@@ -1,3 +1,4 @@
+import { isPrefixOf } from './chatStore';
 import { SaveOutcome } from './chatStoreFile';
 
 /**
@@ -119,7 +120,7 @@ export function nextAfterSave(
     case 'refused':
       // Somebody has been in this conversation since we last wrote. Adoption is the one exception
       // and it is decided by the WORDS, never the revision — see the header.
-      return baseline === 0 && outcome.diskRev > 0 && containedIn(outcome.said, ours)
+      return baseline === 0 && outcome.diskRev > 0 && isPrefixOf(outcome.said, ours)
         ? { kind: 'adopt', rev: outcome.diskRev, ...(outcome.began === undefined ? {} : { began: outcome.began }) }
         : { kind: 'fork', note: CONTINUED_ELSEWHERE };
     case 'incompatible':
@@ -135,18 +136,6 @@ export function nextAfterSave(
   }
 }
 
-/**
- * Whether what is on disk is the beginning of what we hold.
- *
- * <p>A prefix, in order, and never longer: a disk AHEAD of this window holds turns that adopting
- * would replace, which is the case that matters most and the one a length check alone would miss.
- * `undefined` — a record nobody could read — is not contained in anything, because nothing is known
- * about it and the safe answer is the one that loses nobody's words.</p>
- */
-function containedIn(disk: readonly string[] | undefined, ours: readonly string[]): boolean {
-  if (!Array.isArray(disk) || disk.length > ours.length) {
-    return false;
-  }
-
-  return disk.every((said, at) => said === ours[at]);
-}
+// "Is the disk the beginning of what we hold" is `isPrefixOf` in `chatStore.ts`: the migration of
+// story A4 asks the same question the other way round, so the one implementation lives where both
+// can import it rather than being copied here a second time.

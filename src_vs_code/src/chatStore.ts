@@ -459,6 +459,38 @@ export function sameSource(left: ConversationSource, right: ConversationSource):
 export const expired = (meta: ConversationMeta, now: number): boolean => now - meta.updatedAt > KEEP_FOR_MS;
 
 /**
+ * What two copies of one conversation are compared BY: every message's text, in order.
+ *
+ * <p>Not the whole record and not a checksum. A conversation's words are what a person loses when
+ * one copy replaces another; its model, its mark and its passage are what they can set again. So the
+ * rules below reason about the words alone, and the callers say what they do about the rest.</p>
+ */
+export const saidIn = (messages: readonly ChatMessage[]): readonly string[] => messages.map((message) => message.text);
+
+/**
+ * Whether `part` is the beginning of `whole` — in order, and never longer.
+ *
+ * <p>The one comparison this feature has between two copies of a conversation, and it lives here so
+ * that the two places that need it cannot drift. `chatStoreWrite.ts` asks it whether the record on
+ * disk is this window's own earlier session (the disk contained in what we hold), and the migration
+ * asks it which of two copies is the newer (each contained in the other, or neither). It was written
+ * first as a private helper of the write decision; the migration's code round moved it here rather
+ * than copy it, per the reuse rule's second move.</p>
+ *
+ * <p>A copy AHEAD of the other holds words the other does not, which is the case that matters most
+ * and the one a length check alone would miss. `undefined` — a copy nobody could read — is the
+ * beginning of nothing, because nothing is known about it and the safe answer is the one that loses
+ * nobody's words.</p>
+ */
+export function isPrefixOf(part: readonly string[] | undefined, whole: readonly string[]): boolean {
+  if (!Array.isArray(part) || part.length > whole.length) {
+    return false;
+  }
+
+  return part.every((said, at) => said === whole[at]);
+}
+
+/**
  * A memento record as a store record — the migration's one decision.
  *
  * <p>The id survives, because it is what the page hands the serializer back after a reload. The

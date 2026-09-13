@@ -17,7 +17,7 @@ import {
   presetInForce,
   reaskFrom,
 } from './chatPresets';
-import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
+import { ChatTabMemory, reloadedNote } from './chatTabs';
 import { CONVERSATION_VERSION, ConversationRecord } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
@@ -327,6 +327,19 @@ function whereToLook(): readonly string[] {
 }
 
 /**
+ * The workspace a conversation is FILED under in the store: the first folder `whereToLook` gives,
+ * so a conversation is filed where its Claude session is; empty for a window with none at all.
+ *
+ * <p>ONE function, and exported, because three writers must agree on it or a picker filtered on
+ * this workspace shows two of the three: the dual write here, the migration of the memento, and
+ * the serializer's memento fallback. Story C1 is what teaches a record which root it really belongs
+ * to; until then every writer gives this answer, and the boundary is named in that story's row.</p>
+ */
+export function conversationWorkspace(): string {
+  return whereToLook()[0] ?? '';
+}
+
+/**
  * Where this tab's session is, however the window was opened.
  *
  * <p>A window with NO FOLDER still runs Claude Code — and it runs it in the HOME directory, which is
@@ -407,12 +420,13 @@ function pinSession(id: object, title: string, fromSession: boolean): void {
 const asking = new WeakMap<object, number>();
 
 /**
- * Where conversations are kept so a window reload does not empty them. Set once, in `activate`.
+ * The MEMENTO — where conversations were kept before the store on disk, and still written until the
+ * migration has confirmed every record is there. Set once, in `activate`; unset by {@link retireMemento}.
  *
  * <p>A module-level handle rather than a parameter on six signatures: the command has no context and
  * neither do the callbacks a panel is wired with, and threading a store through both to reach two
- * call sites would be a wide change for a narrow need. It is absent only in tests of this file's
- * pure neighbours, and every use is guarded.</p>
+ * call sites would be a wide change for a narrow need. It is absent in tests of this file's pure
+ * neighbours and in every window whose migration has succeeded, and every use is guarded.</p>
  */
 let memory: ChatTabMemory | undefined;
 
@@ -421,12 +435,24 @@ export function rememberChatsIn(store: ChatTabMemory): void {
 }
 
 /**
- * The conversation store on disk, which nothing reads yet.
+ * The store on disk is the ONLY store from here on, in this window.
  *
- * <p>Bound the same way and for the same reason as the memento above. It is written BESIDE that
- * memento for one version — story A4 is what makes it the source of truth, and it can only do that
- * against a store that has been filling while the old one was still in charge. Absent means no
- * store, which is every test of this file's pure neighbours: every use is guarded.</p>
+ * <p>Called by `activate` when the migration reports that every memento record is confirmed on disk
+ * and the key is emptied. Until then the two are written together — a store that cannot be reached
+ * must not leave a person's next words written NOWHERE, which is what an unconditional cut-over did
+ * in the first draft of this story (A4's plan round). Unbinding the handle is the whole gate: every
+ * `memory?.` below becomes a no-op, and nothing else has to know.</p>
+ */
+export function retireMemento(): void {
+  memory = undefined;
+}
+
+/**
+ * The conversation store on disk — the source of truth, read by the reload serializer and written on
+ * every push.
+ *
+ * <p>Bound the same way and for the same reason as the memento above. Absent means no store, which
+ * is every test of this file's pure neighbours: every use is guarded.</p>
  */
 let store: ChatStoreFile | undefined;
 
@@ -584,6 +610,9 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
   thread.savedCarryFrom = thread.carryFrom;
+  // The MEMENTO, until this window's migration has confirmed every record is on disk and
+  // `retireMemento` has unbound it — a no-op from then on. It is kept this long because a store that
+  // cannot be reached must not leave the person's next words written nowhere (A4's plan round).
   memory?.remember({
     id: thread.saveId,
     title: thread.title,
@@ -593,11 +622,10 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
   });
-  // AND to the store on disk, which nothing reads yet. The memento above is still the source of
-  // truth; story A4 is what turns that round, and it can only do so against a store that has been
-  // filling for a version. Detached on purpose — nobody waits for a disk to see their own words —
-  // and therefore ending in a catch of its own, which `reliability.md` requires of every edge
-  // nothing is above.
+  // AND to the store on disk, which is the source of truth: the reload serializer reads it, and the
+  // memento above is a fallback for as long as it holds anything. Detached on purpose — nobody waits
+  // for a disk to see their own words — and therefore ending in a catch of its own, which
+  // `reliability.md` requires of every edge nothing is above.
   // CHAINED, not fired. Two writes issued before the first answers would both carry the revision
   // this window last had accepted, so the second would be refused — and a refusal reads as another
   // window, so a tab would fork itself and say it had become a copy of a conversation nobody else
@@ -632,7 +660,7 @@ function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
     source: { kind: 'none' },
-    workspace: whereToLook()[0] ?? '',
+    workspace: conversationWorkspace(),
     // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
     // plan round; a conversation answered three months after it started was recorded as having
     // started that day, and the picker draws its "started" from this field.
@@ -722,12 +750,14 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   delete thread.savedMessages;
   delete thread.savedModelId;
   delete thread.savedCarryFrom;
-  // THE MEMENTO FIRST, and WAITED FOR. Written the other way round, a crash in between leaves the
-  // fork on disk under an id the source of truth has never heard of: the tab reloads as the original
-  // it no longer owns, and the copy holding the person's words is orphaned from both the reload and
-  // the migration meant to carry it across. Three reviewers from two vendors asked for the order,
-  // and codex for the wait — `remember` queues rather than writes, so without it the two are only in
-  // invocation order and the crash window stays open.
+  // THE MEMENTO FIRST, and WAITED FOR — while it is still bound. Written the other way round, a crash
+  // in between leaves the fork on disk under an id the memento has never heard of: while the memento
+  // is a fallback the tab could reload as the original it no longer owns, and the copy holding the
+  // person's words would be orphaned from both the reload and the migration meant to carry it
+  // across. Three reviewers from two vendors asked for the order, and codex for the wait —
+  // `remember` queues rather than writes, so without it the two are only in invocation order and the
+  // crash window stays open. Once `retireMemento` has run this is a no-op and the fork rests on the
+  // store's own swap, which is what the page's `setState` of the new id reloads against.
   memory?.remember({
     id: thread.saveId,
     title: thread.title,
@@ -2247,7 +2277,7 @@ function answeredBy(thread: Thread): AnsweredBy {
  * the middle is how it goes on being about it.</p>
  */
 function restoredPage(
-  saved: SavedTab,
+  saved: ConversationRecord,
   ready: Ready,
   restored: LegacyPick,
   presets: { readonly promptPresets: readonly PromptPreset[]; readonly modelPresets: readonly ModelPreset[] },
@@ -2277,7 +2307,7 @@ function restoredPage(
       turn: 0,
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
       draft: '',
-      fromSession: saved.fromSession === true,
+      fromSession: saved.fromSession,
       asked: [],
       carryFrom: carryMark(saved.carryFrom, saved.messages.length),
       marks: {
@@ -2290,16 +2320,27 @@ function restoredPage(
     };
 }
 
+/**
+ * @param saved the record as the store holds it — or, while the memento still holds anything, the
+ *   memento's copy mapped through `fromLegacy` with `rev` 0, which is what says "no disk revision
+ *   known" to the swap and lets the write decision adopt the store's copy on the first save
+ */
 export function restoreConversation(
   panels: ChatPanels,
   panel: vscode.WebviewPanel,
-  saved: SavedTab,
+  saved: ConversationRecord,
   extensionUri: vscode.Uri,
 ): void {
   const config = vscode.workspace.getConfiguration('coai');
   const restored = savedPick(config, saved.modelId);
   const presets = { promptPresets: savedPrompts(config), modelPresets: savedModels(config) };
   const ready = readyToChat(config, restored.providerId, restored.modelId);
+  // ONE array for the transcript and for "what the store already holds", so the first push after a
+  // reload — which redraws exactly what was read — writes nothing. A reload is not a use: a write
+  // here would stamp a new `updatedAt` and put a conversation nobody spoke in at the top of the
+  // picker's Recent. The guard in `show` compares by reference, which is why they must be the same
+  // object and not two copies of one.
+  const messages = [...saved.messages];
   // A dead session, and the page can never reach it: `reopened` replaces it before the first turn is
   // sent. It answers rather than throws, because a `ChatSession` that rejects is a contract this
   // codebase does not have — every failure here is a sentence.
@@ -2344,7 +2385,7 @@ export function restoreConversation(
     // show that session's words inside the file's tab. Handing over another conversation silently is
     // the one outcome this whole join exists to prevent, and it outranks a button that is missing
     // from stored tabs until they are opened again. (codex, twice, from two roles.)
-    fromSession: saved.fromSession === true,
+    fromSession: saved.fromSession,
     // Restored with the transcript it belongs to: without it, a reload would put the whole
     // conversation back on the wire and the next Team turn would quietly cost what it used to.
     carryFrom: carryMark(saved.carryFrom, saved.messages.length),
@@ -2365,19 +2406,20 @@ export function restoreConversation(
     // The whole transcript, ready to travel with the first question — the same handover a model
     // switch performs, and the reason nothing has to resume a vendor thread.
     carry: carriedFrom(saved.messages, carryMark(saved.carryFrom, saved.messages.length)),
-    messages: [...saved.messages],
+    messages,
+    savedMessages: messages,
+    savedModelId: saved.modelId,
     turns: Promise.resolve(),
     saveId: saved.id,
-    // 0, because what this came back from is the MEMENTO, which knows nothing about the store's
-    // revisions. The conversation's own record is very likely already on disk under this id from a
-    // previous session, and the first save meets it — `nextAfterSave` then ADOPTS its number rather
-    // than forking, which is precisely the case that rule exists for. Story A4 retires the memento,
-    // and this becomes the record's own revision, read back with it.
-    rev: 0,
-    // A restored conversation began before this window did. The memento does not record when, so the
-    // best available answer is when it was last written down, which `savedAt` is — story A4 reads a
-    // record that carries the real one and hands it over instead.
-    createdAt: saved.savedAt,
+    // The record's OWN revision, read back with it, so the first save after a reload is a swap
+    // against exactly what the disk holds: another window that has moved it on is refused and the
+    // tab forks, which is the honest answer. A copy that came from the memento arrives at 0 — no
+    // disk revision known — and the first save then meets whatever is there; `nextAfterSave` ADOPTS
+    // it when its words are the beginning of ours, the rule kept for exactly that case.
+    rev: saved.rev,
+    // When it BEGAN, as the record says — not when it was last written. A memento copy carries only
+    // its last write, and `fromLegacy` puts that in both fields, which is the best answer it has.
+    createdAt: saved.createdAt,
     writes: Promise.resolve(),
     title: saved.title,
     reopen: true,

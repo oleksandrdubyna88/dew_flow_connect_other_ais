@@ -8,6 +8,7 @@ import {
   expired,
   fromLegacy,
   idOfMeta,
+  isPrefixOf,
   isRecordName,
   isSafeId,
   isStale,
@@ -15,6 +16,7 @@ import {
   recordFrom,
   recordName,
   metaFrom,
+  saidIn,
   sameSource,
   sourceOfFile,
   sourceOfSession,
@@ -389,4 +391,22 @@ test('metadata from another schema version is stale, not merely of another revis
   const mine = record({ rev: 4 });
 
   assert.equal(isStale({ ...metaOf(mine), version: CONVERSATION_VERSION + 1 }, mine), true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The one comparison between two copies of a conversation, shared by the write decision and the
+// migration. It was the write decision's private helper until A4's code round moved it here.
+// ---------------------------------------------------------------------------------------------
+
+test('two copies of a conversation are compared by their words, in order, and a longer copy is never the beginning of a shorter one', () => {
+  const two = saidIn([said('you', 'why'), said('model', 'because')]);
+  const four = [...two, 'and then', 'this'];
+
+  assert.deepEqual(two, ['why', 'because'], 'the words are not what is compared');
+  assert.equal(isPrefixOf(two, four), true);
+  assert.equal(isPrefixOf(four, two), false, 'a copy AHEAD of the other was called its beginning — adopting it would replace turns');
+  assert.equal(isPrefixOf(two, two), true, 'a copy is the beginning of itself');
+  assert.equal(isPrefixOf([], two), true, 'nothing is the beginning of everything');
+  assert.equal(isPrefixOf(['why', 'BECAUSE'], four), false, 'a different word in the same place matched');
+  assert.equal(isPrefixOf(undefined, four), false, 'a copy nobody could read was called the beginning of something');
 });

@@ -12,23 +12,27 @@ import * as path from 'node:path';
  * `chatWiring.test.ts` and `aConversationSurvivesAReload.test.ts` already use here for the same
  * reason.</p>
  *
- * <p>Story A3 is a DUAL WRITE: the memento is still the source of truth and the store is filled
- * beside it, because story A4 can only make the store authoritative against one that has been
- * filling for a version. So these assert both halves are written, not that one replaced the other.</p>
+ * <p>Story A3 was a DUAL WRITE: the memento stayed the source of truth and the store was filled
+ * beside it. Story A4 turned that round — the store is the source of truth and the serializer reads
+ * it — but the memento is STILL written until the migration has confirmed every record is on disk in
+ * this window, because a store that cannot be reached must not leave a person's next words written
+ * nowhere. So these assert both halves are written and that the gate that ends the memento's half is
+ * the migration's success and nothing else.</p>
  */
 
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
-test('a conversation is written to the store, and to the memento it has not replaced yet', () => {
+test('a conversation is written to the store, and to the memento until the migration has retired it', () => {
   const command = source('chatCommand.ts');
 
-  assert.match(command, /memory\?\.remember\(/u, 'the memento is no longer written, a version too early');
+  assert.match(command, /memory\?\.remember\(/u,
+    'the memento is no longer written at all: a store that cannot be reached would leave the next words nowhere');
   assert.match(command, /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
-  assert.ok(
-    command.indexOf('memory?.remember(') < command.indexOf('keepOnDisk(entry, thread)'),
-    'the store is written before the memento, so a crash between them loses the authoritative copy',
-  );
+  // The gate is the binding itself: retiring the memento unbinds it, and every `memory?.` site
+  // becomes a no-op without knowing.
+  assert.match(command, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;\s*\n\}/u,
+    'retiring the memento is something other than unbinding it, so a write site can keep going');
 });
 
 test('the store writes of ONE conversation are chained, and the chain survives a rejection', () => {
@@ -47,15 +51,20 @@ test('the store writes of ONE conversation are chained, and the chain survives a
     'a store write that rejected told the console and left the person looking at a tab that said nothing');
 });
 
-test('the extension gives the chat a store to write to, under the coai data directory', () => {
+test('the extension gives the chat a store to write to, under the coai data directory, and the same store to the migration and the serializer', () => {
   const wiring = source('extension.ts');
 
-  assert.match(wiring, /keepChatsIn\(new ChatStoreFile\(conversationsDir\(coaiDataDir\(\)\)\)\)/u,
+  assert.match(wiring, /const chatStore = new ChatStoreFile\(conversationsDir\(coaiDataDir\(\)\)\)/u,
     'the chat has no store, so every conversation is written to the memento alone');
-  assert.ok(
-    wiring.indexOf('rememberChatsIn(') < wiring.indexOf('keepChatsIn('),
-    'the two stores are bound in an order that reads as if the disk one were in charge',
-  );
+  assert.match(wiring, /keepChatsIn\(chatStore\)/u, 'the chat writes to a store other than the one the serializer reads');
+  assert.match(wiring, /importLegacyTabs\(\{ memento: context\.workspaceState, store: chatStore, workspace: conversationWorkspace\(\) \}\)/u,
+    'the migration is handed a different store, a different memento, or a different workspace than the writers use');
+  assert.match(wiring, /store: chatStore, memento: chatTabMemory/u, 'the serializer reads a store other than the one that is written');
+  // The gate: retired on success and on nothing else. `importSucceeded` is `nothing` or `migrated`;
+  // `unavailable` and `incomplete` leave the memento bound and the dual write on.
+  assert.match(wiring, /if \(importSucceeded\(report\)\) \{\s*\n\s*retireMemento\(\);\s*\n\s*\}/u,
+    'the memento is retired on some condition other than the migration having succeeded');
+  assert.equal(wiring.split('retireMemento()').length - 1, 1, 'the memento is retired from more than one place');
 });
 
 test('a conversation another window took over is kept under a NEW id, never overwritten', () => {
@@ -67,11 +76,13 @@ test('a conversation another window took over is kept under a NEW id, never over
   assert.match(fork, /thread\.saveId = randomUUID\(\)/u, 'a fork keeps the id it was refused under');
   assert.match(fork, /thread\.rev = 0/u, 'a forked conversation would swap against a revision that is not its own');
   assert.match(fork, /pushChatNote\(entry, thread\.saveId/u, 'the tab is not told it has become a copy');
-  // And the memento, which is still the source of truth: without it the fork lives only on disk and
-  // in memory, so a reload restores the tab as the original it no longer owns and the copy holding
-  // the person's words is the one nothing can find. (codex, A3's plan round.)
+  // And the memento, for as long as it is still bound — a fallback the serializer asks while its key
+  // holds anything: without it the fork lives only on disk and in memory, so a reload during the
+  // dual-write window restores the tab as the original it no longer owns and the copy holding the
+  // person's words is the one nothing can find. (codex, A3's plan round.) Once `retireMemento` has
+  // unbound it this is a no-op and the fork rests on the store's own swap.
   assert.match(fork, /memory\?\.remember\(/u,
-    'a forked conversation is not written to the store of record, so a reload loses it');
+    'a forked conversation is not written to the memento while it is still a fallback, so a reload loses it');
 });
 
 test('the page is told through a message of its OWN, never through the state channel', () => {
