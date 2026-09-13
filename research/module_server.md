@@ -684,7 +684,7 @@ migration step throwing something unlisted must not take down a review it only r
   for the same reason — a pooled connection keeps the handle after `Dispose`, which turned nine
   unrelated tests red on their own cleanup.
 - **A decision carries the finding NUMBER it was made by, never its position in the list**
-  (`Core/Rounds.DecisionAt`, 2026-09-13). `RecordDecisions` used to read the ordinal off the loop
+  (`Store/DecisionAt`, 2026-09-13). `RecordDecisions` used to read the ordinal off the loop
   index, which is the same number only while the caller resolves top to bottom — and nothing makes
   it: `resolve`'s entries carry a `finding` index, and `RoundMachine.Resolve` checks that rejections
   carry reasons and counts nothing, so an out-of-order or partial set reaches the projection exactly
@@ -692,6 +692,23 @@ migration step throwing something unlisted must not take down a review it only r
   wrong, so nothing visibly broke; the log page and anything reading the database were. The number is
   taken from `dto.Finding` in `PanelService.Resolve` and travels to the projection with its decision.
   Found while tracing the export plan, before an export could publish the wrong marks.
+  - **It lives in `Store`, not beside `Decision` in `Core.Rounds`.** `Finish` strips the numbers
+    before calling the state machine, which has no use for them; a projection index in the core
+    would be inherited by every future consumer of a namespace that discards it.
+  - **It has no public constructor.** A freely built `(int, Decision)` pair can disagree with
+    itself — `new(0, Accepted(findings[2]))` — and would mark a finding nobody decided while leaving
+    the decided one alone, which is the same defect wearing a different hat. `DecisionAt.Accept` and
+    `.Reject` take the round's pending list and a number and read the finding OUT of it, so the two
+    cannot disagree; a number naming nothing is `null`, not an exception, because a bad index is an
+    expected answer from a caller.
+- **One decision per finding, per call.** `resolve` refuses a finding index sent twice rather than
+  taking the last. Both entries used to pass every check: the projection wrote both in order so the
+  later silently won, while `RecordClosing` counted both — a round with one finding closing as one
+  accepted AND one rejected, with neither number true. The refusal names the index.
+- **The decision stamp comes from an injected `TimeProvider`**, not `DateTime.UtcNow`
+  (`.agents/conventions/common/utc-timestamps.md`). `RoundsDb.Open` takes one, defaulting to
+  `TimeProvider.System`. A clock a test cannot control is a column a test cannot assert, and
+  `resolved_utc` is about to become a duration on screen.
 - WAL, for the five-window case.
 - `Microsoft.Data.Sqlite.Core` plus a chosen `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5, not the
   all-in-one package: that one pins 2.1.11, whose native lib carries GHSA-2m69-gcr7-jv3q, and this

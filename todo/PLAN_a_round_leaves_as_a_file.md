@@ -1,6 +1,6 @@
 # PLAN — a round leaves the page as a file, and the log says what the deciding cost
 
-> Status: **plan only, nothing implemented yet, 2026-09-13.** Scope: the rounds-log page
+> Status: **in progress, 2026-09-13 — story A1 shipped, A2 through C2 open.** Scope: the rounds-log page
 > (`src_vs_code/src/roundsLog*.ts`), one new one-shot mode and one widened DTO on the server
 > (`src_mcp/src/Store/RoundsQuery.cs`, `src_mcp/src/Program.cs`).
 >
@@ -225,7 +225,16 @@ Engineering choices, not product ones; recorded here so a reviewer reads them as
 
 ## Build order
 
-### Phase 0 — an ordinal is not a position (the defect below; decided 2026-09-13 to fix it here)
+### Phase 0 / story A1 — an ordinal is not a position — **SHIPPED 2026-09-13**
+
+> Landed as `fix(store): an ordinal is not a position`. Its code round: `proceed`, all 12 reviewers,
+> 23 findings, 11 accepted. What the round changed beyond the plan: `DecisionAt` moved out of
+> `Core.Rounds` into `Store` (the state machine discards the number, so the core should not carry
+> it); it lost its public constructor for two factories that read the finding out of `pending` by
+> the number, so an inconsistent pair is now unconstructible; `resolve` refuses a finding index sent
+> twice in one call, which used to close a one-finding round as one accepted AND one rejected; and
+> `RoundsDb` takes an injected `TimeProvider`, which the next story needs anyway. Both fixes were
+> re-broken afterwards and seen red again, per the RED-GREEN-RED order.
 
 0. **RED first.** A test in `src_mcp/tests/RoundsDbTests.cs` that records a round of three findings,
    resolves them **out of order** (`finding 2` rejected, then `finding 0` accepted) and reads the rows

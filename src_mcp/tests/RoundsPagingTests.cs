@@ -149,15 +149,15 @@ public sealed class RoundsPagingTests : IDisposable
         {
             var first = new[] { Found("a"), Found("b"), Found("c") };
             db.RecordRound(Session(), Round(1, older), first);
-            db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-                new Decision.Accepted(first[0]),
-                new Decision.Accepted(first[1]),
-                new Decision.Rejected(first[2], "not worth the machinery")));
+            db.RecordDecisions("s1", "CodeReview", 1, [
+                Decisions.Accept(first, 0),
+                Decisions.Accept(first, 1),
+                Decisions.Reject(first, 2, "not worth the machinery"),
+            ]);
 
             var second = new[] { Found("d"), Found("e") };
             db.RecordRound(Session(), Round(2, older.AddMinutes(1)), second);
-            db.RecordDecisions("s1", "CodeReview", 2, Decisions.InOrder(
-                new Decision.Accepted(second[0]), new Decision.Rejected(second[1], "no")));
+            db.RecordDecisions("s1", "CodeReview", 2, [Decisions.Accept(second, 0), Decisions.Reject(second, 1, "no")]);
         }
 
         var log = RoundsQuery.Read(_dir, limit: 1);

@@ -33,7 +33,22 @@ public sealed class RoundsDb : IDisposable
 
     private readonly SqliteConnection _db;
 
-    private RoundsDb(SqliteConnection db) => _db = db;
+    /// <summary>
+    /// Where a stamp comes from.
+    /// </summary>
+    /// <remarks>
+    /// Injected rather than read off the machine, per `.agents/conventions/common/utc-timestamps.md`:
+    /// a clock a test cannot control is a column a test cannot assert. It was ambient until the code
+    /// round said so, and the story after this one turns `resolved_utc` into a duration on screen —
+    /// which is exactly when an uncontrollable clock stops being a style question.
+    /// </remarks>
+    private readonly TimeProvider _time;
+
+    private RoundsDb(SqliteConnection db, TimeProvider time)
+    {
+        _db = db;
+        _time = time;
+    }
 
     /// <summary>Opens (and creates or migrates) the database, or answers null when it cannot.</summary>
     /// <remarks>
@@ -41,7 +56,7 @@ public sealed class RoundsDb : IDisposable
     /// open is to carry on without one, and a method that can only be used inside a try/catch says
     /// that badly.
     /// </remarks>
-    public static RoundsDb? Open(string dataDir, Serilog.ILogger log)
+    public static RoundsDb? Open(string dataDir, Serilog.ILogger log, TimeProvider? time = null)
     {
         try
         {
@@ -61,7 +76,7 @@ public sealed class RoundsDb : IDisposable
             db.Open();
             Migrate(db);
 
-            return new RoundsDb(db);
+            return new RoundsDb(db, time ?? TimeProvider.System);
         }
         catch (Exception e)
         {
@@ -286,8 +301,11 @@ public sealed class RoundsDb : IDisposable
     public void RecordDecisions(string sessionId, string stage, int number, IReadOnlyList<DecisionAt> decisions)
     {
         using var transaction = _db.BeginTransaction();
-        var when = DateTime.UtcNow.ToString("O");
-        foreach (var (ordinal, decision) in decisions)
+        var when = _time.GetUtcNow().UtcDateTime.ToString("O");
+        // Property access, not a deconstruction and emphatically not a loop counter: three reviewers
+        // of the code round read `ordinal` as an iteration index after it had stopped being one.
+        // `decided.Ordinal` is the number the caller sent and cannot be read as anything else.
+        foreach (var decided in decisions)
         {
             using var write = _db.CreateCommand();
             write.CommandText = """
@@ -295,10 +313,10 @@ public sealed class RoundsDb : IDisposable
                 WHERE ordinal = $ordinal AND round_id = (
                     SELECT id FROM rounds WHERE session_id = $session AND stage = $stage AND number = $number)
                 """;
-            Bind(write, "$resolution", decision is Decision.Accepted ? "accept" : "reject");
-            Bind(write, "$reason", decision is Decision.Rejected rejected ? rejected.Reason : string.Empty);
+            Bind(write, "$resolution", decided.Decision is Decision.Accepted ? "accept" : "reject");
+            Bind(write, "$reason", decided.Decision is Decision.Rejected rejected ? rejected.Reason : string.Empty);
             Bind(write, "$when", when);
-            Bind(write, "$ordinal", ordinal);
+            Bind(write, "$ordinal", decided.Ordinal);
             BindRound(write, sessionId, stage, number);
             write.ExecuteNonQuery();
         }

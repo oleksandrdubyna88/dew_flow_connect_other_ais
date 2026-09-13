@@ -14,21 +14,6 @@ public abstract record Decision
     private Decision() { }
 }
 
-/// <summary>A decision, and the finding NUMBER the caller made it by.</summary>
-/// <remarks>
-/// <para>The number is the index <c>resolve</c> names in its entries — <c>{"finding": 2, …}</c> —
-/// which is the same number the projection stored as that finding's <c>ordinal</c>, because
-/// <c>Pending</c> and the list handed to <c>RecordRound</c> are one list in one order.</para>
-/// <para>It travels WITH the decision because the projection used to re-derive it from the
-/// decision's position in the list, which is the same number only for a caller that resolves top to
-/// bottom. Nothing requires one to: a set that arrives out of order, or covers only some of a
-/// round's findings, is accepted by <see cref="RoundMachine.Resolve"/> — it checks that rejections
-/// carry reasons and counts nothing — and every mark then landed on the wrong finding. Nothing
-/// visibly broke, because the session file is the state machine's own record and was never wrong;
-/// only the database read by the log page and the export was.</para>
-/// </remarks>
-public sealed record DecisionAt(int Ordinal, Decision Decision);
-
 /// <summary>What a completed round tells the main AI to do next.</summary>
 public abstract record RoundVerdict
 {
