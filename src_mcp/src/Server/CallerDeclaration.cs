@@ -138,8 +138,22 @@ public sealed record CallerDeclaration(
             .Take(LongestField + 1)
             .ToArray()).TrimEnd();
 
-        return kept.Length > LongestField ? kept[..LongestField] : kept;
+        return kept.Length > LongestField ? kept[..EndOfACharacter(kept)] : kept;
     }
+
+    /// <summary>
+    /// Where to cut so the cap never leaves half a character behind.
+    /// </summary>
+    /// <remarks>
+    /// The cap counts UTF-16 CODE UNITS, and anything outside the basic plane is two of them — so a
+    /// value whose 120th and 121st units are the halves of one character was cut between them,
+    /// leaving an unpaired surrogate in the session file, the database column and the page. That is
+    /// a byte sequence which is not text, from a field whose whole job is to be read. Raised by
+    /// CodeRabbit on the pull request. Cutting one character SHORT is the right answer; cutting one
+    /// in half is not an answer at all.
+    /// </remarks>
+    private static int EndOfACharacter(string kept) =>
+        char.IsHighSurrogate(kept[LongestField - 1]) ? LongestField - 1 : LongestField;
 
     /// <summary>Everything that is not invisible: not a control character, not a format one.</summary>
     private static bool Keepable(char c) =>

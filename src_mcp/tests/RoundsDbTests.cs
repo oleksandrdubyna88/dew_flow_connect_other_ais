@@ -375,6 +375,43 @@ public sealed class RoundsDbTests : IDisposable
         rows[1]["caller_model"].Should().Be("claude-opus-5");
     }
 
+    /// <summary>
+    /// A step that fails part-way leaves NEITHER its schema change nor its version bump behind.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect-reproducing test CodeRabbit asked for on the pull request, and it was right
+    /// that <c>TheMigrationRunsOnce…</c> does not detect a missing transaction — that one passes
+    /// whether or not the step and the bump are atomic.</para>
+    /// <para>What it protects: an <c>ALTER TABLE ADD COLUMN</c> is not idempotent the way
+    /// <c>CREATE TABLE IF NOT EXISTS</c> is, and <see cref="RoundsDb.Open"/> answers null to ANY
+    /// exception. A half-applied step would therefore re-run on the next open, answer
+    /// <c>duplicate column name</c>, and leave a database that never opens again — with nothing in
+    /// this process able to repair it.</para>
+    /// <para>Proved by INJECTING a step that cannot exist in the real schema: a good alter followed
+    /// by a statement that does not parse. Every real step succeeds, so the property cannot be
+    /// observed any other way.</para>
+    /// </remarks>
+    [Fact]
+    public void AStepThatFailsPartWay_LeavesNothingOfItselfBehind()
+    {
+        Directory.CreateDirectory(_dir);
+        using var db = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
+        db.Open();
+
+        var halfBad = new[]
+        {
+            "CREATE TABLE IF NOT EXISTS t (a TEXT);",
+            "ALTER TABLE t ADD COLUMN b TEXT; THIS IS NOT SQL;",
+        };
+        var migrating = () => RoundsDb.Migrate(db, halfBad);
+
+        migrating.Should().Throw<SqliteException>("the step is broken, and a broken step must be loud");
+        Query("PRAGMA user_version").Single().Values.Single().Should().Be(
+            "1", "the first step committed; the second must have left the version exactly where it was");
+        Query("SELECT name FROM pragma_table_info('t')").Select(r => r["name"])
+            .Should().Equal(["a"], "the column its first statement added is rolled back with it");
+    }
+
     [Fact]
     public void TheMigrationRunsOnce_SoASecondOpenIsNotASecondAlter()
     {
