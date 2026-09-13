@@ -10,6 +10,7 @@ import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
+import { consultantBody } from './consultantView';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
@@ -77,6 +78,13 @@ export interface PanelState {
    * <p>Optional, like {@link teamServers}, and absent means the same as `me`.</p>
    */
   readonly usageScope?: 'me' | 'company' | undefined;
+  /**
+   * The consultant's prompt override as it is ON DISK, or empty for the shipped one.
+   *
+   * <p>A file rather than a setting, so it is read at paint time like the pasted snippet beside it.
+   * Optional for the reason {@link teamServers} is: no fixture's assertions care.</p>
+   */
+  readonly consultPrompt?: string | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -235,8 +243,15 @@ export function withholdsRepaint(editingSince: number, now: number): boolean {
  */
 export const OPEN_BY_DEFAULT: readonly string[] = [];
 
-/** `setting|vendor|role`, each of them a name. Nothing that could end a script or open a tag. */
-const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*$/;
+/**
+ * `setting|vendor|role|caller`, each of them a name. Nothing that could end a script or open a tag.
+ *
+ * <p>The fourth part arrived with the consultant rows, and it had to arrive HERE as well as in the
+ * page's `idOf`: an id this pattern does not match is dropped whole rather than escaped, so a
+ * forgotten segment does not fail loudly — it silently stops putting the caret back, in every
+ * control on the panel. Eight tests said so within a second of the id gaining its fourth part.</p>
+ */
+const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*$/;
 
 /**
  * {@link PanelState.focus} as a literal the page's own script can hold, or `null`.
@@ -265,6 +280,14 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state)),
+    // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
+    // another vendor about a passage, here an AI asks one about the tree it is stuck in.
+    section('consultant', 'Consultant', open, consultantBody(state.settings.consult, {
+      vendors: state.vendors,
+      codexModels: state.codexModels,
+      agyModels: state.agyModels,
+      consultPrompt: state.consultPrompt,
+    })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
@@ -290,7 +313,10 @@ ${body}
 
   // What names ONE control. A role-keyed control and a vendor-keyed one can share a setting name,
   // so a name alone would refocus whichever of them the document holds first.
-  const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '');
+  // The CALLER is part of it too: four consultant rows share one setting name, so without it a
+  // repaint mid-edit would put the cursor back in whichever of them the document holds first.
+  const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '')
+    + '|' + (el.dataset.caller || '');
   const posted = new Map();
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
@@ -306,7 +332,8 @@ ${body}
     }
     posted.set(el, value);
     vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
-                         vendor: el.dataset.vendor, role: el.dataset.role });
+                         vendor: el.dataset.vendor, role: el.dataset.role,
+                         caller: el.dataset.caller });
   };
   const reportFocus = (el, editing) => vscode.postMessage({
     type: 'focus',
@@ -1851,6 +1878,10 @@ const CSS = `
      not about the gate at all, and a new hue would say "another kind of setting" when what it is
      is another kind of WORK. */
   .sec-chat      > summary { color: var(--tone-uxdx); }
+  /* The consultant takes the chat's tone for the same reason the chat took the server's: the two
+     are one idea from opposite ends — a person asking another vendor about a passage, an AI asking
+     one about the tree it is stuck in — and sharing a hue says so without a word. */
+  .sec-consultant > summary { color: var(--tone-uxdx); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }
   .section > summary::-webkit-details-marker { display: none; }
@@ -1875,12 +1906,15 @@ const CSS = `
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 64px; width: 64px; }
   .hint { opacity: .65; font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
-  input[type="text"], input[type="url"], input[type="number"], select {
+  input[type="text"], input[type="url"], input[type="number"], select, textarea {
     background: var(--vscode-input-background); color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px;
     padding: 3px 6px; font-family: inherit; font-size: inherit;
     width: 100%; max-width: 100%; min-width: 0;
   }
+  /* Vertical only. A sidebar's width is the person's choice, and a box they can drag wider than
+     the view is exactly the horizontal scrollbar this panel is not allowed to grow. */
+  textarea { resize: vertical; }
   button {
     background: var(--vscode-button-background); color: var(--vscode-button-foreground);
     border: none; border-radius: 2px; padding: 5px 10px; cursor: pointer;
@@ -2095,6 +2129,9 @@ export const PANEL_COMMANDS = [
   'updateVendorCli',
   'forgetUsage',
   'reprobeLocal',
+  // Takes the consultant's prompt override away, so the shipped prompt answers again. A command
+  // rather than an emptied box: both do it, and only one of them is discoverable.
+  'restoreConsultPrompt',
   // Only rendered when the probe SAW an engine on the Windows side that this WSL distro cannot
   // reach; on every other machine the button does not exist, because there is nothing to fix.
   'fixWslNetwork',

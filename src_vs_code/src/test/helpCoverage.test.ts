@@ -121,6 +121,13 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.splitPlan': 'split the plan into epics and stories',
   'coai.splitWithFable': 'split with fable',
   'coai.perSideSettings': 'separate settings for each side',
+  // The consultant's five. The caller map and each cap is a setting of its own, so each one is
+  // covered by the words the article actually uses for it.
+  'coai.consultants': 'who a stuck ai asks',
+  'coai.consultTurns': 'turns per consultation',
+  'coai.consultCallsPerSession': 'calls per session',
+  'coai.consultIdleMinutes': 'close an idle consultation after, minutes',
+  'coai.consultEnabled': 'let a stuck ai consult another vendor',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

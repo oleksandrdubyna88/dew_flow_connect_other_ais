@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULTS, envBlock } from '../settingsShape';
+import { CALLER_KINDS, CONSULTING_RUNTIMES, DEFAULT_CONSULT } from '../consultSettings';
 import { ROLES } from '../prompts';
 
 /**
@@ -60,4 +61,73 @@ test('a pristine panel writes no round or threshold key at all', () => {
     Object.keys(env).filter((k) => k.startsWith('COAI_ROUNDS_') || k.startsWith('COAI_THRESHOLD_')),
     [],
     'a default panel wrote a gate key, so the two halves disagree about what the default is');
+});
+
+/**
+ * The consultant, held to the same rule by the same reasoning.
+ *
+ * <p>Five settings cross this seam and the panel writes each one only when it DIFFERS, so a
+ * pristine install sends nothing and the server's own fallback is what runs. Every number below is
+ * read out of the C# rather than transcribed: a hand-copied constant is a third place to forget,
+ * and the failure it produces is silent — the panel says one thing, the server does another, and a
+ * consultation goes to a vendor nobody picked.</p>
+ */
+const mcp = (...parts: string[]): string => path.join(__dirname, '..', '..', '..', 'src_mcp', ...parts);
+
+const panelSettings = fs.readFileSync(mcp('src', 'Server', 'PanelSettings.cs'), 'utf8');
+const routing = fs.readFileSync(mcp('src', 'Server', 'Consultation', 'ConsultantRouting.cs'), 'utf8');
+const resolution = fs.readFileSync(mcp('runners', 'Consultation', 'ConsultantResolution.cs'), 'utf8');
+
+/** `IntVar(env, "COAI_CONSULT_TURNS", 5)` -> 5. The fallback the server uses with nothing set. */
+function serverFallback(key: string): number {
+  const m = new RegExp(`"${key}",\\s*(\\d+)`).exec(panelSettings);
+
+  assert.ok(m, key + ' is not read in PanelSettings.cs — the shape this test reads has changed');
+
+  return Number(m[1]);
+}
+
+test("every consult default in the panel is the server's own fallback", () => {
+  assert.strictEqual(DEFAULT_CONSULT.turns, serverFallback('COAI_CONSULT_TURNS'));
+  assert.strictEqual(DEFAULT_CONSULT.callsPerSession, serverFallback('COAI_CONSULT_CALLS_PER_SESSION'));
+  assert.strictEqual(DEFAULT_CONSULT.idleMinutes, serverFallback('COAI_CONSULT_IDLE_MINUTES'));
+  // On unless somebody switched it off, on BOTH sides: the server reads this key through the
+  // not-switched-off parser, which is the shape of "absent means on".
+  assert.strictEqual(DEFAULT_CONSULT.enabled, true);
+  assert.match(panelSettings, /NotSwitchedOff\(env, "COAI_CONSULT_ENABLED"\)/);
+});
+
+test('the shipped consultant for every caller kind is the one the server would choose', () => {
+  for (const { id } of CALLER_KINDS) {
+    // `[CallerIdentity.Claude] = new("codex"),` — the kind is the C# constant's name, capitalised.
+    const kind = id.charAt(0).toUpperCase() + id.slice(1);
+    const m = new RegExp(`CallerIdentity[.]${kind}\\][^"]*"([a-z-]+)"`).exec(routing);
+
+    assert.ok(m, id + ' is not in ConsultantRouting.Shipped — a caller the panel offers and the server does not route');
+    assert.strictEqual(
+      DEFAULT_CONSULT.byCaller[id]!.vendor,
+      m[1],
+      id + ': the panel shows ' + DEFAULT_CONSULT.byCaller[id]!.vendor + ', the server would ask ' + m[1],
+    );
+  }
+});
+
+test('the runtimes the picker offers are the runtimes the server can resolve', () => {
+  // The extension cannot ask the server which they are — the picker has to be drawable before the
+  // server is installed — so it holds a copy, and a copy needs this.
+  const m = /Consulting[^=]*=[^"]*((?:"[a-z]+",?[ ]*)+)/.exec(resolution);
+
+  assert.ok(m, 'ConsultantResolution.Consulting is not in the shape this test reads');
+  assert.deepStrictEqual(
+    [...(m[1] ?? '').matchAll(/"([a-z]+)"/g)].map((one) => one[1]),
+    [...CONSULTING_RUNTIMES],
+    'the panel would offer a vendor the server cannot consult with, or hide one it can',
+  );
+});
+
+test('a pristine panel writes no consult key either', () => {
+  assert.deepStrictEqual(
+    Object.keys(envBlock(DEFAULTS)).filter((k) => k.startsWith('COAI_CONSULT')),
+    [],
+    'a default panel wrote a consult key, so the two halves disagree about what the default is');
 });

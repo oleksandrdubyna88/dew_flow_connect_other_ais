@@ -497,12 +497,34 @@ lock and fence are the security half and stay on Fable.
 
 **Epic 2 — the person configures it and sees it.**
 
-- [ ] **S3 — the seam and the *Consultant* section.** `consultSettings.ts` (ONE reader for the section and
+- [x] **S3 — the seam and the *Consultant* section.** `consultSettings.ts` (ONE reader for the section and
       the env block), `settingsShape.ts` keys written only when they differ, `panelView.ts:264` gains
       `section('consultant', 'Consultant', …)`, four caller rows over the reviewers' vendor rows and model
       lists with the same-vendor note, the caps, the prompt textarea with *Restore default*, `package.json`
       + help in five languages, the defaults-agreement test reading C#. **Live:** the real writer, the real
       binary, a changed consultant reaching the next call.
+
+      **Three things shipped differently, each with a reason.**
+      1. **Five stored settings, not one object.** `coai.consultants` holds the caller map and every cap is
+         a setting of its own — one for one with the five `COAI_CONSULT*` keys. One nested object would have
+         read better in `consultSettings.ts` and worse everywhere else: VS Code describes and completes a
+         declared key, the panel's ordinary write path stores one, and the per-side overlay copies one, and
+         it can do none of the three for a field inside an object.
+      2. **The prompt box writes a FILE, and the plan's "editable and restorable for free" was not true.**
+         It counted on `RolePrompts.For("consult")` being override-first, which it is — but nothing on the
+         EXTENSION side has ever edited a prompt's text, so there was no editor to get for free. The box
+         writes `<dataDir>/prompts/consult.md` directly, which is where the server reads it; a mirrored
+         `coai.*` key was rejected because it would give one prompt two homes and revert the hand-edit the
+         server has always supported. `data-file` in the markup is what exempts it from the
+         declared-settings test.
+      3. **`COAI_CONSULT_ENABLED` needed its server half here.** The plan's table said "S3", and S1 read the
+         other four — so the panel would have written a key nothing read. `PanelSettings.ConsultEnabled`
+         (through `NotSwitchedOff`) and a refusal BY NAME at the top of `AskAsync`, before the arguments are
+         examined, landed with the section.
+
+      Also in this story because the section put them there: the caller became the fourth segment of the
+      focus id and `FOCUS_ID` had to learn it (eight tests said so), the consultant header took the chat's
+      tone, and the free-text-hazard test now ends its slice at the NEXT section rather than a named one.
 - [ ] **S4 — the card and the log row.** `consultations.ts` + `consultationWatcher.ts`, the third live
       region, schema step (`consultations` + `consult_missed`), `RecordConsultation`, `LoggedConsultation`,
       `--log`, the log page list, `status`'s block.

@@ -12,6 +12,14 @@
 
 import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
+import {
+  CALLER_KINDS,
+  ConsultSettings,
+  DEFAULT_CONSULT,
+  consultSettingsFrom,
+  CONSULT_SETTINGS,
+  sameCallers,
+} from './consultSettings';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -68,6 +76,16 @@ export interface CoaiSettings {
    * switch whose only setting turns the whole plan stage off is a different feature.</p>
    */
   readonly roleEnabled: Readonly<Record<string, boolean>>;
+
+  /**
+   * Which consultant each kind of CALLER gets when it is stuck, and the caps around a consultation.
+   *
+   * <p>Its own module (`consultSettings.ts`) rather than fields here, because the panel section and
+   * the env block must read it through ONE function — the chat's four settings carry the same note
+   * and the same reason. What differs is that these DO cross to the server: it decides which vendor
+   * answers and it enforces the caps.</p>
+   */
+  readonly consult: ConsultSettings;
 
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
@@ -141,10 +159,17 @@ export interface CoaiSettings {
  * provider looked for a vendor called `Architecture`, found none, and wrote nothing. The number
  * reverted on the next repaint and the prompt pickers never changed count.</p>
  */
+/**
+ * <p>A FOURTH kind arrived with the consultant, and for the same reason the third did: its controls
+ * are keyed by CALLER — which agent is stuck — and travelling in the vendor slot would have the
+ * provider hunt for a vendor called `claude` when the row means "what Claude Code asks", and
+ * sometimes find one.</p>
+ */
 export type SettingWrite =
   | { readonly kind: 'plain'; readonly key: string; readonly value: unknown }
   | { readonly kind: 'vendor'; readonly key: string; readonly value: unknown; readonly vendor: string }
-  | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string };
+  | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string }
+  | { readonly kind: 'caller'; readonly key: string; readonly value: unknown; readonly caller: string };
 
 /** What the webview said it changed. A message with no key changes nothing. */
 export interface SettingMessage {
@@ -152,6 +177,7 @@ export interface SettingMessage {
   readonly value: unknown;
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
+  readonly caller?: string | undefined;
 }
 
 /**
@@ -163,6 +189,9 @@ export function settingWrite(message: SettingMessage): SettingWrite | undefined 
   if (key === undefined || key.length === 0) {
     return undefined;
   }
+  if (message.caller !== undefined && message.caller.length > 0) {
+    return { kind: 'caller', key, value, caller: message.caller };
+  }
   if (message.role !== undefined && message.role.length > 0) {
     return { kind: 'role', key, value, role: message.role };
   }
@@ -171,6 +200,32 @@ export function settingWrite(message: SettingMessage): SettingWrite | undefined 
   }
 
   return { kind: 'plain', key, value };
+}
+
+/**
+ * One caller's consultant, merged into whatever the stored map already holds.
+ *
+ * <p>Merged rather than replaced, exactly as a role record is: writing what Claude Code asks must
+ * not drop the other three callers, and the stored object is what every other row reads on the next
+ * repaint. The two keys a row can change are the vendor and the model, and a vendor change CLEARS
+ * the model — a model named for one vendor is not a model the next one offers, and leaving it would
+ * strand a pair nobody chose.</p>
+ */
+export function consultantRecordUpdate(
+  current: Readonly<Record<string, unknown>>,
+  caller: string,
+  key: string,
+  value: unknown,
+): Record<string, unknown> {
+  const row = { ...(current[caller] as Record<string, unknown> | undefined ?? {}) };
+  if (key === 'consultVendor') {
+    row['vendor'] = String(value);
+    row['model'] = '';
+  } else {
+    row['model'] = String(value);
+  }
+
+  return { ...current, [caller]: row };
 }
 
 /**
@@ -224,6 +279,7 @@ export const DEFAULTS: CoaiSettings = {
   splitWithFable: false,
   codeWorkspace: 'none',
   roles: [],
+  consult: DEFAULT_CONSULT,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -248,6 +304,10 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
   // question rather than a configuration, and two sides asking one question is right.
   'roles',
+  // Which consultant answers is a property of the WORK, not of the person reading the panel — two
+  // sides of one machine serving two companies want their own, like every other row above. Spread
+  // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
+  ...CONSULT_SETTINGS,
 ];
 
 /**
@@ -308,6 +368,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     splitWithFable: read('splitWithFable') === true,
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
+    consult: consultSettingsFrom(read),
   };
 }
 
@@ -372,6 +433,31 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.onExhausted !== DEFAULTS.onExhausted) {
     env['COAI_ON_EXHAUSTED'] = settings.onExhausted;
+  }
+  // The consultant's four, each only when it differs — so a pristine panel sends NOTHING and the
+  // server's own fallback is what runs. That is what makes the two default sets one contract rather
+  // than two numbers that happen to agree today; the gate's defaults diverged for a day once, and a
+  // new install read one number off the screen while another one ran.
+  if (!sameCallers(settings.consult.byCaller, DEFAULT_CONSULT.byCaller)) {
+    // One JSON key rather than four scalars, for the reason `COAI_VENDORS` already carries: a
+    // compound value needs a structured encoding, and four key spellings is four chances for the two
+    // halves to disagree about one of them.
+    env['COAI_CONSULTANTS'] = JSON.stringify(Object.fromEntries(
+      CALLER_KINDS.map(({ id }) => [id, settings.consult.byCaller[id]])));
+  }
+  if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
+    env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
+  }
+  if (settings.consult.callsPerSession !== DEFAULT_CONSULT.callsPerSession) {
+    env['COAI_CONSULT_CALLS_PER_SESSION'] = String(settings.consult.callsPerSession);
+  }
+  if (settings.consult.idleMinutes !== DEFAULT_CONSULT.idleMinutes) {
+    env['COAI_CONSULT_IDLE_MINUTES'] = String(settings.consult.idleMinutes);
+  }
+  // Written only when OFF, like every role switch: absent means on, and the server encodes that
+  // structurally rather than by agreement.
+  if (!settings.consult.enabled) {
+    env['COAI_CONSULT_ENABLED'] = 'false';
   }
   if (settings.maxConcurrency !== DEFAULTS.maxConcurrency) {
     env['COAI_MAX_CONCURRENCY'] = String(settings.maxConcurrency);

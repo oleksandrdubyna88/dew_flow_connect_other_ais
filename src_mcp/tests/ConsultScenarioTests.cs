@@ -80,7 +80,7 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
     }
 
-    private PanelService Service(int turns = 5, int callsPerSession = 10) => new(
+    private PanelService Service(int turns = 5, int callsPerSession = 10, bool enabled = true) => new(
         new PanelSettings
         {
             Providers = [new("codex") { ExecutablePath = FakeCliExe }],
@@ -89,6 +89,7 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
             ReviewerTimeout = TimeSpan.FromSeconds(30),
             ConsultTurns = turns,
             ConsultCallsPerSession = callsPerSession,
+            ConsultEnabled = enabled,
         },
         VaultKeys.None("no vault in tests"),
         default,
@@ -374,6 +375,31 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         {
             Directory.Delete(elsewhere, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Switched off is a SENTENCE, and it is the first thing the tool says.
+    /// </summary>
+    /// <remarks>
+    /// The tool stays in the list when the feature is off — a caller that cannot see the tool cannot
+    /// be told why it is not there — so the refusal has to name the setting and the panel section
+    /// that writes it. Asserted with an empty problem statement as well, because the guard's PLACE is
+    /// half of it: an off feature that first complains about an argument reads like a broken tool
+    /// rather than a closed one.
+    /// </remarks>
+    [Fact]
+    public async Task SwitchedOff_RefusesByNameAndLaunchesNothing()
+    {
+        var before = await Status();
+
+        var refusal = Refusal(await Consult(Service(enabled: false), "The parser returns 3 where 4 is expected."));
+
+        refusal.Should().Contain("switched off").And.Contain("COAI_CONSULT_ENABLED").And.Contain("Consultant section");
+        Refusal(await Consult(Service(enabled: false), "   ")).Should().Contain("switched off",
+            "an off feature answers for being off, not for the shape of a call nobody is going to make");
+        // The tree is DIRTY here on purpose — the uncommitted change is what a consultation sends —
+        // so the guarantee is that a refusal left it exactly as it was, not that it is clean.
+        (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");
     }
 
     private async Task<string> Status()

@@ -17,7 +17,7 @@
  * <p><b>It refuses rather than skips when the binary is missing.</b> A cross-side check that quietly
  * passes when it did not run is worse than no check: it is the green suite the rule is about.</p>
  */
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -58,6 +58,7 @@ if (binary === '') {
 const { serverSettingsJson } = await import('../out/serverSettingsFile.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { DEFAULTS } = await import('../out/settingsShape.js');
+const { DEFAULT_CONSULT } = await import('../out/consultSettings.js');
 const { tokenFileName } = await import('../out/teamServers.js');
 
 /**
@@ -204,7 +205,164 @@ if (reported.note.includes('npm install')) {
 }
 
 server.close();
+
+// ----------------------------------------------------------------------------------------------
+// The SECOND leg: the consultant settings, which cross the same seam and have the same failure.
+//
+// Five keys travel here and the panel writes each one only when it DIFFERS from its own default, so
+// a key the writer forgets is a key nobody misses: the server falls back, a consultation goes to a
+// vendor nobody picked, and both suites stay green. What discriminates is a refusal that NAMES the
+// vendor — asked for one that is deliberately not configured, the server can only produce that name
+// if the map reached it. Drop `COAI_CONSULTANTS` from the writer and this run says `codex` instead.
+//
+// Nothing is launched and nothing is billed: both answers below are refusals, by design.
+
+/** A checkout with something uncommitted in it, which is what a consultation is about. */
+function scratchRepo() {
+  const dir = mkdtempSync(join(tmpdir(), 'coai-seam-repo-'));
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('init', '--initial-branch=main');
+  git('config', 'user.email', 'seam@example.invalid');
+  git('config', 'user.name', 'seam');
+  writeFileSync(join(dir, 'Parser.cs'), 'class Parser { int Count() => 3; }\n', 'utf8');
+  git('add', '-A');
+  git('commit', '-m', 'the committed state');
+  writeFileSync(join(dir, 'Parser.cs'), 'class Parser { int Count() => 4; }\n', 'utf8');
+
+  return dir;
+}
+
+/**
+ * One `consult` call against the real binary, over the transport a real client uses.
+ *
+ * <p>The three session variables are CLEARED rather than inherited: this process is itself running
+ * under an assistant, so the caller kind would otherwise be whatever happens to be driving the
+ * script, and the leg would assert about a different row of the map on somebody else's machine.</p>
+ */
+async function consult(repoPath, kindVariable) {
+  const child = spawn('dotnet', [binary], {
+    env: {
+      ...process.env,
+      COAI_DATA_DIR: dataDir,
+      CLAUDE_CODE_SESSION_ID: '',
+      CODEX_SESSION_ID: '',
+      GEMINI_CLI_SESSION_ID: '',
+      ...(kindVariable === '' ? {} : { [kindVariable]: 'seam-session' }),
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const say = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
+
+  return await new Promise((done, broke) => {
+    let buffered = '';
+    let err = '';
+    const deadline = setTimeout(() => {
+      child.kill('SIGKILL');
+      broke(new Error(`consult did not answer within ${TIMEOUT_MS} ms\n${err}`));
+    }, TIMEOUT_MS);
+
+    child.stderr.on('data', (b) => {
+      err += String(b);
+    });
+    child.stdout.on('data', (b) => {
+      buffered += String(b);
+      for (const line of buffered.split('\n').slice(0, -1)) {
+        const message = JSON.parse(line);
+        if (message.id === 1) {
+          say({ jsonrpc: '2.0', method: 'notifications/initialized' });
+          say({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: {
+              name: 'consult',
+              arguments: { repoPath, problem: 'The parser returns 3 where 4 is expected, after two fix attempts.' },
+            },
+          });
+        }
+        if (message.id === 2) {
+          clearTimeout(deadline);
+          child.kill();
+          done(message);
+        }
+      }
+      buffered = buffered.slice(buffered.lastIndexOf('\n') + 1);
+    });
+    child.on('error', (e) => {
+      clearTimeout(deadline);
+      broke(e);
+    });
+
+    say({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'seam', version: '1' } },
+    });
+  });
+}
+
+/** The tool's own answer, which is a JSON object in the text content of the result. */
+function answerOf(reply) {
+  const text = reply?.result?.content?.[0]?.text ?? '';
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
+const repoPath = scratchRepo();
+const consultFail = (why) => {
+  rmSync(repoPath, { recursive: true, force: true });
+  fail(why);
+};
+
+// A consultant nobody configured, for the `other` caller kind — the one a plain client gets.
+const CHOSEN = 'a-vendor-nobody-configured';
+writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
+  {
+    ...DEFAULTS,
+    consult: { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: { vendor: CHOSEN, model: '' } } },
+  },
+  vendorsFrom([row]),
+  '9.9.9',
+), 'utf8');
+
+let routed;
+try {
+  routed = answerOf(await consult(repoPath, ''));
+} catch (e) {
+  consultFail(`the binary could not answer a consult call: ${e.message}`);
+}
+
+if (!String(routed.error ?? '').includes(CHOSEN)) {
+  consultFail(`the consultant map did not cross the seam. The server answered: ${JSON.stringify(routed).slice(0, 400)}`);
+}
+
+// And the switch, which is the other key with no second reader: off must refuse BY NAME rather than
+// leave a stuck agent to guess why nothing came back.
+writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
+  { ...DEFAULTS, consult: { ...DEFAULT_CONSULT, enabled: false } },
+  vendorsFrom([row]),
+  '9.9.9',
+), 'utf8');
+
+let switched;
+try {
+  switched = answerOf(await consult(repoPath, 'CLAUDE_CODE_SESSION_ID'));
+} catch (e) {
+  consultFail(`the binary could not answer a consult call with the feature off: ${e.message}`);
+}
+
+if (!String(switched.error ?? '').includes('switched off')) {
+  consultFail(`COAI_CONSULT_ENABLED did not cross the seam. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
+}
+
+rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
 console.log(`seam: its note was "${reported.note}"`);
+console.log(`seam: the consultant map crossed too — "${String(routed.error).slice(0, 120)}…"`);
+console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}…"`);
 console.log(`seam: asked ${binary}`);

@@ -261,6 +261,23 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'the-consultant',
+    en: {
+      title:
+        "The consultant: a second vendor for an AI that is stuck",
+      whatItIs:
+        "A tool your assistant calls ITSELF, `consult`, when it has been round the same bug twice and is not getting out. It hands the problem to another vendor’s model together with this checkout and the change you have not committed yet, and that model reads the tree READ-ONLY and answers advice.\n\nNothing it says is applied. The answer comes back fenced and marked advisory, your assistant is told in so many words that it is one opinion about code it cannot change, and the fix is still written and verified here. The consultation is a conversation rather than a question: a few turns, so the second model can say \"try this, tell me what it printed\" and hear the answer.",
+      why:
+        "Two rounds of the same wrong fix is the most expensive thing an assistant does, and the model that produced the blind spot is precisely the one that cannot see it. A different vendor reads the same tree cold.\n\nDoing it by hand means describing the problem again to a second AI, without the repository, without the diff, and usually without the thing you already tried — which is why the second answer is so often the first one again. Here the server assembles all three itself: your assistant sends the problem in its own words and nothing else.",
+      setup:
+        "**Let a stuck AI consult another vendor** is the switch, in the **Consultant** section of the panel. It is on, and it does nothing until an assistant asks.\n\nUnder it, one row per kind of caller, because who a stuck AI asks depends on which AI is stuck. Shipped: Claude Code asks `codex`, Codex asks `claude`, Gemini and anything else ask `codex` — never itself. The vendors offered are the reviewer rows you already configured that can hold a conversation; a row that cannot is listed underneath with the reason rather than quietly missing.\n\nThe second box is the model, and empty means the model that reviewer row is already set to. Choosing the caller’s own vendor is allowed and the row says what to think about it: it is worth doing only with a stronger model, because the server can see which vendor is asking and never which model.",
+      usage:
+        "You do not press anything. The snippet in your `CLAUDE.md` tells the assistant when to reach for this — the same bug twice, or you saying it is still not fixed — and it calls the tool.\n\nThree numbers bound it. **Turns per consultation** is how many times one consultation may be asked before it closes, five by default, and the consultant is TOLD how many are left in every turn, so the last one answers instead of asking one more clarifying question. **Calls per session** is how many consultations one assistant session may open, ten by default. **Close an idle consultation after, minutes** drops the thread when nobody has come back to it; a later question is then a new consultation with the whole budget again.\n\nA consultation cannot ping-pong: the same question twice in a row is refused, so the next turn only happens after your assistant has actually tried something and has a result to report. What each one cost is in **Show review rounds**, beside the review rounds and the chats.",
+      whatCanGoWrong:
+        "**The consultant cannot write in your repository, and the server checks rather than trusts.** It takes a fingerprint of the tree before and after, and a consultation whose vendor touched anything is failed and reported instead of answered. It never deletes or reverts what it finds — a file you wrote while waiting is yours, and losing it to a safety check would be worse than the thing the check is for.\n\n**Advice is data, not an instruction.** It arrives inside a fence that says which vendor wrote it and that it is advisory only, so a repository that contains text addressed to an AI cannot get itself obeyed by being read out to yours.\n\n**The conversation lives in the other vendor’s store**, because that is what makes a follow-up possible, and it holds this repository’s uncommitted change. That is the price of the feature and it is not ours to delete. Switch the feature off and the tool refuses by name, so an assistant is told it is off rather than left to guess why nothing came back.",
+    },
+  },
+  {
     id: 'recent-rounds',
     en: {
       title: "Active rounds: what is running right now",

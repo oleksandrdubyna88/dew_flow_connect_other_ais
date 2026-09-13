@@ -57,6 +57,7 @@ import {
 } from './modelPrices';
 import {
   ConfigReader,
+  consultantRecordUpdate,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,
@@ -113,6 +114,7 @@ import {
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { coaiDataDir } from './dataDir';
+import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
   VendorInstall,
@@ -283,7 +285,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     });
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; caller?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
         if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -291,7 +293,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
           void this.choosePrompt(m.role, m.round, String(m.value));
         } else if (m.type === 'setting') {
-          this.enqueue(() => this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role }));
+          this.enqueue(() => this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller }));
         } else if (m.type === 'focus') {
           this.editing(m.editing === true, m.id ?? '', Number(m.start), Number(m.end));
         } else if (m.type === 'command') {
@@ -623,6 +625,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
+      consultPrompt: await this.readConsultPrompt(),
       localEngines: await this.probeLocalEngines(vendors),
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
@@ -1207,6 +1210,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // The consultant's prompt is a FILE, not a setting — see `saveConsultPrompt`. Intercepted here
+    // rather than inside the plain case, because everything below this line is about configuration.
+    if (write.kind === 'plain' && write.key === 'consultPrompt') {
+      await this.saveConsultPrompt(write.value);
+      return;
+    }
+
     const config = vscode.workspace.getConfiguration('coai');
     switch (write.kind) {
       case 'vendor': {
@@ -1221,6 +1231,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // three, and the stored object is what every other role reads on the next repaint.
         const current = config.get<Record<string, unknown>>(write.key) ?? {};
         await this.save(config, write.key, roleRecordUpdate(current, write.role, write.value));
+        return;
+      }
+      case 'caller': {
+        // Merged the same way a role record is, and into `consultants` rather than the control's own
+        // key: the four rows are one map, so the key a control carries says which HALF of a row
+        // changed — the vendor or its model — and is never a setting of its own. The caps beside
+        // them are ordinary settings and take the plain path below.
+        const current = config.get<Record<string, unknown>>('consultants') ?? {};
+        await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value));
         return;
       }
       case 'plain':
@@ -1397,6 +1416,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'checkForUpdate':
         this.latestCheckedAt = 0;
+        break;
+      case 'restoreConsultPrompt':
+        await this.saveConsultPrompt('');
         break;
       case 'usageWindow':
         // The cached Team-server totals are the OTHER window's — the same staleness the scope toggle
@@ -2299,6 +2321,50 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // one tag list, and a second timer would mean two rate limits and two answers about one moment.
     this.latestTeamServer = (await latestTeamServerVersion()) ?? '';
     return this.latestServer;
+  }
+
+  /**
+   * The consultant's prompt override, or empty when there is none.
+   *
+   * <p>Read at paint rather than cached, exactly like the pasted snippet above it: the file is small,
+   * it can be edited by hand or by another window, and a cache would show a person their own edit
+   * from two minutes ago with nothing saying so.</p>
+   */
+  private async readConsultPrompt(): Promise<string> {
+    try {
+      return new TextDecoder().decode(
+        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH)),
+      );
+    } catch {
+      return ''; // no override, which is the ordinary state and means the shipped prompt
+    }
+  }
+
+  /**
+   * Writes what is in the box to the server's prompt override, or takes the override away.
+   *
+   * <p>Not `config.update`: the server reads its prompts from its own data directory, override-first,
+   * so the file IS the setting. Writing a `coai.*` key beside it would have given one prompt two
+   * homes, and the hand-edit the server has always supported would have been reverted by whichever
+   * window mirrored next.</p>
+   *
+   * <p>A failure is swallowed the way the settings write's is, and for the same reason: this runs
+   * from a keystroke pause, and a disk that will not take a file is not something a panel can fix by
+   * interrupting somebody about it. The box still holds the words, and the next pause tries again.</p>
+   */
+  private async saveConsultPrompt(value: unknown): Promise<void> {
+    const write = consultPromptWrite(value);
+    const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
+    try {
+      if (write.kind === 'remove') {
+        await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+        return;
+      }
+      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!));
+      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(write.text));
+    } catch {
+      // Nothing to say and nothing to do; see above.
+    }
   }
 
   private async readUsage(): Promise<UsageEntry[]> {
