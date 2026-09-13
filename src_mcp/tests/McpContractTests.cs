@@ -116,6 +116,63 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The prompt is advertised, and asking for it yields a message addressed to the assistant.
+    /// </summary>
+    /// <remarks>
+    /// <para>Over the WIRE, because that is the only place this can be wrong: the collection is
+    /// registered in `ServeAsync` and nothing in-process would notice it being registered on an
+    /// options object the transport never sees. A client lists this as `/mcp__coai__consult`.</para>
+    /// <para>The argument is asked for WITHOUT a value as well, because that is the ordinary use —
+    /// a person who types the command alone is saying "you know what we are stuck on".</para>
+    /// </remarks>
+    [Fact]
+    public async Task PromptsList_NamesTheConsultPrompt_AndGettingItYieldsTheInstruction()
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var listed = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"prompts/list"}""");
+            var prompts = listed.RootElement.GetProperty("result").GetProperty("prompts").EnumerateArray()
+                .Select(p => p.GetProperty("name").GetString())
+                .ToList();
+
+            prompts.Should().BeEquivalentTo(["consult"], "one prompt, unprefixed, like the tools beside it");
+
+            var got = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"The parser returns 3 where 4 is expected."}}}
+                """);
+            var message = got.RootElement.GetProperty("result").GetProperty("messages")[0];
+
+            message.GetProperty("role").GetString().Should().Be("user");
+            var text = message.GetProperty("content").GetProperty("text").GetString()!;
+            text.Should().Contain("The parser returns 3 where 4 is expected.", "the person's own words travel unrewritten")
+                .And.Contain("`consult` tool")
+                .And.Contain("rev-parse --show-toplevel")
+                .And.Contain("MATERIAL")
+                .And.Contain("Report the verification back");
+
+            // And with no words at all, which is the ordinary use.
+            var bare = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":""}}}
+                """);
+            bare.RootElement.GetProperty("result").GetProperty("messages")[0]
+                .GetProperty("content").GetProperty("text").GetString()
+                .Should().Contain("expected to know it");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
     [Fact]
     public async Task EveryStdoutLine_ParsesAsJson_EvenWithVerboseLogging()
     {

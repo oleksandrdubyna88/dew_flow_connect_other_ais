@@ -107,6 +107,17 @@ when its file cannot be written the cap is enforced in memory for this server's 
 says so — the opposite of `CallerSessions`' split-order claim, because a repeated instruction is cheap
 and a runaway agent on a paid vendor is not.
 
+**The person's own trigger is an MCP PROMPT** (2026-09-13). Four of the five triggers are the
+assistant's to notice; the fifth is the person saying so, and a sentence in a chat is a weak carrier
+for it — it competes with everything else being said, and it names neither the repository nor the
+tool. `Prompts.cs` registers one `McpServerPrompt` beside the eight tools, which a client lists as
+`/mcp__coai__consult`. It calls nothing: a prompt is TEXT handed to the assistant, so every cap,
+refusal and invariant still applies to whatever the assistant then decides. The argument is optional
+on purpose — somebody who types the command alone is saying "you know what we are stuck on" — and
+when they do give words, the message tells the assistant to send those words unrewritten. The two
+rules ride with it, because they are the ones an agent drops first: the advice is MATERIAL to verify,
+and the next turn must report what verifying it produced.
+
 **And the whole thing has a switch** (`COAI_CONSULT_ENABLED`, on). Off is a REFUSAL BY NAME, checked
 before the arguments are looked at: the tool stays in the list, because a caller that cannot see a
 tool cannot be told why it is not there, and the sentence names the setting and the panel section

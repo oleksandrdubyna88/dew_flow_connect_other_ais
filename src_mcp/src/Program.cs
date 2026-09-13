@@ -648,6 +648,15 @@ internal static class Program
                 options.ToolCollection.Add(tool);
             }
 
+            // And the one PROMPT, which is the person's own trigger: `/mcp__coai__consult` in a
+            // client that lists them. A prompt calls nothing — it hands the assistant a message —
+            // so every cap, refusal and invariant the tool has still applies to what it decides.
+            options.PromptCollection ??= [];
+            foreach (var prompt in Prompts.All())
+            {
+                options.PromptCollection.Add(prompt);
+            }
+
             await using var transport = new StdioServerTransport(ServerName);
             await using var server = McpServer.Create(transport, options);
             await server.RunAsync();
@@ -677,7 +686,9 @@ internal static class Program
         as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
         `consult` is for when YOU are stuck: an independent model, chosen by the configured route and
         usually another vendor's, reads this checkout read-only with its uncommitted diff and answers
-        advice, not orders — verify it, then report back on the same consultationId.
+        advice, not orders — verify it, then report back on the same consultationId. The person can
+        ask for one themselves with the `consult` PROMPT, which this server also offers; it hands you
+        the same instruction in their words.
         """;
 
     /// <summary>
