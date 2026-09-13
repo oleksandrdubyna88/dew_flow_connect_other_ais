@@ -140,6 +140,71 @@ public sealed class ConsultationProjectionTests : IDisposable
     }
 
     /// <summary>
+    /// The log catches up with records whose projection never landed.
+    /// </summary>
+    /// <remarks>
+    /// The projection is allowed to fail — the record file is the source of truth and a database that
+    /// is locked or full is a line in the log. But a TERMINAL record is never written again, so a
+    /// consultation whose last write met a locked database would be missing from the log for ever.
+    /// This is the pass that fixes that, and the case is simulated exactly: a record written with NO
+    /// projection at all, then reconciled. (codex, story 4's plan round.)
+    /// </remarks>
+    [Fact]
+    public void AConsultationWhoseProjectionNeverLanded_IsCarriedAcrossByTheReconciliation()
+    {
+        // Written with no projection wired at all: the file exists, the database has never heard of it.
+        var unprojected = new ConsultationStore(_dir);
+        unprojected.Write(Record() with
+        {
+            Status = ConsultationStatuses.Closed,
+            Reason = "all 5 of its turns are used",
+            EndedUtc = DateTime.UtcNow.ToString("O"),
+            Turns = [new(DateTime.UtcNow.ToString("O"), "stuck", "the loop stops one short", 5, 100, 10, null)],
+        });
+        Listed().Should().BeEmpty("nothing has projected it yet, which is the situation being fixed");
+
+        // What the service does at startup, over the records the store already reads for its sweep.
+        var store = Store();
+        foreach (var record in store.All())
+        {
+            store.Write(record);
+        }
+
+        var listed = Listed().Should().ContainSingle().Subject;
+        listed.Status.Should().Be(ConsultationStatuses.Closed);
+        listed.Advice.Should().Be("the loop stops one short");
+    }
+
+    /// <summary>
+    /// Projecting the same record twice produces the same row, not doubled totals.
+    /// </summary>
+    /// <remarks>
+    /// Which is what makes the reconciliation above safe to run on every start: the row is RECOMPUTED
+    /// from the record's own turns and upserted by id, never accumulated. Raised on the plan round as
+    /// a risk; it is a property of the shape, and this is the test that says so.
+    /// </remarks>
+    [Fact]
+    public void ProjectingTheSameRecordTwice_IsTheSameRow()
+    {
+        var store = Store();
+        var record = Record() with
+        {
+            Status = ConsultationStatuses.Open,
+            Turns = [new(DateTime.UtcNow.ToString("O"), "stuck", "try this", 12.5, 1_000, 100, 0.02)],
+        };
+
+        store.Write(record);
+        store.Write(record);
+        store.Write(record);
+
+        var listed = Listed().Should().ContainSingle().Subject;
+        listed.Turns.Should().Be(1);
+        listed.TokensIn.Should().Be(1_000);
+        listed.Seconds.Should().BeApproximately(12.5, 0.001);
+        listed.CostUsd.Should().BeApproximately(0.02, 0.0001);
+    }
+
+    /// <summary>
     /// A database written before this table existed answers an EMPTY list, never an error.
     /// </summary>
     /// <remarks>

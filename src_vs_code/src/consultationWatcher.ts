@@ -58,6 +58,9 @@ export class ConsultationWatcher {
    */
   async refresh(): Promise<void> {
     const live = await this.readLive();
+    if (live === undefined) {
+      return; // the last good snapshot stands; see `readLive`
+    }
     const before = signature(this.live);
     this.live = live;
     if (signature(live) !== before) {
@@ -65,27 +68,59 @@ export class ConsultationWatcher {
     }
   }
 
-  private async readLive(): Promise<Consultation[]> {
+  /**
+   * What is running, or NOTHING when the directory could not be read.
+   *
+   * <p>The distinction is the point, and it is the one the plan round asked for. An absent directory
+   * is the ordinary state — nobody has ever been stuck enough to ask — and reads as no consultations.
+   * A read that THROWS is a different thing: a rename landing on an open handle is the ordinary
+   * Windows case, and blanking the region for it would take a running consultation off the screen
+   * somebody is reading, for five seconds, at random. The last good snapshot stands instead.</p>
+   *
+   * <p>A single file that will not parse is skipped rather than failing the pass: the server
+   * publishes records atomically (temp plus rename), so anything unreadable is not a record.</p>
+   */
+  private async readLive(): Promise<Consultation[] | undefined> {
     const dir = vscode.Uri.joinPath(this.dataDir, 'consultations');
-    const found: Consultation[] = [];
+    let entries: [string, vscode.FileType][];
     try {
-      for (const [name, kind] of await vscode.workspace.fs.readDirectory(dir)) {
-        // `.tmp` is a write in flight, and the `answers` subdirectory holds a vendor's own output
-        // files — neither is a consultation, and reading one would be reading somebody's half-file.
-        if (kind !== vscode.FileType.File || !name.endsWith('.json') || name.endsWith('.tmp.json')) {
-          continue;
-        }
+      entries = await vscode.workspace.fs.readDirectory(dir);
+    } catch {
+      // Absent is empty; anything else keeps what we had. `stat` tells the two apart without
+      // guessing from an error message, which is not a contract any filesystem provider offers.
+      return await this.exists(dir) ? undefined : [];
+    }
+
+    const found: Consultation[] = [];
+    for (const [name, kind] of entries) {
+      // `.tmp` is a write in flight, and the `answers` subdirectory holds a vendor's own output
+      // files — neither is a consultation, and reading one would be reading somebody's half-file.
+      if (kind !== vscode.FileType.File || !name.endsWith('.json') || name.endsWith('.tmp.json')) {
+        continue;
+      }
+      try {
         const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
         const consultation = parseConsultation(new TextDecoder().decode(bytes));
         if (consultation !== undefined && isLive(consultation)) {
           found.push(consultation);
         }
+      } catch {
+        // One file being replaced right now. The next poll is five seconds away.
+        continue;
       }
-    } catch {
-      // No consultations directory yet — nobody has ever been stuck enough to ask.
     }
 
     return found;
+  }
+
+  private async exists(dir: vscode.Uri): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(dir);
+
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

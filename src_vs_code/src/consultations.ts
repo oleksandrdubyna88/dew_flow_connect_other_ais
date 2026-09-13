@@ -118,7 +118,7 @@ function card(consultation: Consultation, nowMs: number): string {
   <div class="line branch">${escapeHtml(consultation.branch)}</div>
   <div class="line"><span class="badge ${badgeClass(consultation.status)}">${escapeHtml(label(consultation.status))}</span> · ${escapeHtml(budget)}</div>
   <div class="usage">${escapeHtml(age(consultation, nowMs))}${spent.tokens > 0 ? ` · ${escapeHtml(shortNumber(spent.tokens))} tokens` : ''}</div>
-${alertLine(consultation)}</div>`;
+${alertLine(consultation)}${note(consultation.status)}</div>`;
 }
 
 /** Who is asking whom, which is the whole point of the card. */
@@ -142,9 +142,21 @@ function callerLabel(kind: string): string {
  * <p>The vendor accepted the turn and the process died before the answer was read; the conversation
  * is resumable and that turn was not counted. A person seeing red would go looking for a fault that
  * is not there.</p>
+ *
+ * <p><b>And the card says who resumes it</b>, because "resumable" on its own promises an action a
+ * person cannot take: the AI picks the conversation up by passing its consultation id back, which is
+ * what `status` hands it. Two reviewers read the word as a button that was missing. A button that
+ * resumed somebody's consultation for them would spend a vendor turn nobody asked for.</p>
  */
 function label(status: string): string {
   return status === 'asking' ? 'asking' : status === 'interrupted' ? 'resumable' : 'open';
+}
+
+/** The sentence under a card whose state a person might otherwise expect to act on. */
+function note(status: string): string {
+  return status === 'interrupted'
+    ? '  <div class="hint">The turn was not counted. The AI picks this up with its consultation id — <code>status</code> hands it back.</div>\n'
+    : '';
 }
 
 function badgeClass(status: string): string {

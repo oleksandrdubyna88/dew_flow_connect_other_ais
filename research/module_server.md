@@ -126,13 +126,21 @@ sweeps, so the log would show consultations that never ended. `Store.Projection`
 `try`/`catch` — the file is the source of truth, and a database that is locked, full or corrupt is a
 line in the log, never a consultation that refuses somebody who is stuck.
 
+**The log catches up with the records at startup.** Because the projection is allowed to fail, and a
+TERMINAL record is never written again: a database locked or full when a consultation wrote its last
+state would leave that consultation missing from the log for ever. `ConsultationService.Reproject`
+re-upserts every record the store still holds, beside the sweep that already reads them all —
+bounded by the same 7-day retention, and safe to run on every start because a row is RECOMPUTED from
+its record rather than accumulated. (codex, story 4's plan round.)
+
 **`status` names a consultation this repository still has open.** That is re-orientation, which is
 what the tool is for, pointed at the one thing a compacted conversation loses that costs money: the
 `consultationId` the first reply carried. Without it the next call opens a SECOND consultation — the
 working tree collected again, a model that has already answered asked from scratch, the caller's own
 per-session budget spent twice. Keyed by the REPOSITORY rather than the session (a consultation has
-no session), compared as a resolved PATH rather than as text, and absent for one that is over: there
-is nothing to resume and nothing to say.
+no session) and by the CALLER — `Existing` refuses a follow-up whose caller differs, so another
+session's open consultation is an id that would come back as a refusal — compared as a resolved PATH
+rather than as text, and absent for one that is over: there is nothing to resume and nothing to say.
 
 **Every turn is one ledger row of `kind: consult`, `stage: Consultation`** — a third kind beside
 `review` and `chat`, because the phase-2 question ("should an automatic consultation fire when a

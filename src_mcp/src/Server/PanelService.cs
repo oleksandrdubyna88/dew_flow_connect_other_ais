@@ -101,6 +101,14 @@ public sealed partial class PanelService
             _log.Warning("swept {Count} consultation(s): interrupted by a dead process, idle past their budget, or expired", consultationsSwept);
         }
 
+        // And the LOG catches up with the records, because the projection is allowed to fail: a
+        // database locked or full when a consultation wrote its last state leaves that consultation
+        // missing from the log for ever, since a terminal record is never written again. Bounded by
+        // the same retention the sweep above applies, and idempotent — each row is recomputed from
+        // its record rather than accumulated. (codex, story 4's plan round.)
+        var reprojected = _consultations.Reproject();
+        _log.Debug("re-projected {Count} consultation(s) into the rounds database", reprojected);
+
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
         // same failure. The timeout kill is performed by the parent, so a server that dies takes
         // no reviewers with it: reported from a macOS checkout, an Antigravity child started at
@@ -381,51 +389,6 @@ public sealed partial class PanelService
             ? "no session for this repo+branch — call open first"
             : $"no review of '{document}' on this branch — call review_document for it first. If you "
             + "meant the branch's own session, leave document empty.";
-
-    /// Consultations still open in a checkout, newest first.
-    /// </summary>
-    /// <remarks>
-    /// <para>This is re-orientation, which is what <c>status</c> is for: a conversation that was
-    /// compacted has lost the <c>consultationId</c> its first reply carried, and without it a
-    /// follow-up opens a SECOND consultation — the working tree collected again, a model that has
-    /// already answered asked from scratch, and the caller's own budget spent twice.</para>
-    /// <para>Compared as a PATH rather than as text, because the caller's spelling of a checkout is
-    /// not the server's: the tool resolves <c>repoPath</c> to the repository's top level and the
-    /// record holds that, so a call made from a subdirectory would otherwise match nothing.</para>
-    /// </remarks>
-    private IReadOnlyList<OpenConsultation> OpenConsultationsIn(string repoPath) =>
-        [.. _consultations.Store.All()
-            .Where(record => !record.IsOver && SamePath(record.RepoPath, repoPath))
-            .OrderByDescending(record => record.StartedUtc, StringComparer.Ordinal)
-            .Select(record => new OpenConsultation(
-                record.Id,
-                record.Vendor,
-                record.Model,
-                record.Status,
-                record.Branch,
-                record.Turns.Count,
-                record.MaxTurns,
-                record.StartedUtc,
-                record.Alert))];
-
-    private static bool SamePath(string one, string other)
-    {
-        try
-        {
-            return one.Length > 0 && other.Length > 0
-                && string.Equals(
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
-                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-        }
-        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            // A path this machine cannot even resolve is not the one being asked about, and a status
-            // call must not throw over a record somebody else's server wrote.
-            return false;
-        }
-    }
-
     // ---------- the two review stages ----------
 
     /// <summary>
@@ -2488,7 +2451,7 @@ public sealed partial class PanelService
             _ => string.Empty,
         },
         HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
-        Consultations = OpenConsultationsIn(session.State.RepoPath),
+        Consultations = _consultations.OpenIn(session.State.RepoPath),
     };
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
