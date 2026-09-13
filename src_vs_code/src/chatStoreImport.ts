@@ -312,7 +312,16 @@ export interface ImportDeps {
   readonly store: ChatStoreFile;
   /** The workspace a migrated record is filed under: what the dual write filed its neighbours under. */
   readonly workspace: string;
-  /** The clock, pinned by tests. It dates the locks and names the quarantine files. */
+  /**
+   * The clock, pinned by tests. It names the quarantine files — and nothing else.
+   *
+   * <p>It used to date the store's locks too, through every read and save, and that stamped each lock
+   * a migration took with the migration's START time: a run of many records on a slow disk outlives
+   * the lock's thirty-second window, after which a lock it was actively holding read as abandoned to
+   * another extension host — and a rival's genuinely stale lock read as fresh by the same frozen
+   * clock. The store's own clock dates its locks now ({@link migrateOne}); this instant survives where
+   * a NAME is derived from it, which a re-run must reproduce. (CodeRabbit, PR #223.)</p>
+   */
   readonly at?: number;
   /**
    * End this window's writes to the memento: nothing new may be queued, and what is queued has landed.
@@ -440,7 +449,7 @@ async function pass(deps: ImportDeps, raw: unknown, at: number): Promise<Pass> {
   if (open > 0) {
     return incomplete(fates, `${open} conversation(s) could not be confirmed on disk`);
   }
-  await repairIndexes(deps.store, fates, at);
+  await repairIndexes(deps.store, fates);
   const missing = await unlisted(deps.store, fates);
   if (missing.length > 0) {
     return incomplete(fates, `${missing.length} conversation(s) are on disk but not in the list that finds them`);
@@ -457,7 +466,7 @@ async function migrateRecords(
 ): Promise<readonly Fate[]> {
   const jobs: readonly (() => Promise<Fate>)[] = [
     ...contents.damaged.map((entry, index) => () => quarantine(deps.store, entry, `entry-${index}`, at)),
-    ...contents.tabs.map((tab) => () => migrateOne(deps, tab, at, true)),
+    ...contents.tabs.map((tab) => () => migrateOne(deps, tab, true)),
   ];
 
   return abreast(jobs, IMPORT_WIDTH);
@@ -485,36 +494,38 @@ async function abreast<T>(jobs: readonly (() => Promise<T>)[], width: number): P
  * <p>The read is NOT a check-then-act on absence: a save at baseline 0 is refused by the store's own
  * swap if anything has appeared in between, and a save at the disk's revision is refused if it moved
  * — either way the fate is `unconfirmed` and the next activation compares again.</p>
+ *
+ * <p><b>The read and the save take the store's own clock</b>, never the migration's `at`. Both may
+ * claim the conversation's lock, and a lock is dated by what it is handed: dated from the moment
+ * the migration BEGAN, a lock taken twenty records into a slow run was already old when it was
+ * written, and read as abandoned to any other window once the run passed the thirty-second window —
+ * while a rival's stale lock, aged against the same frozen instant, read as fresh and left the
+ * record `unconfirmed`. The migration has no clock of its own to offer here; the store's default is
+ * the right one. (CodeRabbit, PR #223.)</p>
  */
-async function migrateOne(deps: ImportDeps, tab: SavedTab, at: number, mayFork: boolean): Promise<Fate> {
-  const seen = await deps.store.read(tab.id, at);
+async function migrateOne(deps: ImportDeps, tab: SavedTab, mayFork: boolean): Promise<Fate> {
+  const seen = await deps.store.read(tab.id);
   if (seen.kind === 'absent') {
-    return fateOfSave(tab.id, await deps.store.save(fromLegacy(tab, deps.workspace), 0, at));
+    return fateOfSave(tab.id, await deps.store.save(fromLegacy(tab, deps.workspace), 0));
   }
   if (seen.kind !== 'record') {
     return { kind: 'unconfirmed', id: tab.id, reason: seen.reason };
   }
 
-  return reconcile(deps, tab, seen.record, at, mayFork);
+  return reconcile(deps, tab, seen.record, mayFork);
 }
 
 /** Both copies exist. Which is the beginning of the other decides everything. */
-async function reconcile(
-  deps: ImportDeps,
-  tab: SavedTab,
-  disk: ConversationRecord,
-  at: number,
-  mayFork: boolean,
-): Promise<Fate> {
+async function reconcile(deps: ImportDeps, tab: SavedTab, disk: ConversationRecord, mayFork: boolean): Promise<Fate> {
   const newer = newerOf(saidIn(tab.messages), saidIn(disk.messages));
   if (newer === 'same' || newer === 'store') {
     return { kind: 'kept', id: tab.id };
   }
   if (newer === 'memento') {
-    return fateOfSave(tab.id, await deps.store.save(overDisk(tab, disk, deps.workspace), disk.rev, at));
+    return fateOfSave(tab.id, await deps.store.save(overDisk(tab, disk, deps.workspace), disk.rev));
   }
 
-  return fork(deps, tab, at, mayFork);
+  return fork(deps, tab, mayFork);
 }
 
 /**
@@ -527,12 +538,12 @@ async function reconcile(
  * Whatever the fork comes to is attributed to the MEMENTO record, which is what the person has and
  * what the report names.</p>
  */
-async function fork(deps: ImportDeps, tab: SavedTab, at: number, mayFork: boolean): Promise<Fate> {
+async function fork(deps: ImportDeps, tab: SavedTab, mayFork: boolean): Promise<Fate> {
   const as = forkId(tab.id);
   if (!mayFork || as.length === 0) {
     return { kind: 'unconfirmed', id: tab.id, reason: DIVERGED_TWICE };
   }
-  const fate = await migrateOne(deps, { ...tab, id: as }, at, false);
+  const fate = await migrateOne(deps, { ...tab, id: as }, false);
   if (fate.kind === 'unconfirmed') {
     return { ...fate, id: tab.id };
   }
@@ -540,11 +551,15 @@ async function fork(deps: ImportDeps, tab: SavedTab, at: number, mayFork: boolea
   return fate.kind === 'quarantined' ? fate : { ...fate, forkedFrom: tab.id };
 }
 
-/** A `partial` save's index, regenerated by the store's own read. Best-effort: the confirmation judges the result. */
-async function repairIndexes(store: ChatStoreFile, fates: readonly Fate[], at: number): Promise<void> {
+/**
+ * A `partial` save's index, regenerated by the store's own read. Best-effort: the confirmation judges
+ * the result. The read takes the store's clock, for the reason {@link migrateOne} gives — it claims
+ * the lock to write the index.
+ */
+async function repairIndexes(store: ChatStoreFile, fates: readonly Fate[]): Promise<void> {
   for (const fate of fates) {
     if (fate.kind === 'written' && !fate.indexed) {
-      await store.read(fate.id, at);
+      await store.read(fate.id);
     }
   }
 }

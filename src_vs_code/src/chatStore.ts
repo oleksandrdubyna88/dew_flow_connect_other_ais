@@ -1,4 +1,5 @@
 import { ChatMessage } from './chatPage';
+import { isChatMessage } from './chatMessageShape';
 import { SavedTab } from './chatTabs';
 
 /**
@@ -221,13 +222,6 @@ const isRev = (value: unknown): value is number =>
 const isInstant = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-const isMessage = (value: unknown): value is ChatMessage => {
-  const row = value as { role?: unknown; text?: unknown } | null;
-
-  return row !== null && typeof row === 'object'
-    && (row.role === 'you' || row.role === 'model') && typeof row.text === 'string';
-};
-
 /**
  * A source, validated — or nothing, which a reader turns into `none`.
  *
@@ -304,7 +298,7 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
   if (!isText(row.title) || !isText(row.passage) || !isText(row.modelId)) {
     return undefined;
   }
-  if (!Array.isArray(row.messages) || !row.messages.every(isMessage)) {
+  if (!Array.isArray(row.messages) || !row.messages.every(isChatMessage)) {
     return undefined;
   }
   if (!isInstant(row.createdAt) || !isInstant(row.updatedAt)) {

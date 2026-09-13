@@ -72,14 +72,44 @@ export async function restoreAfterReload(
 
     return;
   }
-  draw(deps, panel, restoringHtml(id, nonce()));
-  await withinCeiling(migration, MIGRATION_WAIT_MS);
-  await restoreChatTab(deps, panel, id);
+  // WHETHER THE TAB IS STILL THERE, recorded before anything is awaited. The wait below is up to five
+  // seconds and a person can close the tab inside it; the restore then went on into a panel that no
+  // longer existed, and both arms of it assign `panel.webview.html`, which throws on a disposed panel
+  // — into the serializer's handler. Nothing leaks on this path (`restoreConversation` registers the
+  // panel only after `createChatPanel` returns); it is the throw. So the decision is applied only to
+  // a panel that is still open: checked after the wait, and again after the read that follows it.
+  // (CodeRabbit, PR #223.)
+  let disposed = false;
+  const closing = panel.onDidDispose(() => { disposed = true; });
+  const open = (): boolean => !disposed;
+  try {
+    draw(deps, panel, restoringHtml(id, nonce()));
+    await withinCeiling(migration, MIGRATION_WAIT_MS);
+    if (!open()) {
+      return;
+    }
+    await restoreChatTab(deps, panel, id, open);
+  } finally {
+    closing.dispose();
+  }
 }
 
-/** One tab, decided and done — the half a retry runs again. */
-export async function restoreChatTab(deps: RestoreDeps, panel: vscode.WebviewPanel, id: string): Promise<void> {
+/**
+ * One tab, decided and done — the half a retry runs again.
+ *
+ * @param open whether the panel is still there once the store has answered; the decision is applied
+ *   only then. The retry leaves it at its default — a press is proof enough that the tab is open.
+ */
+export async function restoreChatTab(
+  deps: RestoreDeps,
+  panel: vscode.WebviewPanel,
+  id: string,
+  open: () => boolean = () => true,
+): Promise<void> {
   const decision = restoreDecision(await deps.store.read(id), deps.memento.saved(id), deps.workspace());
+  if (!open()) {
+    return;
+  }
   if (decision.kind === 'restore') {
     restoreConversation(deps.panels, panel, decision.record, deps.extensionUri);
 

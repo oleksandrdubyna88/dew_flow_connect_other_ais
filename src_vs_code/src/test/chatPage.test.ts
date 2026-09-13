@@ -950,6 +950,22 @@ test('a state that omits the capped notice clears it, as it always did', () => {
   assert.strictEqual(page.seen['failure'].innerHTML, '', 'an omitted failure stayed on screen');
 });
 
+test('a note is replaced by the next state that says the failure line should read otherwise', () => {
+  // CodeRabbit, PR #223. The note wrote into #failure but not into what the state handler compares a
+  // push against, so a state carrying the SAME failure as before the note read as unchanged, was
+  // skipped, and the note stood as a stale status line for as long as the failure did not move.
+  const page = runChatPage();
+
+  page.deliver({ type: 'state', failureHtml: '<p>it broke</p>' });
+  page.deliver({ type: 'note', noteHtml: 'This tab is now a copy.' });
+  assert.match(page.seen['failure'].innerHTML, /now a copy/, 'the note was never shown');
+
+  page.deliver({ type: 'state', failureHtml: '<p>it broke</p>' });
+
+  assert.strictEqual(page.seen['failure'].innerHTML, '<p>it broke</p>',
+    'a state that repeated the failure it last sent left the note standing over it');
+});
+
 
 /* ------------------------------------------------------------------------------------------------
  * Story 3: rule 3 of the decided behaviour — a reader who was NOT followed is told that something

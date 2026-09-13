@@ -1,4 +1,5 @@
 import { ChatMessage } from './chatPage';
+import { isChatMessage } from './chatMessageShape';
 
 /**
  * What was kept of a chat tab so a window reload did not take the conversation with it — the
@@ -84,13 +85,6 @@ export const TAB_STORE_KEY = 'coai.chatTabs';
  */
 export const TAB_VERSION = 1;
 
-const isMessage = (value: unknown): value is ChatMessage => {
-  const row = value as { role?: unknown; text?: unknown } | null;
-
-  return row !== null && typeof row === 'object'
-    && (row.role === 'you' || row.role === 'model') && typeof row.text === 'string';
-};
-
 /**
  * Whether one stored value is a record this build can render.
  *
@@ -107,7 +101,7 @@ export const isTab = (value: unknown): value is SavedTab => {
     && typeof tab.savedAt === 'number' && Number.isFinite(tab.savedAt)
     && typeof tab.title === 'string' && typeof tab.passage === 'string'
     && typeof tab.modelId === 'string'
-    && Array.isArray(tab.messages) && tab.messages.every(isMessage)
+    && Array.isArray(tab.messages) && tab.messages.every(isChatMessage)
     // Absent is legitimate — an older record. Present and not a boolean is a record this build
     // cannot trust, and it is dropped with the rest of them rather than half-read.
     && (tab.fromSession === undefined || typeof tab.fromSession === 'boolean')

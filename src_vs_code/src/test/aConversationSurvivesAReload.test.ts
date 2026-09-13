@@ -62,6 +62,22 @@ test('a conversation round-trips through the store unchanged', () => {
   assert.equal(savedTab(read, 'nobody'), undefined);
 });
 
+test('the memento judges a message by the same rule the store does', () => {
+  // There were TWO copies of that rule, and when the store's was tightened to check the optional
+  // fields the memento's was not. The gap was not cosmetic: an entry carrying a malformed `model`
+  // passed here, was carried into the store by the migration, and came back from the store as
+  // unreadable — so a conversation that should have been set aside in the quarantine, where a person
+  // can go and get it, became one that reads as broken instead. One rule, one module, and this is
+  // what fails if a third copy ever appears. (CodeRabbit, pull request #223.)
+  const malformed = { ...tab(), messages: [{ role: 'model', text: 'hello', model: { id: 'x', label: null } }] };
+
+  assert.deepEqual(tabsFrom(stored([malformed as never])), [],
+    'a message the page would throw on while rendering was accepted by the old store');
+  // And what is merely ABSENT is still legal: a record written before those fields existed is a real
+  // conversation, and discarding it to tighten a check would be the opposite of the point.
+  assert.equal(tabsFrom(stored([tab()])).length, 1, 'a record without the optional fields was dropped');
+});
+
 test('a store written by another version is not guessed at', () => {
   assert.deepEqual(tabsFrom({ version: TAB_VERSION + 1, tabs: [tab()] }), [],
     'a record from a shape this build does not know was rendered anyway');
@@ -285,7 +301,7 @@ test('a panel whose conversation is NOWHERE is not left as an empty tab — and 
   assert.match(panel, /showNotice\(/, 'the two answers that keep the tab draw nothing on it');
   assert.match(source('chatRestore.ts'), /case 'incompatible':\s*\n\s*return \{ kind: 'notice'/,
     'a record this build cannot read is not given a defined tab');
-  assert.match(source('chatRestore.ts'), /default:\s*\n\s*return \{ kind: 'notice', sentence: unavailableNotice\(seen\.reason\), retry: true \}/,
+  assert.match(source('chatRestore.ts'), /case 'unavailable':\s*\n\s*return \{ kind: 'notice', sentence: unavailableNotice\(seen\.reason\), retry: true \}/,
     'a disk that would not answer is not given a tab with a retry');
   // And the serializer itself disposes nothing: every decision about a tab is in one module.
   const wiring = source('extension.ts');

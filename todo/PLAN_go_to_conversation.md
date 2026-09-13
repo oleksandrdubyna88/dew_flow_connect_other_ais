@@ -1,7 +1,17 @@
 # PLAN — go to the conversation, switch between them, and start a new one
 
-> Status: **plan only, nothing implemented yet, 2026-09-12.** Kind: **feature** — three stories, one
-> branch (`feat/go-to-conversation`), one pull request, a code round per story. Scope: the chat's
+> Status: **PARTLY IMPLEMENTED, 2026-09-13 — epic A is built and in pull request #223; epics B, C
+> and D are not started.** What ships in A is the persistence underneath the feature and nothing a
+> person can see: the record and its validation, the atomic write, the file protocol with its lock
+> and its compare-and-swap, the dual write, and the cut-over that makes the store the source of
+> truth and empties the memento. What remains is the sweep and the index (B1), the picker (B2–B4),
+> the durable source that lets a tab find its own conversation (C1), and the reset (D1–D2) — which
+> together are everything the operator actually asked for, so this plan stays in `todo/` where the
+> majority of its value still lives.
+>
+> Kind: **feature** — four epics, thirteen stories, one branch per epic and a gate round per story
+> (the line above said three stories and one pull request; the split into epics came out of the
+> plan's own gate round, and epic A alone took eleven rounds). Scope: the chat's
 > identity and persistence (`src_vs_code/src/chatCommand.ts`, `chatPanels.ts`, `sessionKey.ts`,
 > `chatTabs.ts`, `extension.ts`), two new commands with a picker (new modules `chatStore.ts`,
 > `chatStoreFile.ts`, `atomicFile.ts`, `chatGoto.ts`, `conversationPicker.ts`), the chat page's header
