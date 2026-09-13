@@ -92,3 +92,6 @@ src_vs_code/measurements/
 # Generated delivery from the pinned canonical rule, rebuilt before compile/package.
 src_vs_code/src/generated/gateRule.ts
 src_vs_code/src/generated/gateRule.ts.tmp
+
+# Coverage reports, written by c8 locally and by the sonarcloud workflow in CI.
+coverage/

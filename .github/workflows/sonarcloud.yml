@@ -68,6 +68,25 @@ jobs:
       #     Without it a pull request that adds a test suite fails the 80 % new-code coverage gate
       #     for having added tests.
       #
+      #
+      #   sonar.coverage.exclusions + the seventeen modules that IMPORT `vscode`
+      #     A module that imports `vscode` cannot be loaded outside an extension host, and this
+      #     repository has no harness that provides one — `research/module_tests.md` records that as
+      #     its largest single gap. Node's runner therefore never executes a line of them, so they
+      #     arrive at the gate as 0 % of whatever they contributed to new code: a number about the
+      #     analysis rather than about the change, which is the same reason the extension's lcov is
+      #     produced at all and the same reason `coai-server` was added to the collection above.
+      #     Seventeen of a hundred and thirty-five files in `src`, and the split is deliberate — the
+      #     decisions live in the other hundred and eighteen, which are tested as values and are at
+      #     96 % overall.
+      #     What guards these instead is a source-read wiring test per feature (`chatWiring`,
+      #     `chatGotoWiring`, `chatFreshWiring`, `conversationPickerWiring`, `chatSourceWiring`),
+      #     which asserts which function each arm calls and that each dispatch is exhaustive.
+      #     **The list is checked by `sonarExclusions.test.ts`**, which fails when it stops matching
+      #     the set of files that import `vscode` — so a new host module cannot be quietly left out
+      #     and one that sheds the import cannot be quietly left in. Take the whole entry out the
+      #     day an extension-host harness exists.
+      #
       #   both lists            + .claude/hooks/**
       #     The Claude host adapter, which exists to run `git rev-parse` and then the pinned
       #     resolver — the developer's toolchain again, so S4036 fires for the same reason and can
@@ -86,7 +105,7 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**" \
-            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**"
+            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**,src_vs_code/src/chatCommand.ts,src_vs_code/src/chatGotoCommand.ts,src_vs_code/src/chatPanel.ts,src_vs_code/src/chatPresetsPanel.ts,src_vs_code/src/chatRestorePanel.ts,src_vs_code/src/conversationPickerCommand.ts,src_vs_code/src/escalationWatcher.ts,src_vs_code/src/extension.ts,src_vs_code/src/helpPanel.ts,src_vs_code/src/installer.ts,src_vs_code/src/panelProvider.ts,src_vs_code/src/rolesPanel.ts,src_vs_code/src/roundsLogPanel.ts,src_vs_code/src/sideConfig.ts,src_vs_code/src/snippetInWorkspace.ts,src_vs_code/src/textToneHost.ts,src_vs_code/src/uiScaleHost.ts"
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release --no-incremental
       - name: Test with coverage
