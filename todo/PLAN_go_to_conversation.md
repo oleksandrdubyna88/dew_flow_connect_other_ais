@@ -433,7 +433,44 @@ under it).
 | `<coaiDataDir>/chat-conversations/*.lock` | one per conversation being written, ~80 B, alive for the length of two file writes | its own writer, in a `finally`; a claim older than thirty seconds is broken by the next writer, and B1's sweep collects one whose owner died before either | a lock left by a killed writer is what the stale window exists for; the residual race it leaves is stated in `chatStoreLock.ts`'s header rather than here |
 | `*.meta.json` | ≈ 300 B each, the same count | with its record; a metadata file whose record is gone is removed by the same sweep | a `rev` lower than its record's means the pair was interrupted: the reader regenerates it from the record rather than trusting it |
 | the metadata cache in memory | one entry per meta file, ≈ 300 B; at 2 700 records ≈ 800 KB, bounded by the sweep | built in the background at activation, refreshed against the directory's filename set and by `mtime` | a failed refresh keeps the last good cache and logs; a record deleted by another window leaves the cache on the next reconcile |
-| `workspaceState['coai.chatTabs']` | today ≤ 20 records | emptied by the migration on the first activation of this build | a migration interrupted after some files and before the key is emptied re-runs; a record already on disk is skipped by id |
+| `workspaceState['coai.chatTabs']` | today ≤ 20 records | emptied by the migration on the first activation of this build | a migration interrupted after some files and before the key is emptied re-runs; a record already on disk is skipped by id, and is NEWER than the memento's copy, so it is never replaced by it |
+
+### A4's migration compares TRANSCRIPTS, because the store's copy may be behind
+
+Written into the plan after A4's own gate round, where codex and gemini found the same defect
+independently and were right. The first design skipped any id the store already held, on the reasoning
+that the dual write had been filling it for a version and a record on disk was therefore newer.
+
+**It is not.** A3's store write is best-effort — it can answer `busy`, `failed` or `refused` — and the
+memento went on being the source of truth regardless. So the memento can hold eight turns while the
+store holds the same conversation at five, and skipping on the id and then emptying the key deletes
+three turns of somebody's conversation permanently, with every test green. The comparison is
+therefore the same containment the fork rule already uses: the store's record is a prefix of the
+memento's, or absent, and the memento is written; they are equal and nothing is done; the store has
+what the memento does not and the store is left alone.
+
+Four more things the same round settled, each of which was a way to lose a conversation quietly:
+only an `ok` save counts as present (a `partial` leaves a record nothing can list); an `incompatible`
+record never counts, because a record this build cannot read is not proof the conversation is safe; a
+damaged memento entry is quarantined rather than dropped, which would delete it silently, or counted
+as missing, which would wedge the migration into re-running for ever; and the memento is re-read
+immediately before the clear, because another window can write into it while this one migrates.
+
+And two about the moment the cut-over happens: `show` keeps writing both copies until the migration
+has actually SUCCEEDED in this window — the first design stopped unconditionally, so a window that
+could not reach the store preserved the memento and then wrote the person's next edits nowhere — and
+the reload serializer waits for the migration before it answers, because VS Code calls it during
+activation and an unmigrated conversation reads as absent, which disposes a tab the person had open.
+
+**A4 removes a bound before B1 adds one, and that gap is deliberate rather than overlooked.** The
+memento's retention was a sweep at activation cutting the store to seven days and twenty records;
+when the memento is emptied, that sweep goes with it, and the store's own — ninety days, no count cap
+— is story B1. Between the two, the conversations directory grows without anything retiring it. The
+window is one story long and the growth in it is bounded by how much a person can say in that time,
+which the table above puts at tens of megabytes a year; the reason it is written down rather than
+left is that "we will add the sweep next" is exactly the sentence a growth surface is introduced
+under. **B1 does not ship later than A4 by more than one working session, and if it does, this plan
+is wrong and the sweep moves into A4.**
 | `chat-doors.jsonl` | +110 B per invocation of the two new doors | kept forever by the ruling recorded in `chatDoorsFile.ts:14-20` | already handled |
 
 ## Boundaries with other plans — named on both sides
@@ -484,7 +521,7 @@ Everything else reads or writes it, and it holds the only migration.
 | **A1** *Atomic write, and the store's pure shapes* | `atomicFile.ts` (sync + async), `chatOrphans.ts` calling it, `chatStore.ts`: the record, `ConversationSource`, `isRecord`, `metaOf`, `isStale` by `rev`, `expired`, `fromLegacy` | `atomicFile.test.ts`, `chatStore.test.ts` — round trip, a record without the new fields, wrong `version`, damaged dropped, meta derivation, 90 days on a pinned clock, the legacy mapping |
 | **A2** *The file protocol* ⚠ | `chatStoreFile.ts` + `chatStoreLock.ts`: `save(record, expectedRev)` → ok \| partial \| refused \| incompatible \| failed, `read`, `forget`, `listMeta`, `state()` — record then meta under one `rev`, claimed by an exclusive-create lock per conversation, delete meta then record, stale meta regenerated under the claim, `ENOENT` empty vs `unavailable(reason)` | `chatStoreFile.test.ts` and `chatStoreLock.test.ts` against a real directory — order, torn `.tmp`, reconciliation, interrupted delete, a refused stale writer, racers on one lock, a lock broken at the stale boundary, the downgrade case, missing vs unreadable |
 | **A3** *Dual write, and the re-key message* ⚠ | `show()` writes the store beside the memento; `Thread.rev`, `saveId` mutable; a refused write re-mints under a new id, keeps the transcript, and tells the page. **Does NOT decide which workspace a conversation is filed under** — it uses the first root, and the boundary is named in C1's row, which is where the source that answers it properly arrives | reload-suite source guards, `chatPage.test.ts` for the re-key, a store test that both transcripts survive a fork |
-| **A4** *Cut-over: read from the store, import, retire the memento* ⚠⚠ | the serializer reads the store; `coai.chatTabs` imported only where no `<id>.json` exists; the key emptied once, after every record is confirmed; `ChatTabMemory` and the `KEEP_*` constants go; the serializer's behaviour when the store is `unavailable` is decided and tested — today an absent record disposes the panel, and disposing over a permissions error would throw a tab away | `chatStoreImport.test.ts` incl. the interrupted case; the reload suite re-pointed |
+| **A4** *Cut-over: read from the store, import, retire the memento* ⚠⚠ | the serializer reads the store, **waiting for the migration first and falling back to the memento while its key is non-empty**; the memento imported where the store's record is **not already a superset of it** — compared by TRANSCRIPT, never by id; only an `ok` save counts as present, and `incompatible` never does; a damaged record is quarantined rather than dropped or left to wedge the run; the key re-read and emptied once, after every record is confirmed; `show` keeps dual-writing **until the migration actually succeeds in this window**; `ChatTabMemory` and the `KEEP_*` constants go; `incompatible` and `unavailable` each restore a DEFINED tab that says what happened rather than an undisposed blank one | `chatStoreImport.test.ts`: the newer-memento case, the interrupted run, an unavailable store, a quarantined record, a concurrent write before the clear; the reload suite re-pointed, and both blocked-tab states |
 
 ### EPIC B — CoAI: switch conversations…
 
