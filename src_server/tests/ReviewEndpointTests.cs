@@ -215,15 +215,17 @@ public sealed class ReviewEndpointTests
 
         // The recorded spelling is asserted at the function rather than over the wire: the role a
         // job carries reaches no response a client can read back, only the ledger a finished run
-        // writes — and running one here would mean running a vendor.
-        ReviewEndpoints.CanonicalRole(sent).Should().Be(recorded);
+        // writes — and running one here would mean running a vendor. It moved from
+        // `ReviewEndpoints.CanonicalRole` to `AcceptedRoles` when which roles a server runs stopped
+        // being a constant.
+        AcceptedRoles.From([], allowAny: false).Canonical(sent).Should().Be(recorded);
     }
 
     [Fact]
     public void ARoleTheCatalogDoesNotKnow_KeepsTheSpellingItArrivedWith() =>
         // So the refusal can quote it back. Canonicalising is not the same as validating, and the
         // check that refuses an unknown role runs before this ever sees one.
-        ReviewEndpoints.CanonicalRole("Requirements").Should().Be("Requirements");
+        AcceptedRoles.From([], allowAny: false).Canonical("Requirements").Should().Be("Requirements");
 
     [Fact]
     public async Task ARoleThisServerDoesNotKnow_IsRefusedNamingTheOnesItDoes()
@@ -313,6 +315,107 @@ public sealed class ReviewEndpointTests
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
             .Should().Contain("idempotency key");
+    }
+
+    // ---------- story 2: the gates read what this server was CONFIGURED to accept ----------
+
+    /// <summary>A server told to run one role of its own, beside the five it ships with.</summary>
+    private static TeamServer WithExtraRole(string extra = "Requirements")
+    {
+        var server = new TeamServer(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = extra });
+        File.WriteAllText(Path.Combine(server.DataDir, "vendors.json"), Vendors);
+
+        return server;
+    }
+
+    [Fact]
+    public async Task ARoleTheOperatorConfigured_IsAccepted()
+    {
+        // The whole point of plan 3. Until this, a team that shared a Team server was exactly the
+        // team that could not share a review role somebody wrote.
+        using var server = WithExtraRole();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "Requirements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task AConfiguredRoleIsAcceptedInAnyCase()
+    {
+        using var server = WithExtraRole();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "requirements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted,
+            "a client that lower-cases its roles is a client, not a mistake");
+    }
+
+    [Fact]
+    public async Task AServerWithAnExtraRoleStillRefusesOneNobodyConfigured()
+    {
+        using var server = WithExtraRole();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "Invented" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("Invented").And.Contain("Requirements",
+                "the accepted set is what this server runs, not what it shipped with");
+    }
+
+    [Fact]
+    public async Task AnIdThatIsNotAnIdIsRefusedByNamingTheRuleRatherThanTheRoles()
+    {
+        using var server = new TeamServer(new Dictionary<string, string?> { ["Coai:AllowAnyRole"] = "true" });
+        File.WriteAllText(Path.Combine(server.DataDir, "vendors.json"), Vendors);
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "My-Role" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("COAI_ROUNDS_", "the rule it broke")
+            .And.NotContain("Architecture", "which is not what was wrong with it");
+    }
+
+    [Fact]
+    public async Task AllowAnyRoleAcceptsARoleNobodyNamed()
+    {
+        using var server = new TeamServer(new Dictionary<string, string?> { ["Coai:AllowAnyRole"] = "true" });
+        File.WriteAllText(Path.Combine(server.DataDir, "vendors.json"), Vendors);
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "Invented" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task TheSameReviewInTwoCasingsIsOneJob()
+    {
+        // Canonicalisation happens ONCE, at the request boundary, BEFORE the idempotency
+        // fingerprint — so two clients disagreeing about the case of a role do not become two jobs
+        // that a later ledger view has to merge. (codex, the plan round, the sharpest finding.)
+        // Two sends under ONE key. The fingerprint is what decides whether they are the same work:
+        // canonicalised, they agree and the second is the first again; uncanonicalised, they differ
+        // and the server answers 409 because one key is describing two different reviews.
+        using var server = WithExtraRole();
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+        var sent = Request() with { IdempotencyKey = "one-key" };
+
+        var first = await client.PostAsJsonAsync("/api/reviews", sent with { Role = "Requirements" });
+        var second = await client.PostAsJsonAsync("/api/reviews", sent with { Role = "requirements" });
+
+        first.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        second.StatusCode.Should().Be(HttpStatusCode.Accepted, "the same review, spelled twice");
+
+        var one = await first.Content.ReadFromJsonAsync<ReviewAcceptedDto>();
+        var two = await second.Content.ReadFromJsonAsync<ReviewAcceptedDto>();
+        two!.Id.Should().Be(one!.Id, "the fingerprint is computed from the canonical role");
     }
 }
 

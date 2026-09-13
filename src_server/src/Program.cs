@@ -301,6 +301,7 @@ app.MapReviewEndpoints(
     jobs,
     catalog,
     gate,
+    acceptedRoles,
     // How long a review may WAIT for a free account before giving up, having spent nothing. Not how
     // long the vendor may take — that is the caller's own timeoutSeconds, and the two are separate
     // clocks on purpose.

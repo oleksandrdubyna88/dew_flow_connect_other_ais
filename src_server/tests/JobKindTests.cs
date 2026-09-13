@@ -16,15 +16,18 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class JobKindTests
 {
+    /// <summary>A server nobody reconfigured: the five it ships with, which is what these rows are about.</summary>
+    private static readonly AcceptedRoles Shipped = AcceptedRoles.From([], allowAny: false);
+
     [Fact]
     public void AClientThatSaysNothingIsAReviewAndIsNotJudgedOnIt()
     {
         // The old-client row. `coai-mcp --ask-remote` has never sent a kind and never will until it
         // is released again; refusing it would take every round on every machine down at once.
-        JobKinds.Refusal(null, "Architecture").Should().BeNull();
-        JobKinds.Refusal(null, null).Should().BeNull("an old client's role has always been optional");
-        JobKinds.Refusal("", "").Should().BeNull("an empty string is a client saying nothing");
-        JobKinds.Refusal("   ", null).Should().BeNull();
+        JobKinds.Refusal(null, "Architecture", Shipped).Should().BeNull();
+        JobKinds.Refusal(null, null, Shipped).Should().BeNull("an old client's role has always been optional");
+        JobKinds.Refusal("", "", Shipped).Should().BeNull("an empty string is a client saying nothing");
+        JobKinds.Refusal("   ", null, Shipped).Should().BeNull();
 
         JobKinds.TryRead(null, out var kind).Should().BeTrue();
         kind.Should().Be(JobKind.Review, "everything written before this field existed was one");
@@ -33,32 +36,32 @@ public sealed class JobKindTests
     [Fact]
     public void AJobThatSaysItIsAReviewMustCarryARole()
     {
-        JobKinds.Refusal("review", "Architecture").Should().BeNull();
+        JobKinds.Refusal("review", "Architecture", Shipped).Should().BeNull();
 
         // It made a CLAIM, and a review is its role. This is the row the extension's `kind: chat`
         // was shipped ahead of the server for: the day this fires, a client sending a blank role and
         // no kind would have been refused with a message about roles, and every chat would stop.
-        JobKinds.Refusal("review", null).Should().Contain("needs a role")
+        JobKinds.Refusal("review", null, Shipped).Should().Contain("needs a role")
             .And.Contain("Architecture", "a refusal names what is allowed");
-        JobKinds.Refusal("review", "  ").Should().Contain("needs a role");
+        JobKinds.Refusal("review", "  ", Shipped).Should().Contain("needs a role");
     }
 
     [Fact]
     public void AChatCarriesNoRoleAndSayingOneIsRefused()
     {
-        JobKinds.Refusal("chat", null).Should().BeNull();
-        JobKinds.Refusal("chat", "").Should().BeNull();
+        JobKinds.Refusal("chat", null, Shipped).Should().BeNull();
+        JobKinds.Refusal("chat", "", Shipped).Should().BeNull();
 
         // Dropping it silently is how a field comes to mean something else: the job would run as a
         // chat while its usage line said Architecture, and the spending page would be wrong forever.
-        JobKinds.Refusal("chat", "Architecture").Should().Contain("carries no review role")
+        JobKinds.Refusal("chat", "Architecture", Shipped).Should().Contain("carries no review role")
             .And.Contain("Architecture", "it names the role it found");
     }
 
     [Fact]
     public void AKindThisServerDoesNotKnowIsRefusedNamingTheOnesItDoes()
     {
-        var refusal = JobKinds.Refusal("conversation", null);
+        var refusal = JobKinds.Refusal("conversation", null, Shipped);
 
         refusal.Should().Contain("not a kind of job").And.Contain("review").And.Contain("chat");
     }
@@ -72,7 +75,7 @@ public sealed class JobKindTests
         {
             JobKinds.TryRead(said, out var kind).Should().BeTrue(said);
             kind.Should().Be(JobKind.Chat, said);
-            JobKinds.Refusal(said, null).Should().BeNull(said);
+            JobKinds.Refusal(said, null, Shipped).Should().BeNull(said);
         }
     }
 
@@ -92,7 +95,7 @@ public sealed class JobKindTests
         foreach (var number in new[] { "0", "1", "-1", "99" })
         {
             JobKinds.TryRead(number, out _).Should().BeFalse(number);
-            JobKinds.Refusal(number, null).Should().Contain("not a kind of job", number);
+            JobKinds.Refusal(number, null, Shipped).Should().Contain("not a kind of job", number);
         }
     }
 
