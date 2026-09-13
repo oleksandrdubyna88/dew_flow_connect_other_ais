@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Consultation, consultationsBody, isLive, parseConsultation } from '../consultations';
-import { consultationsHtml } from '../roundsLog';
+import { CONSULTATIONS_SHOWN, consultationsHtml } from '../roundsLog';
 import { EMPTY_LOG, parseLog } from '../roundsDb';
 
 /**
@@ -98,6 +98,18 @@ test('the invariant’s alert is on the card, because it is the one line a perso
   assert.match(html, /2 files changed/);
 });
 
+test('a turn without numbers cannot put NaN on the card', () => {
+  // A record from a server that changed the shape, or a half-written file that still parses: the
+  // card adds these up, and `NaN tokens` is the one number nobody can read.
+  const parsed = parseConsultation(JSON.stringify({
+    id: 'abc', status: 'open', maxTurns: 5,
+    turns: [{ problem: 'p', advice: 'a' }, { problem: 'p', advice: 'a', seconds: 2, tokensIn: 10, tokensOut: 1 }],
+  }));
+
+  assert.equal(parsed?.turns.length, 1, 'a turn whose numbers are not numbers is not a turn');
+  assert.match(consultationsBody([{ ...record({ status: 'open' }), turns: parsed!.turns }], NOW), /11 tokens/);
+});
+
 test('a repository path is escaped like every other value that came off a disk', () => {
   const html = consultationsBody([record({ branch: '<script>x</script>' })], NOW);
 
@@ -139,6 +151,21 @@ test('a consultation that ended normally is not painted as a failure', () => {
   assert.match(of('closed'), /badge done/);
   assert.match(of('failed'), /badge interrupted/, 'the red one is reserved for what actually went wrong');
   assert.match(of('interrupted'), /badge awaiting/);
+});
+
+test('a full page says it is the newest N rather than letting the rest not exist', () => {
+  const one = (id: string) => ({
+    id, callerKind: 'claude', repoPath: 'D:/repo', branch: 'main', vendor: 'codex', model: '',
+    turns: 1, status: 'closed', reason: '', startedUtc: '2026-09-13T09:00:00.000Z', endedUtc: '',
+    seconds: 1, tokensIn: 0, tokensOut: 0, costUsd: null, problem: 'p', advice: 'a', alert: '',
+  });
+  const full = consultationsHtml({
+    ...EMPTY_LOG,
+    consultations: Array.from({ length: CONSULTATIONS_SHOWN }, (_, i) => one(`c${i}`)),
+  });
+
+  assert.match(full, new RegExp(`Showing the newest ${CONSULTATIONS_SHOWN}`));
+  assert.ok(!consultationsHtml({ ...EMPTY_LOG, consultations: [one('c0')] }).includes('Showing the newest'));
 });
 
 test('an empty list says how a consultation happens at all', () => {

@@ -942,7 +942,14 @@ export function consultationsHtml(log: DbLog): string {
   </tr>${one.alert.length === 0 ? '' : `
   <tr><td colspan="9" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
 
-  return `<table><thead><tr>
+  // The server answers the newest N for the same N the rounds use. Said out loud when the list is
+  // AT that number, because an older consultation silently not existing is a page telling a lie
+  // about the history it exists to be. (codex, code round.)
+  const capped = log.consultations.length >= CONSULTATIONS_SHOWN
+    ? `<div class="hint">Showing the newest ${CONSULTATIONS_SHOWN}. Older consultations are in the database and not on this page.</div>`
+    : '';
+
+  return `${capped}<table><thead><tr>
     <th>Started</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
     <th>How it ended</th><th class="num">Tokens</th><th class="num">Cost</th>
     <th>What was stuck</th><th>What was advised</th>
@@ -1061,6 +1068,9 @@ function waitingFor(): string {
  * growth this deliberately does not have.</p>
  */
 export const PAGE_SIZE = 200;
+
+/** What `--log` answers at most: `RoundsQuery` bounds the consultations by the rounds' own limit. */
+export const CONSULTATIONS_SHOWN = PAGE_SIZE;
 
 export function roundsLogHtml(
   rows: readonly LogRow[],

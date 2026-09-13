@@ -16,7 +16,7 @@ namespace CoaiMcp.Store;
 /// </remarks>
 public sealed class Projection(string dataDir, Serilog.ILogger log)
 {
-    /// <summary>Opens the database, hands it to the writer, and swallows every way that can fail.</summary>
+    /// <summary>Opens the database ONCE, hands it to the writer, and swallows every way that can fail.</summary>
     /// <param name="what">
     /// What was being projected, for the log line. A sentence a person can act on — "the round", "the
     /// consultation" — rather than a stack trace with no subject.

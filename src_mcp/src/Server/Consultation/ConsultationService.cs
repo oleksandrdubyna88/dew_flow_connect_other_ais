@@ -137,10 +137,23 @@ public sealed class ConsultationService(
     public int Reproject()
     {
         var records = _store.All();
-        foreach (var record in records)
+        if (records.Count == 0)
         {
-            Project(settings, log, record);
+            return 0;
         }
+
+        // ONE open for the whole pass. A projection per record opened, stepped and closed the file
+        // once per consultation — which is what `Projection.Write` is for, but it was being asked the
+        // wrong question. (codex and gemini, code round.)
+        new Store.Projection(settings.DataDir, log).Write(
+            db =>
+            {
+                foreach (var record in records)
+                {
+                    db.RecordConsultation(ConsultationRows.From(record));
+                }
+            },
+            "the consultations");
 
         return records.Count;
     }
