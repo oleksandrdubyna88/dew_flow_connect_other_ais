@@ -166,8 +166,14 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
 
             return (Read(server, vendor, body, enabled), true);
         }
+        // The CALLER giving up is not the server failing. A round whose clock ran out would otherwise
+        // record every server it was still asking as unreachable — poisoning the roles cache with a
+        // verdict about a request that was abandoned rather than refused, and letting the caller
+        // carry on past its own cancellation point. Only OUR timeout, which `timeout` owns, becomes
+        // an unreachable server. (codex, story 4's code round.)
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {
+            ct.ThrowIfCancellationRequested();
             Learn(server, null);
 
             return (new VendorHealth(enabled, false, "", "unavailable",

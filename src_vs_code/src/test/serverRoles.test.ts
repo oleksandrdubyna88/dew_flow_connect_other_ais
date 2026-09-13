@@ -158,3 +158,39 @@ test('a shipped role is silent even against a server nobody could reach', () => 
   assert.deepStrictEqual(roleOnServers(servers, shipped, shipped), [],
     'the five have always run everywhere, and a failed fetch does not change that');
 });
+
+// ---------- the catalog is a promise, not a fact ----------
+
+test('a roles array carrying rubbish does not take the panel down with it', () => {
+  // `Catalog` is a TypeScript interface — a promise about a value that came over HTTP from a server
+  // somebody else configured. `{"roles":[null]}` reached `name.toLowerCase()` while the Prompts
+  // section was being built, so one malformed response aborted the whole render.
+  // (codex, story 4's code round.)
+  for (const rubbish of [[null], [undefined], [1, 2], [{}], ['']]) {
+    const read = serverRolesFrom(catalog({ roles: rubbish as unknown as string[] }));
+
+    assert.deepStrictEqual(read, { kind: 'shipped' }, JSON.stringify(rubbish));
+  }
+});
+
+test('roles that is not a list at all is read as an answer nobody could use', () => {
+  for (const rubbish of ['Architecture', 42, {}, null]) {
+    assert.deepStrictEqual(
+      serverRolesFrom(catalog({ roles: rubbish as unknown as string[] })),
+      { kind: 'shipped' },
+      JSON.stringify(rubbish));
+  }
+});
+
+test('the usable names survive a list that is only partly rubbish', () => {
+  const read = serverRolesFrom(
+    catalog({ roles: ['Requirements', null, '', 'Brief'] as unknown as string[] }));
+
+  assert.deepStrictEqual(read, { kind: 'answered', names: ['Requirements', 'Brief'], allowAny: false });
+});
+
+test('a hostile catalog still carries the five this product ships', () => {
+  // The floor holds whatever arrives: a round does not get smaller because a server sent nonsense.
+  assert.strictEqual(
+    serverRuns(serverRolesFrom(catalog({ roles: [null] as unknown as string[] })), shipped), true);
+});

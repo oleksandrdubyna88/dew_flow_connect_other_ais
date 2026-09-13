@@ -755,6 +755,16 @@ reviewer from every round, and reading it as "anything goes" would send custom r
 certain to 400 them. An EMPTY list means the same as absent, because a server that HAS the field
 always accepts at least five.
 
+**The answer is re-asked, never remembered for ever.** `WarmRemoteRolesAsync` has no "already asked,
+skip it" test, and the first version's did real harm: a 502 during a restart recorded `Unreachable`,
+every later round saw a state that was no longer `NotAsked` and skipped the server, and that server's
+custom roles stayed off for the life of the process — with the staleness running the other way too,
+so an operator adding to `Coai:ExtraRoles` was never heard again. `RemoteProbe` already owns
+freshness: it answers from its cache inside the window and backs off after a failure, so asking every
+round costs nothing when the answer is fresh and is the only thing that can refresh it when it is
+not. The servers are asked CONCURRENTLY, because five configured servers with three down used to mean
+three timeouts in a row out of the round's own budget.
+
 **Both clients ask now, and there are THREE answers rather than two.** `RemoteRoles` in coai-mcp and
 `serverRoles.ts` in the extension read the same rule independently, and both distinguish a server
 that ANSWERED without the field from one that could not be REACHED. Collapsing those two is how a
