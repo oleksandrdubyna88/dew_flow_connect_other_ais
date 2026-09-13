@@ -280,4 +280,16 @@ public sealed class AcceptedRolesTests
 
         Default.Canonical(huge).Should().BeSameAs(huge, "handed straight back, not copied");
     }
+
+    [Fact]
+    public void ARoleNOBODYSENTCanonicalisesToNothingRatherThanFailing()
+    {
+        // The old-client row reaches `Canonical` too: a request that named no kind and no role passes
+        // BOTH gates, and its role is still canonicalised on the way into the JobRecord and the
+        // fingerprint. Nothing about that path is allowed to throw, and it was never asserted — the
+        // gates were tested, the ingress was not. (gemini, story 2's plan round.)
+        Default.Canonical(null).Should().BeEmpty();
+        Default.Canonical(string.Empty).Should().BeEmpty();
+        Default.Canonical("   ").Should().Be("   ", "a refusal quotes back exactly what arrived");
+    }
 }

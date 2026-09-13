@@ -25,8 +25,19 @@ public sealed class OneAcceptedRoleListTests
     /// <summary>The file that is allowed to build the list, because building it is its whole job.</summary>
     private const string TheOnePlace = "AcceptedRoles.cs";
 
-    /// <summary>Enumerating every shipped role — the shape a second copy of the list would take.</summary>
-    private const string Enumeration = "RoleCatalog.Builtin.Roles";
+    /// <summary>
+    /// Reaching the shipped catalog at all — which is the shape any second answer would take.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately <c>RoleCatalog.Builtin</c> rather than <c>RoleCatalog.Builtin.Roles</c>: the
+    /// narrower token let a gate ask <c>RoleCatalog.Builtin.ById(role)</c> — which is exactly the
+    /// membership check this type exists to own — and pass the scan. Two reviewers named the
+    /// alias-shaped evasion; this closes the one spelling of it that is a real method on a real type.
+    /// Nothing outside <see cref="AcceptedRoles"/> reaches the catalog today, so the tightening costs
+    /// nothing and refuses a whole family rather than one phrase. (gemini and codex, story 2's plan
+    /// round.)
+    /// </remarks>
+    private const string Enumeration = "RoleCatalog.Builtin";
 
     [Fact]
     public void OnlyAcceptedRolesEnumeratesTheShippedCatalog()
