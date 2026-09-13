@@ -278,6 +278,25 @@ public sealed class ConsultationProjectionTests : IDisposable
     }
 
     /// <summary>
+    /// A projection that throws is a line in the log, never a failed round.
+    /// </summary>
+    /// <remarks>
+    /// The claim that lets the consultation record and story 6's counter be written from inside the
+    /// projection at all: the record files are the source of truth, and a database that is locked,
+    /// full or corrupt must never take down the thing it is a view of. It was stated and not driven.
+    /// (codex, story 6's plan round.)
+    /// </remarks>
+    [Fact]
+    public void AWriterThatThrows_IsSwallowedByTheProjection()
+    {
+        var projection = new Projection(_dir, _log);
+
+        var act = () => projection.Write(_ => throw new InvalidOperationException("the disk said no"), "the test");
+
+        act.Should().NotThrow("a measurement may never be the reason a round fails");
+    }
+
+    /// <summary>
     /// The step runs on a database that already exists, which is the only way anybody will meet it.
     /// </summary>
     [Fact]

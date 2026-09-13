@@ -3,8 +3,16 @@ using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Core.Gate;
 
-/// <summary>One finding a caller ACCEPTED in an earlier round of this session, and which round.</summary>
-public readonly record struct AcceptedEarlier(int Round, Finding Finding);
+/// <summary>
+/// What the caller decided about one finding in an earlier round of this session.
+/// </summary>
+/// <remarks>
+/// Rejections are carried as well as acceptances, and that is not bookkeeping: accepted in round 1,
+/// REJECTED in round 2, raised again in round 3 is a disagreement the caller is defending — the
+/// <c>re_raised</c> signal — and counting it here would file it as a fix that did not take. The
+/// LATEST word about a defect is the one that decides. (codex, story 6's plan round.)
+/// </remarks>
+public readonly record struct EarlierDecision(int Round, Finding Finding, bool Accepted);
 
 /// <summary>
 /// A finding the caller accepted, fixed, and was handed back — the measurable shape of being stuck.
@@ -51,13 +59,13 @@ public static class StuckFindings
     /// </summary>
     /// <param name="thisRound">What this round produced, already merged.</param>
     /// <param name="earlier">
-    /// Accepted findings from EARLIER rounds of the same session and stage. Same stage, because a
-    /// plan-stage remark has no file and a code-stage one usually does — comparing across them would
-    /// match on category alone and count coincidences.
+    /// What the caller decided in EARLIER rounds of the same session and stage, oldest first. Same
+    /// stage, because a plan-stage remark has no file and a code-stage one usually does — comparing
+    /// across them would match on category alone and count coincidences.
     /// </param>
     public static Survivors SurvivedAcceptance(
         IReadOnlyList<Finding> thisRound,
-        IReadOnlyList<AcceptedEarlier> earlier)
+        IReadOnlyList<EarlierDecision> earlier)
     {
         if (thisRound.Count == 0 || earlier.Count == 0)
         {
@@ -68,17 +76,20 @@ public static class StuckFindings
         var rounds = new SortedSet<int>();
         foreach (var finding in thisRound)
         {
-            // FIRST match only: one finding that survived is one finding, however many earlier
-            // rounds accepted something like it. Counting it once per round would make a long
-            // session look worse than a short one for the same defect.
-            var match = earlier.FirstOrDefault(one => FindingDedup.SameDefect(one.Finding, finding));
-            if (match.Finding is null)
+            // The LATEST word about this defect, and only then whether it was an acceptance. A
+            // defect accepted in round 1 and rejected in round 2 is a standing disagreement by the
+            // time round 3 raises it — `re_raised`'s signal, not this one.
+            var about = earlier.Where(one => FindingDedup.SameDefect(one.Finding, finding)).ToList();
+            if (about.Count == 0 || !about[^1].Accepted)
             {
                 continue;
             }
 
+            // And ONE finding, however many earlier rounds accepted something like it: the round it
+            // was accepted in is what the sentence names, and counting per matching round would make
+            // a long session look worse than a short one for the same defect.
             survived.Add(finding);
-            rounds.Add(match.Round);
+            rounds.Add(about.First(one => one.Accepted).Round);
         }
 
         return new Survivors([.. survived], [.. rounds]);
