@@ -32,31 +32,27 @@ public sealed class DataDirIsAbsoluteTests
 
         Path.IsPathRooted(settings.DataDir).Should().BeTrue(
             "a reviewer subprocess launches somewhere else and cannot resolve our relative path");
-        settings.DataDir.Should().StartWith(
+        settings.DataDir.Should().Be(
             Path.GetFullPath(Path.Combine("artifacts", "bench", "smoke")));
     }
 
     /// <summary>
-    /// A configured directory is rooted and kept — and, since 2026-09-13, a side is appended to it.
+    /// A configured directory is used exactly as configured — the per-side partition is opt-in.
     /// </summary>
     /// <remarks>
-    /// This test read <c>Should().Be(absolute)</c> until issue #115. That exact equality was never
-    /// the guarantee it existed for: what it was written to prove is that a configured path is
-    /// ABSOLUTE by the time a reviewer subprocess is handed it, because a relative one made every
-    /// round unrunnable while reporting success. A configured directory is now partitioned per side
-    /// — <c>&lt;dir&gt;/&lt;side&gt;</c> — so that two installations can share one NAS without writing
-    /// one SQLite file, and the assertion keeps the part that was the point.
+    /// Worth a word, because issue #115 nearly changed this. The first build of the side partition
+    /// applied it to EVERY override, which moved this directory to <c>&lt;dir&gt;/&lt;side&gt;</c> and
+    /// turned six scenario tests red — they set <c>COAI_DATA_DIR</c> and then read files from that
+    /// exact path, which is what a script, the bench, and anybody who set the variable last year
+    /// also do. The partition is asked for with <c>COAI_DATA_SIDE</c> now, so this guarantee is
+    /// exactly what it always was.
     /// </remarks>
     [Fact]
-    public void AnAbsoluteOne_IsKeptAndTheSideIsAppendedToIt()
+    public void AnAbsoluteOne_IsLeftExactlyAsItIs()
     {
         var absolute = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "coai-data"));
 
-        var dir = From(absolute).DataDir;
-
-        dir.Should().StartWith(absolute, "the directory somebody chose is still the root of it");
-        dir.Should().NotBe(absolute, "each side keeps its own beneath it — issue #115");
-        Path.IsPathRooted(dir).Should().BeTrue();
+        From(absolute).DataDir.Should().Be(absolute);
     }
 
     [Fact]
