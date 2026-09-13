@@ -269,7 +269,8 @@ public sealed class EndToEndTests : IAsyncLifetime
     [Fact]
     public async Task AnAcceptedFindingRaisedAgain_IsCountedOnTheRound_AndNothingIsCalled()
     {
-        var service = Service();
+        var sink = new ListSink();
+        var service = Service(log: new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger());
         await service.OpenAsync(_repo, "feature");
 
         // Round 1: four findings, and the caller accepts every one of them.
@@ -288,6 +289,16 @@ public sealed class EndToEndTests : IAsyncLifetime
 
         second.ConsultMissed.Should().Be(4, "every finding the caller accepted came back");
         first.ConsultMissed.Should().Be(0, "the first round had nothing to have accepted yet");
+
+        // The audit SAYS it, in the trail the round writes, and says it as a measurement rather than
+        // an instruction — the line a person meets when they ask why a round felt like the last one.
+        sink.Lines.Should().ContainMatch("an automatic consultation could have fired here: 4 accepted finding(s)*");
+        sink.Lines.Should().NotContainMatch("*consult now*");
+
+        // And NOTHING was called: no consultation was opened, which is the whole promise of this
+        // story. The directory is the one the consult tool writes into.
+        Directory.Exists(Path.Combine(_data, "consultations")).Should().BeFalse(
+            "story 6 measures; the trigger it informs does not exist yet");
     }
 
     [Fact]

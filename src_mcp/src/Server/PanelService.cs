@@ -1315,7 +1315,7 @@ public sealed partial class PanelService
                 // measurement must never be able to take a round down. A round the projection could
                 // not ask about keeps `-1`, which is the absence of a measurement rather than a zero.
                 var stuck = Core.Gate.StuckFindings.SurvivedAcceptance(
-                    merged, db.AcceptedEarlier(completed.State.SessionId, record.Stage, record.Number));
+                    merged, db.DecidedEarlier(completed.State.SessionId, record.Stage, record.Number));
                 db.RecordConsultMissed(completed.State.SessionId, record.Stage, record.Number, stuck.Count);
                 if (stuck.Count > 0)
                 {

@@ -26,7 +26,9 @@ public sealed class StuckFindingsTests
         Category category = Category.Reliability) =>
         new(Severity.Major, category, file, line, title, title + ", and here is why", "and the fix", ["codex"]);
 
-    private static AcceptedEarlier Accepted(int round, Finding finding) => new(round, finding);
+    private static EarlierDecision Accepted(int round, Finding finding) => new(round, finding, true);
+
+    private static EarlierDecision Rejected(int round, Finding finding) => new(round, finding, false);
 
     [Fact]
     public void AFindingTheCallerAcceptedAndWasHandedBack_IsCounted()
@@ -109,6 +111,32 @@ public sealed class StuckFindingsTests
         survivors.Count.Should().Be(2);
         survivors.Rounds.Should().Equal([1, 3]);
         survivors.Sentence.Should().Contain("2 accepted finding(s) from round 1, 3");
+    }
+
+    /// <summary>
+    /// Accepted, then REJECTED, then raised again: that is a disagreement, not a fix that did not take.
+    /// </summary>
+    /// <remarks>
+    /// The caller's latest word about the defect is the rejection, and a reviewer pressing a standing
+    /// rejection is `re_raised` — a different signal, recorded elsewhere, and the more interesting one
+    /// for reading an argument. Counting it here would file a disagreement as a failure to fix.
+    /// (codex, story 6's plan round.)
+    /// </remarks>
+    [Fact]
+    public void ADefectAcceptedThenRejected_IsNotCountedWhenItComesBack()
+    {
+        var defect = Found("the parser drops the last token");
+
+        StuckFindings.SurvivedAcceptance(
+            [defect],
+            [Accepted(1, defect), Rejected(2, defect)])
+            .Count.Should().Be(0, "the caller's latest word about it is a disagreement they are defending");
+
+        // And the other way round: rejected once, then accepted, then handed back IS this signal.
+        StuckFindings.SurvivedAcceptance(
+            [defect],
+            [Rejected(1, defect), Accepted(2, defect)])
+            .Should().Match<StuckFindings.Survivors>(s => s.Count == 1 && s.Rounds.Contains(2));
     }
 
     [Fact]

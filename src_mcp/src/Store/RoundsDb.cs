@@ -204,7 +204,7 @@ public sealed class RoundsDb : IDisposable
     }
 
     /// <summary>
-    /// What this caller ACCEPTED in earlier rounds of the same session and stage.
+    /// What this caller DECIDED in earlier rounds of the same session and stage, oldest first.
     /// </summary>
     /// <remarks>
     /// <para>The input to story 6's counter. Same STAGE, because a plan-stage remark has no file and
@@ -214,26 +214,30 @@ public sealed class RoundsDb : IDisposable
     /// the title. The severity is filled with the row's own, and the rest of the finding is left at
     /// its defaults, because nothing downstream reads them — <see cref="FindingDedup.SameDefect"/>
     /// looks at four fields and this is the shape that says so.</para>
+    /// <para>Both kinds of decision travel, ordered oldest first, because the LATEST word about a
+    /// defect is what decides: one accepted in round 1 and rejected in round 2 is a disagreement the
+    /// caller is defending by the time it comes back. An UNRESOLVED finding is neither and is left
+    /// out — it is a round the caller has not answered, not a decision.</para>
     /// </remarks>
-    public IReadOnlyList<AcceptedEarlier> AcceptedEarlier(string sessionId, string stage, int number)
+    public IReadOnlyList<EarlierDecision> DecidedEarlier(string sessionId, string stage, int number)
     {
         using var read = _db.CreateCommand();
         read.CommandText = """
-            SELECT r.number, f.severity, f.category, f.file, f.line, f.title
+            SELECT r.number, f.severity, f.category, f.file, f.line, f.title, f.resolution
             FROM findings f JOIN rounds r ON r.id = f.round_id
             WHERE r.session_id = $session AND r.stage = $stage AND r.number < $number
-              AND f.resolution = 'accept'
-            ORDER BY r.number
+              AND f.resolution IN ('accept', 'reject')
+            ORDER BY r.number, f.ordinal
             """;
         Bind(read, "$session", sessionId);
         Bind(read, "$stage", stage);
         Bind(read, "$number", number);
 
-        var accepted = new List<AcceptedEarlier>();
+        var decided = new List<EarlierDecision>();
         using var rows = read.ExecuteReader();
         while (rows.Read())
         {
-            accepted.Add(new AcceptedEarlier(
+            decided.Add(new EarlierDecision(
                 rows.GetInt32(0),
                 new Finding(
                     Enum.TryParse<Severity>(rows.GetString(1), out var severity) ? severity : Severity.Major,
@@ -243,10 +247,11 @@ public sealed class RoundsDb : IDisposable
                     rows.GetString(5),
                     string.Empty,
                     string.Empty,
-                    [])));
+                    []),
+                rows.GetString(6) == "accept"));
         }
 
-        return accepted;
+        return decided;
     }
 
     /// <summary>

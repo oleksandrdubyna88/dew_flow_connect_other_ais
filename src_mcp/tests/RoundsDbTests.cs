@@ -669,7 +669,7 @@ public sealed class ConsultMissedTests : IDisposable
     }
 
     [Fact]
-    public void OnlyACCEPTEDFindings_FromEARLIERRoundsOfTheSAMEStageAndSession_Count()
+    public void OnlyDecidedFindings_FromEARLIERRoundsOfTheSAMEStageAndSession_Travel()
     {
         using var db = RoundsDb.Open(_dir, _log)!;
         var session = Session();
@@ -687,10 +687,13 @@ public sealed class ConsultMissedTests : IDisposable
         var other = Session("s2");
         Recorded(db, other, Round("CodeReview", 1), [Found("someone else's finding")], [null]);
 
-        var accepted = db.AcceptedEarlier(session.SessionId, "CodeReview", 2);
+        var decided = db.DecidedEarlier(session.SessionId, "CodeReview", 2);
 
-        accepted.Select(one => one.Finding.Title).Should().Equal(["the parser drops the last token"]);
-        accepted[0].Round.Should().Be(1);
+        // Both decisions of the code round travel — the rejection is what keeps a defect the caller
+        // is DEFENDING out of the count when it comes back — and nothing from another stage or
+        // another session does.
+        decided.Select(one => (one.Finding.Title, one.Accepted, one.Round)).Should().Equal(
+            [("the parser drops the last token", true, 1), ("the lock is late", false, 1)]);
     }
 
     [Fact]
@@ -700,7 +703,7 @@ public sealed class ConsultMissedTests : IDisposable
         var session = Session();
         Recorded(db, session, Round("CodeReview", 2), [Found("the parser drops the last token")], [null]);
 
-        db.AcceptedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
+        db.DecidedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
     }
 
     [Fact]
@@ -711,7 +714,7 @@ public sealed class ConsultMissedTests : IDisposable
         // Recorded, never resolved — which is a real state: the round ran and the caller has not answered.
         db.RecordRound(session, Round("CodeReview", 1), [Found("the parser drops the last token")]);
 
-        db.AcceptedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
+        db.DecidedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
     }
 
     [Fact]

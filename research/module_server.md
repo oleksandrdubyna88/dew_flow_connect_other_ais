@@ -113,7 +113,9 @@ code or the plan for, and met again. That is not `re_raised`, which is a reviewe
 REJECTION: a disagreement the caller is defending, and the more interesting of the two for reading an
 argument. This is the more expensive one, because nobody is disagreeing — the fix did not take.
 
-It is counted inside the projection, where the DECISIONS live (the session file holds what a round
+The caller's LATEST word about a defect decides: accepted in round 1, rejected in round 2 and raised
+again in round 3 is a disagreement being defended — `re_raised`'s signal — and counting it here would
+file it as a fix that did not take. It is counted inside the projection, where the DECISIONS live (the session file holds what a round
 found; the database holds what was done about it), matched by `FindingDedup.SameDefect` — this
 product's own rule for "the same defect", rather than a second similarity rule written beside it —
 and scoped to earlier rounds of the SAME session and stage, since a plan-stage remark has no file and
