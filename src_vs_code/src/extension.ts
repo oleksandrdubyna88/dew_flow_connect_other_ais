@@ -9,14 +9,17 @@ import {
   chatReadsThisSide,
   chatWithOtherAi,
   conversationWorkspace,
+  heldConversationIds,
   keepChatsIn,
   noteChatDoor,
+  pulseChatsThrough,
   rememberChatsIn,
   retireMemento,
   takeTheQuestion,
 } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
+import { startHousekeeping } from './chatStoreHousekeeping';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
@@ -199,6 +202,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
       return { kind: 'incomplete', fates: [], reason: 'the migration threw' };
     });
+  // HOUSEKEEPING, and the INDEX the picker reads (story B1): this window's heartbeat from now on, the
+  // sweep after the migration, the index published after the sweep. `chatStoreHousekeeping.ts` says
+  // why each order holds; what stays here is the wiring — the keeper on the SAME directory as the
+  // store, the heartbeat fed by the registry, and the chat pulsing it whenever the set of open
+  // conversations changes. Its `ready` catches its own defects, so nothing is left unhandled here.
+  const housekeeping = startHousekeeping({
+    dir: conversationsDir(coaiDataDir()),
+    store: chatStore,
+    held: () => heldConversationIds(chatPanels),
+    after: migration,
+  });
+  pulseChatsThrough(() => {
+    housekeeping.heartbeat.pulse();
+  });
   // Bound once, and never asked for again: an extension host has one storage directory for its
   // whole life, and threading it through six functions paired a per-call path with a module-level
   // list of children — two things that must agree, with nothing making them.
@@ -229,6 +246,12 @@ export function activate(context: vscode.ExtensionContext): void {
         // finds the lock busy schedules nothing, and the configuration then waits for a change that
         // may never come. Accepted finding, this story's code round.
         deferred = undefined;
+      },
+    },
+    // The heartbeat's timer. Its FILE is left on purpose — see `chatStoreHeartbeat.ts`.
+    {
+      dispose: () => {
+        housekeeping.dispose();
       },
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
