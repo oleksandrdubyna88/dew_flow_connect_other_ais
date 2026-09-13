@@ -1,6 +1,6 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
-> Status: **in progress — stories 1 and 2 of 4 implemented, 2026-09-13.** `AcceptedRoles` exists, is
+> Status: **in progress — stories 1, 2, 3 and 4 are on the branch and through the gate; the merge and the promotion are still open, 2026-09-13.** `AcceptedRoles` exists, is
 > built from configuration at boot, refuses a configured id that could never run, and is what BOTH
 > role gates and the request ingress now read; stories 3 (the wire) and 4 (both clients) are open. Scope: `src_server` (the two role gates,
 > `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),

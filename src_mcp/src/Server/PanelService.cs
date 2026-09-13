@@ -1337,11 +1337,13 @@ public sealed partial class PanelService
             // prompt — `!choice.BuiltIn` — answered the same today only because composition refuses
             // a custom role a shipped prompt id, which is a second rule holding up the first.
             // (codex and gemini, story B2's code round.)
-            if (!CanCarry(provider, role))
+            // The server's OWN words where it gave any: "this Team server runs A, B — not C" is
+            // something a person can act on, and it is true of THAT server rather than of Team
+            // servers in general. The sentence used to say "it accepts the five this product ships"
+            // for every one of them, which stopped being true the day an operator could add a role.
+            if (WhyNotCarried(provider, role) is { } why)
             {
-                Exclude(provider.Provider, role,
-                    $"'{catalog.ById(role)?.Name ?? role}' is a role this Team "
-                    + "server does not know — it accepts the five this product ships");
+                Exclude(provider.Provider, role, why);
                 return;
             }
 
@@ -1512,7 +1514,35 @@ public sealed partial class PanelService
     /// was compiled with, and a role a person defined is not in it.
     /// </remarks>
     private bool CanCarry(ProviderSettings provider, string role) =>
-        !Remote(provider) || _settings.Rounds.Catalog.ById(role)?.BuiltIn == true;
+        WhyNotCarried(provider, role) is null;
+
+    /// <summary>
+    /// Why this vendor cannot run this role, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// <para>A vendor this machine runs itself carries anything: the roles are composed here and the
+    /// CLI is told what to ask.</para>
+    /// <para>A TEAM SERVER is somebody else's boundary, and it used to be guessed at —
+    /// <c>Catalog.ById(role)?.BuiltIn == true</c>, which is "the five this product ships" written as
+    /// though it were a fact about the server. It has been true of every Team server until now, and
+    /// it stops being true the moment an operator sets <c>Coai:ExtraRoles</c>. So the server is ASKED,
+    /// through the catalog the panel already fetches to draw its health, and the answer decides —
+    /// with the shipped five as the fallback for a server that has not said, which is exactly the
+    /// old behaviour.</para>
+    /// </remarks>
+    private string? WhyNotCarried(ProviderSettings provider, string role)
+    {
+        if (!Remote(provider))
+        {
+            return null;
+        }
+
+        var known = _settings.Rounds.Catalog.ById(role);
+
+        // The id is what the server matches; the NAME is what the sentence says. A person who called
+        // a role "Requirements we wrote" reads that back rather than the `Requirements` the wire uses.
+        return _remote.RolesOn(provider.BaseUrl).WhyNot(role, known?.Name ?? role, known?.BuiltIn == true);
+    }
 
     /// <summary>The vendors that can carry this role, as one key so items group by capability.</summary>
     /// <remarks>
