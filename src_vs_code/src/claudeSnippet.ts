@@ -1,4 +1,4 @@
-import { DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
+import { CALLER_RULE, DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
@@ -37,7 +37,7 @@ import { DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '370e20f39d1b7199';
+export const SNIPPET_BODY_SHA = '62da93fda9f373c0';
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -96,6 +96,21 @@ export const DOCUMENT_VERSION = 1;
 
 const DOCUMENT_MARKER = /<!-- coai-document v(\d+) -->/;
 
+/**
+ * The CALLER half's version — say which model you are when you open the gate.
+ *
+ * <p><b>A third number rather than a bump of either other one, and for the same reason there is a
+ * second.</b> The sentence asking an AI to declare its own model belongs in step 1 of
+ * `coai-review-gate.md`, and that file is frozen against the conventions migration baseline. So it
+ * is a third rule file with a marker of its own, and a marker of its own is what lets a paste made
+ * before it be recognised — the AI obeying such a paste never sends `callerModel`, and every round
+ * it drives is recorded as stating no model while the gate is perfectly capable of recording one.
+ * That is the same defect the first version marker was introduced for, two rule files over.</p>
+ */
+export const CALLER_VERSION = 1;
+
+const CALLER_MARKER = /<!-- coai-caller v(\d+) -->/;
+
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
@@ -129,11 +144,11 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
     return { kind: 'unversioned', current };
   }
   if (found === current) {
-    // The gate half is current and the document half may not be there at all, which is what
-    // every copy pasted before plan 4 looks like. Reported as OLDER, because that is the
-    // sentence that gets it replaced — and `found` stays the number actually in the file, so
-    // nobody is told they have a version that was never handed out.
-    return documentVersionIn(pasted) === DOCUMENT_VERSION
+    // The gate half is current and one of the OTHER halves may not be there at all — which is what
+    // every copy pasted before plan 4 looks like, and every copy pasted before #174. Reported as
+    // OLDER, because that is the sentence that gets it replaced — and `found` stays the number
+    // actually in the file, so nobody is told they have a version that was never handed out.
+    return documentVersionIn(pasted) === DOCUMENT_VERSION && callerVersionIn(pasted) === CALLER_VERSION
       ? { kind: 'current', current }
       : { kind: 'older', found, current };
   }
@@ -201,13 +216,20 @@ export function documentVersionIn(text: string): number | undefined {
   return found === undefined ? undefined : Number.parseInt(found, 10);
 }
 
+/** The caller half's version out of a pasted file, or nothing when it has no such half. */
+export function callerVersionIn(text: string): number | undefined {
+  const found = CALLER_MARKER.exec(text)?.[1];
+
+  return found === undefined ? undefined : Number.parseInt(found, 10);
+}
+
 /**
- * Both rules, in the order an AI should read them: the gate, then the document gate.
+ * All three rules, in the order an AI should read them: the gate, the document gate, the caller.
  *
- * <p>Two files because the first one is frozen — see `DOCUMENT_VERSION`. A person pasting this
- * gets one block either way, and the AI reading it gets both gates, which is the only thing that
- * matters about the arrangement.</p>
+ * <p>Three files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
+ * person pasting this gets one block either way, and the AI reading it gets every rule, which is
+ * the only thing that matters about the arrangement.</p>
  */
 export function claudeSnippet(): string {
-  return `${GATE_RULE}\n${DOCUMENT_RULE}`;
+  return `${GATE_RULE}\n${DOCUMENT_RULE}\n${CALLER_RULE}`;
 }
