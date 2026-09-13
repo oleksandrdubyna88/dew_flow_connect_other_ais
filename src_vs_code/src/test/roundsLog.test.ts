@@ -247,6 +247,7 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
   const findings = over.findings ?? [dbFinding()];
 
   return {
+    consultations: [],
     rounds: [{
       repoPath: 'D:/rsd/dew_flow_connect_other_ais', branch: 'feat/shared-gate-rule',
       stage: 'CodeReview', number: 1, startedUtc: '2026-09-05T07:41:00.000Z',

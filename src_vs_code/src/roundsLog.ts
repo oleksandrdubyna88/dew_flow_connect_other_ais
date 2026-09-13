@@ -4,7 +4,7 @@ import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
-import { UsageEntry, Window, WINDOWS } from './usage';
+import { shortNumber, UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { calledBy, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -914,6 +914,65 @@ function facetOptions(rows: readonly LogRow[], key: Facet): string {
  * <p><b>What it argued with and got again</b> is the shorter and sharper list: the caller rejected
  * it with a reason, the rejection still stood, and a reviewer raised it anyway.</p>
  */
+/**
+ * Every consultation, newest first — the history the sidebar deliberately does not show.
+ *
+ * <p>The sidebar is present tense; this is where a person asks whether consulting is WORKING. So the
+ * columns are the ones that answer that: who was stuck, who answered, how many turns it took, what
+ * it cost, and the advice in force. The problem and the advice are the two long fields and they are
+ * the point of the row — a table of ids and numbers would say a consultation happened and nothing
+ * about whether it helped.</p>
+ */
+export function consultationsHtml(log: DbLog): string {
+  if (log.consultations.length === 0) {
+    return '<div class="empty">No consultations yet. One happens when a stuck AI calls <code>consult</code> —'
+      + ' the <b>Consultant</b> section of the panel says who it asks.</div>';
+  }
+
+  const rows = log.consultations.map((one) => `<tr>
+    <td>${escapeHtml(startedOf(one.startedUtc))}</td>
+    <td>${escapeHtml(callerOf(one.callerKind))} → ${escapeHtml(one.vendor)}${one.model.length > 0 ? ` · ${escapeHtml(one.model)}` : ''}</td>
+    <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
+    <td class="num">${one.turns}</td>
+    <td><span class="badge ${badgeOf(one.status)}">${escapeHtml(one.status)}</span>${one.reason.length > 0 ? ` <span class="decided" title="${escapeHtml(one.reason)}">why…</span>` : ''}</td>
+    <td class="num">${one.tokensIn + one.tokensOut > 0 ? escapeHtml(shortNumber(one.tokensIn + one.tokensOut)) : '—'}</td>
+    <td class="num cost">${escapeHtml(money(one.costUsd))}</td>
+    <td class="what">${escapeHtml(one.problem)}</td>
+    <td class="what">${escapeHtml(one.advice)}</td>
+  </tr>${one.alert.length === 0 ? '' : `
+  <tr><td colspan="9" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
+
+  return `<table><thead><tr>
+    <th>Started</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
+    <th>How it ended</th><th class="num">Tokens</th><th class="num">Cost</th>
+    <th>What was stuck</th><th>What was advised</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** The caller kind as a person names it, never the raw word from the wire. */
+function callerOf(kind: string): string {
+  return kind === 'claude' ? 'Claude Code'
+    : kind === 'codex' ? 'Codex'
+      : kind === 'gemini' ? 'Gemini'
+        : kind.length > 0 ? 'Another client' : 'An AI';
+}
+
+/**
+ * `closed` is how a consultation is SUPPOSED to end, so it is not painted as a failure.
+ *
+ * <p>`interrupted` is the amber one and deliberately not red: the vendor accepted the turn, the
+ * process died before the answer was read, and the conversation is resumable.</p>
+ */
+function badgeOf(status: string): string {
+  return status === 'failed' ? 'interrupted' : status === 'interrupted' ? 'awaiting' : 'done';
+}
+
+function startedOf(utc: string): string {
+  const at = Date.parse(utc);
+
+  return Number.isFinite(at) ? new Date(at).toLocaleString() : utc;
+}
+
 export function blindSpotsHtml(log: DbLog): string {
   if (log.blindSpots.length === 0 && log.defended.length === 0) {
     return '<div class="empty">Nothing decided yet. This fills in as gates are closed —'
@@ -1010,6 +1069,7 @@ export function roundsLogHtml(
   usageHtml = '',
   spotsHtml = '',
   totals: DbTotals = EMPTY_TOTALS,
+  consultationsHtmlText = '',
 ): string {
   const headers = COLUMNS
     .map((c) => `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`)
@@ -1135,7 +1195,7 @@ export function roundsLogHtml(
 <h1>Review rounds</h1>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
-<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
 <section id="tab-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
@@ -1162,6 +1222,7 @@ export function roundsLogHtml(
 <div id="recorded" class="hint"></div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
+<section id="tab-consultations" hidden><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
 <section id="tab-spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
 <script nonce="${nonce}">
@@ -1386,6 +1447,7 @@ export function roundsLogHtml(
         tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
       }
       document.getElementById('tab-rounds').hidden = which !== 'rounds';
+      document.getElementById('tab-consultations').hidden = which !== 'consultations';
       document.getElementById('tab-usage').hidden = which !== 'usage';
       document.getElementById('tab-spots').hidden = which !== 'spots';
       return;
@@ -1503,6 +1565,11 @@ export function roundsLogHtml(
   window.addEventListener('message', function (event) {
     var message = event.data;
     if (!message) { return; }
+    if (message.type === 'consultations' && typeof message.html === 'string') {
+      told.consultations = true;
+      document.getElementById('consultations-body').innerHTML = message.html;
+      return;
+    }
     if (message.type === 'spots' && typeof message.html === 'string') {
       told.spots = true;
       document.getElementById('spots-body').innerHTML = message.html;
@@ -1570,7 +1637,7 @@ export function roundsLogHtml(
   // is a console.warn in the extension host, which nobody opens. Four findings across both remote
   // vendors and three roles said so on the code round.
   setTimeout(function () {
-    var sections = [['usage', 'usage-body'], ['spots', 'spots-body']];
+    var sections = [['usage', 'usage-body'], ['spots', 'spots-body'], ['consultations', 'consultations-body']];
     for (var w = 0; w < sections.length; w++) {
       // Only a section that OPENED on the placeholder, and only one nothing ever reached. The
       // spending tab is painted with real numbers on the first paint, and replacing those with an

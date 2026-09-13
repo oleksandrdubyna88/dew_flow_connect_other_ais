@@ -8,7 +8,10 @@ namespace CoaiMcp.Server;
 /// One JSON file per consultation in the data directory both halves share — the escalation channel's
 /// shape: written whole under the turn, read without forbidding a writer, a torn file is nothing.
 /// </summary>
-public sealed partial class ConsultationStore(string dataDir, Action<string>? warn = null)
+public sealed partial class ConsultationStore(
+    string dataDir,
+    Action<string>? warn = null,
+    Action<ConsultationRecord>? projected = null)
 {
     /// <summary>How long a finished consultation is kept for the log and the card before its file goes.</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
@@ -26,10 +29,23 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
 
     public string PathFor(string id) => Path.Combine(Directory, $"{id}.json");
 
+    /// <summary>
+    /// The record on disk, and the projection after it.
+    /// </summary>
+    /// <remarks>
+    /// <para>ONE place, which is why the projection hangs here rather than in the service: every
+    /// state a consultation reaches is written through this method — the turns, and the sweep that
+    /// flips a dead <c>asking</c> record or closes an idle one. A projection wired in the service
+    /// would have recorded the turns and silently missed both sweeps, so the log would show
+    /// consultations that never ended.</para>
+    /// <para>The file FIRST and the projection second, never the other way round: the file is the
+    /// source of truth, and the database is a view of it that is allowed to be behind.</para>
+    /// </remarks>
     public void Write(ConsultationRecord record)
     {
         System.IO.Directory.CreateDirectory(Directory);
         AtomicJson.Write(PathFor(record.Id), JsonSerializer.Serialize(record, ConsultationJsonContext.Default.ConsultationRecord));
+        projected?.Invoke(record);
     }
 
     /// <summary>The record, or null for an id nobody wrote, a torn file, or one being replaced right now.</summary>

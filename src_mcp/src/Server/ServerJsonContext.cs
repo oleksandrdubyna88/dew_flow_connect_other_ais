@@ -28,6 +28,27 @@ public sealed record ProvidersAnswer(
     /// </remarks>
     IReadOnlyList<string> Unrecognised);
 
+/// <summary>
+/// A consultation this repository has open, as `status` reports it.
+/// </summary>
+/// <remarks>
+/// The point of it is RESUMPTION. A conversation that was compacted, or an agent picking the work up
+/// again, has lost the <c>consultationId</c> the first reply carried — and without it a follow-up
+/// opens a second consultation, pays for the working tree again and asks a model that has already
+/// answered. The id is the field that matters; the rest is what a caller needs to decide whether to
+/// continue this one or leave it.
+/// </remarks>
+public sealed record OpenConsultation(
+    string Id,
+    string Vendor,
+    string Model,
+    string Status,
+    string Branch,
+    int TurnsUsed,
+    int MaxTurns,
+    string StartedUtc,
+    string Alert);
+
 /// <summary>What `open` and `status` return.</summary>
 public sealed record SessionAnswer(
     string SessionId,
@@ -52,6 +73,17 @@ public sealed record SessionAnswer(
     public string HumanDecision { get; init; } = string.Empty;
 
     public string HumanAnswer { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Consultations still open in this repository — none, almost always.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted, so every existing construction of this record is unchanged and a caller that does
+    /// not know the field reads a session answer exactly as it always did. It is keyed by the
+    /// REPOSITORY rather than by the session: a consultation belongs to whoever is stuck in a
+    /// checkout, and half the moments that start one happen before a review session exists at all.
+    /// </remarks>
+    public IReadOnlyList<OpenConsultation> Consultations { get; init; } = [];
 }
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>

@@ -63,6 +63,35 @@ public sealed record LoggedRound(
     /// </remarks>
     Server.CallerDeclaration? Caller = null);
 
+/// <summary>
+/// One consultation as the log page lists it: who asked, who answered, and how it ended.
+/// </summary>
+/// <remarks>
+/// The turn-by-turn conversation is deliberately NOT here. The sidebar shows a consultation while it
+/// is running, from the record file; this list is the history, and what a person asks of history is
+/// what it was about, what it cost and whether it was worth it. The advice in force is carried
+/// because that is the one line worth reading back.
+/// </remarks>
+public sealed record LoggedConsultation(
+    string Id,
+    string CallerKind,
+    string RepoPath,
+    string Branch,
+    string Vendor,
+    string Model,
+    int Turns,
+    string Status,
+    string Reason,
+    string StartedUtc,
+    string EndedUtc,
+    double Seconds,
+    long TokensIn,
+    long TokensOut,
+    double? CostUsd,
+    string Problem,
+    string Advice,
+    string Alert);
+
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
 public sealed record BlindSpot(string Kind, string Name, int Accepted, int Total);
 
@@ -85,7 +114,15 @@ public sealed record LoggedLog(
     IReadOnlyList<LoggedRound> Rounds,
     IReadOnlyList<BlindSpot> BlindSpots,
     IReadOnlyList<LoggedFinding> Defended,
-    LoggedTotals Totals);
+    LoggedTotals Totals)
+{
+    /// <summary>
+    /// The consultations, newest first. Defaulted, and that is the compatibility promise: an
+    /// extension too old to know about them reads a list it ignores, and a binary too old to have
+    /// the table answers none — an absent list is EMPTY on both sides, never an error.
+    /// </summary>
+    public IReadOnlyList<LoggedConsultation> Consultations { get; init; } = [];
+}
 
 /// <summary>
 /// Reading the rounds database, for the page and for the two questions it exists to answer.
@@ -199,7 +236,10 @@ public static class RoundsQuery
             Rounds(db, Math.Clamp(limit, 1, MaxLimit), Cursor(before), withFindings),
             BlindSpots(db),
             Defended(db),
-            Totals(db));
+            Totals(db))
+        {
+            Consultations = Consultations(db, Math.Clamp(limit, 1, MaxLimit)),
+        };
     }
 
     /// <summary>
@@ -413,6 +453,53 @@ public static class RoundsQuery
     /// findings and gets two accepted says something different from one that produces two and gets
     /// both — and only the second is a blind spot worth acting on.
     /// </remarks>
+    /// <summary>
+    /// The consultations, newest first, bounded by the same limit the rounds are.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not paged, deliberately: a consultation is rarer than a round by an order of magnitude —
+    /// one is an agent admitting it is stuck — so the page that holds two hundred rounds holds every
+    /// consultation anybody has had. A cursor for a list that short would be machinery with nothing
+    /// to do.</para>
+    /// <para>A database written by an older binary has no table. It answers an EMPTY list rather than
+    /// throwing, because the two halves of this product update separately and a log page that refuses
+    /// to draw is a worse answer than a log page with one section missing.</para>
+    /// </remarks>
+    private static List<LoggedConsultation> Consultations(SqliteConnection db, int limit)
+    {
+        var consultations = new List<LoggedConsultation>();
+        try
+        {
+            using var read = db.CreateCommand();
+            read.CommandText = """
+                SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+                       started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+                       problem, advice, alert
+                FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+                """;
+            read.Parameters.AddWithValue("$limit", limit);
+            using var rows = read.ExecuteReader();
+            while (rows.Read())
+            {
+                consultations.Add(new LoggedConsultation(
+                    rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                    rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetString(7),
+                    rows.GetString(8), rows.GetString(9), rows.GetString(10), rows.GetDouble(11),
+                    rows.GetInt64(12), rows.GetInt64(13),
+                    rows.IsDBNull(14) ? null : rows.GetDouble(14),
+                    rows.GetString(15), rows.GetString(16), rows.GetString(17)));
+            }
+        }
+        catch (SqliteException)
+        {
+            // A file this binary has not stepped yet: the schema runs on OPEN, and this reader opens
+            // read-only, so a database last touched by an older build genuinely has no table here.
+            return [];
+        }
+
+        return consultations;
+    }
+
     private static List<BlindSpot> BlindSpots(SqliteConnection db)
     {
         var spots = new List<BlindSpot>();

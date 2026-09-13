@@ -246,7 +246,7 @@ function scratchRepo() {
  * the leg would assert about a different row of the map on somebody else's machine. Cleared, the kind
  * is `other` — which is also the row a plain MCP client gets.</p>
  */
-function serverSession() {
+function serverSession(extraEnv = {}) {
   const child = spawn('dotnet', [binary], {
     env: {
       ...process.env,
@@ -254,6 +254,7 @@ function serverSession() {
       CLAUDE_CODE_SESSION_ID: '',
       CODEX_SESSION_ID: '',
       GEMINI_CLI_SESSION_ID: '',
+      ...extraEnv,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -312,6 +313,56 @@ function serverSession() {
     }),
     end: () => child.kill(),
   };
+}
+
+/**
+ * The stand-in vendor CLI the server's own tests use, so a consultation can ANSWER here.
+ *
+ * <p>Nothing reaches a model and nothing is billed — but the server is real, the record it writes is
+ * real, and so is the row it projects. That is what this leg is about: the database is written by one
+ * process and read by another, through `--log`, and the extension's own parser is what reads it.</p>
+ */
+function fakeCli() {
+  for (const configuration of ['Release', 'Debug']) {
+    const candidate = join(
+      repo, 'src_mcp', 'tests_fakecli', 'bin', configuration, 'net10.0',
+      process.platform === 'win32' ? 'FakeCli.exe' : 'FakeCli');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return '';
+}
+
+/** `--log`, as a second process: what the extension actually runs, rather than a read of our own. */
+async function readLog() {
+  return await new Promise((done, broke) => {
+    const child = spawn('dotnet', [binary, '--log', '--paged', '--limit', '50'], {
+      env: { ...process.env, COAI_DATA_DIR: dataDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    const deadline = setTimeout(() => {
+      child.kill('SIGKILL');
+      broke(new Error(`--log did not answer within ${TIMEOUT_MS} ms`));
+    }, TIMEOUT_MS);
+    child.stdout.on('data', (b) => {
+      out += String(b);
+    });
+    child.on('error', (e) => {
+      clearTimeout(deadline);
+      broke(e);
+    });
+    child.on('close', (code) => {
+      clearTimeout(deadline);
+      if (code !== 0) {
+        broke(new Error(`--log exited ${code}`));
+        return;
+      }
+      done(out);
+    });
+  });
 }
 
 /** The tool's own answer, which is a JSON object in the text content of the result. */
@@ -392,10 +443,78 @@ if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'consult')) {
 }
 
 session.end();
+
+// ----------------------------------------------------------------------------------------------
+// The THIRD leg: a consultation that answers, projected by one process and read by another.
+//
+// Story 4's seam is the database. The server writes a row as the consultation advances and the
+// extension never opens SQLite — it runs `--log` and parses the answer — so the two halves can each
+// be green while nothing crosses. Here the real binary runs a consultation against the stand-in CLI
+// its own tests use (no model, no money), and then the extension's own `parseLog` reads it back out
+// of a second process.
+
+const cli = fakeCli();
+if (cli === '') {
+  consultFail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
+}
+
+writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
+  DEFAULTS,
+  vendorsFrom([{
+    id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', enabled: true, plan: true, code: true,
+    baseUrl: '', executablePath: cli, pricePerMillionIn: 0, pricePerMillionOut: 0,
+  }]),
+  '9.9.9',
+), 'utf8');
+
+const answering = serverSession({
+  FAKECLI_MODE: 'vendor',
+  FAKECLI_STDOUT: `${JSON.stringify({ type: 'thread.started', thread_id: '0199-seam' })}\n`,
+  FAKECLI_OUTFILE_TEXT: 'Print the token stream: your loop stops one short.',
+});
+try {
+  await answering.ready;
+} catch (e) {
+  answering.end();
+  consultFail(`the binary never finished the MCP handshake for the answering leg: ${e.message}`);
+}
+
+let answered;
+try {
+  answered = answerOf(await answering.consult(repoPath));
+} catch (e) {
+  answering.end();
+  consultFail(`the binary could not run a consultation against the stand-in CLI: ${e.message}`);
+}
+answering.end();
+
+if (typeof answered.consultationId !== 'string' || answered.consultationId.length === 0) {
+  consultFail(`the consultation did not open. The server answered: ${JSON.stringify(answered).slice(0, 400)}`);
+}
+
+// And now the other side of the seam: a SECOND process, `--log`, and the extension's own parser.
+const { parseLog } = await import('../out/roundsDb.js');
+let logged;
+try {
+  logged = parseLog(await readLog(), true);
+} catch (e) {
+  consultFail(`--log could not be read: ${e.message}`);
+}
+
+const consulted = (logged.consultations ?? []).find((one) => one.id === answered.consultationId);
+if (consulted === undefined) {
+  consultFail(`the consultation never reached the log. It holds: ${
+    JSON.stringify((logged.consultations ?? []).map((one) => one.id)).slice(0, 200)}`);
+}
+if (!String(consulted.advice).includes('token stream')) {
+  consultFail(`the row reached the log without its advice: ${JSON.stringify(consulted).slice(0, 400)}`);
+}
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
 console.log(`seam: its note was "${reported.note}"`);
 console.log(`seam: the consultant map crossed too — "${String(routed.error).slice(0, 120)}…"`);
 console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}…"`);
+console.log(`seam: and a consultation the binary RAN was read back out of --log — "${String(consulted.advice).slice(0, 60)}…"`);
 console.log(`seam: asked ${binary}`);

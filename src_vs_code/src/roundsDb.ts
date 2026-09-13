@@ -93,8 +93,44 @@ export interface BlindSpot {
   readonly total: number;
 }
 
+/**
+ * One consultation as the log lists it — who asked, who answered, and how it ended.
+ *
+ * <p>The turn-by-turn conversation is deliberately not here: the sidebar shows a consultation while
+ * it runs, from the record file, and this is the history. What a person asks of history is what it
+ * was about, what it cost, and whether the advice was worth having.</p>
+ */
+export interface DbConsultation {
+  readonly id: string;
+  readonly callerKind: string;
+  readonly repoPath: string;
+  readonly branch: string;
+  readonly vendor: string;
+  readonly model: string;
+  readonly turns: number;
+  readonly status: string;
+  readonly reason: string;
+  readonly startedUtc: string;
+  readonly endedUtc: string;
+  readonly seconds: number;
+  readonly tokensIn: number;
+  readonly tokensOut: number;
+  readonly costUsd: number | null;
+  readonly problem: string;
+  readonly advice: string;
+  readonly alert: string;
+}
+
 export interface DbLog {
   readonly rounds: readonly DbRound[];
+  /**
+   * The consultations, newest first.
+   *
+   * <p>Absent from a server too old to have the table, and that is why it is a list rather than an
+   * optional: an absent list is an EMPTY one on both sides of this seam, never an error. The two
+   * halves of this product update separately and always have.</p>
+   */
+  readonly consultations: readonly DbConsultation[];
   readonly blindSpots: readonly BlindSpot[];
   readonly defended: readonly DbFinding[];
   readonly totals: DbTotals;
@@ -119,7 +155,7 @@ export interface DbLog {
 }
 
 export const EMPTY_LOG: DbLog = {
-  rounds: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false, read: false,
+  rounds: [], consultations: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false, read: false,
 };
 
 /**
@@ -135,6 +171,7 @@ export function parseLog(text: string, paged = false): DbLog {
 
     return {
       rounds: (raw.rounds ?? []).map(round),
+      consultations: (raw.consultations ?? []).filter((one) => typeof one?.id === 'string'),
       blindSpots: (raw.blindSpots ?? []).filter((s) => typeof s?.name === 'string'),
       defended: (raw.defended ?? []).map(finding),
       totals: totalsOf(raw.totals),

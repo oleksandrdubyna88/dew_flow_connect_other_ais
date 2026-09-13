@@ -71,7 +71,8 @@ export class RoundsLogPanel {
     usage: string;
     spots: string;
     totals: DbTotals;
-  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS };
+    consultations: string;
+  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '' };
 
   /**
    * The belt to the handshake's braces.
@@ -99,10 +100,11 @@ export class RoundsLogPanel {
     usageHtml: string,
     spotsHtml = '',
     totals: DbTotals = EMPTY_TOTALS,
+    consultationsHtml = '',
   ): void {
     if (this.panel !== undefined) {
       this.panel.reveal();
-      this.update(rows, questions, usageHtml, true, spotsHtml, totals);
+      this.update(rows, questions, usageHtml, true, spotsHtml, totals, consultationsHtml);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -121,8 +123,8 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
-      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals);
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals };
+      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals, consultationsHtml);
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
     this.rebuilt();
 
     panel.webview.onDidReceiveMessage((message: LogPageMessage) => this.received(logCommandOf(message)));
@@ -142,11 +144,12 @@ export class RoundsLogPanel {
     force = false,
     spotsHtml = '',
     totals: DbTotals = EMPTY_TOTALS,
+    consultationsHtml = '',
   ): void {
     if (this.panel === undefined) {
       return;
     }
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals };
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
     void this.pushAll(force);
   }
 
@@ -249,7 +252,7 @@ export class RoundsLogPanel {
   }
 
   private async pushEach(force: boolean): Promise<void> {
-    const { rows, questions, usage, spots, totals } = this.latest;
+    const { rows, questions, usage, spots, totals, consultations } = this.latest;
     // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
     // push here is then a compile error rather than a region that silently never updates.
     // (gemini, the code round.)
@@ -260,6 +263,10 @@ export class RoundsLogPanel {
       },
       usage: { content: usage, message: () => ({ type: 'usage', html: usage }) },
       spots: { content: spots, message: () => ({ type: 'spots', html: spots }) },
+      consultations: {
+        content: consultations,
+        message: () => ({ type: 'consultations', html: consultations }),
+      },
       // The page is painted before the database is read, so the line under the table opens on
       // nothing. This is what fills it in. It used to be recorded in `latest` and pushed nowhere,
       // which left the whole SQL-totals line permanently empty. (Code round, CodeRabbit.)

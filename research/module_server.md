@@ -115,6 +115,25 @@ asymmetry is deliberate and it is the same one: a consultant wrongly available c
 nothing calls it until an agent is stuck; one wrongly unavailable is a refusal in the one moment it
 was wanted.
 
+**The consultation is projected into the rounds database, and the projection is never allowed to
+matter.** Schema step 2 (2026-09-13) adds a `consultations` table — one row per CONSULTATION rather
+than per turn, upserted as it advances, with the totals summed from the turns, the FIRST problem
+(what it is about) and the LAST advice (the answer in force) — plus `rounds.consult_missed` for story
+6's counter, because a schema step is append-only and splitting one column across two steps buys
+nothing. The write hangs off `ConsultationStore.Write`, which is the ONE place every state passes
+through: a projection wired into the service would have recorded the turns and silently missed both
+sweeps, so the log would show consultations that never ended. `Store.Projection` is the shared
+`try`/`catch` — the file is the source of truth, and a database that is locked, full or corrupt is a
+line in the log, never a consultation that refuses somebody who is stuck.
+
+**`status` names a consultation this repository still has open.** That is re-orientation, which is
+what the tool is for, pointed at the one thing a compacted conversation loses that costs money: the
+`consultationId` the first reply carried. Without it the next call opens a SECOND consultation — the
+working tree collected again, a model that has already answered asked from scratch, the caller's own
+per-session budget spent twice. Keyed by the REPOSITORY rather than the session (a consultation has
+no session), compared as a resolved PATH rather than as text, and absent for one that is over: there
+is nothing to resume and nothing to say.
+
 **Every turn is one ledger row of `kind: consult`, `stage: Consultation`** — a third kind beside
 `review` and `chat`, because the phase-2 question ("should an automatic consultation fire when a
 finding survives two rounds?") is a cost question about consultations specifically, and filing them as

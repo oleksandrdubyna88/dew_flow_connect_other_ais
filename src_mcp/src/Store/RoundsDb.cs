@@ -148,6 +148,60 @@ public sealed class RoundsDb : IDisposable
         transaction.Commit();
     }
 
+    /// <summary>
+    /// One consultation, as it stands right now: written when it opens and again on every change.
+    /// </summary>
+    /// <remarks>
+    /// <para>An upsert rather than an insert, because a consultation is a CONVERSATION — it is
+    /// written `asking`, becomes `open` with a turn, may be `interrupted` and resumed, and ends
+    /// `closed` or `failed`. One row that advances says what happened; a row per state would make
+    /// the log page count one consultation five times.</para>
+    /// <para>The totals are summed from the turns rather than stored per turn: what the log answers
+    /// is "what did this consultation cost", and the turn-by-turn detail is in the record file the
+    /// panel reads while it is still running. <c>problem</c> is the FIRST turn's — what it is about —
+    /// and <c>advice</c> the LAST one's, which is the answer in force. A consultation still in its
+    /// first launch has neither, and that is a real state: it is `asking`.</para>
+    /// </remarks>
+    public void RecordConsultation(ConsultationRow row)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO consultations (
+                id, caller, caller_kind, repo_path, branch, head_sha, vendor, model, turns, status,
+                reason, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert)
+            VALUES (
+                $id, $caller, $kind, $repo, $branch, $sha, $vendor, $model, $turns, $status,
+                $reason, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert)
+            ON CONFLICT(id) DO UPDATE SET
+                turns = excluded.turns, status = excluded.status, reason = excluded.reason,
+                ended_utc = excluded.ended_utc, seconds = excluded.seconds,
+                tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out,
+                cost_usd = excluded.cost_usd, problem = excluded.problem,
+                advice = excluded.advice, alert = excluded.alert
+            """;
+        Bind(write, "$id", row.Id);
+        Bind(write, "$caller", row.Caller);
+        Bind(write, "$kind", row.CallerKind);
+        Bind(write, "$repo", row.RepoPath);
+        Bind(write, "$branch", row.Branch);
+        Bind(write, "$sha", row.HeadSha);
+        Bind(write, "$vendor", row.Vendor);
+        Bind(write, "$model", row.Model);
+        Bind(write, "$turns", row.Turns);
+        Bind(write, "$status", row.Status);
+        Bind(write, "$reason", row.Reason);
+        Bind(write, "$started", row.StartedUtc);
+        Bind(write, "$ended", row.EndedUtc);
+        Bind(write, "$seconds", row.Seconds);
+        Bind(write, "$in", row.TokensIn);
+        Bind(write, "$out", row.TokensOut);
+        Bind(write, "$cost", row.CostUsd is { } usd ? usd : DBNull.Value);
+        Bind(write, "$problem", row.Problem);
+        Bind(write, "$advice", row.Advice);
+        Bind(write, "$alert", row.Alert);
+        write.ExecuteNonQuery();
+    }
+
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>
     public void RecordDecisions(string sessionId, string stage, int number, IReadOnlyList<Decision> decisions)
     {

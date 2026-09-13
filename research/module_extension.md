@@ -1847,6 +1847,22 @@ The caps are bounded by what the SERVER can hold (`int.TryParse`), because `sett
 a person edits by hand and `2147483648` is a whole positive number the panel would have displayed
 while the server ran its own default.
 
+**The third live region, and the second watcher.** `#live-consultations` sits at the TOP of the
+section — what is happening now before what is configured — and `ConsultationWatcher` feeds it with
+the `EscalationWatcher` shape: a glob over the data directory plus a 5 second poll, because the
+directory may not exist until the first consultation and a file written by another process on a
+network path does not always raise a watcher event. **One surface, not three**: the escalation
+watcher raises a modal and holds a status-bar item because a round is BLOCKED behind its question;
+nothing is blocked here, so a consultation appears where a person is already looking and nowhere
+else. The watcher compares what it read before telling anybody — a directory polled twelve times a
+minute would otherwise rebuild the section's DOM under whatever somebody is typing into.
+
+**The sidebar is present tense and the log is the history** (the 2026-09-05 ruling, applied again):
+the card shows `asking`, `open` and `interrupted` only, and a fourth tab on the rounds log —
+*Consultations* — lists every one that has happened with what was stuck, what was advised and what it
+cost. `interrupted` reads as **resumable** in both places, because that is what it is: the vendor
+accepted the turn, the process died before the answer was read, and the turn was not counted.
+
 **The prompt box is not a setting.** `coai-mcp` reads its prompts override-first from its own data
 directory, so what a person types goes to `<dataDir>/prompts/consult.md` and nowhere else — the file
 IS the value, and the panel reads it at paint time like the pasted snippet beside it. A mirrored
@@ -1945,6 +1961,8 @@ flowchart LR
 | `consultSettings.ts` | pure: the five consult settings, the shipped caller map (a mirror of `ConsultantRouting.Shipped`), which vendor rows may consult and why one may not |
 | `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box |
 | `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
+| `consultations.ts` | pure: one consultation record, and the card the sidebar draws while it runs |
+| `consultationWatcher.ts` | the impure half: the glob + 5 s poll over `consultations/*.json`, silent unless something a person would SEE changed |
 | `escalationWatcher.ts` | the impure half: file watcher + a 5s poll (a watcher on a path outside the workspace is not guaranteed), the modal, the status-bar item, the atomic answer write |
 | `extension.ts` | activation, the four commands, the update offer |
 
