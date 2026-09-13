@@ -152,19 +152,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
             using var response = await http.SendAsync(request, timeout.Token);
             var body = await response.Content.ReadAsStringAsync(timeout.Token);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                // A refusal is not an answer ABOUT ROLES. It is recorded as unreachable so that a
-                // custom role is left out with a sentence saying the server could not be asked,
-                // rather than one claiming it said something.
-                Learn(server, null);
-
-                return (Refused(server, (int)response.StatusCode, body, enabled), false);
-            }
-
-            Learn(server, Parse(body));
-
-            return (Read(server, vendor, body, enabled), true);
+            return Answered(server, vendor, response, body, enabled);
         }
         // The CALLER giving up is not the server failing. A round whose clock ran out would otherwise
         // record every server it was still asking as unreachable — poisoning the roles cache with a
@@ -221,6 +209,32 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
                 is not { } offered
                 ? NotOffered(server, vendor, catalog, enabled)
                 : Offered(server, catalog, offered, enabled);
+
+    /// <summary>
+    /// A response arrived. What it MEANS — for this vendor's health, and for the server's roles.
+    /// </summary>
+    /// <remarks>
+    /// Its own method so <see cref="AskAsync"/> is one try/catch around one request rather than a
+    /// request, two branches and two exception alternatives — the complexity ceiling this family
+    /// keeps at four. (CodeRabbit, plan 3's pull request.)
+    /// <para>A refusal is not an answer ABOUT ROLES: it is recorded as unreachable, so a custom role
+    /// is left out with a sentence saying the server could not be asked rather than one claiming it
+    /// said something.</para>
+    /// </remarks>
+    private (VendorHealth Health, bool Ok) Answered(
+        string server, VendorIdentity vendor, HttpResponseMessage response, string body, bool enabled)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            Learn(server, null);
+
+            return (Refused(server, (int)response.StatusCode, body, enabled), false);
+        }
+
+        Learn(server, Parse(body));
+
+        return (Read(server, vendor, body, enabled), true);
+    }
 
     /// <summary>
     /// Remember what this server said about roles — or that it did not say.

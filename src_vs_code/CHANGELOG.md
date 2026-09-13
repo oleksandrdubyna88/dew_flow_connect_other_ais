@@ -15,9 +15,9 @@ roles it runs and says so beside the role: *work runs Architecture, Conventions 
 wrote*. Until now that was only visible in a round's result, by which time you had waited for a
 review that was never going to include it.
 
-A server too old to be asked, and one that could not be reached, both still run the five that ship —
-and the sentence says which of the two happened, because one is fixed by updating a server and the
-other by looking at a network.
+A server too old to REPORT its roles, and one that could not be reached at all, both still run the
+five that ship — and the sentence says which of the two happened, because one is fixed by updating a
+server and the other by looking at a network.
 
 **A reviewer in the Active rounds list reads over two lines.** What it is — vendor, role and model — on the first; what it is doing, indented, on the second. Showing the model had made that line about twice as long as the sidebar is wide, and a model id is one long unbreakable word, so the line used to break in the middle of it. A reviewer whose status has not been recorded shows no second line rather than an empty one. The rounds log page is unchanged: there a reviewer is still one line.
 

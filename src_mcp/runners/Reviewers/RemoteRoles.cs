@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
@@ -45,7 +47,7 @@ public enum RemoteRolesSource
 /// The roles it named. Empty unless <see cref="Source"/> is <see cref="RemoteRolesSource.Answered"/>.
 /// </param>
 /// <param name="AllowAny">Whether it said it will run any well-formed role, however it was named.</param>
-public sealed record RemoteRoles(
+public sealed partial record RemoteRoles(
     IReadOnlyList<string> Names, bool AllowAny, RemoteRolesSource Source)
 {
     /// <summary>Nothing is known about this server's roles.</summary>
@@ -65,14 +67,33 @@ public sealed record RemoteRoles(
     public static RemoteRoles From(IReadOnlyList<string?>? named, bool allowAny)
     {
         var usable = (named ?? [])
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name!)
+            .Select(name => name?.Trim() ?? string.Empty)
+            .Where(IsRoleId)
             .ToList();
 
         return usable.Count > 0
             ? new RemoteRoles(usable, allowAny, RemoteRolesSource.Answered)
             : new RemoteRoles([], false, RemoteRolesSource.Shipped);
     }
+
+    /// <summary>
+    /// Whether a name a server sent could be a role id at all.
+    /// </summary>
+    /// <remarks>
+    /// The same shape and the same 48 the rest of this product applies, because this is the one place
+    /// an id arrives from OUTSIDE: a catalog is JSON from a box somebody else configured. Merely
+    /// "not blank" was not enough — <c>[" "]</c> would make a catalog look ANSWERED, and an answered
+    /// catalog is the whole truth about its server, so one space would report every shipped role as
+    /// unsupported. (CodeRabbit, plan 3's pull request.)
+    /// </remarks>
+    private static bool IsRoleId(string name) =>
+        name.Length is > 0 and <= MaxIdLength && RoleId.IsMatch(name);
+
+    /// <summary>The bound the whole product applies, for the reason `COAI_ROUNDS_&lt;ID&gt;` gives.</summary>
+    private const int MaxIdLength = 48;
+
+    [GeneratedRegex(@"\A[A-Za-z][A-Za-z0-9_]*\z")]
+    private static partial Regex RoleId { get; }
 
     /// <summary>The server was asked and did not answer — a timeout, a refusal, an unreadable body.</summary>
     public static readonly RemoteRoles Unreachable = new([], false, RemoteRolesSource.Unreachable);
@@ -96,21 +117,32 @@ public sealed record RemoteRoles(
     /// both.
     /// </param>
     public string? WhyNot(string role, string shown, bool builtIn) =>
+        Source == RemoteRolesSource.Answered ? Said(role, shown) : NotSaid(shown, builtIn);
+
+    /// <summary>A server that told us its roles: the list decides, and it decides about the five too.</summary>
+    private string? Said(string role, string shown) =>
+        AllowAny || Names.Contains(role, StringComparer.OrdinalIgnoreCase)
+            ? null
+            : $"'{shown}' is not one of the roles this Team server runs — it runs {string.Join(", ", Names)}";
+
+    /// <summary>
+    /// Every other state. The shipped five are carried by all of them; only the SENTENCE differs.
+    /// </summary>
+    /// <remarks>
+    /// Which is the whole reason there are three: the answer about what runs is identical, and what
+    /// a person can do about it is not. An old server wants updating, an unreachable one wants a look
+    /// at the network, and one nobody has asked wants nothing at all yet.
+    /// </remarks>
+    private string? NotSaid(string shown, bool builtIn) =>
+        builtIn ? null : $"'{shown}' is a role you added, and this Team server {Because()}";
+
+    private string Because() =>
         Source switch
         {
-            RemoteRolesSource.Answered when AllowAny || Names.Contains(role, StringComparer.OrdinalIgnoreCase) => null,
-            RemoteRolesSource.Answered =>
-                $"'{shown}' is not one of the roles this Team server runs — it runs "
-                + string.Join(", ", Names),
-            _ when builtIn => null,
             RemoteRolesSource.Shipped =>
-                $"'{shown}' is a role you added, and this Team server is older than the setting that "
-                + "carries them — it runs the five this product ships",
+                "is older than the setting that carries them — it runs the five this product ships",
             RemoteRolesSource.Unreachable =>
-                $"'{shown}' is a role you added, and this Team server could not be asked whether it "
-                + "runs one — so it was left out rather than sent and refused",
-            _ =>
-                $"'{shown}' is a role you added, and this Team server has not been asked yet whether "
-                + "it runs one",
+                "could not be asked whether it runs one — so it was left out rather than sent and refused",
+            _ => "has not been asked yet whether it runs one",
         };
 }

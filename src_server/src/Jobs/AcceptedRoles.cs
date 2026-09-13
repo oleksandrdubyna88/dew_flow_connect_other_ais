@@ -238,7 +238,12 @@ public sealed partial class AcceptedRoles
         var said = Said(raw);
         if (said.Length == 0)
         {
-            return $"a review needs a role. Accepted: {string.Join(", ", Names)}";
+            // Listing `Names` on a server that accepts ANY well-formed id would present five
+            // configured names as the accepted set — the same misdirection the shape refusal below
+            // was split out to avoid, one branch up. (CodeRabbit, plan 3's pull request.)
+            return AllowAny
+                ? $"a review needs a role. This server accepts any role id at all. {ShapeRule}"
+                : $"a review needs a role. Accepted: {string.Join(", ", Names)}";
         }
         if (!Shaped(said))
         {
