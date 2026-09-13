@@ -16,7 +16,7 @@ namespace CoaiMcp.Server;
 /// reviewed once when it had been reviewed twice, or read findings from a round they thought was
 /// closed.</para>
 /// </remarks>
-public static class DocumentSessions
+public static partial class DocumentSessions
 {
     /// <summary>
     /// How many reviews of ONE document this will look for before refusing.
@@ -56,6 +56,37 @@ public static class DocumentSessions
             _ => Nth(document, taken),
         };
     }
+
+    /// <summary>
+    /// Why this identity cannot be reviewed under its own name, or null.
+    /// </summary>
+    /// <remarks>
+    /// An ordinal is written as <c>spec.md#2</c>, and <c>#</c> is an ordinary character in a
+    /// filename on every filesystem this runs on — so a real file called <c>notes#2.md</c> would
+    /// share an identity with the second review of <c>notes.md</c>, and one person's round would
+    /// land in another's session. Refused by NAME rather than escaped: an escape scheme is a second
+    /// thing to get right, and a document whose name ends in a hash and a number can be reviewed as
+    /// <c>documentText</c> under a name of its own. (codex, the code round.)
+    /// </remarks>
+    public static string? Reserved(string document) =>
+        Ordinal().IsMatch(document)
+            ? $"'{document}' ends in '#<number>', which is how this names the second and later "
+            + "reviews of one document — so a session keyed by it could be either. Review it as "
+            + "documentText with a documentName, or rename the file."
+            : null;
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"#[0-9]+\z")]
+    private static partial System.Text.RegularExpressions.Regex Ordinal();
+
+    /// <summary>What to tell a caller trying to start a fresh review over an undecided round.</summary>
+    /// <remarks>
+    /// The orphaning this design was rewritten to prevent, one ordinal further along: the open
+    /// session would sit awaiting a resolve that no longer has any way to reach it.
+    /// </remarks>
+    public static string StillOpen(string document) =>
+        $"the current review of '{document}' has a round nobody has decided on yet. Resolve it "
+      + "first — pass this document to resolve — and then ask for newReview; starting a fresh "
+      + "review now would leave that round open with no way to answer it.";
 
     /// <summary>What to tell a caller that has reviewed one document a hundred times.</summary>
     public static string TooMany(string document) =>

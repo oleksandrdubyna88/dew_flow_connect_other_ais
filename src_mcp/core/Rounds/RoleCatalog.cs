@@ -28,17 +28,30 @@ public static class RoleStages
 /// </remarks>
 public static class RoleBuckets
 {
-    public const string PlanCode = "plan:code";
+    public static readonly RoleBucket PlanCode = new(RoleStages.Plan, ProgrammingTask: true);
 
-    public const string PlanDocument = "plan:document";
+    public static readonly RoleBucket PlanDocument = new(RoleStages.Plan, ProgrammingTask: false);
 
-    public const string ResultCode = "result:code";
+    public static readonly RoleBucket ResultCode = new(RoleStages.Result, ProgrammingTask: true);
 
-    public const string ResultDocument = "result:document";
+    public static readonly RoleBucket ResultDocument = new(RoleStages.Result, ProgrammingTask: false);
+}
 
-    /// <summary>The one place a bucket string is spelled; everything else asks for it.</summary>
-    public static string Of(string stage, bool programmingTask) =>
-        $"{stage}:{(programmingTask ? "code" : "document")}";
+/// <summary>
+/// A stage and a kind of work, as a VALUE.
+/// </summary>
+/// <remarks>
+/// <para>Not a string, and the code round is why: a bucket and a stage are both strings, so every
+/// call that passed the wrong one would have gone on compiling and started answering nothing. The
+/// extension learned that first — seven call sites, all found by making its bucket a type — and this
+/// side was left as a string for one round. Rule 4 of the doctrine says it in general; this is the
+/// case that pays for it.</para>
+/// <para>Its <see cref="ToString"/> is the spelling a log line and a dropped-role sentence use, and
+/// it is the only place that spelling exists.</para>
+/// </remarks>
+public sealed record RoleBucket(string Stage, bool ProgrammingTask)
+{
+    public override string ToString() => $"{Stage}:{(ProgrammingTask ? "code" : "document")}";
 }
 
 /// <summary>
@@ -89,7 +102,7 @@ public sealed record RoleDefinition(
     /// which is why the five-active limit counts per bucket — and, since plan 4, why a round's
     /// roster is selected by it.
     /// </summary>
-    public string Bucket => RoleBuckets.Of(Stage, ProgrammingTask);
+    public RoleBucket Bucket => new(Stage, ProgrammingTask);
 }
 
 /// <summary>The seed file's shape, for the source-generated deserialiser. Internal: the seed is read, never written.</summary>
@@ -172,7 +185,7 @@ public sealed record RoleCatalog
     /// <see cref="RoleBuckets.ResultCode"/> always did — and <see cref="RoleBuckets.PlanDocument"/>
     /// selects one no stage asks for, which is the honest shape of "waiting, not dropped".</para>
     /// </remarks>
-    public IReadOnlyList<string> InBucket(string bucket) =>
+    public IReadOnlyList<string> InBucket(RoleBucket bucket) =>
         [.. Roles.Where(r => r.Bucket == bucket && r.Active).Select(r => r.Id)];
 
     /// <summary>A role's prompts, general first; nothing for a role this catalog does not know.</summary>

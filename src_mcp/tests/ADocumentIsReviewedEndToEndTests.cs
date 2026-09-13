@@ -194,7 +194,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var work = service.BuildWork(
             ["Spec"], _repo,
             $"## What this document is for\n\n{Purpose}\n\n## The document under review — spec.md\n\n{Document}",
-            round: 1, isPlanStage: true);
+            round: 1, servedByPlanSwitch: true, readsCheckout: false);
 
         work.Reviewers.Should().ContainSingle();
         var prompt = work.Reviewers[0].Invocation.Request.StdIn;
@@ -342,5 +342,40 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var kept = Path.Combine(_data, "documents", $"{DocumentRules.ArtifactIdOf(Document)}.txt");
         File.Exists(kept).Should().BeTrue("a person opens this to see what the reviewers were given");
         (await File.ReadAllTextAsync(kept)).Should().Be(Document);
+    }
+
+    /// <summary>
+    /// Snapshots do not grow for ever — three reviewers said the same thing on the code round.
+    /// </summary>
+    [Fact]
+    public void OldSnapshots_AreSweptOnTheNextWrite()
+    {
+        var store = new ArtifactStore(_data);
+        store.Keep("aaaaaaaaaaaaaaaa", "old").Should().BeNull();
+
+        var old = Path.Combine(_data, "documents", "aaaaaaaaaaaaaaaa.txt");
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow - ArtifactStore.Keeps - TimeSpan.FromDays(1));
+        // A scratch file a killed process left behind, which nothing else would ever remove.
+        var abandoned = Path.Combine(_data, "documents", "bbbb.deadbeef.writing");
+        File.WriteAllText(abandoned, "half a document");
+        File.SetLastWriteTimeUtc(abandoned, DateTime.UtcNow - ArtifactStore.Keeps - TimeSpan.FromDays(1));
+
+        store.Keep("cccccccccccccccc", "new").Should().BeNull();
+
+        File.Exists(old).Should().BeFalse("it is past the retention window");
+        File.Exists(abandoned).Should().BeFalse("and so is the scratch file");
+        store.Has("cccccccccccccccc").Should().BeTrue("the one just written is kept");
+    }
+
+    /// <summary>A snapshot inside the window is kept, which is the half that matters.</summary>
+    [Fact]
+    public void ARecentSnapshot_Survives()
+    {
+        var store = new ArtifactStore(_data);
+        store.Keep("dddddddddddddddd", "recent").Should().BeNull();
+
+        store.Keep("eeeeeeeeeeeeeeee", "another").Should().BeNull();
+
+        store.Has("dddddddddddddddd").Should().BeTrue();
     }
 }

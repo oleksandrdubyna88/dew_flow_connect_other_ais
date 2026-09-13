@@ -98,8 +98,12 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
             "every composed prompt carries it, including one a person overrode in the catalog");
         source.Should().Contain("ComposePrompt(choice, context, hasCheckout)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
-        source.Should().Contain("var hasCheckout = !fastCode && !isPlan",
-            "a plan round stands in an empty scratch directory, so it has no checkout either");
+        source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",
+            "the mode is TOLD, and a round that reads no checkout has none however it is configured");
+        source.Should().NotContain("!isPlan",
+            "it was derived from the stage until plan 4, which made `isPlanStage: true` the only way "
+            + "to ask for a document round's workspace — a claim about identity made to get a "
+            + "behaviour, and two reviewers said so");
     }
 
     [Fact]

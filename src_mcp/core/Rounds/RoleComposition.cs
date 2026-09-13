@@ -378,7 +378,7 @@ public static partial class RoleComposition
         var capped = new List<RoleDefinition>(roles.Count);
         foreach (var role in roles)
         {
-            var count = active.GetValueOrDefault(role.Bucket);
+            var count = active.GetValueOrDefault(role.Bucket.ToString());
             if (!role.Active)
             {
                 capped.Add(role);
@@ -395,7 +395,7 @@ public static partial class RoleComposition
                 continue;
             }
 
-            active[role.Bucket] = count + 1;
+            active[role.Bucket.ToString()] = count + 1;
             capped.Add(role);
         }
 

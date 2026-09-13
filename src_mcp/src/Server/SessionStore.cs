@@ -234,6 +234,18 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
+    /// <summary>
+    /// Whether a session exists, without parsing it.
+    /// </summary>
+    /// <remarks>
+    /// <c>DocumentSessions.Which</c> walks the ordinals of one document looking for the next free
+    /// one, and it used <see cref="Load"/> — so finding review three meant deserialising three whole
+    /// session files, findings and rounds and all, to learn three file names. A stat answers the
+    /// question that was actually being asked. (gemini and the local reviewer, the code round.)
+    /// </remarks>
+    public bool Exists(string repoPath, string branch, string document = "") =>
+        File.Exists(FileFor(repoPath, branch, document));
+
     /// <param name="document">
     /// Which DOCUMENT's session, or empty for the branch's own. Absent is the default, so every
     /// caller that predates plan 4 keeps loading exactly the session it always loaded.

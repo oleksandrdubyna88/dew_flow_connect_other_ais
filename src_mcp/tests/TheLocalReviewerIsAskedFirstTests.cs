@@ -81,7 +81,7 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     private List<string> Rows(PanelService service, int seed) =>
         [.. service.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
-                Worktree(), "ctx", round: 1, isPlanStage: false, seed: seed)
+                Worktree(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true, seed: seed)
             .Reviewers
             .Select(w => w.Invocation.Provider)];
 

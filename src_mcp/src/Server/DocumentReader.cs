@@ -70,9 +70,86 @@ public static class DocumentReader
             : FromText(text, request.Name);
     }
 
-    /// <summary>The real resolver: one hop is enough, because a link to a link resolves to the end.</summary>
+    /// <summary>
+    /// The real resolver, for ONE path entry — file or directory.
+    /// </summary>
+    /// <remarks>
+    /// <c>returnFinalTarget</c> walks a chain of links to its end, which is why one call is enough
+    /// per entry. What it does NOT do is look at the entry's parents, which is the hole
+    /// <see cref="Canonical"/> exists to close.
+    /// </remarks>
     public static string FollowLink(string path) =>
-        File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+        File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
+        ?? Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
+        ?? path;
+
+    /// <summary>
+    /// The real path of <paramref name="path"/>, with EVERY component's links followed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Resolving only the last component is an escape.</b> With <c>repo/docs</c> a symlink
+    /// to <c>/outside</c>, the path <c>repo/docs/secret.md</c> has a perfectly ordinary final
+    /// component: the resolver returns it unchanged, the syntactic containment check passes, and the
+    /// read follows the parent link and hands <c>/outside/secret.md</c> to three vendors. Three
+    /// reviewers found it independently on this change's own code round.</para>
+    /// <para>So the walk is from the root DOWN, re-resolving after every step: a link found halfway
+    /// moves the whole remaining walk, which is exactly what the attack relies on.</para>
+    /// </remarks>
+    public static string Canonical(string path, Func<string, string> followLink)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var rest = full[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+
+        var at = root;
+        foreach (var step in rest)
+        {
+            // Re-resolved at every step, not once at the end: the previous step may have moved this
+            // one somewhere else entirely.
+            at = Path.GetFullPath(followLink(Path.Combine(at, step)));
+        }
+
+        return at.Length == 0 ? full : at;
+    }
+
+    /// <summary>
+    /// The session identity a caller's word for a document means — the same one <c>Read</c> derives.
+    /// </summary>
+    /// <remarks>
+    /// <b>`resolve` and `status` have to reach the session `review_document` created</b>, and they
+    /// were reconstructing the identity by a different route: rooted paths only, no link resolution,
+    /// and a different case rule. A caller that passed a relative path — which is what a person
+    /// types — could then never resolve their own round. Five findings on one code round said so;
+    /// one resolution, called from all three places, is the answer.
+    /// </remarks>
+    public static string IdentityOf(string repoPath, string said, Func<string, string> followLink)
+    {
+        var trimmed = said.Trim();
+        if (trimmed.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // A name given to raw text is its own identity and is not a path; it can never contain a
+        // separator, so anything that does is a path and anything that does not is tried as a name
+        // first and falls back to a path.
+        var asPath = DocumentId.Of(repoPath, Canonical(Absolute(repoPath, trimmed), followLink));
+
+        return asPath.Length > 0 ? asPath : trimmed;
+    }
+
+    /// <summary>
+    /// A caller's path, made absolute against the REPOSITORY rather than the process.
+    /// </summary>
+    /// <remarks>
+    /// <c>Path.GetFullPath(path)</c> resolves a relative path against the current working directory,
+    /// which for this server is wherever the MCP client happened to launch it — never the repository
+    /// the session was opened for. A caller passing <c>docs/spec.md</c>, which is the ordinary thing
+    /// to pass, therefore named a file nobody meant.
+    /// </remarks>
+    private static string Absolute(string repoPath, string path) =>
+        Path.IsPathRooted(path) ? path : Path.GetFullPath(path, repoPath);
 
     private static DocumentOutcome FromText(string text, string? name)
     {
@@ -100,12 +177,15 @@ public static class DocumentReader
               + "and two names for one thing would be two sessions for it.");
         }
 
-        if (OnDisk(path) is DocumentOutcome.Refused missing)
+        // Made absolute against the REPOSITORY before anything looks at the disk, so every later
+        // step — existence, extension, containment, the read itself — is about the same file.
+        var absolute = Absolute(repoPath, path);
+        if (OnDisk(absolute) is DocumentOutcome.Refused missing)
         {
             return missing;
         }
 
-        var resolved = followLink(Path.GetFullPath(path));
+        var resolved = Canonical(absolute, followLink);
         var id = DocumentId.Of(repoPath, resolved);
 
         return id.Length == 0
@@ -138,7 +218,7 @@ public static class DocumentReader
         // The resolved path is named separately ONLY when it differs, because the case it exists
         // for is the confusing one: a link inside the repository whose target is not, where saying
         // only what the caller typed would look like a refusal of a path that is plainly inside.
-        var target = string.Equals(Path.GetFullPath(said), resolved, StringComparison.OrdinalIgnoreCase)
+        var target = string.Equals(Path.GetFullPath(said), resolved, DocumentId.Comparison)
             ? string.Empty
             : $" It resolves to '{resolved}'.";
 

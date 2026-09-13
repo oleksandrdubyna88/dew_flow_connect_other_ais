@@ -95,7 +95,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         foreach (var seed in Enumerable.Range(0, 10))
         {
             var work = service.BuildWork(
-                ["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false, seed: seed, deal: true);
+                ["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true, seed: seed, deal: true);
 
             work.Reviewers.Should().ContainSingle($"seed {seed}: some vendor here can run this role")
                 .Which.Invocation.Provider.Should().Be("local");
@@ -147,7 +147,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         Prompt("req-general", text);
 
         var work = Service(With("req-general"), withTeamServer: false)
-            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.Reviewers.Should().BeEmpty("a reviewer handed an empty prompt reviews nothing");
         work.NotAsked.Should().ContainSingle().Which.Reason.Should().Contain("req-general").And.Contain("no text");
@@ -165,7 +165,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
     public void TheSentenceNamesTheFileToWrite_NotJustTheFolder()
     {
         var work = Service(With("req-general"), withTeamServer: false)
-            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.NotAsked.Should().ContainSingle().Which.Reason.Should()
             .Contain(Path.Combine(_dataDir, "prompts", "req-general.md"));
@@ -188,7 +188,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         Prompt("architecture", "Review the architecture, but in our words.");
 
         var work = Service(With("req-general"), withTeamServer: true)
-            .BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.Excluded.Should().BeEmpty("the role is one of the five that server was compiled with");
         work.Reviewers.Should().ContainSingle().Which.Invocation.Role.Should().Be(RoleCatalog.ArchitectureRole);
@@ -208,7 +208,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
     public void ARoleWithNoTextAndOnlyATeamServer_IsNamedForTheTextFirst()
     {
         var work = Service(With("req-general"), withTeamServer: true)
-            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.NotAsked.Should().ContainSingle().Which.Reason.Should().Contain("no text");
     }
@@ -229,7 +229,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         Prompt("req-general", "Whether the requirement is met.");
         var service = Service(With("req-general"), withTeamServer: true);
 
-        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
         work.Reviewers.Should().BeEmpty("the only vendor here cannot take this role");
 
         var refusal = service.NoReviewerRefusal(Stage.CodeReview, work);
@@ -253,7 +253,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         Prompt("req-gaps", "What the requirement does not say.");
 
         var work = Service(With("req-general", "req-gaps"), withTeamServer: true).BuildWork(
-            ["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false,
+            ["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true,
             planPrompts: ["req-general", "req-gaps"]);
 
         work.Excluded.Should().ContainSingle().Which.Role.Should().Be("Requirements");
