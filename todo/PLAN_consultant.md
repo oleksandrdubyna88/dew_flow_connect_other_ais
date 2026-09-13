@@ -636,6 +636,26 @@ lock and fence are the security half and stay on Fable.
 8. **The per-repository lock is a wait.** Thirty seconds, then a named refusal; a stuck agent that is
    refused knows why and can retry.
 
+## What phase 2 would have to move, if the number says it is worth it
+
+Recorded here because story 6's last code round worked it out and it would otherwise have to be
+worked out again. (gemini, S6's second code round, filed as Blocking and declined for scope.)
+
+The counter reads earlier decisions out of the ROUNDS DATABASE, and the reason is structural rather
+than convenient: `RoundMachine.Resolve` carries **rejections** forward in `SessionState` — the
+standing-rejection discount needs them — and does not carry acceptances, so by the time a later round
+runs, what the caller ACCEPTED exists only in the projection. Core is pure and cannot query SQLite, so
+the call site is `PanelService`'s projection, which runs AFTER `CompleteRound` has fixed the verdict.
+
+That is exactly right for a measurement and exactly wrong for a trigger. A phase 2 that fires a
+consultation, or lets a survived finding change a verdict, cannot run after the verdict. It would
+need the accepted decisions kept in `SessionState` alongside `Rejections`, and
+`StuckFindings.SurvivedAcceptance` evaluated inside the round-completion pipeline — with the database
+demoted to what it should be, a passive audit store.
+
+**Not built, deliberately.** Building the state machine a trigger would need, before the number that
+says whether the trigger should exist, is the guess this whole story was written to replace.
+
 ## Definition of Done
 
 - [ ] Every "must be true" above holds, each pinned by a RED-then-GREEN test named in the test plan.
