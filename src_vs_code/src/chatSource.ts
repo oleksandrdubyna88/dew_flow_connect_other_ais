@@ -127,6 +127,19 @@ export function rootOf(path: string, roots: readonly string[], caseBlind: boolea
   return inside.reduce((longest, root) => (root.length > longest.length ? root : longest), '');
 }
 
+/**
+ * Whether two paths name the SAME folder, under this filesystem's own rule.
+ *
+ * <p>A record's workspace is a path a window wrote down, and the root it is compared against is a
+ * path this window read — two programs, two spellings, and on Windows two cases. Comparing them with
+ * `===` meant a conversation filed by a window that spelled its root `D:/rsd/one` never matched a
+ * tab under `D:\rsd\one`, so the person was offered a new conversation while theirs sat right there.
+ * The path beside it was already compared this way; only this one was not. (codex, the code
+ * round.)</p>
+ */
+export const sameRoot = (left: string, right: string, caseBlind: boolean): boolean =>
+  normal(left, caseBlind) === normal(right, caseBlind);
+
 /** Whether `path` is the folder `root` itself or something under it. */
 function contains(root: string, path: string, caseBlind: boolean): boolean {
   const one = normal(root, caseBlind);
@@ -221,12 +234,13 @@ export function movedTo(
   if (was.length === 0) {
     return '';
   }
+  // Normalised ONCE per conversation, not once per rename: every prepared move carries the same rule,
+  // because they all came from one `prepareMoves`. A folder refactor reporting two hundred moves was
+  // otherwise doing two hundred regex passes over this one path, for every conversation in the store.
+  // (gemini and codex, the code round — and it was my own regression from the case fix.)
+  const here = normal(was, renames[0]?.caseBlind ?? false);
   const hit = renames
-    .filter((one) => {
-      const here = normal(was, one.caseBlind);
-
-      return here === one.from || here.startsWith(`${one.from}/`);
-    })
+    .filter((one) => here === one.from || here.startsWith(`${one.from}/`))
     .reduce<Prepared | undefined>((closest, one) => (closest === undefined || one.from.length > closest.from.length ? one : closest), undefined);
   if (hit === undefined) {
     return '';

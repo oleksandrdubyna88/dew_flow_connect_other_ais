@@ -97,16 +97,35 @@ test('a conversation filed under ANOTHER root of the same window is not this tab
   // wrong project's conversation.
   const there = meta({ workspace: 'D:\\rsd\\two' });
 
-  assert.deepEqual(goto(asked({ candidates: [there] })), { kind: 'start', offer: 'main.ts' });
+  // NOT reopened — and not silently dropped either. Treating it as nothing would offer to START a
+  // conversation while the one about this very file sits a folder away: the duplicate the workspace
+  // rule exists to prevent, produced by the rule itself. It is shown, and the person decides.
+  // (Two vendors, the code round.)
+  const answer = goto(asked({ candidates: [there] }));
+  assert.equal(answer.kind, 'pick', 'a conversation about this file in another project was silently ignored');
+  assert.deepEqual(answer.kind === 'pick' ? answer.why : undefined, { kind: 'cross root' });
+  assert.deepEqual(answer.kind === 'pick' ? answer.among.map((one) => one.id) : [], ['a1']);
   // And the same record IS this tab's when the tab is the one under that root.
   const tabThere = { kind: 'document' as const, label: 'main.ts', path: 'D:\\rsd\\two\\main.ts' };
   const uriThere = 'file:///D:/rsd/two/main.ts';
-  const answer = goto(asked({
+  const same = goto(asked({
     tab: tabThere,
     source: sourceOfFile(uriThere),
     candidates: [meta({ source: sourceOfFile(uriThere), workspace: 'D:\\rsd\\two' })],
   }));
-  assert.equal(answer.kind, 'reopen');
+  assert.equal(same.kind, 'reopen');
+});
+
+test('a root spelled two ways is one root, not two', () => {
+  // The record's workspace was written by a window that may have spelled its root differently — a
+  // forward slash, another case on a case-blind filesystem. Comparing them as raw strings meant the
+  // person was offered a new conversation while theirs sat right there. (codex, the code round.)
+  const spelled = meta({ workspace: 'D:/RSD/ONE' });
+
+  assert.equal(goto(asked({ candidates: [spelled] })).kind, 'reopen', 'one root spelled two ways read as two roots');
+  // And on a case-SENSITIVE filesystem those really are two folders.
+  assert.equal(goto(asked({ candidates: [spelled], caseBlind: false })).kind, 'pick',
+    'a case-sensitive filesystem treated two differently-cased roots as one');
 });
 
 test('a tab under NO root falls back to the same answer story C1 files such a conversation under', () => {
@@ -153,15 +172,41 @@ test('two conversations with one source is a picker, never the newer of the two'
   assert.equal(answer.kind === 'pick' ? answer.offer : '', 'main.ts', 'the picker cannot offer to start one instead');
 });
 
-test('a Claude tab whose name answers to more than one session is a picker that says so', () => {
+test('a Claude tab whose name answers to more than one session is a picker that says so — WITH the candidates in it', () => {
+  // The one defect in this story that would have shipped looking like a working feature, and four
+  // reviewers found it. An ambiguous tab has no resolvable source, so filtering the candidates BY
+  // source left none — a picker asking which conversation somebody meant, containing no
+  // conversations. The source is the very thing in doubt there; the candidates are narrowed by their
+  // root and by nothing else.
   const answer = goto(asked({
     tab: { kind: 'claude', label: 'Fixing the lock', path: '' },
     source: { kind: 'none' },
     ambiguous: true,
+    candidates: [
+      meta({ id: 'one', source: sourceOfSession('9f1c3a4e-1111-2222-3333-444455556666') }),
+      meta({ id: 'two', source: sourceOfSession('aaaabbbb-1111-2222-3333-444455556666') }),
+    ],
   }));
 
   assert.equal(answer.kind, 'pick');
   assert.deepEqual(answer.kind === 'pick' ? answer.why : undefined, { kind: 'ambiguous session' });
+  assert.deepEqual(answer.kind === 'pick' ? answer.among.map((one) => one.id) : [], ['one', 'two'],
+    'the picker asks which conversation was meant and offers none of them');
+});
+
+test('an ambiguous tab is still narrowed by ROOT, because that much is not in doubt', () => {
+  const answer = goto(asked({
+    tab: { kind: 'claude', label: 'Fixing the lock', path: '' },
+    source: { kind: 'none' },
+    ambiguous: true,
+    candidates: [
+      meta({ id: 'here', source: sourceOfSession('9f1c3a4e-1111-2222-3333-444455556666') }),
+      meta({ id: 'there', source: sourceOfSession('aaaabbbb-1111-2222-3333-444455556666'), workspace: 'D:\\rsd\\two' }),
+    ],
+  }));
+
+  assert.deepEqual(answer.kind === 'pick' ? answer.among.map((one) => one.id) : [], ['here'],
+    'another project’s conversation was offered for this tab');
 });
 
 test('an ambiguous session outranks having exactly one candidate, because the TAB is what is in doubt', () => {
@@ -243,10 +288,17 @@ test('every combination of the inputs answers, and only with answers this union 
 test('a record re-read at the press is bindable only if it is still this tab’s', () => {
   // Between the decision and the press another window can forget the conversation or follow it
   // somewhere else. The same division story B3 made for the picker.
-  const record = { source: sourceOfFile(HERE) } as Parameters<typeof bindable>[0];
+  const mine = 'D:\\rsd\\one';
+  const record = { source: sourceOfFile(HERE), workspace: mine } as Parameters<typeof bindable>[0];
 
-  assert.equal(bindable(record, sourceOfFile(HERE)), true);
-  assert.equal(bindable(undefined, sourceOfFile(HERE)), false, 'a conversation that has gone was bound to a tab');
-  assert.equal(bindable(record, sourceOfFile('file:///D:/rsd/one/other.ts')), false, 'a record was bound to a tab it does not belong to');
-  assert.equal(bindable(record, { kind: 'none' }), false, 'a sourceless tab was bound to a record');
+  assert.equal(bindable(record, sourceOfFile(HERE), mine, true), true);
+  assert.equal(bindable(undefined, sourceOfFile(HERE), mine, true), false, 'a conversation that has gone was bound to a tab');
+  assert.equal(bindable(record, sourceOfFile('file:///D:/rsd/one/other.ts'), mine, true), false, 'a record was bound to a tab it does not belong to');
+  assert.equal(bindable(record, { kind: 'none' }, mine, true), false, 'a sourceless tab was bound to a record');
+  // BOTH halves of the key. A record another window re-filed into a different project between the
+  // decision and the press still has this tab's source — checking only that would bind the wrong
+  // project's conversation, undoing the workspace rule at the last step. (Three findings.)
+  assert.equal(bindable(record, sourceOfFile(HERE), 'D:\\rsd\\two', true), false, 'a conversation from another project was bound to this tab');
+  // And the two roots are compared the way paths are, not as raw strings.
+  assert.equal(bindable(record, sourceOfFile(HERE), 'D:/RSD/ONE', true), true, 'one root spelled two ways read as two roots');
 });

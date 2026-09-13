@@ -344,15 +344,27 @@ export const QUARANTINE_DIR = 'quarantine';
  * to the swap's answers becomes a sentence here and not a silently wrong outcome.</p>
  */
 function whyNotFollowed(done: Exclude<SaveOutcome, { kind: 'ok' } | { kind: 'partial' }>): string {
-  if (done.kind === 'busy') {
-    return 'the conversation was claimed by somebody while this window held its claim';
-  }
-  if (done.kind === 'refused') {
-    return 'the conversation changed under the claim';
-  }
+  switch (done.kind) {
+    case 'busy':
+      return 'the conversation was claimed by somebody while this window held its claim';
+    case 'refused':
+      return 'the conversation changed under the claim';
+    case 'incompatible':
+    case 'failed':
+      // Both carry their own reason, and it is the one worth repeating.
+      return done.reason;
+    default: {
+      // EXHAUSTIVE BY NAME. `return done.reason` as a catch-all would silently accept any future
+      // outcome that happened to carry a reason, which is how a new answer gets reported as an old
+      // one. (codex, the code round; the constraint was my own.)
+      const unhandled: never = done;
 
-  // `incompatible` and `failed` both carry their own reason, which is the one worth repeating.
-  return done.reason;
+      throw new Error(
+        `a save answer this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the answers it may give here are busy, refused, incompatible and failed',
+      );
+    }
+  }
 }
 
 /** What setting a value aside came to: where it is, or why it is not. */
