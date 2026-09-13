@@ -78,32 +78,103 @@ of the directory carried along, and it needs no naming scheme for five different
    `COAI_CALLER_SESSION` and the vault key. The panel's job is to produce the exact line and say
    where to paste it, as *Install the MCP server…* already does for the config block.
 4. **Two sides pointed at one location never write to each other's files.** Each resolves to its own
-   subdirectory, derived from the side the panel already knows (`PanelState.side`, the Windows/WSL
-   distinction the per-side token work introduced).
+   subdirectory, from a side the SERVER derives itself — see question 1. Not `PanelState.side`: that
+   belongs to the extension, and the process that opens the database must be able to answer without
+   asking the panel.
 5. **Moving existing data is a deliberate act**, offered and never automatic, and it does not delete
    anything until the copy has been read back.
 6. A side that finds its subdirectory empty **starts clean rather than failing** — that is the normal
    first move, not an error.
 
-## Open questions for the plan round
+## The three questions, answered
 
-- What names the side in the path? `PanelState.side` exists for the panel; the SERVER needs the same
-  answer independently, since it is the process that opens the database. Is there one value both
-  halves already agree on, or does this need one?
-- macOS and Linux have no Windows/WSL split — is the side then the hostname, or a single directory?
-  A NAS shared between two Macs raises the same question the operator raised about WSL.
-- Does the panel offer to COPY the existing directory into the new place, or only tell you where to
-  put it? Requirement 5 allows either; the cheaper one may be enough.
+### 1. What names a side — `<platform>[-<wsl distro>]-<machine>`
+
+The server has **no** side concept today: `grep` for one finds only prose. `PanelState.side` belongs
+to the extension, and the server is the process that opens the database, so it needs an answer it can
+reach on its own without asking the panel.
+
+**`RuntimeInformation` platform + `Environment.MachineName`**, lower-cased and path-safe:
+`windows-desktop01`, `linux-desktop01`, `osx-macbook-a`. Both are available on every platform and
+need no configuration.
+
+The machine name **alone** is not enough, and this is the case the operator actually has: WSL takes
+its hostname from the Windows host by default, so `MachineName` is the SAME string on both sides of
+one box. The platform is what separates them — WSL reports Linux.
+
+**And the platform is not enough either, which the plan round caught**: two WSL distributions on one
+host — Ubuntu and Debian, or a work one and a personal one — both report `linux-<hostname>` and would
+land in one directory. So `WSL_DISTRO_NAME` joins the name when it is set: `linux-ubuntu-desktop01`.
+An empty `MachineName` — possible in a container — falls back to a fixed word rather than producing
+a name ending in a dash.
+
+`COAI_DATA_SIDE` overrides the whole thing for anyone who wants to name a side themselves. It is
+**validated, not trusted**: no directory separators, no `.`/`..` segments, and the resolved path must
+still be under the data root after canonicalisation — otherwise a side called `../shared` escapes the
+root it is supposed to partition. It is also what makes the value testable without a second machine.
+
+**A machine rename makes a new side**, and that is worth saying out loud rather than discovering: the
+old directory stays where it is, full, and the server starts a new one beside it. The panel shows the
+resolved side and path for exactly this reason, and `COAI_DATA_SIDE` is how somebody pins a name that
+survives a rename.
+
+### 2. The side subdirectory applies to EVERY override, with no flat-layout fallback
+
+This is what keeps requirement 1 true at one end and requirement 4 true at the other. With no
+`COAI_DATA_DIR`, the path is `DefaultDataDir` **exactly as today** — no subdirectory, nothing moves,
+nobody has to do anything. The per-side layout is a property of a directory somebody deliberately
+chose to share.
+
+**The first draft of this answer had a fallback, and it defeated the whole feature.** It said: if
+`<dir>` itself contains `coai.db`, use `<dir>` — so that somebody already overriding the directory
+did not find an empty one. Three reviewers, independently, pointed out what that does in the
+operator's own scenario: Windows moves its data directory to `//nas/coai/`, so `//nas/coai/coai.db`
+exists; WSL is then pointed at `//nas/coai/`, sees the database in the root, adopts the flat layout —
+and **both sides write the same SQLite file**, which is the exact thing the plan was written to
+prevent, arrived at through the compatibility shim.
+
+So there is no fallback. An override always resolves to `<dir>/<side>`. A database sitting in
+`<dir>` itself is **never adopted and never written to**; the server reports it — "there is a
+database at `<dir>` in the old flat layout; move it into `<dir>/<side>` to keep its history" — and
+carries on with the side directory. Non-destructive, visible, and it cannot produce two sides on one
+file. Silence there would make a working configuration look broken, which is the lesson already
+written into `PanelSettings.cs` about relative paths.
+
+**A newly created side directory is reported too**, for the same reason: a mistyped NAS path is a
+creatable directory, and a person who typo'd it would otherwise quietly accumulate a second history
+while believing they were writing to the first.
+
+### 3. The panel tells you where to put it; it does not copy
+
+Requirement 5 allowed either. Telling is enough for the case in the issue — a person who is moving to
+a NAS is already moving files — and copying is the half with every interesting failure in it (a
+partial copy, a file in use, a database being written to while it is read). It stays out of this
+plan rather than being done badly; if it is wanted, it is its own plan with its own verification.
+
+**The panel speaks for the side it is running on, and says so.** A Windows panel shows a Windows path
+and a WSL panel shows the WSL one — raised on the plan round, because `\\nas\coai` pasted into a WSL
+client entry is not a path that exists there, and `/mnt/z/coai` pasted into a Windows one is not
+either. Each side's panel already runs on that side; it produces the line for the side it can see,
+labels it with the resolved side name, and does not pretend to know the other one's mount.
+
+And what it tells you to move is named: the database, the session files, `unparseable/` and `empty/`.
+Not `worktrees/`, which is scratch pruned on every `open`, and not the token files, which belong to
+the side that signed in.
 
 ## Test plan (RED first)
 
 | # | Test | RED symptom expected |
 |---|---|---|
-| 1 | `src_mcp/tests`: with no override, the resolved directory is exactly today's — asserted against the current default, so the "nothing moves" promise is a test rather than a sentence | (guard; green before and after) |
-| 2 | `src_mcp/tests`: two sides given the SAME `COAI_DATA_DIR` resolve to different subdirectories, and neither's database path equals the other's | both resolve to one file and two processes write one database |
-| 3 | `src_mcp/tests`: a side whose subdirectory does not exist yet starts clean — the directory is created, the database opens, nothing throws | it throws on a missing path |
-| 4 | `src_mcp/tests`: the token path stays inside the side's own subdirectory, so one side's sign-in is never visible to the other | tokens share a directory |
-| 5 | `panelView.test.ts`: the panel shows the directory in use and the line to paste, and says plainly that the default has not moved | nothing is shown |
+| 1 | `src_mcp/tests`: with no override the resolved directory is **exactly** `DefaultDataDir` — no side, no subdirectory. The "nothing moves" promise as a test rather than a sentence | (guard; green before and after) |
+| 2 | `src_mcp/tests`: two sides given the SAME `COAI_DATA_DIR` resolve to DIFFERENT directories — asserted through the `COAI_DATA_SIDE` override, since one test process cannot be two machines | both resolve to one path, and two processes write one database |
+| 3 | `src_mcp/tests`: the side is `<platform>-<machine>` and a machine name shared by two platforms still yields two sides — the WSL case, which a machine-name-only scheme would collapse | there is no side |
+| 4 | `src_mcp/tests`: **the scenario the plan round found** — an override whose directory already holds `coai.db` STILL resolves to `<dir>/<side>`, never to `<dir>`. Asserted for two different sides against one root, so the two-sides-one-database case is the test rather than a sentence | the flat database is adopted and both sides share it |
+| 5 | `src_mcp/tests`: that flat database is REPORTED — the resolution says it saw one and where to move it — and a newly created side directory is reported too, so a mistyped path is not a silent second history | both are silent |
+| 6 | `src_mcp/tests`: `COAI_DATA_SIDE` is validated — a separator, a `..` segment or an empty value is refused, and the resolved path is still under the root after canonicalisation | `../shared` escapes the root it partitions |
+| 7 | `src_mcp/tests`: two WSL distributions on one host get two sides — `WSL_DISTRO_NAME` joins the name — and an empty `MachineName` does not produce a name ending in a dash | both distros land in one directory |
+| 8 | `src_mcp/tests`: a side whose subdirectory does not exist yet starts clean — created, opened, nothing thrown | it throws on a missing path |
+| 9 | `src_mcp/tests`: the Team-server token path lands inside the side's own directory, and the directory it needs exists by the time a token is written | tokens share a directory |
+| 10 | `panelView.test.ts`: the panel shows the resolved side and directory, the line to paste for THIS side, what to move and what not to move, and says plainly that the default has not moved | nothing is shown |
 
 Run: `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4`, then the MTP executable — never
 `dotnet test`. Extension side: `cd src_vs_code && npm test`.
