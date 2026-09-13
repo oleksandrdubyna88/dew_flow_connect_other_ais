@@ -145,15 +145,16 @@ public sealed partial record RemoteRoles(
     /// can join it. A server that has not SAID its roles predates that field; therefore it runs
     /// exactly these.</para>
     /// </remarks>
-    public static readonly IReadOnlySet<string> BeforeTheCatalog =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            RoleCatalog.PlanRole,
-            RoleCatalog.ConventionsRole,
-            RoleCatalog.ArchitectureRole,
-            RoleCatalog.SecurityRole,
-            RoleCatalog.UxDxRole,
-        };
+    public static readonly System.Collections.Frozen.FrozenSet<string> BeforeTheCatalog =
+        System.Collections.Frozen.FrozenSet.ToFrozenSet(
+            [
+                RoleCatalog.PlanRole,
+                RoleCatalog.ConventionsRole,
+                RoleCatalog.ArchitectureRole,
+                RoleCatalog.SecurityRole,
+                RoleCatalog.UxDxRole,
+            ],
+            StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Every other state. <see cref="BeforeTheCatalog"/> is carried by all of them; the SENTENCE
@@ -169,7 +170,10 @@ public sealed partial record RemoteRoles(
     /// </remarks>
     private string? NotSaid(string role, string shown, bool builtIn)
     {
-        if (BeforeTheCatalog.Contains(role))
+        // BOTH, not the name alone. A row a person wrote that happens to be called `Architecture`
+        // is not the shipped Architecture, and the name on its own would have said it was — offering
+        // somebody's own role to a server that has never seen it. (codex, the code round.)
+        if (builtIn && BeforeTheCatalog.Contains(role))
         {
             return null;
         }
@@ -182,10 +186,12 @@ public sealed partial record RemoteRoles(
     private string Because() =>
         Source switch
         {
+            // Not a recital of the five. `Said` lists a server's roles when it REFUSES one, because
+            // there the list is the answer; here the answer is "this box is too old", and the ids of
+            // five roles somebody did not ask about are noise in front of it. (the code round, twice.)
             RemoteRolesSource.Shipped =>
-                "is older than the setting that names roles, so it runs only the ones this product "
-                + "shipped before it: "
-                + string.Join(", ", BeforeTheCatalog),
+                "is older than the setting that names roles, so it runs only what this product "
+                + "shipped before that",
             RemoteRolesSource.Unreachable =>
                 "could not be asked which roles it runs — so it was left out rather than sent and refused",
             _ => "has not been asked which roles it runs yet",

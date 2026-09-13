@@ -113,7 +113,7 @@ public sealed class RemoteRolesTests
     {
         var why = RemoteRoles.Unknown.WhyNot("Requirements", "Requirements", builtIn: false);
 
-        why.Should().Contain("not been asked which roles it runs yet");
+        why.Should().Be("'Requirements' is a role you added, and this Team server has not been asked which roles it runs yet");
         RemoteRoles.Unknown.WhyNot("Architecture", "Architecture", builtIn: true)
             .Should().BeNull("the shipped five are carried by every server, asked or not");
     }
@@ -277,4 +277,44 @@ public sealed class RemoteRolesTests
         Answered(false, RoleCatalog.ArchitectureRole)
             .WhyNot(RoleCatalog.DocumentRole, "The document", builtIn: true)
             .Should().NotBeNull();
+
+    /// <summary>
+    /// A row a PERSON wrote that borrows a shipped name is not the shipped role.
+    /// </summary>
+    /// <remarks>
+    /// The membership check was on the NAME alone, and codex pointed out what that claims: that
+    /// anything called <c>Architecture</c> is the Architecture every Team server has run since before
+    /// it could say so. Provenance decides with it now. Unreachable through the real caller today —
+    /// a catalog row whose id names a built-in IS that built-in — and one <c>&amp;&amp;</c> is a
+    /// cheaper guarantee than the argument that it cannot happen.
+    /// </remarks>
+    [Fact]
+    public void ARoleOfYourOwnBorrowingAShippedName_IsNotCarried() =>
+        new RemoteRoles([], false, RemoteRolesSource.Shipped)
+            .WhyNot(RoleCatalog.ArchitectureRole, "Architecture", builtIn: false)
+            .Should().NotBeNull("a name is not a claim about who shipped it");
+
+    /// <summary>The fact about the past cannot be edited at runtime.</summary>
+    /// <remarks>
+    /// It was a <c>HashSet</c> behind an <c>IReadOnlySet</c>, which a caller can cast back and add
+    /// to — and a role added there is a role sent to every old server for the life of the process.
+    /// </remarks>
+    [Fact]
+    public void TheFrozenList_CannotBeAddedTo() =>
+        RemoteRoles.BeforeTheCatalog.Should().BeAssignableTo<System.Collections.Frozen.FrozenSet<string>>(
+            "a set somebody can Add to is not a fact about the past");
+
+    /// <summary>The refusal says why the server cannot, not what else it could.</summary>
+    [Fact]
+    public void TheOldServerSentence_DoesNotReciteTheFive()
+    {
+        var why = new RemoteRoles([], false, RemoteRolesSource.Shipped)
+            .WhyNot(RoleCatalog.DocumentRole, "The document", builtIn: true);
+
+        why.Should().Contain("older than the setting that names roles");
+        foreach (var role in RemoteRoles.BeforeTheCatalog)
+        {
+            why.Should().NotContain(role, "the ids of five roles nobody asked about are noise");
+        }
+    }
 }
