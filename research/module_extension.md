@@ -2163,6 +2163,75 @@ Nothing retires the conversations directory yet. The memento's retention went wi
 the store's sweep is the next story — a deliberate one-story gap, recorded in the plan's growth table
 rather than left for somebody to discover.
 
+## The store retires what nobody is holding (2026-09-13)
+
+The two sections above put conversations on disk and made that disk authoritative. Neither gave the
+directory a bound: the seven-day, twenty-record cut belonged to the memento and went with it, so
+between those stories and this one every conversation anybody had was kept for ever. That gap was
+recorded in the plan rather than discovered later, with a commitment that this story would follow
+within one working session.
+
+### Liveness is announced, not assumed
+
+The obvious protection — when sweeping, skip the conversations THIS window has open — protects
+nothing, because the directory is shared by every window on the machine. Window A leaves a
+conversation open and untouched, window B activates, sees no such id among its own tabs, and deletes
+it.
+
+So each window writes a HEARTBEAT under `chat-conversations/housekeeping/`, naming the conversations
+it holds, refreshed while it lives; the sweep skips every id a live heartbeat names, and collects one
+nobody has refreshed. It is the shape the orphan ledger already uses for vendor processes.
+
+`updatedAt` could not be that signal, and the reason is a decision from the story before: a reload is
+deliberately NOT a use, so a tab open for three months has an old timestamp and is a legitimate
+target by age alone. A window also never deletes its OWN heartbeat file, because a reload is a
+deactivate and an activate with a new process id, and the old file is what protects tabs still being
+restored.
+
+### What is retired, and what is not
+
+| What | When |
+|---|---|
+| a conversation | untouched for 90 days, and not named by a live heartbeat |
+| a staging file | past an hour — the atomic write stages beside the record, so a young one may be a write in flight |
+| metadata whose record is gone | at once; it is a row that opens onto nothing |
+| a lock a killed writer left | past the lock module's own window, and collected by CLAIMING it through that module |
+| a quarantined value | past the same 90 days |
+| a heartbeat | when nobody has refreshed it |
+
+**An orphaned TRANSCRIPT is quarantined, never deleted, and only past a day's grace.** It is the one
+rule that would destroy the sole copy of somebody's words rather than a derived or expired thing —
+and a record is legitimately alone for the instant between the store's two writes, so an unbounded
+rule would delete conversations while they were being created.
+
+**A record this build cannot read is never aged out.** What cannot be read cannot be dated, and a
+downgrade would otherwise quietly retire a conversation a newer build wrote.
+
+### A delete re-checks under the lock
+
+Listing a record as expired and then deleting it is a check-then-act, and a save can land in between
+— the same shape that cost the compare-and-swap two rounds. One store operation takes the claim,
+re-reads, and retires only if the record is still there at the revision the listing saw. The sweep
+deletes no other way, and it does not break locks on its own terms: that rule belongs to the lock
+module, which states its own residual, and two answers to one question is how they drift.
+
+### One window sweeps, not six
+
+A marker records when the last sweep ran, and a window that finds a recent one does nothing — six
+windows opening together is the ordinary case here. The sweep is bounded in time and says when it did
+not finish, and nothing runs at all while the store answers `unavailable`: a directory that exists
+and will not answer must not be read as a directory full of expired things.
+
+### The index the picker reads
+
+Built from the metadata files alone and never opening a transcript, because reading ninety days of
+them to draw a list is seconds of a blocked extension host. It re-reads an entry whose modification
+time is at or after the last load — not strictly after, since two writes inside one filesystem
+timestamp granularity are real and so is a clock that steps backwards — with the file size beside it,
+and the filename set catches anything added or removed regardless. It publishes in one assignment, so
+no reader sees it half-built; it keeps its last good rows when a refresh fails; and it is published
+after the sweep, or it would hold a row for a record being removed.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
