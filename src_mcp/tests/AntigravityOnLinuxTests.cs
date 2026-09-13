@@ -38,7 +38,7 @@ public class AntigravityOnLinuxTests
     [Fact]
     public async Task OnLinux_APresentAntigravityCli_IsReportedFound()
     {
-        var data = Directory.CreateTempSubdirectory("coai-agy-").FullName;
+        using var data = TempDir.For("coai-agy-");
         // The launcher stands in for a CLI that answers --version with 0, which is what a present
         // `agy` does. Nothing here needs a real binary; what is under test is whether it is ASKED.
         //

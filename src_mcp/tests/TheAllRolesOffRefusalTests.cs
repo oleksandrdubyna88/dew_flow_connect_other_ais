@@ -141,7 +141,7 @@ public sealed class TheAllRolesOffRefusalTests
     [Fact]
     public void ASessionReadBack_RunsAgainstTheCatalogTheServerHasNow()
     {
-        var dir = Directory.CreateTempSubdirectory("coai-resume-").FullName;
+        using var dir = TempDir.For("coai-resume-");
         var catalog = RoleComposition.Compose([
             new RoleEntry("Requirements", Name: "Requirements", Stage: RoleStages.Result,
                 Prompts: [new PromptEntry("req-general")]),

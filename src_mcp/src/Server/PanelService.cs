@@ -131,110 +131,22 @@ public sealed partial class PanelService
     /// underneath the tools when the panel rewrites its file.
     /// </summary>
     public PanelSettings Settings => _settings;
-
-    /// <summary>
-    /// What a caller is told when every code-review role has been switched off.
-    /// </summary>
+    /// <summary>Every sentence this round says instead of reviewing — see <see cref="RoundRefusals"/>.</summary>
     /// <remarks>
-    /// <para>It names the boxes rather than the setting alone, because the person reading it is
-    /// looking at a panel with titled sections and not at a JSON key. The environment variable is
-    /// named too: a Team server or a hand-written `mcpServers` block is the other way this state is
-    /// reachable, and there is no checkbox to look at there.</para>
-    /// <para>The names come from the CATALOG since roles became data, so a person who added one of
-    /// their own is told to tick the box they can actually see. It was a sentence naming four
-    /// constants, which would have listed the shipped four at somebody whose panel showed five.</para>
+    /// A delegation rather than a field on the settings, because the catalog is per SESSION: the
+    /// panel rewrites its settings file while this server runs, and a refusal built once at
+    /// construction would name the roles that were configured at startup.
     /// </remarks>
-    /// <summary>
-    /// Why a round has nobody in it — the vendors, and then every role something dropped.
-    /// </summary>
-    /// <remarks>
-    /// <para>This path returns before any summary is built, so whatever the round decided on the way
-    /// here is said HERE or nowhere. It carried the roles it could not ASK — a prompt with no text —
-    /// from the start; it did not carry the roles a vendor could not TAKE, and those are the ones
-    /// that empty a round whose configuration is otherwise perfect: every vendor a Team server,
-    /// every scheduled role one a person defined. They were then told to check their vendors, which
-    /// are fine. (CodeRabbit, this plan's pull request.)</para>
-    /// <para>Both clauses name the ROLE first, because that is what somebody reading a round with
-    /// nothing in it is trying to find.</para>
-    /// <para><b>And the vendor advice is a CHECK, not a diagnosis.</b> The lead sentence used to
-    /// assert it — "every configured vendor is either disabled, set not to review this stage, or
-    /// missing its CLI or key" — which is one of the two causes and the wrong one exactly when a
-    /// clause below is present: a healthy Team server, serving this stage, rejecting one role a
-    /// person defined. It is last and conditional in wording now, so it stays actionable without
-    /// claiming something the round does not know. (CodeRabbit, on the fix for its own earlier
-    /// finding.)</para>
-    /// </remarks>
-    internal string NoReviewerRefusal(Stage stage, RoundWork work) =>
-        $"nothing could review the {stage} stage: no vendor here can run any of the roles this round "
-        + "was going to ask. A round with no reviewer would pass the gate having reviewed nothing, so "
-        + "it is refused."
-        + Clause(" Before that, ", work.NotAsked.Select(r => $"{r.Role} was not asked: {r.Reason}"))
-        + Clause(" And ", work.Excluded.Select(e => $"{e.Role} could not go to {e.Provider}: {e.Reason}"))
-        + " Otherwise every configured vendor is disabled, set not to review this stage, or missing "
-        + "its CLI or key: tick a vendor's stage box in the panel, or enable one that can run.";
+    private RoundRefusals Refusals => new(_settings.Rounds.Catalog);
 
-    /// <summary>A clause joining what a list holds, or nothing at all when it holds nothing.</summary>
-    private static string Clause(string lead, IEnumerable<string> parts) =>
-        parts.ToList() is { Count: > 0 } said ? $"{lead}{string.Join("; ", said)}." : string.Empty;
+    internal string NoCodeRolesRefusal => Refusals.NoCodeRoles;
 
-    internal string NoCodeRolesRefusal => NoRolesRefusal(Stage.CodeReview);
+    internal string NoRolesRefusal(Stage stage) => Refusals.NoRoles(stage);
 
-    /// <summary>The same sentence for either stage, naming that stage's own roles.</summary>
-    /// <remarks>
-    /// The plan stage needs it since its roster started coming from the catalog: the shipped plan
-    /// role honours no <c>COAI_ENABLED_</c> key, but a <c>COAI_ROLES</c> row saying
-    /// <c>active: false</c> switches it off like any other — and a person who does that with no plan
-    /// role of their own would otherwise get a round with nothing in it, which the session counts as
-    /// unresolved and never lets them retry.
-    /// </remarks>
-    internal string NoRolesRefusal(Stage stage) =>
-        $"Every {ReviewKindOf(stage)}-review role is switched off, so this "
-        + "round would have no reviewers in it. "
-        + $"Tick at least one of {Names(Tickable(stage))} "
-        + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
-
-    /// <summary>Which KIND of review a stage runs, as one word inside a refusal.</summary>
-    /// <remarks>
-    /// Not <c>RoundSubject.StageName</c>, which renders a stage as a phrase for a person reading the
-    /// rounds log ("code review"). Two names one letter apart for two different jobs is what this
-    /// one was called out for; this is the adjective in "every code-review role".
-    /// </remarks>
-    private static string ReviewKindOf(Stage stage) => stage switch
-    {
-        Stage.PlanReview => "plan",
-        Stage.DocumentReview => "document",
-        _ => "code",
-    };
-
-    /// <summary>
-    /// The roles this refusal may offer: the code stage's, switched on or NOT.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately not <c>RolesOf</c>, which answers with the ACTIVE ones — in the only state this
-    /// sentence is ever read, that can be the empty list, and "tick at least one of a role" is not
-    /// an instruction. It offers only the stage's OWN bucket for the opposite reason: ticking a role
-    /// of another kind cannot satisfy this round, so offering it would leave somebody exactly as
-    /// blocked as before, having done what they were told. (codex, on the code round of the story
-    /// that removed the enum — and the reason this reads the bucket rather than the stage since
-    /// plan 4 gave a document role a round of its own to be ticked for.)
-    /// </remarks>
-    private IReadOnlyList<string> Tickable(Stage stage) =>
-        [.. _settings.Rounds.Catalog.Roles
-            .Where(r => r.Bucket == PanelConfig.BucketFor(stage))
-            .Select(r => r.Id)];
-
-    /// <summary>Role ids as a person reads them: their display names, in an English list.</summary>
-    private string Names(IReadOnlyList<string> roleIds)
-    {
-        var names = roleIds.Select(id => _settings.Rounds.Catalog.ById(id)?.Name ?? id).ToList();
-
-        return names.Count switch
-        {
-            0 => "a role",
-            1 => names[0],
-            _ => $"{string.Join(", ", names[..^1])} or {names[^1]}",
-        };
-    }
+    internal string NoReviewerRefusal(Stage stage, RoundWork work) => Refusals.NoReviewer(
+        stage,
+        work.NotAsked.Select(r => $"{r.Role} was not asked: {r.Reason}"),
+        work.Excluded.Select(e => $"{e.Role} could not go to {e.Provider}: {e.Reason}"));
 
     // ---------- providers ----------
 
@@ -1432,8 +1344,56 @@ public sealed partial class PanelService
     private static bool VersionCache(string dir) =>
         Path.GetFileName(dir) is { Length: > 5 } name && char.IsDigit(name["coai-".Length]);
 
-    private static void PruneOldAnswerDirs() =>
+    /// <summary>How often one process will walk the temp directory looking for its own leftovers.</summary>
+    /// <remarks>
+    /// <para><b>A sweep is cheap and a WALK is not, and this used to pay the walk on every
+    /// <c>BuildWork</c>.</b> The cost is the number of directories in temp, which on a machine
+    /// running this suite grows all day: measured here 2026-09-13, <b>81,986</b> <c>coai-*</c>
+    /// directories, and <c>SubmissionOrderTests</c> — which calls <c>BuildWork</c> a hundred times in
+    /// a loop — went from 8 seconds to over four minutes and read, from the outside, as a deadlock in
+    /// whatever had just been changed.</para>
+    /// <para>Ten minutes is far below the six-hour window it sweeps, so nothing survives longer than
+    /// it did; what changes is that a round pays for the walk at most once every ten minutes instead
+    /// of twice per reviewer.</para>
+    /// </remarks>
+    private static readonly TimeSpan SweepEvery = TimeSpan.FromMinutes(10);
+
+    private static DateTime _sweptUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Sweeps this product's leftovers, at most once per <see cref="SweepEvery"/> per process.
+    /// </summary>
+    /// <remarks>
+    /// The clock is read and written under a lock rather than with <c>Interlocked</c> on purpose: two
+    /// rounds starting in the same millisecond should produce ONE walk, and a compare-and-swap on a
+    /// <c>DateTime</c> is not a thing this runtime offers without a struct wider than a word.
+    /// </remarks>
+    private static void PruneOldAnswerDirs()
+    {
+        lock (SweepLock)
+        {
+            var now = DateTime.UtcNow;
+            if (now - _sweptUtc < SweepEvery)
+            {
+                return;
+            }
+
+            _sweptUtc = now;
+        }
+
         PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6));
+    }
+
+    private static readonly System.Threading.Lock SweepLock = new();
+
+    /// <summary>Lets a test drive the throttle rather than wait ten minutes for it.</summary>
+    internal static void ForgetTheLastSweep()
+    {
+        lock (SweepLock)
+        {
+            _sweptUtc = DateTime.MinValue;
+        }
+    }
 
     /// <summary>
     /// Removes leftover scratch directories created before <paramref name="cutoff"/>.

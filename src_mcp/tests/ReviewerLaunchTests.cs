@@ -20,10 +20,15 @@ namespace CoaiMcp.Tests;
 /// whole point of the split.</para>
 /// </remarks>
 [Collection("fakecli-env")]
-public sealed class ReviewerLaunchTests
+public sealed class ReviewerLaunchTests : IDisposable
 {
+    /// <summary>Every temporary directory this class made, gone when it ends.</summary>
+    public void Dispose()
+    {
+        _dir.Dispose();
+    }
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-launch-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-launch-");
 
     [Fact]
     public async Task AnAnswerComesBackRaw_NotParsed()

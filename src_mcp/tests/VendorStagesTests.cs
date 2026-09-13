@@ -97,7 +97,7 @@ public sealed class VendorStagesTests
         // gate, so the round answered `proceed` having reviewed nothing at all. That was unreachable
         // until a vendor could be narrowed to one stage; now it is one checkbox away. Asked of the
         // PLAN stage, because that is the one a fresh session can run.
-        var repo = await Repository();
+        using var repo = await Repository();
         var service = Service(Local(plan: false, code: true));
         await service.OpenAsync(repo, "feature");
 
@@ -117,7 +117,7 @@ public sealed class VendorStagesTests
         // while the PRIMARY use of the feature is the other direction - local serves plans, so a code
         // round has nobody. Driven through the real tools with a scripted CLI, because reaching the
         // code stage means a plan round that actually PROCEEDED.
-        var repo = await Repository();
+        using var repo = await Repository();
         var data = Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}");
         var fake = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
@@ -166,10 +166,18 @@ public sealed class VendorStagesTests
         CONSTRAINTS: no new environment variable, and the env block still carries only what differs.
         """;
 
-    /// <summary>A real git repository with a branch, which is the least a round will accept.</summary>
-    private static async Task<string> Repository()
+    /// <summary>
+    /// A real git repository with a branch, which is the least a round will accept.
+    /// </summary>
+    /// <remarks>
+    /// It hands the directory's OWNERSHIP back — <c>using var repo = await Repository();</c> — rather
+    /// than disposing one it is about to return. A `using` on a value that escapes its scope deletes
+    /// the thing the caller was given, which is what the first mechanical pass of this conversion did
+    /// here: the round then found no repository and answered an empty object.
+    /// </remarks>
+    private static async Task<TempDir> Repository()
     {
-        var path = Directory.CreateTempSubdirectory("coai-stages-repo-").FullName;
+        var path = TempDir.For("coai-stages-repo-");
         await Git(path, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(path, "app.cs"), "v1" + Environment.NewLine);
         await Git(path, "add", ".");

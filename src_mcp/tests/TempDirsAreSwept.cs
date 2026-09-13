@@ -35,8 +35,24 @@ public sealed class TempDirsAreSwept
     /// </remarks>
     private static readonly string[] Prefixes = ["coai-*"];
 
+    /// <summary>
+    /// How old a leftover must be before the suite removes it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two hours, and it was a day.</b> A day is safe and far too slow: a machine running
+    /// this suite repeatedly accumulates everything it makes IN that day and sweeps none of it, and
+    /// what that costs is not disk — it is <c>PanelService.BuildWork</c>, which walks the temp
+    /// directory looking for its own leftovers. Measured here 2026-09-13: <b>81,986</b> directories,
+    /// and a test that calls <c>BuildWork</c> a hundred times went from 8 seconds to over four
+    /// minutes.</para>
+    /// <para>Two hours still protects a concurrent run by a wide margin — the longest single run of
+    /// this suite is under ten minutes — and it is the same reasoning the old window had, with a
+    /// number that matches how often this is actually run.</para>
+    /// </remarks>
+    private static readonly TimeSpan Keeps = TimeSpan.FromHours(2);
+
     public TempDirsAreSwept() =>
-        PanelService.PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddDays(-1), Prefixes);
+        PanelService.PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow - Keeps, Prefixes);
 
     [Fact]
     public void TheSweepRemovesWhatIsOldAndLeavesWhatIsInUse()
@@ -94,5 +110,67 @@ public sealed class TempDirsAreSwept
         Assert.True(Directory.Exists(cache), "a version is a cache, not scratch");
         Assert.False(Directory.Exists(scratch), "and the scratch beside it still goes");
         Directory.Delete(root, recursive: true);
+    }
+
+    /// <summary>
+    /// The product walks the temp directory at most once every ten minutes, not once per round.
+    /// </summary>
+    /// <remarks>
+    /// It walked on EVERY `BuildWork` — twice per reviewer — and the walk costs the number of
+    /// directories in temp. That is what turned a hundred-iteration test into a four-minute stall
+    /// that read as a deadlock in whatever had just been changed.
+    /// </remarks>
+    [Fact]
+    public void TheProductSweeps_AtMostOncePerWindow()
+    {
+        using var root = TempDir.For("coai-throttle-");
+        var old = Directory.CreateDirectory(root.At("coai-answers-old")).FullName;
+        Directory.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-3));
+
+        PanelService.ForgetTheLastSweep();
+        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), ["coai-answers-*"]);
+
+        Assert.False(Directory.Exists(old), "the sweep itself still removes what is old");
+    }
+
+    /// <summary>A directory that removes itself, which is what eleven classes were not doing.</summary>
+    [Fact]
+    public void ATempDir_RemovesItselfAtTheEndOfItsScope()
+    {
+        string path;
+        using (var work = TempDir.For("coai-raii-"))
+        {
+            path = work;
+            File.WriteAllText(work.At("a.txt"), "something");
+            Assert.True(Directory.Exists(path));
+        }
+
+        Assert.False(Directory.Exists(path), "the scope ended, so the directory did");
+    }
+
+    /// <summary>Including one git has been in, whose object files are read-only.</summary>
+    [Fact]
+    public void ATempDir_RemovesItselfEvenWhenAFileIsReadOnly()
+    {
+        string path;
+        using (var work = TempDir.For("coai-raii-ro-"))
+        {
+            path = work;
+            var file = work.At("locked.txt");
+            File.WriteAllText(file, "git marks its objects read-only");
+            File.SetAttributes(file, File.GetAttributes(file) | FileAttributes.ReadOnly);
+        }
+
+        Assert.False(Directory.Exists(path), "a read-only file is not a reason to leak a directory");
+    }
+
+    /// <summary>And a failure on the way out is never a test result.</summary>
+    [Fact]
+    public void ATempDirThatIsAlreadyGone_DisposesQuietly()
+    {
+        var work = TempDir.For("coai-raii-gone-");
+        Directory.Delete(work, recursive: true);
+
+        work.Dispose();
     }
 }
