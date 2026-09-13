@@ -2322,6 +2322,48 @@ source makes reopening create a second conversation for one tab: records carry n
 so capture already opens a new conversation for every tab, and epic C is where both halves land
 together.
 
+### What the code round changed
+
+Twelve reviewers, twenty-one gating findings, and five worth taking.
+
+**The cut hid conversations from the search.** The rows are capped at a hundred and QuickPick
+filters what it was handed, so the hundred-and-first conversation could not be found by typing its
+own title — the list failing at the one thing it exists for. What is typed is matched before the
+cut now, and the widget rebuilds only when the list on screen could be missing a match: a set drawn
+for `pay` already holds every match for `paym`, so typing forward costs nothing, while a shortened
+query or a draw that hit the cap reads again. That rule is a pure function.
+
+**The picker closed before it knew whether anything had opened.** Every failing answer is a
+sentence about the list — "it has been taken off this list", "the row stays" — and hiding first
+made all of them false, ejecting the person to their editor to read a toast about a list that was
+gone. Choosing now reports whether a tab is on screen, and one `settle` decides: hide on success,
+otherwise unlatch, stop the spinner and redraw.
+
+**Two quick presses on one row blamed a window that did not exist.** The second forget met the lock
+the first was holding and reported "the conversation is being changed by another window" — it was
+being changed by this one. One forget at a time, and the second press is ignored rather than
+queued, because the row is still there to press again if the first fails.
+
+**A forget with nothing to archive said the same thing as one that archived.** An `ENOENT` on the
+rename returns success, correctly — the row went, which is what was asked — but reporting it
+identically would make the archive unfalsifiable. It is logged distinctly and the person is still
+not interrupted. And `forgetting` became exhaustive by name: a ternary treated everything that was
+not `ok` as a failure, which is the one union in this feature that was not.
+
+**Two reviewers read the heartbeat-ownership check as its own opposite.** The semantics were right
+— exclude a file if EITHER its name or its body names this window — but spelled inline as a
+conjunction of two not-equals, which is what De Morgan turns that into. It is a named function now.
+Nothing changed but the spelling, and that two readers got it backwards was reason enough.
+
+Declined, with reasons recorded: that the picker should be coupled to a storage seam rather than to
+the store (one implementation, and C1 adds a field rather than a backend); that `openConversations`
+materialises every transcript per draw (`recordOf` copies a reference and `metaOf` reads a length
+and a last element — both O(1), asserted by reading them); that a quarantine filename can collide
+within a millisecond (it would need one id forgotten twice in that millisecond, and the first
+forget removes it); that `heldElsewhere` dereferences a possibly-absent beat (it is guarded on the
+same line); and a timeout on the forget, which no other store operation has and which applied here
+alone would be the measure-at-some-of-its-sites defect the conventions name.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was

@@ -368,7 +368,7 @@ export function protectedIds(heartbeats: readonly HeartbeatFile[], now: number, 
 export function heldElsewhere(heartbeats: readonly HeartbeatFile[], now: number, ownPid: number): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const file of heartbeats) {
-    if (file.beat !== undefined && file.beat.pid !== ownPid && heartbeatOwner(file.name) !== ownPid && liveHeartbeat(file.beat, now)) {
+    if (!ourOwn(file, ownPid) && file.beat !== undefined && liveHeartbeat(file.beat, now)) {
       for (const id of file.beat.ids) {
         ids.add(id);
       }
@@ -377,6 +377,22 @@ export function heldElsewhere(heartbeats: readonly HeartbeatFile[], now: number,
 
   return ids;
 }
+
+/**
+ * Whether a heartbeat file is THIS window's — by either of the two things that name a window.
+ *
+ * <p>A file says whose it is twice: in its name, which is `window-<pid>.json`, and in the `pid` its
+ * body carries. They agree in every file this code writes. This asks whether EITHER says ours, which
+ * is the safe direction — a file that might be ours is left out of what "somebody else holds", and
+ * the cost of being wrong that way is a conversation this window can reopen rather than a second tab
+ * on a record another window is writing.</p>
+ *
+ * <p>It is a named function because the same condition spelled inline — as a conjunction of two
+ * not-equals, which is what De Morgan turns this into — was misread as its own opposite by two
+ * reviewers in one round. The semantics never changed; the spelling did.</p>
+ */
+const ourOwn = (file: HeartbeatFile, ownPid: number): boolean =>
+  file.beat?.pid === ownPid || heartbeatOwner(file.name) === ownPid;
 
 /**
  * Whether a sweep should run, given the marker the last one left.

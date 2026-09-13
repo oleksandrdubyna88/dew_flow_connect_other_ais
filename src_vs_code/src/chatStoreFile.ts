@@ -626,6 +626,16 @@ export class ChatStoreFile {
       return { kind: 'ok' };
     } catch (reason) {
       if (codeOf(reason) === 'ENOENT') {
+        // NOT the same event as an archive, and it does not pass in silence. The row has gone, which
+        // is what was asked, so this is not a failure and the person is not interrupted — but "the
+        // transcript was set aside" and "there was no transcript to set aside" are different facts,
+        // and a log that reported them identically would make the archive unfalsifiable. (Three
+        // reviewers, the code round.)
+        console.info(
+          `ConnectOtherAIs: a conversation was forgotten, but there was no transcript to set aside: ${this.recordPath(id)}`
+          + ' — it had already gone, so nothing was archived',
+        );
+
         return { kind: 'ok' };
       }
       console.error(`ConnectOtherAIs: a forgotten conversation transcript could not be set aside: ${this.recordPath(id)}`, reason);

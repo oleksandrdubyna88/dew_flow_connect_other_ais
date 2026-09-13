@@ -53,7 +53,7 @@ const open = (over: Partial<OpenConversation> = {}): OpenConversation => ({
 
 /** The input, with everything a test does not care about filled in. */
 const input = (over: Partial<PickerInput>): PickerInput => ({
-  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, elsewhere: new Set<string>(), ...over,
+  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, elsewhere: new Set<string>(), query: '', ...over,
 });
 
 const shown = (rows: readonly PickerRow[]): readonly string[] => rows.flatMap((row) => (row.kind === 'conversation' ? [row.id] : []));
@@ -328,4 +328,42 @@ test('this window’s OWN open conversations are never called elsewhere, whateve
 
   assert.equal(drawn.length, 1, 'one conversation was drawn twice');
   assert.equal(drawn[0]?.kind === 'conversation' ? drawn[0].where : '', 'here');
+});
+
+test('what is TYPED is matched before the hundred-row cut, or an older conversation cannot be found at all', () => {
+  // The hole the cut left, and the one thing this list exists to do. QuickPick filters the items it
+  // was handed; the list hands it a hundred; so conversation number a hundred and one could not be
+  // found by typing its own title, however exactly it was typed. Filtering first is what makes the
+  // search a search. (codex, the code round.)
+  const many = Array.from({ length: 140 }, (_, at) => meta({ id: `c${at}`, updatedAt: AT - at * 1_000 }));
+  const buried = meta({ id: 'buried', title: 'The lock is fenced with a token', updatedAt: AT - 200_000_000 });
+
+  const unfiltered = pickerRows(input({ stored: [...many, buried] }));
+  assert.equal(shown(unfiltered).includes('buried'), false, 'the test did not manage to bury the conversation past the cut');
+
+  const found = pickerRows(input({ stored: [...many, buried], query: 'fenced with a token' }));
+  assert.deepEqual(shown(found), ['buried'], 'a conversation past the cut could not be found by typing its own title');
+});
+
+test('a query matches the title, the model or the last line — the three the widget filters on', () => {
+  const stored = [
+    meta({ id: 'byTitle', title: 'Why the lock is fenced', modelId: 'gpt-5.4', lastLine: 'nothing to see' }),
+    meta({ id: 'byModel', title: 'nothing to see', modelId: 'gemini-3-pro', lastLine: 'nothing to see' }),
+    meta({ id: 'byLine', title: 'nothing to see', modelId: 'gpt-5.4', lastLine: 'because a read and a delete are two' }),
+  ];
+
+  assert.deepEqual(shown(pickerRows(input({ stored, query: 'FENCED' }))), ['byTitle'], 'the title is not matched, or not case-blind');
+  assert.deepEqual(shown(pickerRows(input({ stored, query: 'gemini' }))), ['byModel'], 'the model is not matched');
+  assert.deepEqual(shown(pickerRows(input({ stored, query: 'a delete' }))), ['byLine'], 'the last line is not matched');
+  assert.equal(shown(pickerRows(input({ stored, query: '' }))).length, 3, 'an empty query filtered something out');
+  assert.deepEqual(shown(pickerRows(input({ stored, query: 'nothing like this' }))), []);
+});
+
+test('an OPEN conversation is never filtered away by what is typed — the widget filters those itself', () => {
+  // Only the stored rows are cut, so only they need matching before it. Filtering the open ones here
+  // as well would mean two filters over one list, and this one is a plain substring while the
+  // widget's is fuzzy — a row would vanish that the widget was willing to show.
+  const rows = pickerRows(input({ open: [open()], stored: [], query: 'nothing like this' }));
+
+  assert.deepEqual(shown(rows), ['a1']);
 });

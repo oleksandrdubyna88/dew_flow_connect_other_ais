@@ -142,10 +142,42 @@ export function opening(title: string, seen: ReadOutcome): Opening {
 
 /** What removing one came to. See {@link Forgetting} for why success says nothing. */
 export function forgetting(title: string, done: ForgetOutcome): Forgetting {
-  return done.kind === 'ok'
-    ? { kind: 'forgotten' }
-    : { kind: 'failed', message: `“${title}” could not be forgotten: ${done.reason}.` };
+  switch (done.kind) {
+    case 'ok':
+      return { kind: 'forgotten' };
+    case 'failed':
+      return { kind: 'failed', message: `“${title}” could not be forgotten: ${done.reason}.` };
+    default: {
+      // EXHAUSTIVE BY NAME, like every other answer read in this file. A ternary treated everything
+      // that was not `ok` as a failure, so a third outcome added to the store would have been
+      // reported to the person as one — silently, and with the wrong sentence. (codex, the code
+      // round; the constraint was my own.)
+      const unhandled: never = done;
+
+      throw new Error(
+        `a conversation store forget answer this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the answers it may give are ok and failed',
+      );
+    }
+  }
 }
+
+/**
+ * Whether the list must be rebuilt for what has just been typed.
+ *
+ * <p>The picker draws at most a hundred conversations, and QuickPick filters what it was
+ * GIVEN — so the hundred-and-first conversation could not be found by typing its own title, which is
+ * the one thing this list exists to do. The fix is to filter before the cut; this is the rule for
+ * when that has to happen again.</p>
+ *
+ * <p>A set drawn for `"pay"` already contains every match for `"paym"`, because matching is a
+ * substring test and extending a query can only narrow it — so while somebody types forward, the
+ * widget's own filter is enough and nothing is rebuilt. Deleting a character widens the question and
+ * the set must be read again. And a draw that HIT the cap is incomplete for anything, so the next
+ * keystroke rebuilds whatever it was.</p>
+ */
+export const mustRedraw = (drawn: string, next: string, cut: boolean): boolean =>
+  cut || !next.startsWith(drawn);
 
 /**
  * Whether this row may be forgotten — and the sentence when it may not.

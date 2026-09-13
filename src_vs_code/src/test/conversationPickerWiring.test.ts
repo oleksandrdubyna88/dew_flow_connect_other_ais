@@ -335,3 +335,63 @@ test('a conversation can be restored WITHOUT a panel, and the panel is then crea
   assert.doesNotMatch(body.slice(0, 5_500), /vscode\.window\.createWebviewPanel/u,
     'a second place builds a chat panel — the icon, the wiring and the disposal are set up in createChatPanel and nowhere else');
 });
+
+test('the picker is not closed until a tab is actually on screen', () => {
+  // Every way choosing can fail says something about THIS LIST — "it has been taken off this list",
+  // "the row stays", "it is open in another window". A picker hidden before the work made all three
+  // false and threw the person back to their editor to read a toast about a list that was no longer
+  // there. It waits, busy, and closes only when something opened. (gemini, the code round.)
+  const text = widget();
+  const accept = text.slice(text.indexOf('pick.onDidAccept'));
+  const body = accept.slice(0, accept.indexOf('pick.onDidChangeValue'));
+
+  assert.doesNotMatch(body, /pick\.hide\(\)/u, 'the picker is hidden before it is known whether anything opened');
+  assert.match(body, /pick\.busy = true/u, 'nothing says the picker is working while a conversation is opened');
+  assert.match(body, /\.then\(settle\)/u, 'the outcome of choosing does not decide what happens to the list');
+  // And `settle` is the one place that decides, so the catch cannot forget to.
+  const settle = text.slice(text.indexOf('const settle ='), text.indexOf('pick.onDidAccept'));
+  assert.match(settle, /if \(opened\)/u, 'settle does not distinguish a conversation that opened from one that did not');
+  assert.match(settle, /pick\.hide\(\)/u, 'a conversation that opened leaves the list covering it');
+  assert.match(settle, /chosen = false/u, 'a choice that opened nothing leaves the picker latched, so nothing else can be chosen');
+  assert.match(settle, /draw\(\)/u, 'a row that has gone is left on the list after it was said to have been taken off');
+  assert.match(settle, /if \(!onScreen\)/u, 'settle writes to a picker that may already have been dismissed and disposed');
+});
+
+test('choosing answers whether anything opened, rather than leaving the caller to guess', () => {
+  // The three failing answers and the two opening ones are five returns, and the widget acts on the
+  // boolean rather than re-deriving the outcome it has already decided.
+  const text = widget();
+  const choose = text.slice(text.indexOf('const choose ='), text.indexOf('pick.onDidTriggerButton'));
+
+  assert.match(choose, /Promise<boolean>/u, 'choosing does not say whether it opened anything');
+  assert.equal(choose.split('return true;').length - 1, 2, 'the two ways a tab appears — revealed, and reopened — do not both report it');
+  assert.equal(choose.split('return false;').length - 1, 3, 'the three ways it can fail — gone, refused, held elsewhere — do not all report it');
+});
+
+test('one forget at a time, so a second press cannot blame another window for this one', () => {
+  // The trash and Alt+Delete are advertised as pressable in a row. Two presses on ONE row before the
+  // first finishes would have the second meet the lock the first is holding, and be told the
+  // conversation "is being changed by another window" — which it is not; it is being changed by this
+  // one. (gemini, the code round.)
+  const text = widget();
+  const body = text.slice(text.indexOf('const forget ='), text.indexOf('const forgetRow ='));
+
+  assert.match(text, /let removing = false;/u, 'nothing stops two forgets of one conversation overlapping');
+  assert.match(body, /if \(removing\)/u, 'the guard is not read before the store is asked');
+  assert.match(body, /removing = false;/u, 'the guard is never released, so one forget disables the rest of the session');
+  assert.ok(body.indexOf('if (removing)') < body.indexOf('deps.store.forget('),
+    'the guard is checked after the store has already been asked, which is not a guard');
+});
+
+test('typing rebuilds the list only when what is on screen could be missing a match', () => {
+  // The hundred-row cut is applied after the filter now, so a query must be able to reach past it —
+  // but rebuilding on every keystroke would reassign a directory's worth of rows under somebody's
+  // fingers. `mustRedraw` is the rule, and it is decided where a test can reach it.
+  const text = widget();
+
+  assert.match(text, /pick\.onDidChangeValue\(/u, 'what is typed never reaches the list, so the cut still hides older conversations');
+  assert.match(text, /mustRedraw\(drawn, value, cut\)/u, 'the widget decides for itself when to rebuild, rather than asking the rule');
+  const draw = text.slice(text.indexOf('const draw ='), text.indexOf('const choose ='));
+  assert.match(draw, /drawn = query;/u, 'nothing records which query the list on screen was built for');
+  assert.match(draw, /cut = rows\.some\(/u, 'nothing records whether the list on screen was cut');
+});

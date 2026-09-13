@@ -27,6 +27,11 @@ export const RECENT_SECTION = 'Recent';
  * <p>Ninety days at this operator's rate is hundreds, and a QuickPick that renders all of them is
  * slow to open for a list nobody scrolls to the end of. It is a CUT rather than a filter, and it is
  * stated on a row of its own: a list that silently stops is a list somebody searches in vain.</p>
+ *
+ * <p><b>It is applied after {@link PickerInput.query}, never before.</b> A cut that came first left
+ * the hundred-and-first conversation unreachable by any amount of typing, because QuickPick filters
+ * only what it was handed — so the list could not do the one thing it exists for. What is cut now is
+ * the newest hundred OF THE MATCHES.</p>
  */
 export const MOST_ROWS = 100;
 
@@ -113,6 +118,15 @@ export interface PickerInput {
   readonly workspace: string;
   /** Whether the person asked for every workspace rather than this one. */
   readonly everywhere: boolean;
+  /**
+   * What the person has typed, matched BEFORE the hundred-row cut.
+   *
+   * <p>QuickPick filters the items it was given, and this list is capped — so without this the
+   * hundred-and-first conversation could not be found by typing its own title, which is the one
+   * thing the list exists for. Empty means no filter, and then the cut is simply the newest
+   * hundred.</p>
+   */
+  readonly query: string;
   readonly now: number;
   /** The tab a new conversation would belong to, when the caller wants that offered. */
   readonly offerNew?: string;
@@ -135,7 +149,9 @@ export function pickerRows(input: PickerInput): readonly PickerRow[] {
     return [...first, ...opened, buildingNotice()];
   }
   const held = new Set(input.open.map((one) => one.id));
-  const closed = input.stored.filter((one) => !held.has(one.id) && (input.everywhere || one.workspace === input.workspace));
+  const closed = input.stored.filter((one) => !held.has(one.id)
+    && (input.everywhere || one.workspace === input.workspace)
+    && matches(one, input.query));
   const recent = recentRows(closed, input.now, input.elsewhere);
   if (input.index.kind === 'unavailable') {
     // NOT an empty list. They are opposite facts, and only one of them means "you have none" — which
@@ -166,6 +182,23 @@ function recentRows(closed: readonly ConversationMeta[], now: number, elsewhere:
     ...cut,
   ];
 }
+
+/**
+ * Whether a conversation answers what has been typed — the same three fields the widget's own filter
+ * reads, so narrowing here can never hide a row the widget would have shown.
+ *
+ * <p>Title, model and last line, case-blind and by substring. It runs BEFORE the cut to a hundred,
+ * which is the whole point: the cut is what made an older conversation unfindable, and a filter
+ * applied after it searches only the hundred newest. (codex, the code round.)</p>
+ */
+const matches = (one: ConversationMeta, query: string): boolean => {
+  if (query.length === 0) {
+    return true;
+  }
+  const looking = query.toLocaleLowerCase();
+
+  return [one.title, one.modelId, one.lastLine].some((field) => field.toLocaleLowerCase().includes(looking));
+};
 
 const section = (label: string): PickerRow => ({ kind: 'section', label });
 
