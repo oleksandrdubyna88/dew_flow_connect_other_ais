@@ -29,7 +29,10 @@ internal static class Prompts
     internal static IEnumerable<McpServerPrompt> All()
     {
         yield return McpServerPrompt.Create(
-            (string problem) => Ask(problem),
+            // A DEFAULT, or the argument is required and the ordinary use — the command typed with no
+            // words — comes back as a protocol error. The same rule the tools here follow, and the
+            // plan round predicted this one before the wire test caught it.
+            (string problem = "") => Ask(problem),
             new McpServerPromptCreateOptions
             {
                 Name = ConsultName,
