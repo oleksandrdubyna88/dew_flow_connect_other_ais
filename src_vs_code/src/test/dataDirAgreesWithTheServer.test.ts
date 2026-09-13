@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { resolve } from 'node:path';
 import { coaiDataDir } from '../dataDir';
+
+/** The configured root as the server also resolves it — absolute, and native to this platform. */
+const ROOT = resolve('/srv/coai');
 
 /**
  * The extension resolves the data directory exactly as `coai-mcp` does.
@@ -45,33 +49,53 @@ test('a chosen directory with no side named is used exactly as chosen', () => {
   // The partition is opt-in on both halves. Anyone who set COAI_DATA_DIR before this existed keeps
   // the directory they set, which is the promise the server makes too.
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: undefined }, () => {
-    assert.equal(coaiDataDir(), '/srv/coai');
+    assert.equal(coaiDataDir(), ROOT);
   });
 });
 
 test('a named side is appended, so two installations on one NAS do not share a token', () => {
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' }, () => {
-    assert.equal(coaiDataDir(), '/srv/coai/windows');
+    assert.equal(coaiDataDir(), `${ROOT}/windows`);
   });
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'wsl' }, () => {
-    assert.equal(coaiDataDir(), '/srv/coai/wsl');
+    assert.equal(coaiDataDir(), `${ROOT}/wsl`);
   });
 });
 
-test('a side name that could leave the directory is refused, not rewritten', () => {
-  // Rewriting is the dangerous repair: two different names sanitised into one would put two
-  // installations back on one database, which is what the partition exists to prevent.
-  for (const side of ['../shared', '..', '.', 'a/b', 'a\\b', '   ']) {
+test('a side that was asked for and cannot be used is REFUSED, never the shared root', () => {
+  // The finding seven reviewers raised on the server's half. Falling back to the root is the
+  // feature inverted: `wsl/node1` is a plausible thing to type, and treating it as "no side" puts
+  // this installation and every other one on the root's single database.
+  for (const side of ['../shared', '..', '.', 'a/b', 'a\\b', 'wsl/node1', 'a:b', 'a b']) {
     withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: side }, () => {
-      assert.equal(coaiDataDir(), '/srv/coai', `a side called '${side}' must not escape the root`);
+      assert.throws(() => coaiDataDir(), /COAI_DATA_SIDE/u,
+        `a side called '${side}' must be refused rather than silently ignored`);
     });
   }
+});
+
+test('a side name within the grammar is accepted, and the grammar is the server\'s', () => {
+  // An explicit allowlist on both sides, because `Path.GetInvalidFileNameChars()` in C# is
+  // platform-dependent — a colon is refused on Windows and accepted on Linux — and the two halves
+  // disagreeing on one name means a token written where the server does not read it.
+  for (const side of ['windows', 'wsl-ubuntu', 'box_2', 'node.1']) {
+    withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: side }, () => {
+      assert.equal(coaiDataDir().replaceAll('\\', '/').toLowerCase().endsWith(`/srv/coai/${side}`), true,
+        `'${side}' is within the grammar and must resolve under the root`);
+    });
+  }
+});
+
+test('a whitespace-only directory means unset, as it does in the server', () => {
+  withEnv({ COAI_DATA_DIR: '   ', COAI_DATA_SIDE: undefined }, () => {
+    assert.ok(coaiDataDir().endsWith('coai-mcp'), 'whitespace is not a configured directory');
+  });
 });
 
 test('the side is lower-cased, as the server lower-cases it', () => {
   // Two halves disagreeing on case is the same silent "not signed in" as disagreeing on the name.
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'Windows' }, () => {
-    assert.equal(coaiDataDir(), '/srv/coai/windows');
+    assert.equal(coaiDataDir(), `${ROOT}/windows`);
   });
 });
 

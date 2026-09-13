@@ -293,23 +293,33 @@ public sealed record PanelSettings
     /// <summary>The side this installation was NAMED, or empty when it was not given one.</summary>
     public static string DataSide(Func<string, string?> env) => PathSafeSide(env("COAI_DATA_SIDE"));
 
-    /// <summary>One path segment, or empty — anything that could leave the directory is refused.</summary>
+    /// <summary>
+    /// The side-name grammar, and it is deliberately narrower than any filesystem's.
+    /// </summary>
     /// <remarks>
-    /// REFUSED rather than rewritten. Two different names sanitised the same way would silently
-    /// become one side sharing one database, which is the outcome this whole partition exists to
-    /// avoid.
+    /// <para>An EXPLICIT allowlist rather than <see cref="Path.GetInvalidFileNameChars"/>, which is
+    /// platform-dependent: a colon is refused on Windows and accepted on Linux, so
+    /// <c>COAI_DATA_SIDE=a:b</c> would resolve to <c>&lt;root&gt;/a:b</c> under WSL and to
+    /// <c>&lt;root&gt;</c> under Windows — the two halves of one installation disagreeing about where
+    /// the Team-server token lives, which reads as a silent "not signed in". Four reviewers found
+    /// this independently.</para>
+    /// <para>The same grammar is spelled in <c>src_vs_code/src/dataDir.ts</c>. It has to be a rule
+    /// simple enough to write twice without drifting, which is why it is a short allowlist and not a
+    /// list of what to exclude.</para>
     /// </remarks>
+    private const string SideGrammar = "lower-case letters, digits, dot, dash and underscore";
+
+    private static bool IsSafeSide(string side) =>
+        side.Length > 0
+        && side is not ("." or "..")
+        && side.All(c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c is '.' or '-' or '_');
+
+    /// <summary>One path segment, or empty when nothing was asked for.</summary>
     private static string PathSafeSide(string? value)
     {
         var trimmed = (value ?? string.Empty).Trim().ToLowerInvariant();
 
-        return trimmed.Length == 0
-            || trimmed is "." or ".."
-            || trimmed.Contains('/')
-            || trimmed.Contains('\\')
-            || trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                ? string.Empty
-                : trimmed;
+        return IsSafeSide(trimmed) ? trimmed : string.Empty;
     }
 
     /// <summary>
@@ -334,12 +344,33 @@ public sealed record PanelSettings
     /// </remarks>
     private static (string Dir, IReadOnlyList<string> Notes) ResolveDataDir(Func<string, string?> env)
     {
-        if (env("COAI_DATA_DIR") is not { Length: > 0 } configured)
+        // Whitespace is not a configured directory. `COAI_DATA_DIR=' '` reaching Path.GetFullPath
+        // would be the working directory, which is not what anybody meant by setting it.
+        if (env("COAI_DATA_DIR")?.Trim() is not { Length: > 0 } configured)
         {
             return (DefaultDataDir, []);
         }
 
         var root = Path.GetFullPath(configured);
+        var asked = (env("COAI_DATA_SIDE") ?? string.Empty).Trim();
+
+        // A side that was ASKED FOR and refused must never fall back to the shared root. That is the
+        // finding seven reviewers raised, and it is the whole feature inverted: `COAI_DATA_SIDE=
+        // wsl/node1` is a plausible thing to type, it fails the grammar, and falling back would put
+        // this installation and every other one on the root's single database — the corruption the
+        // partition exists to prevent, reached by a typo and reported nowhere.
+        //
+        // So it is refused loudly. A configuration that cannot be resolved safely is not a
+        // configuration to carry on from: the alternative is picking a directory the operator did
+        // not choose and writing somebody else's data into it.
+        if (asked.Length > 0 && PathSafeSide(asked).Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"COAI_DATA_SIDE='{asked}' is not a usable directory name. A side may contain "
+                + $"{SideGrammar}. It names a folder under COAI_DATA_DIR so that two installations "
+                + "sharing one location keep their own database; refusing is deliberate, because "
+                + "falling back would put both of them on the same one.");
+        }
 
         // The partition is OPT-IN: no COAI_DATA_SIDE, no subdirectory, and a directory somebody
         // already points at keeps answering exactly where it always did.
@@ -389,13 +420,26 @@ public sealed record PanelSettings
         WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));
 
     private static PanelSettings WithCatalog(
-        Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) => new PanelSettings
+        Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) =>
+        WithCatalog(env, roles, catalog, ResolveDataDir(env));
+
+    /// <remarks>
+    /// The resolution is passed IN rather than computed twice. It was called once for `DataDir` and
+    /// once for the notes, which meant two round trips to a NAS on every settings read and, worse,
+    /// two answers: a directory created between the two calls made `DataDir` and `Unrecognised`
+    /// describe different states. Raised four times on the code round.
+    /// </remarks>
+    private static PanelSettings WithCatalog(
+        Func<string, string?> env,
+        RolesSetting roles,
+        RoleCatalog catalog,
+        (string Dir, IReadOnlyList<string> Notes) data) => new PanelSettings
     {
         Rounds = Config(env, catalog),
         // The data directory's own notes ride here rather than in a channel of their own: this list
         // is already "things said out loud at startup, because silence made a working configuration
         // look broken", and a database left behind in a shared root is exactly that.
-        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. ResolveDataDir(env).Notes],
+        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. data.Notes],
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
@@ -423,7 +467,7 @@ public sealed record PanelSettings
         // And PARTITIONED PER SIDE when it was overridden, so a location deliberately shared — a NAS
         // that survives a Windows reinstall — does not end up with Windows and WSL writing one
         // SQLite file. See ResolveDataDir; the default is untouched by it.
-        DataDir = ResolveDataDir(env).Dir,
+        DataDir = data.Dir,
         AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         Autonomous = Flag(env, "COAI_AUTONOMOUS"),

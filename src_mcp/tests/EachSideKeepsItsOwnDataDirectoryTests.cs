@@ -111,19 +111,65 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
         settings.Unrecognised.Should().Contain(n => n.Contains(settings.DataDir));
     }
 
+    /// <summary>
+    /// A side that was asked for and cannot be used REFUSES — it never falls back to the root.
+    /// </summary>
+    /// <remarks>
+    /// Seven reviewers raised this on the code round, and it is the feature inverted. The first
+    /// build treated an unusable name as no name and returned the shared root, so
+    /// <c>COAI_DATA_SIDE=wsl/node1</c> — a plausible thing to type — put this installation and every
+    /// other one on the root's single database. The corruption the partition exists to prevent,
+    /// reached by a typo and reported nowhere.
+    /// </remarks>
     [Theory]
     [InlineData("../shared")]
     [InlineData("..")]
+    [InlineData(".")]
     [InlineData("a/b")]
     [InlineData("a\\b")]
-    [InlineData("   ")]
-    public void ASideNameThatCouldEscapeTheRoot_IsRefused(string side)
+    [InlineData("wsl/node1")]
+    [InlineData("a:b")]
+    [InlineData("a b")]
+    public void ASideNameThatCannotBeUsed_IsRefusedRatherThanIgnored(string side)
     {
-        var settings = From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", side));
+        var refusing = () => From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", side));
 
-        settings.DataDir.Should().StartWith(Path.GetFullPath(_root),
-            $"a side called '{side}' must not escape the root it is meant to partition");
-        Path.GetFullPath(settings.DataDir).Should().NotBe(Path.GetFullPath(Path.Combine(_root, "..")));
+        refusing.Should().Throw<InvalidOperationException>(
+                $"falling back would put '{side}' and everything else on the root's one database")
+            .WithMessage("*COAI_DATA_SIDE*");
+    }
+
+    /// <summary>
+    /// The grammar is an explicit allowlist, so both halves can spell it without drifting.
+    /// </summary>
+    /// <remarks>
+    /// <c>Path.GetInvalidFileNameChars()</c> is platform-dependent — a colon is refused on Windows
+    /// and accepted on Linux — so using it would resolve <c>a:b</c> to two different directories on
+    /// the two sides of one installation, and the token would be written where the server does not
+    /// read it. Four reviewers found that independently.
+    /// </remarks>
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("wsl-ubuntu")]
+    [InlineData("box_2")]
+    [InlineData("node.1")]
+    public void ASideNameWithinTheGrammar_IsAccepted(string side)
+    {
+        From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", side))
+            .DataDir.Should().Be(Path.Combine(Path.GetFullPath(_root), side));
+    }
+
+    [Fact]
+    public void ASideNameIsLowerCased_SoTheTwoHalvesAgreeOnCaseToo()
+    {
+        From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "Windows"))
+            .DataDir.Should().Be(Path.Combine(Path.GetFullPath(_root), "windows"));
+    }
+
+    [Fact]
+    public void AWhitespaceOnlyDirectory_MeansUnset_AsItDoesInTheExtension()
+    {
+        From(("COAI_DATA_DIR", "   ")).DataDir.Should().Be(PanelSettings.DefaultDataDir);
     }
 
 
