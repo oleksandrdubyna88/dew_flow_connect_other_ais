@@ -374,11 +374,14 @@ public static partial class RoleComposition
     /// </remarks>
     private static List<RoleDefinition> Capped(List<RoleDefinition> roles, List<string> dropped)
     {
-        var active = new Dictionary<string, int>();
+        // Keyed by the BUCKET itself, not by its spelling: a record's value equality is the thing
+        // being relied on, and going through ToString() made the cap depend on a display format.
+        // Three findings across two vendors, on the round after the type was introduced.
+        var active = new Dictionary<RoleBucket, int>();
         var capped = new List<RoleDefinition>(roles.Count);
         foreach (var role in roles)
         {
-            var count = active.GetValueOrDefault(role.Bucket.ToString());
+            var count = active.GetValueOrDefault(role.Bucket);
             if (!role.Active)
             {
                 capped.Add(role);
@@ -395,7 +398,7 @@ public static partial class RoleComposition
                 continue;
             }
 
-            active[role.Bucket.ToString()] = count + 1;
+            active[role.Bucket] = count + 1;
             capped.Add(role);
         }
 

@@ -194,14 +194,22 @@ public sealed record PanelConfig(
     /// the two vocabularies apart and joining them in exactly one expression is what the plan round
     /// asked for in those words, because a second place that mapped them would be a second place to
     /// disagree.</para>
-    /// <para><see cref="Stage.Done"/> falls through to the plan bucket, as it always has: a finished
-    /// session runs no round, so what it would have selected is never asked for.</para>
+    /// <para><b>Exhaustive, and <see cref="Stage.Done"/> is listed rather than caught by a discard.</b>
+    /// It had one, and codex named what that costs: a stage added to the enum and forgotten here
+    /// would select the plan roster and the plan vendor switch with no compile error and no
+    /// exception — a round quietly asking the wrong reviewers. A finished session runs no round, so
+    /// the value it maps to is never used; it is the fall-through that had to go, not the case.</para>
     /// </remarks>
     public static RoleBucket BucketFor(Stage stage) => stage switch
     {
+        Stage.PlanReview => RoleBuckets.PlanCode,
         Stage.CodeReview => RoleBuckets.ResultCode,
         Stage.DocumentReview => RoleBuckets.ResultDocument,
-        _ => RoleBuckets.PlanCode,
+        // Never asked for: a finished session runs no round. Answered rather than thrown because
+        // `status` reads `For(Stage)` on a session that has reached it.
+        Stage.Done => RoleBuckets.PlanCode,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(stage), stage, "a stage with no bucket cannot choose a roster — map it here"),
     };
 
     /// <summary>
@@ -398,7 +406,7 @@ public static class SessionKey
     public static string For(string repoPath, string branch, string document = "")
     {
         var repoAndBranch = $"{repoPath.Replace('\\', '/').TrimEnd('/').ToLowerInvariant()}#{branch.Trim()}";
-        var doc = document.Trim();
+        var doc = DocumentId.KeyOf(document.Trim());
 
         return doc.Length == 0 ? repoAndBranch : $"{repoAndBranch}#{doc}";
     }
