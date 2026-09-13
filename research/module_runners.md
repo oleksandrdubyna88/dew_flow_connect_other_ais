@@ -283,6 +283,16 @@ A RESUMED codex turn is a third shape again: `exec resume <id>` accepts neither 
 sandbox rides `-c sandbox_mode="read-only"` and the process must run in the directory the thread was
 started in — which is the repository, for every turn.
 
+**`Build` is pure on three routes and not on the fourth, and that is worth saying plainly.** The three
+CLI consultants take their prompt on stdin, so `Build` describes a process and touches no disk. The
+LOCAL one's shim reads a prompt FILE — the way a prompt reaches a shim without crossing a Windows
+argv — and `LocalRuntime.Build` has written that file since the review path shipped. The consultant
+reuses that builder rather than forking it, so the write is inherited rather than introduced. Story
+2's second code round caught the claim that every route was pure, and it was right: the test meant to
+hold it had been watching a different directory. The trigger to move the write to the execution
+boundary is the first caller that wants to BUILD a local launch without running it — a dry run, a
+preview, a flag inspection — and there is none today.
+
 **What the composition costs, and what would end it.** A consultant adapter returns a
 `ReviewerInvocation`, so it must HOLD a reviewer adapter to delegate its answer and usage reading to.
 Every vendor this product can consult has one — codex, claude, antigravity and the local engine are

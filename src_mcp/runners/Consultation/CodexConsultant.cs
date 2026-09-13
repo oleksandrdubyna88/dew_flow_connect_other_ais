@@ -30,7 +30,8 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
-        var outputFile = Path.Combine(launch.OutputDir, $"{FileName.Safe(vendor)}-consult-{Guid.NewGuid():N}.txt");
+        // Named through the one place that also decides what the sweep may delete.
+        var outputFile = Path.Combine(launch.OutputDir, ConsultantArtefacts.Name(vendor, ".txt"));
         var argv = (string[])[.. Argv(launch, outputFile)];
         ConsultantLaunches.MustCarryNoLineBreak(argv);
 

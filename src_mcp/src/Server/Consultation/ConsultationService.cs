@@ -44,7 +44,22 @@ public sealed class ConsultationService(
     /// Its own directory, never <c>consultations/</c>: that one holds a file per consultation keyed
     /// by id, and story 2's live check found this schema being read back as a record with no id.
     /// </remarks>
-    private readonly string _answerSchema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
+    private readonly ConsultSchemaFile.Provisioned _answerSchema = Provision(settings, log);
+
+    private static ConsultSchemaFile.Provisioned Provision(PanelSettings settings, Serilog.ILogger log)
+    {
+        var provisioned = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
+        if (!provisioned.Ready)
+        {
+            // Said WHERE it happened, at startup, rather than surfacing minutes later as a child
+            // process complaining about a missing file. It does not stop the service: one route of
+            // four needs this, and a consultation on codex must not be prevented by a directory the
+            // local engine would have used.
+            log.Warning("consultations: {Problem}", provisioned.Problem);
+        }
+
+        return provisioned;
+    }
 
     public ConsultationStore Store => _store;
 
@@ -147,6 +162,14 @@ public sealed class ConsultationService(
             return Error(ConsultantResolution.CannotConsult(row.Identity()));
         }
 
+        // The one route that needs the schema is refused BY NAME when it is not there, rather than
+        // launched to meet a shim's complaint about a file it was handed. Every other route is
+        // unaffected by the same failure, which is why this is checked here and not at startup.
+        if (runtime.NeedsAnswerSchema && !_answerSchema.Ready)
+        {
+            return Error(_answerSchema.Problem);
+        }
+
         var model = choice.Model.Length > 0 ? choice.Model : row.Model;
         var consultant = new Consultant(runtime, row, model, caller);
 
@@ -214,7 +237,7 @@ public sealed class ConsultationService(
             record.Handle,
             AnswersDir,
             Settings(consultant),
-            _answerSchema));
+            _answerSchema.Path));
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) };
         _store.Write(asking);
         log.Information("consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);

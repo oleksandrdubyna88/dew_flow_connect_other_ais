@@ -134,15 +134,12 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
     /// local shim was handed.
     /// </summary>
     /// <remarks>
-    /// The two shapes are the adapters' own: <c>&lt;vendor&gt;-consult-&lt;guid&gt;.txt</c> from a CLI
-    /// route, and <c>local-consult-&lt;guid&gt;.prompt</c> / <c>.json</c> from the local one. A sweep
-    /// that removes what it did not write is a sweep nobody can trust with a directory.
+    /// The rule lives with the adapters that NAME these files, not here: the writer and the deleter
+    /// are in different projects, and an ad-hoc check in the sweep would leak files the day an
+    /// adapter renamed its output. A sweep that removes what it did not write is a sweep nobody can
+    /// trust with a directory.
     /// </remarks>
-    private static bool OurOwn(string name) =>
-        name.Contains("-consult-", StringComparison.Ordinal)
-        && (name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(".prompt", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+    private static bool OurOwn(string name) => Runners.Consultation.ConsultantArtefacts.Ours(name);
 
     /// <summary>
     /// Whether this repository is free for the sweep to decide anything about.

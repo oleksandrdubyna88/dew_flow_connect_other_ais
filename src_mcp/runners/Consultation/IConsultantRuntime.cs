@@ -42,6 +42,34 @@ public static class ConsultantRoles
 }
 
 /// <summary>
+/// What a consultation leaves in the answers directory, and how it is recognised again.
+/// </summary>
+/// <remarks>
+/// <para>ONE place, because the adapter that writes the name and the sweep that deletes it live in
+/// different projects and are read by different people. An ad-hoc substring check in the sweep would
+/// either leak files the day an adapter renamed its output or delete something another component
+/// happened to call the same thing. (gemini, story 2's second code round.)</para>
+/// <para>Both shapes come from the role a consultation carries: <c>codex-consult-&lt;guid&gt;.txt</c>
+/// from a CLI route, <c>local-consult-&lt;guid&gt;.prompt</c> and <c>.json</c> from the local one.</para>
+/// </remarks>
+public static class ConsultantArtefacts
+{
+    /// <summary>The infix every consultation artefact carries, because every one is named for the role.</summary>
+    public const string Marker = "-" + ConsultantRoles.Consult + "-";
+
+    private static readonly string[] Extensions = [".txt", ".prompt", ".json"];
+
+    /// <summary>A file name this product wrote for a consultation.</summary>
+    public static bool Ours(string fileName) =>
+        fileName.Contains(Marker, StringComparison.Ordinal)
+        && Array.Exists(Extensions, e => fileName.EndsWith(e, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A fresh artefact name for one launch. Unique, so two launches cannot share a file.</summary>
+    public static string Name(string vendor, string extension) =>
+        $"{Core.Rounds.FileName.Safe(vendor)}{Marker}{Guid.NewGuid():N}{extension}";
+}
+
+/// <summary>
 /// The conversation-shaped vendor adapter: the <c>ChatAdapter</c> seam of the extension, in C#.
 /// </summary>
 /// <remarks>
@@ -71,6 +99,16 @@ public interface IConsultantRuntime
 
     /// <summary>The vendor's own id for this conversation, read off whatever the process said — or empty.</summary>
     string ReadHandle(ProcessResult result);
+
+    /// <summary>
+    /// This route cannot run without the answer schema on disk, so a failure to provision it is a
+    /// refusal for this route alone.
+    /// </summary>
+    /// <remarks>
+    /// False for the three CLIs, which answer prose and are handed no schema at all — a read-only
+    /// data directory must not stop a consultation that never needed the file.
+    /// </remarks>
+    bool NeedsAnswerSchema => false;
 
     /// <summary>
     /// The advice out of whatever shape this vendor answers in. Prose for every CLI; the one
