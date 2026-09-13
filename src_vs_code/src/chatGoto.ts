@@ -1,6 +1,6 @@
 import { ConversationMeta, ConversationRecord, ConversationSource, sameSource } from './chatStore';
 import { IndexState } from './chatStoreCache';
-import { rootOf } from './chatSource';
+import { filedUnder, sameRoot } from './chatSource';
 
 /**
  * *CoAI: go to conversation* — which conversation belongs to the tab somebody is looking at.
@@ -50,6 +50,8 @@ export type Narrowing =
   | { readonly kind: 'several' }
   /** More than one Claude session answers to this tab's name, so its own identity is in doubt. */
   | { readonly kind: 'ambiguous session' }
+  /** This tab's conversation exists, filed under ANOTHER project of this window. */
+  | { readonly kind: 'cross root' }
   /** The store could not be read; these are the rows as they were last known. */
   | { readonly kind: 'unreadable'; readonly reason: string };
 
@@ -138,7 +140,7 @@ export function goto(asked: GotoAsked): Goto {
     // feature was asked for, and it must be instant.
     return { kind: 'reveal', id: asked.live };
   }
-  if (asked.tab.kind === 'other') {
+  if (!eligible(asked.tab.kind)) {
     // A terminal, the Output pane, our own chat tab. The operator's decision: a tab with nothing
     // behind it gets the LIST, never an error and never silence.
     return { kind: 'everything' };
@@ -149,25 +151,63 @@ export function goto(asked: GotoAsked): Goto {
     // offer to create a second conversation for a tab that already has one. (Three vendors.)
     return { kind: 'building' };
   }
-  const mine = ours(asked);
+  const here = belongsTo(asked);
+  // EVERY candidate of this root, whatever its source. The ambiguous branch needs these and only
+  // these: when a Claude title answers to more than one session there IS no source to match on, and
+  // filtering by one leaves nothing — a picker asking which conversation somebody meant, with no
+  // conversations in it. Four reviewers found that, and it is the one defect in this story that
+  // would have shipped looking like a working feature. (The code round.)
+  const around = asked.candidates.filter((meta) => sameRoot(meta.workspace, here, asked.caseBlind));
   if (asked.index.kind === 'unavailable') {
     // Its last good rows are a statement about a moment that has passed. They are worth SHOWING —
     // they are probably right — but not worth binding a tab to without a person looking at them.
-    return { kind: 'pick', among: mine, why: { kind: 'unreadable', reason: asked.index.reason }, offer };
+    return { kind: 'pick', among: around, why: { kind: 'unreadable', reason: asked.index.reason }, offer };
   }
   if (asked.ambiguous) {
-    // The tab's own identity is in doubt: more than one Claude session answers to this name, so
-    // there is no source to match on and the candidates are whatever was passed in.
-    return { kind: 'pick', among: mine, why: { kind: 'ambiguous session' }, offer };
+    // The TAB's own identity is in doubt, not the conversations'. So the candidates are shown as they
+    // came, narrowed only by the root they belong to.
+    return { kind: 'pick', among: around, why: { kind: 'ambiguous session' }, offer };
   }
+  const mine = around.filter((meta) => sameSource(meta.source, asked.source));
   if (mine.length > 1) {
     // Impossible by construction — one source belongs to one conversation, and C1 writes it once —
     // and answered honestly anyway, because the alternative is guessing which of two is yours.
     return { kind: 'pick', among: mine, why: { kind: 'several' }, offer };
   }
   const only = mine[0];
+  if (only !== undefined) {
+    return { kind: 'reopen', meta: only };
+  }
+  const elsewhere = asked.candidates.filter((meta) => sameSource(meta.source, asked.source));
+  if (elsewhere.length > 0) {
+    // THIS TAB'S CONVERSATION, filed under another project. Dropping it to silence would offer to
+    // start a new one while the old one sits a folder away — the duplicate this whole rule exists to
+    // prevent, produced by the rule itself. It is shown, and the person decides. (Two vendors.)
+    return { kind: 'pick', among: elsewhere, why: { kind: 'cross root' }, offer };
+  }
 
-  return only === undefined ? { kind: 'start', offer } : { kind: 'reopen', meta: only };
+  return { kind: 'start', offer };
+}
+
+/** Whether a conversation can belong to a tab of this kind — exhaustive, so a fourth kind must decide. */
+function eligible(kind: TabKind): boolean {
+  switch (kind) {
+    case 'claude':
+    case 'document':
+      return true;
+    case 'other':
+      return false;
+    default: {
+      // A new tab kind must not fall silently into the document path, where it would be matched by a
+      // path it has not got. (codex, the code round; the constraint was my own.)
+      const unhandled: never = kind;
+
+      throw new Error(
+        `a tab kind this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the kinds it may be are claude, document and other',
+      );
+    }
+  }
 }
 
 /**
@@ -183,21 +223,16 @@ export function goto(asked: GotoAsked): Goto {
  * is the line this whole story rests on: every conversation written before C1 has no source, and
  * handing one of them to a tab that never owned it would be this feature's worst failure.</p>
  */
-function ours(asked: GotoAsked): readonly ConversationMeta[] {
-  if (asked.source.kind === 'none') {
-    return [];
-  }
-  const here = belongsTo(asked);
-
-  return asked.candidates.filter((meta) => sameSource(meta.source, asked.source) && meta.workspace === here);
-}
-
-/** The root this tab belongs to — its own, or the fallback for a tab under none of them. */
-function belongsTo(asked: GotoAsked): string {
-  const root = asked.tab.path.length === 0 ? '' : rootOf(asked.tab.path, asked.roots, asked.caseBlind);
-
-  return root.length > 0 ? root : asked.fallback;
-}
+/**
+ * The root this tab belongs to — its own, or the fallback for a tab under none of them.
+ *
+ * <p>Through {@link filedUnder}, which is the function story C1 FILES a conversation with. Two copies
+ * of that rule would drift the day either changed, and the failure would be silent: a record filed
+ * one way and looked up the other, answering `start` for a conversation that exists. (gemini, the
+ * code round.)</p>
+ */
+const belongsTo = (asked: GotoAsked): string =>
+  filedUnder(asked.tab.path, asked.roots, asked.fallback, asked.caseBlind);
 
 /**
  * What the offer to start a conversation is called.
@@ -213,6 +248,19 @@ const offerFor = (label: string): string => (label.trim().length > 0 ? label : U
  * <p>A decision is a statement about a moment that has passed. Between `goto` answering `reopen` and
  * the host reading the record, another window can have forgotten it. This is the same division B3
  * made for the picker: decide on what is known, verify at the act.</p>
+ *
+ * <p><b>BOTH halves of the ownership key</b>, not just the source. `goto` decides on source AND
+ * workspace, so checking only the source here would let a record another window re-filed into a
+ * different project bind to this tab anyway — which is precisely what the workspace rule was added to
+ * prevent, undone at the last step. (Three findings, the code round.)</p>
+ *
+ * <p>It has no caller yet: C3 is the story that re-reads and binds. The contract is fixed and pinned
+ * by its test now, while the reasoning that produced it is still to hand.</p>
  */
-export const bindable = (record: ConversationRecord | undefined, source: ConversationSource): boolean =>
-  record !== undefined && sameSource(record.source, source);
+export const bindable = (
+  record: ConversationRecord | undefined,
+  source: ConversationSource,
+  workspace: string,
+  caseBlind: boolean,
+): boolean =>
+  record !== undefined && sameSource(record.source, source) && sameRoot(record.workspace, workspace, caseBlind);

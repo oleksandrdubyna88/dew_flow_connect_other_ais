@@ -782,18 +782,28 @@ async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource
 
       return true;
     }
-    if (done.kind === 'kept' && done.why !== 'busy') {
-      // Somebody else followed it first, or it is gone. Neither is a failure and neither is ours to
-      // report — but the DISK has moved under our index either way, so it still counts as touched:
-      // if every match came back like this the index would never be refreshed, and the picker would
-      // go on naming the file the conversation left while a later rename compared against that stale
-      // source. (CodeRabbit, on the pull request.)
-      return true;
-    }
-    if (done.kind === 'failed') {
+    if (done.kind === 'kept') {
+      if (done.why !== 'busy') {
+        // Somebody else followed it first, or it is gone. Neither is a failure and neither is ours to
+        // report — but the DISK has moved under our index either way, so it still counts as touched:
+        // if every match came back like this the index would never be refreshed, and the picker would
+        // go on naming the file the conversation left while a later rename compared against that
+        // stale source. (CodeRabbit, on the pull request.)
+        return true;
+      }
+    } else if (done.kind === 'failed') {
       console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${id} — ${done.reason}`);
 
       return false;
+    } else {
+      // EXHAUSTIVE BY NAME: a future outcome must decide here rather than falling through into the
+      // busy retry, which is what a chain of ifs would have let it do. (codex, the code round.)
+      const unhandled: never = done;
+
+      throw new Error(
+        `a refile answer this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the answers it may give are followed, unindexed, kept and failed',
+      );
     }
     await new Promise<void>((resolve) => {
       setTimeout(resolve, FOLLOW_WAIT_MS);

@@ -270,7 +270,7 @@ test('a narrowing this build has no sentence for fails by name', () => {
 
   assert.throws(() => narrowedTitle(odd, 'main.ts', 1), (thrown: Error) => {
     assert.match(thrown.message, /because/u, 'the failure does not say what arrived');
-    assert.match(thrown.message, /several, ambiguous session and unreadable/u, 'it does not name the reasons that are legal');
+    assert.match(thrown.message, /several, ambiguous session, cross root and unreadable/u, 'it does not name the reasons that are legal');
 
     return true;
   });

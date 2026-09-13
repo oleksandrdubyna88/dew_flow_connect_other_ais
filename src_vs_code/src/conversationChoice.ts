@@ -90,8 +90,12 @@ export function narrowedTitle(why: Narrowing, tab: string, among: number): strin
       return `${among} conversations could belong to “${tab}” — which one?`;
     case 'ambiguous session':
       return `More than one Claude session is called “${tab}” — which conversation did you mean?`;
+    case 'cross root':
+      return `“${tab}” has a conversation, but it is filed under another folder of this window — open it?`;
     case 'unreadable':
-      return `Conversations for “${tab}”, as they were last read — the folder did not answer just now`;
+      // The reason is carried, not swallowed: a permissions problem and a transient failure need
+      // different things done about them, and reading identically would tell nobody which it was.
+      return `Conversations for “${tab}”, as they were last read — the folder did not answer just now (${why.reason})`;
     default: {
       // EXHAUSTIVE BY NAME, like every other answer in this file: a fourth reason must be a compile
       // error rather than a picker with no title.
@@ -99,7 +103,7 @@ export function narrowedTitle(why: Narrowing, tab: string, among: number): strin
 
       throw new Error(
         `a narrowing this build has no sentence for: ${JSON.stringify(unhandled)}`
-        + ' — the reasons it may give are several, ambiguous session and unreadable',
+        + ' — the reasons it may give are several, ambiguous session, cross root and unreadable',
       );
     }
   }
