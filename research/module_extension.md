@@ -1794,6 +1794,56 @@ Toggling the switch carries the sign-in either way rather than dropping it: on, 
 seeded from the shared one; off, this side's is promoted to the shared one when there is none. Other
 sides need nothing — their token then disagrees with the intent, and the rule re-mints it.
 
+
+### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
+
+It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea
+from opposite ends — there a person asks another vendor about a passage, here an AI asks one about
+the tree it is stuck in — so they share a heading tone rather than taking a new hue.
+
+**One row per CALLER, not per vendor.** The question this feature answers is "when THIS kind of agent
+is stuck, who does it ask", and the answer differs for each because a model cannot see its own blind
+spot. Four rows — Claude Code, Codex, Gemini, another client — over the SAME vendor list the reviewer
+cards offer, from the same `modelsFor`: a consultant is an ordinary vendor row, and a second curated
+list would be a second thing to keep in step with every CLI. A row that cannot hold a conversation is
+listed underneath **with its reason** rather than quietly missing, which is `chatModelsFrom`'s rule
+and the same defect it was written for. Choosing the caller's own vendor is allowed and annotated,
+never refused: the server sees the caller's VENDOR and never its model, so "Fable answering a Sonnet
+session" and "Sonnet answering itself" look identical from there and only the person can tell them
+apart.
+
+**Five settings, five env keys, one for one.** `coai.consultants` holds the caller map; each cap is a
+setting of its own (`coai.consultTurns`, `coai.consultCallsPerSession`, `coai.consultIdleMinutes`,
+`coai.consultEnabled`). A nested object would have read better in one file and worse everywhere else:
+VS Code describes and completes a declared key, the panel's ordinary write path stores one, and the
+per-side overlay copies one — and it can do none of the three for a field buried inside an object.
+`CONSULT_SETTINGS` is the list, spread into `OVERLAID_SETTINGS` so a sixth one cannot be left
+silently shared. Each is written only when it DIFFERS from the shipped value, and
+`panelServerDefaultsAgreement.test.ts` reads the C# — `PanelSettings.cs` for the caps,
+`ConsultantRouting.Shipped` for the map, `ConsultantResolution.Consulting` for the runtimes the
+picker offers — because that rule has one precondition nothing was checking: the two sides' defaults
+must be the same value. The gate's own defaults diverged for a day once, and a new install read one
+number off the screen while another one ran.
+
+**A fourth `SettingWrite` kind arrived with it.** The four rows share two setting names and are told
+apart by `data-caller`, exactly as the round budgets are told apart by `data-role`; travelling in the
+vendor slot would have had the provider hunt for a vendor called `claude` when the row means "what
+Claude Code asks" — and sometimes find one. The caller is now part of the focus id as well
+(`setting|vendor|role|caller`), and `FOCUS_ID` had to learn the fourth segment in the same change: an
+id that pattern does not match is dropped whole rather than escaped, so a forgotten segment does not
+fail loudly — it silently stops putting the caret back, in every control on the panel. Eight tests
+said so within a second.
+
+**The prompt box is not a setting.** `coai-mcp` reads its prompts override-first from its own data
+directory, so what a person types goes to `<dataDir>/prompts/consult.md` and nowhere else — the file
+IS the value, and the panel reads it at paint time like the pasted snippet beside it. A mirrored
+`coai.*` key would have given one prompt two homes and made the hand-edit the server has always
+supported something the next window reverts. The box carries `data-file`, which is what exempts it
+from the declared-settings test — a fact in the markup rather than a name on a list somewhere else —
+and *Restore default* is a button because an emptied box doing the same thing is true but not
+discoverable. Empty means the shipped prompt, and the hint says so: the panel cannot show those
+words, because they are compiled into the server.
+
 ### The MCP server section is about coai-mcp, and about nothing else (2026-09-07)
 
 It is titled **MCP server** and carries the `coai-mcp` lines alone: what is installed on this side,
@@ -1875,6 +1925,9 @@ flowchart LR
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
+| `consultSettings.ts` | pure: the five consult settings, the shipped caller map (a mirror of `ConsultantRouting.Shipped`), which vendor rows may consult and why one may not |
+| `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box |
+| `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
 | `escalationWatcher.ts` | the impure half: file watcher + a 5s poll (a watcher on a path outside the workspace is not guaranteed), the modal, the status-bar item, the atomic answer write |
 | `extension.ts` | activation, the four commands, the update offer |
 

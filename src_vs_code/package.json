@@ -662,6 +662,52 @@
               }
             }
           }
+        },
+        "coai.consultants": {
+          "type": "object",
+          "default": {
+            "claude": { "vendor": "codex", "model": "" },
+            "codex": { "vendor": "claude", "model": "" },
+            "gemini": { "vendor": "codex", "model": "" },
+            "other": { "vendor": "codex", "model": "" }
+          },
+          "markdownDescription": "Who a stuck AI asks, by the kind of AI that is stuck. Edit it in the **Consultant** section of the panel. The shipped pairs never send a caller to itself — a model cannot see its own blind spot — but the same vendor is allowed as a deliberate choice, which is how you put a stronger model of your own assistant behind a weaker one.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "vendor": {
+                "type": "string",
+                "description": "The id of a configured vendor row. It must be a row that can hold a conversation: codex, claude, antigravity or a local engine."
+              },
+              "model": {
+                "type": "string",
+                "description": "Empty uses the model that row is already set to."
+              }
+            }
+          }
+        },
+        "coai.consultTurns": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "markdownDescription": "How many times one consultation may be asked before it closes. The consultant is TOLD how many are left in every turn, so the last one answers instead of asking a clarifying question."
+        },
+        "coai.consultCallsPerSession": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "How many consultations one AI session may open. The cap is what keeps a loop from spending an afternoon's tokens on the same question."
+        },
+        "coai.consultIdleMinutes": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 1,
+          "description": "How long an open consultation may sit unasked before it is closed. A follow-up after this is a new consultation, with the whole budget again."
+        },
+        "coai.consultEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Whether the `consult` tool answers at all. Off refuses by NAME, so a stuck AI is told the feature is switched off rather than left to guess why nothing came back."
         }
       }
     },

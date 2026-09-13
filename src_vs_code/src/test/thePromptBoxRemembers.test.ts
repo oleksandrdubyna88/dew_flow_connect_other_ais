@@ -236,6 +236,7 @@ test('what is typed into the prompt box is saved without waiting for a blur', ()
 
   assert.deepEqual(settings(page), [{
     type: 'setting', key: 'chatPrompt', value: 'поясни', vendor: undefined, role: undefined,
+    caller: undefined,
   }], 'one save, carrying the last thing typed');
 });
 
@@ -263,12 +264,12 @@ test('the page says when a control has focus, so nothing rebuilds it underneath'
   page.fire(0, 'focusin');
 
   assert.deepEqual(focusMessages(page),
-    [{ type: 'focus', id: 'chatPrompt||', editing: true, start: 0, end: 0 }]);
+    [{ type: 'focus', id: 'chatPrompt|||', editing: true, start: 0, end: 0 }]);
 
   page.fire(0, 'focusout', { relatedTarget: null });
 
   assert.deepEqual(focusMessages(page)[1],
-    { type: 'focus', id: 'chatPrompt||', editing: false, start: 0, end: 0 });
+    { type: 'focus', id: 'chatPrompt|||', editing: false, start: 0, end: 0 });
 });
 
 test('moving between two controls is not a moment to rebuild the page', () => {
@@ -285,7 +286,7 @@ test('moving between two controls is not a moment to rebuild the page', () => {
     'the page was released for a repaint while focus was still inside it',
   );
   // Paired with the transition actually being seen, so this cannot pass by reporting nothing at all.
-  assert.deepEqual(focusMessages(page).map((message) => message.id), ['chatPrompt||', 'chatLanguage||']);
+  assert.deepEqual(focusMessages(page).map((message) => message.id), ['chatPrompt|||', 'chatLanguage|||']);
 });
 
 test('leaving the box writes what was typed, before it says the box is free', () => {
@@ -316,7 +317,7 @@ test('a panel that is being hidden writes what was typed into it', () => {
 test('a paint that could not be withheld any longer puts the caret back', () => {
   const box = promptBox();
   box.value = 'поясни';
-  const page = run([box, languagePicker()], { focus: { id: 'chatPrompt||', start: 2, end: 2 } });
+  const page = run([box, languagePicker()], { focus: { id: 'chatPrompt|||', start: 2, end: 2 } });
 
   assert.equal(page.elements[0].focused, true, 'the control the paint landed under was not refocused');
   assert.deepEqual(page.elements[0].caret, [2, 2], 'the caret did not come back where it was');
@@ -325,7 +326,7 @@ test('a paint that could not be withheld any longer puts the caret back', () => 
 test('the caret is put back inside a value the rebuilt page is shorter than', () => {
   const box = promptBox();
   box.value = 'по';
-  const page = run([box], { focus: { id: 'chatPrompt||', start: 40, end: 90 } });
+  const page = run([box], { focus: { id: 'chatPrompt|||', start: 40, end: 90 } });
 
   assert.deepEqual(page.elements[0].caret, [2, 2], 'a range past the end of the box was asked for');
 });
@@ -336,7 +337,7 @@ test('two controls sharing a setting name are told apart', () => {
   // unless it happens to be Architecture.
   const architecture = roundsFor('Architecture');
   const security = roundsFor('SecurityReliability');
-  run([architecture, security], { focus: { id: 'rounds||SecurityReliability', start: 1, end: 1 } });
+  run([architecture, security], { focus: { id: 'rounds||SecurityReliability|', start: 1, end: 1 } });
 
   assert.equal(security.focused, true, 'the control that was being edited was not the one refocused');
   assert.equal(architecture.focused, false, 'a namesake control took the focus');
@@ -357,9 +358,9 @@ test('a focus name that is not a setting name never reaches the page', () => {
 
   // And a caret that is not two ordered whole numbers is coerced rather than carried.
   const silly = panelHtml(
-    state({ focus: { id: 'chatPrompt||', start: -5, end: Number.NaN } }), 'test-nonce');
+    state({ focus: { id: 'chatPrompt|||', start: -5, end: Number.NaN } }), 'test-nonce');
 
-  assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|","start":0,"end":0\};/);
+  assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|\|","start":0,"end":0\};/);
 });
 
 test('a chat setting repaints the panel now, because there is no longer a box to rebuild under', () => {
@@ -380,7 +381,11 @@ test('the free-text hazard the old rule guarded is gone with the box, not merely
   // The rule above is only safe while the section has nothing a person types INTO. This asserts
   // that, so re-introducing a textarea here fails with this sentence rather than by flickering.
   const body = panelHtml(state(), 'n0nce');
-  const section = body.slice(body.indexOf('data-section="chat"'), body.indexOf('data-section="prompts"'));
+  // Ends at whatever section comes NEXT rather than at a named one: the consultant was inserted
+  // between the chat and the prompts, and a hard-coded end would have quietly swallowed it — this
+  // assertion would then have been failing about somebody else's controls.
+  const start = body.indexOf('data-section="chat"');
+  const section = body.slice(start, body.indexOf('data-section="', start + 1));
 
   assert.doesNotMatch(section, /<textarea|<input type="(text|url|number)"/,
     'a free-text control is back in a section that now repaints on every one of its own settings');
@@ -454,7 +459,7 @@ test('a chosen dropdown RELEASES the repaint it is holding, so its neighbour can
   const released = focusMessages(page).filter((message) => message.editing === false);
 
   assert.equal(released.length, 1, 'choosing in a dropdown did not release the repaint hold');
-  assert.equal(released[0]!.id, 'chatLanguage||');
+  assert.equal(released[0]!.id, 'chatLanguage|||');
 });
 
 test('a textarea keeps its hold through a change, because its words are still being written', () => {

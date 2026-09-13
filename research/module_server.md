@@ -106,6 +106,15 @@ when its file cannot be written the cap is enforced in memory for this server's 
 says so — the opposite of `CallerSessions`' split-order claim, because a repeated instruction is cheap
 and a runaway agent on a paid vendor is not.
 
+**And the whole thing has a switch** (`COAI_CONSULT_ENABLED`, on). Off is a REFUSAL BY NAME, checked
+before the arguments are looked at: the tool stays in the list, because a caller that cannot see a
+tool cannot be told why it is not there, and the sentence names the setting and the panel section
+that writes it. It is read through `NotSwitchedOff` — the parser a reviewer's own switch uses — so
+only the four spellings of false disable it and a mangled value leaves the tool working. The
+asymmetry is deliberate and it is the same one: a consultant wrongly available costs nothing, because
+nothing calls it until an agent is stuck; one wrongly unavailable is a refusal in the one moment it
+was wanted.
+
 **Every turn is one ledger row of `kind: consult`, `stage: Consultation`** — a third kind beside
 `review` and `chat`, because the phase-2 question ("should an automatic consultation fire when a
 finding survives two rounds?") is a cost question about consultations specifically, and filing them as

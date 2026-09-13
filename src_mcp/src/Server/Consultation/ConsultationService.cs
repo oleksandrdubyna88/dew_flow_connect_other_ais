@@ -68,6 +68,17 @@ public sealed class ConsultationService(
 
     public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default)
     {
+        // FIRST, before the shape of the call is examined at all: somebody who switched the feature
+        // off is owed the sentence saying so, not a complaint about an empty argument. And it is a
+        // named refusal rather than a tool that disappears from the list — a caller that cannot see
+        // the tool cannot be told why it is not there. (The panel's Consultant section writes it.)
+        if (!settings.ConsultEnabled)
+        {
+            return Error("consulting another vendor is switched off in this installation "
+                         + "(COAI_CONSULT_ENABLED) — the Consultant section of the ConnectOtherAIs panel turns it "
+                         + "back on. Nothing was sent anywhere; carry on with the person instead");
+        }
+
         if (string.IsNullOrWhiteSpace(problem))
         {
             return Error("a problem statement is required — say what is stuck and what already broke");

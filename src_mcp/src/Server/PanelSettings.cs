@@ -273,6 +273,17 @@ public sealed record PanelSettings
     /// <summary>How long an open consultation may sit unasked before it is closed and its handle dropped.</summary>
     public TimeSpan ConsultIdle { get; init; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>Whether the <c>consult</c> tool answers at all.</summary>
+    /// <remarks>
+    /// <para>On unless somebody switched it off, and read through <see cref="NotSwitchedOff"/> rather
+    /// than <see cref="Flag"/> for the reason that method states: the failure modes are not
+    /// symmetric. A consultant wrongly available costs nothing, because nothing calls it until an
+    /// agent is stuck; one wrongly unavailable is a refusal in the one moment it was wanted.</para>
+    /// <para>The tool still EXISTS when this is off — a tool that vanishes from the list is a caller
+    /// that cannot be told why. It refuses by name instead.</para>
+    /// </remarks>
+    public bool ConsultEnabled { get; init; } = true;
+
     public static string DefaultDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
@@ -479,6 +490,7 @@ public sealed record PanelSettings
         ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
         ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
         ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+        ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),

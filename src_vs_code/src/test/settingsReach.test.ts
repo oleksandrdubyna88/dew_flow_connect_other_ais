@@ -32,6 +32,20 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   splitWithFable: true,
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  // Every part of it changed at once, because this walk changes ONE top-level setting at a time and
+  // `consult` is one setting holding five things — a caller map that differs, and four numbers.
+  consult: {
+    byCaller: {
+      claude: { vendor: 'claude', model: 'claude-opus-5' },
+      codex: { vendor: 'codex', model: '' },
+      gemini: { vendor: 'antigravity', model: '' },
+      other: { vendor: 'local', model: 'qwen' },
+    },
+    turns: 3,
+    callsPerSession: 4,
+    idleMinutes: 30,
+    enabled: false,
+  },
 };
 
 test('every setting, changed on its own, reaches the server file', () => {

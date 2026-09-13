@@ -43,9 +43,12 @@ const state = (): PanelState => ({
 function controls(html: string): { setting: string; scoped: boolean }[] {
   return [...html.matchAll(/<[^>]*\bdata-setting="([a-zA-Z.]+)"[^>]*>/g)].map((m) => ({
     setting: m[1]!,
-    // A per-vendor or per-role control is stored INSIDE `coai.vendors` or a role record, so it is
-    // not a settings key of its own and must not be required to be one.
-    scoped: /\bdata-(vendor|role)=/.test(m[0]),
+    // A per-vendor, per-role or per-CALLER control is stored INSIDE `coai.vendors`, a role record
+    // or `coai.consultants`, so it is not a settings key of its own and must not be required to
+    // be one. `data-file` is the third case and the only one that leaves the configuration
+    // entirely: the consultant's prompt is written to the server's own prompt override, because
+    // that is where the server reads it from.
+    scoped: /\bdata-(vendor|role|caller|file)=/.test(m[0]),
   }));
 }
 
