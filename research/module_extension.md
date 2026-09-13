@@ -2457,12 +2457,34 @@ archived conversation, still there and still opening: the reset did not happen, 
 worst case. Reversing the pair is what would make it lossy, which is why a durable reset journal was
 declined: the window is two statements wide and its cost is a button somebody presses again.
 
+**And drained is not saved.** The write chain is built so that it cannot reject — a handler on both
+sides, which is exactly what makes awaiting it safe — so a save that FAILED still lets the drain
+resolve. `rev` is the disk's own answer: zero until the store has accepted this record, non-zero from
+the moment it has. A record that never landed leaves the id unpublished and says so, and the tab stays
+on the one it had.
+
+**A window with nowhere to keep conversations refuses the reset** rather than performing it. Reading
+an absent store as a successful archive would wipe a conversation with nowhere for it to have gone —
+*archived, never deleted* broken in the one case where the deletion is total. A conversation with
+nothing said in it is a different matter and is checked first: it needs no store to be archived
+correctly.
+
 `chatFresh.ts` holds the slate as one value with a closed type, applied in a single statement, so a
 field added to it is applied by construction rather than by somebody remembering that statement
 exists. What it does NOT name survives — the title, because the tab is still the conversation of that
 tab; the model, the provider and the prompt, because a reset is a new subject and not a new setup;
 the source and the workspace; and `turn`, which is never reset anywhere, because a stop names the
 turn it means and a late one must not be able to name a turn of the new conversation.
+
+**And EVERY field is decided about, checked by the compiler rather than by hand.** Typing the slate as
+`Partial<Thread>` proves that every field of `Freshened` is a thread field of the right type — and it
+caught a real mismatch the moment it was added — but it cannot prove the other direction. A
+per-conversation field added to `Thread` and forgotten would simply survive the reset, carrying the
+old conversation into the new one with nothing to say so. So the fields a reset keeps are named in a
+union beside it, and what is in neither half is computed: when that set is empty the assertion is a
+`true` that compiles, and when it is not, the build stops and names the field. Adding a `contextWindow`
+to `Thread` produces *Type 'true' is not assignable to type "contextWindow"* — which is the message
+somebody wants at that moment.
 
 ### Two regions, opposite conclusions
 
