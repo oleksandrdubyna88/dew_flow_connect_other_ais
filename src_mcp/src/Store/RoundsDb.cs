@@ -233,9 +233,7 @@ public sealed class RoundsDb : IDisposable
               AND f.resolution IN ('accept', 'reject')
             ORDER BY r.number, f.ordinal
             """;
-        Bind(read, "$session", sessionId);
-        Bind(read, "$stage", stage);
-        Bind(read, "$number", number);
+        BindRound(read, sessionId, stage, number);
 
         var decided = new List<EarlierDecision>();
         using var rows = read.ExecuteReader();
@@ -274,9 +272,7 @@ public sealed class RoundsDb : IDisposable
             WHERE session_id = $session AND stage = $stage AND number = $number
             """;
         Bind(write, "$missed", missed);
-        Bind(write, "$session", sessionId);
-        Bind(write, "$stage", stage);
-        Bind(write, "$number", number);
+        BindRound(write, sessionId, stage, number);
         write.ExecuteNonQuery();
     }
 
@@ -297,9 +293,7 @@ public sealed class RoundsDb : IDisposable
             Bind(write, "$reason", decisions[ordinal] is Decision.Rejected rejected ? rejected.Reason : string.Empty);
             Bind(write, "$when", when);
             Bind(write, "$ordinal", ordinal);
-            Bind(write, "$session", sessionId);
-            Bind(write, "$stage", stage);
-            Bind(write, "$number", number);
+            BindRound(write, sessionId, stage, number);
             write.ExecuteNonQuery();
         }
 
@@ -323,9 +317,7 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = SQL_CLOSING;
         Bind(write, "$accepted", decisions.Count(d => d is Decision.Accepted));
         Bind(write, "$rejected", decisions.Count(d => d is Decision.Rejected));
-        Bind(write, "$session", sessionId);
-        Bind(write, "$stage", stage);
-        Bind(write, "$number", number);
+        BindRound(write, sessionId, stage, number);
         write.ExecuteNonQuery();
     }
 
@@ -372,9 +364,7 @@ public sealed class RoundsDb : IDisposable
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model
             RETURNING id
             """;
-        Bind(write, "$session", state.SessionId);
-        Bind(write, "$stage", round.Stage);
-        Bind(write, "$number", round.Number);
+        BindRound(write, state.SessionId, round.Stage, round.Number);
         Bind(write, "$subject", round.Subject);
         Bind(write, "$status", round.Status);
         Bind(write, "$verdict", round.Verdict);
@@ -487,6 +477,21 @@ public sealed class RoundsDb : IDisposable
 
     private static void Bind(SqliteCommand command, string name, object value) =>
         command.Parameters.AddWithValue(name, value);
+
+    /// <summary>
+    /// The three parameters that name ONE round — bound together, because they never travel apart.
+    /// </summary>
+    /// <remarks>
+    /// Five statements in this class select or update by exactly this key and each repeated the three
+    /// names. One helper is the reason they cannot drift, and it removes the repeated literals
+    /// SonarCloud counted on the pull request.
+    /// </remarks>
+    private static void BindRound(SqliteCommand command, string sessionId, string stage, int number)
+    {
+        Bind(command, "$session", sessionId);
+        Bind(command, "$stage", stage);
+        Bind(command, "$number", number);
+    }
 
     private static void Run(SqliteConnection db, string sql)
     {

@@ -84,17 +84,31 @@ internal static class Prompts
     /// </remarks>
     internal const int ProblemCap = ConsultantPrompt.ProblemBudget;
 
+    /// <summary>What the person actually said, bounded — or nothing, when they said nothing.</summary>
+    /// <remarks>
+    /// Its own method because the two questions are different and reading them as one nested ternary
+    /// was worth a finding: whether anything was said at all, and then whether what was said fits.
+    /// (SonarCloud, Major, on the pull request.)
+    /// </remarks>
+    private static string Stated(string raw)
+    {
+        if (raw.Trim().Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return raw.Length <= ProblemCap
+            ? raw
+            : raw[..ProblemCap] + $"\n\n[cut here at {ProblemCap} characters — send the rest as a follow-up turn if it matters]";
+    }
+
     internal static string Text(string problem)
     {
         // Trimmed only to DECIDE whether anything was said. The words themselves travel as written:
         // the message tells the assistant to send them unrewritten, and leading whitespace in a code
         // block or a command with significant spacing is exactly what a stuck person pastes.
         var raw = problem ?? string.Empty;
-        var stated = raw.Trim().Length == 0
-            ? string.Empty
-            : raw.Length > ProblemCap
-                ? raw[..ProblemCap] + $"\n\n[cut here at {ProblemCap} characters — send the rest as a follow-up turn if it matters]"
-                : raw;
+        var stated = Stated(raw);
 
         return $"""
             Consult another vendor's model about this, with the `consult` tool of the `coai` server.
