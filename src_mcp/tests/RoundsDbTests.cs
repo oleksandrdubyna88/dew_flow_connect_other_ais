@@ -94,9 +94,9 @@ public sealed class RoundsDbTests : IDisposable
 
         db.RecordDecisions("s1", "CodeReview", 1,
         [
-            new Decision.Accepted(findings[0]),
-            new Decision.Rejected(findings[1], "the branch is behind main; verified absent from all three refs"),
-            new Decision.Accepted(findings[2]),
+            new DecisionAt(0, new Decision.Accepted(findings[0])),
+            new DecisionAt(1, new Decision.Rejected(findings[1], "the branch is behind main; verified absent from all three refs")),
+            new DecisionAt(2, new Decision.Accepted(findings[2])),
         ]);
 
         var rows = Query("SELECT title, resolution, reason FROM findings ORDER BY ordinal");
@@ -105,6 +105,61 @@ public sealed class RoundsDbTests : IDisposable
         rows[1]["reason"].Should().Be("the branch is behind main; verified absent from all three refs");
         rows[1]["title"].Should().Be("second", "a decision must land on the finding it was made about");
         rows[2]["resolution"].Should().Be("accept");
+    }
+
+    /// <summary>
+    /// The same guarantee as the test above, for a caller that does not resolve top to bottom.
+    /// </summary>
+    /// <remarks>
+    /// <para>`resolve` takes entries carrying a finding INDEX — <c>[{"finding": 2, ...}]</c> — and
+    /// nothing anywhere requires them to arrive in the order the round listed them.
+    /// <c>RoundMachine.Resolve</c> checks that rejections carry reasons and counts nothing, so an
+    /// out-of-order set reaches the database exactly as an in-order one does.</para>
+    /// <para>The test above passes them in order, which is why this went unnoticed: the loop index
+    /// and the finding's ordinal are the same number for as long as nobody does anything else.</para>
+    /// </remarks>
+    [Fact]
+    public void ADecisionSentOutOfOrder_StillLandsOnItsOwnFinding()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var findings = new[] { Found("first"), Found("second"), Found("third") };
+        db.RecordRound(Session, Round(), findings);
+
+        // Finding 2 decided FIRST, and finding 1 not decided at all: the position in this list and
+        // the number the decision was made by disagree, which is the whole point.
+        db.RecordDecisions("s1", "CodeReview", 1,
+        [
+            new DecisionAt(2, new Decision.Rejected(findings[2], "the third one reads the base ref, which this branch never moved")),
+            new DecisionAt(0, new Decision.Accepted(findings[0])),
+        ]);
+
+        var rows = Query("SELECT title, resolution FROM findings ORDER BY ordinal");
+        rows[0]["resolution"].Should().Be("accept", "the caller accepted 'first', whichever order it said so in");
+        rows[1]["resolution"].Should().Be("", "the caller said nothing at all about 'second'");
+        rows[2]["resolution"].Should().Be("reject", "the caller rejected 'third', whichever order it said so in");
+    }
+
+    /// <summary>
+    /// A caller that decides SOME of a round's findings marks those and leaves the rest alone.
+    /// </summary>
+    /// <remarks>
+    /// Partial sets are not hypothetical: <c>PanelService.Resolve</c> refuses an EMPTY list while
+    /// findings are pending, and lets a shorter-than-pending one through. Read by position, a set of
+    /// one lands on ordinal 0 whichever finding it was actually about.
+    /// </remarks>
+    [Fact]
+    public void APartialResolve_LeavesTheFindingsNobodyMentionedUndecided()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var findings = new[] { Found("first"), Found("second"), Found("third") };
+        db.RecordRound(Session, Round(), findings);
+
+        db.RecordDecisions("s1", "CodeReview", 1, [new DecisionAt(1, new Decision.Accepted(findings[1]))]);
+
+        var rows = Query("SELECT title, resolution FROM findings ORDER BY ordinal");
+        rows[0]["resolution"].Should().Be("", "nobody decided 'first'");
+        rows[1]["resolution"].Should().Be("accept", "'second' is the one the caller accepted");
+        rows[2]["resolution"].Should().Be("", "nobody decided 'third'");
     }
 
     [Fact]
@@ -177,12 +232,10 @@ public sealed class RoundsDbTests : IDisposable
         var findings = new[] { Found("a"), Found("b"), Found("c") };
         db.RecordRound(Session, Round(), findings);
 
-        db.RecordDecisions("s1", "CodeReview", 1,
-        [
+        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
             new Decision.Accepted(findings[0]),
             new Decision.Rejected(findings[1], "verified absent from all three refs"),
-            new Decision.Rejected(findings[2], "same subject as the one above"),
-        ]);
+            new Decision.Rejected(findings[2], "same subject as the one above")));
 
         var round = Query("SELECT accepted, rejected FROM rounds").Single();
         round["accepted"].Should().Be("1");
@@ -528,8 +581,8 @@ public sealed class RoundsDbTests : IDisposable
         using var db = RoundsDb.Open(_dir, _log)!;
         var findings = new[] { Found("first"), Found("second") };
         db.RecordRound(Session, Round(), findings);
-        db.RecordDecisions("s1", "CodeReview", 1,
-            [new Decision.Accepted(findings[0]), new Decision.Rejected(findings[1], "not this time")]);
+        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
+            new Decision.Accepted(findings[0]), new Decision.Rejected(findings[1], "not this time")));
 
         db.RecordRound(Session, Round() with { Verdict = "revise" }, findings);
 
@@ -558,8 +611,8 @@ public sealed class RoundsDbTests : IDisposable
         using var db = RoundsDb.Open(_dir, _log)!;
         var first = new[] { Found("session file opened without FileShare"), Found("the retry never gives up") };
         db.RecordRound(Session, Round(), first);
-        db.RecordDecisions("s1", "CodeReview", 1,
-            [new Decision.Rejected(first[0], "already handled"), new Decision.Accepted(first[1])]);
+        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
+            new Decision.Rejected(first[0], "already handled"), new Decision.Accepted(first[1])));
 
         // The same round, run again, with a different finding first.
         db.RecordRound(Session, Round(), [Found("something else entirely"), first[1]]);

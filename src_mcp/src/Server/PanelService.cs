@@ -2310,7 +2310,10 @@ public sealed partial class PanelService
                 : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
-        var decisions = new List<Decision>();
+        // Each decision keeps the NUMBER the caller made it by. The projection used to take that
+        // number from the decision's position here, which is the same number only while the caller
+        // resolves top to bottom — and nothing makes it.
+        var decisions = new List<DecisionAt>();
         foreach (var dto in dtos)
         {
             if (dto.Finding < 0 || dto.Finding >= session.Pending.Count)
@@ -2333,9 +2336,9 @@ public sealed partial class PanelService
                 return Task.FromResult(Error($"action '{dto.Action}' is neither accept nor reject"));
             }
 
-            decisions.Add(action == "accept"
+            decisions.Add(new DecisionAt(dto.Finding, action == "accept"
                 ? new Decision.Accepted(finding)
-                : new Decision.Rejected(finding, dto.Reason));
+                : new Decision.Rejected(finding, dto.Reason)));
         }
 
         return Task.FromResult(Finish(WithHumanDecision(session), decisions, humanSaysProceed));
@@ -2396,9 +2399,12 @@ public sealed partial class PanelService
         return session with { State = session.State with { RoundsRunThisStage = 0 } };
     }
 
-    private string Finish(PersistedSession session, List<Decision> decisions, bool humanSaysProceed = false)
+    private string Finish(PersistedSession session, List<DecisionAt> decisions, bool humanSaysProceed = false)
     {
-        switch (RoundMachine.Resolve(session.State, decisions, humanSaysProceed))
+        // The state machine judges DECISIONS and has no use for the numbers they were made by; the
+        // projection needs both. One projection here rather than two lists carried side by side.
+        var judged = decisions.Select(d => d.Decision).ToList();
+        switch (RoundMachine.Resolve(session.State, judged, humanSaysProceed))
         {
             case Transition.Refused refused:
                 return Error(refused.Sentence);

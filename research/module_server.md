@@ -683,6 +683,15 @@ migration step throwing something unlisted must not take down a review it only r
   connection buys nothing and costs a file handle five servers would fight over. `Pooling=False`
   for the same reason — a pooled connection keeps the handle after `Dispose`, which turned nine
   unrelated tests red on their own cleanup.
+- **A decision carries the finding NUMBER it was made by, never its position in the list**
+  (`Core/Rounds.DecisionAt`, 2026-09-13). `RecordDecisions` used to read the ordinal off the loop
+  index, which is the same number only while the caller resolves top to bottom — and nothing makes
+  it: `resolve`'s entries carry a `finding` index, and `RoundMachine.Resolve` checks that rejections
+  carry reasons and counts nothing, so an out-of-order or partial set reaches the projection exactly
+  as an in-order one does and wrote every mark onto the wrong finding. The session file was never
+  wrong, so nothing visibly broke; the log page and anything reading the database were. The number is
+  taken from `dto.Finding` in `PanelService.Resolve` and travels to the projection with its decision.
+  Found while tracing the export plan, before an export could publish the wrong marks.
 - WAL, for the five-window case.
 - `Microsoft.Data.Sqlite.Core` plus a chosen `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5, not the
   all-in-one package: that one pins 2.1.11, whose native lib carries GHSA-2m69-gcr7-jv3q, and this

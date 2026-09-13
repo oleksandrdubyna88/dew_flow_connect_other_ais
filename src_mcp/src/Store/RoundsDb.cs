@@ -277,11 +277,17 @@ public sealed class RoundsDb : IDisposable
     }
 
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>
-    public void RecordDecisions(string sessionId, string stage, int number, IReadOnlyList<Decision> decisions)
+    /// <remarks>
+    /// Each decision carries the finding NUMBER it was made by (see <see cref="DecisionAt"/>). This
+    /// used to read the number off the decision's POSITION in the list, which is the same thing only
+    /// for a caller that resolves top to bottom — and nothing requires one to, so an out-of-order or
+    /// partial set wrote every mark onto the wrong finding.
+    /// </remarks>
+    public void RecordDecisions(string sessionId, string stage, int number, IReadOnlyList<DecisionAt> decisions)
     {
         using var transaction = _db.BeginTransaction();
         var when = DateTime.UtcNow.ToString("O");
-        for (var ordinal = 0; ordinal < decisions.Count; ordinal++)
+        foreach (var (ordinal, decision) in decisions)
         {
             using var write = _db.CreateCommand();
             write.CommandText = """
@@ -289,8 +295,8 @@ public sealed class RoundsDb : IDisposable
                 WHERE ordinal = $ordinal AND round_id = (
                     SELECT id FROM rounds WHERE session_id = $session AND stage = $stage AND number = $number)
                 """;
-            Bind(write, "$resolution", decisions[ordinal] is Decision.Accepted ? "accept" : "reject");
-            Bind(write, "$reason", decisions[ordinal] is Decision.Rejected rejected ? rejected.Reason : string.Empty);
+            Bind(write, "$resolution", decision is Decision.Accepted ? "accept" : "reject");
+            Bind(write, "$reason", decision is Decision.Rejected rejected ? rejected.Reason : string.Empty);
             Bind(write, "$when", when);
             Bind(write, "$ordinal", ordinal);
             BindRound(write, sessionId, stage, number);
@@ -311,12 +317,12 @@ public sealed class RoundsDb : IDisposable
     /// raises again (see <c>re_raised</c>) is a disagreement the caller is defending. Counting them
     /// per round makes "what does this model habitually miss" a query rather than an afternoon.
     /// </remarks>
-    private void RecordClosing(string sessionId, string stage, int number, IReadOnlyList<Decision> decisions)
+    private void RecordClosing(string sessionId, string stage, int number, IReadOnlyList<DecisionAt> decisions)
     {
         using var write = _db.CreateCommand();
         write.CommandText = SQL_CLOSING;
-        Bind(write, "$accepted", decisions.Count(d => d is Decision.Accepted));
-        Bind(write, "$rejected", decisions.Count(d => d is Decision.Rejected));
+        Bind(write, "$accepted", decisions.Count(d => d.Decision is Decision.Accepted));
+        Bind(write, "$rejected", decisions.Count(d => d.Decision is Decision.Rejected));
         BindRound(write, sessionId, stage, number);
         write.ExecuteNonQuery();
     }
