@@ -137,10 +137,16 @@ Run: `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4` then the MTP e
 
 ## Definition of Done
 
-- [ ] Every test above written RED first, with its failure message recorded.
-- [ ] Both suites green, counts reported in the pull request.
-- [ ] The diff through the `coai` plan and code rounds, every finding resolved.
-- [ ] `module_server.md`, `module_extension.md`, `CHANGELOG.md` updated.
-- [ ] The conventions snippet amended, its own pull request merged, and the pin cascade run across
-      the consumer repositories.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Every test above written RED first, with its failure message recorded. The two worth naming:
+      removing the migration step makes the pre-change test fail with `table rounds has no column
+      named caller_vendor`, and reverting the format-character predicate makes the override theory
+      fail at index 6 — which is where U+202E sat.
+- [x] Both suites green, counts reported in the pull request.
+- [x] The diff through the `coai` plan and code rounds, every finding resolved. One plan round
+      (`good_enough`, 15 findings) and two code rounds (34 then 8); 22 accepted, the rest rejected
+      with reasons.
+- [x] `module_server.md`, `module_extension.md`, `CHANGELOG.md` updated.
+- [x] The conventions snippet amended, its own pull request merged
+      ([dew_flow_conventions#27](https://github.com/oleksandrdubyna88/dew_flow_conventions/pull/27),
+      `db71a0d`), and the pin cascade run across all six consumer repositories.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date.

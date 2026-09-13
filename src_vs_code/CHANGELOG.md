@@ -11,8 +11,14 @@ The client and its version come from the MCP handshake, which every client sends
 not exist anywhere in the MCP protocol**, so the calling AI has to tell us — it sends its own model
 id when it opens a session, and the shared gate rule now asks it to. An AI that sends nothing is
 shown as *model not stated*, which is the truth about it; you will never see a model named that
-nobody claimed. A model switched mid-session is picked up, because the id arrives per session rather
-than once when the client started.
+nobody claimed.
+
+**Switch model and the log follows you — from the next time your AI opens a session.** The id
+travels with that one call rather than being read once when your client started, so it is not stuck
+on whatever you were running an hour ago; the shared rule tells every AI to send it on every open,
+including one that merely resumes. An AI that switches and never opens again keeps the model it last
+declared, and the rounds it has already finished keep theirs — a round says who asked for *it*, not
+who happens to be here now.
 
 Rounds recorded before this look exactly as they did — they name their reviewers and say nothing
 about their caller, which is what was true of them.

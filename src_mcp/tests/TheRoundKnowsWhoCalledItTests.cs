@@ -229,6 +229,34 @@ public sealed class TheRoundKnowsWhoCalledItTests
         CallerDeclaration.From(default, "", "", invisible).Model.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The cap never cuts a character in half.
+    /// </summary>
+    /// <remarks>
+    /// CodeRabbit, on the pull request: <c>kept[..LongestField]</c> slices UTF-16 CODE UNITS, and
+    /// anything outside the basic plane is two of them. A value whose 120th and 121st units are the
+    /// halves of one character left an unpaired surrogate in the session file, the database column
+    /// and the page — a byte sequence that is not text, from a field whose whole job is to be read
+    /// by a person. Cutting one character short is the correct answer; half of one is not an answer.
+    /// </remarks>
+    [Fact]
+    public void TheCapNeverSplitsACharacterInHalf()
+    {
+        // 119 ASCII characters and then one that takes two UTF-16 units: the cap falls between them.
+        var declared = CallerDeclaration.From(default, "", "", new string('m', 119) + "😀");
+
+        declared.Model.Should().Be(new string('m', 119), "the character that does not fit is dropped whole");
+        char.IsSurrogate(declared.Model[^1]).Should().BeFalse("an unpaired surrogate is not text");
+    }
+
+    [Fact]
+    public void ACharacterThatFitsWhole_IsKept()
+    {
+        var declared = CallerDeclaration.From(default, "", "", new string('m', 118) + "😀");
+
+        declared.Model.Should().Be(new string('m', 118) + "😀", "both halves fit, so both are kept");
+    }
+
     [Fact]
     public void APaddedLongModel_KeepsItsCharactersRatherThanItsPadding()
     {

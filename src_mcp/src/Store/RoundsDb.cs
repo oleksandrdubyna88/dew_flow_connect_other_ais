@@ -93,15 +93,27 @@ public sealed class RoundsDb : IDisposable
     /// exception — leave a database that never opens again, with nothing here able to repair it.
     /// Raised by codex on the #174 plan round.</para>
     /// </remarks>
-    private static void Migrate(SqliteConnection db)
+    private static void Migrate(SqliteConnection db) => Migrate(db, Schema.Steps);
+
+    /// <param name="steps">
+    /// The schema, as ordered steps — <see cref="Schema.Steps"/> everywhere but the test that
+    /// proves the transaction is real.
+    /// </param>
+    /// <remarks>
+    /// The seam exists because the claim above cannot be tested without a step that FAILS after an
+    /// earlier statement in the same step has succeeded, and every real step succeeds. CodeRabbit
+    /// asked for the defect-reproducing test on the pull request and was right that
+    /// <c>TheMigrationRunsOnce…</c> does not detect a missing transaction: it passes either way.
+    /// </remarks>
+    internal static void Migrate(SqliteConnection db, IReadOnlyList<string> steps)
     {
         Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
         Run(db, "PRAGMA busy_timeout=5000");
         var version = Version(db);
-        for (var step = version; step < Schema.Steps.Length; step++)
+        for (var step = version; step < steps.Count; step++)
         {
             using var applying = db.BeginTransaction();
-            Run(db, Schema.Steps[step]);
+            Run(db, steps[step]);
             Run(db, $"PRAGMA user_version={step + 1}");
             applying.Commit();
         }
