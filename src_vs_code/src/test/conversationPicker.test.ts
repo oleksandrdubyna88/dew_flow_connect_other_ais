@@ -53,7 +53,7 @@ const open = (over: Partial<OpenConversation> = {}): OpenConversation => ({
 
 /** The input, with everything a test does not care about filled in. */
 const input = (over: Partial<PickerInput>): PickerInput => ({
-  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, ...over,
+  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, elsewhere: new Set<string>(), ...over,
 });
 
 const shown = (rows: readonly PickerRow[]): readonly string[] => rows.flatMap((row) => (row.kind === 'conversation' ? [row.id] : []));
@@ -125,7 +125,7 @@ test('an OPEN row carries the same facts as a stored one — the last line and h
   assert.match(row('a1')?.description ?? '', /2 hours ago/u, 'an open row omits how long ago');
   assert.match(row('b2')?.description ?? '', /just now/u);
   assert.match(row('a1')?.description ?? '', /open now/u, 'an open row does not say it is open');
-  assert.equal(row('a1')?.live, true);
+  assert.equal(row('a1')?.where, 'here');
   assert.notEqual(row('a1')?.description, row('b2')?.description, 'two open conversations with one title, model and turn count are indistinguishable');
 });
 
@@ -293,4 +293,39 @@ test('how long ago reads the way a person would say it', () => {
   assert.equal(rowAge(AT, AT - 5 * 86_400_000), '5 days ago');
   // And a clock that stepped backwards is not a conversation from the future.
   assert.equal(rowAge(AT, AT + 60_000), 'just now');
+});
+test('a conversation ANOTHER window holds is drawn as such, and never as one this window can reopen', () => {
+  // The defect three reviewers found independently, and the one I had flagged myself: a tab in
+  // another window cannot be revealed from this one — VS Code offers no way to raise a window an
+  // extension is not running in — so it used to be drawn as closed, and pressing it opened a SECOND
+  // tab on one record. Two writers, and the store's compare-and-swap forks the conversation and
+  // reports it afterwards: the product causing the exact accident that swap exists to catch.
+  const rows = pickerRows(input({
+    stored: [meta({ id: 'mine' }), meta({ id: 'theirs', title: 'Held over there' })],
+    elsewhere: new Set(['theirs']),
+  }));
+  const row = (id: string): Extract<PickerRow, { kind: 'conversation' }> | undefined => {
+    const found = rows.find((one) => one.kind === 'conversation' && one.id === id);
+
+    return found?.kind === 'conversation' ? found : undefined;
+  };
+
+  assert.equal(row('theirs')?.where, 'elsewhere', 'a conversation another window holds is offered as reopenable');
+  assert.equal(row('mine')?.where, 'closed', 'a conversation nobody holds is not reopenable');
+  // And it is visible BEFORE the press, not only in the sentence after it: a person scanning the
+  // list should see which rows this window can actually take them to.
+  assert.match(row('theirs')?.description ?? '', /another window/iu, 'the row does not say where it is');
+  assert.doesNotMatch(row('mine')?.description ?? '', /another window/iu);
+});
+
+test('this window’s OWN open conversations are never called elsewhere, whatever a heartbeat says', () => {
+  // A window's own heartbeat names what it holds and is written at most once a minute, so it can
+  // still name a conversation whose tab closed seconds ago. `heldElsewhere` leaves this window's own
+  // file out for exactly that reason; if a caller passed it in anyway, the open row must still win —
+  // it is the row the picker can answer instantly.
+  const rows = pickerRows(input({ open: [open()], stored: [meta()], elsewhere: new Set(['a1']) }));
+  const drawn = rows.filter((row) => row.kind === 'conversation' && row.id === 'a1');
+
+  assert.equal(drawn.length, 1, 'one conversation was drawn twice');
+  assert.equal(drawn[0]?.kind === 'conversation' ? drawn[0].where : '', 'here');
 });

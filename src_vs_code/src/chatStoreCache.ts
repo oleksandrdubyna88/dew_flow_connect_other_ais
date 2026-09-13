@@ -2,7 +2,7 @@ import { abreast } from './abreast';
 import { ConversationMeta, ConversationSource, sameSource } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatStoreKeeper } from './chatStoreKeeper';
-import { Stamp } from './chatStoreSweep';
+import { HeartbeatFile, Stamp, heldElsewhere } from './chatStoreSweep';
 
 /**
  * The index the picker draws from: every conversation's metadata, in memory, built from the METADATA
@@ -92,9 +92,21 @@ export class ConversationIndex {
 
   private status: IndexState = { kind: 'building' };
 
+  /**
+   * The other windows' announcements, as the last survey found them — kept whole rather than reduced
+   * to a set of ids, because whether a heartbeat still speaks for its window is a question about the
+   * instant it is ASKED, not the instant it was read. See {@link ConversationIndex.elsewhere}.
+   */
+  private beats: readonly HeartbeatFile[] = [];
+
   private inFlight: Promise<RefreshOutcome> | undefined;
 
-  public constructor(private readonly keeper: ChatStoreKeeper, private readonly store: ChatStoreFile) {}
+  public constructor(
+    private readonly keeper: ChatStoreKeeper,
+    private readonly store: ChatStoreFile,
+    /** This window, so its own heartbeat is not mistaken for somebody else's. */
+    private readonly ownPid: number = process.pid,
+  ) {}
 
   public state(): IndexState {
     return this.status;
@@ -102,6 +114,19 @@ export class ConversationIndex {
 
   public get size(): number {
     return this.rows.size;
+  }
+
+  /**
+   * Every conversation another live window holds open — what the picker must not reopen.
+   *
+   * <p>It costs nothing: the survey a refresh already performs carries the heartbeats, so this is the
+   * same listing read a second way rather than a second listing. A survey that failed leaves the last
+   * good announcements in place, exactly as it leaves the last good rows: the honest reading of "the
+   * folder would not answer" is that what it last said is still the best thing known, and erring
+   * towards believing another window holds something errs towards not giving a record two writers.</p>
+   */
+  public elsewhere(now = Date.now()): ReadonlySet<string> {
+    return heldElsewhere(this.beats, now, this.ownPid);
   }
 
   /**
@@ -180,7 +205,8 @@ export class ConversationIndex {
         next.set(id, { meta, stamp });
       }
     });
-    // Sorted ONCE, here, and published at once.
+    // Sorted ONCE, here, and published at once — the announcements beside them, from the same survey.
+    this.beats = surveyed.survey.heartbeats;
     this.publish(next, [...next.values()].map((row) => row.meta).sort(newestFirst));
     this.loadedAt = now;
     this.status = { kind: 'ready', at: now };

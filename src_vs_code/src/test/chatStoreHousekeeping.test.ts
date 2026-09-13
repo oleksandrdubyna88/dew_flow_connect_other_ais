@@ -66,7 +66,18 @@ async function quietly<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-const tick = (): Promise<void> => new Promise<void>((resolve) => { setTimeout(resolve, 20); });
+/**
+ * Wait for the first heartbeat to have LANDED — the condition, never a duration.
+ *
+ * <p>This used to be a twenty-millisecond sleep, and it failed about one run in seven under a loaded
+ * machine: the write had not finished, and the test reported it as "the heartbeat waited for the
+ * migration", which is a sentence about ordering and was not what had happened. A test that fails for
+ * a reason its own message denies is worse than no test, and repeated reruns teach a reader to read
+ * every red as noise. The sweep's half needs no wait at all: it is gated behind a promise this test
+ * holds shut, so "it has not run yet" is true by construction rather than by being quick enough to
+ * look. (codex, the plan round.)</p>
+ */
+const beaten = (housekeeping: Housekeeping): Promise<void> => housekeeping.heartbeat.settled();
 
 test('the heartbeat beats at once; the sweep waits for what it is told to; the index is published after the sweep', async () => {
   const dir = home();
@@ -79,7 +90,7 @@ test('the heartbeat beats at once; the sweep waits for what it is told to; the i
     const migration = gate();
 
     housekeeping = startHousekeeping({ store, held: () => [], after: migration.promise, pid: 4242, clock: () => now, timers: quietTimers });
-    await tick();
+    await beaten(housekeeping);
 
     assert.equal(existsSync(join(dir, HOUSEKEEPING_DIR, heartbeatName(4242))), true, 'the heartbeat waited for the migration; a sweep elsewhere could not have known this window was alive');
     assert.equal(existsSync(join(dir, recordName('old'))), true, 'the sweep ran before what it was told to wait for');

@@ -69,7 +69,10 @@ export function startHousekeeping(deps: HousekeepingDeps): Housekeeping {
   const pid = deps.pid ?? process.pid;
   const clock = deps.clock ?? Date.now;
   const keeper = new ChatStoreKeeper(deps.store.dir);
-  const index = new ConversationIndex(keeper, deps.store);
+  // THE SAME pid the heartbeat writes under, never this process's by default: the index leaves this
+  // window's own announcement out when it says what OTHER windows hold, and the two halves reading a
+  // different pid would have a window refuse to reopen its own conversations.
+  const index = new ConversationIndex(keeper, deps.store, pid);
   const heartbeat = new ConversationHeartbeat(keeper, deps.held, pid, deps.timers, clock);
   heartbeat.start();
   const announced = heartbeat.beat();

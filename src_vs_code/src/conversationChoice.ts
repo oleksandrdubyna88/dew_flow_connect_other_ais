@@ -52,6 +52,22 @@ export type MayForget =
   | { readonly kind: 'forget'; readonly id: string; readonly title: string }
   | { readonly kind: 'refuse'; readonly message: string };
 
+/**
+ * What to say when somebody chooses a conversation another window is holding.
+ *
+ * <p>The one row the picker will not act on, and therefore the one that must explain itself. VS Code
+ * gives an extension no way to raise a window it is not running in, so "switch to it for them" is not
+ * among the things that could have been built here; what is left is to say where it is and why this
+ * window is not going to make a second copy. The alternative — reopening it — gives one record two
+ * writers, and the store would fork the conversation under a new id and report it afterwards, which is
+ * the product causing the exact accident its compare-and-swap exists to catch.</p>
+ *
+ * <p>It names the tab rather than the window, because a pid is not something anybody can act on.</p>
+ */
+export const openElsewhere = (title: string): string =>
+  `“${title}” is already open in another VS Code window. Switch to that window to carry on with it —`
+  + ' reopening it here would split it in two.';
+
 /** What the picker's title says, which is the only place the scope is visible. */
 export const pickerTitle = (everywhere: boolean): string =>
   everywhere ? 'Conversations in every folder' : 'Conversations in this folder';
@@ -136,18 +152,26 @@ export function forgetting(title: string, done: ForgetOutcome): Forgetting {
  *
  * <p>TOTAL over the row union by construction rather than by care: only a `conversation` carries an
  * id, so there is nothing for the other three kinds to act on and nothing a caller could pass by
- * mistake. An OPEN conversation is refused although it has one: its tab is still writing that record,
- * so deleting the two files under it would have the next push create them again — the row would come
- * back and the person would have been told a lie. That is also why no trash button is drawn on an
- * open row; this is the keybinding's half of the one rule, and `Alt+Delete` is pressed wherever the
- * cursor happens to be.</p>
+ * mistake. A conversation open in a tab is refused although it has one: that tab is still writing the
+ * record, so deleting the files under it would have the next push create them again — the row would
+ * come back and the person would have been told a lie. That holds wherever the tab is, which is why
+ * `elsewhere` is refused by the same rule and not by a different one: the window that would recreate
+ * the files is simply not this one, and this window cannot even close the tab to stop it. That is also
+ * why no trash button is drawn on either; this is the keybinding's half of the one rule, and
+ * `Alt+Delete` is pressed wherever the cursor happens to be.</p>
  */
 export function mayForget(row: PickerRow | undefined): MayForget {
   if (row === undefined || row.kind !== 'conversation') {
     return { kind: 'refuse', message: 'There is no conversation under the cursor — move to one, then press it again.' };
   }
-  if (row.live) {
+  if (row.where === 'here') {
     return { kind: 'refuse', message: `“${row.label}” is open in a tab. Close the tab first, and then it can be forgotten.` };
+  }
+  if (row.where === 'elsewhere') {
+    return {
+      kind: 'refuse',
+      message: `“${row.label}” is open in another VS Code window. Close it there, and then it can be forgotten.`,
+    };
   }
 
   return { kind: 'forget', id: row.id, title: row.label };

@@ -107,6 +107,11 @@ running until you ask something. A trash button on every closed row forgets that
 `Alt+Delete` forgets the one under the cursor — the list stays open either way — and the globe in the
 title widens it from this folder to every folder.
 
+Forgetting is not destroying: the row goes at once, but the conversation itself is set aside on
+disk and only really deleted after the same ninety days as everything else. A conversation open in
+ANOTHER VS Code window is listed and says so, and cannot be opened or forgotten from here — one
+window cannot raise another, and a second tab onto one conversation would split it in two.
+
 The full description lives in the help — `⋯` → **Help** → *Chat with other AI*, in any of the five
 languages. This section is the overview; that article is the one kept in step with the code.
 

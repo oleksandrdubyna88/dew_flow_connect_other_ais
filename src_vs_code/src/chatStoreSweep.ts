@@ -353,6 +353,32 @@ export function protectedIds(heartbeats: readonly HeartbeatFile[], now: number, 
 }
 
 /**
+ * Every conversation some OTHER live window holds open — the same announcement, asked the other way.
+ *
+ * <p>{@link protectedIds} asks "may the sweep delete this", and answers for every window including
+ * this one. The picker asks a different question — "would reopening this give a record a second
+ * writer" — and this window's own tabs are not an obstacle to that: they are the case the picker
+ * REVEALS. So this reads the same heartbeats and leaves out the file this window wrote, which is also
+ * the one that may be a minute behind its own tabs; believing it about ourselves would draw a
+ * conversation closed a moment ago as open somewhere and refuse to reopen it.</p>
+ *
+ * <p>Liveness is judged against `now` at the moment of asking rather than at the moment of the
+ * survey, so a picker left open does not go on believing a window that has since gone quiet.</p>
+ */
+export function heldElsewhere(heartbeats: readonly HeartbeatFile[], now: number, ownPid: number): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const file of heartbeats) {
+    if (file.beat !== undefined && file.beat.pid !== ownPid && heartbeatOwner(file.name) !== ownPid && liveHeartbeat(file.beat, now)) {
+      for (const id of file.beat.ids) {
+        ids.add(id);
+      }
+    }
+  }
+
+  return ids;
+}
+
+/**
  * Whether a sweep should run, given the marker the last one left.
  *
  * <p>No marker is due. A claim is not due while it is younger than {@link SWEEP_CLAIM_MS} — a window is

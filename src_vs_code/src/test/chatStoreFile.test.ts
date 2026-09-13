@@ -397,17 +397,46 @@ test('a delete interrupted after the metadata leaves NO listable row — and an 
   }
 });
 
-test('forget removes both files of a conversation and says so', async () => {
+test('forget takes the row away at once and SETS THE TRANSCRIPT ASIDE, so one keystroke cannot destroy it', async () => {
+  // The operator's rule was archive, not destroy — and no confirmation dialog in the way of an
+  // ordinary action. Those two are only compatible if the press is recoverable: the trash and its
+  // keybinding are one keystroke in a list somebody is filtering, and what an unlink would take is
+  // the only copy of their words. So the metadata goes (the row disappears, nothing lists it again)
+  // and the transcript is RENAMED into the quarantine, where the sweep's own dated rule retires it at
+  // the same ninety days as everything else.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
     await store.save(record(), 0);
     assert.equal(readdirSync(dir).length, 2, 'the setup did not write the pair');
 
-    assert.deepEqual(await store.forget('a1'), { kind: 'ok' }, 'a completed deletion did not report itself completed');
+    assert.deepEqual(await store.forget('a1', AT), { kind: 'ok' }, 'a completed forget did not report itself completed');
 
-    assert.deepEqual(readdirSync(dir), [], 'a forgotten conversation left a file — or its lock — behind');
+    assert.deepEqual(readdirSync(dir), [QUARANTINE_DIR], 'a forgotten conversation left a file — or its lock — in the store');
     assert.deepEqual(await store.read('a1'), { kind: 'absent' }, 'a forgotten conversation is still readable');
+    assert.deepEqual([...(await rows(store))], [], 'a forgotten conversation still shows a row');
+    // The words are still there, byte for byte, under a dated name the sweep can age.
+    const set = readdirSync(join(dir, QUARANTINE_DIR));
+    assert.deepEqual(set, [`a1-forgotten-${AT}.json`], `the transcript was not set aside: ${set.join(',')}`);
+    const kept = JSON.parse(readFileSync(join(dir, QUARANTINE_DIR, set[0]!), 'utf8')) as ConversationRecord;
+    assert.equal(kept.passage, record().passage, 'the set-aside transcript is not the conversation that was forgotten');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('forgetting a conversation whose transcript has already gone is not a failure', async () => {
+  // The half-deleted shape the header documents: a crash after the metadata leaves a transcript with
+  // no row. Forgetting it again has nothing to move, and the person asked for the row to go — which
+  // it has. Reporting a failure here would put a warning on a press that did exactly what was wanted.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0);
+    rmSync(join(dir, recordName('a1')));
+
+    assert.deepEqual(await store.forget('a1', AT), { kind: 'ok' });
+    assert.deepEqual(readdirSync(dir).filter((name) => name !== QUARANTINE_DIR), [], 'the index entry was left behind');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -845,7 +874,8 @@ test('a save with a baseline above zero over an ABSENT record is refused — it 
 
     assert.equal(resurrect.kind, 'refused', 'a conversation deleted in another window was resurrected');
     assert.equal(resurrect.kind === 'refused' ? resurrect.diskRev : -1, 0, 'the refusal does not say the record is gone');
-    assert.deepEqual(readdirSync(dir), [], 'a refused resurrection wrote something');
+    assert.deepEqual(readdirSync(dir).filter((name) => name !== QUARANTINE_DIR), [],
+      'a refused resurrection wrote something');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
