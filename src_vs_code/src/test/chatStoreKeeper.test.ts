@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { ChatStoreFile, QUARANTINE_DIR, RetireOutcome } from '../chatStoreFile';
+import { ChatStoreFile, Listing, QUARANTINE_DIR, RetireOutcome } from '../chatStoreFile';
 import { ChatStoreKeeper, DebrisOutcome, SweepDeps, runSweep } from '../chatStoreKeeper';
 import { LOCK_STALE_MS, lockName } from '../chatStoreLock';
 import {
@@ -11,6 +11,7 @@ import {
   HEARTBEAT_STALE_MS,
   HOUSEKEEPING_DIR,
   ORPHAN_GRACE_MS,
+  SWEEP_CLAIM_MS,
   SWEEP_MARKER,
   Survey,
   SweepReport,
@@ -206,19 +207,18 @@ test('a beat writes the window’s heartbeat, a second beat replaces it, and an 
   }
 });
 
-test('no marker reads as none; a marker written reads back; a torn marker reads as none and is said', async () => {
+test('no marker reads as none; a claim written reads back as a claim, and a finished marker over it reads back as finished', async () => {
   const dir = home();
   try {
     const keeper = new ChatStoreKeeper(dir);
     const now = Date.now();
 
     assert.equal(await keeper.marker(), undefined);
-    assert.equal(await keeper.markSwept(4242, now), true);
-    assert.deepEqual(await keeper.marker(), { pid: 4242, at: now });
-
-    writeFileSync(join(dir, HOUSEKEEPING_DIR, SWEEP_MARKER), '{{', 'utf8');
-    const { value: torn } = await capturing(() => keeper.marker());
-    assert.equal(torn, undefined, 'a torn marker was believed');
+    assert.equal(await keeper.writeMarker({ kind: 'claimed', pid: 4242, began: now }), true);
+    assert.deepEqual(await keeper.marker(), { kind: 'claimed', pid: 4242, began: now });
+    assert.equal(await keeper.writeMarker({ kind: 'finished', pid: 4242, began: now, finished: now + 5_000 }), true);
+    assert.deepEqual(await keeper.marker(), { kind: 'finished', pid: 4242, began: now, finished: now + 5_000 });
+    assert.deepEqual(readdirSync(join(dir, HOUSEKEEPING_DIR)), [SWEEP_MARKER], 'a temporary or a second file was left');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -359,7 +359,7 @@ test('a heartbeat is removed by its name; the marker is not a heartbeat and is r
     const keeper = new ChatStoreKeeper(dir);
     const now = Date.now();
     await keeper.beat(7, [], now);
-    await keeper.markSwept(1, now);
+    await keeper.writeMarker({ kind: 'claimed', pid: 1, began: now });
 
     assert.equal((await keeper.removeHeartbeat(heartbeatName(7))).kind, 'removed');
     const refused = await keeper.removeHeartbeat(SWEEP_MARKER);
@@ -445,7 +445,10 @@ test('the sweep retires what is expired and unheld, sets aside what is orphaned 
     assert.equal(readdirSync(join(w.dir, QUARANTINE_DIR)).some((name) => name.startsWith('young-')), true, 'a young quarantined value was removed');
     assert.equal(existsSync(join(w.dir, HOUSEKEEPING_DIR, heartbeatName(8))), false, 'the stale heartbeat was kept');
     assert.equal(existsSync(join(w.dir, HOUSEKEEPING_DIR, heartbeatName(7))), true, 'a live heartbeat was removed');
-    assert.deepEqual(await w.keeper.marker(), { pid: 4242, at: w.now }, 'the sweep left no marker for the other windows');
+    const marker = await w.keeper.marker();
+    assert.equal(marker?.kind, 'finished', `a sweep that walked its whole plan left no finished marker for the other windows: ${JSON.stringify(marker)}`);
+    assert.equal(marker?.pid, 4242);
+    assert.equal(marker?.began, w.now);
     assert.deepEqual(readdirSync(w.dir).filter((name) => name.endsWith('.lock')), [lockName('i9')], 'a lock of the sweep\'s own was left');
 
     assert.deepEqual(done, {
@@ -585,6 +588,166 @@ test('the budget bounds the sweep: what is not reached waits, and the report say
     assert.equal(done.unfinished, true, 'a sweep that ran out of budget reported itself finished');
     assert.equal(existsSync(join(w.dir, recordName('a1'))), true, 'work was done after the budget ran out');
     assert.equal(done.retired, 0);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The marker: a CLAIM while the sweep runs, and a day's marker only once it has done its work.
+// ---------------------------------------------------------------------------------------------
+
+test('a sweep that failed before doing any work does not stand every window down for a day', async () => {
+  // The marker used to be written before the survey. One transient failure then left it standing,
+  // and every window opening for the next day read it and did nothing. (codex and the local round.)
+  const w = await world();
+  try {
+    // The survey needs the quarantine subdirectory; a file where it should be makes the survey fail
+    // AFTER the marker check and the claim, while the store itself reads fine.
+    rmSync(join(w.dir, QUARANTINE_DIR), { recursive: true, force: true });
+    writeFileSync(join(w.dir, QUARANTINE_DIR), 'a file where the quarantine should be', 'utf8');
+    const { value: first } = await capturing(() => runSweep(deps(w)));
+    assert.equal(first.kind, 'skipped');
+    assert.equal(first.kind === 'skipped' ? first.why : '', 'unavailable', 'the sweep ran against a survey that failed');
+    assert.equal(existsSync(join(w.dir, recordName('a1'))), true, 'the failed sweep deleted something');
+    assert.equal((await w.keeper.marker())?.kind, 'claimed', 'a sweep that did no work left a FINISHED marker');
+
+    rmSync(join(w.dir, QUARANTINE_DIR));
+    // Once the claim has aged out — and a day short of the marker a finished sweep leaves.
+    const { value: second } = await capturing(() => runSweep(deps(w, { pid: 1, now: w.now + SWEEP_CLAIM_MS })), 'info');
+
+    assert.equal(second.kind, 'swept', `a sweep that failed before doing any work left a marker that stood every window down for a day: ${JSON.stringify(second)}`);
+    assert.equal(existsSync(join(w.dir, recordName('a1'))), false, 'the second sweep did not do the work the first could not');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('an unfinished sweep leaves itself due — the backlog it did not reach is not put off for a day', async () => {
+  // The first run on a store nobody has ever swept: the budget runs out, the report says
+  // `unfinished`, and the marker used to say "swept today" regardless. (codex.)
+  const w = await world();
+  try {
+    let ticks = 0;
+    const spent = (): number => {
+      ticks += 1;
+
+      return ticks === 1 ? w.now : w.now + 10 * 60_000;
+    };
+    const { value: first } = await capturing(() => runSweep(deps(w, { clock: spent })), 'info');
+    assert.equal(swept(first).unfinished, true, 'the test did not produce an unfinished sweep');
+    assert.equal(existsSync(join(w.dir, recordName('a1'))), true);
+    assert.equal((await w.keeper.marker())?.kind, 'claimed', 'an unfinished sweep wrote the marker that holds for a day');
+
+    const { value: second } = await capturing(() => runSweep(deps(w, { pid: 1, now: w.now + SWEEP_CLAIM_MS })), 'info');
+
+    assert.equal(second.kind, 'swept', `an unfinished sweep blocked its own continuation for a day: ${JSON.stringify(second)}`);
+    assert.equal(existsSync(join(w.dir, recordName('a1'))), false, 'the continuation did not reach the work the first sweep left');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('a sweep whose claim cannot be written does not run — six windows that cannot see each other must not all sweep', async () => {
+  const w = await world();
+  try {
+    // A directory where the marker file goes: the marker reads as none, and the claim's rename over it fails.
+    mkdirSync(join(w.dir, HOUSEKEEPING_DIR, SWEEP_MARKER));
+    const { value: report } = await capturing(() => runSweep(deps(w)), 'info');
+
+    assert.equal(report.kind, 'skipped', `the sweep ran without a claim: ${JSON.stringify(report)}`);
+    assert.equal(report.kind === 'skipped' ? report.why : '', 'unclaimed');
+    assert.equal(existsSync(join(w.dir, recordName('a1'))), true, 'the sweep deleted without having claimed the store');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+/** A store whose listing waits for the test to say go — a sweep held mid-way, its claim taken and its work not yet done. */
+class Gated extends ChatStoreFile {
+  public open: () => void = () => undefined;
+
+  private readonly gate = new Promise<void>((resolve) => {
+    this.open = resolve;
+  });
+
+  public override async listMeta(): Promise<Listing> {
+    await this.gate;
+
+    return super.listMeta();
+  }
+}
+
+test('a second window arriving while the first is mid-sweep stands down, and after the first has finished stands down for a day', async () => {
+  const w = await world();
+  try {
+    const gated = new Gated(w.dir);
+    const first = capturing(() => runSweep(deps(w, { store: gated })), 'info');
+    // Let the first sweep reach its listing: state, marker, claim and survey are behind it.
+    await new Promise<void>((resolve) => { setTimeout(resolve, 50); });
+
+    const during = await runSweep(deps(w, { pid: 1, now: w.now + 1_000 }));
+    assert.equal(during.kind, 'skipped', `a second window swept beside one that was mid-sweep: ${JSON.stringify(during)}`);
+    assert.equal(during.kind === 'skipped' ? during.why : '', 'sweeping', 'the second window was not told a sweep is running');
+
+    gated.open();
+    swept((await first).value);
+    const after = await runSweep(deps(w, { pid: 1, now: w.now + 3_600_000 }));
+    assert.equal(after.kind, 'skipped', 'a second window swept an hour after the first had finished');
+    assert.equal(after.kind === 'skipped' ? after.why : '', 'recent');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('a marker of another shape, or a torn one, reads as none AND is said with its path and its reason', async () => {
+  // A value somebody could hand-edit must not vanish silently into "no marker". (The code round.)
+  const dir = home();
+  try {
+    const keeper = new ChatStoreKeeper(dir);
+    mkdirSync(join(dir, HOUSEKEEPING_DIR), { recursive: true });
+    const path = join(dir, HOUSEKEEPING_DIR, SWEEP_MARKER);
+
+    writeFileSync(path, '{"version":1,"pid":7,"began":"yesterday"}', 'utf8');
+    const { value: shaped, lines: shapedLines } = await capturing(() => keeper.marker());
+    assert.equal(shaped, undefined, 'a marker of another shape was believed');
+    assert.ok(shapedLines.some((line) => line.includes(path) && /began yesterday is not a UTC instant/u.test(line)), `the malformed marker was not said with its path and reason: ${shapedLines.join(' | ')}`);
+
+    writeFileSync(path, '{{', 'utf8');
+    const { value: torn, lines: tornLines } = await capturing(() => keeper.marker());
+    assert.equal(torn, undefined, 'a torn marker was believed');
+    assert.ok(tornLines.some((line) => line.includes(path)), `the torn marker was not said with its path: ${tornLines.join(' | ')}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// A record that changed under the lock: the retire writes nothing; the SWEEP repairs the index.
+// ---------------------------------------------------------------------------------------------
+
+test('a stale index entry under an expired record is repaired by the sweep through the store’s read, and retired only by a later sweep that lists the agreeing revision', async () => {
+  // The crash between a save's two renames: the record is at rev 2, the index still says rev 1, and
+  // both are expired. The listing nominates rev 1; the retire finds rev 2 and keeps it. What repairs
+  // the index is the sweep asking the store to read the record — the read's own reconciliation, under
+  // its own lock — not a write hidden inside the retire. The NEXT sweep lists rev 2 and retires it.
+  const w = await world();
+  try {
+    const expired = w.now - KEEP_FOR_MS - 60_000;
+    await w.store.save(record({ id: 'j1', updatedAt: expired }), 0);
+    await w.store.save(record({ id: 'j1', updatedAt: expired }), 1);
+    const staleText = readFileSync(join(w.dir, besideMeta('j1')), 'utf8').replace('"rev":2', '"rev":1');
+    assert.notEqual(staleText.indexOf('"rev":1'), -1, 'the test could not make the index entry stale');
+    writeFileSync(join(w.dir, besideMeta('j1')), staleText, 'utf8');
+
+    const { value: first } = await capturing(() => runSweep(deps(w)), 'info');
+    assert.equal(existsSync(join(w.dir, recordName('j1'))), true, 'a record whose revision differed from the listing was retired');
+    assert.equal(swept(first).keptUnderLock, 1, 'the changed record was not counted as kept under the lock');
+    assert.match(readFileSync(join(w.dir, besideMeta('j1')), 'utf8'), /"rev":2/u, 'the stale index entry was not repaired by the sweep');
+
+    const { value: second } = await capturing(() => runSweep(deps(w, { force: true })), 'info');
+    assert.equal(swept(second).retired, 1, 'with the listing agreeing, the expired conversation was still kept');
+    assert.equal(existsSync(join(w.dir, recordName('j1'))), false);
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
   }

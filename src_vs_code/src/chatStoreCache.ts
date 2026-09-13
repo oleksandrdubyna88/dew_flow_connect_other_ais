@@ -27,13 +27,18 @@ import { Stamp } from './chatStoreSweep';
  * it was chosen and failed, so a row whose file is gone is dropped and a file the index has never
  * seen is read.</p>
  *
- * <h2>Published at once; last good rows kept</h2>
+ * <h2>Published at once, sorted once; last good rows kept</h2>
  *
- * <p>The rows are one map, replaced in a single assignment at the end of a refresh — a reader sees
- * the old index or the new one, never half of each. A refresh whose survey fails keeps the last good
- * rows and says `unavailable` with the reason, which the picker can show beside them; "could not
- * look" and "nothing here" are different facts, and the store's typed listing exists so this module
- * can tell them apart. Two refreshes asked for at once are one refresh: the second joins the first.</p>
+ * <p>The rows are one map and one list, the list newest-first, both replaced at the end of a refresh
+ * with no await between the two assignments — a reader sees the old index or the new one, never half
+ * of each and never a list that disagrees with the map. The list is SORTED ONCE, there: every reader
+ * gets the same published order, and {@link ConversationIndex.entries} filters it without copying or
+ * sorting — the picker draws these on every keystroke of a filter, and a copy, a filter and a sort per
+ * call was a sort of the whole store per keystroke, before the picker sorted it again (the code round).
+ * A refresh whose survey fails keeps the last good rows and says `unavailable` with the reason, which
+ * the picker shows beside them; "could not look" and "nothing here" are different facts, and the
+ * store's typed listing exists so this module can tell them apart. Two refreshes asked for at once are
+ * one refresh: the second joins the first.</p>
  *
  * <p><b>`now` is the wall clock, or a clock a test has placed the files' stamps against.</b> It is
  * compared with filesystem `mtime`s, so it must be the same clock the filesystem stamps with; a test
@@ -79,6 +84,9 @@ const newestFirst = (left: ConversationMeta, right: ConversationMeta): number =>
 export class ConversationIndex {
   private rows: ReadonlyMap<string, Row> = new Map();
 
+  /** The same rows as a list, newest update first — sorted ONCE when published; what every reader is handed. */
+  private sorted: readonly ConversationMeta[] = [];
+
   /** The instant the last successful load BEGAN. A file stamped at or after it is re-read next time. */
   private loadedAt = 0;
 
@@ -96,11 +104,12 @@ export class ConversationIndex {
     return this.rows.size;
   }
 
-  /** Every entry in scope, newest update first — what the picker's Recent section is drawn from. */
+  /**
+   * Every entry in scope, newest update first — what the picker's Recent section is drawn from. The
+   * published list itself for `everywhere`, a filter of it for one workspace; nothing is sorted here.
+   */
   public entries(scope: IndexScope): readonly ConversationMeta[] {
-    const all = [...this.rows.values()].map((row) => row.meta);
-
-    return (scope.kind === 'everywhere' ? all : all.filter((meta) => meta.workspace === scope.workspace)).sort(newestFirst);
+    return scope.kind === 'everywhere' ? this.sorted : this.sorted.filter((meta) => meta.workspace === scope.workspace);
   }
 
   /**
@@ -110,10 +119,7 @@ export class ConversationIndex {
    * question to it rather than answering twice.</p>
    */
   public bySource(source: ConversationSource): readonly ConversationMeta[] {
-    return [...this.rows.values()]
-      .map((row) => row.meta)
-      .filter((meta) => sameSource(meta.source, source))
-      .sort(newestFirst);
+    return this.sorted.filter((meta) => sameSource(meta.source, source));
   }
 
   /** Forget one row now — for a caller that has just removed the record and must not offer it until the next refresh. */
@@ -123,7 +129,13 @@ export class ConversationIndex {
     }
     const next = new Map(this.rows);
     next.delete(id);
-    this.rows = next;
+    this.publish(next, this.sorted.filter((meta) => meta.id !== id));
+  }
+
+  /** PUBLISHED AT ONCE: two assignments with no await between them, so a reader never sees half the rows, or a list that disagrees with the map. */
+  private publish(rows: ReadonlyMap<string, Row>, sorted: readonly ConversationMeta[]): void {
+    this.rows = rows;
+    this.sorted = sorted;
   }
 
   /**
@@ -168,8 +180,8 @@ export class ConversationIndex {
         next.set(id, { meta, stamp });
       }
     });
-    // PUBLISHED AT ONCE: one assignment, so a reader never sees a map with half the rows.
-    this.rows = next;
+    // Sorted ONCE, here, and published at once.
+    this.publish(next, [...next.values()].map((row) => row.meta).sort(newestFirst));
     this.loadedAt = now;
     this.status = { kind: 'ready', at: now };
 

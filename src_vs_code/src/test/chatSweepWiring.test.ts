@@ -22,7 +22,10 @@ test('the extension starts housekeeping on the store’s own directory, after th
 
   assert.notEqual(start, -1, 'nothing starts the sweep, the index or the heartbeat — the store keeps everything for ever');
   const call = wiring.slice(start, start + 400);
-  assert.match(call, /dir: conversationsDir\(coaiDataDir\(\)\),/u, 'the keeper is bound to a directory other than the one the store writes');
+  // ONE root. The keeper, the heartbeat and the sweep are all bound to the store's own directory by
+  // `startHousekeeping`; a separate `dir` beside `store` was two roots that a future change could
+  // let drift apart — the sweep surveying one while deleting from another. (The code round.)
+  assert.doesNotMatch(call, /\bdir:/u, 'housekeeping is handed a directory beside the store — two roots that can drift apart');
   assert.match(call, /store: chatStore,/u, 'the sweep is handed a different store than the writers use');
   assert.match(call, /held: \(\) => heldConversationIds\(chatPanels\),/u, 'what this window holds open is not read from the registry, so a restored tab is not protected');
   assert.match(call, /after: migration,/u, 'the sweep does not wait for the migration — a record still in the memento reads as debris');
