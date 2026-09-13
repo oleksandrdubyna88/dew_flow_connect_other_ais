@@ -1,11 +1,26 @@
 import { ChatMessage } from './chatPage';
 
 /**
- * What is kept of a chat tab so a window reload does not take the conversation with it.
+ * What was kept of a chat tab so a window reload did not take the conversation with it — the
+ * MEMENTO, `workspaceState['coai.chatTabs']`, which the conversation store on disk has replaced.
  *
- * <p>There is no `WebviewPanelSerializer` in this extension before this module, so a reload emptied
+ * <p>There was no `WebviewPanelSerializer` in this extension before this module, so a reload emptied
  * every chat tab: `retainContextWhenHidden` keeps a panel alive while it is HIDDEN, which is a
- * different thing entirely.</p>
+ * different thing entirely. The memento was the first answer, and it was bounded at a week and
+ * twenty records because `workspaceState` is one JSON value rewritten on every change. The store of
+ * `chatStoreFile.ts` — one file per conversation, ninety days — is the second, and from story A4 of
+ * the go-to-conversation plan it is the source of truth.</p>
+ *
+ * <p><b>What is left of this module, and why each piece is still here.</b> {@link tabsFrom} and
+ * {@link isTab} read what earlier builds wrote, for the migration (`chatStoreImport.ts`) that carries
+ * every record across ONCE and for the reload serializer, which falls back to the memento for as
+ * long as the key is not empty — a conversation not yet migrated must not read as absent.
+ * {@link ChatTabMemory} still WRITES, but only until the migration has confirmed every record is on
+ * disk: a store that cannot be reached must not leave a person's next words written nowhere, so
+ * `chatCommand.ts` writes both until `retireMemento()` and the store alone afterwards.
+ * {@link reloadedNote} is what a restored tab says, whichever store it came back from. What is gone:
+ * the activation-time prune — nothing may shrink the memento before the migration has read it — and
+ * the `forget` path, which no production caller ever had.</p>
  *
  * <p>No `vscode` import, on purpose. Every rule here — what is written, what a corrupt record does,
  * what is pruned and when — is a decision, and a decision inside the host is a decision no test can
@@ -83,7 +98,15 @@ const isMessage = (value: unknown): value is ChatMessage => {
     && (row.role === 'you' || row.role === 'model') && typeof row.text === 'string';
 };
 
-const isTab = (value: unknown): value is SavedTab => {
+/**
+ * Whether one stored value is a record this build can render.
+ *
+ * <p>Exported for the migration, which needs the two halves of {@link tabsFrom} separately: what
+ * passes is written to the store, and what does not is QUARANTINED rather than dropped — a damaged
+ * record silently disappearing when the key is emptied is one of the two ways the migration could
+ * lose a conversation without a trace.</p>
+ */
+export const isTab = (value: unknown): value is SavedTab => {
   const tab = value as Partial<Record<keyof SavedTab, unknown>> | null;
 
   return tab !== null && typeof tab === 'object'
@@ -134,11 +157,6 @@ export function remembered(tabs: readonly SavedTab[], tab: SavedTab, now: number
   return pruned([tab, ...tabs.filter((held) => held.id !== tab.id)], now);
 }
 
-/** This conversation forgotten — for a tab the person closed, not one a reload took away. */
-export function forgotten(tabs: readonly SavedTab[], id: string): readonly SavedTab[] {
-  return tabs.filter((tab) => tab.id !== id);
-}
-
 export const savedTab = (tabs: readonly SavedTab[], id: string): SavedTab | undefined =>
   tabs.find((tab) => tab.id === id);
 
@@ -186,15 +204,6 @@ export class ChatTabMemory {
 
   remember(tab: Omit<SavedTab, 'savedAt'>): void {
     this.write((tabs) => remembered(tabs, { ...tab, savedAt: this.clock() }, this.clock()));
-  }
-
-  forget(id: string): void {
-    this.write((tabs) => forgotten(tabs, id));
-  }
-
-  /** On activation: a week of closed conversations is not something to carry forever. */
-  prune(): void {
-    this.write((tabs) => pruned(tabs, this.clock()));
   }
 
   /** Resolves when everything asked for so far has been written — the tests' way in, and only that. */

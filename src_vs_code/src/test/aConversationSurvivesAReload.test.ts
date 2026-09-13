@@ -9,7 +9,6 @@ import {
   SavedTab,
   TAB_STORE_KEY,
   TAB_VERSION,
-  forgotten,
   pruned,
   reloadedNote,
   remembered,
@@ -32,6 +31,15 @@ import {
  * a `deserializeWebviewPanel` call cannot know whether another panel of the same name is still
  * coming; and `workspaceState` is shared by two windows on one folder. The conversation now carries
  * its own id, minted where the tab is made and echoed back by the page.</p>
+ *
+ * <p><b>Story A4 of the go-to-conversation plan moved the source of truth to the store on disk</b>
+ * (`chatStoreFile.ts`). The memento this suite was written for is now what earlier builds wrote: the
+ * migration (`chatStoreImport.test.ts`) carries it across once, the serializer reads the STORE and
+ * falls back to the memento only while its key still holds anything, and the memento goes on being
+ * written only until that migration has succeeded in the window. The pure rules over the memento's
+ * shape are still tested here because they are still run — by the migration on the way in, and by the
+ * dual write until it ends. What was removed with the code: the activation-time prune and the
+ * `forget` path.</p>
  */
 
 const message = (role: 'you' | 'model', text: string) => ({ role, text });
@@ -107,12 +115,6 @@ test('a week-old conversation is not carried forever, and neither are thirty of 
   assert.equal(pruned(many, now)[0].id, 't0', 'the oldest were kept and the newest dropped');
 });
 
-test('a conversation the person closed is forgotten; one they only reloaded is not', () => {
-  assert.deepEqual(forgotten([tab(), tab({ id: 'b2' })], 'a1').map((held) => held.id), ['b2']);
-  assert.deepEqual(forgotten([tab()], 'nobody').map((held) => held.id), ['a1'],
-    'forgetting an id nobody holds threw the store away');
-});
-
 // ---------------------------------------------------------------------------------------------
 // The store as the host uses it: one key, many writers.
 // ---------------------------------------------------------------------------------------------
@@ -172,26 +174,19 @@ test('a storage failure does not stop every write after it', async () => {
     'one rejected write poisoned the queue and nothing was ever saved again');
 });
 
-test('the store is pruned on demand, and a tab is forgotten by id', async () => {
+test('a remembered tab is read back by id, and nothing on the memory prunes or forgets any more', async () => {
+  // `prune()` went with story A4: nothing may shrink the memento before the migration has read it,
+  // and the store's own retention is story B1's sweep. `forget()` never had a production caller.
   const fake = fakeStore();
-  let now = 5_000;
-  const memory = new ChatTabMemory(fake.store, () => now);
+  const memory = new ChatTabMemory(fake.store, () => 5_000);
 
   memory.remember({ id: 'a1', title: 'main', passage: 'p', modelId: 'gemini', messages: [] });
   await memory.settled();
+
   assert.notEqual(memory.saved('a1'), undefined);
-
-  memory.forget('a1');
-  await memory.settled();
-  assert.equal(memory.saved('a1'), undefined, 'a closed tab was kept');
-
-  memory.remember({ id: 'b2', title: 'other', passage: 'p', modelId: 'codex', messages: [] });
-  await memory.settled();
-  now += KEEP_FOR_MS + 1;
-  memory.prune();
-  await memory.settled();
-
-  assert.deepEqual(memory.held(), [], 'a week-old conversation survived the sweep');
+  assert.equal(memory.saved('nobody'), undefined);
+  assert.equal('prune' in memory, false, 'an activation-time prune is back, and would shrink the memento before it is migrated');
+  assert.equal('forget' in memory, false);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -201,14 +196,49 @@ test('the store is pruned on demand, and a tab is forgotten by id', async () => 
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
-test('the extension tells VS Code how to bring a chat tab back', () => {
+test('the extension tells VS Code how to bring a chat tab back, and it reads the STORE to do it', () => {
   // The symptom, as a test: there was no serializer anywhere, so a reload had nothing to restore
   // through and every tab came back empty or not at all.
   const wiring = source('extension.ts');
+  const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
 
   assert.match(wiring, /registerWebviewPanelSerializer\(\s*'coaiChat'/,
     'nothing registers a serializer for the chat tab, so a reload still empties every one of them');
-  assert.match(wiring, /chatTabMemory|ChatTabMemory/, 'the serializer has no store to restore from');
+  assert.match(handler.slice(0, 1_200), /restoreChatTab\(/, 'the serializer restores through something other than the store path');
+  assert.match(source('chatRestorePanel.ts'), /deps\.store\.read\(id\)/,
+    'the serializer does not read the store, so a conversation the memento no longer holds is not found');
+  assert.doesNotMatch(handler.slice(0, 1_200), /chatTabMemory\.saved\(/,
+    'the serializer still looks the conversation up in the memento first, a version too late');
+});
+
+test('the serializer waits for the migration before it answers — a tab not yet carried across must not read as absent', () => {
+  // THE SECOND FATAL FINDING of A4's plan round. VS Code deserializes panels DURING activation, and a
+  // conversation the migration has not written yet reads as `absent` in the store, which the first
+  // brief said to dispose: an open tab destroyed on the first reload after the upgrade, the single most
+  // visible moment this feature has.
+  const wiring = source('extension.ts');
+  const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
+
+  assert.match(handler.slice(0, 1_200), /await migration;/, 'the serializer answers before the migration has had its say');
+  assert.ok(handler.indexOf('await migration;') < handler.indexOf('restoreChatTab('),
+    'the migration is awaited after the store has already been read');
+  assert.ok(wiring.indexOf('importLegacyTabs(') < wiring.indexOf('registerWebviewPanelSerializer'),
+    'the migration is started after the serializer could already have been called');
+});
+
+test('the memento is written until the migration has SUCCEEDED, and only then retired', () => {
+  // The first brief cut over unconditionally, which meant: store unavailable → memento preserved →
+  // the cut-over still happens → the person's next words are written NOWHERE. (A4's plan round.)
+  const wiring = source('extension.ts');
+  const command = source('chatCommand.ts');
+
+  assert.match(wiring, /if \(importSucceeded\(report\)\) \{\s*\n\s*retireMemento\(\);/,
+    'the memento is retired whatever the migration came to, or never');
+  assert.match(command, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;/,
+    'retiring the memento does something other than unbind it, so a memory?. site keeps writing');
+  assert.match(command, /memory\?\.remember\(/, 'the memento is no longer written at all — a store that cannot be reached leaves words nowhere');
+  assert.doesNotMatch(wiring, /chatTabMemory\.prune\(\)/,
+    'the activation-time prune is back, and shrinks the memento before the migration has read it');
 });
 
 test('a restored tab is built the way an opened one is', () => {
@@ -230,12 +260,30 @@ test('a restored tab says what it is, and names the model the next question goes
   assert.ok(note.includes('gemini'), 'the sentence does not name the model that will answer');
 });
 
-test('a panel whose conversation is not in the store is not left as an empty tab', () => {
+test('a panel whose conversation is NOWHERE is not left as an empty tab — and that is the only thing that disposes one', () => {
+  // The store answers four ways, and only `absent` — with the memento holding nothing either — means
+  // "no such conversation". `incompatible` (a newer build's record) and `unavailable` (a disk that
+  // would not answer) keep the tab and say so; disposing over either throws a person's conversation
+  // away over a permissions error or a downgrade. `chatRestore.test.ts` holds the decision to that
+  // as values; this holds the wiring to it as source.
+  const panel = source('chatRestorePanel.ts');
+
+  assert.match(panel, /decision\.kind === 'dispose'\)\s*\{[\s\S]{0,400}panel\.dispose\(\)/,
+    'a reload with no record left a chat tab that looks like a conversation and holds none');
+  assert.equal(panel.split('panel.dispose()').length - 1, 1,
+    'the panel is disposed somewhere other than the one arm where the conversation is nowhere');
+  assert.match(panel, /showNotice\(/, 'the two answers that keep the tab draw nothing on it');
+  assert.match(source('chatRestore.ts'), /case 'incompatible':\s*\n\s*return \{ kind: 'notice'/,
+    'a record this build cannot read is not given a defined tab');
+  assert.match(source('chatRestore.ts'), /default:\s*\n\s*return \{ kind: 'notice', sentence: unavailableNotice\(seen\.reason\), retry: true \}/,
+    'a disk that would not answer is not given a tab with a retry');
+  // The serializer's own guard, before the store is asked: state that carries no id has nothing to
+  // look up anywhere, and that is the one other disposal.
   const wiring = source('extension.ts');
   const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
-
-  assert.match(handler.slice(0, 700), /panel\.dispose\(\)/,
-    'a reload with no record left a chat tab that looks like a conversation and holds none');
+  assert.match(handler.slice(0, 500), /if \(typeof id !== 'string'\) \{\s*\n\s*panel\.dispose\(\);/);
+  assert.equal(handler.slice(0, 1_400).split('panel.dispose()').length - 1, 1,
+    'the serializer disposes a panel for something other than a state with no id in it');
 });
 
 test('no process is started until the first question after a restore', () => {
@@ -260,7 +308,9 @@ test('the first question after a restore carries the whole transcript', () => {
   // is widened when that function grows rather than dropped. It grew when a restored tab started
   // carrying its prompt, its role and the words this side last wrote.
   // It grew again when a restored tab started remembering which door it came through.
-  assert.match(restore.slice(0, 4_500), /carry: carriedFrom\(saved\.messages,/,
+  // And again in story A4, when a restored thread started sharing one transcript array with its
+  // "already saved" mark so that a reload writes nothing.
+  assert.match(restore.slice(0, 5_200), /carry: carriedFrom\(saved\.messages,/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 

@@ -288,7 +288,11 @@ export function conversationsDir(dataDir: string): string {
 }
 
 export class ChatStoreFile {
-  public constructor(private readonly dir: string) {}
+  /**
+   * The directory, readable so the migration can file its quarantine BESIDE the records rather than
+   * being handed the same path twice and trusted to keep the two in step.
+   */
+  public constructor(public readonly dir: string) {}
 
   /** Where a record lives. Throws on an unsafe id, so every caller guards with {@link isSafeId} first. */
   private recordPath(id: string): string {
