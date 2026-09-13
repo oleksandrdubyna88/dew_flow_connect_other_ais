@@ -282,8 +282,13 @@ test('a memento copy written over the store\'s older one is the DISK record with
   assert.notEqual(recordFrom(JSON.parse(JSON.stringify(written))), undefined, 'the written record is one the validator refuses to read back');
   assert.equal(overDisk(tab(), { ...disk, workspace: '' }, WORKSPACE).workspace, WORKSPACE,
     'a store copy filed nowhere did not take this window\'s answer');
-  assert.equal(overDisk(tab({ fromSession: false }), { ...disk, source: { kind: 'none' } }, WORKSPACE).fromSession, false,
-    'a disk record with no source did not take the memento\'s flag');
+  // WHICH DOOR IT CAME THROUGH IS ALWAYS THE DISK'S, whatever its source says. This asserted the
+  // opposite until A4's second round: the flag was taken from the memento whenever the disk record
+  // named no source, which today is every record — so the condition had one live arm and would have
+  // started behaving differently for records written before and after story C1 lands, silently. The
+  // memento's value is the older statement of the same fact. (gemini.)
+  assert.equal(overDisk(tab({ fromSession: false }), { ...disk, source: { kind: 'none' } }, WORKSPACE).fromSession, true,
+    'the memento\'s older answer about the door overwrote the store\'s newer one');
 });
 
 test('the report says which of the four things happened, and which ids nothing could be said about', () => {
@@ -608,7 +613,11 @@ test('a store that goes away between the pass and the clear leaves the key, and 
     assert.equal(report.kind, 'incomplete', JSON.stringify(report));
     assert.match((report as { reason: string }).reason, /stopped answering before the old one could be emptied/u);
     assert.deepEqual(fake.updates(), [], 'the key was emptied although the store had stopped answering');
-    assert.equal(sealing.seals(), 1);
+    // NEVER TAKEN, which is stronger than taken and given back: the seal lives one statement from
+    // the update it protects, so everything that can still refuse — this health check included —
+    // happens while the memento's writer is still bound and an edit made meanwhile still reaches it.
+    // (codex, A4's second code round.)
+    assert.equal(sealing.seals(), 0, 'the writer was unbound over a clear that then did not happen');
     assert.equal(sealing.unseals(), 1, 'the memento\'s writer was left sealed with the key still populated');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -701,8 +710,14 @@ test('a record that lands in the key while it is being sealed as empty is carrie
     assert.equal(report.kind, 'migrated', JSON.stringify(report));
     assert.deepEqual(await listed(store), ['a1'], 'the record the seal drained into the key was stranded there');
     assert.deepEqual(fake.updates(), [[TAB_STORE_KEY, undefined]]);
-    assert.ok(sealing.seals() >= 1);
-    assert.equal(sealing.unseals(), 0);
+    // TWO seals and ONE unseal, and the order is the point. The empty path takes a seal, finds the
+    // key filled after all by a write its own drain released, and GIVES THAT SEAL BACK so the carry
+    // runs with the memento's writer bound — a carry can still refuse, and a window whose words go
+    // nowhere while it does is the defect this whole sequence exists to avoid. The carry then takes
+    // its own seal one statement from the update, and that one is never given back because the clear
+    // succeeded. (gemini, A4's second code round.)
+    assert.equal(sealing.seals(), 2, 'the carry ran without a seal of its own, or the empty path kept one it should have returned');
+    assert.equal(sealing.unseals(), 1, 'the writer was left unbound while the carry could still refuse');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -913,7 +928,7 @@ test('a memento that throws on read is an outcome, not an exception — the key 
     assert.equal(later.value.kind, 'incomplete');
     assert.equal((later.value as { reason: string }).reason, 'the old store could not be read');
     assert.deepEqual(fatesOf(later.value), [{ kind: 'written', id: 'a1', indexed: true }], 'the record was not written before the key failed');
-    assert.equal(sealing.seals(), 1);
+    assert.equal(sealing.seals(), 0, 'the writer was unbound although the key could not be re-read');
     assert.equal(sealing.unseals(), 1, 'the writer stayed sealed over a key nobody could re-read');
   } finally {
     rmSync(dir, { recursive: true, force: true });

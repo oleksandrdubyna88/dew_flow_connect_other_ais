@@ -250,7 +250,14 @@ export function overDisk(tab: SavedTab, disk: ConversationRecord, workspace: str
     carryFrom: ours.carryFrom,
     updatedAt: ours.updatedAt,
     workspace: ours.workspace,
-    fromSession: disk.source.kind === 'none' ? ours.fromSession : disk.fromSession,
+    // WHICH DOOR IT CAME THROUGH stays the disk's, always. It used to be taken from the memento
+    // whenever the disk record named no source — which today is every record, since the durable
+    // source is story C1 — so the condition was a branch with one live arm, and the moment C1 lands
+    // it would silently start behaving differently for records written before and after it. A
+    // migration is not the place to learn that. The memento's value is the older statement of the
+    // same fact and the disk's is the newer one, which is the rule everywhere else here.
+    // (gemini, A4's second code round.)
+    fromSession: disk.fromSession,
   };
 }
 
@@ -362,8 +369,16 @@ export async function importLegacyTabs(deps: ImportDeps): Promise<ImportReport> 
   if (contentsOf(first.value).kind !== 'empty') {
     return carry(deps, first.value, at);
   }
-  // Empty. Seal — nothing new may be written from this window — and look once more: a write the
-  // seal drained may have filled the key between the read above and now.
+  // Empty — but that is not on its own a reason to retire the old store. ASK THE NEW ONE FIRST: a
+  // fresh window whose store cannot be reached would otherwise unbind the memento, and the first
+  // conversation of that session would be written to a disk that refuses it and to nothing else.
+  // (codex, A4's second code round.)
+  const ready = await deps.store.state();
+  if (ready.kind === 'unavailable') {
+    return { kind: 'unavailable', reason: ready.reason };
+  }
+  // Now seal — nothing new may be written from this window — and look once more: a write the seal
+  // drained may have filled the key between the read above and now.
   await deps.seal?.();
   const again = readKey(deps.memento);
   if (again.kind === 'failed') {
@@ -372,7 +387,16 @@ export async function importLegacyTabs(deps: ImportDeps): Promise<ImportReport> 
     return incomplete([], again.reason);
   }
 
-  return contentsOf(again.value).kind === 'empty' ? { kind: 'nothing' } : carry(deps, again.value, at);
+  if (contentsOf(again.value).kind === 'empty') {
+    return { kind: 'nothing' };
+  }
+  // A write the seal drained filled the key after all. It is carried like any other — and the seal
+  // taken above is given BACK first, because the carry takes its own at the one moment it is safe
+  // to, and a writer left unbound over a key that is still populated is a window whose next words
+  // go to one store while the other is in charge. (gemini, A4's second code round.)
+  deps.unseal?.();
+
+  return carry(deps, again.value, at);
 }
 
 /** A non-empty key, carried; and the memento's writer resumed whenever the key did NOT go. */
@@ -396,11 +420,10 @@ async function carrying(deps: ImportDeps, raw: unknown, at: number): Promise<Imp
   if (first.kind === 'incomplete') {
     return first;
   }
-  // Every record confirmed. Sealed LATE, deliberately: sealed before the pass, a store that then
-  // proved unavailable would have left this window's words unwritten to the memento for the length
-  // of the pass. From here to the clear is a re-read and an update.
-  await deps.seal?.();
-
+  // Every record confirmed. The seal is NOT taken here: it lives one statement from the `update`
+  // itself, in `clear`. Sealed here, an edit made during the re-read and the health check below
+  // would be written to neither store if its own disk write then failed and the clear then failed
+  // too — and both of those are outcomes this function has. (codex, A4's second code round.)
   return clearIfUnchanged(deps, raw, first.fates, at);
 }
 
@@ -591,6 +614,14 @@ async function clear(deps: ImportDeps, fates: readonly Fate[]): Promise<ImportRe
   if (state.kind === 'unavailable') {
     return incomplete(fates, `the store stopped answering before the old one could be emptied (${state.reason})`);
   }
+  // THE SEAL, one statement from the update it protects. Unbind so nothing new can queue, then
+  // drain what already has — in that order, or a write issued a moment ago lands after the clear and
+  // fills the key again, which makes the migration re-run on every activation for ever.
+  //
+  // And here rather than earlier: everything above this line can still refuse, and an edit made
+  // while a refusal was being decided would have been written to neither store. The window between
+  // this line and the update is one `await` wide, and nothing of the person's can enter it.
+  await deps.seal?.();
   try {
     await deps.memento.update(TAB_STORE_KEY, undefined);
 
