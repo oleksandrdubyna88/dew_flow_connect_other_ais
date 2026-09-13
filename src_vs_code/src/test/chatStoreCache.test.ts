@@ -216,16 +216,25 @@ test('an entry whose file has not changed since the last load is not read again'
 test('an entry stamped exactly AT the last load is read again — the rule is >=, not >', async () => {
   // Two writes inside one filesystem timestamp granularity are real. A rule of `>` would miss a save
   // that landed in the same instant the load began.
+  //
+  // The instant is TAKEN FROM THE FILESYSTEM rather than demanded of it. This test used to stamp the
+  // file with a chosen millisecond and assert the stamp came back unchanged, which held on NTFS and
+  // failed on ext4: a nanosecond stamp converted to milliseconds comes back as `…358.999`, so the
+  // boundary the test exists for was never reached and CI went red on a rule that was correct. What
+  // matters is that the load instant and the file's stamp are THE SAME NUMBER, whatever number the
+  // disk chose — so the file is stamped first, the stamp is read back, and the load is dated to it.
   const w = world();
   try {
     await w.store.save(record({ id: 'a1' }), 0);
-    const now = Date.now();
-    stampBefore(w.dir, 'a1', 10_000, now);
-    await w.index.refresh(now);
+    const path = join(w.dir, besideMeta('a1'));
+    const chosen = new Date(Date.now() - 10_000);
+    utimesSync(path, chosen, chosen);
+    const taken = statSync(path).mtimeMs;
 
-    utimesSync(join(w.dir, besideMeta('a1')), new Date(now), new Date(now));
-    assert.equal(statSync(join(w.dir, besideMeta('a1'))).mtimeMs, now, 'the filesystem did not take the exact stamp; the test cannot pin the boundary here');
-    await w.index.refresh(now + 5_000);
+    await w.index.refresh(taken);
+    assert.equal(w.store.reads, 1, 'the first refresh did not read the entry it had never seen');
+
+    await w.index.refresh(taken + 5_000);
 
     assert.equal(w.store.reads, 2, 'an entry written in the very instant the load began was believed unchanged');
   } finally {
