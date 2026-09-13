@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Core.Rounds;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -110,6 +111,77 @@ public sealed class CatalogEndpointTests
 
         (await client.GetFromJsonAsync<CatalogDto>("/api/catalog"))!.IsAdmin.Should().BeFalse();
         (await boss.GetFromJsonAsync<CatalogDto>("/api/catalog"))!.IsAdmin.Should().BeTrue();
+    }
+
+    // ---------- story 3: the catalog says which roles this server will run ----------
+
+    private static TeamServer WithRoles(IDictionary<string, string?>? config = null)
+    {
+        var server = new TeamServer(config);
+        File.WriteAllText(Path.Combine(server.DataDir, "vendors.json"), Vendors);
+
+        return server;
+    }
+
+    [Fact]
+    public async Task TheCatalogNamesTheFiveThisProductShipsWhenNobodyConfiguredAnything()
+    {
+        using var server = WithRoles();
+
+        var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.Roles.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles.Select(r => r.Id));
+        catalog.AllowAnyRole.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheCatalogNamesARoleTheOperatorConfigured()
+    {
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements" });
+
+        var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.Roles.Should().Contain("Requirements")
+            .And.Contain(RoleCatalog.Builtin.Roles[0].Id, "the shipped ones never go away");
+        catalog.AllowAnyRole.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheCatalogSaysWhenThisServerWillRunAnything()
+    {
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:AllowAnyRole"] = "true" });
+
+        var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.AllowAnyRole.Should().BeTrue();
+        catalog.Roles.Should().NotBeEmpty(
+            "a server that runs anything still runs these, and a client with no custom role needs the list");
+    }
+
+    [Fact]
+    public async Task WhatTheCatalogSAYSIsWhatTheGateACCEPTS()
+    {
+        // The failure this test exists for: a DTO property filled from somewhere other than the
+        // instance the gates refuse with — or from nowhere, which is likelier — leaves a client
+        // excluding a role this server runs perfectly well, with every other test still green.
+        // So the two are compared against each other rather than against a literal.
+        // (codex, plan 3's plan round.)
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements,Brief" });
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        foreach (var role in catalog!.Roles)
+        {
+            var submitted = await client.PostAsJsonAsync(
+                "/api/reviews",
+                new ReviewRequestDto("codex", "gpt-5.6-luna", "review this", role, 60));
+
+            submitted.StatusCode.Should().Be(HttpStatusCode.Accepted, role);
+        }
     }
 }
 

@@ -295,7 +295,7 @@ app.MapGet("/api/client-config", () => Results.Json(
 // handler. A route that is not registered with it cannot ask who is calling — see CallerFilter.
 var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
 app.MapSessionEndpoints(sessions, gate);
-app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate);
+app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate, acceptedRoles);
 app.MapUsageEndpoints(new UsageReader(dataDir), gate);
 app.MapReviewEndpoints(
     jobs,

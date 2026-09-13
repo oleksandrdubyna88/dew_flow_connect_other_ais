@@ -740,8 +740,21 @@ role therefore submit ONE job under one key, rather than two that a later ledger
 canonicalise to empty, because returning `"   "` put whitespace into the record and the fingerprint
 and made the same review two jobs depending on which way a client said nothing.
 
-`CatalogDto` still has no role field, so a client cannot yet learn any of this — that is story 3, and
-story 4 is the two clients.
+**`/api/catalog` says which roles this server will run.** `CatalogDto` carries `roles` — the list,
+populated FROM the same `AcceptedRoles` the two gates refuse with, so what a client is told and what
+the server accepts cannot be two answers — and `allowAnyRole`, a separate boolean.
+
+**A separate boolean rather than a sentinel inside the list.** A marker such as `["*"]` was
+considered and refused: `roles.includes(role)` is the obvious client code and it answers false for
+every real role, so an entire server's configuration would be inverted by the one line anybody would
+write. A boolean cannot be read wrongly by accident.
+
+**Absent means the five this product ships** — never "none", never "any". A server older than this
+field sends no such property; a client reading that as an empty set would silently drop every
+reviewer from every round, and reading it as "anything goes" would send custom roles to a server
+certain to 400 them. An EMPTY list means the same as absent, because a server that HAS the field
+always accepts at least five. That rule is the CLIENT's to honour, and it is story 4 — as are
+`CanCarry` in coai-mcp and `teamServerApi.ts` in the extension.
 
 **Building it IS the boot guard.** `From` throws on a configured id that could never run, so an
 operator who writes `My-Role` learns at startup rather than on every request. It is deliberately not
