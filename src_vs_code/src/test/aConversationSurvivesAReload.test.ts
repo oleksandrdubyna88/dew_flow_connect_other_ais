@@ -4,12 +4,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ChatTabMemory,
-  KEEP_FOR_MS,
-  KEEP_TABS,
   SavedTab,
   TAB_STORE_KEY,
   TAB_VERSION,
-  pruned,
   reloadedNote,
   remembered,
   savedTab,
@@ -92,27 +89,24 @@ test('a record that cannot be read is dropped, and its neighbours survive', () =
   }
 });
 
-test('the newest record for a conversation replaces the one before it', () => {
+test('the newest record for a conversation replaces the one before it, and NOTHING is cut', () => {
   const first = tab({ messages: [message('you', 'first')] });
   const second = tab({ savedAt: 2_000, messages: [message('you', 'second')] });
 
-  const held = remembered([first, tab({ id: 'other', savedAt: 500 })], second, 2_000);
+  const held = remembered([first, tab({ id: 'other', savedAt: 500 })], second);
 
   assert.deepEqual(held.map((held) => held.id), ['a1', 'other'], 'newest first, and no duplicate id');
   assert.deepEqual(savedTab(held, 'a1'), second);
-});
 
-test('a week-old conversation is not carried forever, and neither are thirty of them', () => {
-  const now = 10 * KEEP_FOR_MS;
-  const old = tab({ id: 'old', savedAt: now - KEEP_FOR_MS - 1 });
-  const fresh = tab({ id: 'fresh', savedAt: now - 1 });
+  // The week-and-twenty cut this made on every write went with story A4 (codex, its code round): while
+  // the memento is still written — until the migration has confirmed every record is on disk — a legacy
+  // record whose store write failed could be dropped from the memento by an ordinary write BEFORE the
+  // next activation's migration read it. Thirty old records and one new one are thirty-one.
+  const thirty = Array.from({ length: 30 }, (_, at) => tab({ id: `t${at}`, savedAt: 1 }));
+  const week = 7 * 24 * 60 * 60 * 1000;
 
-  assert.deepEqual(pruned([old, fresh], now).map((held) => held.id), ['fresh']);
-
-  const many = Array.from({ length: KEEP_TABS + 5 }, (_, at) => tab({ id: `t${at}`, savedAt: now - at }));
-
-  assert.equal(pruned(many, now).length, KEEP_TABS, 'the store grows without bound');
-  assert.equal(pruned(many, now)[0].id, 't0', 'the oldest were kept and the newest dropped');
+  assert.equal(remembered(thirty, tab({ id: 'new', savedAt: 10 * week })).length, 31,
+    'a write to the memento shrank it — a record the migration has not read yet may be gone');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -204,7 +198,8 @@ test('the extension tells VS Code how to bring a chat tab back, and it reads the
 
   assert.match(wiring, /registerWebviewPanelSerializer\(\s*'coaiChat'/,
     'nothing registers a serializer for the chat tab, so a reload still empties every one of them');
-  assert.match(handler.slice(0, 1_200), /restoreChatTab\(/, 'the serializer restores through something other than the store path');
+  assert.match(handler.slice(0, 600), /restoreAfterReload\(restoreDeps, panel, state, migration\)/,
+    'the serializer restores through something other than the store path, or hands it a different store than the writers use');
   assert.match(source('chatRestorePanel.ts'), /deps\.store\.read\(id\)/,
     'the serializer does not read the store, so a conversation the memento no longer holds is not found');
   assert.doesNotMatch(handler.slice(0, 1_200), /chatTabMemory\.saved\(/,
@@ -215,30 +210,40 @@ test('the serializer waits for the migration before it answers — a tab not yet
   // THE SECOND FATAL FINDING of A4's plan round. VS Code deserializes panels DURING activation, and a
   // conversation the migration has not written yet reads as `absent` in the store, which the first
   // brief said to dispose: an open tab destroyed on the first reload after the upgrade, the single most
-  // visible moment this feature has.
+  // visible moment this feature has. The wait has a CEILING and the tab is drawn before it (the code
+  // round's four findings on a blank tab) — `chatRestore.test.ts` holds that order.
   const wiring = source('extension.ts');
-  const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
+  const panel = source('chatRestorePanel.ts');
+  const body = panel.slice(panel.indexOf('export async function restoreAfterReload'), panel.indexOf('export async function restoreChatTab'));
 
-  assert.match(handler.slice(0, 1_200), /await migration;/, 'the serializer answers before the migration has had its say');
-  assert.ok(handler.indexOf('await migration;') < handler.indexOf('restoreChatTab('),
-    'the migration is awaited after the store has already been read');
+  assert.match(body, /await withinCeiling\(migration, MIGRATION_WAIT_MS\);/, 'the serializer answers before the migration has had its say');
+  assert.ok(body.indexOf('withinCeiling(migration') < body.indexOf('restoreChatTab('),
+    'the migration is waited for after the store has already been read');
   assert.ok(wiring.indexOf('importLegacyTabs(') < wiring.indexOf('registerWebviewPanelSerializer'),
     'the migration is started after the serializer could already have been called');
 });
 
-test('the memento is written until the migration has SUCCEEDED, and only then retired', () => {
+test('the memento is written until the migration has SEALED it — and sealing drains the queue before the key goes', () => {
   // The first brief cut over unconditionally, which meant: store unavailable → memento preserved →
-  // the cut-over still happens → the person's next words are written NOWHERE. (A4's plan round.)
+  // the cut-over still happens → the person's next words are written NOWHERE. (A4's plan round.) Then
+  // the code round found the race in the fix: `ChatTabMemory` QUEUES, so a write issued a moment before
+  // the clear lands after it and fills the key again. The seal is the one retirement point: unbind, then
+  // drain; and the way back when the clear did not happen.
   const wiring = source('extension.ts');
   const command = source('chatCommand.ts');
 
-  assert.match(wiring, /if \(importSucceeded\(report\)\) \{\s*\n\s*retireMemento\(\);/,
-    'the memento is retired whatever the migration came to, or never');
+  assert.match(wiring, /seal: async \(\) => \{\s*\n\s*retireMemento\(\);\s*\n\s*await chatTabMemory\.settled\(\);/,
+    'the seal does not unbind the writer and then drain its queue, in that order');
+  assert.match(wiring, /unseal: \(\) => \{\s*\n\s*rememberChatsIn\(chatTabMemory\);/,
+    'a clear that did not happen leaves this window writing one store while the other is in charge');
+  assert.equal(wiring.split('retireMemento()').length - 1, 1, 'the memento is retired from somewhere other than the seal');
   assert.match(command, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;/,
     'retiring the memento does something other than unbind it, so a memory?. site keeps writing');
   assert.match(command, /memory\?\.remember\(/, 'the memento is no longer written at all — a store that cannot be reached leaves words nowhere');
   assert.doesNotMatch(wiring, /chatTabMemory\.prune\(\)/,
     'the activation-time prune is back, and shrinks the memento before the migration has read it');
+  assert.doesNotMatch(source('chatTabs.ts'), /KEEP_TABS|KEEP_FOR_MS|\.slice\(0, /,
+    'a cut on the memento is back — a record the migration has not read yet can be dropped by an ordinary write');
 });
 
 test('a restored tab is built the way an opened one is', () => {
@@ -270,20 +275,23 @@ test('a panel whose conversation is NOWHERE is not left as an empty tab — and 
 
   assert.match(panel, /decision\.kind === 'dispose'\)\s*\{[\s\S]{0,400}panel\.dispose\(\)/,
     'a reload with no record left a chat tab that looks like a conversation and holds none');
-  assert.equal(panel.split('panel.dispose()').length - 1, 1,
-    'the panel is disposed somewhere other than the one arm where the conversation is nowhere');
+  // Two disposals, both "nowhere": a state whose id nothing can be filed under (validated at the
+  // boundary — `persistedId` — with the legal shape named on the console), and a conversation the
+  // store and the memento both say is absent.
+  assert.equal(panel.split('panel.dispose()').length - 1, 2,
+    'the panel is disposed somewhere other than the two arms where the conversation is nowhere');
+  assert.match(panel, /if \(id\.length === 0\) \{[\s\S]{0,600}panel\.dispose\(\)/,
+    'a state with no usable id is not refused at the boundary');
   assert.match(panel, /showNotice\(/, 'the two answers that keep the tab draw nothing on it');
   assert.match(source('chatRestore.ts'), /case 'incompatible':\s*\n\s*return \{ kind: 'notice'/,
     'a record this build cannot read is not given a defined tab');
   assert.match(source('chatRestore.ts'), /default:\s*\n\s*return \{ kind: 'notice', sentence: unavailableNotice\(seen\.reason\), retry: true \}/,
     'a disk that would not answer is not given a tab with a retry');
-  // The serializer's own guard, before the store is asked: state that carries no id has nothing to
-  // look up anywhere, and that is the one other disposal.
+  // And the serializer itself disposes nothing: every decision about a tab is in one module.
   const wiring = source('extension.ts');
   const handler = wiring.slice(wiring.indexOf('deserializeWebviewPanel'));
-  assert.match(handler.slice(0, 500), /if \(typeof id !== 'string'\) \{\s*\n\s*panel\.dispose\(\);/);
-  assert.equal(handler.slice(0, 1_400).split('panel.dispose()').length - 1, 1,
-    'the serializer disposes a panel for something other than a state with no id in it');
+  assert.doesNotMatch(handler.slice(0, 1_400), /panel\.dispose\(\)/,
+    'the serializer disposes a panel on its own account, outside the one module that decides');
 });
 
 test('no process is started until the first question after a restore', () => {

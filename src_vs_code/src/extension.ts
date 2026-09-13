@@ -18,7 +18,7 @@ import {
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
-import { restoreChatTab } from './chatRestorePanel';
+import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -154,23 +154,48 @@ export function activate(context: vscode.ExtensionContext): void {
   const chatTabMemory = new ChatTabMemory(context.workspaceState);
   rememberChatsIn(chatTabMemory);
   keepChatsIn(chatStore);
-  // THE MIGRATION, started before anything can read the store and awaited by the serializer — VS
+  // What restoring a tab needs; one object, so the serializer and every retry read the same store,
+  // the same memento and the same workspace the writers use.
+  const restoreDeps: RestoreDeps = {
+    panels: chatPanels,
+    store: chatStore,
+    memento: chatTabMemory,
+    extensionUri: context.extensionUri,
+    workspace: conversationWorkspace,
+  };
+  // THE MIGRATION, started before anything can read the store and waited for by the serializer — VS
   // Code deserializes panels during activation, and a conversation not yet carried across would read
   // as absent and be disposed on the first reload after the upgrade. It compares transcripts, never
-  // ids, and empties the key only once every record is confirmed and listed; `chatStoreImport.ts`
+  // ids, and empties the key only once every record is confirmed and indexed; `chatStoreImport.ts`
   // says why each of those rules exists. It never throws, so the catch below is the outer edge of a
-  // detached call and a defect if it ever speaks.
-  const migration: Promise<ImportReport> = importLegacyTabs({ memento: context.workspaceState, store: chatStore, workspace: conversationWorkspace() })
+  // detached call and a defect if it ever speaks — and it re-binds the memento, because a defect
+  // after the seal would otherwise leave this window writing to one store while the other is in charge.
+  const migration: Promise<ImportReport> = importLegacyTabs({
+    memento: context.workspaceState,
+    store: chatStore,
+    workspace: conversationWorkspace(),
+    // THE SEAL — the one place the memento is retired. Unbind first, so nothing new can queue a
+    // write; then drain the queue, so a write issued a moment before the clear cannot land after it
+    // and fill the key again (gemini, A4's code round). The migration calls it only when the key is
+    // empty or every record is confirmed, immediately before the clear.
+    seal: async () => {
+      retireMemento();
+      await chatTabMemory.settled();
+    },
+    // And the way back, when the clear did not happen after all: the memento is still in charge, so
+    // it is written again.
+    unseal: () => {
+      rememberChatsIn(chatTabMemory);
+    },
+  })
     .then((report) => {
-      console.warn(describeImport(report));
-      if (importSucceeded(report)) {
-        retireMemento();
-      }
+      (importSucceeded(report) ? console.info : console.warn)(describeImport(report));
 
       return report;
     })
     .catch((reason: unknown): ImportReport => {
       console.error('ConnectOtherAIs: the chat conversation migration threw; the old store stays in charge', reason);
+      rememberChatsIn(chatTabMemory);
 
       return { kind: 'incomplete', fates: [], reason: 'the migration threw' };
     });
@@ -270,33 +295,22 @@ export function activate(context: vscode.ExtensionContext): void {
     // panel and the vendor process behind it have to be ended here or they outlive the extension.
     { dispose: () => chatPanels.closeAll() },
     // How a chat tab comes back after a window reload. VS Code hands back the panel and whatever the
-    // page saved with `setState` — here, the conversation's own id — and the transcript is looked up
-    // by that in the STORE, after the migration has had its say, so a record that was still in the
-    // memento a moment ago is found. The store answers four ways and `chatRestore.ts` decides each:
-    // a record restores; absent — in the store AND in the memento — disposes, because an empty tab
-    // pretending to be a conversation is worse than none; a record this build cannot read, or a disk
-    // that would not answer, keeps the tab and SAYS so, with a retry where one makes sense. Disposing
-    // over either of those would throw a person's tab away over a permissions error or a downgrade.
+    // page saved with `setState` — here, the conversation's own id — and `chatRestorePanel.ts` does
+    // the rest: validates the id, draws *Restoring…* before anything is awaited, waits for the
+    // migration under a ceiling so a record that was still in the memento a moment ago is found, and
+    // reads the STORE. The store answers four ways and `chatRestore.ts` decides each: a record
+    // restores; absent — in the store AND in the memento — disposes, because an empty tab pretending
+    // to be a conversation is worse than none; a record this build cannot read, or a disk that would
+    // not answer, keeps the tab and SAYS so, with a retry where one makes sense. Disposing over either
+    // of those would throw a person's tab away over a permissions error or a downgrade.
     vscode.window.registerWebviewPanelSerializer('coaiChat', {
-      deserializeWebviewPanel: async (panel: vscode.WebviewPanel, state: unknown) => {
-        const id = (state as { id?: unknown } | null)?.id;
-        if (typeof id !== 'string') {
-          panel.dispose();
-
-          return;
-        }
-        await migration;
-        await restoreChatTab(
-          { panels: chatPanels, store: chatStore, memento: chatTabMemory, extensionUri: context.extensionUri, workspace: conversationWorkspace },
-          panel,
-          id,
-        ).catch((reason: unknown) => {
+      deserializeWebviewPanel: (panel: vscode.WebviewPanel, state: unknown) =>
+        restoreAfterReload(restoreDeps, panel, state, migration).catch((reason: unknown) => {
           // The store answers in outcomes and never rejects, so anything here is a defect — said on
           // the console rather than dropped, and the panel is NOT disposed over it: the rule of this
           // whole serializer is that a tab is thrown away only for a conversation that is nowhere.
           console.error('ConnectOtherAIs: a chat tab could not be restored after a reload', reason);
-        });
-      },
+        }),
     }),
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
     // the command and then renders — so an update started from THIS menu left the Server section

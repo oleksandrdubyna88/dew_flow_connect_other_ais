@@ -3,13 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { ChatStoreFile, SaveOutcome } from '../chatStoreFile';
+import { ChatStoreFile, QUARANTINE_DIR, SaveOutcome } from '../chatStoreFile';
 import {
   DIVERGED_TWICE,
   FORK_SUFFIX,
   Fate,
+  IMPORT_WIDTH,
+  ImportDeps,
   ImportReport,
-  QUARANTINE_DIR,
   allSettled,
   contentsOf,
   describe,
@@ -20,11 +21,10 @@ import {
   importSucceeded,
   newerOf,
   overDisk,
-  unlisted,
 } from '../chatStoreImport';
-import { ConversationRecord, besideMeta, fromLegacy, recordName, saidIn } from '../chatStore';
+import { ConversationRecord, besideMeta, fromLegacy, recordFrom, recordName, saidIn, sourceOfSession } from '../chatStore';
 import { lockName } from '../chatStoreLock';
-import { SavedTab, TAB_STORE_KEY, TAB_VERSION, TabStore } from '../chatTabs';
+import { ChatTabMemory, SavedTab, TAB_STORE_KEY, TAB_VERSION, TabStore } from '../chatTabs';
 import { ChatMessage } from '../chatPage';
 
 /**
@@ -35,9 +35,11 @@ import { ChatMessage } from '../chatPage';
  * conversation silently with all tests green, and each has a test here that would have gone red:
  * the store holding an id is not proof its copy is newer (a memento of four turns against a store
  * of two); a `partial` save is not "present"; a damaged record neither vanishes nor wedges the key
- * open; the memento is re-read before it is emptied; a store that cannot be read migrates nothing.
- * The interrupted case — half the records written, the key still populated, the next activation
- * writing only what is missing and emptying the key exactly once — is the plan's own test.</p>
+ * open; the memento is sealed and re-read before it is emptied; the store is asked once more before
+ * the clear; a store that cannot be read migrates nothing; a memento that throws is an outcome, not
+ * an exception. The interrupted case — half the records written, the key still populated, the next
+ * activation writing only what is missing and emptying the key exactly once — is the plan's own
+ * test.</p>
  *
  * <p>Every store copy is written through the store's own writer and read back through its reader,
  * never typed as JSON and cast, so the real validator runs both ways. The memento fake is two
@@ -85,10 +87,11 @@ interface FakeMemento {
 /**
  * A memento as the host has one: `get` and `update` of a key. `failUpdates` makes the first N writes
  * reject, which is how a host whose storage would not take the clear is simulated; `onGet` lets a
- * test hand back a different value on each read, which is how another window writing between the
- * pass and the clear is simulated.
+ * test hand back a different value on each read — or do something to the world on a given read —
+ * which is how another window writing between the pass and the clear, or a disk going away, is
+ * simulated.
  */
-function fakeMemento(initial: unknown, options: { failUpdates?: number; onGet?: (call: number) => unknown } = {}): FakeMemento {
+function fakeMemento(initial: unknown, options: { failUpdates?: number; onGet?: (call: number, held: unknown) => unknown } = {}): FakeMemento {
   let held = initial;
   let gets = 0;
   let failures = options.failUpdates ?? 0;
@@ -102,7 +105,7 @@ function fakeMemento(initial: unknown, options: { failUpdates?: number; onGet?: 
           return undefined;
         }
 
-        return options.onGet === undefined ? held : options.onGet(gets);
+        return options.onGet === undefined ? held : options.onGet(gets, held);
       },
       update: async (key: string, value: unknown) => {
         await Promise.resolve();
@@ -148,21 +151,39 @@ async function listed(store: ChatStoreFile): Promise<readonly string[]> {
   return (listing as { metas: readonly { id: string }[] }).metas.map((meta) => meta.id).sort();
 }
 
-async function run(store: ChatStoreFile, fake: FakeMemento, workspace = WORKSPACE): Promise<ImportReport> {
-  return importLegacyTabs({ memento: fake.store, store, workspace, at: AT });
+/** The seal and unseal hooks, counted — what the host does with them is `extension.ts`'s, and read there. */
+function hooks(): { readonly seals: () => number; readonly unseals: () => number; readonly deps: Pick<ImportDeps, 'seal' | 'unseal'> } {
+  let seals = 0;
+  let unseals = 0;
+
+  return {
+    seals: () => seals,
+    unseals: () => unseals,
+    deps: {
+      seal: async () => { seals += 1; await Promise.resolve(); },
+      unseal: () => { unseals += 1; },
+    },
+  };
 }
 
-/** The console, kept quiet where the store is EXPECTED to complain, and its lines for assertion. */
+async function run(store: ChatStoreFile, fake: FakeMemento, extra: Partial<ImportDeps> = {}): Promise<ImportReport> {
+  return importLegacyTabs({ memento: fake.store, store, workspace: WORKSPACE, at: AT, ...extra });
+}
+
+/** The console, kept quiet where the store is EXPECTED to speak, and its lines for assertion. */
 async function capturing<T>(work: () => Promise<T>): Promise<{ readonly value: T; readonly lines: readonly string[] }> {
   const lines: string[] = [];
-  const before = { error: console.error, warn: console.warn };
-  console.error = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
-  console.warn = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
+  const before = { error: console.error, warn: console.warn, info: console.info };
+  const capture = (...parts: unknown[]): void => { lines.push(parts.map(String).join(' ')); };
+  console.error = capture;
+  console.warn = capture;
+  console.info = capture;
   try {
     return { value: await work(), lines };
   } finally {
     console.error = before.error;
     console.warn = before.warn;
+    console.info = before.info;
   }
 }
 
@@ -232,36 +253,37 @@ test('only a save that landed puts a copy on disk; four of the six answers say n
   assert.deepEqual(filedIds([...fates, { kind: 'kept', id: 'k' }, { kind: 'quarantined', at: 'q' }]), ['a1', 'a1', 'k']);
 });
 
-test('a filed id the listing does not carry is a conversation that exists and cannot be found', () => {
-  const fates: readonly Fate[] = [{ kind: 'written', id: 'a1', indexed: true }, { kind: 'kept', id: 'b2' }];
-  const meta = { id: 'a1' } as unknown as import('../chatStore').ConversationMeta;
-
-  assert.deepEqual(unlisted(fates, { kind: 'listed', metas: [meta] }), ['b2']);
-  assert.deepEqual(unlisted(fates, { kind: 'unavailable', reason: 'x' }), ['a1', 'b2'],
-    'a listing that could not be read confirmed every record');
-});
-
 test('the fork id is derived from the record\'s own, never minted, so a re-run finds it', () => {
   assert.equal(forkId('a1'), `a1${FORK_SUFFIX}`);
   assert.equal(forkId('x'.repeat(199)), '', 'an id the suffix takes past the limit produced an unsafe filename');
 });
 
-test('a memento copy written over the store\'s older one keeps what the store knew better', () => {
+test('a memento copy written over the store\'s older one is the DISK record with the memento\'s words over it', () => {
+  // gemini, A4's code round: rebuilt from the legacy shape, the write dropped every field the store
+  // knew and the memento never did — nothing today, and the durable source or a sweep field the
+  // moment a later story adds one. The disk record is spread first, so such a field survives without
+  // this function having to name it.
   const disk: ConversationRecord = {
-    ...fromLegacy(tab({ messages: TWO, savedAt: AT - 9_000 }), 'E:\\elsewhere'),
+    ...fromLegacy(tab({ messages: TWO, savedAt: AT - 9_000, fromSession: true }), 'E:\\elsewhere'),
     createdAt: AT - 100_000,
-    source: { kind: 'none' },
+    source: sourceOfSession('9f1c-uuid'),
     closedAt: AT - 50,
   };
-  const written = overDisk(tab(), disk, WORKSPACE);
+  // The memento's copy says the OTHER thing about origin — a hand edit; nothing writes that.
+  const written = overDisk(tab({ fromSession: false }), disk, WORKSPACE);
 
   assert.deepEqual(written.messages, FOUR, 'the words are the memento\'s');
   assert.equal(written.createdAt, AT - 100_000, 'the beginning the store recorded was replaced by the memento\'s last write');
   assert.equal(written.updatedAt, AT, 'the last use is the memento\'s');
   assert.equal(written.workspace, 'E:\\elsewhere', 'where the dual write filed it is where it stays');
-  assert.equal(written.closedAt, AT - 50);
+  assert.equal(written.closedAt, AT - 50, 'a field the memento never had was dropped');
+  assert.deepEqual(written.source, sourceOfSession('9f1c-uuid'), 'the durable source was dropped');
+  assert.equal(written.fromSession, true, 'origin stopped being a pair: a source naming a session beside a flag saying file');
+  assert.notEqual(recordFrom(JSON.parse(JSON.stringify(written))), undefined, 'the written record is one the validator refuses to read back');
   assert.equal(overDisk(tab(), { ...disk, workspace: '' }, WORKSPACE).workspace, WORKSPACE,
     'a store copy filed nowhere did not take this window\'s answer');
+  assert.equal(overDisk(tab({ fromSession: false }), { ...disk, source: { kind: 'none' } }, WORKSPACE).fromSession, false,
+    'a disk record with no source did not take the memento\'s flag');
 });
 
 test('the report says which of the four things happened, and which ids nothing could be said about', () => {
@@ -287,17 +309,27 @@ test('the report says which of the four things happened, and which ids nothing c
 // The migration, against a real directory.
 // ---------------------------------------------------------------------------------------------
 
-test('every memento record moves into the store, is listed there, and the key is emptied exactly once', async () => {
+test('every memento record moves into the store, is indexed there, and the key is emptied exactly once', async () => {
+  // More records than the pool is wide, so the pool is exercised and the fates still come back in
+  // the memento's order.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
-    const tabs = [tab({ id: 'a1' }), tab({ id: 'b2', messages: TWO, savedAt: AT - 5_000, fromSession: false, carryFrom: 1 }), tab({ id: 'c3', messages: [] })];
+    const tabs = Array.from({ length: IMPORT_WIDTH * 2 + 1 }, (_, at) => tab({
+      id: `t${at}`,
+      messages: at % 3 === 0 ? [] : at % 3 === 1 ? TWO : FOUR,
+      savedAt: AT - at * 1_000,
+      fromSession: at % 2 === 0,
+      carryFrom: at % 2,
+    }));
     const fake = fakeMemento(memento(tabs));
+    const sealing = hooks();
 
-    const report = await run(store, fake);
+    const report = await run(store, fake, sealing.deps);
 
     assert.equal(report.kind, 'migrated', JSON.stringify(report));
-    assert.deepEqual(fatesOf(report).map((fate) => fate.kind), ['written', 'written', 'written']);
+    assert.deepEqual(fatesOf(report).map((fate) => [fate.kind, (fate as { id: string }).id]), tabs.map((one) => ['written', one.id]),
+      'the fates are not in the memento\'s order, or not all written');
     for (const one of tabs) {
       const record = await readRecord(store, one.id);
       assert.deepEqual(record.messages, one.messages);
@@ -311,9 +343,11 @@ test('every memento record moves into the store, is listed there, and the key is
       assert.equal(record.title, one.title);
       assert.equal(record.passage, one.passage);
     }
-    assert.deepEqual(await listed(store), ['a1', 'b2', 'c3'], 'a migrated conversation is not in the list that finds it');
+    assert.deepEqual(await listed(store), tabs.map((one) => one.id).sort(), 'a migrated conversation is not in the list that finds it');
     assert.deepEqual(fake.updates(), [[TAB_STORE_KEY, undefined]], 'the key was written more than once, or with something other than nothing');
     assert.equal(fake.held(), undefined);
+    assert.equal(sealing.seals(), 1, 'the memento was not sealed before the key was emptied');
+    assert.equal(sealing.unseals(), 0, 'the memento\'s writer was resumed although the key went');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -397,8 +431,9 @@ test('diverged copies: the store\'s stands, the memento\'s is filed under a fork
     await onDisk(store, fromLegacy(tab({ messages: theirs }), WORKSPACE));
     // The clear fails the first time, which is how the second run is made to see the same memento.
     const fake = fakeMemento(memento([tab({ messages: ours })]), { failUpdates: 1 });
+    const sealing = hooks();
 
-    const first = await capturing(() => run(store, fake));
+    const first = await capturing(() => run(store, fake, sealing.deps));
 
     assert.equal(first.value.kind, 'incomplete', 'the clear that was made to fail was reported as a success');
     assert.match((first.value as { reason: string }).reason, /could not be emptied/u);
@@ -406,14 +441,45 @@ test('diverged copies: the store\'s stands, the memento\'s is filed under a fork
     assert.deepEqual((await readRecord(store, 'a1')).messages, theirs, 'the store\'s copy was replaced');
     assert.deepEqual((await readRecord(store, `a1${FORK_SUFFIX}`)).messages, ours, 'the memento\'s words are nowhere');
     assert.deepEqual(await listed(store), ['a1', `a1${FORK_SUFFIX}`]);
+    assert.equal(sealing.seals(), 1);
+    assert.equal(sealing.unseals(), 1, 'the key stayed and the memento\'s writer was not resumed — the next words go to one store only');
 
-    const second = await run(store, fake);
+    const second = await run(store, fake, sealing.deps);
 
     assert.equal(second.kind, 'migrated', JSON.stringify(second));
     assert.deepEqual(fatesOf(second), [{ kind: 'kept', id: `a1${FORK_SUFFIX}`, forkedFrom: 'a1' }],
       'a re-run over the same memento filed a second copy');
     assert.deepEqual(await listed(store), ['a1', `a1${FORK_SUFFIX}`]);
     assert.deepEqual(fake.updates(), [[TAB_STORE_KEY, undefined]]);
+    assert.equal(sealing.seals(), 2);
+    assert.equal(sealing.unseals(), 1, 'the writer was resumed after a clear that succeeded');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a re-run over an existing fork whose memento copy has grown writes over the fork and keeps the fork\'s own beginning', async () => {
+  // The fork goes back through the same read-then-compare as any record, so an existing fork is
+  // found before anything is written, and what is written over it is the disk record first.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const forkBegan = AT - 777_000;
+    await onDisk(store, fromLegacy(tab({ messages: [...TWO, said('you', 'X')] }), WORKSPACE));
+    await onDisk(store, { ...fromLegacy(tab({ id: `a1${FORK_SUFFIX}`, messages: [...TWO, said('you', 'Y')], savedAt: AT - 5_000 }), WORKSPACE), createdAt: forkBegan });
+    const grown = [...TWO, said('you', 'Y'), said('model', 'Z')];
+    const fake = fakeMemento(memento([tab({ messages: grown })]));
+
+    const report = await run(store, fake);
+
+    assert.equal(report.kind, 'migrated', JSON.stringify(report));
+    assert.deepEqual(fatesOf(report), [{ kind: 'written', id: `a1${FORK_SUFFIX}`, indexed: true, forkedFrom: 'a1' }]);
+    const fork = await readRecord(store, `a1${FORK_SUFFIX}`);
+    assert.deepEqual(fork.messages, grown, 'the grown memento copy did not reach the fork');
+    assert.equal(fork.rev, 2, 'the fork was not written as a swap against its own revision');
+    assert.equal(fork.createdAt, forkBegan, 'the fork\'s own beginning was clobbered by the re-run');
+    assert.deepEqual((await readRecord(store, 'a1')).messages, [...TWO, said('you', 'X')], 'the store\'s own copy was touched');
+    assert.deepEqual(await listed(store), ['a1', `a1${FORK_SUFFIX}`], 'a third copy appeared');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -500,8 +566,9 @@ test('a store that cannot be read migrates nothing and leaves the key exactly as
     const store = new ChatStoreFile(asFile);
     const value = memento([tab(), tab({ id: 'b2' })]);
     const fake = fakeMemento(value);
+    const sealing = hooks();
 
-    const { value: report } = await capturing(() => run(store, fake));
+    const { value: report } = await capturing(() => run(store, fake, sealing.deps));
 
     assert.equal(report.kind, 'unavailable', JSON.stringify(report));
     // The store's own sentence for this shape of fault, handed on unchanged — never a path.
@@ -509,6 +576,40 @@ test('a store that cannot be read migrates nothing and leaves the key exactly as
     assert.deepEqual(fake.updates(), [], 'the memento was written to over a store that would not answer');
     assert.deepEqual(fake.held(), value);
     assert.equal(readFileSync(asFile, 'utf8'), 'a file standing where the store should be', 'the store path was touched');
+    assert.equal(sealing.seals(), 0, 'the memento was sealed over a store that would not answer');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a store that goes away between the pass and the clear leaves the key, and the writer resumes', async () => {
+  // gemini, A4's code round: the store's health was checked once, before the pass. Emptying the
+  // memento on the strength of records held by a store that has stopped answering in between is
+  // the same unrecoverable mistake reached a moment later.
+  const dir = home();
+  const storeDir = join(dir, 'store');
+  try {
+    const store = new ChatStoreFile(storeDir);
+    // Read 1 is the pass; read 2 is the check before the clear — and that is when the disk goes.
+    const fake = fakeMemento(memento([tab()]), {
+      onGet: (call, held) => {
+        if (call === 2) {
+          rmSync(storeDir, { recursive: true, force: true });
+          writeFileSync(storeDir, 'the volume is gone', 'utf8');
+        }
+
+        return held;
+      },
+    });
+    const sealing = hooks();
+
+    const { value: report } = await capturing(() => run(store, fake, sealing.deps));
+
+    assert.equal(report.kind, 'incomplete', JSON.stringify(report));
+    assert.match((report as { reason: string }).reason, /stopped answering before the old one could be emptied/u);
+    assert.deepEqual(fake.updates(), [], 'the key was emptied although the store had stopped answering');
+    assert.equal(sealing.seals(), 1);
+    assert.equal(sealing.unseals(), 1, 'the memento\'s writer was left sealed with the key still populated');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -564,20 +665,44 @@ test('a memento value of a shape no build wrote is set aside whole, and the key 
   }
 });
 
-test('an empty memento is a no-op: nothing read from disk, nothing written anywhere', async () => {
+test('an empty memento is a no-op on disk, and the memento is sealed: the store is the only store from here', async () => {
   const dir = home();
   try {
     const store = new ChatStoreFile(join(dir, 'never-made'));
 
     for (const empty of [undefined, null]) {
       const fake = fakeMemento(empty);
-      const report = await run(store, fake);
+      const sealing = hooks();
+      const report = await run(store, fake, sealing.deps);
 
       assert.deepEqual(report, { kind: 'nothing' });
       assert.equal(importSucceeded(report), true, 'an empty memento kept the dual write on');
       assert.deepEqual(fake.updates(), [], 'an empty key was written to');
+      assert.equal(sealing.seals(), 1, 'an empty memento was not sealed, so the dual write goes on for nothing');
+      assert.equal(sealing.unseals(), 0);
     }
     assert.equal(existsSync(join(dir, 'never-made')), false, 'a store directory was made for nothing');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a record that lands in the key while it is being sealed as empty is carried, not stranded', async () => {
+  // The key was empty on the first read; a queued write drained by the seal filled it. The second
+  // read sees it, and the ordinary path runs.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const fake = fakeMemento(undefined, { onGet: (call) => (call === 1 ? undefined : memento([tab()])) });
+    const sealing = hooks();
+
+    const report = await run(store, fake, sealing.deps);
+
+    assert.equal(report.kind, 'migrated', JSON.stringify(report));
+    assert.deepEqual(await listed(store), ['a1'], 'the record the seal drained into the key was stranded there');
+    assert.deepEqual(fake.updates(), [[TAB_STORE_KEY, undefined]]);
+    assert.ok(sealing.seals() >= 1);
+    assert.equal(sealing.unseals(), 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -594,6 +719,38 @@ test('a memento holding an empty list is emptied, so the dual write ends', async
     assert.equal(report.kind, 'migrated');
     assert.deepEqual(fatesOf(report), []);
     assert.deepEqual(fake.updates(), [[TAB_STORE_KEY, undefined]]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a write queued a moment before the clear lands BEFORE it, and is carried: the seal drains the memento\'s own queue', async () => {
+  // gemini, A4's code round: `ChatTabMemory` queues; without the seal, a write queued before the
+  // clear would execute its update after it and fill the key again — and the migration would re-run
+  // on every activation for ever.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const fake = fakeMemento(memento([tab()]));
+    const memory = new ChatTabMemory(fake.store, () => AT + 1);
+    // Queued, not landed: the fake's update yields a tick first, and the migration's first read is
+    // synchronous, so the pass sees a memento without `b2`.
+    memory.remember({ id: 'b2', title: 'late', passage: '', modelId: 'codex', messages: TWO, fromSession: true, carryFrom: 0 });
+    const order: string[] = [];
+
+    const report = await run(store, fake, {
+      seal: async () => { order.push('seal'); await memory.settled(); order.push('drained'); },
+    });
+
+    assert.equal(report.kind, 'migrated', JSON.stringify(report));
+    assert.deepEqual(order, ['seal', 'drained']);
+    const writes = fake.updates();
+    assert.equal(writes.length, 2, 'the queued write did not land, or landed after the clear and refilled the key');
+    assert.deepEqual((writes[0] as readonly [string, { tabs: readonly { id: string }[] }])[1].tabs.map((one) => one.id), ['b2', 'a1'],
+      'the queued write is not the one before the clear');
+    assert.deepEqual(writes[1], [TAB_STORE_KEY, undefined], 'the clear did not come last');
+    assert.deepEqual(await listed(store), ['a1', 'b2'], 'the record the queued write added was not carried');
+    assert.deepEqual((await readRecord(store, 'b2')).messages, TWO);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -621,19 +778,21 @@ test('the memento is re-read before it is emptied: a record another window added
   }
 });
 
-test('a memento that changes on every read is not emptied this time round', async () => {
+test('a memento that changes on every read is not emptied this time round, and the writer resumes', async () => {
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
     const fake = fakeMemento(undefined, { onGet: (call) => memento([tab({ id: `t${call}` })]) });
+    const sealing = hooks();
 
-    const report = await run(store, fake);
+    const report = await run(store, fake, sealing.deps);
 
     assert.equal(report.kind, 'incomplete');
     assert.match((report as { reason: string }).reason, /changed twice/u);
     assert.deepEqual(fake.updates(), [], 'the key was emptied while another window was still writing it');
     // What WAS seen is on disk — nothing is lost; only the clear is deferred.
     assert.deepEqual(await listed(store), ['t1', 't2']);
+    assert.equal(sealing.unseals(), 1, 'the writer stayed sealed with the key still populated');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -645,8 +804,9 @@ test('a record another window is writing right now is not confirmed; the others 
     const store = new ChatStoreFile(dir);
     rivalLock(dir, 'b2');
     const fake = fakeMemento(memento([tab(), tab({ id: 'b2' }), tab({ id: 'c3' })]));
+    const sealing = hooks();
 
-    const { value: report } = await capturing(() => run(store, fake));
+    const { value: report } = await capturing(() => run(store, fake, sealing.deps));
 
     assert.equal(report.kind, 'incomplete', JSON.stringify(report));
     assert.deepEqual(fatesOf(report).map((fate) => fate.kind), ['written', 'unconfirmed', 'written']);
@@ -654,6 +814,7 @@ test('a record another window is writing right now is not confirmed; the others 
     assert.deepEqual(await listed(store), ['a1', 'c3']);
     assert.equal(existsSync(join(dir, recordName('b2'))), false, 'a save went through a lock somebody else holds');
     assert.deepEqual(fake.updates(), [], 'the key was emptied with a record unconfirmed');
+    assert.equal(sealing.seals(), 0, 'the memento was sealed before every record was confirmed');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -710,7 +871,7 @@ test('a folderless window files under the empty string, and the record survives 
     const store = new ChatStoreFile(dir);
     const fake = fakeMemento(memento([tab()]));
 
-    const report = await run(store, fake, '');
+    const report = await run(store, fake, { workspace: '' });
 
     assert.equal(report.kind, 'migrated', JSON.stringify(report));
     assert.equal((await readRecord(store, 'a1')).workspace, '');
@@ -720,10 +881,10 @@ test('a folderless window files under the empty string, and the record survives 
   }
 });
 
-test('nothing here throws: a memento whose get throws is a defect the caller\'s catch owns, not a silent key', async () => {
-  // The one thing this module cannot turn into an outcome is a memento that throws on READ — there
-  // is no value to reason about. It propagates, which is why `extension.ts` ends the migration in a
-  // catch that reports `incomplete` and leaves the memento in charge.
+test('a memento that throws on read is an outcome, not an exception — the key is left and the writer resumes', async () => {
+  // The one case the first version let escape to the caller's catch. A memento whose `get` throws
+  // is `incomplete` with a sentence, whether it throws on the first read or on the one before the
+  // clear.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
@@ -731,9 +892,29 @@ test('nothing here throws: a memento whose get throws is a defect the caller\'s 
       get: () => { throw new Error('storage is gone'); },
       update: () => Promise.resolve(),
     };
+    const sealing = hooks();
 
-    await assert.rejects(importLegacyTabs({ memento: throwing, store, workspace: WORKSPACE, at: AT }), /storage is gone/u);
+    const first = await capturing(() => importLegacyTabs({ memento: throwing, store, workspace: WORKSPACE, at: AT, ...sealing.deps }));
+
+    assert.deepEqual(first.value, { kind: 'incomplete', fates: [], reason: 'the old store could not be read' });
+    assert.match(first.lines.join('\n'), /storage is gone/u, 'the throw was swallowed without a word on the console');
     assert.equal(existsSync(join(dir, recordName('a1'))), false);
+    assert.equal(sealing.seals(), 0);
+
+    // And on the read before the clear: the pass has written, the key cannot be re-read, the key stays.
+    const value = memento([tab()]);
+    let calls = 0;
+    const laterThrowing: TabStore = {
+      get: () => { calls += 1; if (calls > 1) { throw new Error('storage went away'); } return value; },
+      update: () => Promise.resolve(),
+    };
+    const later = await capturing(() => importLegacyTabs({ memento: laterThrowing, store, workspace: WORKSPACE, at: AT, ...sealing.deps }));
+
+    assert.equal(later.value.kind, 'incomplete');
+    assert.equal((later.value as { reason: string }).reason, 'the old store could not be read');
+    assert.deepEqual(fatesOf(later.value), [{ kind: 'written', id: 'a1', indexed: true }], 'the record was not written before the key failed');
+    assert.equal(sealing.seals(), 1);
+    assert.equal(sealing.unseals(), 1, 'the writer stayed sealed over a key nobody could re-read');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
