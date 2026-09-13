@@ -188,8 +188,20 @@ function alertLine(consultation: Consultation): string {
     : `  <div class="hint stale">${escapeHtml(consultation.alert)}</div>\n`;
 }
 
+/**
+ * A turn is an object whose numbers are numbers.
+ *
+ * <p>Loose enough to take a turn from a server that added a field, strict enough that the card's
+ * token sum cannot become `NaN` — which is a number nobody can read, and the only way this file can
+ * put one on screen. (gemini, code round.)</p>
+ */
 function isTurn(value: unknown): value is ConsultationTurn {
-  return typeof value === 'object' && value !== null;
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const turn = value as Partial<ConsultationTurn>;
+
+  return Number.isFinite(turn.seconds) && Number.isFinite(turn.tokensIn) && Number.isFinite(turn.tokensOut);
 }
 
 function text_(value: unknown): string {

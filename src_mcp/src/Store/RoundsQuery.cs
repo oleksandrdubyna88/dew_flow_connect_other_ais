@@ -490,15 +490,26 @@ public static class RoundsQuery
                     rows.GetString(15), rows.GetString(16), rows.GetString(17)));
             }
         }
-        catch (SqliteException)
+        catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable || Missing(e))
         {
             // A file this binary has not stepped yet: the schema runs on OPEN, and this reader opens
             // read-only, so a database last touched by an older build genuinely has no table here.
+            //
+            // ONLY that. Catching every SqliteException here would answer an empty tab for a corrupt
+            // file or a half-stepped schema — a wrong answer that looks like a true one, which is
+            // the shape of defect this whole page is written against. (codex, code round, twice.)
             return [];
         }
 
         return consultations;
     }
+
+    /// <summary>SQLite's generic error code, which is what a missing table arrives as.</summary>
+    private const int SqliteNoSuchTable = 1;
+
+    /// <summary>Whether the message names a missing table, since the code alone is SQLite's catch-all.</summary>
+    private static bool Missing(SqliteException e) =>
+        e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase);
 
     private static List<BlindSpot> BlindSpots(SqliteConnection db)
     {

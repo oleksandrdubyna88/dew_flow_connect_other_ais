@@ -15,6 +15,15 @@ import { Consultation, isLive, parseConsultation } from './consultations';
  * and is waiting on it, which is information rather than a demand, so it appears where a person is
  * already looking and nowhere else.</p>
  */
+/**
+ * How often the directory is re-read when no watcher event arrives.
+ *
+ * <p>The same five seconds the escalation watcher uses, and for the same reason: a watcher on a path
+ * outside the workspace is not guaranteed on every platform, so this is what makes "you will see it"
+ * true rather than likely.</p>
+ */
+export const POLL_MS = 5000;
+
 export class ConsultationWatcher {
   private readonly disposables: vscode.Disposable[] = [];
   private live: Consultation[] = [];
@@ -39,7 +48,7 @@ export class ConsultationWatcher {
       watcher.onDidDelete(() => void this.refresh()),
     );
 
-    const timer = setInterval(() => void this.refresh(), 5000);
+    const timer = setInterval(() => void this.refresh(), POLL_MS);
     this.disposables.push(new vscode.Disposable(() => clearInterval(timer)));
     void this.refresh();
   }
@@ -105,7 +114,14 @@ export class ConsultationWatcher {
           found.push(consultation);
         }
       } catch {
-        // One file being replaced right now. The next poll is five seconds away.
+        // One file being replaced right now — a rename landing on an open handle, the ordinary
+        // Windows case. The consultation it describes is KEPT from the last pass rather than dropped:
+        // a card blinking off a section somebody is reading, for five seconds, at random, is the
+        // defect. It goes when a pass reads the file and finds it over. (codex, code round, twice.)
+        const last = this.live.find((one) => one.id === idOf(name));
+        if (last !== undefined) {
+          found.push(last);
+        }
         continue;
       }
     }
@@ -131,6 +147,11 @@ export class ConsultationWatcher {
  * are not, because the card's "3 min ago" is computed at paint time and would make every poll a
  * change.</p>
  */
+/** A consultation file is named by its id, which is how a failed read still knows what it lost. */
+function idOf(name: string): string {
+  return name.replace(/\.json$/, '');
+}
+
 function signature(consultations: readonly Consultation[]): string {
   return consultations
     .map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`)

@@ -106,7 +106,7 @@ with a friendly name.
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
-| The consultant (`consult`, the eighth tool) | [module_server.md](module_server.md) · [../todo/PLAN_consultant.md](../todo/PLAN_consultant.md) | **stories 1–2 shipped 2026-09-12**, server-side and invisible so far. Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Stories 3–6 (the panel section, the live card and log row, the triggers, the phase-2 counter) are open |
+| The consultant (`consult`, the eighth tool) | [module_server.md](module_server.md) · [module_extension.md](module_extension.md) · [../todo/PLAN_consultant.md](../todo/PLAN_consultant.md) | **stories 1–4 shipped (1–2 on 2026-09-12, 3–4 on 2026-09-13)**, server-side and invisible so far. Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Story 3: the *Consultant* section — a row per caller kind, the caps, the switch and the prompt override. Story 4: the third live region, the `consultations` table and the log page's fourth tab. Stories 5–6 (the triggers, the phase-2 counter) are open |
 
 ## The gate has an opposite: the agent asking, rather than being judged (2026-09-12)
 
@@ -148,6 +148,29 @@ delegates the answer envelope and the token arithmetic to it, so that arithmetic
 constraint that buys: a vendor must be a reviewer before it can be a consultant. Every vendor here is.
 The first CONSULT-ONLY vendor is the trigger to split the seam, and it is named in
 [module_runners.md](module_runners.md) rather than built ahead of the vendor that needs it.
+
+### And it is SEEN across the seam, twice (2026-09-13)
+
+Story 4 gave the consultation two readers on the other side, and neither is a new channel — both are
+paths this product already had, which is why the container diagram gains no arrow.
+
+**While it runs: a FILE the extension watches.** `<dataDir>/consultations/<id>.json` is published
+atomically by the server and polled by `ConsultationWatcher` on the extension side, exactly as
+`escalations/*.json` has been since escalation shipped. One difference, and it is deliberate: an
+escalation BLOCKS a round, so it gets a modal and a status-bar item; a consultation blocks nothing, so
+it appears in the sidebar where a person is already looking and nowhere else.
+
+**After it ends: the rounds DATABASE, read through `--log`.** The server projects each consultation
+into a `consultations` table as it advances — one row, upserted, totals summed from the turns — and
+the extension never opens SQLite: it runs the binary and parses the answer, which is how it reads the
+rounds too. That keeps the schema owned by the half that writes it, and it is why an older binary
+answering no list at all has to read as an empty one rather than an error.
+
+**The projection is never allowed to matter.** The record file is the source of truth; the table is a
+view of it. A database that is locked, full or corrupt is a line in the log, never a consultation that
+refuses somebody who is stuck — and because a terminal record is never written again,
+`ConsultationService.Reproject` lets the view catch up at startup with the one write that could have
+been lost.
 
 ## The extension gained two arrows of its own (2026-09-09)
 

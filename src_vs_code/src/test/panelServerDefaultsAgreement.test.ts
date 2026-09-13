@@ -5,6 +5,7 @@ import path from 'node:path';
 import { DEFAULTS, envBlock } from '../settingsShape';
 import { CALLER_KINDS, CONSULTING_RUNTIMES, DEFAULT_CONSULT } from '../consultSettings';
 import { CONSULT_PROMPT_PATH } from '../consultPrompt';
+import { RUNNING_STATUSES } from '../consultations';
 import { ROLES } from '../prompts';
 
 /**
@@ -155,6 +156,32 @@ test('the panel writes the prompt override where the server looks for it', () =>
     [...CONSULT_PROMPT_PATH],
     [directory[1], 'consult.md'],
     'the panel would write the consultant a prompt the server never reads',
+  );
+});
+
+/**
+ * The states the sidebar draws are the states the server writes.
+ *
+ * <p>`RUNNING_STATUSES` is the extension's copy of `ConsultationStatuses`, and without this the panel
+ * would quietly stop drawing a state the server had started writing — a consultation running with no
+ * card, which looks exactly like a consultation that is not running. Raised on the code round as an
+ * unversioned duplicated protocol; taken the way the runtimes and the caller kinds were taken, by
+ * reading the C#, because there is one writer and a version number would be ceremony.</p>
+ */
+test('the states the sidebar shows are the states the server can write', () => {
+  const statuses = fs.readFileSync(mcp('src', 'Server', 'Consultation', 'ConsultationRecord.cs'), 'utf8');
+  const declared = [...statuses.matchAll(/public const string [A-Za-z]+ = "([a-z]+)";/g)].map((one) => one[1]!);
+
+  // Every state, so a new one added in C# fails here rather than going undrawn.
+  assert.deepStrictEqual(
+    declared.sort(),
+    ['asking', 'closed', 'failed', 'interrupted', 'open'].sort(),
+    'the server writes a consultation state this panel has never heard of',
+  );
+  // And the ones the sidebar shows are exactly the ones that are not over.
+  assert.deepStrictEqual(
+    [...RUNNING_STATUSES].sort(),
+    ['asking', 'interrupted', 'open'].sort(),
   );
 });
 
