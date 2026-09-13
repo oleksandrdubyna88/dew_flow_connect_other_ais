@@ -233,13 +233,20 @@ function scratchRepo() {
 }
 
 /**
- * One `consult` call against the real binary, over the transport a real client uses.
+ * ONE live server, driven over the transport a real client uses.
  *
- * <p>The three session variables are CLEARED rather than inherited: this process is itself running
- * under an assistant, so the caller kind would otherwise be whatever happens to be driving the
- * script, and the leg would assert about a different row of the map on somebody else's machine.</p>
+ * <p><b>One process for the whole leg, deliberately.</b> A fresh server per call would read the file
+ * at startup and prove nothing about the case that actually happens: the panel writes while an MCP
+ * client is already holding a server, and the NEXT call has to see it. `PanelServiceHost` re-stamps
+ * the settings file on every tool call for exactly that reason, and this is what holds it — raised on
+ * this story's plan round, where the first version of this leg spawned twice and could not tell.</p>
+ *
+ * <p>The three session variables are CLEARED rather than inherited: this script is itself running
+ * under an assistant, so the caller kind would otherwise be whatever happens to be driving it, and
+ * the leg would assert about a different row of the map on somebody else's machine. Cleared, the kind
+ * is `other` — which is also the row a plain MCP client gets.</p>
  */
-async function consult(repoPath, kindVariable) {
+function serverSession() {
   const child = spawn('dotnet', [binary], {
     env: {
       ...process.env,
@@ -247,59 +254,64 @@ async function consult(repoPath, kindVariable) {
       CLAUDE_CODE_SESSION_ID: '',
       CODEX_SESSION_ID: '',
       GEMINI_CLI_SESSION_ID: '',
-      ...(kindVariable === '' ? {} : { [kindVariable]: 'seam-session' }),
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  const say = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
+  const waiting = new Map();
+  let next = 1;
+  let buffered = '';
+  let err = '';
 
-  return await new Promise((done, broke) => {
-    let buffered = '';
-    let err = '';
-    const deadline = setTimeout(() => {
-      child.kill('SIGKILL');
-      broke(new Error(`consult did not answer within ${TIMEOUT_MS} ms\n${err}`));
-    }, TIMEOUT_MS);
-
-    child.stderr.on('data', (b) => {
-      err += String(b);
-    });
-    child.stdout.on('data', (b) => {
-      buffered += String(b);
-      for (const line of buffered.split('\n').slice(0, -1)) {
-        const message = JSON.parse(line);
-        if (message.id === 1) {
-          say({ jsonrpc: '2.0', method: 'notifications/initialized' });
-          say({
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'tools/call',
-            params: {
-              name: 'consult',
-              arguments: { repoPath, problem: 'The parser returns 3 where 4 is expected, after two fix attempts.' },
-            },
-          });
-        }
-        if (message.id === 2) {
-          clearTimeout(deadline);
-          child.kill();
-          done(message);
-        }
-      }
-      buffered = buffered.slice(buffered.lastIndexOf('\n') + 1);
-    });
-    child.on('error', (e) => {
-      clearTimeout(deadline);
-      broke(e);
-    });
-
-    say({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'seam', version: '1' } },
-    });
+  child.stderr.on('data', (b) => {
+    err += String(b);
   });
+  child.stdout.on('data', (b) => {
+    buffered += String(b);
+    for (const line of buffered.split('\n').slice(0, -1)) {
+      const message = JSON.parse(line);
+      const settle = waiting.get(message.id);
+      if (settle !== undefined) {
+        waiting.delete(message.id);
+        settle(message);
+      }
+    }
+    buffered = buffered.slice(buffered.lastIndexOf('\n') + 1);
+  });
+
+  const say = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
+  const ask = async (method, params) => {
+    const id = (next += 1);
+
+    return await new Promise((done, broke) => {
+      const deadline = setTimeout(() => {
+        waiting.delete(id);
+        broke(new Error(`${method} did not answer within ${TIMEOUT_MS} ms\n${err}`));
+      }, TIMEOUT_MS);
+      waiting.set(id, (message) => {
+        clearTimeout(deadline);
+        done(message);
+      });
+      child.on('error', (e) => {
+        clearTimeout(deadline);
+        broke(e);
+      });
+      say({ jsonrpc: '2.0', id, method, params });
+    });
+  };
+
+  return {
+    ready: ask('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'seam', version: '1' },
+    }).then(() => say({ jsonrpc: '2.0', method: 'notifications/initialized' })),
+    tools: async () => await ask('tools/list', {}),
+    consult: async (repoPath) => await ask('tools/call', {
+      name: 'consult',
+      arguments: { repoPath, problem: 'The parser returns 3 where 4 is expected, after two fix attempts.' },
+    }),
+    end: () => child.kill(),
+  };
 }
 
 /** The tool's own answer, which is a JSON object in the text content of the result. */
@@ -313,7 +325,10 @@ function answerOf(reply) {
 }
 
 const repoPath = scratchRepo();
+const session = serverSession();
+await session.ready;
 const consultFail = (why) => {
+  session.end();
   rmSync(repoPath, { recursive: true, force: true });
   fail(why);
 };
@@ -331,7 +346,7 @@ writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
 
 let routed;
 try {
-  routed = answerOf(await consult(repoPath, ''));
+  routed = answerOf(await session.consult(repoPath));
 } catch (e) {
   consultFail(`the binary could not answer a consult call: ${e.message}`);
 }
@@ -340,8 +355,8 @@ if (!String(routed.error ?? '').includes(CHOSEN)) {
   consultFail(`the consultant map did not cross the seam. The server answered: ${JSON.stringify(routed).slice(0, 400)}`);
 }
 
-// And the switch, which is the other key with no second reader: off must refuse BY NAME rather than
-// leave a stuck agent to guess why nothing came back.
+// And the switch, which is the other key with no second reader — written under the SAME server, so
+// what this proves is the live reload as well as the key.
 writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
   { ...DEFAULTS, consult: { ...DEFAULT_CONSULT, enabled: false } },
   vendorsFrom([row]),
@@ -349,16 +364,26 @@ writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
 ), 'utf8');
 
 let switched;
+let listed;
 try {
-  switched = answerOf(await consult(repoPath, 'CLAUDE_CODE_SESSION_ID'));
+  switched = answerOf(await session.consult(repoPath));
+  listed = await session.tools();
 } catch (e) {
   consultFail(`the binary could not answer a consult call with the feature off: ${e.message}`);
 }
 
 if (!String(switched.error ?? '').includes('switched off')) {
-  consultFail(`COAI_CONSULT_ENABLED did not cross the seam. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
+  consultFail(`COAI_CONSULT_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
 }
 
+// The tool must still be THERE while it is off. A caller that cannot see a tool cannot be told why
+// it is not there, and the documentation promises this in those words.
+if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'consult')) {
+  consultFail(`the consult tool vanished from tools/list while the feature was off: ${
+    (listed?.result?.tools ?? []).map((tool) => tool.name).join(', ')}`);
+}
+
+session.end();
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULTS, envBlock } from '../settingsShape';
 import { CALLER_KINDS, CONSULTING_RUNTIMES, DEFAULT_CONSULT } from '../consultSettings';
+import { CONSULT_PROMPT_PATH } from '../consultPrompt';
 import { ROLES } from '../prompts';
 
 /**
@@ -122,6 +123,28 @@ test('the runtimes the picker offers are the runtimes the server can resolve', (
     [...(m[1] ?? '').matchAll(/"([a-z]+)"/g)].map((one) => one[1]),
     [...CONSULTING_RUNTIMES],
     'the panel would offer a vendor the server cannot consult with, or hide one it can',
+  );
+});
+
+/**
+ * The prompt override is a PATH two halves derive independently, which is the other way this seam
+ * breaks silently: the panel reports a saved prompt, the server reads somewhere else, and every
+ * consultation runs on the shipped words with nothing anywhere saying so. Raised on the plan round.
+ * The live half of it cannot be observed without spending a vendor turn — the prompt reaches the
+ * consultant and not the reply — so what is checked is the agreement itself.
+ */
+test('the panel writes the prompt override where the server looks for it', () => {
+  const prompts = fs.readFileSync(mcp('src', 'Server', 'RolePrompts.cs'), 'utf8');
+
+  const directory = /OverrideDir\s*=>\s*Path\.Combine\(dataDir,\s*"([a-z]+)"\)/.exec(prompts);
+  const file = /FileOf\(string promptId\)\s*=>\s*\$"\{FileName\.Safe\([^)]*\)\}\.md"/.exec(prompts);
+
+  assert.ok(directory, 'RolePrompts.OverrideDir is not in the shape this test reads');
+  assert.ok(file, 'RolePrompts.FileOf is not in the shape this test reads — the extension assumes <id>.md');
+  assert.deepStrictEqual(
+    [...CONSULT_PROMPT_PATH],
+    [directory[1], 'consult.md'],
+    'the panel would write the consultant a prompt the server never reads',
   );
 });
 
