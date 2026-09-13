@@ -386,7 +386,8 @@ owns, held by both suites — and `architecture.md` gains a paragraph saying so.
   the panel knew vendors. Plan 2 also owns `CUSTOM_ROLES_SINCE` (= the version this plan ships as)
   and the skew banner, because it is plan 2 that starts *writing* the key.
 - **The Team server still refuses any role but the five** — plan 3,
-  *PLAN_team_server_accepts_custom_roles* (`Coai:ExtraRoles`, `Coai:AllowAnyRole`).
+  [PLAN_team_server_accepts_custom_roles.md](PLAN_team_server_accepts_custom_roles.md)
+  (`Coai:ExtraRoles`, `Coai:AllowAnyRole`), shipped 2026-09-13.
 - **No `review_document`, no session kind, no artifact** — plan 4, *PLAN_review_document*. A role
   with `programmingTask: false` is accepted and stored by this plan and **takes part in no round**,
   because `RolesOf` filters to programming roles; it is not named as dropped, because it is not
