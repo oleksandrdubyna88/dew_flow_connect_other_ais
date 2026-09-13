@@ -119,6 +119,41 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         advice.Should().Contain("unverified external suggestion");
     }
 
+    /// <summary>
+    /// A REFUSED call spends nothing: the cap counts consultations, not attempts.
+    /// </summary>
+    /// <remarks>
+    /// The count used to be taken at the top, before the lock and before every check below it — so an
+    /// id belonging to another checkout, a vendor row somebody switched off, a missing runtime or a
+    /// lock held by another consultation each cost the caller one of their calls while no consultant
+    /// ran. `ConsultCallCounter` has no refund, so a caller could burn the whole cap on refusals and
+    /// then be told they had used it up. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public async Task ACallTheServerRefused_DoesNotComeOutOfTheCap()
+    {
+        var service = Service(callsPerSession: 2);
+
+        // Two refusals, neither of which reaches a consultant: an id this server never wrote.
+        Refusal(await Consult(service, "still stuck", id: new string('b', 32)))
+            .Should().Contain("no consultation");
+        Refusal(await Consult(service, "still stuck", id: new string('c', 32)))
+            .Should().Contain("no consultation");
+
+        // The budget is untouched, so both real consultations still run.
+        var first = await Consult(service, "the parser returns 3 where 4 is expected");
+        first.TryGetProperty("error", out _).Should().BeFalse(first.ToString());
+
+        Answer("0198-second", Advice);
+        var second = await Consult(service, "and the lock is taken after the read");
+        second.TryGetProperty("error", out _).Should().BeFalse(second.ToString());
+
+        // And the cap itself still holds on the third.
+        Answer("0198-third", Advice);
+        Refusal(await Consult(service, "a third thing entirely"))
+            .Should().Contain("consult calls, the cap");
+    }
+
     [Fact]
     public async Task TheConsultantIsHandedTheWorkingTreeTheSERVERCollected()
     {

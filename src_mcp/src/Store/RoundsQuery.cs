@@ -490,14 +490,17 @@ public static class RoundsQuery
                     rows.GetString(15), rows.GetString(16), rows.GetString(17)));
             }
         }
-        catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable || Missing(e))
+        catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable && Missing(e))
         {
             // A file this binary has not stepped yet: the schema runs on OPEN, and this reader opens
             // read-only, so a database last touched by an older build genuinely has no table here.
             //
-            // ONLY that. Catching every SqliteException here would answer an empty tab for a corrupt
-            // file or a half-stepped schema — a wrong answer that looks like a true one, which is
-            // the shape of defect this whole page is written against. (codex, code round, twice.)
+            // ONLY that — and the conjunction is the whole guard. It was `||`, which made the code
+            // check alone sufficient: `SqliteNoSuchTable` IS SQLite's generic `SQLITE_ERROR`, as the
+            // constant below says, so "no such COLUMN" from a half-stepped schema also matched and
+            // the tab answered empty. That is exactly the wrong answer that looks like a true one
+            // which the paragraph above says must not happen — the comment was right and the code
+            // beside it was not. (CodeRabbit, on the pull request.)
             return [];
         }
 

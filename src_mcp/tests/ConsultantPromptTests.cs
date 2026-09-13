@@ -109,6 +109,55 @@ public sealed class ConsultantPromptTests
     }
 }
 
+/// <summary>The carry is bounded by what it RENDERS, at the budget and either side of it.</summary>
+/// <remarks>
+/// `spent` used to count the blocks only, while `string.Join` added a separator between each pair and
+/// the omission note added more text again — so a transcript that "fit" was handed to the vendor over
+/// the budget, on the one route whose context window is the smallest here. (CodeRabbit, on the pull
+/// request.)
+/// </remarks>
+public sealed class ConsultantCarryBudgetTests
+{
+    private static (string Problem, string Advice) Turn(int n, int size) =>
+        ($"q{n}", new string((char)('a' + (n % 26)), size));
+
+    [Theory]
+    [InlineData(200)]
+    [InlineData(400)]
+    [InlineData(1_000)]
+    [InlineData(4_096)]
+    public void ACarryNeverExceedsTheBudgetItAdvertises(int budget)
+    {
+        // Every size from well under the budget to well over it, so the boundary is crossed by one
+        // character at a time somewhere in here rather than being aimed at.
+        for (var size = 1; size <= budget + 40; size += 7)
+        {
+            var turns = new[] { Turn(1, size), Turn(2, size), Turn(3, size) };
+
+            ConsultantPrompt.Transcript(turns, budget).Length
+                .Should().BeLessThanOrEqualTo(budget, $"three turns of {size} characters at a budget of {budget}");
+        }
+    }
+
+    [Fact]
+    public void TheNewestTurnSurvives_EvenWhenItAloneIsBiggerThanEverything()
+    {
+        var carried = ConsultantPrompt.Transcript([Turn(1, 50), Turn(2, 5_000)], 300);
+
+        carried.Length.Should().BeLessThanOrEqualTo(300);
+        carried.Should().Contain("CUT", "the newest turn is cut rather than dropped");
+    }
+
+    [Fact]
+    public void ASingleTurnThatFits_IsCarriedWhole_AndSaysNothingAboutEarlierOnes()
+    {
+        var carried = ConsultantPrompt.Transcript([Turn(1, 20)], 4_096);
+
+        carried.Should().Contain("q1");
+        carried.Should().NotContain("not carried", "there was never an earlier turn to lose");
+    }
+}
+
 /// <summary>Which consultant a caller gets, and what a broken setting does.</summary>
 public sealed class ConsultantRoutingTests
 {
@@ -131,6 +180,17 @@ public sealed class ConsultantRoutingTests
         parsed.Complaints.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A malformed setting is never HALF a map — and it is not a licence to choose a vendor either.
+    /// </summary>
+    /// <remarks>
+    /// The map stays whole so nothing downstream meets a missing kind. What changed is
+    /// <c>Unreadable</c>: the shipped map used to be left silently in force, so a person who
+    /// configured a consultant and mistyped the JSON had their working tree sent to a vendor they had
+    /// not chosen, warned only by a line in a panel list they were not looking at. That is the exact
+    /// failure `ConsultantRouting`'s own remark says it exists to avoid. (CodeRabbit, on the pull
+    /// request.)
+    /// </remarks>
     [Fact]
     public void AMalformedSetting_IsTheShippedMapPlusASentence_NeverHalfAMap()
     {
@@ -138,6 +198,15 @@ public sealed class ConsultantRoutingTests
 
         parsed.Map.Should().BeEquivalentTo(ConsultantRouting.Shipped);
         parsed.Complaints.Should().ContainSingle().Which.Should().Contain("COAI_CONSULTANTS");
+        parsed.Unreadable.Should().BeTrue("consulting refuses until somebody fixes it");
+    }
+
+    [Fact]
+    public void ASettingThatPARSES_IsNotUnreadable()
+    {
+        ConsultantRouting.Parse("""{"claude":{"vendor":"my-gpt"}}""").Unreadable.Should().BeFalse();
+        ConsultantRouting.Parse(null).Unreadable.Should().BeFalse("no setting at all is a choice, not a mistake");
+        ConsultantRouting.Parse("   ").Unreadable.Should().BeFalse();
     }
 
     [Fact]

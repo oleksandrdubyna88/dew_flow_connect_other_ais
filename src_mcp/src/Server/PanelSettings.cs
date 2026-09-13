@@ -284,6 +284,16 @@ public sealed record PanelSettings
     /// </remarks>
     public bool ConsultEnabled { get; init; } = true;
 
+    /// <summary>
+    /// Whether <c>COAI_CONSULTANTS</c> could not be read at all — in which case consulting refuses.
+    /// </summary>
+    /// <remarks>
+    /// Fail-closed, like every other consultation check. A setting that does not parse is a person
+    /// who MEANT to choose a consultant and did not succeed; running the shipped one instead sends
+    /// their working tree to a vendor they did not pick. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    public bool ConsultantsUnreadable { get; init; }
+
     public static string DefaultDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
@@ -491,6 +501,7 @@ public sealed record PanelSettings
         ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
         ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
         ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+        ConsultantsUnreadable = consultants.Unreadable,
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),

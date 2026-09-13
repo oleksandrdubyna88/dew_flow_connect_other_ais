@@ -463,9 +463,13 @@ ${body}
   // What each region showed last. Identical markup is not re-applied: replacing it recreates
   // every element and drops the scroll position, and "nothing changed" is the common case on a
   // five-second tick.
-  let lastQuestions = '';
-  let lastRounds = '';
-  let lastConsultations = '';
+  // SEEDED from what the page was rendered with, not empty. Starting empty made the first live
+  // message replace all three regions even when its HTML was identical to what was already there —
+  // one guaranteed DOM rebuild per paint, which is the exact cost this comparison exists to avoid.
+  // (CodeRabbit, on the pull request.)
+  let lastQuestions = document.getElementById('live-questions')?.innerHTML ?? '';
+  let lastRounds = document.getElementById('live-rounds')?.innerHTML ?? '';
+  let lastConsultations = document.getElementById('live-consultations')?.innerHTML ?? '';
   window.addEventListener('message', (event) => {
     const message = event.data;
     if (message?.type !== 'live') {
@@ -2230,5 +2234,16 @@ export function staticKey(state: PanelState): string {
     // and choosing a preset in the other tab must reach this list, and neither can happen in a
     // section the paint decision cannot see.
     state.chat,
+    // The consultant's prompt is a FILE, and the page has to notice when it changes underneath the
+    // textarea: "Restore default" deletes the override and repaints, and with this key missing the
+    // markup was identical so the box went on showing the text that had just been deleted. An
+    // external edit of `prompts/consult.md` did the same nothing.
+    //
+    // It is a free-text control, which the paragraph above says must not drive a repaint per
+    // keystroke — and it does not: the focus HOLD is what makes this safe. A textarea saves on a
+    // debounced `input` and `focusin` holds the paint until focus leaves it, so the rebuild lands
+    // when the person has finished typing rather than under their caret. (CodeRabbit, on the pull
+    // request.)
+    state.consultPrompt,
   ]);
 }

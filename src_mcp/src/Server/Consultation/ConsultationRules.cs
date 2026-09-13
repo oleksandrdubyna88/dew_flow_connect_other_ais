@@ -8,16 +8,29 @@ namespace CoaiMcp.Server;
 /// </summary>
 internal static class ConsultationRules
 {
+    /// <summary>
+    /// Three questions, in order: whose it is, what STATE it is in, and whether the turn may run.
+    /// </summary>
+    /// <remarks>
+    /// Split because they are three, not because of a count: ownership is about the caller, the
+    /// status refusals are about the record as the server last left it, and the rest is about this
+    /// turn. Each half is now a table nobody has to read past to find the one that applies.
+    /// (CodeRabbit, on the pull request — the ceiling is this repository's own rule.)
+    /// </remarks>
     public static string? Refusal(ConsultationRecord record, string caller, DateTime nowUtc, TimeSpan idle, string problem) =>
         record.Caller != caller
             ? $"consultation {record.Id} belongs to another caller session — start a new consultation of your own"
-        : record.Status == ConsultationStatuses.Failed
+            : ByStatus(record) ?? Later(record, nowUtc, idle, problem);
+
+    /// <summary>The refusals a record's own STATUS decides, before anything about this turn.</summary>
+    private static string? ByStatus(ConsultationRecord record) =>
+        record.Status == ConsultationStatuses.Failed
             ? $"consultation {record.Id} failed ({record.Reason}) — start a new consultation with a fresh problem statement"
         : record.Status == ConsultationStatuses.Closed
             ? $"consultation {record.Id} is closed ({record.Reason}) — a fresh problem statement opens a new one"
         : record.Status == ConsultationStatuses.Asking
             ? $"consultation {record.Id} is still running a turn — wait for its answer before asking again"
-        : Later(record, nowUtc, idle, problem);
+        : null;
 
     private static string? Later(ConsultationRecord record, DateTime nowUtc, TimeSpan idle, string problem) =>
         ConsultationStore.IdleFor(record, nowUtc) > idle

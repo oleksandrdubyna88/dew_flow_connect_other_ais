@@ -25,7 +25,14 @@ public sealed partial class ConsultationStore(
     public static string NewId() => Guid.NewGuid().ToString("N");
 
     /// <summary>An id a CALLER handed us is a file name only when it is shaped like one of ours.</summary>
-    public static bool IsWellFormedId(string id) => WellFormedId().IsMatch(id);
+    /// <remarks>
+    /// It takes <c>string?</c> because one of its callers reads the id off a DESERIALISED record,
+    /// where a JSON file with no <c>id</c> yields null however non-nullable the property is — the
+    /// state the remark on <see cref="All"/> records having met in a live run. `Regex.IsMatch(null)`
+    /// throws, `All` is what `Sweep` enumerates, and so one malformed file in the directory stopped
+    /// the sweep for every record behind it. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    public static bool IsWellFormedId(string? id) => id is not null && WellFormedId().IsMatch(id);
 
     public string PathFor(string id) => Path.Combine(Directory, $"{id}.json");
 
@@ -183,29 +190,47 @@ public sealed partial class ConsultationStore(
 
         if (record.Status == ConsultationStatuses.Asking && !isAlive(record.RunnerPid))
         {
-            Write(record.Handle.Length > 0
-                ? record with { Status = ConsultationStatuses.Interrupted, Reason = "the server running this turn died before the answer was read", UpdatedUtc = Stamp(nowUtc) }
-                : record with { Status = ConsultationStatuses.Failed, Reason = "the server running this turn died before the answer was read", EndedUtc = Stamp(nowUtc), UpdatedUtc = Stamp(nowUtc) });
+            Write(Orphaned(record, nowUtc));
 
             return true;
         }
 
         if (record.Status != ConsultationStatuses.Asking && IdleFor(record, nowUtc) > idle && NobodyIsWorkingIn(record.RepoPath))
         {
-            Write(record with
-            {
-                Status = ConsultationStatuses.Closed,
-                Reason = $"idle for {idle.TotalMinutes:0} minutes — the vendor's conversation handle was dropped",
-                Handle = string.Empty,
-                EndedUtc = Stamp(nowUtc),
-                UpdatedUtc = Stamp(nowUtc),
-            });
+            Write(Idled(record, nowUtc, idle));
 
             return true;
         }
 
         return false;
     }
+
+    /// <summary>
+    /// A turn whose server died: <c>interrupted</c> when it can be resumed, <c>failed</c> when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// The HANDLE decides, and that is the whole distinction: the turn may have been accepted and
+    /// paid for, so a conversation the vendor can still be asked to continue is not a failure — it is
+    /// one nobody read the answer to. Extracted with <see cref="Idled"/> so the sweep above reads as
+    /// the three states it walks. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    private static ConsultationRecord Orphaned(ConsultationRecord record, DateTime nowUtc) =>
+        record.Handle.Length > 0
+            ? record with { Status = ConsultationStatuses.Interrupted, Reason = Died, UpdatedUtc = Stamp(nowUtc) }
+            : record with { Status = ConsultationStatuses.Failed, Reason = Died, EndedUtc = Stamp(nowUtc), UpdatedUtc = Stamp(nowUtc) };
+
+    /// <summary>A conversation nobody came back to: closed, and its vendor handle dropped.</summary>
+    private static ConsultationRecord Idled(ConsultationRecord record, DateTime nowUtc, TimeSpan idle) =>
+        record with
+        {
+            Status = ConsultationStatuses.Closed,
+            Reason = $"idle for {idle.TotalMinutes:0} minutes — the vendor's conversation handle was dropped",
+            Handle = string.Empty,
+            EndedUtc = Stamp(nowUtc),
+            UpdatedUtc = Stamp(nowUtc),
+        };
+
+    private const string Died = "the server running this turn died before the answer was read";
 
     private bool Expire(ConsultationRecord record, DateTime nowUtc, TimeSpan retention)
     {

@@ -131,6 +131,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // afternoon repaints the sidebar exactly as often as a consultation changes.
   consultations.onChanged = () => {
     void panel.render();
+    // And the LOG, which draws the same consultations on its own tab. Repainting only the sidebar
+    // left an open Consultations tab showing history from before the conversation started, advanced
+    // or ended — and the page's own ten-second cache could hold that past the LAST watcher event,
+    // so it stayed wrong until somebody clicked something. (CodeRabbit, on the pull request.)
+    panel.forgetRoundsLog();
+    void refreshRoundsLog(roundsLog, watcher, panel, true);
   };
   consultations.start();
 

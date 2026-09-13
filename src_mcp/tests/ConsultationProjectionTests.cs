@@ -229,6 +229,41 @@ public sealed class ConsultationProjectionTests : IDisposable
     }
 
     /// <summary>
+    /// A table that EXISTS but is missing a column is a broken file, not an empty one.
+    /// </summary>
+    /// <remarks>
+    /// The distinction the empty answer above is allowed to make, and the one it used to destroy:
+    /// the filter was `code == SqliteNoSuchTable || Missing(e)`, and that code is SQLite's generic
+    /// `SQLITE_ERROR`, so "no such column" matched the first half and the page answered "no
+    /// consultations" for a file that has some. A wrong answer that looks like a true one is the
+    /// defect this whole reader is written against. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public void ATableMissingAColumn_IsNotReadAsAnEmptyList()
+    {
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, RoundsDb.FileName);
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={file};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            // Everything the reader needs EXCEPT one column of `consultations`: a half-stepped file,
+            // which is what an interrupted migration leaves and what a corrupt one can look like.
+            make.CommandText = Schema.Tables + """
+                ; CREATE TABLE consultations (
+                    id TEXT PRIMARY KEY, repo_path TEXT NOT NULL, branch TEXT NOT NULL
+                ); PRAGMA user_version=2
+                """;
+            make.ExecuteNonQuery();
+        }
+
+        var act = () => RoundsQuery.Read(_dir);
+
+        act.Should().Throw<Microsoft.Data.Sqlite.SqliteException>(
+            "a file that is broken must say so rather than read as a file with nothing in it");
+    }
+
+    /// <summary>
     /// The step runs on a database that already exists, which is the only way anybody will meet it.
     /// </summary>
     [Fact]

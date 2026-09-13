@@ -106,8 +106,12 @@ export function consultationsBody(
 
 /** What one running consultation says on screen. */
 function card(consultation: Consultation, nowMs: number): string {
-  const turn = Math.min(consultation.turns.length + (consultation.status === 'asking' ? 1 : 0), consultation.maxTurns);
-  const budget = consultation.maxTurns > 0 ? `turn ${turn} of ${consultation.maxTurns}` : `${consultation.turns.length} turn(s)`;
+  // The turn IN FLIGHT counts. A record written before `maxTurns` existed falls to the second
+  // branch, which counted only FINISHED turns — so the first `asking` state of such a consultation
+  // said "0 turn(s)" while a vendor was being asked. (CodeRabbit, on the pull request.)
+  const active = consultation.turns.length + (consultation.status === 'asking' ? 1 : 0);
+  const turn = consultation.maxTurns > 0 ? Math.min(active, consultation.maxTurns) : active;
+  const budget = consultation.maxTurns > 0 ? `turn ${turn} of ${consultation.maxTurns}` : `${active} turn(s)`;
   const spent = consultation.turns.reduce(
     (total, one) => ({ tokens: total.tokens + one.tokensIn + one.tokensOut, seconds: total.seconds + one.seconds }),
     { tokens: 0, seconds: 0 },
