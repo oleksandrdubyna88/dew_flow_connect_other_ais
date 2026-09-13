@@ -83,6 +83,10 @@ test('an expired conversation still at the revision the listing showed is retire
     assert.equal(existsSync(join(dir, recordName('a1'))), false, 'the transcript is still on disk');
     assert.equal(existsSync(join(dir, besideMeta('a1'))), false, 'the index entry is still on disk');
     assert.deepEqual(locksIn(dir), [], 'the retire left its lock behind');
+    // AND NOTHING SET ASIDE. A person's forget quarantines the transcript so a mis-press is
+    // recoverable; the ninety-day retirement is the path that really deletes, and quarantining what
+    // has just aged out would simply keep it another ninety days.
+    assert.deepEqual(readdirSync(dir), [], 'the retirement set the transcript aside instead of deleting it');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -49,6 +49,19 @@ export interface OpenConversation {
   readonly updatedAt: number;
 }
 
+/**
+ * Where a conversation IS — and therefore what choosing its row does.
+ *
+ * <p>Three states rather than open-or-not, because the third one was drawn as the second and that was
+ * the defect three reviewers found independently. `here` is a tab in THIS window: choosing it reveals
+ * that tab. `closed` is on disk and nowhere open: choosing it reads it back. `elsewhere` is a tab in
+ * ANOTHER window, which this one cannot reveal — VS Code gives no extension a way to raise a window it
+ * is not running in — and must not reopen: a second tab for one record is a second writer, and the
+ * store's compare-and-swap would then fork the conversation and tell the person about it afterwards.
+ * A fork this product caused itself is the worst kind, so the row says where it is and declines.</p>
+ */
+export type Whereabouts = 'here' | 'elsewhere' | 'closed';
+
 /** What a notice row says instead of a conversation. */
 export type PickerNotice = 'building' | 'unreadable' | 'empty' | 'more';
 
@@ -70,8 +83,8 @@ export type PickerRow =
     readonly label: string;
     readonly description: string;
     readonly detail: string;
-    /** Whether it is open in a tab — the caller reveals one and reopens the other. */
-    readonly live: boolean;
+    /** Where it is — the caller reveals `here`, reopens `closed`, and declines `elsewhere`. */
+    readonly where: Whereabouts;
   }
   | { readonly kind: 'new'; readonly label: string; readonly detail: string }
   | { readonly kind: 'notice'; readonly notice: PickerNotice; readonly label: string; readonly detail: string };
@@ -92,6 +105,11 @@ export interface PickerInput {
    * good rows the index kept, and the notice says they may be behind.
    */
   readonly index: IndexState;
+  /**
+   * What OTHER windows announce they hold open. Never this window's own tabs — those are `open`
+   * above, and revealing one is the cheapest answer the picker has.
+   */
+  readonly elsewhere: ReadonlySet<string>;
   readonly workspace: string;
   /** Whether the person asked for every workspace rather than this one. */
   readonly everywhere: boolean;
@@ -118,7 +136,7 @@ export function pickerRows(input: PickerInput): readonly PickerRow[] {
   }
   const held = new Set(input.open.map((one) => one.id));
   const closed = input.stored.filter((one) => !held.has(one.id) && (input.everywhere || one.workspace === input.workspace));
-  const recent = recentRows(closed, input.now);
+  const recent = recentRows(closed, input.now, input.elsewhere);
   if (input.index.kind === 'unavailable') {
     // NOT an empty list. They are opposite facts, and only one of them means "you have none" — which
     // is the whole reason the index's state is typed. The offer to start one survives, because
@@ -134,7 +152,7 @@ export function pickerRows(input: PickerInput): readonly PickerRow[] {
 }
 
 /** The Recent section: the newest hundred as given, each saying where it is when that could differ, and the cut stated. */
-function recentRows(closed: readonly ConversationMeta[], now: number): readonly PickerRow[] {
+function recentRows(closed: readonly ConversationMeta[], now: number, elsewhere: ReadonlySet<string>): readonly PickerRow[] {
   const shown = closed.slice(0, MOST_ROWS);
   if (shown.length === 0) {
     return [];
@@ -142,7 +160,11 @@ function recentRows(closed: readonly ConversationMeta[], now: number): readonly 
   const where = folderLabels(shown.map((one) => one.workspace));
   const cut: PickerRow[] = closed.length > shown.length ? [moreNotice(closed.length - shown.length)] : [];
 
-  return [section(RECENT_SECTION), ...shown.map((one) => storedRow(one, where.get(one.workspace) ?? '', now)), ...cut];
+  return [
+    section(RECENT_SECTION),
+    ...shown.map((one) => storedRow(one, where.get(one.workspace) ?? '', now, elsewhere.has(one.id))),
+    ...cut,
+  ];
 }
 
 const section = (label: string): PickerRow => ({ kind: 'section', label });
@@ -190,16 +212,24 @@ const openRow = (one: OpenConversation, now: number): PickerRow => ({
   label: one.title,
   description: [one.modelId, turnsIn(one.turns), rowAge(now, one.updatedAt), 'open now'].filter((part) => part.length > 0).join(' · '),
   detail: one.lastLine,
-  live: true,
+  where: 'here',
 });
 
-const storedRow = (one: ConversationMeta, where: string, now: number): PickerRow => ({
+const storedRow = (one: ConversationMeta, folder: string, now: number, elsewhere: boolean): PickerRow => ({
   kind: 'conversation',
   id: one.id,
   label: one.title,
-  description: [one.modelId, turnsIn(one.turns), rowAge(now, one.updatedAt), where].filter((part) => part.length > 0).join(' · '),
+  description: [
+    one.modelId,
+    turnsIn(one.turns),
+    rowAge(now, one.updatedAt),
+    folder,
+    // Said on the row rather than only in the sentence that follows a press: a person scanning this
+    // list should be able to see which conversations this window can actually take them to.
+    ...(elsewhere ? ['open in another window'] : []),
+  ].filter((part) => part.length > 0).join(' · '),
   detail: one.lastLine,
-  live: false,
+  where: elsewhere ? 'elsewhere' : 'closed',
 });
 
 const turnsIn = (turns: number): string => (turns === 1 ? '1 turn' : `${turns} turns`);

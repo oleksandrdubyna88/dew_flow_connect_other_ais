@@ -1,4 +1,4 @@
-import { readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { abreast } from './abreast';
 import { writeFileAtomically } from './atomicFile';
@@ -67,15 +67,28 @@ import { claimConversation } from './chatStoreLock';
  * absent record. Treating it as one would let an older build replace a newer build's conversation
  * after a downgrade, and a conversation minted under a fresh id — saved with baseline zero — meets
  * whatever is already at that id. So a save over it is `incompatible` and writes nothing; the file
- * stays where it is until an explicit {@link ChatStoreFile.forget} — the trash button of story B4. The
+ * stays where it is until an explicit {@link ChatStoreFile.forget} — the trash button of story B4,
+ * which sets it aside rather than deleting it. The
  * sweep of story B1 deliberately leaves it: what cannot be read cannot be aged, and
  * {@link ChatStoreFile.retireIfExpired} answers `kept` for it. `read` returns nothing for it, saying
  * so on the console.</p>
  *
- * <h2>What a crash between the two deletes leaves, and who collects it</h2>
+ * <h2>A person's forget SETS THE TRANSCRIPT ASIDE; only the ninety-day retirement deletes</h2>
  *
- * <p>{@link ChatStoreFile.forget} removes the metadata first, then the record. A crash between the two
- * leaves a TRANSCRIPT WITH NO METADATA: invisible to {@link ChatStoreFile.listMeta}, which reads
+ * <p>{@link ChatStoreFile.forget} — the picker's trash and its keybinding — removes the metadata, so
+ * the row goes at once and nothing lists it again, and then RENAMES the transcript into the quarantine
+ * rather than unlinking it. The operator's rule for this feature was *archive, not destroy*, with no
+ * confirmation dialog in the way, and those two are only compatible if the press is recoverable: a
+ * mis-aimed `Alt+Delete` in a filtered list is one keystroke, and what it would otherwise destroy is
+ * the only copy of somebody's words. The set-aside file is dated, so the sweep's own quarantine rule
+ * retires it at the same ninety days everything else is kept for — recoverable by hand until then, and
+ * nothing accumulates for ever. {@link ChatStoreFile.retireIfExpired} is the path that really deletes,
+ * and it must stay that way: quarantining what has just aged out would keep it another ninety days.</p>
+ *
+ * <h2>What a crash between the two steps leaves, and who collects it</h2>
+ *
+ * <p>{@link ChatStoreFile.forget} removes the metadata first, then moves the record. A crash between
+ * the two leaves a TRANSCRIPT WITH NO METADATA: invisible to {@link ChatStoreFile.listMeta}, which reads
  * metadata only, and — because a baseline-zero save meets it and is `refused` — an id that cannot be
  * reused for a new conversation. That is the intended shape of the failure (a file nobody sees beats a
  * row nobody can open), and it is the sweep of story B1 that collects such a file. This listing does
@@ -581,13 +594,50 @@ export class ChatStoreFile {
       return { kind: 'failed', reason: 'the conversation is being changed by another window' };
     }
     try {
-      return await this.forgetClaimed(id);
+      return await this.setAsideClaimed(id, now);
     } finally {
       await claim.release();
     }
   }
 
-  /** The two deletes, in their order, with the claim held. */
+  /**
+   * A person's forget, with the claim held: the row goes, the words are kept.
+   *
+   * <p>The metadata FIRST, because that is what makes the conversation stop existing as far as every
+   * window is concerned, and a crash after it leaves a file the sweep collects rather than a row that
+   * opens onto nothing. Then the transcript is renamed into the quarantine — a rename, so the bytes
+   * are never rewritten and the move cannot half-happen. A transcript that is already gone is not a
+   * failure: the row has gone, which is what was asked.</p>
+   */
+  private async setAsideClaimed(id: string, now: number): Promise<ForgetOutcome> {
+    try {
+      await rm(this.metaPath(id), { force: true });
+    } catch (reason) {
+      console.error(`ConnectOtherAIs: a conversation index entry could not be deleted: ${this.metaPath(id)}`, reason);
+
+      return { kind: 'failed', reason: withCode('the conversation could not be deleted', codeOf(reason)) };
+    }
+    const to = join(this.dir, QUARANTINE_DIR, `${id}-forgotten-${now}.json`);
+    try {
+      await mkdir(join(this.dir, QUARANTINE_DIR), { recursive: true });
+      await rename(this.recordPath(id), to);
+      console.info(`ConnectOtherAIs: a conversation was forgotten; its transcript was set aside, unchanged, at ${to}`);
+
+      return { kind: 'ok' };
+    } catch (reason) {
+      if (codeOf(reason) === 'ENOENT') {
+        return { kind: 'ok' };
+      }
+      console.error(`ConnectOtherAIs: a forgotten conversation transcript could not be set aside: ${this.recordPath(id)}`, reason);
+
+      return {
+        kind: 'failed',
+        reason: withCode('the conversation was removed from the list but its transcript could not be set aside', codeOf(reason)),
+      };
+    }
+  }
+
+  /** The two deletes, in their order, with the claim held — the retirement's path, and nothing else's. */
   private async forgetClaimed(id: string): Promise<ForgetOutcome> {
     try {
       await rm(this.metaPath(id), { force: true });

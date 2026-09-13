@@ -29,6 +29,22 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
+**Forgetting a conversation no longer destroys it.** The row goes the moment you press the trash,
+and nothing lists that conversation again — but the transcript is set aside on disk and only really
+deleted after the same ninety days as everything else. There is no confirmation dialog in the way of
+an ordinary action, and there does not need to be one: `Alt+Delete` aimed at the wrong row of a list
+you were filtering is a keystroke, and what it would otherwise have taken is the only copy of what
+you and a model said to each other.
+
+**A conversation open in another VS Code window is shown as such, and is not reopened here.** Two
+windows on one project is the ordinary case, and the list is the whole store rather than this
+window’s tabs — so a conversation you have open over there appeared in this window as simply
+closed. Pressing it opened a SECOND tab onto it, and two tabs on one conversation are two writers:
+they save over each other, the store catches the collision, and the conversation ends up split in
+two under a new name. Its row now says *open in another window*, pressing it tells you where it is,
+and its trash button is gone for the same reason — the tab that holds it would simply write it
+back. Switch to that window to carry on with it.
+
 ## Extension 0.39.0 — 2026-09-13
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.

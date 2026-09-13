@@ -779,6 +779,7 @@
       {
         "command": "coai.forgetPickedConversation",
         "key": "alt+delete",
+        "mac": "cmd+delete",
         "when": "inQuickOpen && coai.conversationsPickerOpen"
       }
     ]

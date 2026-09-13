@@ -95,6 +95,11 @@ test('forgetting is bound to Alt+Delete and scoped to OUR picker being open', ()
   assert.equal(bound[0]?.key, 'alt+delete');
   assert.match(bound[0]?.when ?? '', /inQuickOpen/u, 'the chord fires outside a quick pick, where there is no row');
   assert.match(bound[0]?.when ?? '', new RegExp(KEY.replace('.', '\\.')), 'the chord fires in every quick pick, not only ours');
+  // AND A DIFFERENT CHORD ON macOS. The focus in a QuickPick is always in its filter box, and on
+  // macOS Alt+Delete is the system's own delete-word-forward: a person editing what they had typed
+  // would have deleted a conversation instead of a word. Cmd+Delete is that platform's move-to-trash,
+  // which is now literally what this does. (gemini, the plan round.)
+  assert.equal(bound[0]?.mac, 'cmd+delete', 'on macOS the chord is the system word-delete, and editing the filter would forget a conversation');
 });
 
 test('forgetting is not offered in the palette, because from there it acts on nothing', () => {
@@ -171,8 +176,27 @@ test('an OPEN conversation is revealed, never reopened', () => {
   const text = widget();
 
   assert.match(text, /revealConversation\(panels,/u, 'an open conversation is not revealed by the registry that holds it');
-  const live = text.indexOf('row.live');
-  assert.notEqual(live, -1, 'the widget does not tell an open conversation from a closed one');
+  // THREE states, not two. A tab in ANOTHER window cannot be revealed from this one and must not be
+  // reopened either, so the widget has to tell that case from a conversation nobody holds.
+  assert.notEqual(text.indexOf('row.where'), -1, 'the widget does not tell an open conversation from a closed one');
+  assert.match(text, /row\.where === 'elsewhere'/u, 'the widget reopens a conversation another window has open, giving one record two writers');
+  const declines = text.indexOf("row.where === 'elsewhere'");
+  assert.ok(declines > text.indexOf('revealConversation(panels,'),
+    'the other window is refused before this one is asked — a tab adopted here since the list was drawn would be refused');
+});
+
+test('one accept per picker, so two presses cannot open one conversation twice', () => {
+  // The widget is hidden by the first accept and VS Code dispatches its events in order, so a second
+  // should not arrive — but what a second WOULD do is build a second tab for one record, which is the
+  // single accident this command exists to prevent. A latch is cheaper than the argument that it
+  // cannot happen. (The plan round.)
+  const text = widget();
+
+  assert.match(text, /let chosen = false;/u, 'nothing stops a second accept');
+  assert.match(text, /if \(chosen \|\|/u, 'the latch is not read before the row is acted on');
+  const accept = text.slice(text.indexOf('onDidAccept'));
+  assert.ok(accept.indexOf('chosen = true;') < accept.indexOf('void choose('),
+    'the latch is set after the work starts, which is not a latch');
 });
 
 test('forgetting rebuilds the list without closing the picker, from both doors', () => {
@@ -197,7 +221,7 @@ test('the trash button is drawn on closed rows and on nothing else', () => {
   const item = text.slice(text.indexOf('const itemFor'), text.indexOf('const itemFor') + 1_200);
 
   assert.ok(item.length > 0, 'there is no one place a row becomes an item');
-  assert.match(item, /row\.live \? \[\] : \[TRASH\]|!row\.live/u, 'the trash button is drawn without asking whether the row is open');
+  assert.match(item, /row\.where === 'closed' \? \[TRASH\] : \[\]/u, 'the trash button is drawn without asking where the row is — an open tab would write the files again');
 });
 
 test('a picker dismissed while something is in flight is not redrawn', () => {

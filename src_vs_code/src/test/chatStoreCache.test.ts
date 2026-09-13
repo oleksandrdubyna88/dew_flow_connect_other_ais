@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { ConversationIndex, mustReread } from '../chatStoreCache';
 import { ChatStoreFile } from '../chatStoreFile';
 import { ChatStoreKeeper } from '../chatStoreKeeper';
+import { HEARTBEAT_STALE_MS } from '../chatStoreSweep';
 import {
   CONVERSATION_VERSION,
   ConversationMeta,
@@ -340,6 +341,59 @@ test('the rows are published at once: a reader mid-refresh sees the old index or
 
     assert.ok(seen.every((size) => size === 2 || size === 3), `a reader saw a half-built index: ${seen.join(',')}`);
     assert.equal(w.index.size, 3);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+test('the index knows what OTHER windows hold, out of the survey it was already doing', async () => {
+  // The picker must not offer to reopen a conversation another window has open: it cannot reveal
+  // that tab, so the press would make a second one, and a record with two writers is the fork the
+  // store's compare-and-swap exists to catch. The announcements are already in the survey each
+  // refresh performs, so knowing this costs no second listing.
+  const w = world();
+  try {
+    const keeper = new ChatStoreKeeper(w.dir);
+    const now = Date.now();
+    await keeper.beat(4242, ['mine'], now);
+    await keeper.beat(7, ['theirs'], now);
+    const index = new ConversationIndex(keeper, w.store, 4242);
+
+    assert.deepEqual([...index.elsewhere(now)], [], 'the index answered before it had ever looked');
+
+    await index.refresh(now);
+
+    assert.deepEqual([...index.elsewhere(now)].sort(), ['theirs'],
+      'this window read its OWN heartbeat as another window, and would refuse to reopen its own conversations');
+    // A heartbeat is written at most once a minute, so its window is believed for a while and then
+    // is not — judged at the moment of asking, so a picker left open stops holding them hostage.
+    assert.deepEqual([...index.elsewhere(now + HEARTBEAT_STALE_MS)], [],
+      'a window that went quiet while the list was up still held its conversations');
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
+test('a survey that fails keeps the last good announcements, exactly as it keeps the last good rows', async () => {
+  // "Could not look" is not "nobody holds anything". Erring towards believing another window still
+  // has a conversation errs towards not giving one record two writers, which is the whole point.
+  const w = world();
+  try {
+    const keeper = new ChatStoreKeeper(w.dir);
+    const now = Date.now();
+    await keeper.beat(7, ['theirs'], now);
+    const index = new ConversationIndex(keeper, w.store, 4242);
+    await index.refresh(now);
+
+    rmSync(w.dir, { recursive: true, force: true });
+    writeFileSync(w.dir, 'a file where the store should be', 'utf8');
+    const before = console.error;
+    console.error = () => undefined;
+    const out = await index.refresh(now + 5_000).finally(() => {
+      console.error = before;
+    });
+
+    assert.equal(out.kind, 'unavailable', 'the test did not manage to make the store unreadable');
+    assert.deepEqual([...index.elsewhere(now + 5_000)], ['theirs'], 'a folder that would not answer emptied what other windows hold');
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
   }

@@ -2232,6 +2232,96 @@ and the filename set catches anything added or removed regardless. It publishes 
 no reader sees it half-built; it keeps its last good rows when a refresh fails; and it is published
 after the sweep, or it would hold a row for a record being removed.
 
+## A list of your conversations, and a way back into any of them (2026-09-13)
+
+The three sections above are machinery: a store, a cut-over, a keeper. None of it was reachable from
+a running window. **CoAI: switch conversations…** is the first thing in this feature a person can
+press — the palette, both right-click menus, and `Ctrl+Shift+Alt+G` (`Cmd+Shift+Alt+G` on a Mac).
+
+**Open** is what this window holds in a tab; **Recent** is everything else, newest first. Every row
+carries the model, the turn count, how long ago and the last line said, because a title alone does
+not tell two conversations apart — and an open row is derived through the same function a stored one
+is, so a conversation cannot describe itself one way in a tab and another the moment it closes.
+
+### The chord is deliberately unscoped, and that reversed the brief
+
+It was briefed scoped like the existing chat chord — a Claude panel or an editor. The implementer
+built that and then argued it contradicted the operator's own decision that a tab with no
+conversation behind it gets the LIST rather than silence. This picker reads nothing from the active
+tab, so a `when` clause only takes it away from a terminal, the Output pane, a settings tab and the
+chat tab itself, which are exactly where somebody reaches for a list of their conversations. The
+brief was wrong and was reversed; the *go to* command of epic C stays scoped, because it acts on the
+active tab and so has something to be scoped to.
+
+### `createQuickPick`, against six `showQuickPick` sites
+
+The simple form takes a list and returns a choice. Three things here need the instance: item buttons
+(a trash per closed row), a title button (the globe), and rebuilding the list WITHOUT closing it —
+forgetting three conversations must be three presses, not three openings of the picker. The deviation
+is stated in the module header, where a reader meets it, rather than left to look like an oversight.
+
+### Where a conversation is, in three states rather than two
+
+A row was `live: boolean` — open in a tab, or closed — and a conversation open in ANOTHER window
+matched neither honestly. It was drawn as closed, and pressing it opened a second tab onto a record
+another window was already writing: two writers, the store's compare-and-swap catching the collision,
+and the conversation forked under a new id and reported afterwards. The product causing the exact
+accident that swap exists to catch. **Three reviewers found it independently in the plan round**, and
+it was already flagged in the plan as a known deferral — which is what made deferring it the wrong
+call rather than a judgement one could defend.
+
+So a row is `here`, `elsewhere` or `closed`, and the compiler asks at every use. `here` is revealed;
+`closed` is read back off disk; `elsewhere` is declined with a sentence saying where it is, because VS
+Code offers no way to raise a window an extension is not running in. It cannot be forgotten from here
+either, by the same rule that protects an open tab: the window holding it would simply write it back.
+
+The announcement it reads is the heartbeat the sweep already relies on, so this costs no second
+listing — the index's refresh surveys the directory anyway, and now keeps the heartbeats it finds.
+Two details matter and are asserted: this window's OWN file is left out (it is written at most once a
+minute, so it goes on naming a conversation whose tab closed seconds ago, and believing it would
+refuse to reopen our own), and liveness is judged when the question is ASKED rather than when the
+survey ran, so a picker left open stops believing a window that has gone quiet.
+
+**Every row is still tried as a reveal first**, whatever it says: the registry can move between the
+list being drawn and the row being pressed, and refusing on the strength of a heartbeat read seconds
+ago would refuse a tab that is right here.
+
+### Forgetting sets the transcript aside; only the retirement deletes
+
+The operator asked for *archive, not destroy* and, separately, for no confirmation dialog in the way
+of an ordinary action — *«Модальные окна на каждое базовое действие превращают софт в пытку»*. Those
+two are only compatible if the press is recoverable, and the first build satisfied only the second:
+the trash unlinked both files. `Alt+Delete` aimed at the wrong row of a list somebody is filtering is
+one keystroke, and what it took was the sole copy of a conversation.
+
+Now the metadata is removed — the row goes at once and nothing lists it again — and the transcript is
+RENAMED into the quarantine the store already keeps, under a dated name the sweep's existing rule
+retires at the same ninety days. Recoverable by hand until then; nothing accumulates for ever; no
+dialog. `retireIfExpired` remains the path that really deletes, and must: quarantining what has just
+aged out would keep it another ninety days.
+
+### The chord that would have deleted a word
+
+`Alt+Delete` was bound on every platform. The focus in a QuickPick is always in its filter box, and on
+macOS `Alt+Delete` is the system's own delete-word-forward — so a person editing what they had typed
+would have forgotten a conversation instead. The mac form is `Cmd+Delete`, that platform's
+move-to-trash, which is now literally what it does.
+
+### What the plan round found, and what was declined
+
+Eight gating findings. Three were the cross-window defect, from three vendors. Two more were true and
+taken: the forget with no way back, and the macOS chord. A latch on the accept was added although the
+argument that a second accept cannot arrive is sound — the widget is hidden by the first and events
+are dispatched in order — because what a second WOULD do is the one accident this command exists to
+prevent, and a latch is cheaper than the argument.
+
+Three were declined with reasons. That `Alt+Delete` lacks an open-state check: `mayForget` refuses a
+live row and a test has pinned it since B4. That reveal-before-reopen is not atomic: it is, by the
+hide that precedes the await — and the latch above settles it regardless. That deferring the durable
+source makes reopening create a second conversation for one tab: records carry no source at all yet,
+so capture already opens a new conversation for every tab, and epic C is where both halves land
+together.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was

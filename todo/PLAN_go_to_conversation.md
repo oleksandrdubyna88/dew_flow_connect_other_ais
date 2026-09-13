@@ -483,6 +483,53 @@ that loses a person's words.
   header, and a second lock-breaking path with a different window would be two answers to one
   question. The sweep collects only a lock far older than A2's own window, and through the store.
 
+### B3's picker must not reopen what ANOTHER window has open
+
+Written into the plan after B3/B4's gate round, where all three vendors converged on it and it had
+already been flagged in the round's own brief as a known deferral — which is what made the deferral
+indefensible rather than a judgement call.
+
+A row was open-or-closed. A conversation open in another VS Code window is neither: this window
+cannot reveal that tab, because no extension can raise a window it is not running in, so the row was
+drawn as CLOSED and pressing it read the record back and opened a second tab onto it. One record,
+two tabs, two writers — the store's compare-and-swap catches the collision and forks the conversation
+under a new id, so the product causes the exact accident that swap exists to catch, and tells the
+person about it afterwards.
+
+- **A row is `here`, `elsewhere` or `closed`**, not a boolean, so the compiler asks at every use.
+  `elsewhere` is declined with a sentence saying where it is, and cannot be forgotten either — the
+  window holding it would write the files straight back, which is the rule that already protected an
+  open tab here.
+- **The signal already exists.** B1's heartbeat names what each window holds, and the index's refresh
+  already surveys the directory that holds them, so this costs no second listing.
+- **This window's own heartbeat is left out.** It is written at most once a minute, so it goes on
+  naming a conversation whose tab closed seconds ago; believing it would have this window refuse to
+  reopen its own conversations.
+- **Liveness is judged when the question is asked**, not when the survey ran, or a picker left open
+  goes on holding another window's conversations hostage after that window has gone quiet.
+- **A reveal is still tried first, whatever the row says.** The registry can move between the list
+  being drawn and the row being pressed, and refusing on a heartbeat read seconds ago would refuse a
+  tab that is right here.
+
+### B4's forget sets the transcript aside, because the operator asked for an archive and no dialog
+
+The same round. The operator's decisions were *archive, not destroy* and no confirmation dialog in
+the way of a basic action — *«Модальные окна на каждое базовое действие превращают софт в пытку»* —
+and the first build honoured only the second: the trash unlinked both files. `Alt+Delete` aimed at
+the wrong row of a list somebody is filtering is one keystroke, and what it took was the sole copy of
+a conversation.
+
+The metadata is removed, so the row goes at once and nothing lists it again, and the transcript is
+RENAMED into the quarantine the store already keeps, under a dated name the existing sweep rule
+retires at the same ninety days. Recoverable by hand until then, nothing accumulating for ever, and
+no dialog. `retireIfExpired` stays the path that really deletes: quarantining what has just aged out
+would simply keep it another ninety days.
+
+**And the keybinding needed a macOS form.** The focus in a QuickPick is always in its filter box, and
+on macOS `Alt+Delete` is the system's own delete-word-forward — a person editing what they had typed
+would have forgotten a conversation instead of a word. `Cmd+Delete` is that platform's move-to-trash,
+which is now literally what the command does.
+
 ### A4's migration compares TRANSCRIPTS, because the store's copy may be behind
 
 Written into the plan after A4's own gate round, where codex and gemini found the same defect

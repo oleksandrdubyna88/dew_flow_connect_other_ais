@@ -25,6 +25,7 @@ import {
   parseMarker,
   planIsEmpty,
   planSweep,
+  heldElsewhere,
   protectedIds,
   quarantinedAt,
   sweepDue,
@@ -192,6 +193,25 @@ test('the protected set is the union of every live heartbeat and what this windo
   const ids = protectedIds([beat(7, ['a1'], NOW), beat(8, ['b2'], NOW - HEARTBEAT_STALE_MS), beat(9, ['c3'], NOW - 1)], NOW, ['d4']);
 
   assert.deepEqual([...ids].sort(), ['a1', 'c3', 'd4']);
+});
+
+test('what ANOTHER window holds leaves out this one, so the picker never refuses to reopen its own', () => {
+  // The picker asks a different question from the sweep's. The sweep asks "may this be deleted" and
+  // every window's answer counts, this one included. The picker asks "would reopening this give the
+  // record a second writer" — and this window's own tabs are not an obstacle to that, they are the
+  // case it reveals. Believing our own heartbeat here would be worse than useless: it is written at
+  // most once a minute, so it goes on naming a conversation whose tab closed seconds ago, and the
+  // picker would refuse to reopen something nothing holds.
+  const ours = beat(OWN_PID, ['mine'], NOW);
+  const theirs = beat(7, ['theirs'], NOW);
+  const gone = beat(8, ['stale'], NOW - HEARTBEAT_STALE_MS);
+
+  assert.deepEqual([...heldElsewhere([ours, theirs, gone], NOW, OWN_PID)].sort(), ['theirs']);
+  // Liveness is judged at the moment of ASKING, not of the survey: a picker left open must stop
+  // believing a window that has since gone quiet, or it holds those conversations hostage.
+  assert.deepEqual([...heldElsewhere([theirs], NOW + HEARTBEAT_STALE_MS, OWN_PID)], [],
+    'a heartbeat that went stale while the list was up still held its conversations');
+  assert.deepEqual([...heldElsewhere([], NOW, OWN_PID)], [], 'no heartbeats at all is not an empty answer');
 });
 
 // ---------------------------------------------------------------------------------------------

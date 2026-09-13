@@ -8,6 +8,7 @@ import {
   byLastUsed,
   forgetting,
   mayForget,
+  openElsewhere,
   opening,
   pickerTitle,
   scopeOf,
@@ -98,9 +99,9 @@ const itemFor = (row: PickerRow): Item => {
       label: row.label,
       description: row.description,
       detail: row.detail,
-      // An OPEN conversation carries none: its tab is still writing that record, so deleting the
-      // files under it would have the next push create them again.
-      buttons: row.live ? [] : [TRASH],
+      // A conversation open in a tab carries none — here or in another window: that tab is still
+      // writing the record, so deleting the files under it would have the next push create them again.
+      buttons: row.where === 'closed' ? [TRASH] : [],
     };
   }
 
@@ -120,6 +121,11 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
   live?.hide();
   let everywhere = false;
   let onScreen = true;
+  // One accept per picker. The widget is hidden by the first one and VS Code dispatches its events in
+  // order, so a second cannot arrive — but what a second WOULD do is open the same conversation twice,
+  // which is the one accident this command is written to prevent, and a latch is cheaper than the
+  // argument that it cannot happen. (The plan round.)
+  let chosen = false;
   const pick = vscode.window.createQuickPick<Item>();
   // Typing a model name or a word from the last answer filters — which is most of why a person opens
   // this rather than hunting through their tabs.
@@ -147,6 +153,9 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
       open: byLastUsed(openConversations(panels)),
       stored: deps.index.entries(scopeOf(everywhere, deps.workspace())),
       index: deps.index.state(),
+      // Asked at every draw, not once at opening: judged against this instant, so a window that has
+      // gone quiet while the list was up stops holding its conversations hostage.
+      elsewhere: deps.index.elsewhere(now()),
       workspace: deps.workspace(),
       everywhere,
       now: now(),
@@ -170,6 +179,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
     // for one record would give it two writers: the fork the store's swap exists to catch, caused by
     // us. Asking costs one walk of the registry.
     if (revealConversation(panels, row.id)) {
+      return;
+    }
+    if (row.where === 'elsewhere') {
+      // ASKED THIS WINDOW FIRST, and only then declined: between the list being drawn and the row
+      // being pressed the other window may have closed and this one adopted it, and refusing on the
+      // strength of a heartbeat read seconds ago would refuse a tab that is right here.
+      void vscode.window.showWarningMessage(openElsewhere(row.label));
+
       return;
     }
     // NOT the metadata the row was drawn from. The index is built in the background and a row can be
@@ -214,13 +231,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
 
   pick.onDidAccept(() => {
     const row = pick.selectedItems[0]?.row;
-    if (row === undefined || row.kind !== 'conversation') {
+    if (chosen || row === undefined || row.kind !== 'conversation') {
       // TOTAL by construction rather than by care: a separator cannot be chosen at all, and a notice
       // and the offer to start one carry no id — there is nothing here for them to open and no
       // sentinel a crafted row could aim at. (Starting one is story C2's; this command never offers
       // that row.)
       return;
     }
+    chosen = true;
     // Hidden BEFORE the work: what happens next is a tab appearing, and a list still covering it
     // would be a list the person has to dismiss to see what they asked for.
     pick.hide();

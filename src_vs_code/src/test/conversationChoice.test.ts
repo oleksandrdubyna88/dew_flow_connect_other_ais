@@ -6,6 +6,7 @@ import {
   byLastUsed,
   forgetting,
   mayForget,
+  openElsewhere,
   opening,
   pickerTitle,
   scopeOf,
@@ -57,7 +58,7 @@ const row = (over: Partial<Extract<PickerRow, { kind: 'conversation' }>> = {}): 
   label: 'Why the lock is fenced',
   description: 'gemini-3-pro · 4 turns · a minute ago',
   detail: 'because a read and a delete are two operations',
-  live: false,
+  where: 'closed',
   ...over,
 });
 
@@ -166,10 +167,22 @@ test('an OPEN conversation is not forgettable, and the refusal says what to do a
   // conversation would have the next push create them again, so the row would come back and the
   // person would have been told a lie. The trash button is not drawn on an open row either; this is
   // the keybinding's half of the same rule.
-  const refused = mayForget(row({ live: true }));
+  const refused = mayForget(row({ where: 'here' }));
 
   assert.equal(refused.kind, 'refuse');
   assert.match(refused.kind === 'refuse' ? refused.message : '', /open in a tab/iu);
+});
+
+test('a conversation open in ANOTHER window is not forgettable either, and says which', () => {
+  // The same rule, not a different one: the tab that would recreate the files is simply not this
+  // one — and this window cannot even close it, so the sentence has to say where to go. Three
+  // reviewers found this row treated as closed; forgetting it was the quieter half of that defect.
+  const refused = mayForget(row({ where: 'elsewhere' }));
+
+  assert.equal(refused.kind, 'refuse');
+  const said = refused.kind === 'refuse' ? refused.message : '';
+  assert.match(said, /another VS Code window/iu);
+  assert.doesNotMatch(said, /Close the tab first/iu, 'it tells them to close a tab this window does not have');
 });
 
 test('a closed conversation is forgettable, by the id and title the row carries', () => {
@@ -190,4 +203,16 @@ test('a separator, a notice, the offer to start one, and nothing at all are all 
     assert.equal(answer.kind, 'refuse', `${one?.kind ?? 'nothing'} was treated as a conversation`);
     assert.ok((answer.kind === 'refuse' ? answer.message : '').length > 20, 'the refusal is not a sentence');
   }
+});
+test('choosing a conversation another window holds is declined by a sentence that says where it is', () => {
+  // The only row the picker will not act on, and therefore the only one that has to explain itself.
+  // There is no API to raise another VS Code window, so "switch to it for them" was never among the
+  // options; what is left is to say where it is and why this window will not make a second copy.
+  const said = openElsewhere('Why the lock is fenced');
+
+  assert.match(said, /Why the lock is fenced/u, 'it does not name the conversation that was pressed');
+  assert.match(said, /another VS Code window/iu, 'it does not say where the conversation is');
+  assert.match(said, /split it in two/iu, 'it does not say why reopening is refused');
+  // Never a pid: a process id is not something a person can act on.
+  assert.doesNotMatch(said, /[0-9]{3,}/u);
 });
