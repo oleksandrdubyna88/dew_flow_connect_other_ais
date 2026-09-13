@@ -2211,7 +2211,14 @@ downgrade would otherwise quietly retire a conversation a newer build wrote.
 
 Listing a record as expired and then deleting it is a check-then-act, and a save can land in between
 — the same shape that cost the compare-and-swap two rounds. One store operation takes the claim,
-re-reads, and retires only if the record is still there at the revision the listing saw. The sweep
+re-reads, and retires only if the record is still there at the revision the listing saw.
+
+**And, last of all, whether anybody holds it now.** Reopening a conversation deliberately does not
+change its record — a reload is not a use — so a conversation somebody reopens between the plan and
+the delete has the revision the listing saw and the age it always had, and every other re-check still
+says delete; the heartbeat that would protect it is written by a queued pulse, on another tick, under
+no lock. So the question is asked once more inside the claim, after everything else has already said
+delete, and a housekeeping directory that will not answer means keep. The sweep
 deletes no other way, and it does not break locks on its own terms: that rule belongs to the lock
 module, which states its own residual, and two answers to one question is how they drift.
 

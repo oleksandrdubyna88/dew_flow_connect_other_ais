@@ -687,7 +687,17 @@ export class ChatStoreFile {
    * lock, an absent record, one this build cannot read and a disk that will not answer are `kept` too,
    * each named. The two deletes are {@link forgetClaimed}'s, in its order. `now` is the clock; a test pins it.</p>
    */
-  public async retireIfExpired(id: string, seenRev: number, now = Date.now()): Promise<RetireOutcome> {
+  public async retireIfExpired(
+    id: string,
+    seenRev: number,
+    now = Date.now(),
+    /**
+     * Whether a live window holds this conversation — asked INSIDE the claim, because the sweep's own
+     * answer was read before the lock was taken and a person can reopen a conversation in between.
+     * The default is "nobody", for a caller with no heartbeats to consult.
+     */
+    heldNow: () => Promise<boolean> = async () => false,
+  ): Promise<RetireOutcome> {
     if (!isSafeId(id)) {
       return { kind: 'failed', reason: 'a conversation id that cannot be a filename' };
     }
@@ -699,14 +709,19 @@ export class ChatStoreFile {
       return { kind: 'kept', why: 'held' };
     }
     try {
-      return await this.retireClaimed(id, seenRev, now);
+      return await this.retireClaimed(id, seenRev, now, heldNow);
     } finally {
       await claim.release();
     }
   }
 
   /** The re-check and the two deletes, with the claim held. Nothing is written on any `kept` path. */
-  private async retireClaimed(id: string, seenRev: number, now: number): Promise<RetireOutcome> {
+  private async retireClaimed(
+    id: string,
+    seenRev: number,
+    now: number,
+    heldNow: () => Promise<boolean>,
+  ): Promise<RetireOutcome> {
     const seen = await this.probe(id);
     if (seen.kind !== 'record') {
       return { kind: 'kept', why: seen.kind };
@@ -716,6 +731,12 @@ export class ChatStoreFile {
     }
     if (!expired(metaOf(seen.record), now)) {
       return { kind: 'kept', why: 'not expired' };
+    }
+    // THE LAST QUESTION, and the only one whose answer can have changed since the plan: reopening a
+    // conversation moves neither its revision nor its age, so every check above still says delete —
+    // and the announcement that protects it is written on another tick, under no lock.
+    if (await heldNow()) {
+      return { kind: 'kept', why: 'held' };
     }
     const gone = await this.forgetClaimed(id);
 

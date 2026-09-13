@@ -24,6 +24,7 @@ import {
   parseHeartbeat,
   parseMarker,
   planSweep,
+  protectedIds,
   quarantinedAt,
   sweepDue,
 } from './chatStoreSweep';
@@ -246,8 +247,15 @@ export class ChatStoreKeeper {
     };
   }
 
-  /** Every window's heartbeat, parsed where it can be — a torn one keeps its name and stamp, and protects nothing. */
-  private async heartbeats(): Promise<{ readonly kind: 'files'; readonly files: readonly HeartbeatFile[] } | Extract<Listed, { kind: 'unavailable' }>> {
+  /**
+   * Every window's heartbeat, parsed where it can be — a torn one keeps its name and stamp, and
+   * protects nothing.
+   *
+   * <p>Public because the RETIREMENT asks it a second time, under the conversation's lock: the set
+   * the plan was built from is a statement about a moment that has passed, and a window can reopen a
+   * conversation in between. See {@link retireOne}.</p>
+   */
+  public async heartbeats(): Promise<{ readonly kind: 'files'; readonly files: readonly HeartbeatFile[] } | Extract<Listed, { kind: 'unavailable' }>> {
     const listed = await this.filesIn(this.housekeeping);
     if (listed.kind === 'unavailable') {
       return listed;
@@ -556,12 +564,35 @@ async function retireOne(deps: SweepDeps, id: string, rev: number): Promise<Coun
   if (deps.held().has(id)) {
     return undefined;
   }
-  const out = await deps.store.retireIfExpired(id, rev, deps.now);
+  const out = await deps.store.retireIfExpired(id, rev, deps.now, async () => held(deps, id));
   if (out.kind === 'kept' && out.why === 'changed') {
     await deps.store.read(id, deps.now);
   }
 
   return out.kind === 'retired' ? 'retired' : out.kind === 'kept' ? 'keptUnderLock' : 'failed';
+}
+
+/**
+ * Does ANY live window hold this conversation, asked again with the lock held?
+ *
+ * <p>The plan's protected set was read when the directory was surveyed, and a retirement happens
+ * later — a whole budget later, on a backlog. In between, a person can reopen a ninety-day-old
+ * conversation from the picker, and reopening deliberately does NOT change the record (a reload is
+ * not a use, which is story A4's ruling), so neither the revision nor the age moves and every other
+ * re-check under the lock still says "delete it". The heartbeat that would have protected it is
+ * written by a queued pulse, on another tick, under no lock at all. So the question is asked once
+ * more at the last possible moment. (CodeRabbit, on the pull request.)</p>
+ *
+ * <p>A housekeeping directory that will not answer means KEEP: not being able to tell who holds a
+ * conversation is not permission to delete it.</p>
+ */
+async function held(deps: SweepDeps, id: string): Promise<boolean> {
+  const beats = await deps.keeper.heartbeats();
+  if (beats.kind !== 'files') {
+    return true;
+  }
+
+  return protectedIds(beats.files, (deps.clock ?? Date.now)(), deps.held()).has(id);
 }
 
 /**

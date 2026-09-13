@@ -395,3 +395,23 @@ test('typing rebuilds the list only when what is on screen could be missing a ma
   assert.match(draw, /drawn = query;/u, 'nothing records which query the list on screen was built for');
   assert.match(draw, /cut = rows\.some\(/u, 'nothing records whether the list on screen was cut');
 });
+
+test('a picker that hides LATE does not unregister the one that replaced it', () => {
+  // `hide()` returns before anything is hidden: the renderer is another process, and `onDidHide`
+  // arrives when it answers. So pressing the chord twice quickly runs the second invocation — which
+  // registers ITSELF — before the first picker's hide handler runs. Clearing unconditionally then
+  // unregistered the picker the person was looking at and turned the context key off underneath it,
+  // and `Alt+Delete` quietly stopped working on a list that was still on screen. (CodeRabbit, on the
+  // pull request.)
+  const text = widget();
+  const hide = text.slice(text.indexOf('pick.onDidHide'));
+  const body = hide.slice(0, hide.indexOf('draw();'));
+
+  assert.match(body, /if \(live !== mine\)/u, 'the hide handler clears the registration without asking whether it is still its own');
+  const guard = body.indexOf('if (live !== mine)');
+  assert.ok(guard < body.indexOf('live = undefined'), 'the registration is cleared before the guard, which is not a guard');
+  assert.ok(guard < body.indexOf("'coai.conversationsPickerOpen', false"), 'the context key is turned off before the guard');
+  // And the registration is that object, so identity is what is compared.
+  assert.match(text, /const mine = \{ hide:/u, 'the picker has no identity to compare');
+  assert.match(text, /live = mine;/u, 'the picker registers something other than the identity it compares');
+});

@@ -256,3 +256,57 @@ test('an id that cannot be a filename is refused, naming the rule, before any lo
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a conversation REOPENED between the plan and the delete is kept, although nothing about it changed', () => {
+  // The last hole in "the store retires what nobody is holding". Reopening deliberately does not
+  // change the record — a reload is not a use, which is A4's ruling — so the revision is the one the
+  // listing saw and the age is still past the window, and every other re-check under the lock says
+  // delete. The heartbeat that would protect it is written by a queued pulse, on another tick, under
+  // no lock at all. So the question is asked once more at the last possible moment, inside the claim.
+  // (CodeRabbit, on the pull request.)
+  return (async () => {
+    const dir = home();
+    try {
+      const store = new ChatStoreFile(dir);
+      assert.equal((await store.save(record(), 0)).kind, 'ok');
+
+      const out = await store.retireIfExpired('a1', 1, AT, async () => true);
+
+      assert.equal(out.kind, 'kept', `an expired conversation somebody had just reopened was retired: ${why(out)}`);
+      assert.equal(why(out), 'held');
+      assert.equal(existsSync(join(dir, recordName('a1'))), true, 'the transcript was deleted under an open tab');
+      assert.equal(existsSync(join(dir, besideMeta('a1'))), true, 'the index entry was deleted under an open tab');
+      assert.deepEqual(locksIn(dir), [], 'the retire left its lock behind');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  })();
+});
+
+test('the last question is asked INSIDE the claim, and only when everything else already said delete', () => {
+  // Order matters twice over. Asking before the claim would be the check-then-act this store has been
+  // corrected for twice; asking before the revision and age checks would read the housekeeping
+  // directory for every conversation the sweep merely considered, rather than for the few it is about
+  // to delete.
+  return (async () => {
+    const dir = home();
+    try {
+      const store = new ChatStoreFile(dir);
+      assert.equal((await store.save(record(), 0)).kind, 'ok');
+      let asked = 0;
+      const count = async (): Promise<boolean> => {
+        asked += 1;
+
+        return false;
+      };
+
+      assert.equal(why(await store.retireIfExpired('a1', 99, AT, count)), 'changed', 'the setup did not make the revision disagree');
+      assert.equal(asked, 0, 'the heartbeats were read for a conversation that was never going to be deleted');
+
+      assert.equal(why(await store.retireIfExpired('a1', 1, AT, count)), 'retired');
+      assert.equal(asked, 1, 'the question was not asked before the delete, or was asked more than once');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  })();
+});
