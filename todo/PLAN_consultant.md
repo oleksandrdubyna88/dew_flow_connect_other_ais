@@ -548,8 +548,24 @@ lock and fence are the security half and stay on Fable.
 
 **Epic 3 — triggers and measurement.**
 
-- [ ] **S5 — the triggers.** The conventions paragraph + pin cascade, `SNIPPET_VERSION` 6, `Prompts.cs`
+- [x] **S5 — the triggers.** The conventions paragraph + pin cascade, `SNIPPET_VERSION` 6, `Prompts.cs`
       + `PromptCollection`, `prompts/list` over stdio against the published binary.
+
+      **The paragraph did NOT go into the shared rule, and the cascade did not run.** Two reasons, and
+      the second one is the operator's.
+      1. It cannot: since this plan was written, the conventions repository froze its 24 migrated
+         rules — `tools/rules.test.mjs` SHA-pins each rule BODY against
+         `research/shared-rules-migration-map.json` as *evidence against the original commit* — so
+         editing `common/coai-review-gate.md` turns that suite red.
+      2. It should not. Asked which shape to take, the operator answered: *"why do we put purely
+         project rules into the shared store? in conventions only shared ones; specific — in the
+         project itself"*. The gate rule is shared because every repository in the family is reviewed
+         by it; a rule about when to call one tool of one server is this product's own.
+
+      So `src_vs_code/src/consultantRule.md` is OURS, `prepare-gate.mjs` emits it beside `gateRule.ts`,
+      and the pasted snippet is the two halves under ONE marker stamped over the composed artefact —
+      `SNIPPET_VERSION` 6, the hash re-pinned, the menu item's `(v6)`. No conventions commit, so no
+      consumer's pin went stale and there was no cascade to run.
 - [ ] **S6 — the counter.** `StuckFindings.SurvivedAcceptance` in `Project`, the column, the audit line.
 - [ ] **Docs (DoD of every story):** `research/module_server.md` (the ninth tool, the consultation channel,
       the invariant, the lock), `module_runners.md` (consultant adapters, the working-tree collector, the

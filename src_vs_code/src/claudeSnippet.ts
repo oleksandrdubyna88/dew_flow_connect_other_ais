@@ -1,4 +1,5 @@
 import { CALLER_RULE, DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
+import { CONSULTANT_RULE } from './generated/consultantRule';
 
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
@@ -37,7 +38,7 @@ import { CALLER_RULE, DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '62da93fda9f373c0';
+export const SNIPPET_BODY_SHA = '45dc60e8bbfd0d31';
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -111,6 +112,25 @@ export const CALLER_VERSION = 1;
 
 const CALLER_MARKER = /<!-- coai-caller v(\d+) -->/;
 
+/**
+ * The CONSULTANT half's version — when to ask another vendor, and what to do with the answer.
+ *
+ * <p><b>A fourth number, and the first one whose rule file is not in the conventions repository.</b>
+ * The other three halves are shared: every repository in this family is reviewed by the gate, asked
+ * to declare its model, and may have a document reviewed. This one says when to call ONE tool of ONE
+ * server, which is this product's own material — asked where it should live, the operator answered
+ * that conventions holds only shared rules and specific material belongs to the project that owns
+ * it. So the source is <c>src_vs_code/src/consultantRule.md</c> here, emitted beside the generated
+ * gate rules, and everything else about it follows the pattern the two halves above established.</p>
+ *
+ * <p>It is not cosmetic, for the same reason theirs are not: a copy pasted before the consultant
+ * existed carries no consultant marker, and the AI obeying it never calls `consult` — it goes on
+ * trying the same fix a third time, which is the whole thing this feature exists to interrupt.</p>
+ */
+export const CONSULTANT_VERSION = 1;
+
+const CONSULTANT_MARKER = /<!-- coai-consultant v(\d+) -->/;
+
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
@@ -148,7 +168,9 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
     // every copy pasted before plan 4 looks like, and every copy pasted before #174. Reported as
     // OLDER, because that is the sentence that gets it replaced — and `found` stays the number
     // actually in the file, so nobody is told they have a version that was never handed out.
-    return documentVersionIn(pasted) === DOCUMENT_VERSION && callerVersionIn(pasted) === CALLER_VERSION
+    return documentVersionIn(pasted) === DOCUMENT_VERSION
+           && callerVersionIn(pasted) === CALLER_VERSION
+           && consultantVersionIn(pasted) === CONSULTANT_VERSION
       ? { kind: 'current', current }
       : { kind: 'older', found, current };
   }
@@ -223,13 +245,25 @@ export function callerVersionIn(text: string): number | undefined {
   return found === undefined ? undefined : Number.parseInt(found, 10);
 }
 
+/** The consultant half's version out of a pasted file, or nothing when it has no such half. */
+export function consultantVersionIn(text: string): number | undefined {
+  const found = CONSULTANT_MARKER.exec(text)?.[1];
+
+  return found === undefined ? undefined : Number.parseInt(found, 10);
+}
+
 /**
- * All three rules, in the order an AI should read them: the gate, the document gate, the caller.
+ * All four rules, in the order an AI should read them: the gate, the document gate, the caller, the
+ * consultant.
  *
- * <p>Three files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
+ * <p>Four files because the first one is frozen — see `DOCUMENT_VERSION` and `CALLER_VERSION`. A
  * person pasting this gets one block either way, and the AI reading it gets every rule, which is
  * the only thing that matters about the arrangement.</p>
+ *
+ * <p>The consultant is last on purpose: the three before it are about work being REVIEWED, and this
+ * one is about the assistant asking for help mid-task. It is also the only one whose source is this
+ * repository rather than the shared conventions — see `CONSULTANT_VERSION`.</p>
  */
 export function claudeSnippet(): string {
-  return `${GATE_RULE}\n${DOCUMENT_RULE}\n${CALLER_RULE}`;
+  return `${GATE_RULE}\n${DOCUMENT_RULE}\n${CALLER_RULE}\n${CONSULTANT_RULE}`;
 }
