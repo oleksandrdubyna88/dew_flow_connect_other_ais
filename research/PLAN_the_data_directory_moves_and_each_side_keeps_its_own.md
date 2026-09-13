@@ -1,7 +1,34 @@
 # PLAN — the data directory can move, and two sides keep their own
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/src/Server/PanelSettings.cs`, the
-> panel's *MCP server* section, and the docs.
+> Status: **IMPLEMENTED, 2026-09-13.** `COAI_DATA_SIDE=<name>` partitions a chosen `COAI_DATA_DIR`
+> per side, so two installations sharing one location each keep their own database, sessions and
+> Team-server tokens. The default is untouched.
+>
+> **Three deviations, each forced by evidence rather than preference.**
+>
+> **The partition is OPT-IN.** The plan partitioned every override. Built that way, six of this
+> repository's own scenario tests went red — they set `COAI_DATA_DIR` and then read that exact path,
+> which is what a script, the bench, and a setting made a year ago also do. Moving their data one
+> level down silently is the surprise the plan spends a section refusing.
+>
+> **The side is a NAME, not derived.** The plan built it from platform + WSL distribution + machine
+> name. `src_vs_code/src/dataDir.ts` explains why that is wrong in a docstring older than this
+> change: the extension WRITES the Team-server token where the shim READS it, so both halves must
+> agree on the path exactly — and deriving means computing one string twice, from
+> `Environment.MachineName` and from `os.hostname()`, which differ in case and in whether they carry
+> a domain. A chosen name cannot diverge, and it is what the issue asked for.
+>
+> **A refused side refuses, rather than meaning the root.** The code round returned `revise` on this:
+> `COAI_DATA_SIDE=wsl/node1` failed the grammar, was treated as "no side", and put every
+> misconfigured installation on the shared root's single database — the corruption the partition
+> exists to prevent, reached by a typo. Seven reviewers raised it.
+>
+> **Not built, and named rather than dropped:** the panel field that shows the directory in use and
+> produces the line to paste. The resolution rule is the half that can be silently wrong, and it is
+> done; the panel is a sentence and a button, and it is
+> [PLAN_the_panel_shows_where_the_data_lives.md](../todo/PLAN_the_panel_shows_where_the_data_lives.md).
+>
+> Related docs: [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 >
 > Issue [#115](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/115): *"we take
 > the values from the database here. I want to be able to say where the database lives, the way

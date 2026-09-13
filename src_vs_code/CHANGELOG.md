@@ -87,6 +87,8 @@ A document is read only from inside the repository you opened the session for, a
 is text. Both refusals say what to do instead — this is a file that gets sent to other vendors'
 models, so where it may come from is not a detail.
 
+**Two machines can keep their review history in one place without treading on each other.** `COAI_DATA_DIR` has always let you move the data somewhere that survives reinstalling Windows — a NAS, say. What it could not do is answer what happens when you point *two* installations at the same place: Windows writing one database and WSL writing the same one is corruption, not sharing. Set `COAI_DATA_SIDE` to a name — `windows`, `wsl`, whatever you like — and each keeps its own database, sessions and sign-ins in a folder of that name, side by side. Nothing moves unless you ask: with no side named, the directory you configured is the directory you get, exactly as before. A database already sitting loose in the shared folder is left alone and reported rather than adopted, and a name that cannot be a folder is refused outright instead of quietly putting you back on the shared one.
+
 ## Extension 0.39.0 — 2026-09-13
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.
