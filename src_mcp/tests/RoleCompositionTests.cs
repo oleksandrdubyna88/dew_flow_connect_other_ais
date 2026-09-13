@@ -96,9 +96,9 @@ public sealed class RoleCompositionTests
 
         catalog.ById(RoleCatalog.ConventionsRole)!.Prompts.Select(p => p.Id)
             .Should().Equal(["conventions", "conv-ours"], "an override keeps the shipped prompts and adds to them");
-        catalog.RolesOf(RoleStages.Result).Should().Equal(
+        catalog.InBucket(RoleBuckets.ResultCode).Should().Equal(
             "Architecture", "SecurityReliability", "UxDxPerformance", "Requirements", "Risks");
-        catalog.RolesOf(RoleStages.Plan).Should().Equal("PlanCritique", "Brief");
+        catalog.InBucket(RoleBuckets.PlanCode).Should().Equal("PlanCritique", "Brief");
         catalog.Dropped.Should().BeEmpty("every row here is usable — unticking one built-in made room for two");
     }
 
@@ -149,7 +149,7 @@ public sealed class RoleCompositionTests
         var catalog = Composed(new RoleEntry(RoleCatalog.ArchitectureRole, Active: false));
 
         catalog.ById(RoleCatalog.ArchitectureRole)!.Active.Should().BeFalse();
-        catalog.RolesOf(RoleStages.Result).Should().NotContain(RoleCatalog.ArchitectureRole);
+        catalog.InBucket(RoleBuckets.ResultCode).Should().NotContain(RoleCatalog.ArchitectureRole);
         catalog.Dropped.Should().BeEmpty("switching a role off is not a refusal");
     }
 
@@ -174,7 +174,7 @@ public sealed class RoleCompositionTests
         (role.BuiltIn, role.Active, role.ProgrammingTask).Should().Be((false, true, true));
         role.General.Id.Should().Be("req-general");
         role.Prompts.Select(p => p.Universal).Should().Equal(true, false);
-        catalog.RolesOf(RoleStages.Result).Should().Contain("Requirements");
+        catalog.InBucket(RoleBuckets.ResultCode).Should().Contain("Requirements");
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class RoleCompositionTests
         ]);
 
         catalog.ById("SpecReview").Should().NotBeNull();
-        catalog.RolesOf(RoleStages.Result).Should().NotContain("SpecReview",
+        catalog.InBucket(RoleBuckets.ResultCode).Should().NotContain("SpecReview",
             "a document role is waiting for the round that reviews a document, not dropped");
         catalog.Dropped.Should().BeEmpty();
     }
@@ -293,7 +293,7 @@ public sealed class RoleCompositionTests
 
         catalog.ById("First")!.Active.Should().BeTrue();
         catalog.ById("Second")!.Active.Should().BeFalse("five is the limit and the built-ins were there first");
-        catalog.RolesOf(RoleStages.Result).Should().HaveCount(RoleComposition.MaxActivePerBucket);
+        catalog.InBucket(RoleBuckets.ResultCode).Should().HaveCount(RoleComposition.MaxActivePerBucket);
         catalog.Dropped.Should().ContainSingle().Which.Should().Contain("Second").And.Contain("switched off");
     }
 
@@ -318,7 +318,7 @@ public sealed class RoleCompositionTests
             Custom("First", RoleStages.Result, "first-general"),
             Custom("Second", RoleStages.Result, "second-general"));
 
-        catalog.RolesOf(RoleStages.Result).Should().Equal(
+        catalog.InBucket(RoleBuckets.ResultCode).Should().Equal(
             RoleCatalog.ConventionsRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole, "First", "Second");
     }
 
@@ -341,7 +341,7 @@ public sealed class RoleCompositionTests
     {
         var catalog = Composed(Custom("Assumptions", RoleStages.Plan, "assumptions-general"));
 
-        catalog.RolesOf(RoleStages.Plan).Should().Equal(RoleCatalog.PlanRole, "Assumptions");
+        catalog.InBucket(RoleBuckets.PlanCode).Should().Equal(RoleCatalog.PlanRole, "Assumptions");
     }
 
     /// <summary>

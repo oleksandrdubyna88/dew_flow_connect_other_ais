@@ -94,7 +94,7 @@ public sealed record PanelConfig(
     /// </remarks>
     public static readonly string[] AllRoles = [.. RoleCatalog.Builtin.Roles.Select(r => r.Id)];
 
-    public static readonly string[] CodeRoleNames = [.. RoleCatalog.Builtin.RolesOf(RoleStages.Result)];
+    public static readonly string[] CodeRoleNames = [.. RoleCatalog.Builtin.InBucket(RoleBuckets.ResultCode)];
 
     /// <summary>
     /// Which roles exist for this session — the shipped five, plus whatever a person configured.
@@ -182,8 +182,27 @@ public sealed record PanelConfig(
     /// A hard-coded pair of arrays until the catalog became data, which is why a role a person
     /// created could not take part in a round however carefully it was configured.
     /// </remarks>
-    private IReadOnlyList<string> RolesOf(Stage stage) =>
-        Catalog.RolesOf(stage == Stage.CodeReview ? RoleStages.Result : RoleStages.Plan);
+    private IReadOnlyList<string> RolesOf(Stage stage) => Catalog.InBucket(BucketFor(stage));
+
+    /// <summary>
+    /// The ONE bridge between the orchestration stage and the bucket a role is persisted in.
+    /// </summary>
+    /// <remarks>
+    /// <para>A document role's own <see cref="RoleDefinition.Stage"/> stays the string
+    /// <c>result</c> with <c>ProgrammingTask: false</c> — in the seed, in <c>COAI_ROLES</c>, in every
+    /// session file — and <see cref="Stage.DocumentReview"/> never appears in any of them. Keeping
+    /// the two vocabularies apart and joining them in exactly one expression is what the plan round
+    /// asked for in those words, because a second place that mapped them would be a second place to
+    /// disagree.</para>
+    /// <para><see cref="Stage.Done"/> falls through to the plan bucket, as it always has: a finished
+    /// session runs no round, so what it would have selected is never asked for.</para>
+    /// </remarks>
+    public static string BucketFor(Stage stage) => stage switch
+    {
+        Stage.CodeReview => RoleBuckets.ResultCode,
+        Stage.DocumentReview => RoleBuckets.ResultDocument,
+        _ => RoleBuckets.PlanCode,
+    };
 
     /// <summary>
     /// The same gate for every role — what the legacy single-value settings mean, and what a test
@@ -193,11 +212,29 @@ public sealed record PanelConfig(
         new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
 }
 
+/// <summary>
+/// Which gate a session is at. Not the same thing as <see cref="RoleDefinition.Stage"/>, which is a
+/// STRING a role is persisted with — see <see cref="PanelConfig.BucketFor"/>, the one place the two
+/// meet.
+/// </summary>
+/// <remarks>
+/// <see cref="DocumentReview"/> is appended rather than inserted: the value is written into every
+/// session file and every round record by NAME, so its position carries nothing — but a reader of
+/// this list should not have to know that to be sure, and appending keeps it true either way.
+/// </remarks>
 public enum Stage
 {
     PlanReview,
     CodeReview,
     Done,
+
+    /// <summary>A document rather than a diff. Its own stage, so it has its own budget.</summary>
+    /// <remarks>
+    /// Not a second meaning for <see cref="CodeReview"/>. A stage is what rounds, thresholds and the
+    /// verdict trail are counted against, and two different jobs sharing one stage share one budget
+    /// — the exact mistake <see cref="RoleGate"/> was introduced to undo.
+    /// </remarks>
+    DocumentReview,
 }
 
 /// <summary>A role the round decided not to ask for, and why.</summary>
@@ -321,11 +358,48 @@ public sealed record SessionState(
     public bool HumanGate { get; init; }
 
     public ImmutableArray<PriorRejection> Rejections { get; init; } = [];
+
+    /// <summary>
+    /// Which DOCUMENT this session reviews — empty for a code session, which is all of them until
+    /// somebody calls <c>review_document</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>One field rather than a <c>Kind</c> beside it: two fields that must agree are two
+    /// fields that can disagree, and there is nothing a separate enum could say that this does not.
+    /// A code session has no document; a document session has one; there is no third answer.</para>
+    /// <para><b>Normalised where it is DECLARED.</b> A session file written before this field
+    /// existed has no such member, and the source-generated deserializer does not run a property
+    /// initializer for an absent one — the lesson `UsedPrompts` records above, learned the day every
+    /// <c>review_code</c> in every repository threw on a null it had been promised could not
+    /// happen.</para>
+    /// </remarks>
+    public string Document
+    {
+        get => field ?? string.Empty;
+        init => field = (value ?? string.Empty).Trim();
+    }
+
+    /// <summary>Whether this session reviews a document rather than a branch.</summary>
+    public bool IsDocumentSession => Document.Length > 0;
 }
 
 /// <summary>The canonical identity of a session: same checkout + branch → same session, always.</summary>
+/// <remarks>
+/// <para>Since plan 4 a third segment may name a DOCUMENT, because a document review is not a
+/// branch: a person with ten documents does not have ten branches. It is absent — not empty — for
+/// every code session, which is what keeps every key already on disk byte-identical and is why this
+/// change needs no migration, no version field and no sweep.</para>
+/// <para>What goes in it is the document's IDENTITY and never its CONTENT. The first draft of
+/// plan 4 used a content hash, and the plan round killed it in one pass: an edit between rounds
+/// would change the key, leaving the previous round orphaned and unresolved for ever.</para>
+/// </remarks>
 public static class SessionKey
 {
-    public static string For(string repoPath, string branch) =>
-        $"{repoPath.Replace('\\', '/').TrimEnd('/').ToLowerInvariant()}#{branch.Trim()}";
+    public static string For(string repoPath, string branch, string document = "")
+    {
+        var repoAndBranch = $"{repoPath.Replace('\\', '/').TrimEnd('/').ToLowerInvariant()}#{branch.Trim()}";
+        var doc = document.Trim();
+
+        return doc.Length == 0 ? repoAndBranch : $"{repoAndBranch}#{doc}";
+    }
 }

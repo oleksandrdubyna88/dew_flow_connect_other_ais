@@ -192,7 +192,7 @@ public sealed class BuiltinRoleCatalogTests
         var catalog = RoleCatalog.From([.. RoleCatalog.Builtin.Roles.Select(r => r.Id == off.Id ? off : r)]);
 
         catalog.ById(RoleCatalog.ArchitectureRole).Should().NotBeNull("an inactive role is still catalogued");
-        catalog.RolesOf(RoleStages.Result).Should().NotContain(RoleCatalog.ArchitectureRole)
+        catalog.InBucket(RoleBuckets.ResultCode).Should().NotContain(RoleCatalog.ArchitectureRole)
             .And.Contain(RoleCatalog.ConventionsRole, "the roles left on are untouched");
     }
 

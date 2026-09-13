@@ -8,8 +8,37 @@ public static class RoleStages
     /// <summary>The plan gate — a document, no checkout, no diff.</summary>
     public const string Plan = "plan";
 
-    /// <summary>The result gate — today a diff, from plan 4 also a document.</summary>
+    /// <summary>The result gate — a diff for a programming role, a document for one that is not.</summary>
     public const string Result = "result";
+}
+
+/// <summary>
+/// Which roles run TOGETHER: a stage and a kind of work. This is what a round is selected by.
+/// </summary>
+/// <remarks>
+/// <para>A bucket is not a fifth spelling of a stage. Roles of the two kinds never share a round —
+/// one reads a diff and the other reads a document, and a reviewer handed the wrong one reviews
+/// nothing useful — which is also why the five-active limit has counted per bucket since plan 1.
+/// Selecting a round by it is what that name always described; until plan 4 only the limit used
+/// it.</para>
+/// <para><see cref="PlanDocument"/> is a real bucket that nothing runs: a plan-stage role that is
+/// not a programming task is composed, counted and stored, and there is no stage for it yet. It is
+/// waiting, not dropped, and it is named here rather than left unspellable so that the difference is
+/// something code can check.</para>
+/// </remarks>
+public static class RoleBuckets
+{
+    public const string PlanCode = "plan:code";
+
+    public const string PlanDocument = "plan:document";
+
+    public const string ResultCode = "result:code";
+
+    public const string ResultDocument = "result:document";
+
+    /// <summary>The one place a bucket string is spelled; everything else asks for it.</summary>
+    public static string Of(string stage, bool programmingTask) =>
+        $"{stage}:{(programmingTask ? "code" : "document")}";
 }
 
 /// <summary>
@@ -57,9 +86,10 @@ public sealed record RoleDefinition(
 
     /// <summary>
     /// Which roles run together: a stage and a kind. Roles of the other kind never share a round,
-    /// which is why the five-active limit counts per bucket.
+    /// which is why the five-active limit counts per bucket — and, since plan 4, why a round's
+    /// roster is selected by it.
     /// </summary>
-    public string Bucket => $"{Stage}:{(ProgrammingTask ? "code" : "document")}";
+    public string Bucket => RoleBuckets.Of(Stage, ProgrammingTask);
 }
 
 /// <summary>The seed file's shape, for the source-generated deserialiser. Internal: the seed is read, never written.</summary>
@@ -127,12 +157,15 @@ public sealed record RoleCatalog
     /// ignored it would schedule a reviewer the operator switched off. It is not the same switch as
     /// <c>RoleGate.Enabled</c>, which the panel writes per role as <c>COAI_ENABLED_*</c>: that one
     /// is a budget the stage reads, this one is whether the role is in the round's list at all.</para>
-    /// <para>Programming roles only, until plan 4 gives a document role a round to run in: a role
-    /// stored with <c>programmingTask: false</c> is in the catalog and in no round, and it is not
-    /// dropped — it is waiting.</para>
+    /// <para><b>By BUCKET, not by stage.</b> It filtered <c>r.ProgrammingTask</c> against a stage
+    /// until plan 4, which is where a document role stopped: composed, budgeted, switchable, and in
+    /// no round. The kind is now part of what is being asked for rather than a condition on the
+    /// answer, so <see cref="RoleBuckets.ResultDocument"/> selects a roster the same way
+    /// <see cref="RoleBuckets.ResultCode"/> always did — and <see cref="RoleBuckets.PlanDocument"/>
+    /// selects one no stage asks for, which is the honest shape of "waiting, not dropped".</para>
     /// </remarks>
-    public IReadOnlyList<string> RolesOf(string stage) =>
-        [.. Roles.Where(r => r.Stage == stage && r.ProgrammingTask && r.Active).Select(r => r.Id)];
+    public IReadOnlyList<string> InBucket(string bucket) =>
+        [.. Roles.Where(r => r.Bucket == bucket && r.Active).Select(r => r.Id)];
 
     /// <summary>A role's prompts, general first; nothing for a role this catalog does not know.</summary>
     public IEnumerable<PromptChoice> For(string roleId) => ById(roleId)?.Prompts ?? [];

@@ -83,8 +83,8 @@ public static class RoundMachine
 
     public static Transition BeginPlanRound(SessionState s) => s switch
     {
-        { AwaitingResolve: true } => new Transition.Refused(
-            "the previous round's findings have not been resolved — record accept/reject decisions first (resolve)"),
+        { AwaitingResolve: true } => new Transition.Refused(Unresolved),
+        { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),
         { Stage: not Stage.PlanReview } => new Transition.Refused(
             $"the plan stage is over for this session (stage: {s.Stage}); open a new session for a new plan"),
         // The budget was never enforced HERE, and that was the defect: it was read only at
@@ -94,14 +94,66 @@ public static class RoundMachine
         _ => new Transition.Moved(s),
     };
 
+    /// <summary>The previous round is unresolved — the same sentence at every gate, on purpose.</summary>
+    internal const string Unresolved =
+        "the previous round's findings have not been resolved — record accept/reject decisions first (resolve)";
+
+    /// <summary>
+    /// A document session was asked for a code round, or the other way round.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than quietly converted. The two kinds have separate stages and therefore
+    /// separate budgets; a session that changed kind under the caller would count one budget against
+    /// two different jobs, and the round that lost would look like a gate that simply stopped
+    /// working.
+    /// </remarks>
+    internal const string ThisIsADocumentSession =
+        "this session is reviewing a document, not a branch — call review_document for it, or open " +
+        "a session on another branch for the code";
+
+    internal const string ThisIsACodeSession =
+        "this session is reviewing a branch, not a document — call review_plan and review_code for " +
+        "it; review_document starts a session of its own, keyed by the document";
+
+    /// <summary>
+    /// A document's review is finished — and the way to start another is NAMED.
+    /// </summary>
+    /// <remarks>
+    /// A refusal with no door is a stall, which is the rule <see cref="GateHeld"/> was written to.
+    /// Without the door an unchanged policy would be permanently unreviewable: the same document has
+    /// the same identity for ever, so it would meet a finished session every time and a person would
+    /// have to EDIT their document to get it read again. (codex, the plan round.)
+    /// </remarks>
+    internal const string DocumentDone =
+        "this document's review is complete. To review it again — unchanged, or for a different " +
+        "purpose — call review_document with newReview: true, which starts a fresh review and leaves " +
+        "the finished one on the record";
+
     public static Transition BeginCodeRound(SessionState s) => s switch
     {
+        { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),
         { HumanGate: true } => new Transition.Refused(GateHeld),
         { PlanProceeded: false } => new Transition.Refused(
             "no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
-        { AwaitingResolve: true } => new Transition.Refused(
-            "the previous round's findings have not been resolved — record accept/reject decisions first (resolve)"),
+        { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { Stage: Stage.Done } => new Transition.Refused("this session is complete; open a new one"),
+        _ => new Transition.Moved(s),
+    };
+
+    /// <summary>
+    /// The document gate. Every refusal the code gate has except the one that cannot apply.
+    /// </summary>
+    /// <remarks>
+    /// <b>No <c>PlanProceeded</c> check</b>, and that is the one deliberate difference: there is no
+    /// plan before a document, because the document IS the work. Requiring one would mean asking a
+    /// person to write a plan about the thing they wanted reviewed.
+    /// </remarks>
+    public static Transition BeginDocumentRound(SessionState s) => s switch
+    {
+        { IsDocumentSession: false } => new Transition.Refused(ThisIsACodeSession),
+        { HumanGate: true } => new Transition.Refused(GateHeld),
+        { AwaitingResolve: true } => new Transition.Refused(Unresolved),
+        { Stage: Stage.Done } => new Transition.Refused(DocumentDone),
         _ => new Transition.Moved(s),
     };
 
