@@ -54,6 +54,25 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
     }
 
     [Fact]
+    public void AChosenDirectoryWithNoSideAsked_IsUsedExactlyAsChosen()
+    {
+        // The partition is OPT-IN, and this is the test that says so. The first build applied it to
+        // every override and turned six scenario tests red — they set COAI_DATA_DIR and read files
+        // from that exact path, as a script or the bench or a year-old setting also would.
+        From(("COAI_DATA_DIR", _root)).DataDir.Should().Be(Path.GetFullPath(_root));
+    }
+
+    [Fact]
+    public void AskingForTheDerivedSide_PartitionsWithoutNamingOne()
+    {
+        var dir = From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "auto")).DataDir;
+
+        dir.Should().StartWith(Path.GetFullPath(_root));
+        dir.Should().NotBe(Path.GetFullPath(_root));
+        Path.GetFileName(dir).Should().Be(PanelSettings.DataSide(_ => null));
+    }
+
+    [Fact]
     public void TwoSidesGivenOneLocation_ResolveToDifferentDirectories()
     {
         var windows = From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "windows-desktop01"));

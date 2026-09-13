@@ -288,9 +288,19 @@ public sealed record PanelSettings
     /// VALIDATED rather than trusted: a side called <c>../shared</c> would escape the very root it
     /// is meant to partition.</para>
     /// </remarks>
-    public static string DataSide(Func<string, string?> env)
+    public static string DataSide(Func<string, string?> env) => SideFrom(env("COAI_DATA_SIDE"), env);
+
+    /// <summary>
+    /// The side a request asked for: a name of its own, or <c>auto</c> for the derived one.
+    /// </summary>
+    /// <remarks>
+    /// A name that could leave the directory falls back to the derived side rather than being
+    /// rewritten into a different one — <c>../shared</c> must not become <c>shared</c> and quietly
+    /// mean something else, and it must certainly not escape the root it is meant to partition.
+    /// </remarks>
+    private static string SideFrom(string? requested, Func<string, string?> env)
     {
-        if (PathSafeSide(env("COAI_DATA_SIDE")) is { Length: > 0 } chosen)
+        if (PathSafeSide(requested) is { Length: > 0 } chosen && chosen != "auto")
         {
             return chosen;
         }
@@ -355,7 +365,25 @@ public sealed record PanelSettings
         }
 
         var root = Path.GetFullPath(configured);
-        var dir = Path.Combine(root, DataSide(env));
+
+        // The partition is OPT-IN: no COAI_DATA_SIDE, no subdirectory, and a directory somebody
+        // already points at keeps answering exactly where it always did.
+        //
+        // This is a correction to the plan, made on evidence. The first build partitioned EVERY
+        // override, and six of this repository's own scenario tests went red — they set
+        // COAI_DATA_DIR and then read files from that exact path, which is precisely what a person
+        // with a script, or the bench, or anyone who set the variable last year also does. Silently
+        // moving their data one level down is the same class of surprise the plan spent a section
+        // refusing.
+        //
+        // Opting in also says what the operator said: "give them different names, side by side in
+        // one folder". `auto` derives the name; anything else IS the name.
+        if (env("COAI_DATA_SIDE") is not { Length: > 0 } requested)
+        {
+            return (root, []);
+        }
+
+        var dir = Path.Combine(root, SideFrom(requested, env));
         var notes = new List<string>(2);
 
         if (File.Exists(Path.Combine(root, DatabaseFile)))
