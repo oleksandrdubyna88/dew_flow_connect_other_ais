@@ -24,7 +24,7 @@ import { Vendor } from '../vendors';
  * markup from a value, so all of it is reachable without a running window.</p>
  */
 
-function vendor(id: string, runtime = id as Runtime, enabled = true): Vendor {
+function vendor(id: string, runtime: Runtime = 'codex', enabled = true): Vendor {
   return {
     id,
     runtime,
@@ -115,15 +115,33 @@ test('the same-vendor note is offered for thought rather than refused', () => {
   assert.equal(sameVendorNote('claude', 'codex'), '');
 });
 
+test('a caller kind is not a runtime, and `gemini` is the case that proves it', () => {
+  // The vendor row that runs Gemini models is on the `antigravity` runtime, so a name-to-name
+  // comparison withheld the warning from the one caller most likely to be pointed at itself.
+  assert.match(sameVendorNote('gemini', 'antigravity'), /stronger model/);
+  assert.match(sameVendorNote('gemini', 'gemini'), /stronger model/, 'a row configured before that runtime retired still exists');
+  assert.equal(sameVendorNote('gemini', 'claude'), '');
+  // `other` is not any vendor, so nothing is "itself" — saying so of an arbitrary script would be
+  // a guess dressed as advice.
+  assert.equal(sameVendorNote('other', 'codex'), '');
+});
+
+test('a cap the server could not hold is not a cap', () => {
+  // settings.json is a file a person edits by hand, and 2147483648 is a whole positive number that
+  // C#'s int.TryParse refuses — the panel would show one number while the server enforced another.
+  assert.equal(consultSettingsFrom(reader({ consultTurns: 2_147_483_648 })).turns, DEFAULT_CONSULT.turns);
+  assert.equal(consultSettingsFrom(reader({ consultCallsPerSession: 2_147_483_647 })).callsPerSession, 2_147_483_647);
+});
+
 // ---------------------------------------------------------------------------------------------
 // Which rows may be consulted
 
 test('a vendor that cannot hold a conversation is NAMED with its reason, never filtered away', () => {
   const { offered, refused } = consultableVendors([
     vendor('codex'),
-    vendor('remsoftdev-claude', 'remote' as Runtime),
-    vendor('gem', 'gemini' as Runtime),
-    vendor('off', 'claude' as Runtime, false),
+    vendor('remsoftdev-claude', 'remote'),
+    vendor('gem', 'gemini'),
+    vendor('off', 'claude', false),
   ]);
 
   assert.deepEqual(offered.map((one) => one.id), ['codex']);
@@ -142,7 +160,7 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
 // ---------------------------------------------------------------------------------------------
 // The section itself
 
-const rows = [vendor('codex'), vendor('claude'), vendor('antigravity')];
+const rows = [vendor('codex'), vendor('claude', 'claude'), vendor('antigravity', 'antigravity')];
 
 test('every caller kind gets a row of its own, keyed by the caller', () => {
   const html = consultantBody(DEFAULT_CONSULT, { vendors: rows });
@@ -186,13 +204,31 @@ test('a saved model is kept whatever the vendor lists, and both ways of saying s
   assert.match(stranded, /r1 — not offered by this vendor/);
 });
 
-test('with nothing configured the section says so instead of drawing four empty pickers', () => {
-  const html = consultantBody(DEFAULT_CONSULT, { vendors: [vendor('gem', 'gemini' as Runtime)] });
+test('with nothing consultable the sentence is said BESIDE the rows, never instead of them', () => {
+  const html = consultantBody(
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'codex', model: '' } } },
+    { vendors: [vendor('gem', 'gemini')] },
+  );
 
   assert.match(html, /No configured vendor can hold a consultation yet/);
-  assert.ok(!html.includes('data-setting="consultVendor"'), 'a picker with nothing in it is worse than a sentence');
+  // The rows stay: this is the one moment a person is deciding what to configure, and what each
+  // caller is already set to is what they need to see. (codex, the code round.)
+  for (const { id } of CALLER_KINDS) {
+    assert.ok(html.includes(`data-caller="${id}"`), `${id} lost its row when nothing could answer`);
+  }
+  assert.match(html, /codex — not configured any more/);
   // The vendor is still named with its reason — it is configured, and a person can see it is.
   assert.match(html, /gem cannot consult/);
+});
+
+test('a reviewer switched off says SO, rather than reading as one that was deleted', () => {
+  const html = consultantBody(
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'off', model: '' } } },
+    { vendors: [...rows, vendor('off', 'claude', false)] },
+  );
+
+  assert.match(html, /off — switched off in Reviewers/);
+  assert.ok(!html.includes('off — not configured any more'), 'the row contradicted the sentence underneath it');
 });
 
 test('a vendor id is escaped, because it is a name a person typed', () => {
@@ -202,6 +238,12 @@ test('a vendor id is escaped, because it is a name a person typed', () => {
   );
 
   assert.ok(!html.includes('<script>x</script>'));
+});
+
+test('the default model option keeps its noun when the row has no model of its own', () => {
+  const html = consultantBody(DEFAULT_CONSULT, { vendors: rows });
+
+  assert.match(html, /<option value="" selected>the row’s own model<\/option>/);
 });
 
 test('the three caps are on screen with the numbers in force', () => {

@@ -326,12 +326,20 @@ function answerOf(reply) {
 
 const repoPath = scratchRepo();
 const session = serverSession();
-await session.ready;
 const consultFail = (why) => {
   session.end();
   rmSync(repoPath, { recursive: true, force: true });
   fail(why);
 };
+
+// The handshake is INSIDE the guard, not before it: a `ready` that never answers used to skip the
+// only cleanup this leg had, leaving a dotnet child and two temporary directories behind on exactly
+// the runs somebody would re-run. (codex, this story's code round.)
+try {
+  await session.ready;
+} catch (e) {
+  consultFail(`the binary never finished the MCP handshake: ${e.message}`);
+}
 
 // A consultant nobody configured, for the `other` caller kind — the one a plain client gets.
 const CHOSEN = 'a-vendor-nobody-configured';

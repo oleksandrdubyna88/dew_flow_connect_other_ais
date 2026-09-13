@@ -34,7 +34,8 @@ export function consultantBody(consult: ConsultSettings, state: ConsultantViewSt
   <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let a stuck AI consult another vendor</label>
   <div class="hint">The AI calls <code>consult</code> itself when it is stuck. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
-${offered.length === 0 ? noVendors() : CALLER_KINDS.map((caller) => row(caller, consult, offered, state)).join('\n')}
+${offered.length === 0 ? noVendors() : ''}
+${CALLER_KINDS.map((caller) => row(caller, consult, offered, state)).join('\n')}
 ${refused.map(refusal).join('\n')}
 <div class="field inline">
   <label for="consultTurns">Turns per consultation</label>
@@ -64,7 +65,15 @@ function row(
   // A saved vendor that no longer resolves is STRANDED in the list rather than replaced: falling
   // through to the first offered row would show a pair nobody chose and offer it as valid, which is
   // the defect `chatChoice` was fixed for.
-  const stranded = vendor === undefined && chosen.vendor.length > 0;
+  //
+  // And it says WHICH of the two it is. A row switched off in *Reviewers* is still configured, and
+  // calling it "not configured any more" contradicted the sentence underneath it — which said, in
+  // the same paint, that the vendor was merely switched off. (gemini, this story's code round, in
+  // two roles.)
+  const known = state.vendors.find((one) => one.id === chosen.vendor);
+  const stranded = vendor === undefined && chosen.vendor.length > 0
+    ? (known === undefined ? 'not configured any more' : 'switched off in Reviewers')
+    : '';
   // The SAME list a reviewer card offers, from the same function — a consultant is an ordinary
   // vendor row, and a second curated list would be a second thing to keep in step with every CLI.
   // A local engine's models are not asked for here: the engine is only consulted where a reviewer
@@ -85,10 +94,10 @@ function row(
   <label for="consultVendor-${escapeHtml(caller.id)}">${escapeHtml(caller.label)} asks</label>
   <select id="consultVendor-${escapeHtml(caller.id)}" data-setting="consultVendor" data-caller="${escapeHtml(caller.id)}">
 ${offered.map((one) => option(one.id, `${one.id}${one.model.length > 0 ? ` · ${one.model}` : ''}`, chosen.vendor)).join('\n')}
-${stranded ? option(chosen.vendor, `${chosen.vendor} — not configured any more`, chosen.vendor) : ''}
+${stranded.length === 0 ? '' : option(chosen.vendor, `${chosen.vendor} — ${stranded}`, chosen.vendor)}
   </select>
   <select id="consultModel-${escapeHtml(caller.id)}" data-setting="consultModel" data-caller="${escapeHtml(caller.id)}">
-${option('', vendor === undefined ? 'the row’s own model' : `the row’s own${vendor.model.length > 0 ? ` — ${vendor.model}` : ''}`, chosen.model)}
+${option('', `the row’s own${vendor === undefined || vendor.model.length === 0 ? ' model' : ` — ${vendor.model}`}`, chosen.model)}
 ${models.map((model) => option(model.id, model.label, chosen.model)).join('\n')}
 ${chosen.model.length > 0 && !models.some((one) => one.id === chosen.model) ? option(chosen.model, `${chosen.model} — not offered by this vendor`, chosen.model) : ''}
   </select>
@@ -110,6 +119,13 @@ function refusal(row: { vendor: Vendor; why: string }): string {
   return `<div class="hint stale">${escapeHtml(row.vendor.id)} cannot consult — ${escapeHtml(row.why)}.</div>`;
 }
 
+/**
+ * Said BESIDE the rows, never instead of them.
+ *
+ * <p>Replacing them hid what each caller is set to at the one moment it matters — nothing can answer
+ * today, and the person is deciding what to configure. A saved choice that cannot run is still the
+ * choice that will run when its vendor comes back. (codex, this story's code round.)</p>
+ */
 function noVendors(): string {
   return '<div class="hint stale">No configured vendor can hold a consultation yet. Add one in Reviewers first — a consultant is an ordinary vendor row.</div>';
 }
