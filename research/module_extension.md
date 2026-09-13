@@ -2486,6 +2486,27 @@ union beside it, and what is in neither half is computed: when that set is empty
 to `Thread` produces *Type 'true' is not assignable to type "contextWindow"* — which is the message
 somebody wants at that moment.
 
+### Always reachable, from the tab header
+
+The capped notice only exists when a Team-server conversation hits its three-turn cap, and a local
+CLI conversation never caps — so for most chats there was no way to reach the reset at all. **New
+chat** sits in the tab header, after the two ± controls and before *Asked*, and posts the very same
+message: one gesture, one host implementation, because a second host path would be two places for one
+behaviour to drift.
+
+**Its own id, and one push to the right.** `wireCapped` finds the notice’s button with
+`getElementById('restart')`, and two elements cannot share an id — the header’s would be found first
+and the notice’s would stop working the moment a conversation capped. And an auto left margin on two
+flex siblings splits the free space BETWEEN them, so two buttons both wearing it are pushed apart
+rather than grouped at the edge: the look and the push are two classes now, and only the first of the
+right-hand group wears the push. The button is wired once, with the page, because the header is not
+one of the regions a state push replaces — which is exactly why the notice’s button is re-wired every
+time its own region is redrawn.
+
+**It says what it will do.** *New chat* alone reads like “open another tab”, which is not what it is,
+so the tooltip says the conversation is archived. There is still no dialog: the operator refused one
+by name, and what a dialog would have said is the non-modal line the reset already shows.
+
 ### Two regions, opposite conclusions
 
 A state message is the whole truth about every region it MENTIONS. The push does not mention the

@@ -50,9 +50,9 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
-**Start a new conversation, without losing the old one.** *Start a new conversation* in the notice
-that appears when a Team-server chat is full has been there for a while and did nothing at all. It
-works now: the conversation you were in is archived — you will find it in **CoAI: switch
+**Start a new conversation, without losing the old one.** **New chat** sits in the chat tab's own
+header, beside *Asked*, and it is also the button in the notice that appears when a Team-server chat
+is full — that one has been there for a while and did nothing at all. Both work now: the conversation you were in is archived — you will find it in **CoAI: switch
 conversations…** under the same name, whole — and the tab is yours again, empty, with the quotation
 that started the old one cleared away. The model, the prompt and the tab's own name stay as they
 were.

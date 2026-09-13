@@ -706,6 +706,60 @@ test('the composer comes back with the focus when the turn ends', () => {
   assert.strictEqual(page.seen['say'].disabled, false, 'the finished turn left the box locked');
 });
 
+test('New chat is in the header, on every tab, and is not the capped notice’s button', () => {
+  // The capped notice's button only exists when a Team-server conversation hits its three-turn cap.
+  // A local CLI conversation never caps, so for most chats there was no way to reach the reset at
+  // all. This is the same gesture where it is always reachable.
+  const fromSession = chatPageHtml(state({ fromSession: true }), 'n1');
+  const fromFile = chatPageHtml(state({ fromSession: false }), 'n1');
+
+  for (const [what, html] of [['a session tab', fromSession], ['a file tab', fromFile]] as const) {
+    const header = html.slice(html.indexOf('<header>'), html.indexOf('</header>'));
+    assert.match(header, /id="fresh"/u, `${what} has no New chat button in its header`);
+    assert.match(header, /New chat<\/button>/u, `${what}'s button is not called New chat`);
+    // A destructive-sounding action that says what it does. The label alone reads like "open another
+    // tab", which is not what it is. (local, the plan round.)
+    assert.match(header, /title="Archive this conversation and start a new one for this tab"/u,
+      `${what}'s button does not say what it will do`);
+  }
+  // ITS OWN ID. `wireCapped` finds the notice's button with `getElementById('restart')`, and two
+  // elements cannot share an id: the header's would be found first and the notice's would stop
+  // working the moment a conversation capped.
+  assert.doesNotMatch(fromSession.slice(0, fromSession.indexOf('</header>')), /id="restart"/u,
+    'the header button shares the capped notice’s id, which would break the notice’s own button');
+  // A file tab has no Asked button — there is no session to read back — and New chat is there anyway.
+  assert.doesNotMatch(fromFile, /id="asked"/u);
+});
+
+test('only ONE header control pushes the group right, so the two are not pushed apart', () => {
+  // `margin-left: auto` on two flex siblings splits the free space BETWEEN them: both buttons wearing
+  // it would sit apart rather than grouped at the right edge. So the look and the push are two
+  // classes, and only the first of the group wears the push. (gemini, the plan round.)
+  const html = chatPageHtml(state({ fromSession: true }), 'n1');
+  const header = html.slice(html.indexOf('<header>'), html.indexOf('</header>'));
+
+  assert.equal((header.match(/toRight/gu) ?? []).length, 1, 'more than one header control pushes itself right');
+  assert.match(header, /id="fresh" class="asked toRight"/u, 'the push is not on the first of the right-hand group');
+  assert.match(html, /\.toRight \{ margin-left: auto; \}/u, 'nothing pushes the group to the right edge at all');
+  assert.doesNotMatch(html, /\.asked \{ margin-left: auto;/u, 'the shared look still carries the push, so both buttons carry it');
+  // And the order: the ± controls, then New chat, then Asked.
+  assert.ok(header.indexOf('id="fresh"') > header.indexOf('</h1>'), 'New chat comes before the title');
+  assert.ok(header.indexOf('id="fresh"') < header.indexOf('id="asked"'), 'New chat comes after Asked');
+});
+
+test('the header button posts the SAME command as the capped notice’s, and posts it once', () => {
+  // One gesture, one host implementation. A second host path would be two places for one behaviour
+  // to drift, and the words on the two buttons say the same thing.
+  const page = chatPageHtml(state({ fromSession: true }), 'n1');
+  const wiring = page.slice(page.indexOf("getElementById('fresh')"));
+
+  assert.match(wiring.slice(0, 300), /vscode\.postMessage\(\{ type: 'command', command: 'restart' \}\)/u,
+    'the header button posts something other than the reset the notice’s button posts');
+  // Wired once, with the page: the header is not one of the regions a state push replaces, which is
+  // why the notice's button is re-wired on every redraw of its own region and this one is not.
+  assert.equal((page.match(/getElementById\('fresh'\)/gu) ?? []).length, 1, 'the header button is wired more than once');
+});
+
 test('a locked composer posts nothing, however it is asked', () => {
   const page = runChatPage({ running: true });
   page.seen['say'].value = 'while a turn runs';

@@ -17,6 +17,27 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
  * fourth way and no silent default, so a new command cannot merely be forgotten.</p>
  */
 
+test('every language’s chat article names the header button, not just the article key', () => {
+  // THIS TEST EXISTS BECAUSE THE ONE BELOW CANNOT SEE IT. `bodyFor` marks a translation that is
+  // MISSING; it cannot mark one that is merely a release out of date, and a reader of the Russian
+  // help is then told about a page that has moved. The control's own label is English in every
+  // language — as every other control name in this catalogue is — so it is the one string all five
+  // can be asked for. (codex, D2's plan round.)
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} chat article is missing, so a reader of it gets English`);
+    assert.match(
+      Object.values(body).join(' '),
+      /New chat/u,
+      `the ${language} chat article does not mention the New chat button, so a reader of it never learns `
+      + 'where the reset is — the article is a release out of date rather than absent, which nothing else here can see',
+    );
+  }
+});
+
 interface Manifest {
   contributes: {
     commands: Array<{ command: string; title: string }>;
