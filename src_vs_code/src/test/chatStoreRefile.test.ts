@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile } from '../chatStoreFile';
 import {
   CONVERSATION_VERSION,
+  besideMeta,
   ConversationRecord,
   sourceOfFile,
   sourceOfSession,
@@ -163,6 +164,41 @@ test('the store refuses to WRITE a record it could not read back', () => {
 
       // And the honest pair goes in without complaint, so the guard is not simply refusing everything.
       assert.equal((await store.save(record({ source: sourceOfSession('9f1c'), fromSession: true }), 0)).kind, 'ok');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  })();
+});
+
+test('a follow whose INDEX ENTRY could not be written says so, rather than reporting success', () => {
+  // The record is the commit, so the conversation really has moved — but the picker's index reads
+  // metadata ONLY. Reporting this as a success would have the caller refresh that index straight back
+  // onto the path the file left, and a later rename would compare against it and follow nothing.
+  // (CodeRabbit, on the pull request.)
+  return (async () => {
+    const dir = home();
+    try {
+      const store = new ChatStoreFile(dir);
+      assert.equal((await store.save(record(), 0)).kind, 'ok');
+      // A DIRECTORY where the index entry belongs: the record still writes, the entry cannot.
+      rmSync(join(dir, besideMeta('a1')));
+      mkdirSync(join(dir, besideMeta('a1')));
+
+      const quiet = console.error;
+      console.error = () => undefined;
+      let done;
+      try {
+        done = await store.refile('a1', sourceOfFile(WAS), sourceOfFile(NOW), 'D:\rsd\two', AT);
+      } finally {
+        console.error = quiet;
+      }
+
+      assert.equal(done.kind, 'unindexed', `a half-written follow reported itself as done: ${JSON.stringify(done)}`);
+      assert.equal(done.kind === 'unindexed' ? done.rev : 0, 2, 'the revision the record actually reached is not reported');
+      assert.ok((done.kind === 'unindexed' ? done.reason : '').length > 0, 'it does not say what went wrong');
+      // And the record itself DID move: the save committed, which is why this is not a failure.
+      const seen = await store.read('a1');
+      assert.deepEqual(seen.kind === 'record' ? seen.record.source : undefined, sourceOfFile(NOW), 'the conversation did not follow at all');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

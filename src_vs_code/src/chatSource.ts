@@ -111,33 +111,56 @@ export interface Moved {
  * `D:\rsd\coai` would otherwise file every conversation in the inner project under the outer one,
  * which is the same misfiling this story is removing, one level down.</p>
  *
- * <p>The comparison is on segment boundaries, so `D:\rsd\coai-old` is not inside `D:\rsd\coai`, and
- * it is case-blind on both separators because Windows paths reach here spelled either way and from
- * two programs — the editor's and Claude's.</p>
+ * <p>The comparison is on segment boundaries, so `D:\rsd\coai-old` is not inside `D:\rsd\coai`. The
+ * separator is always normalised, because a Windows path reaches here spelled either way and from two
+ * programs — the editor's and Claude's. <b>Case is folded only where the FILESYSTEM folds it</b>, which
+ * the caller says: on Linux `/work/App` and `/work/app` are two different folders, and treating them
+ * as one picks the wrong root and applies a rename to an unrelated conversation. (CodeRabbit, on the
+ * pull request.)</p>
+ *
+ * @param caseBlind whether this filesystem treats two spellings as one name — Windows and macOS do,
+ *   which is the same predicate `everyFolder` already uses to search for a session
  */
-export function rootOf(path: string, roots: readonly string[]): string {
-  const inside = roots.filter((root) => root.length > 0 && contains(root, path));
+export function rootOf(path: string, roots: readonly string[], caseBlind: boolean): string {
+  const inside = roots.filter((root) => root.length > 0 && contains(root, path, caseBlind));
 
   return inside.reduce((longest, root) => (root.length > longest.length ? root : longest), '');
 }
 
 /** Whether `path` is the folder `root` itself or something under it. */
-function contains(root: string, path: string): boolean {
-  const one = normal(root);
-  const other = normal(path);
+function contains(root: string, path: string, caseBlind: boolean): boolean {
+  const one = normal(root, caseBlind);
+  const other = normal(path, caseBlind);
 
   return other === one || other.startsWith(one.endsWith('/') ? one : `${one}/`);
 }
 
 /**
- * A path as it compares: one kind of separator, no trailing one, and case-blind.
+ * A path as it compares: one kind of separator, no trailing one, and case folded only if it should be.
  *
  * <p>`toLowerCase`, NOT `toLocaleLowerCase`. A path comparison has no business being
  * locale-sensitive: under a Turkish locale `I` lowercases to a dotless `ı`, so two spellings of
  * one ASCII path stop matching and the conversation is filed under no root at all. (gemini, the
- * code round.)</p>
+ * code round.) And it folds at all only when the filesystem does — the two are different questions,
+ * and answering the first had quietly answered the second.</p>
  */
-const normal = (path: string): string => path.replace(/[\\/]+/gu, '/').replace(/\/+$/u, '').toLowerCase();
+const normal = (path: string, caseBlind: boolean): string => {
+  const tidy = oneSeparator(path).replace(TRAILING, '');
+
+  return caseBlind ? tidy.toLowerCase() : tidy;
+};
+
+/** Every run of separators, either kind, as one forward slash. */
+const oneSeparator = (path: string): string => path.replace(/[\\/]+/gu, '/');
+
+/**
+ * The trailing separator, if there is one.
+ *
+ * <p>ONE, not a run, and that is not cosmetic: `oneSeparator` has already collapsed every run, so at
+ * most one can be left — and a `+` here makes the engine backtrack over a long tail of them for a
+ * string that can no longer contain one. (SonarCloud: super-linear runtime.)</p>
+ */
+const TRAILING = /\/$/u;
 
 /**
  * Where a conversation is filed, given what its source knows and what the window has open.
@@ -148,8 +171,8 @@ const normal = (path: string): string => path.replace(/[\\/]+/gu, '/').replace(/
  * @param fallback the answer for a source that names nothing: the first root, which is what every
  *   record had before this story and is therefore not a change for any of them
  */
-export function filedUnder(known: string, roots: readonly string[], fallback: string): string {
-  const root = rootOf(known, roots);
+export function filedUnder(known: string, roots: readonly string[], fallback: string, caseBlind: boolean): string {
+  const root = rootOf(known, roots, caseBlind);
 
   return root.length > 0 ? root : fallback;
 }
@@ -166,11 +189,13 @@ export interface Prepared {
   readonly move: Moved;
   /** `move.from`, normalised for comparison. */
   readonly from: string;
+  /** The rule it was normalised under, so the source it is compared against is normalised the same way. */
+  readonly caseBlind: boolean;
 }
 
 /** Put the renames into comparable form, once, before anything is asked about them. */
-export const prepareMoves = (renames: readonly Moved[]): readonly Prepared[] =>
-  renames.map((move) => ({ move, from: normal(move.from) }));
+export const prepareMoves = (renames: readonly Moved[], caseBlind: boolean): readonly Prepared[] =>
+  renames.map((move) => ({ move, from: normal(move.from, caseBlind), caseBlind }));
 
 /**
  * Where a renamed file went, for a conversation whose source is a `file:` URI — or empty when this
@@ -196,9 +221,12 @@ export function movedTo(
   if (was.length === 0) {
     return '';
   }
-  const here = normal(was);
   const hit = renames
-    .filter((one) => here === one.from || here.startsWith(`${one.from}/`))
+    .filter((one) => {
+      const here = normal(was, one.caseBlind);
+
+      return here === one.from || here.startsWith(`${one.from}/`);
+    })
     .reduce<Prepared | undefined>((closest, one) => (closest === undefined || one.from.length > closest.from.length ? one : closest), undefined);
   if (hit === undefined) {
     return '';
