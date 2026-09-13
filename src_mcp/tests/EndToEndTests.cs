@@ -254,6 +254,66 @@ public sealed class EndToEndTests : IAsyncLifetime
             .Should().Equal("revise", "proceed", "proceed");
     }
 
+    /// <summary>
+    /// The caller accepted three findings, and the next round handed them straight back.
+    /// </summary>
+    /// <remarks>
+    /// <para>Phase 2's instrument, driven end to end rather than asserted about: a real session, real
+    /// rounds through the fake CLI, real decisions, and the number read back out of the database the
+    /// panel reads. What no unit test can see is that the count is written where the ROUND is
+    /// projected — three classes have to agree (the gate merges, the store records the decisions, the
+    /// projection asks about them) and nothing joins them but this path.</para>
+    /// <para><b>Nothing is called.</b> The round proceeds exactly as it would have; the only
+    /// difference is a number on the row and one line in the audit.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AnAcceptedFindingRaisedAgain_IsCountedOnTheRound_AndNothingIsCalled()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        // Round 1: four findings, and the caller accepts every one of them.
+        Script(FourMajors);
+        var round1 = Parse(await service.ReviewPlanAsync(_repo, "feature", "the flawed plan"));
+        await service.ResolveAsync(_repo, "feature", AcceptAll(round1));
+
+        // Round 2: the vendors say the SAME things. The plan changed; the defects did not.
+        Script(FourMajors);
+        var round2 = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan, revised"));
+        round2.GetProperty("findings").GetArrayLength().Should().Be(4, "the round runs exactly as before");
+
+        var rounds = Store.RoundsQuery.Read(_data).Rounds;
+        var first = rounds.Single(r => r.Number == 1);
+        var second = rounds.Single(r => r.Number == 2);
+
+        second.ConsultMissed.Should().Be(4, "every finding the caller accepted came back");
+        first.ConsultMissed.Should().Be(0, "the first round had nothing to have accepted yet");
+    }
+
+    [Fact]
+    public async Task ARoundThatFixedWhatItAccepted_CountsNothing()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        Script(FourMajors);
+        var round1 = Parse(await service.ReviewPlanAsync(_repo, "feature", "the flawed plan"));
+        await service.ResolveAsync(_repo, "feature", AcceptAll(round1));
+
+        // A different defect this time, which is what a round after a real fix looks like. NOT
+        // `OneMajor`: that fixture repeats the first of `FourMajors` verbatim — which the counter
+        // noticed the first time this test ran, and is the shape of the thing it exists to find.
+        Script("""
+            {"findings": [
+              {"severity": "major", "category": "performance", "file": "other.cs", "line": 8,
+               "title": "the cache is rebuilt on every request", "why": "one allocation per call", "fix": "hold it"}
+            ]}
+            """);
+        await service.ReviewPlanAsync(_repo, "feature", "the improved plan");
+
+        Store.RoundsQuery.Read(_data).Rounds.Single(r => r.Number == 2).ConsultMissed.Should().Be(0);
+    }
+
     [Fact]
     public async Task CodeRound_WithEveryReviewerFailing_CallsAHuman_NeverProceeds()
     {

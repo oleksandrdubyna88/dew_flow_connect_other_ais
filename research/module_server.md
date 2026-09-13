@@ -107,6 +107,25 @@ when its file cannot be written the cap is enforced in memory for this server's 
 says so — the opposite of `CallerSessions`' split-order claim, because a repeated instruction is cheap
 and a runaway agent on a paid vendor is not.
 
+**And the question phase 2 has to answer is now a NUMBER** (2026-09-13). `consult_missed` on a round
+counts the findings it handed back that the caller had already ACCEPTED — agreed with, changed the
+code or the plan for, and met again. That is not `re_raised`, which is a reviewer pressing a standing
+REJECTION: a disagreement the caller is defending, and the more interesting of the two for reading an
+argument. This is the more expensive one, because nobody is disagreeing — the fix did not take.
+
+It is counted inside the projection, where the DECISIONS live (the session file holds what a round
+found; the database holds what was done about it), matched by `FindingDedup.SameDefect` — this
+product's own rule for "the same defect", rather than a second similarity rule written beside it —
+and scoped to earlier rounds of the SAME session and stage, since a plan-stage remark has no file and
+a code-stage one usually does. A round the projection could not ask about keeps `-1`, the
+`accepted`/`rejected` convention: a round nobody measured must not read as a round where nothing
+survived.
+
+**Nothing is called.** One line in the audit says an automatic consultation *could* have fired here,
+with the count and the rounds; the number rides on `--log`; no page shows it. A trigger that fired
+before anybody had read the number would be the same guess with a cost attached, and what the number
+is for is deciding whether that trigger should exist at all.
+
 **The person's own trigger is an MCP PROMPT** (2026-09-13). Four of the five triggers are the
 assistant's to notice; the fifth is the person saying so, and a sentence in a chat is a weak carrier
 for it — it competes with everything else being said, and it names neither the repository nor the

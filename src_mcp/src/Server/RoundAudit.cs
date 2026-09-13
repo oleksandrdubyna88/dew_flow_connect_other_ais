@@ -176,6 +176,23 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
     private static string Humanised(TimeSpan span) =>
         span.TotalMinutes >= 1 ? $"{span.TotalMinutes:0} min" : $"{span.TotalSeconds:0}s";
 
+    /// <summary>
+    /// That this round handed back findings the caller had already accepted.
+    /// </summary>
+    /// <remarks>
+    /// One line, and it says what COULD have happened rather than what should: the whole point of
+    /// story 6 is to turn "should a consultation fire when a finding survives two rounds" from an
+    /// impression into a number, and a sentence that instructed anybody would be phase 2 arriving
+    /// without its evidence. The number itself is on the round, in <c>consult_missed</c>.
+    /// </remarks>
+    public void Stuck(string sentence)
+    {
+        if (sentence.Length > 0)
+        {
+            _log.Information("{Stuck}", ForALogLine(sentence));
+        }
+    }
+
     /// <summary>Every finding the round produced, so a later dispute has the original text.</summary>
     public void Findings(IReadOnlyList<Finding> findings)
     {

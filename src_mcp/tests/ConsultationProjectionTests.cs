@@ -233,7 +233,13 @@ public sealed class ConsultationProjectionTests : IDisposable
             make.ExecuteNonQuery();
         }
 
-        RoundsQuery.Read(_dir).Consultations.Should().BeEmpty();
+        var log = RoundsQuery.Read(_dir);
+
+        log.Consultations.Should().BeEmpty();
+        // And the ROUNDS list still draws, which is the half that cannot answer "none": naming a
+        // column that file has never had failed the whole page. Found by this test the first time
+        // story 6's counter was selected.
+        log.Rounds.Should().BeEmpty("an empty database has no rounds either, but asking must not throw");
     }
 
     /// <summary>

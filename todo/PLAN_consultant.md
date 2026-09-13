@@ -566,7 +566,20 @@ lock and fence are the security half and stay on Fable.
       and the pasted snippet is the two halves under ONE marker stamped over the composed artefact —
       `SNIPPET_VERSION` 6, the hash re-pinned, the menu item's `(v6)`. No conventions commit, so no
       consumer's pin went stale and there was no cascade to run.
-- [ ] **S6 — the counter.** `StuckFindings.SurvivedAcceptance` in `Project`, the column, the audit line.
+- [x] **S6 — the counter.** `StuckFindings.SurvivedAcceptance` in `Project`, the column, the audit line.
+
+      **One deviation.** The plan said "on a code round"; it counts on EVERY round, scoped to earlier
+      rounds of the same session and STAGE. The column is on every row, the predicate is stage-agnostic,
+      and a plan round that keeps producing a finding the caller already accepted is the same signal —
+      the caller rewrote the plan and the defect survived the rewrite. Scoping it to one stage is what
+      keeps the comparison meaningful, since a plan-stage remark has no file and a code-stage one
+      usually does.
+
+      The counter found its first real repeat in this repository's own test fixtures: `OneMajor`
+      repeats the first finding of `FourMajors` verbatim, which is why the "nothing survived" scenario
+      scripts a defect of its own. And selecting the new column broke the ROUNDS list against a
+      database written before schema step 2 — caught by story 4's compatibility test, fixed by asking
+      the file whether it has the column rather than assuming it.
 - [ ] **Docs (DoD of every story):** `research/module_server.md` (the ninth tool, the consultation channel,
       the invariant, the lock), `module_runners.md` (consultant adapters, the working-tree collector, the
       `--ephemeral` trade), `module_extension.md` (section, card, log list), `module_core.md`,

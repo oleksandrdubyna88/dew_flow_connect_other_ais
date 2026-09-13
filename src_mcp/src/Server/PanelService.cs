@@ -1298,13 +1298,30 @@ public sealed partial class PanelService
             // And into the database, with what the round was ABOUT. Best-effort by construction:
             // the round is already answered and saved, and a projection that cannot be written must
             // never take it down.
-            Project(db => db.RecordRound(
-                completed.State,
-                record,
-                merged,
-                // Which AI asked for it rides on `record` itself — see RoundContext's remarks.
-                new Store.RoundContext(
-                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
+            Project(db =>
+            {
+                db.RecordRound(
+                    completed.State,
+                    record,
+                    merged,
+                    // Which AI asked for it rides on `record` itself — see RoundContext's remarks.
+                    new Store.RoundContext(
+                        planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record)));
+
+                // Phase 2's instrument, and NOTHING is called: how many findings this round handed
+                // back that the caller had already accepted and fixed. It is counted here because
+                // this is where the decisions live — the session file holds what a round found, the
+                // database holds what was done about it — and it is inside the projection because a
+                // measurement must never be able to take a round down. A round the projection could
+                // not ask about keeps `-1`, which is the absence of a measurement rather than a zero.
+                var stuck = Core.Gate.StuckFindings.SurvivedAcceptance(
+                    merged, db.AcceptedEarlier(completed.State.SessionId, record.Stage, record.Number));
+                db.RecordConsultMissed(completed.State.SessionId, record.Stage, record.Number, stuck.Count);
+                if (stuck.Count > 0)
+                {
+                    audit.Stuck(stuck.Sentence);
+                }
+            });
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }

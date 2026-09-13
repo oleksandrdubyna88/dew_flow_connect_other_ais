@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Gate;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
 using Microsoft.Data.Sqlite;
@@ -199,6 +200,74 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$problem", row.Problem);
         Bind(write, "$advice", row.Advice);
         Bind(write, "$alert", row.Alert);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// What this caller ACCEPTED in earlier rounds of the same session and stage.
+    /// </summary>
+    /// <remarks>
+    /// <para>The input to story 6's counter. Same STAGE, because a plan-stage remark has no file and
+    /// a code-stage one usually does — comparing across them would match on category alone and count
+    /// coincidences.</para>
+    /// <para>Only what is needed to decide "the same defect": the category, the file, the line and
+    /// the title. The severity is filled with the row's own, and the rest of the finding is left at
+    /// its defaults, because nothing downstream reads them — <see cref="FindingDedup.SameDefect"/>
+    /// looks at four fields and this is the shape that says so.</para>
+    /// </remarks>
+    public IReadOnlyList<AcceptedEarlier> AcceptedEarlier(string sessionId, string stage, int number)
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = """
+            SELECT r.number, f.severity, f.category, f.file, f.line, f.title
+            FROM findings f JOIN rounds r ON r.id = f.round_id
+            WHERE r.session_id = $session AND r.stage = $stage AND r.number < $number
+              AND f.resolution = 'accept'
+            ORDER BY r.number
+            """;
+        Bind(read, "$session", sessionId);
+        Bind(read, "$stage", stage);
+        Bind(read, "$number", number);
+
+        var accepted = new List<AcceptedEarlier>();
+        using var rows = read.ExecuteReader();
+        while (rows.Read())
+        {
+            accepted.Add(new AcceptedEarlier(
+                rows.GetInt32(0),
+                new Finding(
+                    Enum.TryParse<Severity>(rows.GetString(1), out var severity) ? severity : Severity.Major,
+                    Enum.TryParse<Category>(rows.GetString(2), out var category) ? category : Category.Reliability,
+                    rows.GetString(3),
+                    rows.GetInt32(4),
+                    rows.GetString(5),
+                    string.Empty,
+                    string.Empty,
+                    [])));
+        }
+
+        return accepted;
+    }
+
+    /// <summary>
+    /// How many accepted findings this round was handed back. <c>-1</c> until something counted.
+    /// </summary>
+    /// <remarks>
+    /// The <c>accepted</c>/<c>rejected</c> convention, for the same reason: a round the projection
+    /// could not ask about must not read as a round where nothing survived. Zero is a measurement and
+    /// -1 is the absence of one.
+    /// </remarks>
+    public void RecordConsultMissed(string sessionId, string stage, int number, int missed)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE rounds SET consult_missed = $missed
+            WHERE session_id = $session AND stage = $stage AND number = $number
+            """;
+        Bind(write, "$missed", missed);
+        Bind(write, "$session", sessionId);
+        Bind(write, "$stage", stage);
+        Bind(write, "$number", number);
         write.ExecuteNonQuery();
     }
 
