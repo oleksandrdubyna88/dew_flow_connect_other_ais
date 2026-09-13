@@ -6,6 +6,7 @@ import { writeFileAtomically } from './atomicFile';
 import {
   ConversationMeta,
   ConversationRecord,
+  ConversationSource,
   besideMeta,
   expired,
   idOfMeta,
@@ -13,6 +14,7 @@ import {
   isStale,
   metaFrom,
   metaOf,
+  sameSource,
   recordFrom,
   recordName,
 } from './chatStore';
@@ -182,6 +184,12 @@ export type ForgetOutcome =
   | { readonly kind: 'failed'; readonly reason: string };
 
 /** What retiring an expired conversation came to; `kept` names why, for the sweep to count and the next one to look at again. */
+/** What following a moved file came to. `kept` is not a failure — the record was not this one to move. */
+export type RefileOutcome =
+  | { readonly kind: 'followed'; readonly rev: number }
+  | { readonly kind: 'kept'; readonly why: 'busy' | 'absent' | 'incompatible' | 'unavailable' | 'moved on' }
+  | { readonly kind: 'failed'; readonly reason: string };
+
 export type RetireOutcome =
   | { readonly kind: 'retired' }
   | { readonly kind: 'kept'; readonly why: 'held' | 'absent' | 'changed' | 'not expired' | 'incompatible' | 'unavailable' }
@@ -388,6 +396,75 @@ export class ChatStoreFile {
     }
     try {
       return await this.saveClaimed({ ...record, rev: expectedRev + 1 }, expectedRev);
+    } finally {
+      await claim.release();
+    }
+  }
+
+  /**
+   * Follow a conversation whose file has MOVED: a new source and the root it now belongs to, written
+   * as one revision.
+   *
+   * <p>Read and write INSIDE one claim, rather than a read followed by a save. A save-after-read
+   * would be the check-then-act this module has been corrected for twice, and answering a refusal by
+   * retrying is a loop whose exit condition is somebody else stopping — three reviewers asked for a
+   * lock-ordered follow in this story's plan round, and this is it. Nothing is retried because
+   * nothing races: the record is probed and replaced without the claim being let go.</p>
+   *
+   * <p><b>Both facts move together.</b> A file dragged into another workspace root changes where it
+   * is AND which project it belongs to, and writing the uri alone would leave the conversation filed
+   * under the root it left — invisible in exactly the folder the person is now looking at, which is
+   * the misfiling this story exists to remove.</p>
+   *
+   * <p>It is `kept` rather than failed when the record has moved on: a window that closed the
+   * conversation, or another window that followed the same rename first, has left a source that is no
+   * longer the one being replaced, and overwriting it would undo their work.</p>
+   *
+   * @param was the source this caller believes is on disk; anything else is left alone
+   */
+  public async refile(
+    id: string,
+    was: ConversationSource,
+    now: ConversationSource,
+    workspace: string,
+    at = Date.now(),
+  ): Promise<RefileOutcome> {
+    if (!isSafeId(id)) {
+      return { kind: 'failed', reason: 'a conversation id that cannot be a filename' };
+    }
+    const claim = await claimConversation(this.dir, id, 'refile', at);
+    if (claim.kind === 'failed') {
+      return { kind: 'failed', reason: claim.reason };
+    }
+    if (claim.kind === 'held') {
+      return { kind: 'kept', why: 'busy' };
+    }
+    try {
+      const seen = await this.probe(id);
+      if (seen.kind !== 'record') {
+        return { kind: 'kept', why: seen.kind };
+      }
+      if (!sameSource(seen.record.source, was)) {
+        return { kind: 'kept', why: 'moved on' };
+      }
+      const written = { ...seen.record, rev: seen.record.rev + 1, source: now, workspace };
+      const done = await this.saveClaimed(written, seen.record.rev);
+
+      if (done.kind === 'ok' || done.kind === 'partial') {
+        return { kind: 'followed', rev: done.rev };
+      }
+
+      // EXHAUSTIVE BY NAME over what is left, like every other answer read in this feature. `busy`
+      // cannot arrive — the claim is held, and `saveClaimed` never takes it — and `refused` cannot
+      // either, because the baseline is the revision just probed inside that claim. Both are
+      // reported rather than assumed away, so a change to the swap's answers is a sentence here and
+      // not a silently wrong outcome.
+      return {
+        kind: 'failed',
+        reason: done.kind === 'busy'
+          ? 'the conversation was claimed by somebody while this window held its claim'
+          : done.kind === 'refused' ? 'the conversation changed under the claim' : done.reason,
+      };
     } finally {
       await claim.release();
     }

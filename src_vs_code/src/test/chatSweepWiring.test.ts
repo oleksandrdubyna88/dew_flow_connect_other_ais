@@ -46,7 +46,9 @@ test('the chat pulses the heartbeat at every place the set of open conversations
   assert.match(after('  panels.open({}, saved.title, () => entry);', 200), /pulse\?\.\(\);/u, 'a restored conversation is not announced');
   assert.match(after('        threads.delete(id);', 80), /pulse\?\.\(\);/u, 'a closed conversation is still announced as open');
   assert.match(after('thread.saveId = randomUUID();', 4_000), /pulse\?\.\(\);/u, 'a conversation re-minted under a new id is announced under the old');
-  const pinned = command.indexOf('pinSession(entry.id, state.title, state.fromSession)');
+  // The pin takes the ENTRY rather than its id since story C1: it writes the conversation's source
+  // when the session is found, and writing needs the entry the note would go to.
+  const pinned = command.indexOf('pinSession(entry, state.title, state.fromSession)');
   assert.notEqual(pinned, -1, 'the pin after a new conversation is gone from chatCommand.ts');
   assert.match(command.slice(pinned - 400, pinned), /pulse\?\.\(\);/u, 'a newly opened conversation is not announced');
   assert.match(command, /export function heldConversationIds\(panels: ChatPanels\)/u, 'nothing reads the open conversations from the registry');

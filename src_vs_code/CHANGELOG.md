@@ -50,6 +50,18 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
+**Conversations are filed under the project they actually belong to.** If you work in a multi-root
+window, every chat used to be recorded against the FIRST folder — so a conversation started in the
+second one never appeared when the list was filtered to that folder, even though it was open in front
+of you. A conversation now remembers which root it came from: the folder its file is in, or the one
+its Claude session was found in.
+
+**And a file that moves takes its conversation with it.** Rename or drag a file — including into
+another project in the same window — and the conversation you had about it follows, both the file it
+names and the folder it is listed under. A conversation started from an unsaved buffer is the one
+exception: the editor does not say which buffer a newly saved file used to be, so that conversation
+keeps its place in the list and is found there rather than being attached to the wrong file.
+
 **Typing now searches all of your conversations, not the hundred newest.** The list draws at most a
 hundred rows, and the filter ran over what had been drawn — so if you had more than that, the older
 ones could not be found by typing their own titles, which is the one thing the list is for. What you

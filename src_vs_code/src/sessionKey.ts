@@ -58,6 +58,16 @@ export interface TabSnapshot {
    * to date. Optional, so every snapshot written before the second door compiles unchanged.</p>
    */
   readonly scheme?: string;
+  /**
+   * The WHOLE uri of that document, as `Uri.toString()` spells it — empty for a tab with none.
+   *
+   * <p>The scheme above says what KIND of tab this is; this says WHICH document, and it is what a
+   * conversation opened from a file is filed under and found by. They are read from the same place
+   * and kept apart because the scheme is a question about eligibility, asked on every snapshot, and
+   * this is an identity, used only when a conversation is created. Optional, so every snapshot
+   * written before story C1 compiles unchanged.</p>
+   */
+  readonly uri?: string;
 }
 
 /** A panel the registry already holds, and the tab it was opened for. */

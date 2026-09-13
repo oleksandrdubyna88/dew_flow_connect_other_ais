@@ -2262,6 +2262,70 @@ and the filename set catches anything added or removed regardless. It publishes 
 no reader sees it half-built; it keeps its last good rows when a refresh fails; and it is published
 after the sweep, or it would hold a row for a record being removed.
 
+## A conversation learns what it was opened from (2026-09-13)
+
+Epic A gave a record a `source` and a `workspace`. Nothing ever wrote a real value into either:
+`source` was always `none`, and `workspace` was always the FIRST root the window had open. Story C1
+is what fills both in, and it is the thing *go to* will match a tab against.
+
+### The workspace is captured, never derived on read
+
+The first design made the root a pure function of the source and the window's roots, worked out
+whenever anybody asked. Three reviewers refused it independently, and they were right: a Claude
+conversation's source is a **session UUID**, and a UUID names no directory. Such a function has
+nothing to match against the roots, so it would fall back to the first one every time — which is the
+exact misfiling this story exists to remove, rebuilt inside its own repair.
+
+So the root is worked out ONCE, from something that genuinely knows it — the file's own path, or the
+folder the Claude session was found in — and written onto the record. `findSession` used to flatten
+its per-folder answers and throw the folder away; it now keeps it, because remembering where a
+session was found is the only honest way to know which project it belongs to. Decoding it out of
+Claude's own encoded directory name was the alternative and was declined: another program's
+undocumented encoding, and a decoder that drifts misfiles conversations silently.
+
+**What this fixes, beyond C2's feature:** in a multi-root window every conversation was filed under
+root one, so a chat opened in the second root was invisible to epic B's picker when it was filtered
+to the second root. The scope was quietly lying about a conversation that was right there.
+
+### Two writers now, and one queue
+
+A Claude session's id arrives from a background walk, minutes after the page last changed — and
+`show`'s dedupe guard compares messages, model and mark, so a source landing on its own would never
+have reached disk through that path. The pin therefore writes explicitly, through the same queue the
+page uses (`keepQueued`), because two writes issued before the first answers both carry the revision
+this window last accepted: the second is refused, a refusal reads as another window, and the tab
+would fork itself.
+
+It is not transactional, deliberately. If the host dies between the pin and the write, the record
+keeps `source: none` until the conversation's next save — and on a reload the tab pins again and
+writes it again. Making the pin WAIT on a disk would trade a rare inconsistency for a routine stall
+on a button whose whole point is to answer at once.
+
+### A file that moves takes its conversation with it — and a saved buffer does not
+
+`onDidRenameFiles` carries an explicit old-to-new mapping, so a move is followed with no guessing:
+a live conversation through its thread and the queue, a closed one through the store's `refile`,
+which reads and replaces **inside one claim**. The ids this window holds are skipped in the store
+pass, or the two halves would race for one record. A rename rewrites the uri AND recomputes the root
+in the same revision, because a file dragged into another project changes both and writing one alone
+leaves the conversation filed where it used to be.
+
+`onDidSaveTextDocument` is deliberately NOT listened to. It hands over the saved document and no
+previous uri, and saving an untitled buffer closes that document and opens a different one — so
+nothing links the two, and a listener would attach a conversation to the wrong file as readily as to
+the right one. This repository has no extension-host harness to prove which. An untitled conversation
+keeps its `untitled:` source and is found in the picker, which is already the rule for a source that
+no longer names anything. A wiring test pins the absence, so adding one is a decision somebody makes
+on purpose.
+
+### A record states its origin twice, and they must agree
+
+`agreeOnOrigin` refuses a record whose `source` is a Claude session while `fromSession` is false, and
+that rule earned its keep here: a test fixture that violated it **saved and then could not be read
+back** — `incompatible`, which would have made every Claude conversation unopenable the moment this
+story started writing session sources. The production path cannot produce the pair (`pinSession`
+returns before writing anything unless the tab has a session), and a wiring test now says so.
+
 ## A list of your conversations, and a way back into any of them (2026-09-13)
 
 The three sections above are machinery: a store, a cut-over, a keeper. None of it was reachable from
