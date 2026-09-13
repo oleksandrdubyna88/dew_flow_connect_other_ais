@@ -2366,6 +2366,66 @@ the picker and measures the retention window — a refactor moving a file is not
 a conversation); a timeout on the session walk (no walk here has one, and one applied at a single
 site is the defect the conventions name); and a progress indicator for background pinning.
 
+## Which conversation belongs to this tab (2026-09-13)
+
+Epic B's picker is a list a person searches BY HAND. This is the other half of what was asked for:
+press once on the tab you are working in and arrive in the conversation about it, two days later,
+without hunting. C1 gave every conversation a durable source; `chatGoto.ts` is what reads it. The
+command is story C3 — nothing here is wired.
+
+### Six answers, and a title is never one of them
+
+**reveal** what this window already holds — asked first, decided on the TAB rather than on a source,
+so it is instant and right even for a conversation that has none. **reopen** the one saved
+conversation carrying this tab's source *and* its root. **pick** with a reason. **start**.
+**everything** for a terminal or the Output pane, which is the operator's decision that a tab with
+nothing behind it gets the list rather than silence. **building** while the index is still being
+read.
+
+### It never guesses, and that is load-bearing three times over
+
+Two candidates is a picker, not the newer of the two. An index that could not be READ never yields
+`reopen` at all — its rows may be behind, and binding a tab to one is the same guess wearing a disk.
+An index that is still BUILDING is not an empty store: it is empty for a window's first seconds, and
+answering `start` there offers a second conversation for a tab that already has one.
+
+A source of `none` matches nothing, including another `none`. That single line of `sameSource` is
+what keeps every conversation written before C1 from being handed to a tab that never owned it.
+
+### The root is the tab's own
+
+Not membership in the window's roots: with two open, membership lets a record filed under the first
+attach to a tab under the second. It is worked out through `filedUnder` — the very function C1 files
+a conversation with — so the two halves are the same code and not merely the same intention. And the
+two roots are compared as PATHS, under the filesystem's own case rule, because the record's workspace
+was written by a window that may have spelled it differently.
+
+**A conversation about this file in ANOTHER project is offered, not hidden.** Dropping it to silence
+would offer to start a new one while the old sits a folder away — the duplicate the root rule exists
+to prevent, produced by the rule itself. It is a `pick` that says so, and it carries `bind: false`:
+such a conversation is opened under its own key and stays filed where it is, because re-homing
+somebody's conversation because they went looking for it is a decision they did not ask for.
+
+### What the code rounds changed
+
+**The ambiguous picker was empty**, and four reviewers found it independently — the one defect here
+that would have shipped looking like a working feature. An ambiguous Claude tab has no resolvable
+source, so filtering candidates by source left none, and the picker asked which conversation the
+person meant while offering none of them. The source is what is in doubt on that path; the rows are
+narrowed by root alone.
+
+**And the input contract contradicted that fix.** `candidates` was documented as the source matches,
+which is empty exactly when the ambiguous path needs rows — so a caller reading the contract would
+have rebuilt the bug. There are two lists now: the source matches from every root, and this root's
+rows whatever their source.
+
+Also: `bindable` checks BOTH halves of the ownership key, since a record re-filed into another
+project between the decision and the press would otherwise still bind; the tab kind, the refile
+outcome and the save outcome became exhaustive switches with a `never`; an unknown tab kind answers
+"not eligible" rather than throwing, because a crash at that moment would take away the very list
+the operator's decision requires; and the rename batch carries one case rule rather than one per
+entry, so a mixed batch cannot be represented.
+
 ## A list of your conversations, and a way back into any of them (2026-09-13)
 
 The three sections above are machinery: a store, a cut-over, a keeper. None of it was reachable from
