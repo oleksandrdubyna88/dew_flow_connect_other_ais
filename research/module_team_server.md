@@ -734,6 +734,8 @@ roles will run", and nothing was looking.
 `ReviewEndpoints.CanonicalRole` is gone; `Accepted` asks `AcceptedRoles.Canonical` and the result
 feeds both the `JobRecord` and `Idempotency.Fingerprint`. Two clients disagreeing about the case of a
 role therefore submit ONE job under one key, rather than two that a later ledger view has to merge.
+**The role is TRIMMED, like the kind and the idempotency key beside it.** It was the one input at this boundary that was not, so a stray space made the shape rule refuse a perfectly good role and explain that a role id is latin and carries no hyphen. The ends only: a space in the middle is an id that could never be an environment variable. This is also what now catches a TRAILING newline — it is removed before anything looks at the shape — while the \A…\z anchors still refuse an interior one.
+
 **Nothing is nothing, however it was spelled**: an absent role and one sent as three spaces both
 canonicalise to empty, because returning `"   "` put whitespace into the record and the fingerprint
 and made the same review two jobs depending on which way a client said nothing.

@@ -143,8 +143,31 @@ public sealed partial class AcceptedRoles
         + "48 characters — it becomes the environment variable COAI_ROUNDS_<ID>.";
 
     /// <summary>Whether this could be a role id at all, before asking whether it is one of ours.</summary>
+    /// <remarks>
+    /// Takes what a caller SENT and trims it — see <see cref="Said"/> for why the ends are forgiven
+    /// and the middle is not.
+    /// </remarks>
     public static bool WellFormed(string? id) =>
-        !string.IsNullOrEmpty(id) && id.Length <= MaxIdLength && RoleId.IsMatch(id);
+        Shaped(Said(id));
+
+    private static bool Shaped(string id) =>
+        id.Length > 0 && id.Length <= MaxIdLength && RoleId.IsMatch(id);
+
+    /// <summary>
+    /// What a caller meant by the role they sent: trimmed, and empty when they meant nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every other field at this boundary is already read this way — <c>JobKinds.Named</c>
+    /// trims the kind, and the endpoint trims the idempotency key. The role was the one that was not,
+    /// so <c>" Architecture "</c> was refused by the SHAPE rule and told that a role id is latin and
+    /// carries no hyphen, which is not what was wrong with it, while the same name without the spaces
+    /// was accepted. Three inputs at one boundary, two of them forgiving. (gemini, story 2's second
+    /// code round.)</para>
+    /// <para><b>The ends only.</b> A space in the middle is an id that could never be an environment
+    /// variable, and it stays refused — trimming is forgiveness for a stray keystroke, not a licence
+    /// to rewrite what somebody sent.</para>
+    /// </remarks>
+    private static string Said(string? raw) => raw?.Trim() ?? string.Empty;
 
     /// <summary>Whether this server will run a role by this name.</summary>
     /// <remarks>
@@ -153,7 +176,7 @@ public sealed partial class AcceptedRoles
     /// membership refuses one of them first. (gemini, the plan round.)
     /// </remarks>
     public bool Knows(string? id) =>
-        WellFormed(id) && (AllowAny || _spelling.ContainsKey(id!));
+        WellFormed(id) && (AllowAny || _spelling.ContainsKey(Said(id)));
 
     /// <summary>
     /// The spelling to RECORD for a role somebody named.
@@ -172,14 +195,15 @@ public sealed partial class AcceptedRoles
     /// the question to the operator. Three reviewers refused that independently, and one of them
     /// named this answer.</para>
     /// </remarks>
-    public string Canonical(string? said)
+    public string Canonical(string? raw)
     {
         // NOTHING is nothing, however it was spelled. A client omitting the field and one sending
         // three spaces mean the same thing, and returning "   " from here put whitespace into
         // `JobRecord.Role` and into the idempotency fingerprint — so the same review, sent by the
         // same person, was two jobs depending on which of the two ways they said nothing. Quoting
         // the input back is `Refusal`'s job, not this one's. (gemini, story 2's code round.)
-        if (string.IsNullOrWhiteSpace(said))
+        var said = Said(raw);
+        if (said.Length == 0)
         {
             return string.Empty;
         }
@@ -187,14 +211,14 @@ public sealed partial class AcceptedRoles
         // Shape next, and it is not only tidiness: a malformed 4 KB id is about to be refused, and
         // folding it for a lookup that cannot match allocates a 4 KB copy per request on input
         // nobody here controls. (codex, story 1's code round.)
-        if (!WellFormed(said))
+        if (!Shaped(said))
         {
             return said;
         }
 
-        return _spelling.TryGetValue(said!, out var known) ? known
-            : AllowAny ? Fold(said!)
-            : said!;
+        return _spelling.TryGetValue(said, out var known) ? known
+            : AllowAny ? Fold(said)
+            : said;
     }
 
     /// <summary>
@@ -207,15 +231,16 @@ public sealed partial class AcceptedRoles
     /// operator the server accepts five roles when it accepts any — the opposite of what is wrong
     /// with their request. (gemini and local, the plan round.)
     /// </remarks>
-    public string? Refusal(string? said)
+    public string? Refusal(string? raw)
     {
         // Missing is not malformed. "'' is not a role id" tells somebody who sent no role that the
         // empty string was rejected, which is true and useless. (gemini, this story's code round.)
-        if (string.IsNullOrWhiteSpace(said))
+        var said = Said(raw);
+        if (said.Length == 0)
         {
             return $"a review needs a role. Accepted: {string.Join(", ", Names)}";
         }
-        if (!WellFormed(said))
+        if (!Shaped(said))
         {
             return $"'{said}' is not a role id. {ShapeRule}";
         }
