@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { openConversations, restoreConversation, revealConversation } from './chatCommand';
+import { openConversations, restoreConversation, revealBound, whereConversationSits } from './chatCommand';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
 import { ConversationMeta, ConversationRecord } from './chatStore';
@@ -133,6 +133,16 @@ export interface Narrowed {
   /** Whether the cursor starts on that row, for the answer that is really "there is none yet". */
   readonly startOnNew: boolean;
   /**
+   * What choosing the offer DOES — and, by its presence, whether the offer is drawn at all.
+   *
+   * <p>The row said *Nothing is created until you choose this* and choosing it did nothing: the
+   * accept handler is total by kind and simply returned, because when it was written no caller
+   * offered the row. A row nothing can complete is now never shown, which is why this is the same
+   * switch as the offer rather than a second one beside it. The picker still knows nothing about
+   * chats — the caller says what starting one means. (gemini, the second code round.)</p>
+   */
+  readonly onNew?: () => void;
+  /**
    * Asked WHEN A ROW IS CHOSEN: which tab may this conversation be bound to, if any?
    *
    * <p>A function rather than a handle, and that distinction was three separate findings. A picker
@@ -215,7 +225,7 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
       everywhere,
       query,
       now: now(),
-      ...(narrowed === undefined ? {} : { offerNew: narrowed.offer }),
+      ...(narrowed?.onNew === undefined ? {} : { offerNew: narrowed.offer }),
     });
     drawn = query;
     cut = rows.some((row) => row.kind === 'notice' && row.notice === 'more');
@@ -242,6 +252,16 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
   };
 
   /**
+   * The tab a conversation this window ALREADY holds should be moved onto — nothing unless the record
+   * is still that tab's, which only the caller's own check can say.
+   */
+  const boundFor = async (id: string, bindTo: NonNullable<Narrowed['bindTo']>): Promise<object | undefined> => {
+    const seen = await deps.store.read(id);
+
+    return seen.kind === 'record' ? bindTo(seen.record)?.key : undefined;
+  };
+
+  /**
    * Reveal it if this window has it, otherwise read it back off disk and reopen it.
    *
    * @returns whether a tab is now on screen for it — `false` when the person was told why not, and
@@ -253,7 +273,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
     // the registry can move between the list being drawn and the row being pressed, and a second tab
     // for one record would give it two writers: the fork the store's swap exists to catch, caused by
     // us. Asking costs one walk of the registry.
-    if (revealConversation(panels, row.id)) {
+    const live = whereConversationSits(panels, row.id);
+    if (live !== undefined) {
+      // BOUND FIRST when this is a *go to* press: a conversation the picker or a reload opened
+      // without a tab is moved onto the tab it belongs to, exactly as the reopen arm does. The
+      // record is read for that and for nothing else — the general list passes no `bindTo` and
+      // pays nothing for a rebind it never wants.
+      revealBound(panels, live, narrowed?.bindTo === undefined ? undefined : await boundFor(row.id, narrowed.bindTo));
+
       return true;
     }
     if (row.where === 'elsewhere') {
@@ -324,7 +351,19 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
 
   pick.onDidAccept(() => {
     const row = pick.selectedItems[0]?.row;
-    if (chosen || row === undefined || row.kind !== 'conversation') {
+    if (chosen || row === undefined) {
+      return;
+    }
+    if (row.kind === 'new' && narrowed?.onNew !== undefined) {
+      // THE OFFER, chosen. Closed first and then handed over: what starting one means is the
+      // caller's, and every sentence it may say is about a conversation rather than about this list.
+      chosen = true;
+      pick.hide();
+      narrowed.onNew();
+
+      return;
+    }
+    if (row.kind !== 'conversation') {
       // TOTAL by construction rather than by care: a separator cannot be chosen at all, and a notice
       // and the offer to start one carry no id — there is nothing here for them to open and no
       // sentinel a crafted row could aim at. (Starting one is story C2's; this command never offers

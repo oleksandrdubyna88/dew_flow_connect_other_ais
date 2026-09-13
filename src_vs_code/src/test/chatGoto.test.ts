@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConversationMeta, sourceOfFile, sourceOfSession } from '../chatStore';
 import { IndexState } from '../chatStoreCache';
-import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto } from '../chatGoto';
+import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto, rootOfTab } from '../chatGoto';
 
 /**
  * Which conversation belongs to the tab somebody is looking at — decided without a host.
@@ -49,6 +49,34 @@ const asked = (over: Partial<GotoAsked> = {}): GotoAsked => ({
 });
 
 const kindOf = (answer: Goto): string => answer.kind;
+
+test('the root a tab belongs to is one the host can ask for, and it is the root the decision files by', () => {
+  // The host must re-check the record against THE TAB'S root at the press, and the only way the two
+  // halves can agree is by asking the same function. Working it out a second time in the command was
+  // the defect that made the workspace half of the guard a tautology: it compared the record's own
+  // workspace against itself and passed for every record in the store. (gemini, the code round.)
+  assert.equal(rootOfTab(asked()), 'D:\\rsd\\one');
+  // The tab's own root, not the window's first: a file under the second root belongs to the second.
+  assert.equal(rootOfTab(asked({ tab: { kind: 'document', label: 'other.ts', path: 'D:\\rsd\\two\\other.ts' } })), 'D:\\rsd\\two');
+  // A tab under NO root falls back to the same answer story C1 files such a conversation by.
+  assert.equal(rootOfTab(asked({ tab: { kind: 'document', label: 'away.ts', path: 'C:\\elsewhere\\away.ts' } })), 'D:\\rsd\\one');
+  // And it is the root the decision itself used: a record filed under it reopens, one filed under
+  // the other root does not — so a guard built on this value agrees with the answer it is guarding.
+  const here = rootOfTab(asked({ tab: { kind: 'document', label: 'other.ts', path: 'D:\\rsd\\two\\other.ts' } }));
+  const mine = meta({ source: sourceOfFile('file:///D:/rsd/two/other.ts'), workspace: here });
+  assert.equal(kindOf(goto(asked({
+    tab: { kind: 'document', label: 'other.ts', path: 'D:\\rsd\\two\\other.ts' },
+    source: sourceOfFile('file:///D:/rsd/two/other.ts'),
+    candidates: [mine],
+  }))), 'reopen');
+  // The same record filed under the OTHER root is offered rather than reopened — which is exactly
+  // what a tautological workspace check would have destroyed.
+  assert.equal(kindOf(goto(asked({
+    tab: { kind: 'document', label: 'other.ts', path: 'D:\\rsd\\two\\other.ts' },
+    source: sourceOfFile('file:///D:/rsd/two/other.ts'),
+    candidates: [meta({ source: sourceOfFile('file:///D:/rsd/two/other.ts'), workspace: 'D:\\rsd\\one' })],
+  }))), 'pick');
+});
 
 test('what this window already holds is revealed, and nothing is read to find out', () => {
   // The ten-tabs case, and the reason the whole feature was asked for. It is decided on the TAB
