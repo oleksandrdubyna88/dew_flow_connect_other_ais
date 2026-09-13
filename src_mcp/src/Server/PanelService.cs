@@ -2424,7 +2424,7 @@ public sealed partial class PanelService
     private static HumanAnswer AnswerFor(string answer) => new("answered", answer, answer, string.Empty);
 
     /// <summary>
-    /// The eighth tool: another vendor's model, consulted about the LIVE working tree — a thin
+    /// The ninth tool: another vendor's model, consulted about the LIVE working tree — a thin
     /// delegation, the way the review half's vendor questions are delegations since 2026-09-05.
     /// </summary>
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>

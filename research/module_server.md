@@ -4,7 +4,7 @@
 > config key (which is what prefixes the tools: `mcp__coai__review_plan`). Built by hand on the
 > `ModelContextProtocol` SDK — the hosted default logs to stdout, and stdout carries JSON-RPC.
 
-## The eight tools
+## The nine tools
 
 | Tool | Backed by | Refuses when |
 |---|---|---|
@@ -18,7 +18,7 @@
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 
-## The consultant — the eighth tool (2026-09-12)
+## The consultant — the ninth tool (2026-09-12)
 
 The first seven tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
 direction — the calling AI, stuck, asking one of them a question. Design record:
