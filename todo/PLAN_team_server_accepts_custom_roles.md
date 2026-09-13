@@ -1,6 +1,8 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
-> Status: **plan only, nothing implemented yet, 2026-09-13.** Scope: `src_server` (the two role gates,
+> Status: **in progress — story 1 of 4 implemented, 2026-09-13.** `AcceptedRoles` exists, is built
+> from configuration at boot and refuses a configured id that could never run; stories 2 (the gates
+> and the ingress), 3 (the wire) and 4 (both clients) are still open. Scope: `src_server` (the two role gates,
 > `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),
 > `src_vs_code` (`teamServerApi.ts` and the sentence the panel shows), and the tests for all of it.
 >
@@ -275,11 +277,12 @@ OLD deployed server before either client is released.
   rather than built, because the ledger cannot contain such a row until this plan ships.)*
 - **Per-caller role permissions** are still nobody's question. If one is ever asked, it is a second
   authorisation model and it belongs beside the domain one, not inside `AcceptedRoles`.
-- **`RoleComposition.RoleId` on the client has the trailing-newline hole.** Story 1's own test caught
-  it on the server: in .NET, `$` matches at the end of the string OR immediately before a trailing
-  newline, so `^[A-Za-z][A-Za-z0-9_]*$` ACCEPTS `"Requirements\n"`. The server anchors `\A…\z` now.
-  `RoleComposition` (`src_mcp/core/Rounds/RoleComposition.cs`) still uses `^…$`, and so does
-  `roles.ts`'s `ROLE_ID` — though JavaScript's `$` does not have this behaviour without the `m` flag,
-  so only the C# copy is affected. Not fixed here because it is not this story's file and a role id
-  reaching it has already passed the page's own generator; it is a one-character change whenever
-  `RoleComposition` is next opened.
+- **The role-id grammar is written out three times and there is no drift check.** `AcceptedRoles`
+  (server), `RoleComposition` (coai-mcp) and `roles.ts` (the extension) each carry their own copy of
+  `[A-Za-z][A-Za-z0-9_]*` and of the 48-character bound. Story 1 had them DISAGREE for the length of
+  one commit — the server was corrected to `\A…\z` and the client was not — which is how codex found
+  it. Both C# copies are anchored now and JavaScript's `$` has no such behaviour without the `m`
+  flag, so all three currently agree; nothing enforces that they keep agreeing. `shared/builtin-roles.json`
+  is the precedent for making a rule owned by neither half. **Not built here**: it is a contract
+  change of its own, and this plan's four stories are about which roles a server accepts rather than
+  how an id is spelled. *(codex, story 1's code round.)*
