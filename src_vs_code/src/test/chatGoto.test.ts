@@ -40,6 +40,7 @@ const asked = (over: Partial<GotoAsked> = {}): GotoAsked => ({
   source: sourceOfFile(HERE),
   ambiguous: false,
   candidates: [],
+  inRoot: [],
   roots: ROOTS,
   fallback: 'D:\\rsd\\one',
   caseBlind: true,
@@ -182,7 +183,9 @@ test('a Claude tab whose name answers to more than one session is a picker that 
     tab: { kind: 'claude', label: 'Fixing the lock', path: '' },
     source: { kind: 'none' },
     ambiguous: true,
-    candidates: [
+    // Through inRoot, not candidates: an ambiguous tab has no source to filter by, which is the whole
+    // point, and the two lists exist so a caller cannot get that wrong. (codex, the code round.)
+    inRoot: [
       meta({ id: 'one', source: sourceOfSession('9f1c3a4e-1111-2222-3333-444455556666') }),
       meta({ id: 'two', source: sourceOfSession('aaaabbbb-1111-2222-3333-444455556666') }),
     ],
@@ -194,19 +197,30 @@ test('a Claude tab whose name answers to more than one session is a picker that 
     'the picker asks which conversation was meant and offers none of them');
 });
 
-test('an ambiguous tab is still narrowed by ROOT, because that much is not in doubt', () => {
+test('an ambiguous tab is offered its own root’s conversations, and the caller supplies them', () => {
+  // `inRoot` IS the root's rows — the host narrows by root when it reads the index, because the
+  // index is the thing that can do it cheaply. What this asserts is that the decision shows them
+  // rather than filtering them away by a source that does not exist.
   const answer = goto(asked({
     tab: { kind: 'claude', label: 'Fixing the lock', path: '' },
     source: { kind: 'none' },
     ambiguous: true,
-    candidates: [
-      meta({ id: 'here', source: sourceOfSession('9f1c3a4e-1111-2222-3333-444455556666') }),
-      meta({ id: 'there', source: sourceOfSession('aaaabbbb-1111-2222-3333-444455556666'), workspace: 'D:\\rsd\\two' }),
-    ],
+    inRoot: [meta({ id: 'here', source: sourceOfSession('9f1c3a4e-1111-2222-3333-444455556666') })],
+    // And the source-matched list is not consulted on this path at all: there is no source.
+    candidates: [meta({ id: 'unrelated' })],
   }));
 
   assert.deepEqual(answer.kind === 'pick' ? answer.among.map((one) => one.id) : [], ['here'],
-    'another project’s conversation was offered for this tab');
+    'the ambiguous picker read the source-matched list, which is empty exactly when it is needed');
+});
+
+test('a DOCUMENT tab is never treated as an ambiguous session, whatever the flag says', () => {
+  // Only a Claude tab can be ambiguous in this sense — a document is named by its uri, which answers
+  // to one thing or to nothing. Reading the flag wherever it was set let an invalid combination
+  // produce a picker telling somebody that two Claude sessions share their file's name. (codex.)
+  const answer = goto(asked({ ambiguous: true, candidates: [meta()] }));
+
+  assert.equal(answer.kind, 'reopen', 'a document tab produced a Claude-session picker');
 });
 
 test('an ambiguous session outranks having exactly one candidate, because the TAB is what is in doubt', () => {
@@ -242,7 +256,9 @@ test('an index that could not be READ never reopens — it offers what it last k
   // Binding a tab to a row that may since have been forgotten is a guess wearing a disk. The person
   // sees the candidates and chooses; the press then re-reads the record.
   const why = { kind: 'unavailable' as const, reason: 'the store could not be read (EACCES)', lastGoodAt: 5 };
-  const answer = goto(asked({ index: why, candidates: [meta()] }));
+  // The ROOT's rows, not this tab's: a store that could not be read cannot say which are this tab's,
+  // and the root's are the honest superset.
+  const answer = goto(asked({ index: why, inRoot: [meta()], candidates: [meta()] }));
 
   assert.equal(answer.kind, 'pick', 'a conversation was bound to a tab on the strength of rows that could not be refreshed');
   assert.deepEqual(answer.kind === 'pick' ? answer.why : undefined, { kind: 'unreadable', reason: why.reason });

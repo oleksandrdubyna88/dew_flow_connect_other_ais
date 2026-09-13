@@ -67,7 +67,22 @@ export type Goto =
   /** Exactly one saved conversation is this tab's. Bind it to this tab. */
   | { readonly kind: 'reopen'; readonly meta: ConversationMeta }
   /** More than one answer, or a store that could not be read: let the person choose. */
-  | { readonly kind: 'pick'; readonly among: readonly ConversationMeta[]; readonly why: Narrowing; readonly offer: string }
+  | {
+    readonly kind: 'pick';
+    readonly among: readonly ConversationMeta[];
+    readonly why: Narrowing;
+    readonly offer: string;
+    /**
+     * Whether choosing a row may BIND that conversation to this tab.
+     *
+     * <p>False for `cross root`, and that is the whole reason this field exists. Those conversations
+     * belong to another project: opening one is right, and re-homing it onto this tab is not — it
+     * would move somebody's conversation between projects because they pressed a key looking for it.
+     * Such a row is opened the way the picker opens one, under its own key. `bindable` would refuse
+     * it anyway, which is how two reviewers found that this answer had no valid completion.</p>
+     */
+    readonly bind: boolean;
+  }
   /** Nothing is saved for this tab, and one could be started for it. */
   | { readonly kind: 'start'; readonly offer: string }
   /** The tab is not one a conversation belongs to: the whole list, which is never an error. */
@@ -107,8 +122,23 @@ export interface GotoAsked {
    * answers to this name. `pinnable` decides it; this is its answer carried in.
    */
   readonly ambiguous: boolean;
-  /** Every saved conversation whose source is this tab's — the index's answer, unfiltered by root. */
+  /**
+   * Every saved conversation whose SOURCE is this tab's, from every root — `ConversationIndex.bySource`.
+   *
+   * <p>Across all roots on purpose: a conversation about this very file filed under another project
+   * is something to offer, not to hide. Empty for a tab whose source could not be resolved, which is
+   * every ambiguous Claude tab — which is why {@link GotoAsked.inRoot} exists beside it.</p>
+   */
   readonly candidates: readonly ConversationMeta[];
+  /**
+   * Every saved conversation of THIS TAB'S ROOT, whatever its source.
+   *
+   * <p>What an ambiguous tab is offered, and what an unreadable store shows. Two reviewers found that
+   * one list could not serve both jobs: an ambiguous Claude tab has no source, so a source-filtered
+   * list is empty, and a picker asking which conversation somebody meant would offer none — the bug
+   * the previous round fixed, which a caller reading a one-list contract would have rebuilt.</p>
+   */
+  readonly inRoot: readonly ConversationMeta[];
   /** The window's workspace roots, to work out which one this tab belongs to. */
   readonly roots: readonly string[];
   /** Where a conversation goes when its tab is under no root — the same fallback story C1 files by. */
@@ -152,38 +182,44 @@ export function goto(asked: GotoAsked): Goto {
     return { kind: 'building' };
   }
   const here = belongsTo(asked);
-  // EVERY candidate of this root, whatever its source. The ambiguous branch needs these and only
-  // these: when a Claude title answers to more than one session there IS no source to match on, and
-  // filtering by one leaves nothing — a picker asking which conversation somebody meant, with no
-  // conversations in it. Four reviewers found that, and it is the one defect in this story that
-  // would have shipped looking like a working feature. (The code round.)
-  const around = asked.candidates.filter((meta) => sameRoot(meta.workspace, here, asked.caseBlind));
   if (asked.index.kind === 'unavailable') {
     // Its last good rows are a statement about a moment that has passed. They are worth SHOWING —
-    // they are probably right — but not worth binding a tab to without a person looking at them.
-    return { kind: 'pick', among: around, why: { kind: 'unreadable', reason: asked.index.reason }, offer };
+    // they are probably right — but not worth binding a tab to without a person looking at them. The
+    // root's conversations rather than this tab's, because a store that could not be read cannot say
+    // which are this tab's, and the root's are the honest superset.
+    return { kind: 'pick', among: asked.inRoot, why: { kind: 'unreadable', reason: asked.index.reason }, offer, bind: true };
   }
-  if (asked.ambiguous) {
-    // The TAB's own identity is in doubt, not the conversations'. So the candidates are shown as they
-    // came, narrowed only by the root they belong to.
-    return { kind: 'pick', among: around, why: { kind: 'ambiguous session' }, offer };
+  if (asked.ambiguous && asked.tab.kind === 'claude') {
+    // The TAB's own identity is in doubt, not the conversations'. So the root's conversations are
+    // shown and the person tells the two sessions apart. Only a Claude tab can be ambiguous in this
+    // sense — a document is named by its uri, which answers to one thing or to nothing — so the flag
+    // is read only where it can mean something rather than trusted wherever it is set. (codex.)
+    return { kind: 'pick', among: asked.inRoot, why: { kind: 'ambiguous session' }, offer, bind: true };
   }
-  const mine = around.filter((meta) => sameSource(meta.source, asked.source));
+  // ONE PASS over the source matches, split by whether they are this tab's project or another's.
+  const mine: ConversationMeta[] = [];
+  const elsewhere: ConversationMeta[] = [];
+  for (const meta of asked.candidates) {
+    if (sameSource(meta.source, asked.source)) {
+      (sameRoot(meta.workspace, here, asked.caseBlind) ? mine : elsewhere).push(meta);
+    }
+  }
   if (mine.length > 1) {
     // Impossible by construction — one source belongs to one conversation, and C1 writes it once —
     // and answered honestly anyway, because the alternative is guessing which of two is yours.
-    return { kind: 'pick', among: mine, why: { kind: 'several' }, offer };
+    return { kind: 'pick', among: mine, why: { kind: 'several' }, offer, bind: true };
   }
   const only = mine[0];
   if (only !== undefined) {
     return { kind: 'reopen', meta: only };
   }
-  const elsewhere = asked.candidates.filter((meta) => sameSource(meta.source, asked.source));
   if (elsewhere.length > 0) {
     // THIS TAB'S CONVERSATION, filed under another project. Dropping it to silence would offer to
     // start a new one while the old one sits a folder away — the duplicate this whole rule exists to
-    // prevent, produced by the rule itself. It is shown, and the person decides. (Two vendors.)
-    return { kind: 'pick', among: elsewhere, why: { kind: 'cross root' }, offer };
+    // prevent, produced by the rule itself. It is shown, and the person decides. It is NOT bound to
+    // this tab: it belongs where it is filed, and moving it because somebody went looking for it
+    // would be a decision they did not ask for. (Two vendors, twice.)
+    return { kind: 'pick', among: elsewhere, why: { kind: 'cross root' }, offer, bind: false };
   }
 
   return { kind: 'start', offer };
@@ -199,13 +235,14 @@ function eligible(kind: TabKind): boolean {
       return false;
     default: {
       // A new tab kind must not fall silently into the document path, where it would be matched by a
-      // path it has not got. (codex, the code round; the constraint was my own.)
+      // path it has not got — so it is a COMPILE error. At runtime it answers "not eligible", which
+      // sends the press to the full list: a tab kind this build has never heard of is exactly the
+      // case the operator's decision 7 covers, and throwing here would take the command down instead
+      // of showing the list. (codex, then local, the code rounds.)
       const unhandled: never = kind;
+      console.warn(`ConnectOtherAIs: a tab kind this build has no arm for: ${JSON.stringify(unhandled)}`);
 
-      throw new Error(
-        `a tab kind this build has no arm for: ${JSON.stringify(unhandled)}`
-        + ' — the kinds it may be are claude, document and other',
-      );
+      return false;
     }
   }
 }
