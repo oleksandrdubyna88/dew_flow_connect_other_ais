@@ -174,12 +174,22 @@ public sealed partial class AcceptedRoles
     /// </remarks>
     public string Canonical(string? said)
     {
-        // Shape FIRST, and it is not only tidiness: a malformed 4 KB id is about to be refused, and
+        // NOTHING is nothing, however it was spelled. A client omitting the field and one sending
+        // three spaces mean the same thing, and returning "   " from here put whitespace into
+        // `JobRecord.Role` and into the idempotency fingerprint — so the same review, sent by the
+        // same person, was two jobs depending on which of the two ways they said nothing. Quoting
+        // the input back is `Refusal`'s job, not this one's. (gemini, story 2's code round.)
+        if (string.IsNullOrWhiteSpace(said))
+        {
+            return string.Empty;
+        }
+
+        // Shape next, and it is not only tidiness: a malformed 4 KB id is about to be refused, and
         // folding it for a lookup that cannot match allocates a 4 KB copy per request on input
-        // nobody here controls. (codex, this story's code round.)
+        // nobody here controls. (codex, story 1's code round.)
         if (!WellFormed(said))
         {
-            return said ?? string.Empty;
+            return said;
         }
 
         return _spelling.TryGetValue(said!, out var known) ? known

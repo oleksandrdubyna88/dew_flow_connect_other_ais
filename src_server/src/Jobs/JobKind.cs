@@ -126,7 +126,13 @@ public static class JobKinds
             (JobKind.Chat, true) =>
                 $"a chat carries no review role, and this one carries '{saidRole}'. Send kind "
                 + $"'{Wire(JobKind.Chat)}' with no role, or drop the kind to send a review.",
-            (JobKind.Review, false) => roles.Refusal(saidRole),
+            // BOTH review rows, not just the roleless one. Taking an `AcceptedRoles` and then
+            // ignoring it when a role IS given was a seam that looked like validation and was not:
+            // a caller reading this signature would reasonably believe a `review` job came out of
+            // here checked, and one with an unconfigured role came out of it accepted. `Refusal`
+            // answers both questions — "you sent none" and "this server does not run that one" —
+            // so the row is one row. (gemini, story 2's code round.)
+            (JobKind.Review, _) => roles.Refusal(saidRole),
             _ => null,
         };
     }

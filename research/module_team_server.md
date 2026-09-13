@@ -715,7 +715,17 @@ the other keys, and registered as a singleton.
 
 **Both gates read it, and a test fails when a third list appears.** `ReviewEndpoints`' unknown-role
 refusal and `JobKinds`' missing-role refusal both ask this instance now, so a configured role cannot
-be refused by one gate and listed by the other. `OneAcceptedRoleListTests` scans the server's own
+be refused by one gate and listed by the other.
+
+**The KIND is judged before the role, and that order is the fix for a contradiction.** A chat
+carrying an unknown role used to be told *"'Invented' is not a review role. Accepted: …"* — so the
+client picked one of the names it had just been handed, sent it, and was told *"a chat carries no
+review role"*. Two refusals disagreeing one request apart. Whether a job may carry a role at all is a
+question about the kind, and it is answered first. For a `review`, `JobKinds` then asks
+`AcceptedRoles` about BOTH the missing role and the unknown one — taking the parameter and ignoring
+it when a role was given was a seam that looked like validation and was not. An OLD client names no
+kind, so that row judges nothing, and its role is checked in `ReviewEndpoints` instead: every client
+is asked the question exactly once, on one side or the other. `OneAcceptedRoleListTests` scans the server's own
 source and fails when any file but `AcceptedRoles.cs` enumerates `RoleCatalog.Builtin.Roles` — plan 2
 is why that is a test rather than a note: it shipped with three independent counts of "which code
 roles will run", and nothing was looking.
@@ -724,6 +734,9 @@ roles will run", and nothing was looking.
 `ReviewEndpoints.CanonicalRole` is gone; `Accepted` asks `AcceptedRoles.Canonical` and the result
 feeds both the `JobRecord` and `Idempotency.Fingerprint`. Two clients disagreeing about the case of a
 role therefore submit ONE job under one key, rather than two that a later ledger view has to merge.
+**Nothing is nothing, however it was spelled**: an absent role and one sent as three spaces both
+canonicalise to empty, because returning `"   "` put whitespace into the record and the fingerprint
+and made the same review two jobs depending on which way a client said nothing.
 
 `CatalogDto` still has no role field, so a client cannot yet learn any of this — that is story 3, and
 story 4 is the two clients.

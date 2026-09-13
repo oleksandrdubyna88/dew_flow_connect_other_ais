@@ -22,8 +22,15 @@ namespace CoaiServer.Tests;
 /// </remarks>
 public sealed class OneAcceptedRoleListTests
 {
-    /// <summary>The file that is allowed to build the list, because building it is its whole job.</summary>
-    private const string TheOnePlace = "AcceptedRoles.cs";
+    /// <summary>
+    /// The file that is allowed to build the list, because building it is its whole job.
+    /// </summary>
+    /// <remarks>
+    /// A PATH, not a base name. Exempting every file called <c>AcceptedRoles.cs</c> would exempt a
+    /// second one added anywhere under the server — which is precisely the thing being prevented,
+    /// wearing the name of the thing that prevents it. (codex, story 2's code round.)
+    /// </remarks>
+    private static readonly string TheOnePlace = Path.Combine("Jobs", "AcceptedRoles.cs");
 
     /// <summary>
     /// Reaching the shipped catalog at all — which is the shape any second answer would take.
@@ -43,10 +50,10 @@ public sealed class OneAcceptedRoleListTests
     public void OnlyAcceptedRolesEnumeratesTheShippedCatalog()
     {
         var offenders = SourceFiles()
+            .Where(file => !Under(file).Equals(TheOnePlace, StringComparison.Ordinal))
             .Where(file => File.ReadAllText(file).Contains(Enumeration, StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .Where(name => name != TheOnePlace)
-            .OrderBy(name => name, StringComparer.Ordinal)
+            .Select(Under)
+            .OrderBy(path => path, StringComparer.Ordinal)
             .ToList();
 
         offenders.Should().BeEmpty(
@@ -60,13 +67,42 @@ public sealed class OneAcceptedRoleListTests
         // A scan over an empty file list passes for the wrong reason, and would go on passing after
         // a rename moved the server's source somewhere it does not look.
         SourceFiles().Should().HaveCountGreaterThan(10, "the server's own source");
-        SourceFiles().Select(Path.GetFileName).Should().Contain(TheOnePlace);
-        File.ReadAllText(SourceFiles().Single(f => Path.GetFileName(f) == TheOnePlace))
+        SourceFiles().Select(Under).Should().Contain(TheOnePlace);
+        File.ReadAllText(SourceFiles().Single(f => Under(f) == TheOnePlace))
             .Should().Contain(Enumeration, "the one place that IS allowed to, so the scan can see it");
     }
 
+    [Fact]
+    public void TheScanDoesNotWalkGeneratedOutput()
+    {
+        // `src_server/src/obj` fills with generated C# on every build — the regex source generator's
+        // output, assembly attributes, editor artefacts. None of it is anybody's code, all of it can
+        // change with a toolchain, and a token appearing there would fail this test for a reason no
+        // reader could act on. (local, story 2's code round.)
+        SourceFiles().Select(Under).Should().OnlyContain(path => !Generated(path));
+    }
+
+    /// <summary>A file's path under `src_server/src`, which is how the exemption is spelled.</summary>
+    private static string Under(string file) =>
+        Path.GetRelativePath(Root(), file);
+
     /// <summary>The server's own C# — not its tests, and not anything generated into obj/bin.</summary>
-    private static List<string> SourceFiles()
+    private static List<string> SourceFiles() =>
+    [
+        .. Directory.EnumerateFiles(Root(), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !Generated(Path.GetRelativePath(Root(), file))),
+    ];
+
+    /// <summary>Build output rather than anybody's code: the regex generator's, the SDK's, the editor's.</summary>
+    private static bool Generated(string relative)
+    {
+        var top = relative.Split(Path.DirectorySeparatorChar)[0];
+
+        return top.Equals("obj", StringComparison.OrdinalIgnoreCase)
+            || top.Equals("bin", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Root()
     {
         var here = new DirectoryInfo(AppContext.BaseDirectory);
         while (here is not null && !Directory.Exists(Path.Combine(here.FullName, "src_server", "src")))
@@ -76,7 +112,6 @@ public sealed class OneAcceptedRoleListTests
 
         here.Should().NotBeNull("the repository root is above the test binary");
 
-        return [.. Directory.EnumerateFiles(
-            Path.Combine(here!.FullName, "src_server", "src"), "*.cs", SearchOption.AllDirectories)];
+        return Path.Combine(here!.FullName, "src_server", "src");
     }
 }
