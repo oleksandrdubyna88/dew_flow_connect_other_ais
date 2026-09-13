@@ -183,6 +183,126 @@ public sealed class CatalogEndpointTests
             submitted.StatusCode.Should().Be(HttpStatusCode.Accepted, role);
         }
     }
+
+    [Fact]
+    public async Task EveryRoleTheGateACCEPTSIsOneTheCatalogNAMES()
+    {
+        // The other direction, and the one the first version of this test missed: checking only that
+        // every advertised role is accepted passes a catalog that UNDER-reports. Configure two and
+        // list one, and a client silently stops offering a role this server runs perfectly well.
+        // (codex and gemini, story 3's plan round.)
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements,Brief" });
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.Roles.Should().BeEquivalentTo(
+            RoleCatalog.Builtin.Roles.Select(r => r.Id).Concat(["Requirements", "Brief"]),
+            "the catalog is the whole accepted set, not a sample of it");
+    }
+
+    [Fact]
+    public async Task ARoleTheCatalogDoesNotNameIsRefused()
+    {
+        // The contract stated as a client would test it: if it is not in the list and the server does
+        // not say it runs anything, sending it is a 400. Without this the agreement could hold in one
+        // direction while the gate quietly accepted things nobody was told about.
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements" });
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
+        catalog!.AllowAnyRole.Should().BeFalse();
+        catalog.Roles.Should().NotContain("Invented");
+
+        var refused = await client.PostAsJsonAsync(
+            "/api/reviews", new ReviewRequestDto("codex", "gpt-5.6-luna", "review this", "Invented", 60));
+
+        refused.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task AllowAnyRoleOnTheWireMeansTheGateReallyTakesAnything()
+    {
+        // A server could advertise the boolean and refuse an unlisted role, or refuse to advertise it
+        // and accept one. Either way a client believes the wrong thing about what it may send.
+        // (codex, story 3's plan round.)
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:AllowAnyRole"] = "true" });
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
+        catalog!.AllowAnyRole.Should().BeTrue();
+        catalog.Roles.Should().NotContain("Invented");
+
+        var accepted = await client.PostAsJsonAsync(
+            "/api/reviews", new ReviewRequestDto("codex", "gpt-5.6-luna", "review this", "Invented", 60));
+
+        accepted.StatusCode.Should().Be(HttpStatusCode.Accepted, "the boolean said so");
+    }
+
+    [Fact]
+    public async Task AllowAnyRoleStillNamesTheRolesTheOperatorConfigured()
+    {
+        using var server = WithRoles(new Dictionary<string, string?>
+        {
+            ["Coai:AllowAnyRole"] = "true",
+            ["Coai:ExtraRoles"] = "Requirements",
+        });
+
+        var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.Roles.Should().Contain("Requirements",
+            "a client drawing a picker needs the names somebody chose, not only the promise that anything goes");
+    }
+
+    [Fact]
+    public async Task ARoleNameTakenFromTheCatalogIsAcceptedExACTLYAsItWasGiven()
+    {
+        // The round trip a client actually performs: read a name, send that name back. If the catalog
+        // served one spelling and the gate matched another, every client would be one case-fold away
+        // from a 400 nobody could explain. (gemini, story 3's plan round.)
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements" });
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+        var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        foreach (var role in catalog!.Roles)
+        {
+            var sent = await client.PostAsJsonAsync(
+                "/api/reviews", new ReviewRequestDto("codex", "gpt-5.6-luna", "review this", role, 60));
+
+            sent.StatusCode.Should().Be(HttpStatusCode.Accepted, role);
+        }
+    }
+
+    [Fact]
+    public async Task TheCatalogNeverSendsAnEmptyRoleList()
+    {
+        // A client reads an empty list as "the five this product ships", because a server that HAS
+        // the field always accepts at least five — so [] can only ever be a bug. This is the server's
+        // half of that rule: it cannot produce one. (local, story 3's plan round.)
+        using var server = WithRoles();
+
+        var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<CatalogDto>("/api/catalog");
+
+        catalog!.Roles.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheWireSpellsThemRolesAndAllowAnyRole()
+    {
+        // Asserted on the RAW payload, because every other test here goes through a typed read that
+        // would be just as green if the server emitted `Roles` and `AllowAnyRole`. A client reading
+        // `roles` — which is what the extension's TypeScript does — would then find nothing at all,
+        // and story 4 would look like a client bug. (codex, story 3's plan round.)
+        using var server = WithRoles(new Dictionary<string, string?> { ["Coai:ExtraRoles"] = "Requirements" });
+
+        var body = await server.ClientFor($"dev@{TeamServer.Domain}").GetStringAsync("/api/catalog");
+
+        body.Should().Contain("\"roles\":").And.Contain("\"allowAnyRole\":false");
+        body.Should().Contain("\"Requirements\"");
+        body.Should().NotContain("\"Roles\":").And.NotContain("\"AllowAnyRole\":");
+    }
 }
 
 /// <summary>The probe cache, tested directly — an HTTP test cannot count process launches.</summary>
