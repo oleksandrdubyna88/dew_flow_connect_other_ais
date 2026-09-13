@@ -42,6 +42,7 @@ function round(over: Partial<RoundRecord> = {}): RoundRecord {
 const NOW = Date.parse('2026-09-05T08:00:00.000Z');
 
 const LOG: DbLog = {
+  consultations: [],
   rounds: [{
     repoPath: 'D:\\repo', branch: 'main', stage: 'CodeReview', number: 1,
     startedUtc: '2026-09-05T07:41:00.000Z', sessionId: 's1', accepted: 1, rejected: 1,

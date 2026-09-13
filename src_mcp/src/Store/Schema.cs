@@ -25,7 +25,10 @@ internal static class Schema
     /// version number, which is the failure this exists to prevent. A step that ADDS a column
     /// therefore goes at the end as its own <c>ALTER</c>, never into <see cref="Tables"/>.
     /// </remarks>
-    internal static readonly string[] Steps = [Tables, Search, WhoCalled];
+    // Consultations is LAST because main's WhoCalled shipped first: a file migrated by that build
+    // already records three steps, so inserting ahead of it would leave those databases without the
+    // consultations table while believing they had run every step.
+    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -105,6 +108,53 @@ internal static class Schema
         CREATE INDEX IF NOT EXISTS findings_by_round ON findings (round_id);
         -- The defended list reads this and nothing else, over the whole table, on every refresh.
         CREATE INDEX IF NOT EXISTS findings_re_raised ON findings (re_raised, resolution);
+        """;
+
+    /// <summary>
+    /// What the consultant was asked, and what it cost. Step 2, appended 2026-09-13.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A table of its own rather than a kind of round.</b> A consultation is keyed by the
+    /// CALLER and has no session, no stage and no findings — half the moments that trigger one happen
+    /// before <c>open</c> exists. Filing it as a round would have meant a row of empty columns and a
+    /// stage nobody could name.</para>
+    /// <para>One row per CONSULTATION, not per turn, upserted as it advances: the log lists what was
+    /// asked and how it ended, and the turn-by-turn detail lives in the record file the panel reads
+    /// while it is running. <c>problem</c> is the FIRST turn's — what the consultation is about —
+    /// and <c>advice</c> the LAST one's, which is the answer in force.</para>
+    /// <para><c>rounds.consult_missed</c> is story 6's counter and is added here, with the table,
+    /// because a schema step is append-only and splitting one column across two steps buys nothing.
+    /// <c>-1</c> means the projection could not answer, the same convention
+    /// <c>accepted</c>/<c>rejected</c> already use.</para>
+    /// </remarks>
+    internal const string Consultations = """
+        CREATE TABLE IF NOT EXISTS consultations (
+            id           TEXT PRIMARY KEY,
+            caller       TEXT NOT NULL DEFAULT '',
+            caller_kind  TEXT NOT NULL DEFAULT '',
+            repo_path    TEXT NOT NULL DEFAULT '',
+            branch       TEXT NOT NULL DEFAULT '',
+            head_sha     TEXT NOT NULL DEFAULT '',
+            vendor       TEXT NOT NULL DEFAULT '',
+            model        TEXT NOT NULL DEFAULT '',
+            turns        INTEGER NOT NULL DEFAULT 0,
+            status       TEXT NOT NULL DEFAULT '',
+            reason       TEXT NOT NULL DEFAULT '',
+            started_utc  TEXT NOT NULL DEFAULT '',
+            ended_utc    TEXT NOT NULL DEFAULT '',
+            seconds      REAL NOT NULL DEFAULT 0,
+            tokens_in    INTEGER NOT NULL DEFAULT 0,
+            tokens_out   INTEGER NOT NULL DEFAULT 0,
+            cost_usd     REAL,
+            problem      TEXT NOT NULL DEFAULT '',
+            advice       TEXT NOT NULL DEFAULT '',
+            -- The filesystem invariant's sentence, when it fired. The one field a person must read.
+            alert        TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS consultations_by_time ON consultations (started_utc DESC);
+
+        ALTER TABLE rounds ADD COLUMN consult_missed INTEGER NOT NULL DEFAULT -1;
         """;
 
     /// <summary>

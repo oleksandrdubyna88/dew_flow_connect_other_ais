@@ -7,6 +7,7 @@ import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
+import { ConsultationWatcher } from './consultationWatcher';
 import { ModelChoice, parseAgyModels, parseCodexModels } from './models';
 import {
   isPanelCommand,
@@ -270,6 +271,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     private readonly watcher: EscalationWatcher,
     private readonly dataDir: vscode.Uri,
     private readonly answer: (id: string) => Promise<void>,
+    /**
+     * What is being consulted right now, or nothing.
+     *
+     * <p>Optional and defaulted, so every test that builds a provider is unchanged and a build with
+     * no watcher paints an empty region rather than crashing. It is a WATCHER rather than a list
+     * because the files change without anybody touching the panel — the same reason the escalation
+     * watcher is one.</p>
+     */
+    private readonly consultations?: ConsultationWatcher,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -626,6 +636,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.readConsultPrompt(),
+      consultations: this.consultations?.running ?? [],
       localEngines: await this.probeLocalEngines(vendors),
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),

@@ -34,7 +34,11 @@ public sealed class ConsultationService(
     private readonly FilesystemInvariant _invariant = new(launcher);
     private readonly ConsultationStore _store = new(
         settings.DataDir,
-        problem => log.Warning("consultations: {Problem}", problem));
+        problem => log.Warning("consultations: {Problem}", problem),
+        // Every state change reaches the log, and none of them can fail because of it: the record
+        // file is the source of truth and `Projection` swallows a database that is locked or full.
+        // A consultation must never refuse somebody who is stuck over a view of itself.
+        record => Project(settings, log, record));
     private readonly ConsultCallCounter _counter = new(settings.DataDir);
 
     /// <summary>
@@ -45,6 +49,19 @@ public sealed class ConsultationService(
     /// by id, and story 2's live check found this schema being read back as a record with no id.
     /// </remarks>
     private readonly ConsultSchemaFile.Provisioned _answerSchema = Provision(settings, log);
+
+    /// <summary>
+    /// The projection, as a static so the field initialiser above can reach it.
+    /// </summary>
+    /// <remarks>
+    /// A primary constructor's parameters are in scope for initialisers, but <c>this</c> is not — so
+    /// the store, which is itself a field, cannot be handed a lambda that touches another field. It
+    /// opens its own <see cref="Store.Projection"/> per write, which is what that type does anyway:
+    /// the database is opened, written and closed per projection, never held.
+    /// </remarks>
+    private static void Project(PanelSettings settings, Serilog.ILogger log, ConsultationRecord record) =>
+        new Store.Projection(settings.DataDir, log)
+            .Write(db => db.RecordConsultation(ConsultationRows.From(record)), "the consultation");
 
     private static ConsultSchemaFile.Provisioned Provision(PanelSettings settings, Serilog.ILogger log)
     {

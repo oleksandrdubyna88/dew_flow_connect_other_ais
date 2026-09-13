@@ -35,6 +35,7 @@ public sealed partial class PanelService
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
     private readonly UsageLedger _ledger;
+    private readonly Store.Projection _projection;
     private readonly CallerSessions _callers;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
@@ -75,6 +76,7 @@ public sealed partial class PanelService
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
         _callers = new CallerSessions(settings.DataDir);
+        _projection = new Store.Projection(settings.DataDir, log);
         _consultations = new ConsultationService(
             settings, launcher, _executor, _context, _prompts, _ledger, log, Environment.GetEnvironmentVariable);
 
@@ -379,6 +381,50 @@ public sealed partial class PanelService
             ? "no session for this repo+branch — call open first"
             : $"no review of '{document}' on this branch — call review_document for it first. If you "
             + "meant the branch's own session, leave document empty.";
+
+    /// Consultations still open in a checkout, newest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is re-orientation, which is what <c>status</c> is for: a conversation that was
+    /// compacted has lost the <c>consultationId</c> its first reply carried, and without it a
+    /// follow-up opens a SECOND consultation — the working tree collected again, a model that has
+    /// already answered asked from scratch, and the caller's own budget spent twice.</para>
+    /// <para>Compared as a PATH rather than as text, because the caller's spelling of a checkout is
+    /// not the server's: the tool resolves <c>repoPath</c> to the repository's top level and the
+    /// record holds that, so a call made from a subdirectory would otherwise match nothing.</para>
+    /// </remarks>
+    private IReadOnlyList<OpenConsultation> OpenConsultationsIn(string repoPath) =>
+        [.. _consultations.Store.All()
+            .Where(record => !record.IsOver && SamePath(record.RepoPath, repoPath))
+            .OrderByDescending(record => record.StartedUtc, StringComparer.Ordinal)
+            .Select(record => new OpenConsultation(
+                record.Id,
+                record.Vendor,
+                record.Model,
+                record.Status,
+                record.Branch,
+                record.Turns.Count,
+                record.MaxTurns,
+                record.StartedUtc,
+                record.Alert))];
+
+    private static bool SamePath(string one, string other)
+    {
+        try
+        {
+            return one.Length > 0 && other.Length > 0
+                && string.Equals(
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        }
+        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            // A path this machine cannot even resolve is not the one being asked about, and a status
+            // call must not throw over a record somebody else's server wrote.
+            return false;
+        }
+    }
 
     // ---------- the two review stages ----------
 
@@ -2302,21 +2348,7 @@ public sealed partial class PanelService
     /// The session files are the source of truth and the round is what somebody is waiting for. A
     /// database that is locked, full or corrupt is a line in the log, not a failed review.
     /// </remarks>
-    private void Project(Action<Store.RoundsDb> write)
-    {
-        try
-        {
-            using var db = Store.RoundsDb.Open(_settings.DataDir, _log);
-            if (db is not null)
-            {
-                write(db);
-            }
-        }
-        catch (Exception e)
-        {
-            _log.Warning(e, "the round could not be projected into the rounds database");
-        }
-    }
+    private void Project(Action<Store.RoundsDb> write) => _projection.Write(write);
 
     private PersistedSession WithHumanDecision(PersistedSession session)
     {
@@ -2456,6 +2488,7 @@ public sealed partial class PanelService
             _ => string.Empty,
         },
         HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
+        Consultations = OpenConsultationsIn(session.State.RepoPath),
     };
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>

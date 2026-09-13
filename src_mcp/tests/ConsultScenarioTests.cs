@@ -378,6 +378,48 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A resumed conversation can find the consultation it already opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what <c>status</c> is for, pointed at the one thing a compacted conversation
+    /// loses that costs money: the <c>consultationId</c> the first reply carried. Without it the next
+    /// call opens a SECOND consultation — the working tree collected again, a model that has already
+    /// answered asked from scratch, and the caller's own per-session budget spent twice.</para>
+    /// <para>Keyed by the REPOSITORY rather than the session, because a consultation has no session:
+    /// half the moments that start one happen before <c>open</c> exists.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Status_NamesAConsultationThisRepositoryStillHasOpen()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+        var opened = await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+        var id = opened.GetProperty("consultationId").GetString()!;
+
+        var status = JsonDocument.Parse(await service.StatusAsync(_repo, "main")).RootElement;
+
+        var listed = status.GetProperty("consultations").EnumerateArray().Single();
+        listed.GetProperty("id").GetString().Should().Be(id);
+        listed.GetProperty("vendor").GetString().Should().Be("codex");
+        listed.GetProperty("status").GetString().Should().Be(ConsultationStatuses.Open);
+        listed.GetProperty("turnsUsed").GetInt32().Should().Be(1);
+        listed.GetProperty("maxTurns").GetInt32().Should().Be(5);
+    }
+
+    [Fact]
+    public async Task Status_SaysNothingAboutAConsultationThatIsOver()
+    {
+        var service = Service(turns: 1);
+        await service.OpenAsync(_repo, "main");
+        await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+
+        // A cap of one means that turn closed it, so there is nothing to resume and nothing to say.
+        var status = JsonDocument.Parse(await service.StatusAsync(_repo, "main")).RootElement;
+
+        status.GetProperty("consultations").GetArrayLength().Should().Be(0);
+    }
+
+    /// <summary>
     /// Switched off is a SENTENCE, and it is the first thing the tool says.
     /// </summary>
     /// <remarks>

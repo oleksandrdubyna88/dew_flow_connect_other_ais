@@ -33,10 +33,11 @@ import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
+import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
-import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
+import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { DbLog } from './roundsDb';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -65,6 +66,10 @@ export function activate(context: vscode.ExtensionContext): void {
   chatReadsThisSide(context);
   presetsReadDiscoveriesFrom(context);
   const watcher = new EscalationWatcher(dataDir());
+  // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
+  // has no modal and no status-bar item — it appears in the sidebar where a person is already
+  // looking, and nowhere else.
+  const consultations = new ConsultationWatcher(dataDir());
   // Declared before the panel so the hooks can reach it; assigned right after.
   let roundsLog: RoundsLogPanel;
   let panelRef: PanelProvider;
@@ -107,7 +112,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (question !== undefined) {
       await watcher.answerCommand(question);
     }
-  });
+  }, consultations);
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
@@ -120,6 +125,14 @@ export function activate(context: vscode.ExtensionContext): void {
     void refreshRoundsLog(roundsLog, watcher, panel);
   };
   watcher.start();
+
+  // The same contract as above, and only when something a person can SEE moved: the watcher
+  // compares what it read before telling anybody, so a directory polled every five seconds for an
+  // afternoon repaints the sidebar exactly as often as a consultation changes.
+  consultations.onChanged = () => {
+    void panel.render();
+  };
+  consultations.start();
 
   // The settings the server reads, mirrored from activation — never from the panel.
   //
@@ -275,6 +288,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     watcher,
+    consultations,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side
@@ -795,7 +809,8 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
     await panel.usageTab(),
     force,
     blindSpotsHtml(fresh),
-    fresh.totals);
+    fresh.totals,
+    consultationsHtml(fresh));
 }
 
 /**

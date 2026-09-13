@@ -525,9 +525,18 @@ lock and fence are the security half and stay on Fable.
       Also in this story because the section put them there: the caller became the fourth segment of the
       focus id and `FOCUS_ID` had to learn it (eight tests said so), the consultant header took the chat's
       tone, and the free-text-hazard test now ends its slice at the NEXT section rather than a named one.
-- [ ] **S4 — the card and the log row.** `consultations.ts` + `consultationWatcher.ts`, the third live
+- [x] **S4 — the card and the log row.** `consultations.ts` + `consultationWatcher.ts`, the third live
       region, schema step (`consultations` + `consult_missed`), `RecordConsultation`, `LoggedConsultation`,
       `--log`, the log page list, `status`'s block.
+
+      **What shipped differently.** The projection hangs off `ConsultationStore.Write` rather than off the
+      service: that is the ONE place every state passes through, and a projection wired into the service
+      would have recorded the turns and silently missed both sweeps — so the log would have shown
+      consultations that never ended. `Store.Projection` was extracted from `PanelService.Project` for it,
+      because the second writer is not a collaborator of the panel service and copying eight lines would
+      have copied the DECISION with them. The log page's list is a fourth TAB rather than rows in the
+      rounds table: a consultation has no stage, no reviewers and no findings, and the columns that answer
+      "did consulting help" are not the columns that answer "did the gate pass".
 
 **Epic 3 — triggers and measurement.**
 

@@ -14,6 +14,7 @@ import { consultantBody } from './consultantView';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
@@ -85,6 +86,13 @@ export interface PanelState {
    * Optional for the reason {@link teamServers} is: no fixture's assertions care.</p>
    */
   readonly consultPrompt?: string | undefined;
+  /**
+   * Consultations running right now — the third live region.
+   *
+   * <p>Optional for the reason {@link teamServers} is, and absent means none: a fixture that does not
+   * supply it is a panel where nobody is consulting anybody, which is the ordinary state.</p>
+   */
+  readonly consultations?: readonly Consultation[] | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -282,12 +290,14 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state)),
     // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
     // another vendor about a passage, here an AI asks one about the tree it is stuck in.
-    section('consultant', 'Consultant', open, consultantBody(state.settings.consult, {
-      vendors: state.vendors,
-      codexModels: state.codexModels,
-      agyModels: state.agyModels,
-      consultPrompt: state.consultPrompt,
-    })),
+    section('consultant', 'Consultant', open,
+      `<div id="live-consultations">${consultationsBody(state.consultations ?? [], nowMs)}</div>`
+      + consultantBody(state.settings.consult, {
+        vendors: state.vendors,
+        codexModels: state.codexModels,
+        agyModels: state.agyModels,
+        consultPrompt: state.consultPrompt,
+      })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
@@ -455,6 +465,7 @@ ${body}
   // five-second tick.
   let lastQuestions = '';
   let lastRounds = '';
+  let lastConsultations = '';
   window.addEventListener('message', (event) => {
     const message = event.data;
     if (message?.type !== 'live') {
@@ -462,6 +473,7 @@ ${body}
     }
     const questions = document.getElementById('live-questions');
     const rounds = document.getElementById('live-rounds');
+    const consultations = document.getElementById('live-consultations');
     if (questions !== null && typeof message.questions === 'string' && message.questions !== lastQuestions) {
       lastQuestions = message.questions;
       questions.innerHTML = message.questions;
@@ -469,6 +481,12 @@ ${body}
     if (rounds !== null && typeof message.rounds === 'string' && message.rounds !== lastRounds) {
       lastRounds = message.rounds;
       rounds.innerHTML = message.rounds;
+    }
+    // Compared before it is written, like the two above: an identical innerHTML assignment still
+    // rebuilds the DOM, and this region sits in a section full of controls.
+    if (consultations !== null && typeof message.consultations === 'string' && message.consultations !== lastConsultations) {
+      lastConsultations = message.consultations;
+      consultations.innerHTML = message.consultations;
     }
     // The answer buttons live inside the patched HTML, so they are re-bound here.
     for (const el of document.querySelectorAll('#live-questions [data-command]')) {
@@ -1771,13 +1789,23 @@ ${reviewers}</div>`;
 
 
 /**
- * The two regions the provider may patch without reloading the webview — the round in flight and
- * a waiting question. Everything else on the panel is a control, and a control only changes when
- * the person changes it.
+ * The three regions the provider may patch without reloading the webview — the round in flight, a
+ * waiting question, and a consultation being had. Everything else on the panel is a control, and a
+ * control only changes when the person changes it.
+ *
+ * <p>A consultation is here rather than in the repaint for the reason the other two are: the section
+ * around it holds pickers and a text box somebody may be editing, and rebuilding the page under a
+ * caret to say a turn finished is the defect `withholdsRepaint` exists for.</p>
  */
-export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string } {
+export function liveRegions(
+  state: PanelState,
+  nowMs: number = Date.now(),
+): { questions: string; rounds: string; consultations: string } {
   return {
-    questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)) };
+    questions: questionsSection(state.questions),
+    rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
+    consultations: consultationsBody(state.consultations ?? [], nowMs),
+  };
 }
 
 /**
