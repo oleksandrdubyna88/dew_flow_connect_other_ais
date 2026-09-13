@@ -45,7 +45,8 @@ The catalog is data and the panel still draws five constants.
   person can already copy one between machines; the button that does it politely is a later plan.
 - **No Team-server change.** It still accepts the five it was compiled with, and `coai-mcp` excludes a
   custom role per (vendor, role) before the launch. Widening it is plan 3,
-  *PLAN_team_server_accepts_custom_roles* (`Coai:ExtraRoles`, `Coai:AllowAnyRole`).
+  [PLAN_team_server_accepts_custom_roles.md](PLAN_team_server_accepts_custom_roles.md)
+  (`Coai:ExtraRoles`, `Coai:AllowAnyRole`), shipped 2026-09-13.
 - **No `review_document`, no artifact, no second CLAUDE.md snippet.** A role stored with
   `programmingTask: false` is saved by this plan, shown in the page, and takes part in **no round** —
   exactly as plan 1 left it. The stage that runs one is plan 4.

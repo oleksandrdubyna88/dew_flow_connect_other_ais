@@ -1,20 +1,59 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
-> Status: **in progress — stories 1, 2, 3 and 4 are on the branch and through the gate; the merge and the promotion are still open, 2026-09-13.** `AcceptedRoles` exists, is
-> built from configuration at boot and refuses a configured id that could never run; both role gates
-> and the request ingress read it; `/api/catalog` carries `roles` and `allowAnyRole`; and both
-> clients ask instead of guessing. What is left is the merge and the promotion — and one Definition
-> of Done line nobody can tick from a test, the verification against the DEPLOYED server.
+> Status: **IMPLEMENTED, 2026-09-13.** Shipped as PR #224, in four stories each gated on its own
+> diff. `AcceptedRoles` is built from configuration at boot and refuses a configured id that could
+> never run; both role gates and the request ingress read it; `/api/catalog` carries `roles` and
+> `allowAnyRole`; and both clients ask instead of guessing.
+>
+> **One Definition-of-Done line is NOT ticked and could not be**: the verification against the
+> DEPLOYED Team server. That deploy is manual (`workflow_dispatch`), so a tag does not put the server
+> on the box — it is a step somebody performs, and until they do, every claim here rests on tests of
+> both sides of the wire rather than on the join.
+>
 > Scope: `src_server` (the two role gates,
 > `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),
 > `src_vs_code` (`teamServerApi.ts` and the sentence the panel shows), and the tests for all of it.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [architecture.md](../research/architecture.md);
-> plan 1: [PLAN_review_roles_become_data.md](../research/PLAN_review_roles_become_data.md),
-> plan 2: [PLAN_review_roles_crud_tab.md](../research/PLAN_review_roles_crud_tab.md), both shipped.
+> Related docs: [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md),
+> [architecture.md](architecture.md);
+> plan 1: [PLAN_review_roles_become_data.md](PLAN_review_roles_become_data.md),
+> plan 2: [PLAN_review_roles_crud_tab.md](PLAN_review_roles_crud_tab.md), both shipped.
 >
+## The deviations, recorded
+
+Five gate rounds over four stories, **86 gating findings**, 48 accepted. What shipped differently
+from what this document originally said:
+
+1. **`AllowAnyRole` CASE-FOLDS**, and the open question about it was withdrawn rather than answered.
+   The first draft documented a usage-ledger split as an acceptable price and put it to the operator;
+   three reviewers refused that independently and one named the answer the draft had dismissed.
+2. **The wire carries TWO fields, not one with a sentinel.** `["*"]` was the draft's shape and was
+   refused by two reviewers on the grounds that `roles.includes(role)` — the obvious client code —
+   answers `false` for every real role.
+3. **A 48-character bound beside the shape rule.** The draft bounded the alphabet and not the length.
+4. **The role-id expression is anchored `\A…\z`, not `^…$`**, in BOTH C# halves. Story 1's own RED
+   test found that .NET's `$` also matches immediately before a trailing newline, so the `^…$` form
+   accepts `"Requirements\n"` — an id carrying a line break into an environment variable name, a
+   ledger key and a log line. Story 1's code round then caught that only one of the two copies had
+   been fixed.
+5. **The KIND is judged before the ROLE.** Not in the draft at all. A chat carrying an unknown role
+   was told *"'Invented' is not a review role. Accepted: …"*, picked one of those names, and was then
+   told *"a chat carries no review role"* — two refusals contradicting each other one request apart.
+6. **`JobKinds.Refusal` validates both review rows.** It took an `AcceptedRoles` and ignored it when
+   a role WAS given: a signature that says it validates and a method that does not.
+7. **Nothing is nothing, however spelled.** `Canonical("   ")` returned three spaces into the record
+   and the fingerprint, so one review became two jobs depending on how a client said nothing. The
+   role is trimmed now, like the kind and the idempotency key beside it.
+8. **The round ASKS before it assembles.** The draft assumed the panel had already probed — but the
+   panel is the extension and `coai-mcp` is a separate process with a separate cache.
+9. **No "already asked, skip it".** The first attempt at story 4 had one, and it made a transient
+   failure permanent: a 502 during a restart disabled that server's custom roles for the life of the
+   process, and an operator's later `Coai:ExtraRoles` change was never heard.
+10. **A catalog is validated, not trusted.** `{"roles":[null]}` made the two clients disagree — one
+    excluded every shipped role while the other read it as saying nothing — and `[" "]` made a
+    catalog look answered. Both halves hold a catalog name to the role-id rule now.
+
 > **Revised after the plan round.** Seventeen findings, and they converged on one thing: the first
 > draft specified `Coai:ExtraRoles` carefully and `Coai:AllowAnyRole` loosely. It had no wire
 > representation, no length bound, no shape check at the boundary, and it *documented* a usage-ledger
