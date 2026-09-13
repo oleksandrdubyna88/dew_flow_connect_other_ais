@@ -334,7 +334,8 @@ test('the first question after a restore carries the whole transcript', () => {
   // It grew again when a restored tab started remembering which door it came through.
   // And again in story A4, when a restored thread started sharing one transcript array with its
   // "already saved" mark so that a reload writes nothing.
-  assert.match(restore.slice(0, 5_200), /carry: carriedFrom\(saved\.messages,/,
+  // And again in story C3, when a restored conversation could be bound to the tab it belongs to.
+  assert.match(restore.slice(0, 6_400), /carry: carriedFrom\(saved\.messages,/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { openConversations, restoreConversation, revealConversation } from './chatCommand';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
+import { ConversationMeta } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { PickerRow, pickerRows } from './conversationPicker';
 import {
@@ -114,8 +115,34 @@ const scopeButton = (everywhere: boolean): vscode.QuickInputButton => ({
   tooltip: scopeTooltip(everywhere),
 });
 
+/**
+ * What *go to* asks this picker for when it could not answer on its own — story C3.
+ *
+ * <p>The same widget, showing fewer rows under a title that says why. Everything else about it is
+ * unchanged: the trash, the chord, the scroll position, the re-read at the press. What it must NOT
+ * do is offer the globe, because a narrowed list is an answer to a question about one tab and
+ * widening it to every folder would quietly turn it back into the general list.</p>
+ */
+export interface Narrowed {
+  /** Exactly the conversations to show. */
+  readonly rows: readonly ConversationMeta[];
+  /** What the title says — `narrowedTitle` wrote it, and it names the tab. */
+  readonly title: string;
+  /** The tab a new conversation would be for, shown as the first row. */
+  readonly offer: string;
+  /** Whether the cursor starts on that row, for the answer that is really "there is none yet". */
+  readonly startOnNew: boolean;
+  /**
+   * The tab a CHOSEN row is bound to — absent when a choice must open under its own key.
+   *
+   * <p>Absent for `cross root`, where the conversation belongs to another project and opening it is
+   * right while re-homing it is not; and absent whenever the tab already holds a conversation.</p>
+   */
+  readonly bindTo?: { readonly key: object; readonly label: string };
+}
+
 /** Open the list of conversations. */
-export function switchConversations(panels: ChatPanels, deps: PickerDeps): void {
+export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrowed?: Narrowed): void {
   const now = deps.clock ?? Date.now;
   // A second invocation replaces the first: two of these on screen would both hold the context key,
   // and `Alt+Delete` would act on whichever was bound last rather than on the one being looked at.
@@ -168,9 +195,13 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
     }
     const held = pick.activeItems[0]?.row;
     const keep = held !== undefined && held.kind === 'conversation' ? held.id : '';
+    const shown = narrowed === undefined ? undefined : new Set(narrowed.rows.map((one) => one.id));
     const rows = pickerRows({
-      open: byLastUsed(openConversations(panels)),
-      stored: deps.index.entries(scopeOf(everywhere, deps.workspace())),
+      // A narrowed list shows the rows it was given and the open conversations among them — never
+      // every open one, which would put conversations belonging to other tabs into an answer about
+      // this one.
+      open: byLastUsed(openConversations(panels)).filter((one) => shown === undefined || shown.has(one.id)),
+      stored: narrowed?.rows ?? deps.index.entries(scopeOf(everywhere, deps.workspace())),
       index: deps.index.state(),
       // Asked at every draw, not once at opening: judged against this instant, so a window that has
       // gone quiet while the list was up stops holding its conversations hostage.
@@ -179,12 +210,24 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
       everywhere,
       query,
       now: now(),
+      ...(narrowed === undefined ? {} : { offerNew: narrowed.offer }),
     });
     drawn = query;
     cut = rows.some((row) => row.kind === 'notice' && row.notice === 'more');
-    pick.title = pickerTitle(everywhere);
-    pick.buttons = [scopeButton(everywhere)];
+    pick.title = narrowed?.title ?? pickerTitle(everywhere);
+    // NO GLOBE on a narrowed list: it answers a question about one tab, and widening it to every
+    // folder would turn that answer back into the general list without saying so.
+    pick.buttons = narrowed === undefined ? [scopeButton(everywhere)] : [];
     pick.items = rows.map(itemFor);
+    const offered = pick.items.find((item) => item.row.kind === 'new');
+    if (narrowed?.startOnNew === true && keep.length === 0 && offered !== undefined) {
+      // *Go to* found nothing saved for this tab. The offer is under the cursor so one keystroke
+      // starts a conversation — and nothing is started until that keystroke, which is the whole
+      // reason this answer is a picker rather than a new conversation. (Two vendors, the plan round.)
+      pick.activeItems = [offered];
+
+      return;
+    }
     const again = pick.items.find((item) => item.row.kind === 'conversation' && item.row.id === keep);
     if (again !== undefined) {
       // The cursor stays on the conversation it was on. Without it, forgetting three in a row means
@@ -221,9 +264,10 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
     const answer = opening(row.label, await deps.store.read(row.id));
     switch (answer.kind) {
       case 'reopen':
-        // Its own key, and no panel: this is `restoreConversation`'s first caller without one. The
-        // conversation comes back closed, with nothing running, exactly as it does after a reload.
-        restoreConversation(panels, undefined, answer.record, deps.extensionUri).panel.reveal();
+        // No panel: this is `restoreConversation`'s first caller without one. The conversation comes
+        // back closed, with nothing running, exactly as it does after a reload — under the tab *go
+        // to* asked it to be bound to, or under its own key for every other caller.
+        restoreConversation(panels, undefined, answer.record, deps.extensionUri, narrowed?.bindTo).panel.reveal();
 
         return true;
       case 'gone':

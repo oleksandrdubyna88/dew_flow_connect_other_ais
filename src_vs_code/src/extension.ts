@@ -19,6 +19,7 @@ import {
   takeTheQuestion,
 } from './chatCommand';
 import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
+import { goToConversation } from './chatGotoCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
 import { startHousekeeping } from './chatStoreHousekeeping';
@@ -334,6 +335,19 @@ export function activate(context: vscode.ExtensionContext): void {
     //
     // The index it draws from is the housekeeping's, published after the sweep — never a listing taken
     // here, which at ninety days of conversations is thousands of files on the way to the first frame.
+    // GO TO the conversation this tab already has — story C3, and the other half of what the
+    // operator asked for: the list above is searched by hand, this one is pressed on the tab you are
+    // working in. Its decision is `chatGoto.ts`; everything here is the registration and the door.
+    // Detached with a catch of its own, like every command that awaits: the store answers in
+    // outcomes and never rejects, so anything arriving there is a defect worth a line.
+    vscode.commands.registerCommand('coai.goToConversation', () => {
+      noteChatDoor('goto');
+      void goToConversation(chatPanels, housekeeping.index, chatStore, context.extensionUri)
+        .catch((reason: unknown) => {
+          console.error('ConnectOtherAIs: going to a conversation threw', reason);
+          void vscode.window.showWarningMessage('That conversation could not be opened.');
+        });
+    }),
     vscode.commands.registerCommand('coai.switchConversations', () => {
       noteChatDoor('switch');
       switchConversations(chatPanels, {

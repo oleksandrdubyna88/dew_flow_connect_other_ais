@@ -112,6 +112,15 @@ disk and only really deleted after the same ninety days as everything else. A co
 ANOTHER VS Code window is listed and says so, and cannot be opened or forgotten from here — one
 window cannot raise another, and a second tab onto one conversation would split it in two.
 
+**CoAI: go to conversation** (`Ctrl+Alt+G`, or either right-click menu) is the same thing from the
+other end, and usually the one you want: pressed on the tab you are working in rather than on a list.
+If this window already has that conversation open it comes to the front; if it is only saved it opens
+again, bound to that tab, so every later press lands in the same place. If nothing is saved for the
+tab, the list opens with *New conversation for it* under the cursor — and nothing is created until you
+press it. From a terminal or anywhere a conversation cannot belong, it opens the full list rather than
+doing nothing. Where it cannot be sure — two Claude sessions with one name, or a conversation about
+this file filed under another folder — it shows those and lets you choose, with a title saying why.
+
 The full description lives in the help — `⋯` → **Help** → *Chat with other AI*, in any of the five
 languages. This section is the overview; that article is the one kept in step with the code.
 

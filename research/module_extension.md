@@ -2366,6 +2366,49 @@ the picker and measures the retention window — a refactor moving a file is not
 a conversation); a timeout on the session walk (no walk here has one, and one applied at a single
 site is the defect the conventions name); and a progress indicator for background pinning.
 
+## The door: go to the conversation about this tab (2026-09-13)
+
+C2 decided; this is the command that carries the decision out, and after it the feature is usable.
+`Ctrl+Alt+G`, both right-click menus, the palette. Scoped, unlike epic B's switch chord — *go to*
+acts on the active tab, so it has something to be scoped to, while a list does not.
+
+### Binding is the only dangerous thing it does
+
+Everything else is a reveal or a list. Registering a saved conversation under a live tab is the one
+act that changes what a tab owns, and it is guarded three ways, each for a race the plan round named:
+the record is **re-read at the press** and checked against source AND workspace, because a decision is
+a statement about a moment that has passed; the **tab must still be open and still hold nothing**,
+because a person can close it or start a chat in it while a record is read or a picker is up; and
+**one press at a time**, because those awaits are long enough for a second chord and what a second
+would build is a second panel for one conversation.
+
+`restoreConversation` gained an optional tab to bind to. The tab is checked for a conversation BEFORE
+anything is built: `panels.open` would reveal what is there without calling the factory, but by then
+the panel would exist — a webview for a tab that turned out to have one, with nobody to close it.
+
+### Nothing is created on a guess
+
+`start` does not open a conversation. It opens the picker with *New conversation for <tab>* under the
+cursor, and nothing exists until that row is chosen. Two vendors refused the alternative and were
+right: this chord is easy to press by accident, and opening one would resolve a CLI and launch a
+vendor process for a conversation nobody has typed into. It is also what the plan said all along —
+my own brief for the story had quietly turned it into opening one outright, and the round caught the
+drift.
+
+### A conversation opened without a tab is rebound, not merely revealed
+
+The gap epic B recorded and named this story as the place to close. A conversation reopened from the
+picker, or restored after a reload, lands under a key of its own; pressing *go to* on the tab it
+belongs to found the record already live and simply revealed it, leaving the tab unbound for ever and
+the picker and this command disagreeing about what that tab owns. The registration is moved onto the
+tab with `ChatPanels.rekey`, which already existed for exactly this.
+
+**A cross-root conversation is opened but NOT bound.** It belongs to another project; re-homing it
+because somebody went looking for it is a decision they did not ask for. The picker answer carries
+that permission explicitly, because C2's offer would otherwise have had no valid completion —
+`bindable` refuses a workspace mismatch, correctly, so the command would have had to bypass its own
+validation to honour its own offer.
+
 ## Which conversation belongs to this tab (2026-09-13)
 
 Epic B's picker is a list a person searches BY HAND. This is the other half of what was asked for:

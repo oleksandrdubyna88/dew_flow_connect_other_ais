@@ -84,7 +84,7 @@ test('Asked is take and add, and nothing else', () => {
   // an Asked. Both partitions are written out so that a seventh door has to be placed in one of them
   // deliberately rather than landing in whichever the filter happens to put it in.
   assert.deepStrictEqual(DOORS.filter((door) => asking(door)), ['take', 'add']);
-  assert.deepStrictEqual(DOORS.filter((door) => !asking(door)), ['key', 'default', 'choose', 'switch']);
+  assert.deepStrictEqual(DOORS.filter((door) => !asking(door)), ['key', 'default', 'choose', 'switch', 'goto']);
 });
 
 test('a door that resolved no model keeps the empty strings rather than inventing them', () => {

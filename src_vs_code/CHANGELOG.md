@@ -50,6 +50,25 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
+**You can go straight to the conversation about what you are looking at.** The list was half of it;
+this is the other half. **CoAI: go to conversation** — `Ctrl+Alt+G` (`Cmd+Alt+G` on a Mac), the
+right-click menu, or the palette — is pressed on the tab you are working in. Already open in this
+window? It comes to the front. Only saved? It opens again and is **bound to that tab**, so every
+later press lands in the same place rather than opening another copy.
+
+**Nothing is created on a guess.** If the tab has no conversation yet, the list opens with *New
+conversation for it* under the cursor and waits — a chord is easy to hit by accident, and it should
+not start a model running. If the list is still being built the command says so and opens nothing,
+because it cannot yet tell an empty store from one it has not finished reading.
+
+**And where it cannot be sure, it asks.** Two Claude sessions with the same name, or a conversation
+about this file filed under another folder of the same window, both open the list narrowed to those,
+with a title saying why. It never picks one for you.
+
+**A conversation you opened from the list now belongs to its tab.** Opening one from the picker — or
+getting it back after a reload — used to leave it unattached, so pressing *go to* on its file found it
+but never joined the two up. It does now.
+
 **Conversations are filed under the project they actually belong to.** If you work in a multi-root
 window, every chat used to be recorded against the FIRST folder — so a conversation started in the
 second one never appeared when the list was filtered to that folder, even though it was open in front
