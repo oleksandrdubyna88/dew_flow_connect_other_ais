@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.39.0 — 2026-09-13
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.
 
