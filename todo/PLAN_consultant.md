@@ -1,9 +1,25 @@
 # PLAN — Consultant: the main AI asks another vendor's model when it is stuck
 
-> Status: **plan only, nothing implemented yet, 2026-09-12.** Scope: `src_mcp` (one tool `consult`,
-> one MCP prompt, a consultation record, per-vendor resumable launches, a filesystem invariant),
-> `src_vs_code` (a *Consultant* section, a live card, a log row), one paragraph in the canonical gate
-> rule that lives in `dew_flow_conventions`. The Team server is OUT of scope: local vendor CLIs only.
+> Status: **stories 1 and 2 IMPLEMENTED 2026-09-12; stories 3–6 open.** Scope: `src_mcp` (one tool
+> `consult`, one MCP prompt, a consultation record, per-vendor resumable launches, a filesystem
+> invariant), `src_vs_code` (a *Consultant* section, a live card, a log row), one paragraph in the
+> canonical gate rule that lives in `dew_flow_conventions`. The Team server is OUT of scope: local
+> vendor CLIs only.
+>
+> **What is done.** The tool answers, all four routes hold a conversation, and every guarantee S1 and
+> S2 owed is pinned by a test. Each story went through this product's own gate on its own branch —
+> S1: 20 plan findings, then 46 and 8 code findings over two rounds; S2: 13 plan findings, then 38
+> and 10. 71 accepted and applied, 42 rejected with reasons, every decision recorded through
+> `resolve`. Suites at the end: CoaiMcp 1479 (1 pre-existing skip), CoaiServer 245, CoaiBench 113.
+>
+> **What the gate and the live runs caught that the tests had not** — the four worth remembering:
+> the invariant watched `.git/index`, which `git status` rewrites, so every consultation failed
+> closed with nothing wrong; an ignored DIRECTORY's mtime did the same for anyone with a build
+> watcher, and **the consultant itself found that one** when asked where its own invariant would
+> produce a false positive; the local route's answer schema, written into the consultations
+> directory, came back from the store as a record with a null id; and `Build` was claimed pure on
+> every route when the local one writes its prompt file, a claim whose own test had been watching the
+> wrong directory.
 >
 > Related docs: [architecture.md](../research/architecture.md), [module_server.md](../research/module_server.md),
 > [module_runners.md](../research/module_runners.md), [module_extension.md](../research/module_extension.md),
@@ -464,7 +480,7 @@ lock and fence are the security half and stay on Fable.
 
 **Epic 1 — the tool.**
 
-- [ ] **S1 — `consult` on codex, whole and safe, nothing visible.** The tool (`Tools.cs`), `ConsultAnswer`
+- [x] **S1 — `consult` on codex, whole and safe, nothing visible.** The tool (`Tools.cs`), `ConsultAnswer`
       in `ServerJsonContext`, `ConsultationService` + `ConsultationStore` + `AtomicJson` + the
       per-repository lock, `IConsultantRuntime` + `CodexConsultant` + `ConsultantHandle` (the `THREAD_ID`
       guard, C# twin of `codexAdapter.ts:42`) + `ConsultantResolution`, `TurnBudget` + the status union
@@ -475,7 +491,7 @@ lock and fence are the security half and stay on Fable.
       `UsageKinds.Consult` + the server test's superset, `Instructions`. Contract tests: eight names;
       `ScenarioCoverageTests.Covered["consult"]`. **Live:** two turns on this repository's own tree with
       codex, the invariant holding, recorded.
-- [ ] **S2 — the other consultants.** `ClaudeConsultant` (`--session-id`/`--resume`), `AntigravityConsultant`
+- [x] **S2 — the other consultants.** `ClaudeConsultant` (`--session-id`/`--resume`), `AntigravityConsultant`
       (`--conversation`, measured with `--add-dir`), `LocalConsultant` (`WeRemember`, answer schema,
       transcript carry). **Live:** two turns each; whether each leaves anything in the tree.
 
