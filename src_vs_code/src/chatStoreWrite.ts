@@ -106,24 +106,31 @@ export function nextAfterSave(
       return { kind: 'kept', rev: outcome.rev };
     case 'partial':
       return { kind: 'kept', rev: outcome.rev, note: INDEX_BEHIND };
+    case 'busy':
+      // The store was mid-mutation of THIS conversation and never probed it, so there is nothing to
+      // compare and nothing has been lost. Forking here would mint a copy because a lock was held
+      // for a few milliseconds; nothing changes and the next turn tries again.
+      //
+      // It is its own outcome rather than a refusal carrying no transcript, which is how it was
+      // first written and which wedges: a genuine conflict over an ABSENT record reports no
+      // transcript either, so reading that as a busy store means waiting for ever and never forking.
+      // (local raised the case, gemini found what the shortcut cost.)
+      return { kind: 'said', note: BUSY_ELSEWHERE };
     case 'refused':
-      // A refusal that says NOTHING about the disk could not be compared, and the reason is almost
-      // always innocent: the store was mid-mutation of this very conversation and never probed it.
-      // Forking there would mint a copy because a lock was held for a few milliseconds, so the
-      // answer is to change nothing and let the next turn try again. (local, A3's code round.)
-      if (outcome.said === undefined) {
-        return { kind: 'said', note: BUSY_ELSEWHERE };
-      }
-
+      // Somebody has been in this conversation since we last wrote. Adoption is the one exception
+      // and it is decided by the WORDS, never the revision — see the header.
       return baseline === 0 && outcome.diskRev > 0 && containedIn(outcome.said, ours)
         ? { kind: 'adopt', rev: outcome.diskRev, ...(outcome.began === undefined ? {} : { began: outcome.began }) }
         : { kind: 'fork', note: CONTINUED_ELSEWHERE };
     case 'incompatible':
+      // A torn record, or one a newer build wrote. The store refuses to replace it, which is what
+      // stops a downgrade destroying a conversation — so this tab needs somewhere else for its own
+      // words. Never adopted at any baseline: what cannot be read cannot be claimed.
       return { kind: 'fork', note: CONTINUED_ELSEWHERE };
     default:
-      // What the disk said, and then what it MEANS for the person: a reason on its own reads as
-      // though the conversation had been lost, when it is on screen and in the store of record and
-      // the next change will try again. (codex and gemini, A3's code round.)
+      // `failed`. What the disk said, and then what it MEANS for the person: a reason on its own
+      // reads as though the conversation had been lost, when it is on screen, in the store of
+      // record, and about to be tried again. (codex and gemini, A3's code round.)
       return { kind: 'said', note: `${outcome.reason} ${STILL_SAFE}` };
   }
 }

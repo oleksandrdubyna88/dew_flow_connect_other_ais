@@ -141,6 +141,17 @@ export type SaveOutcome =
      */
     readonly began?: number;
   }
+  /**
+   * Another mutation of THIS conversation holds its lock; nothing was probed, nothing was written.
+   *
+   * <p>Its own outcome rather than a refusal carrying no transcript, which is how it was first
+   * written — and that overloading was wrong in a way that WEDGES. A genuine conflict where the
+   * record is absent reports no transcript either, so a caller telling the two apart by that absence
+   * reads a real conflict as a busy store: it waits, never forks, never advances, and every later
+   * write waits behind it for ever. Two facts that need different answers need two names. (gemini,
+   * A3's second code round.)</p>
+   */
+  | { readonly kind: 'busy' }
   | { readonly kind: 'incompatible'; readonly reason: string }
   | { readonly kind: 'failed'; readonly reason: string };
 
@@ -326,9 +337,13 @@ export class ChatStoreFile {
       return { kind: 'failed', reason: claim.reason };
     }
     if (claim.kind === 'held') {
-      // Held by another mutation, so nothing was probed and nothing may be said about the disk's
-      // words — `said` stays absent, and a caller that cannot compare does not adopt.
-      return { kind: 'refused', diskRev: await this.revSeen(record.id, expectedRev) };
+      // NOT PROBED, deliberately, and this is the second half of the same finding. Reading the
+      // record while another process is mid-mutation of it is exactly the unfenced read this
+      // module's lock exists to forbid — on Windows it can also meet the sharing error that
+      // mutation is holding, which would surface to a person as a failed save. There is nothing
+      // worth reporting either: a revision read outside the claim describes a moment that has
+      // already passed.
+      return { kind: 'busy' };
     }
     try {
       return await this.saveClaimed({ ...record, rev: expectedRev + 1 }, expectedRev);
@@ -370,13 +385,6 @@ export class ChatStoreFile {
     return indexFault.length === 0
       ? { kind: 'ok', rev: written.rev }
       : { kind: 'partial', rev: written.rev, reason: indexFault };
-  }
-
-  /** The rev to report when a claim is held: what the disk shows, or the baseline when it cannot say. */
-  private async revSeen(id: string, base: number): Promise<number> {
-    const seen = await this.probe(id);
-
-    return seen.kind === 'record' ? seen.record.rev : seen.kind === 'absent' ? 0 : base;
   }
 
   /**

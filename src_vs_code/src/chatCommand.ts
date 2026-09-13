@@ -704,23 +704,30 @@ async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promis
  * This conversation belongs to another window now; keep ours under a new id.
  *
  * <p>Every message stays — they are on the thread, and the record written below carries all of them
- * — so what a person loses is nothing and what they gain is a tab that says which of the two windows
- * they are looking at. The page is told through a message of its OWN rather than through the state
- * channel, for the reason `showAsked` has one: a state push is read as the whole truth about every
- * region it does not mention, so a sentence sent that way would clear a failure line beside it.</p>
+ * — so what a person loses is nothing, and what they gain is a tab that says which of the two
+ * windows they are looking at.</p>
+ *
+ * <p><b>It does not go back through `settle`, and that is deliberate.</b> It used to, which made the
+ * two functions mutually recursive: a fork whose own save was refused would fork again, and again,
+ * with nothing bounding it. It also pushed the settled note and then immediately overwrote it with
+ * its own. A forked id is freshly minted and nobody else holds it, so the only answers its save can
+ * give are that it landed or that the disk would not take it — both handled here, in one place, with
+ * ONE sentence reaching the page. (gemini, A3's second code round.)</p>
  */
 async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   thread.saveId = randomUUID();
   thread.rev = 0;
-  // THE MEMENTO FIRST, then the store — the same order every other write in this file keeps, and
-  // for the same reason. Written the other way round, a crash in between leaves the fork on disk
-  // under an id the source of truth has never heard of: the tab reloads as the original it no
-  // longer owns, and the copy holding the person's words is orphaned from both the reload and the
-  // migration that is supposed to carry it. Three reviewers, from two vendors. The dedupe marks go
-  // first, because this is the same transcript under a different name and the guard would skip it.
+  // The dedupe marks go first: this is the same transcript under a different name, and the guard in
+  // `show` would otherwise decide nothing had changed and skip writing it anywhere.
   delete thread.savedMessages;
   delete thread.savedModelId;
   delete thread.savedCarryFrom;
+  // THE MEMENTO FIRST, and WAITED FOR. Written the other way round, a crash in between leaves the
+  // fork on disk under an id the source of truth has never heard of: the tab reloads as the original
+  // it no longer owns, and the copy holding the person's words is orphaned from both the reload and
+  // the migration meant to carry it across. Three reviewers from two vendors asked for the order,
+  // and codex for the wait — `remember` queues rather than writes, so without it the two are only in
+  // invocation order and the crash window stays open.
   memory?.remember({
     id: thread.saveId,
     title: thread.title,
@@ -730,22 +737,26 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
   });
+  await memory?.settled();
+
+  // THE SENTENCE, and the new id with it: the page hands that id back to the serializer after a
+  // reload, so a tab that forked and was then reloaded comes back as the copy rather than as the
+  // original. A save that then failed adds its own sentence to this one rather than replacing it —
+  // the fork is the fact that matters, and the disk is a detail underneath it.
+  let note = CONTINUED_ELSEWHERE;
   if (store !== undefined) {
-    // Settled like any other answer rather than read for success alone: a fork whose own save then
-    // failed or was refused used to say nothing at all, which is the silent swallow the house rule
-    // forbids. It cannot fork again — the id is new and nobody else holds it — so the only outcomes
-    // left are kept and said, and both are reported. (codex.)
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), 0), 0, ours0(thread)));
+    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0, ours0(thread));
+    if (next.kind === 'kept') {
+      thread.rev = next.rev;
+      note = next.note === undefined ? note : `${note} ${next.note}`;
+    } else if (next.kind === 'said') {
+      // Not swallowed, which is the house rule: a fork whose own save failed used to say nothing.
+      note = `${note} ${next.note}`;
+    }
+    // `fork` and `adopt` cannot arrive: the id was minted a moment ago, so nothing is there to
+    // conflict with and nothing is there to adopt.
   }
-  // AND UNDER THE NEW ID IN THE MEMENTO, which is still the source of truth. Without this the fork
-  // exists only on disk and in memory: the memento still holds this conversation under the id it was
-  // refused at, so a reload would restore the tab as the original it no longer owns — and the copy,
-  // which has the person's words in it, would be the one nothing could find. (codex, A3's plan
-  // round.) The dedupe marks are cleared first, because the record being written is the same
-  // transcript under a different name and the guard would otherwise skip it.
-  // The new id goes with the sentence: the page hands it back to the serializer after a reload, so a
-  // tab that forked and was then reloaded must come back as the copy rather than as the original.
-  pushChatNote(entry, thread.saveId, CONTINUED_ELSEWHERE);
+  pushChatNote(entry, thread.saveId, note);
 }
 
 /**
