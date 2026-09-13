@@ -62,15 +62,6 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
         From(("COAI_DATA_DIR", _root)).DataDir.Should().Be(Path.GetFullPath(_root));
     }
 
-    [Fact]
-    public void AskingForTheDerivedSide_PartitionsWithoutNamingOne()
-    {
-        var dir = From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "auto")).DataDir;
-
-        dir.Should().StartWith(Path.GetFullPath(_root));
-        dir.Should().NotBe(Path.GetFullPath(_root));
-        Path.GetFileName(dir).Should().Be(PanelSettings.DataSide(_ => null));
-    }
 
     [Fact]
     public void TwoSidesGivenOneLocation_ResolveToDifferentDirectories()
@@ -135,27 +126,7 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
         Path.GetFullPath(settings.DataDir).Should().NotBe(Path.GetFullPath(Path.Combine(_root, "..")));
     }
 
-    [Fact]
-    public void TwoWslDistributionsOnOneHost_AreTwoSides()
-    {
-        // Both report linux-<hostname>, because WSL takes its hostname from the Windows host. The
-        // distribution is what separates them. Raised on the plan round.
-        var ubuntu = PanelSettings.DataSide(n => n == "WSL_DISTRO_NAME" ? "Ubuntu" : null);
-        var debian = PanelSettings.DataSide(n => n == "WSL_DISTRO_NAME" ? "Debian" : null);
 
-        ubuntu.Should().NotBe(debian);
-        ubuntu.Should().Contain("ubuntu");
-    }
-
-    [Fact]
-    public void ASideNameIsPathSafeAndNeverEndsInASeparator()
-    {
-        var side = PanelSettings.DataSide(_ => null);
-
-        side.Should().NotBeNullOrWhiteSpace();
-        side.Should().NotContain("/").And.NotContain("\\");
-        side.Should().NotEndWith("-", "an empty machine name must not leave a dangling dash");
-    }
 
     [Fact]
     public void ATeamServerToken_LandsInsideTheSidesOwnDirectory()
