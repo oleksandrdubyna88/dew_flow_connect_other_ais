@@ -752,5 +752,9 @@ header and the `fresh` handler), `chatMessages.ts` (nothing, if `restart` is reu
 `chatPanel.ts` (the `fresh` push helper), `extension.ts` (registration, the serializer, the
 migration), `package.json`, the five help files, and the new modules. **Does not touch**
 `sessionKey.ts`, `chatPanels.ts`, the adapters, `cliChatSession.ts`, or anything under `src_mcp`.
-`chatCommand.ts` is over the file-size rule already (2 484 lines against 800); every new decision
-goes into a new module, and the extraction named in the reload plan's open tail is not taken here.
+`chatCommand.ts` is over the file-size rule already (2 889 lines against 800 when this plan was
+written, 3 361 with epic C landed); every new decision goes into a new module, and the extraction
+named in the reload plan's open tail is not taken here. The first code round on C3 asked for the
+split again and it was declined again for the same reason: a breach that predates this plan by 2 889
+lines is not one a story can honestly close, and moving a hundred lines out would buy a number
+rather than a structure. The pure halves DID move, to `chatGoto.ts`, where they are testable.

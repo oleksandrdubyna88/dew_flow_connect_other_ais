@@ -73,7 +73,7 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
-import { GotoAsked, TabKind } from './chatGoto';
+import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
 import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
@@ -842,19 +842,32 @@ export async function askedForGoto(
   const claude = sourceSession(active, all, known);
   const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
   const tab = all.find((one) => one.key === matched?.key) ?? active;
-  const kind = tabKind(tab);
+  const kind = tabKindOf({ claude: tab !== undefined && isClaudeSessionTab(tab), document: tab !== undefined && isOrdinaryEditorTab(tab) });
   const path = kind === 'document' ? fsPathOf(tab?.uri ?? '') : '';
   const here = filedUnder(path, whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
   const live = matched === undefined ? undefined : threads.get(panels.get(matched.key)?.id ?? {});
-  const found = kind === 'claude' && live === undefined ? await sessionsNamed(tab?.label ?? '') : [];
-  const source = kind === 'claude' ? sessionSource(found) : sourceOfFile(tab?.uri ?? '');
+  // THE WALK, with progress: it reads a directory of session files and can take seconds, and a
+  // person who has just pressed a chord and sees nothing presses it again. The same notification the
+  // Asked button already shows for the same walk. (Four findings, the code round.)
+  const walked = kind === 'claude' && live === undefined
+    ? await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: 'Finding this conversation…' },
+      async () => sessionsNamed(tab?.label ?? ''),
+    )
+    : { found: [] as readonly Found[], unsure: false };
+  const one = walked.found.find((answer) => answer.kind === 'one');
+  const source = kind === 'claude' && pinnable(walked.found)
+    ? sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : ''))
+    : kind === 'claude' ? { kind: 'none' as const } : sourceOfFile(tab?.uri ?? '');
 
   const asked: GotoAsked = {
     tab: { kind, label: tab?.label ?? '', path },
     live: live?.saveId ?? '',
     source,
     // Only a Claude tab can be ambiguous in this sense, and `pinnable` is the same rule the pin uses.
-    ambiguous: kind === 'claude' && found.length > 0 && !pinnable(found),
+    // A walk that could not be done counts as ambiguous too: not knowing which session a tab belongs
+    // to is a reason to ASK, never a reason to offer to start a second conversation.
+    ambiguous: kind === 'claude' && (walked.unsure || (walked.found.length > 0 && !pinnable(walked.found))),
     candidates: index.bySource(source),
     inRoot: index.entries({ kind: 'workspace', workspace: here }),
     roots: whereToLook(),
@@ -869,41 +882,26 @@ export async function askedForGoto(
   return { asked, key: tab?.key };
 }
 
-/** What kind of thing this tab is, as `chatGoto.ts` names them. */
-function tabKind(tab: TabSnapshot | undefined): TabKind {
-  if (tab === undefined) {
-    return 'other';
-  }
-  if (isClaudeSessionTab(tab)) {
-    return 'claude';
-  }
-
-  return isOrdinaryEditorTab(tab) ? 'document' : 'other';
-}
-
-/** Every session this name answers to, or none when the walk fails — a failed walk is not an answer. */
-async function sessionsNamed(title: string): Promise<readonly Found[]> {
+/**
+ * Every session this name answers to — and whether the walk could be done at all.
+ *
+ * <p>A failed walk is NOT an empty result, and conflating them was a real defect: "no session is
+ * called that" leads to offering a new conversation, so an unreadable session directory would have
+ * produced a duplicate of a conversation that already existed. It is said on the console and
+ * reported as `unsure`, which the caller turns into a question rather than an answer. (Two vendors,
+ * the code round; the constraint — never swallow — was my own.)</p>
+ */
+async function sessionsNamed(title: string): Promise<{ readonly found: readonly Found[]; readonly unsure: boolean }> {
   if (title.length === 0) {
-    return [];
+    return { found: [], unsure: false };
   }
   try {
-    return await findSession(title);
-  } catch {
-    // The walk is best-effort here exactly as it is in `pinSession`: a tab must not take down a
-    // command because a folder would not be read. No sessions found is the honest answer, and it
-    // leads to the picker rather than to a wrong conversation.
-    return [];
-  }
-}
+    return { found: await findSession(title), unsure: false };
+  } catch (reason) {
+    console.warn(`ConnectOtherAIs: this tab's Claude sessions could not be read, so which conversation is its own is unknown: ${title}`, reason);
 
-/** The session source a Claude tab has, when its name answers to exactly one session. */
-function sessionSource(found: readonly Found[]): ConversationSource {
-  if (!pinnable(found)) {
-    return { kind: 'none' };
+    return { found: [], unsure: true };
   }
-  const one = found.find((answer) => answer.kind === 'one');
-
-  return sourceOfSession(sessionIdOf(one?.kind === 'one' ? one.file : ''));
 }
 
 /**
@@ -923,6 +921,11 @@ export function whereConversationSits(panels: ChatPanels, saveId: string): objec
   }
 
   return undefined;
+}
+
+/** Bring the panel under this key to the front, for a caller that already knows where it sits. */
+export function revealUnder(panels: ChatPanels, key: object): void {
+  panels.get(key)?.panel.reveal();
 }
 
 /**
