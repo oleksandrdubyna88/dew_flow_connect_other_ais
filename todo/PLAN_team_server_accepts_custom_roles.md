@@ -1,8 +1,8 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
-> Status: **in progress — story 1 of 4 implemented, 2026-09-13.** `AcceptedRoles` exists, is built
-> from configuration at boot and refuses a configured id that could never run; stories 2 (the gates
-> and the ingress), 3 (the wire) and 4 (both clients) are still open. Scope: `src_server` (the two role gates,
+> Status: **in progress — stories 1 and 2 of 4 implemented, 2026-09-13.** `AcceptedRoles` exists, is
+> built from configuration at boot, refuses a configured id that could never run, and is what BOTH
+> role gates and the request ingress now read; stories 3 (the wire) and 4 (both clients) are open. Scope: `src_server` (the two role gates,
 > `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),
 > `src_vs_code` (`teamServerApi.ts` and the sentence the panel shows), and the tests for all of it.
 >

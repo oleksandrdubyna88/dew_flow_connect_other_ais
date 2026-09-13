@@ -101,7 +101,12 @@ public static class JobKinds
     ///     unknown-role refusal already has.</description></item>
     /// </list>
     /// </remarks>
-    public static string? Refusal(string? saidKind, string? saidRole)
+    /// <param name="roles">
+    /// Which roles this server accepts. Passed in rather than read from the catalog here: the
+    /// missing-role message names the legal values, and a second copy of that list would drift from
+    /// the gate that refuses. One list, two gates — see <see cref="AcceptedRoles"/>.
+    /// </param>
+    public static string? Refusal(string? saidKind, string? saidRole, AcceptedRoles roles)
     {
         if (!TryRead(saidKind, out var kind))
         {
@@ -121,9 +126,7 @@ public static class JobKinds
             (JobKind.Chat, true) =>
                 $"a chat carries no review role, and this one carries '{saidRole}'. Send kind "
                 + $"'{Wire(JobKind.Chat)}' with no role, or drop the kind to send a review.",
-            (JobKind.Review, false) =>
-                $"a job sent as kind '{Wire(JobKind.Review)}' needs a role. Allowed: "
-                + string.Join(", ", RoleCatalog.Builtin.Roles.Select(r => r.Id)),
+            (JobKind.Review, false) => roles.Refusal(saidRole),
             _ => null,
         };
     }

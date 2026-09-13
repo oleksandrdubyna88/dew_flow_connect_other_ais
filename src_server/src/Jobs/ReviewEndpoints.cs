@@ -31,14 +31,15 @@ public static class ReviewEndpoints
     private const string RetryAfterSeconds = "30";
 
     public static void MapReviewEndpoints(
-        this WebApplication app, JobStore jobs, VendorCatalogHost catalog, CallerFilter gate, TimeSpan? queueWait = null)
+        this WebApplication app, JobStore jobs, VendorCatalogHost catalog, CallerFilter gate,
+        AcceptedRoles roles, TimeSpan? queueWait = null)
     {
         app.MapPost("/api/reviews", async (HttpContext ctx, ReviewRequestDto request) =>
         {
             var caller = ctx.CallerOf();
             var current = catalog.Current;
 
-            if (Refusal(current, request) is { } refusal)
+            if (Refusal(current, request, roles) is { } refusal)
             {
                 return Results.Json(new ErrorDto(refusal), ServerJsonContext.Default.ErrorDto,
                     statusCode: StatusCodes.Status400BadRequest);
@@ -47,7 +48,7 @@ public static class ReviewEndpoints
             var now = DateTimeOffset.UtcNow;
             var key = request.IdempotencyKey?.Trim() ?? string.Empty;
             var (job, refused, position) = jobs.Submit(
-                Accepted(caller, request, key, now, queueWait), now);
+                Accepted(caller, request, key, now, queueWait, roles), now);
 
             if (Rejected(ctx, jobs, refused, key) is { } rejection)
             {
@@ -119,12 +120,16 @@ public static class ReviewEndpoints
     /// S3776: 19 against the 15 this repository allows.)
     /// </remarks>
     private static JobRecord Accepted(
-        Caller caller, ReviewRequestDto request, string key, DateTimeOffset now, TimeSpan? queueWait)
+        Caller caller, ReviewRequestDto request, string key, DateTimeOffset now, TimeSpan? queueWait,
+        AcceptedRoles roles)
     {
         // Its shape was checked by `Refusal` before anything reached here, so this cannot fail.
         JobKinds.TryRead(request.Kind, out var kind);
 
-        var role = CanonicalRole(request.Role);
+        // Canonicalised ONCE, here, and used for BOTH the record and the fingerprint below. That is
+        // the whole of the ingress rule: two clients disagreeing about the case of a role must not
+        // become two jobs that a later ledger view has to merge. (codex, the plan round.)
+        var role = roles.Canonical(request.Role);
 
         return new JobRecord(
             JobId.New(),
@@ -145,21 +150,6 @@ public static class ReviewEndpoints
                     caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
                     request.TimeoutSeconds));
     }
-
-    /// <summary>
-    /// The CATALOG's spelling of a role a client named, or what they sent when it names none.
-    /// </summary>
-    /// <remarks>
-    /// <para><c>Enum.TryParse(role, ignoreCase: true)</c> did two jobs at once until the enum was
-    /// retired: it ACCEPTED a spelling in any case, and it CANONICALISED it. Losing either half is
-    /// invisible until it is expensive — a case-sensitive check would refuse every client that
-    /// lower-cases its roles, and a spelling passed straight through would make one role two rows in
-    /// the usage view the day two clients disagree about it.</para>
-    /// <para>Its own method so a test can hold it without running a vendor: the recorded role
-    /// reaches nothing a request can read back, only the ledger a finished run writes.</para>
-    /// </remarks>
-    internal static string CanonicalRole(string? said) =>
-        RoleCatalog.Builtin.ById(said ?? string.Empty)?.Id ?? said ?? string.Empty;
 
     /// <summary>
     /// What the STORE refused, as an answer — or null when it refused nothing.
@@ -206,7 +196,7 @@ public static class ReviewEndpoints
     /// allowed. A caller who asked for a model the company does not pay for should not have to guess
     /// which of the two names was wrong.
     /// </remarks>
-    private static string? Refusal(VendorCatalog catalog, ReviewRequestDto request)
+    private static string? Refusal(VendorCatalog catalog, ReviewRequestDto request, AcceptedRoles roles)
     {
         if (string.IsNullOrWhiteSpace(request.Prompt))
         {
@@ -223,16 +213,19 @@ public static class ReviewEndpoints
         // An unknown role fails NAMING the legal values rather than quietly becoming the first one.
         // Silently substituting a role means a reviewer runs with instructions nobody asked for and
         // the answer looks like an ordinary one. (Two reviewers, code round.)
-        if (!string.IsNullOrWhiteSpace(request.Role)
-            && RoleCatalog.Builtin.ById(request.Role) is null)
+        //
+        // WHICH values are legal is `AcceptedRoles`' answer, not this method's: this server runs the
+        // five it ships with plus whatever `Coai:ExtraRoles` names, and a refusal that listed the
+        // five would be describing a different server. Only when a role was actually SAID — an old
+        // client sends neither kind nor role and must keep working.
+        if (!string.IsNullOrWhiteSpace(request.Role) && roles.Refusal(request.Role) is { } badRole)
         {
-            return $"'{request.Role}' is not a review role. Allowed: "
-                + string.Join(", ", RoleCatalog.Builtin.Roles.Select(r => r.Id));
+            return badRole;
         }
 
         // What this job IS, checked against the role it carries. The whole table is in `JobKinds`,
         // where it can be read as a table rather than reconstructed from branches.
-        if (JobKinds.Refusal(request.Kind, request.Role) is { } wrongKind)
+        if (JobKinds.Refusal(request.Kind, request.Role, roles) is { } wrongKind)
         {
             return wrongKind;
         }

@@ -713,10 +713,20 @@ A configured list would have written the third, which is the shape plan 2 shippe
 paid for. `AcceptedRoles` is that one place: constructed from configuration in `Program.cs` beside
 the other keys, and registered as a singleton.
 
-**As of this story nothing reads it but the container.** `ReviewEndpoints` and `JobKinds` still
-enumerate `RoleCatalog.Builtin.Roles` themselves and `CatalogDto` has no role field — stories 2 and 3
-of the plan move both onto this instance, and story 4 the two clients. It is recorded here now
-because the type and its rules are what the later stories depend on, not because they are wired.
+**Both gates read it, and a test fails when a third list appears.** `ReviewEndpoints`' unknown-role
+refusal and `JobKinds`' missing-role refusal both ask this instance now, so a configured role cannot
+be refused by one gate and listed by the other. `OneAcceptedRoleListTests` scans the server's own
+source and fails when any file but `AcceptedRoles.cs` enumerates `RoleCatalog.Builtin.Roles` — plan 2
+is why that is a test rather than a note: it shipped with three independent counts of "which code
+roles will run", and nothing was looking.
+
+**The role is canonicalised ONCE, at the request boundary, before the idempotency fingerprint.**
+`ReviewEndpoints.CanonicalRole` is gone; `Accepted` asks `AcceptedRoles.Canonical` and the result
+feeds both the `JobRecord` and `Idempotency.Fingerprint`. Two clients disagreeing about the case of a
+role therefore submit ONE job under one key, rather than two that a later ledger view has to merge.
+
+`CatalogDto` still has no role field, so a client cannot yet learn any of this — that is story 3, and
+story 4 is the two clients.
 
 **Building it IS the boot guard.** `From` throws on a configured id that could never run, so an
 operator who writes `My-Role` learns at startup rather than on every request. It is deliberately not
