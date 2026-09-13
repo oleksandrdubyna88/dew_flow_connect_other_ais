@@ -1,15 +1,47 @@
 # PLAN — go to the conversation, switch between them, and start a new one
 
-> Status: **PARTLY IMPLEMENTED, 2026-09-13 — epics A and B are built; A merged as pull request
-> #223 and B is in pull request #229. Epics C and D are not started.** Epic A is the persistence
-> underneath the feature and nothing a person can see: the record and its validation, the atomic
-> write, the file protocol with its lock and its compare-and-swap, the dual write, and the cut-over
-> that makes the store the source of truth and empties the memento. Epic B is the first part anybody
-> can press: the store's keeper and the index (B1), the rows as values (B2), and **CoAI: switch
-> conversations…** with its forgetting (B3–B4). What remains is the durable source that lets a tab
-> find its own conversation (C1), **CoAI: go to conversation** (C2–C3), and the new-chat reset
-> (D1–D2), so this plan stays in `todo/` — the operator asked for all four, and two of them are
-> still to build.
+> Status: **IMPLEMENTED, 2026-09-13.** All four epics and all thirteen stories: the conversation
+> store on disk (A), **CoAI: switch conversations…** (B), **CoAI: go to conversation** (C) and
+> **New chat** (D). A merged as pull request #223, B as #229, C and D in #231.
+>
+> **What shipped differently from this plan, and why.**
+>
+> - **The version is 0.40.0, not the 0.39.0 story D2 names.** That number was written here before
+>   0.39.0 shipped, which it did on the morning of the last day of this work.
+> - **`start` does not open a conversation.** The brief written for story C3 had quietly turned the
+>   plan's *New conversation for &lt;tab&gt;* row into opening one outright; two vendors refused it in
+>   the plan round and were right — the chord is easy to press by accident, and opening one resolves
+>   a CLI and launches a vendor process for a conversation nobody has typed into. The plan's own
+>   wording is what shipped. **And the offered row is now completable**: it hands over to the ordinary
+>   chat door on the tab it names, which the first implementation left inert.
+> - **`Thread.passage` stopped being `readonly`**, which was true of every gesture that existed
+>   before D1: a reset is the one act that makes a tab a different conversation.
+> - **Two facts guard a reset, not one.** The plan said a `generation` counter checked in `oneTurn`.
+>   It is bumped BEFORE the stop rather than after — so a question queued behind the running answer
+>   never begins — and what a turn writes at its END is guarded on the `saveId` instead, because
+>   between a reset beginning and the slate being wiped the turn in flight is still writing into the
+>   OLD conversation, where its stopped line belongs. One counter would have had to pick which of the
+>   two to get wrong.
+> - **The page is told in a message of its own, and the sentence is not in it.** The plan put both in
+>   a new `fresh` message. The state push does not mention the passage, so only a message of its own
+>   can clear it — and it DOES mention the line sentences are written in, so a sentence written there
+>   was wiped by the very next push a tick later.
+> - **No timeout on the reset's wait**, asked for seven times across three rounds and declined each
+>   time with the same evidence: the turn is bounded at 180 seconds by `DEFAULT_BUDGETS.turnMs`,
+>   `stop()` settles it at once, and neither the turn chain nor the write chain can reject.
+> - **`chatCommand.ts` was not split.** The plan declared the breach up front (2 889 lines against
+>   800) and deferred the extraction; the gate asked twice more and it was declined twice more, with
+>   the reason recorded here. It is ~3 500 lines now. **This is the plan's open tail** — see below.
+> - **One quality-gate decision came with it**: the seventeen modules that import `vscode` are
+>   excluded from coverage BY NAME, because no test here can execute a line of them, and the list is
+>   asserted to match that set exactly.
+>
+> **The open tail, for a plan of its own.** An extension-host harness — `@vscode/test-electron`, which
+> `research/module_tests.md` records as this repository's largest single gap and which every one of
+> these thirteen stories worked around with source-read wiring tests. Behind it: the `chatCommand.ts`
+> extraction, and the coverage exclusion that comes back out the day the harness exists.
+>
+> Related docs: [module_extension.md](module_extension.md), [module_tests.md](module_tests.md).
 >
 > Kind: **feature** — four epics, thirteen stories, one branch per epic and a gate round per story
 > (the line above said three stories and one pull request; the split into epics came out of the
@@ -22,13 +54,13 @@
 > Origin: the operator's request of 2026-09-12, dictated and then decided point by point in one
 > conversation; the decisions are quoted below in their own words.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_a_conversation_survives_a_reload.md](../research/PLAN_a_conversation_survives_a_reload.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md),
-> [PLAN_what_you_asked_is_on_disk.md](../research/PLAN_what_you_asked_is_on_disk.md),
-> [PLAN_carry_nothing_above.md](../research/PLAN_carry_nothing_above.md),
-> [PLAN_what_the_chat_has_cost.md](../research/PLAN_what_the_chat_has_cost.md),
-> [PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md),
+> [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md),
+> [PLAN_what_you_asked_is_on_disk.md](PLAN_what_you_asked_is_on_disk.md),
+> [PLAN_carry_nothing_above.md](PLAN_carry_nothing_above.md),
+> [PLAN_what_the_chat_has_cost.md](PLAN_what_the_chat_has_cost.md),
+> [PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md).
 
 ## The symptom
 
@@ -398,7 +430,7 @@ draft's Definition of Done over-promised durability; it now claims what the code
   That is checked with a planted number on **all three** CLI adapters, not only `codex`. What it is
   NOT: a promise that the old CLI's process tree is gone on every platform. On Windows the launcher's
   `taskkill /T` ends the tree; on WSL and Linux a grandchild can outlive its parent, which is
-  [PLAN_closing_a_chat_ends_its_whole_tree.md](PLAN_closing_a_chat_ends_its_whole_tree.md)'s
+  [PLAN_closing_a_chat_ends_its_whole_tree.md](../todo/PLAN_closing_a_chat_ends_its_whole_tree.md)'s
   territory — declined, with the orphan ledger collecting such a process at the next activation. An
   orphan holds its own context and nothing speaks to it; it is a process leak, not a memory leak
   between conversations, and this plan says which of the two it fixes.
@@ -574,11 +606,11 @@ is wrong and the sweep moves into A4.**
 
 | Item | This plan | The other |
 |---|---|---|
-| A conversation is handed to a model that never heard it after a **press** | reopening from the store is a press (*go to*, a picker row) and goes through `carriedFrom` on the first question, the sixth of the counted handovers | [PLAN_a_dead_process_could_carry_the_conversation_too.md](PLAN_a_dead_process_could_carry_the_conversation_too.md) owns the case where NO press happened — a crash — and stays gated on its measurement. Nothing here re-sends anything without a press. |
-| Right-click items in Claude's panel | adds two items to `webview/context` and `editor/context` | [PLAN_the_menu_path_opens_nothing.md](PLAN_the_menu_path_opens_nothing.md) still owes one human press with the probe extension disabled; the new items are pressed in the same session and the result recorded there |
-| A disposed chat session leaves a grandchild on WSL/Linux | *New chat* disposes a session per press — more often than a tab close | [PLAN_closing_a_chat_ends_its_whole_tree.md](PLAN_closing_a_chat_ends_its_whole_tree.md) is DECLINED with a re-open trigger, *"a chat routinely held in a WSL or Linux window"*; this plan does not change the launcher and names itself as one more reason to re-open that one if the operator's chats move off Windows |
-| The rounds-log page reads the local database | conversation files carry `id`, `title`, `modelId`, `updatedAt` — the same `conversation` id the turn ledger records | [PLAN_local_db_reader.md](../research/PLAN_local_db_reader.md) may ingest them later; this plan writes nothing into `coai.db` |
-| Translations that exist but are out of date pass the suite | all five languages of the chat article change in the same commit, with the new sentences | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) is what would make that checkable; still open |
+| A conversation is handed to a model that never heard it after a **press** | reopening from the store is a press (*go to*, a picker row) and goes through `carriedFrom` on the first question, the sixth of the counted handovers | [PLAN_a_dead_process_could_carry_the_conversation_too.md](../todo/PLAN_a_dead_process_could_carry_the_conversation_too.md) owns the case where NO press happened — a crash — and stays gated on its measurement. Nothing here re-sends anything without a press. |
+| Right-click items in Claude's panel | adds two items to `webview/context` and `editor/context` | [PLAN_the_menu_path_opens_nothing.md](../todo/PLAN_the_menu_path_opens_nothing.md) still owes one human press with the probe extension disabled; the new items are pressed in the same session and the result recorded there |
+| A disposed chat session leaves a grandchild on WSL/Linux | *New chat* disposes a session per press — more often than a tab close | [PLAN_closing_a_chat_ends_its_whole_tree.md](../todo/PLAN_closing_a_chat_ends_its_whole_tree.md) is DECLINED with a re-open trigger, *"a chat routinely held in a WSL or Linux window"*; this plan does not change the launcher and names itself as one more reason to re-open that one if the operator's chats move off Windows |
+| The rounds-log page reads the local database | conversation files carry `id`, `title`, `modelId`, `updatedAt` — the same `conversation` id the turn ledger records | [PLAN_local_db_reader.md](PLAN_local_db_reader.md) may ingest them later; this plan writes nothing into `coai.db` |
+| Translations that exist but are out of date pass the suite | all five languages of the chat article change in the same commit, with the new sentences | [PLAN_a_stale_translation_is_invisible.md](../todo/PLAN_a_stale_translation_is_invisible.md) is what would make that checkable; still open |
 
 What is disjoint: nothing here touches the review gate, the server, the Team-server protocol or the
 turn ledger's shape.

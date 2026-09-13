@@ -605,7 +605,11 @@ function chatStyle(
      BETWEEN them, so two buttons both wearing it are pushed apart rather than grouped together at
      the edge. (gemini, the plan round.) No backticks in this comment, deliberately: it lives inside
      a template literal, where one would end the literal. */
-  .asked { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  .headerAction { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  .headerAction[disabled] { opacity: .55; cursor: default; }
+  /* The Asked control's OWN identity, and only that: the look above is shared, so a rule written
+     here for the button that reads a session back cannot reach the one that starts a new chat.
+     (codex, the code round.) */
   .asked.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
   .toRight { margin-left: auto; }
   /* It OPENS: a height and an opacity that take half a second, because a block of text appearing
@@ -830,8 +834,8 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 
   return `<header>
 <h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}
-<button type="button" id="fresh" class="asked toRight" title="Archive this conversation and start a new one for this tab">New chat</button>
-${state.fromSession ? '<button type="button" id="asked" class="asked" aria-expanded="false" aria-controls="asking" title="What you asked in this session, read back from disk">Asked</button>' : ''}
+<button type="button" id="fresh" class="headerAction toRight" title="Archive this conversation and start a new one for this tab">New chat</button>
+${state.fromSession ? '<button type="button" id="asked" class="headerAction asked" aria-expanded="false" aria-controls="asking" title="What you asked in this session, read back from disk">Asked</button>' : ''}
 </header>
 ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" aria-hidden="true">
 <div class="askingHead" id="askingHead">
@@ -1343,9 +1347,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   function wireCapped() {
     const restart = document.getElementById('restart');
     if (restart) {
-      restart.addEventListener('click', function () {
-        vscode.postMessage({ type: 'command', command: 'restart' });
-      });
+      restart.addEventListener('click', askForReset);
     }
     const useLocal = document.getElementById('useLocal');
     if (useLocal) {
@@ -1353,6 +1355,28 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         vscode.postMessage({ type: 'command', command: 'useLocal' });
       });
     }
+  }
+  /**
+   * Ask the host for a clean slate - the ONE place this page says it, for both buttons.
+   *
+   * <p>Two listeners posting the same object literal is one contract in two places: a reason field
+   * added to the message, or a rename, would be applied to one of them and quietly leave the other
+   * posting something the host no longer answers. (codex, the code round.)</p>
+   *
+   * <p>THE BUTTON SAYS IT HEARD YOU. The work behind this can take seconds - a running turn is ended
+   * and waited for, the write queue is drained, the old conversation is archived - and a control that
+   * looks untouched through all of it is one somebody presses again. The host ignores the second
+   * press, so nothing is reset twice; what the person loses is the knowledge that the first one
+   * worked. Re-enabled by the next state the host pushes, which arrives on the way out of the reset
+   * whether it succeeded or failed. (Two vendors, four findings, the code round.)</p>
+   */
+  function askForReset() {
+    const button = document.getElementById('fresh');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Starting…';
+    }
+    vscode.postMessage({ type: 'command', command: 'restart' });
   }
   wirePicker();
   wireCapped();
@@ -1368,9 +1392,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // document with a new script, so nothing accumulates.
   const fresh = document.getElementById('fresh');
   if (fresh) {
-    fresh.addEventListener('click', function () {
-      vscode.postMessage({ type: 'command', command: 'restart' });
-    });
+    fresh.addEventListener('click', askForReset);
   }
   // Rule 1: the tab opens looking at the last thing said, not at the passage above it. Three times,
   // because the height is not final until the fonts are: now (the first paint is already close),
@@ -1597,6 +1619,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // silently into "never follow", and the only place that shows is the real webview. One snapshot
     // at the head of the one handler every region arrives through is what makes it true by
     // construction rather than by remembering to do it in five places.
+    // THE RESET BUTTON, GIVEN BACK. A state push is the host having got somewhere, and the reset
+    // ends in one on both of its paths - the slate published, or the reason it was not. Restored
+    // here rather than by a message of its own, so a button cannot be left dead by a path nobody
+    // remembered to add one to.
+    const button = document.getElementById('fresh');
+    if (button && button.disabled) {
+      button.disabled = false;
+      button.textContent = 'New chat';
+    }
     const scroll = document.getElementById('scroll');
     const follow = !scroll || shouldFollow(scroll.scrollTop, scroll.clientHeight, scroll.scrollHeight, SLACK);
     let wrote = false;

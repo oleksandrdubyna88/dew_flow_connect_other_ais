@@ -739,9 +739,13 @@ test('only ONE header control pushes the group right, so the two are not pushed 
   const header = html.slice(html.indexOf('<header>'), html.indexOf('</header>'));
 
   assert.equal((header.match(/toRight/gu) ?? []).length, 1, 'more than one header control pushes itself right');
-  assert.match(header, /id="fresh" class="asked toRight"/u, 'the push is not on the first of the right-hand group');
+  assert.match(header, /id="fresh" class="headerAction toRight"/u, 'the push is not on the first of the right-hand group');
   assert.match(html, /\.toRight \{ margin-left: auto; \}/u, 'nothing pushes the group to the right edge at all');
-  assert.doesNotMatch(html, /\.asked \{ margin-left: auto;/u, 'the shared look still carries the push, so both buttons carry it');
+  assert.doesNotMatch(html, /\.headerAction \{ margin-left: auto;/u, 'the shared look still carries the push, so both buttons carry it');
+  // And the shared LOOK is a neutral name: a rule written for the control that reads a session back
+  // must not be able to reach the one that starts a new chat. (codex, the code round.)
+  assert.match(header, /id="asked" class="headerAction asked"/u, 'the two header actions no longer share one look');
+  assert.doesNotMatch(header, /id="fresh"[^>]*asked/u, 'New chat wears the Asked control’s own identity');
   // And the order: the ± controls, then New chat, then Asked.
   assert.ok(header.indexOf('id="fresh"') > header.indexOf('</h1>'), 'New chat comes before the title');
   assert.ok(header.indexOf('id="fresh"') < header.indexOf('id="asked"'), 'New chat comes after Asked');
@@ -751,13 +755,21 @@ test('the header button posts the SAME command as the capped notice’s, and pos
   // One gesture, one host implementation. A second host path would be two places for one behaviour
   // to drift, and the words on the two buttons say the same thing.
   const page = chatPageHtml(state({ fromSession: true }), 'n1');
-  const wiring = page.slice(page.indexOf("getElementById('fresh')"));
-
-  assert.match(wiring.slice(0, 300), /vscode\.postMessage\(\{ type: 'command', command: 'restart' \}\)/u,
-    'the header button posts something other than the reset the notice’s button posts');
-  // Wired once, with the page: the header is not one of the regions a state push replaces, which is
-  // why the notice's button is re-wired on every redraw of its own region and this one is not.
-  assert.equal((page.match(/getElementById\('fresh'\)/gu) ?? []).length, 1, 'the header button is wired more than once');
+  // ONE transport, called by BOTH: two listeners posting the same object literal is one contract in
+  // two places, and a reason field added to the message would reach one of them. (codex.)
+  assert.equal((page.match(/addEventListener\('click', askForReset\)/gu) ?? []).length, 2,
+    'the two reset buttons do not go through one page-side handler');
+  assert.equal((page.match(/command: 'restart'/gu) ?? []).length, 1, 'the reset message is written in more than one place');
+  assert.match(page, /function askForReset\(\) \{[\s\S]{0,400}vscode\.postMessage\(\{ type: 'command', command: 'restart' \}\)/u,
+    'the shared handler posts something other than the reset');
+  // AND IT SAYS IT HEARD YOU. The work behind this takes seconds; a control that looks untouched
+  // through all of it is one somebody presses again. (Two vendors, four findings.)
+  assert.match(page, /function askForReset\(\) \{[\s\S]{0,300}button\.disabled = true;[\s\S]{0,120}textContent = 'Starting…'/u,
+    'the button gives no sign at all that the press registered');
+  // Given back by the next state, which the reset ends in whether it worked or not — so no path can
+  // leave the button dead by forgetting to send a message of its own.
+  assert.match(page, /if \(button && button\.disabled\) \{[\s\S]{0,140}textContent = 'New chat'/u,
+    'nothing gives the button back, so one press disables it for the life of the tab');
 });
 
 test('a locked composer posts nothing, however it is asked', () => {

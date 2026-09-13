@@ -574,7 +574,7 @@ test('the shipped New chat button reaches the host', () => {
   // The page ships MINIFIED, and this repository has already shipped a page whose embedded function
   // was renamed out from under its caller. The button a person presses is the one in the bundle, so
   // that is the one pressed here.
-  const { rendered, posted, press } = runPage();
+  const { rendered, nodes, posted, press, push } = runPage();
 
   assert.ok(rendered.has('fresh'), 'the shipped chat page has no New chat button');
   press('fresh');
@@ -582,6 +582,17 @@ test('the shipped New chat button reaches the host', () => {
   const resets = posted.filter((message) => message['command'] === 'restart');
   assert.strictEqual(resets.length, 1, 'the shipped New chat button did not ask for exactly one reset');
   assert.strictEqual(resets[0]?.['type'], 'command');
+
+  // AND IT SAYS IT HEARD THE PRESS. The work behind it takes seconds — a running turn ended and
+  // waited for, the write queue drained, the old conversation archived — and a control that looks
+  // untouched through all of that is one somebody presses again.
+  assert.strictEqual(nodes['fresh']?.['disabled'], true, 'the shipped button stayed pressable through a reset it had already asked for');
+  assert.strictEqual(nodes['fresh']?.['textContent'], 'Starting…', 'the shipped button said nothing about what it was doing');
+
+  // Given back by the next state the host pushes, which the reset ends in whether it worked or not.
+  push({ type: 'state', messagesHtml: '<p>a new slate</p>' });
+  assert.strictEqual(nodes['fresh']?.['disabled'], false, 'one press disabled the shipped button for the life of the tab');
+  assert.strictEqual(nodes['fresh']?.['textContent'], 'New chat');
 });
 
 test('the shipped page says WHY there is nothing, rather than showing an empty box', () => {
