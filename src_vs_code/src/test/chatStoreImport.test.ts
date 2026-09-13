@@ -187,9 +187,13 @@ async function capturing<T>(work: () => Promise<T>): Promise<{ readonly value: T
   }
 }
 
-/** A lock as another, live window would leave it: fresh, and not ours. */
-const rivalLock = (dir: string, id: string): void => {
-  writeFileSync(join(dir, lockName(id)), JSON.stringify({ pid: 1, at: new Date(AT).toISOString(), token: 'rival:1', doing: 'save 2' }), 'utf8');
+/**
+ * A lock as another window left it `agoMs` ago — by the REAL clock, because that is the clock the
+ * store ages a lock against: the migration's pinned `at` names quarantine files and dates nothing.
+ * Zero is a live window mid-save; past the lock's window is one that died holding it.
+ */
+const rivalLock = (dir: string, id: string, agoMs = 0): void => {
+  writeFileSync(join(dir, lockName(id)), JSON.stringify({ pid: 1, at: new Date(Date.now() - agoMs).toISOString(), token: 'rival:1', doing: 'save 2' }), 'utf8');
 };
 
 const fatesOf = (report: ImportReport): readonly Fate[] => (report.kind === 'migrated' || report.kind === 'incomplete' ? report.fates : []);
@@ -830,6 +834,36 @@ test('a record another window is writing right now is not confirmed; the others 
     assert.equal(existsSync(join(dir, recordName('b2'))), false, 'a save went through a lock somebody else holds');
     assert.deepEqual(fake.updates(), [], 'the key was emptied with a record unconfirmed');
     assert.equal(sealing.seals(), 0, 'the memento was sealed before every record was confirmed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the locks a migration takes are dated by the clock, not by the moment the migration began', async () => {
+  // CodeRabbit, PR #223. `at` was handed to every read and save and through them to the lock, so a
+  // migration of many records on a slow disk stamped every lock it took with its own START time —
+  // and a lock it was actively holding read as abandoned to another extension host once the run had
+  // outlived the thirty-second window, while a rival's genuinely stale lock read as fresh by the same
+  // frozen clock. Here the migration "began" a minute ago and meets a lock left forty-five seconds
+  // ago: by the clock it is fifteen seconds past the window and is broken; by the start time it would
+  // be fifteen seconds young, the save would wait and report busy, and the record would go
+  // unconfirmed. The quarantine file, by contrast, IS named for the pinned instant — that is what
+  // `at` is for, and the only thing.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const began = Date.now() - 60_000;
+    rivalLock(dir, 'a1', 45_000);
+    const torn = { ...tab({ id: 'b2' }), savedAt: 'yesterday' };
+    const fake = fakeMemento(memento([tab(), torn]));
+
+    const { value: report } = await capturing(() => run(store, fake, { at: began }));
+
+    assert.equal(report.kind, 'migrated', `a lock stale by the clock was read as fresh by the migration's start time: ${JSON.stringify(report)}`);
+    assert.deepEqual(fatesOf(report).map((fate) => fate.kind), ['quarantined', 'written']);
+    const aside = fatesOf(report).find((fate): fate is Extract<Fate, { kind: 'quarantined' }> => fate.kind === 'quarantined');
+    assert.ok(aside?.at.endsWith(`-${began}.json`), `the quarantine file is not named for the pinned clock: ${aside?.at}`);
+    assert.deepEqual(await listed(store), ['a1']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

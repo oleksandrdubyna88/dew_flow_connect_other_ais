@@ -1534,7 +1534,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       }
       const where = document.getElementById('failure');
       if (where && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {
-        where.innerHTML = '<div class="failure">' + data.noteHtml + '</div>';
+        // AND WHAT THE STATE HANDLER COMPARES AGAINST. The note lives in the failure line, and the
+        // state handler skips a push whose failure is the one it last wrote - so a note that wrote the
+        // line without saying so made a later state carrying the same failure as before the note read
+        // as unchanged, and the note stood as a stale status line until the failure itself moved.
+        // (CodeRabbit, PR #223.) No backticks in this comment either, for the reason above.
+        const noteLine = '<div class="failure">' + data.noteHtml + '</div>';
+        where.innerHTML = noteLine;
+        lastWritten.failure = noteLine;
       }
 
       return;

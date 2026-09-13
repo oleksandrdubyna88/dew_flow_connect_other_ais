@@ -199,12 +199,40 @@ test('the host draws the tab BEFORE it waits, waits under the ceiling, and only 
   assert.match(body, /const id = persistedId\(state\);/u, 'the id is not validated at the boundary');
   const drawn = body.indexOf('draw(deps, panel, restoringHtml(id, nonce()))');
   const waited = body.indexOf('await withinCeiling(migration, MIGRATION_WAIT_MS)');
-  const read = body.indexOf('await restoreChatTab(deps, panel, id)');
+  const read = body.indexOf('await restoreChatTab(deps, panel, id');
   assert.ok(drawn !== -1, 'nothing is drawn while the migration runs — a blank tab');
   assert.ok(waited !== -1, 'the migration is waited for without a ceiling, or not at all');
   assert.ok(read !== -1);
   assert.ok(drawn < waited && waited < read, 'the tab is drawn after the wait, or the store is read before the migration has had its say');
   assert.match(panel, /clearTimeout\(timer\)/u, 'a fast migration leaves a timer ticking');
+});
+
+test('a tab closed while the host waits is left alone: nothing is decided for a panel that has been disposed', () => {
+  // CodeRabbit, PR #223. The wait is up to five seconds and a person can close the tab inside it. The
+  // restore then went on into a panel that no longer existed — and both arms of it assign
+  // `panel.webview.html`, which throws on a disposed panel, into the serializer's handler. Nothing
+  // leaks on this path (`restoreConversation` registers the panel only after `createChatPanel`
+  // returns); it is the throw. So disposal is recorded BEFORE anything is awaited, and the decision is
+  // applied only to a panel that is still open — after the wait, and after the read that follows it.
+  const panel = source('chatRestorePanel.ts');
+  const body = panel.slice(panel.indexOf('export async function restoreAfterReload'), panel.indexOf('export async function restoreChatTab'));
+  const watched = body.indexOf('panel.onDidDispose(');
+  const waited = body.indexOf('await withinCeiling(migration, MIGRATION_WAIT_MS)');
+
+  assert.ok(watched !== -1, 'the host does not notice the panel being closed while it waits');
+  assert.ok(watched < waited, 'disposal is watched for only after the wait, so a close during the wait is missed');
+  assert.match(body.slice(waited), /if \(!open\(\)\)\s*\{\s*\n\s*return;/u, 'the restore goes on into a panel that has been disposed');
+  const decided = panel.slice(panel.indexOf('export async function restoreChatTab'), panel.indexOf('function showNotice'));
+  assert.match(decided, /restoreDecision\(await deps\.store\.read\(id\)[\s\S]{0,160}if \(!open\(\)\)\s*\{\s*\n\s*return;/u,
+    'the decision is applied to a panel that was closed while the store was being read');
+});
+
+test('a store answer this module has no arm for is a defect it names, not a notice it invents', () => {
+  // The switch is exhaustive: `unavailable` has its arm by name, and what remains is `never`, so a
+  // variant added to ReadOutcome without an arm here is a compile error. A value that reaches the
+  // default at runtime — which the types forbid — throws with the value in the message, rather than
+  // drawing a retry notice whose reason is the word undefined. (CodeRabbit, PR #223.)
+  assert.throws(() => restoreDecision({ kind: 'lost' } as unknown as ReadOutcome, undefined, ''), /lost/u);
 });
 
 test('the host asks the memento as a fallback and hands both answers to the decision', () => {

@@ -128,11 +128,20 @@ export function nextAfterSave(
       // stops a downgrade destroying a conversation — so this tab needs somewhere else for its own
       // words. Never adopted at any baseline: what cannot be read cannot be claimed.
       return { kind: 'fork', note: CONTINUED_ELSEWHERE };
-    default:
-      // `failed`. What the disk said, and then what it MEANS for the person: a reason on its own
-      // reads as though the conversation had been lost, when it is on screen, in the store of
-      // record, and about to be tried again. (codex and gemini, A3's code round.)
+    case 'failed':
+      // What the disk said, and then what it MEANS for the person: a reason on its own reads as
+      // though the conversation had been lost, when it is on screen, in the store of record, and
+      // about to be tried again. (codex and gemini, A3's code round.)
       return { kind: 'said', note: `${outcome.reason} ${STILL_SAFE}` };
+    default: {
+      // EXHAUSTIVE, by name. This is the decision boundary of the whole persistence path, and a
+      // variant added to SaveOutcome — one carrying a `reason`, say — used to land in a default arm
+      // that read it as a disk failure, silently. Now it is a compile error here, and a value the
+      // types forbid that arrives anyway is a defect named out loud. (CodeRabbit, PR #223.)
+      const unhandled: never = outcome;
+
+      throw new Error(`a save outcome this build has no arm for: ${JSON.stringify(unhandled)}`);
+    }
   }
 }
 

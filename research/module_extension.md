@@ -2006,11 +2006,16 @@ one small change of its own.
 
 ## A conversation is kept on disk as well (2026-09-12)
 
-The memento above is still the source of truth, and everything below is written BESIDE it. That is
-the whole shape of this step: the store is filled for a version before anything reads it, so the
-cut-over that empties the memento runs against a store that has already been correct for a while
-rather than one created in the same commit. It is the only step in this feature that can destroy a
-person's history, and it is the next one.
+> **Read the section AFTER this one too.** This describes the store being filled beside the memento,
+> which is the state one story lasted. The cut-over has since happened: the disk store is the source
+> of truth, and the memento survives only as the fallback while a migration is pending or incomplete.
+> Where the two sections disagree about which is authoritative, the later one is the code.
+
+The memento was still the source of truth while this was built, and everything below was written
+BESIDE it. That was the whole shape of the step: the store is filled for a version before anything
+reads it, so the cut-over that empties the memento runs against a store that has already been correct
+for a while rather than one created in the same commit. It is the only step in this feature that can
+destroy a person's history, and it is the one that follows.
 
 ### Where it lives, and what a conversation is on disk
 
@@ -2019,7 +2024,7 @@ conversation is TWO files:
 
 | File | Holds | Read by |
 |---|---|---|
-| `<id>.json` | the record — version, revision, id, title, passage, model, messages, which door it came through, the carry mark, its source, its workspace, when it began and when it was last written | a read, and the serializer once A4 lands |
+| `<id>.json` | the record — version, revision, id, title, passage, model, messages, which door it came through, the carry mark, its source, its workspace, when it began and when it was last written | a read, and the reload serializer |
 | `<id>.meta.json` | about 300 bytes: the title, the model, how many turns, the last line cut at 120 characters, the source, the workspace, the instants | the listing, and nothing else |
 
 The listing never opens a transcript. Reading ninety days of them to draw a list is seconds of a

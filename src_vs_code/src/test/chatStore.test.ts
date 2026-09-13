@@ -123,6 +123,33 @@ test('a damaged record is dropped rather than repaired', () => {
   }
 });
 
+test('a message whose model or marks are PRESENT and malformed is a record this build cannot trust', () => {
+  // CodeRabbit, PR #223. `isMessage` checked the role and the text and nothing else, while the page
+  // dereferences `message.model.label.length` — so a stored `model: { id, label: null }`, which a hand
+  // edit or a torn write can leave, passed the validator and threw at render time. Present is checked,
+  // whole; absent stays legal, because a record from before either field existed has neither. Rejected
+  // rather than repaired, like every other field here.
+  const answer = (over: Record<string, unknown>): unknown =>
+    ({ ...record(), messages: [said('you', 'why'), { role: 'model', text: 'because', ...over }] });
+  const malformed: Record<string, unknown>[] = [
+    { model: null },
+    { model: 'gemini' },
+    { model: { id: 'gemini' } },
+    { model: { id: 'gemini', label: null } },
+    { model: { id: 7, label: 'Gemini' } },
+    { marks: null },
+    { marks: { role: 'r' } },
+    { marks: { role: 'r', task: 3 } },
+  ];
+
+  for (const bad of malformed) {
+    assert.equal(recordFrom(answer(bad)), undefined, `a message the page cannot render was read: ${JSON.stringify(bad)}`);
+  }
+  const whole = answer({ model: { id: 'gemini', label: 'Gemini' }, marks: { role: 'r', task: 't' } });
+  assert.deepEqual(recordFrom(JSON.parse(JSON.stringify(whole))), whole, 'a well-formed model and marks were refused');
+  assert.notEqual(recordFrom(answer({})), undefined, 'a message with neither field — every record before they existed — was refused');
+});
+
 test('a torn file — the JSON of a write nobody finished — is nothing, not a throw', () => {
   assert.equal(recordFrom(undefined), undefined);
 });

@@ -104,8 +104,12 @@ amount to keep in a store the editor writes to SQLite.
 
 One conversation is a record and a metadata file beside it, and the seam worth knowing at this level
 is that **two extension hosts share that directory**. A save is therefore a compare-and-swap on a
-revision, claimed by an exclusive create — one lock per conversation — and a window that is refused
-keeps its words under a NEW id rather than overwriting somebody's turns or losing its own. The
+revision, claimed by an exclusive create — one lock per conversation. A window whose save CONFLICTS
+with another's keeps its words under a new id rather than overwriting their turns or losing its own;
+a window that merely met the store mid-write, or a disk that would not answer, changes nothing and
+tries again on the next turn; and a window meeting its OWN earlier record — the ordinary case after
+reopening a conversation — takes it over rather than forking, which is decided by comparing the
+words and never the revision. The
 depth is in `research/module_extension.md`; what belongs here is that the directory is shared, that
 the coordination is the filesystem's rather than a server's, and that no half of this product asks
 the other about a conversation.

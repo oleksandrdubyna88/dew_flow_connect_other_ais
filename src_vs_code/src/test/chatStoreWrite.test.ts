@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { SaveOutcome } from '../chatStoreFile';
 import { BUSY_ELSEWHERE, CONTINUED_ELSEWHERE, INDEX_BEHIND, STILL_SAFE, nextAfterSave } from '../chatStoreWrite';
 
 /**
@@ -164,6 +165,25 @@ test('a conflict the store COULD not read is a fork, not a wait — the wedge th
   // store is busy" left it waiting for ever, never advancing and never forking, with every later
   // write of that conversation queued behind it.
   assert.equal(nextAfterSave({ kind: 'refused', diskRev: 0 }, 3, ['why']).kind, 'fork');
+});
+
+test('a refusal that reports NOTHING about the disk is never adopted, even at baseline 0', () => {
+  // The discriminating case, and the one the tests above never reached: every fork they assert is
+  // forced by a baseline above 0, so nothing here would have gone red had adoption crept back in for
+  // a refusal with no transcript. This window has never saved, was refused, and was handed no words —
+  // the record under the claim could not be read, so nothing is known about whose it is. The header
+  // says such a refusal is never adopted; adopting it would take another window's revision on faith
+  // and overwrite that window's turns on the next save. (CodeRabbit, PR #223, on the gap.)
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']).kind, 'fork',
+    'a record nobody could read was adopted at baseline 0 — its revision taken on faith');
+});
+
+test('an outcome this module has no arm for is a defect it names, not a disk failure it invents', () => {
+  // The switch is exhaustive: `failed` has its arm by name, and what remains is `never`, so a variant
+  // added to SaveOutcome without an arm here is a compile error. A value that reaches the default at
+  // runtime — which the types forbid — throws with the value in the message, rather than being read
+  // as a disk failure whose reason is the word undefined. (CodeRabbit, PR #223.)
+  assert.throws(() => nextAfterSave({ kind: 'lost' } as unknown as SaveOutcome, 0), /lost/u);
 });
 
 test('what a failed save says names the fault AND that the conversation is still there', () => {

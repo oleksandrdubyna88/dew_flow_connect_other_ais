@@ -113,8 +113,17 @@ export function restoreDecision(seen: ReadOutcome, fallback: SavedTab | undefine
         : { kind: 'restore', record: { ...fromLegacy(fallback, workspace), rev: 0 } };
     case 'incompatible':
       return { kind: 'notice', sentence: INCOMPATIBLE_NOTICE, retry: false };
-    default:
+    case 'unavailable':
       return { kind: 'notice', sentence: unavailableNotice(seen.reason), retry: true };
+    default: {
+      // EXHAUSTIVE, by name, for the same reason `nextAfterSave` is: a fifth answer added to
+      // ReadOutcome used to land here and be drawn as a disk that would not answer, with a retry
+      // button — silently. Now it is a compile error, and a value the types forbid that arrives
+      // anyway is a defect named out loud. (CodeRabbit, PR #223.)
+      const unhandled: never = seen;
+
+      throw new Error(`a store answer this build has no arm for: ${JSON.stringify(unhandled)}`);
+    }
   }
 }
 
