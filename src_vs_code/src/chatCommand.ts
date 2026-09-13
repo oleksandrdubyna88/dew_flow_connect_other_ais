@@ -20,7 +20,7 @@ import {
 import { ARCHIVED, UNSAVED, couldNotEnd, freshened, sameSlate } from './chatFresh';
 import { ChatTabMemory, reloadedNote } from './chatTabs';
 import { CONVERSATION_VERSION, ConversationRecord, ConversationSource, metaOf, sourceOfFile, sourceOfSession } from './chatStore';
-import { ChatStoreFile } from './chatStoreFile';
+import { ChatStoreFile, SaveOutcome } from './chatStoreFile';
 import { ConversationIndex } from './chatStoreCache';
 import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
 import { ChatEntry, ChatPanels } from './chatPanels';
@@ -140,7 +140,7 @@ interface Thread extends ChatMemory {
    * reading a growing file to answer a question it already knows. The ledger is the record; this is
    * the running count.</p>
    */
-  spend: TurnSpend[];
+  spend: readonly TurnSpend[];
   /** The picture waiting to go with the next question, as the page shows it. */
   attached: string;
   /** Where that picture IS — the file a vendor process will open. Empty when there is none. */
@@ -1429,63 +1429,96 @@ async function freshening(entry: ChatEntry, thread: Thread): Promise<void> {
   // is running would otherwise begin a whole new turn after the stop — the reset would wait it out,
   // and it would append what somebody typed into a transcript that is about to be replaced.
   thread.generation += 1;
-  // 2. THE OLD CONVERSATION IS ENDED AND WAITED FOR, with the same window notification every other
-  // wait in this extension shows: this takes as long as ending a turn takes, and a person who
-  // presses a button and sees nothing presses it again.
-  const failed = await vscode.window.withProgress(
+  // 2. ENDED, THEN ARCHIVED, both inside the one notification: archiving a thousand-turn transcript
+  // is a serialisation and a disk write, and a progress that stopped before it would leave the
+  // longest part of the wait looking like nothing happening. (codex, the code round.)
+  const done = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Ending the previous conversation…' },
-    async () => ended(thread),
+    async (): Promise<Archived> => {
+      const failed = await ended(thread);
+
+      return failed.length > 0 ? { kind: 'refused', reason: failed } : archiveConversation(thread);
+    },
   );
-  if (failed.length > 0) {
-    // 3. AND IF THAT FAILED, NOTHING HAPPENS. A half-performed reset that reports success is the one
-    // outcome worse than no reset: nothing is archived, nothing is cleared, and the conversation is
-    // left not merely live but USABLE — the next question opens it a process exactly as a reload
-    // does, carrying the transcript with it. (codex, the plan round: "the failure branch leaves the
-    // old record active while its session is unusable".)
-    thread.session = closedSession(reloadedNote(thread.modelId));
-    thread.carry = carriedFrom(thread.messages, thread.carryFrom);
-    thread.reopen = true;
-    thread.running = false;
-    show(entry, false, couldNotEnd(failed));
+  if (done.kind === 'refused') {
+    // 3. AND IF EITHER FAILED, NOTHING HAPPENS — including a failure to ARCHIVE, which the first
+    // draft let through: it said the conversation was archived, wiped the slate, and left the old
+    // record open on disk. Five findings from two vendors, all naming the same gap. All or nothing
+    // means all of it.
+    keepTheOldOne(entry, thread, done.reason);
 
     return;
   }
-  // 4. THE OLD RECORD IS CLOSED, NEVER DELETED — and BEFORE the new id is published. A crash between
-  // the two leaves a conversation that is archived and still readable, found in the picker under its
-  // own title: the reset did not happen, which is the honest worst case. Published first, a crash
-  // would leave the tab naming an id no record exists for, and a reload would find nothing — so the
-  // order is chosen rather than accidental. (codex asked for a durable journal; the window is two
-  // statements wide and its cost is a button somebody presses again.)
-  const archived = await archiveConversation(thread);
-  if (archived.length > 0) {
-    pushChatNote(entry, thread.saveId, archived);
-  }
-  // 5. THE SLATE ITSELF, as one value — so a field added to `Freshened` is applied here by
-  // construction rather than by somebody remembering this statement exists.
-  Object.assign(thread, freshened(randomUUID(), Date.now()));
-  // 6. AND THE MARKS THAT SAY WHAT THE DISK HOLDS, deleted rather than emptied: the push that writes
-  // a conversation down reads "never written" from their ABSENCE, and would otherwise compare the
-  // new empty transcript against the old one, decide nothing had changed, and never write the new
-  // record at all. `forkOnDisk` clears the same three for the same reason.
+  await publish(entry, thread, done.note);
+}
+
+/**
+ * Nothing was archived and nothing was cleared: leave the conversation not merely live but USABLE.
+ *
+ * <p>A half-performed reset that reports success is the one outcome worse than no reset. "Live" is
+ * not enough on its own either: by this point the session may have been disposed, so a conversation
+ * left pointing at it is one the next question cannot use. It takes the dead stub and `reopen`, and
+ * the next question opens it a process exactly as a reload does — with its transcript carried, or
+ * the model that answers is handed nothing. (codex, the plan round.)</p>
+ */
+function keepTheOldOne(entry: ChatEntry, thread: Thread, reason: string): void {
+  thread.session = closedSession(reloadedNote(thread.modelId));
+  thread.carry = carriedFrom(thread.messages, thread.carryFrom);
+  thread.reopen = true;
+  thread.running = false;
+  show(entry, false, couldNotEnd(reason));
+}
+
+/**
+ * The new slate — written to disk BEFORE its id is published to the page.
+ *
+ * <p>The order is the last of this story's, and it is the same rule as the archive's. The page hands
+ * its id back to the serializer after a reload, so publishing an id whose record is still queued
+ * would leave a crash in between restoring a tab that names a conversation nothing has ever written.
+ * Waiting costs one write of an empty record. A crash BEFORE the publish leaves the tab on the id it
+ * already had — an archived conversation, which is still there and still opens: the reset did not
+ * happen, the honest worst case. (codex, the code round.)</p>
+ */
+async function publish(entry: ChatEntry, thread: Thread, note: string): Promise<void> {
+  // AS ONE VALUE, and typed as part of a thread on the way in — so a field of `Freshened` that is
+  // not a field of `Thread`, or is one of another type, is a compile error here rather than a silent
+  // property nothing reads. (local, the code round: `Object.assign` alone checks neither.)
+  const slate: Partial<Thread> = freshened(randomUUID(), Date.now());
+  Object.assign(thread, slate);
+  // THE DEAD STUB ON THE SUCCESS PATH TOO. `reopen` says the next QUESTION opens a process, but
+  // between here and that question the thread is still reachable — a stop, a switch, a tab closing —
+  // and every one of those would reach the session this reset has just disposed. (gemini, the code
+  // round; `closedSession`'s own contract said it was for this and the success path did not use it.)
+  thread.session = closedSession(reloadedNote(thread.modelId));
+  // And the marks that say what the disk holds, DELETED rather than emptied: the push below reads
+  // "never written" from their absence, and would otherwise compare the new empty transcript against
+  // the old one, decide nothing had changed, and never write the new record at all.
   for (const mark of UNSAVED) {
     delete thread[mark];
   }
-  // 7. THE PAGE IS TOLD, with the new id: it hands that id back to the serializer after a reload, so
-  // a tab that was reset and then reloaded comes back as the new conversation rather than as the
-  // archived one. The passage goes with it, because the state push does not carry that region and a
-  // new conversation captioned by the old one's quotation is the stuck citation this whole gesture
-  // was asked for.
-  pushChatFresh(entry, thread.saveId, ARCHIVED);
-  // 8. And then the ordinary push, which draws the empty transcript and writes the new record.
-  show(entry, false, '');
+  // THE SENTENCE TRAVELS WITH THE STATE, and that was a real defect: it used to be written straight
+  // into the page's line and then wiped by this very push a tick later, because a state message is
+  // the whole truth about every region it mentions and this one said the line was empty. Nobody ever
+  // saw it. (gemini, twice, the code round.)
+  show(entry, false, note.length > 0 ? note : ARCHIVED);
+  await thread.writes;
+  pushChatFresh(entry, thread.saveId);
 }
 
 /**
  * End the conversation that is running: stop the turn, wait for the chain, dispose, release.
  *
- * @returns an empty string when it is over, or what stopped it
+ * <p>The disposal and the release are INDEPENDENT of the stop and of each other, and run whatever
+ * happened before them. A session that would not stop must still be disposed, or a CLI outlives the
+ * reset and keeps writing into a directory nothing will collect; and a directory that will not go is
+ * one the sweep takes later, never a reason to refuse a reset. Written the other way round — one try
+ * for all four — a stop that threw returned before either cleanup, and the thread was then handed a
+ * stub with the real session unreferenced and still running. (codex, the code round.)</p>
+ *
+ * @returns an empty string when the conversation is over, or what stopped it
  */
 async function ended(thread: Thread): Promise<string> {
+  let stopped = '';
   try {
     // The turn in flight, ended — and then WAITED FOR, so its answer has landed in the OLD
     // transcript and been written down before anything is cleared. A stop that merely stopped
@@ -1494,53 +1527,88 @@ async function ended(thread: Thread): Promise<string> {
     // The CHAIN rather than the turn, because a queued question is on it too — and it is the
     // generation bumped before the stop, not a bound on this wait, that stops such a question
     // beginning. The turn itself is already bounded: `CliChatSession` settles the one in flight by
-    // any of four routes, its own timeout among them.
+    // any of four routes, its own 180-second budget among them.
     await thread.turns;
-    // AND THE DISK QUEUE with it. Writes are chained the way turns are, and the archive below saves
+    // AND THE DISK QUEUE with it. Writes are chained the way turns are, and the archive saves
     // against `thread.rev` — draining first is what makes that the revision the disk actually holds
-    // rather than one a push still in the queue is about to move on.
+    // rather than one a push still in the queue is about to move on. Neither chain can reject: both
+    // are built with a handler on the failure side, which is what makes awaiting them safe here.
     await thread.writes;
+  } catch (reason) {
+    stopped = asText(reason);
+  }
+  try {
     // Safe to call twice, so a session already gone stays gone.
     thread.session.dispose();
   } catch (reason) {
-    return asText(reason);
+    console.warn('ConnectOtherAIs: a chat session would not be disposed on a reset', reason);
   }
   try {
     // AFTER the disposal, never before it: a CLI writing on its way out into a directory that has
     // already been removed throws where nobody is listening.
     thread.home.release();
   } catch (reason) {
-    // BEST EFFORT, and said out loud. A temp directory that would not go is one the sweep collects
-    // later; it is not a reason to refuse a reset the person has asked for and everything else about
-    // which has succeeded.
     console.warn('ConnectOtherAIs: a chat temp directory could not be released after a reset', reason);
   }
 
-  return '';
+  return stopped;
 }
+
+/** Whether the old conversation was filed, and anything worth saying about how. */
+type Archived =
+  | { readonly kind: 'filed'; readonly note: string }
+  | { readonly kind: 'refused'; readonly reason: string };
 
 /**
  * Stamp the old conversation closed, so it is archived rather than lost.
  *
- * @returns an empty string when it is filed, or a sentence saying it is not
+ * <p><b>A refusal stops the reset.</b> The first draft said a sentence and carried on, which left the
+ * old record open on disk while the page said it had been archived, and the new slate in place over
+ * it — the all-or-nothing rule broken at the one step that decides where a person's conversation
+ * went. A `partial` is not a refusal: the record itself landed and only the row that finds it again
+ * is behind, which the next read of that record repairs.</p>
  */
-async function archiveConversation(thread: Thread): Promise<string> {
+async function archiveConversation(thread: Thread): Promise<Archived> {
   if (store === undefined || thread.messages.length === 0) {
     // NOTHING SAID IN IT, nothing to keep: a tab reset before anybody typed would otherwise leave an
     // empty conversation in Recent for every press.
-    return '';
+    return { kind: 'filed', note: '' };
   }
-  const closed = await store.save({ ...recordOf(thread), closedAt: Date.now() }, thread.rev);
-  if (closed.kind === 'ok') {
-    return '';
-  }
-  if (closed.kind === 'partial') {
-    // The record landed and the row that finds it again is behind — said once, because the next read
-    // of that record repairs it and nothing has been lost.
-    return 'The previous conversation was archived, and the list may take a moment to show it.';
-  }
+  try {
+    const closed = await store.save({ ...recordOf(thread), closedAt: Date.now() }, thread.rev);
+    if (closed.kind === 'ok') {
+      return { kind: 'filed', note: '' };
+    }
+    if (closed.kind === 'partial') {
+      return { kind: 'filed', note: 'The previous conversation was archived, and the list may take a moment to show it.' };
+    }
 
-  return 'The previous conversation could not be marked closed, so it may still show as open in the list. Nothing has been lost.';
+    return { kind: 'refused', reason: whyNotClosed(closed) };
+  } catch (reason) {
+    // A store that THREW rather than answered. It answers in outcomes and does not reject, so this
+    // is a defect somewhere below — and a defect must not take the conversation with it.
+    return { kind: 'refused', reason: asText(reason) };
+  }
+}
+
+/** Why the store would not close it, in words a person can act on. */
+function whyNotClosed(closed: Exclude<SaveOutcome, { kind: 'ok' } | { kind: 'partial' }>): string {
+  switch (closed.kind) {
+    case 'busy':
+      return 'another window is writing to it';
+    case 'refused':
+      return 'another window has moved it on';
+    case 'incompatible':
+    case 'failed':
+      return closed.reason;
+    default: {
+      // Exhaustive by name, as every decision in this feature is: a sixth way for a save to end must
+      // be a compile error here rather than a reset that refuses without saying why.
+      const unhandled: never = closed;
+
+      throw new Error(`a save outcome this build has no arm for: ${JSON.stringify(unhandled)}`);
+    }
+  }
 }
 
 /**
@@ -1554,6 +1622,15 @@ async function archiveConversation(thread: Thread): Promise<string> {
 function ask(entry: ChatEntry, text: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
+    return Promise.resolve();
+  }
+  if (resetting.has(entry.id)) {
+    // TYPED WHILE THE SLATE WAS BEING WIPED. The generation has already moved, so the guard inside
+    // the turn would let this through as the NEW conversation's — and it would then run against a
+    // session being disposed and be dropped at the end, with the words gone. They go back to the
+    // composer instead, which is where they were typed. (gemini, the code round.)
+    pushChatDraft(entry, text);
+
     return Promise.resolve();
   }
   // WHICH SLATE THIS QUESTION WAS TYPED ON, captured as it JOINS the chain rather than as it runs:
@@ -1775,6 +1852,11 @@ async function oneTurn(entry: ChatEntry, text: string, began: number): Promise<v
     // after the wipe, which is the one thing that must never reach the new conversation. Nothing is
     // recorded anywhere, ledger included: a cost line filed against a conversation that never asked
     // the question is worse than a cost line missing. (local and gemini, D1's plan round.)
+    //
+    // SAID, though — on the console rather than to the person, whose tab is showing a conversation
+    // this answer has nothing to do with. Swallowing it silently would make a turn that cost money
+    // and produced nothing invisible to anyone looking for why. (gemini, the code round.)
+    console.warn(`ConnectOtherAIs: an answer arrived after its conversation was reset, and was dropped: ${mySlate}`);
     show(entry, false, '');
 
     return;

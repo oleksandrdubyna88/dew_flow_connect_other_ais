@@ -2421,6 +2421,13 @@ outcome worse than no reset: nothing is archived, nothing is cleared, and the co
 not merely live but USABLE — it takes the dead session stub and `reopen`, so the next question opens
 it a process exactly as a reload does, carrying its transcript across.
 
+**The disposal and the release run whatever went wrong before them.** Written as one `try` for all
+four steps — as the first draft was — a stop that threw returned before either cleanup, and the thread
+was then handed a stub with the real session unreferenced and still running, writing into a directory
+nothing would collect. They are independent now: a session that would not stop is still disposed, and
+a directory that will not go is still one the sweep takes later rather than a reason to refuse a reset
+that has otherwise succeeded.
+
 ### Two facts, because they answer two questions
 
 `generation` says whether a reset has BEGUN; `saveId` says whether the slate has actually been WIPED.
@@ -2429,14 +2436,26 @@ stopped line belongs there — so the check before a turn begins reads the gener
 before anything is written at the end of a turn reads the save id. One counter doing both would have
 had to choose which of the two to get wrong.
 
-### Archived, never deleted
+### Archived, never deleted — and archiving is part of the all-or-nothing
 
 The old record is stamped `closedAt` with a fresh revision and appears in *Recent* in epic B's
-picker, under its own title, and opens. That happens BEFORE the new id is published, and the order is
-chosen: a crash in between leaves a conversation that is archived and still readable — the reset did
-not happen, which is the honest worst case — while publishing first would leave the tab naming an id
-no record exists for, and a reload would find nothing. A conversation nobody has said anything in is
-not archived at all, or every press would leave an empty row behind.
+picker, under its own title, and opens. A conversation nobody has said anything in is not archived at
+all, or every press would leave an empty row behind.
+
+**A refusal from the store stops the reset**, exactly as a failure to end the conversation does. The
+first draft said a sentence and carried on, which left the old record open on disk while the page
+said it had been archived and the new slate sat over it — the all-or-nothing rule broken at the one
+step that decides where a person's conversation went. Five findings from two vendors named the same
+gap. A `partial` is not a refusal: the record itself landed and only the row that finds it again is
+behind, which the next read of that record repairs.
+
+**Then the new record is written, and only then is its id published.** The page hands its id back to
+the serializer after a reload, so publishing an id whose record is still in the write queue would
+leave a crash in between restoring a tab that names a conversation nothing ever wrote. Waiting costs
+one write of an empty record. A crash BEFORE the publish leaves the tab on the id it already had — an
+archived conversation, still there and still opening: the reset did not happen, which is the honest
+worst case. Reversing the pair is what would make it lossy, which is why a durable reset journal was
+declined: the window is two statements wide and its cost is a button somebody presses again.
 
 `chatFresh.ts` holds the slate as one value with a closed type, applied in a single statement, so a
 field added to it is applied by construction rather than by somebody remembering that statement
@@ -2445,15 +2464,26 @@ tab; the model, the provider and the prompt, because a reset is a new subject an
 the source and the workspace; and `turn`, which is never reset anywhere, because a stop names the
 turn it means and a late one must not be able to name a turn of the new conversation.
 
-### The page is told in a message of its own
+### Two regions, opposite conclusions
 
-A state message is the whole truth about every region it MENTIONS, and the state push does not
-mention the passage — so the quotation at the top of the tab would survive every push and caption a
-conversation it has nothing to do with, which is the stuck citation this gesture was asked for. The
-`fresh` message clears it, carries the new id to the serializer so a tab reset and then reloaded
-comes back as the new conversation, and says one non-modal line: *the previous conversation was
-archived*. No dialog — the operator refused one by name, and the archived conversation is two clicks
-away in the picker.
+A state message is the whole truth about every region it MENTIONS. The push does not mention the
+passage — so the quotation at the top of the tab would survive every push and caption a conversation
+it has nothing to do with, which is the stuck citation this gesture was asked for, and only a message
+of its own can clear it. The `fresh` message does that, and carries the new id to the serializer so a
+tab reset and then reloaded comes back as the new conversation.
+
+But the push DOES mention the line sentences are written in, and the first draft wrote the *previous
+conversation was archived* straight into that line — where the very next push, a tick later, wiped it.
+Nobody would ever have read it, and an archive that had gone wrong would have had its warning
+overwritten by a sentence saying all was well. The sentence travels with the state push now, which is
+what makes it survive: the archive's own warning when there was one, and otherwise that the
+conversation was archived. No dialog — the operator refused one by name, and the archived conversation
+is two clicks away in the picker.
+
+**And a question typed while the slate is being wiped goes back to the composer.** The generation has
+moved by then, so the guard inside the turn would let such a question through as the NEW
+conversation's — and it would run against a session being disposed and be dropped at the end, with the
+words gone.
 
 ## The door: go to the conversation about this tab (2026-09-13)
 
