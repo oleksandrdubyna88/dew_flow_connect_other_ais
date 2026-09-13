@@ -235,4 +235,55 @@ public sealed class ADocumentSessionIsKeptApartTests
         DocumentSessions.Which("other.md", newReview: true, taken.Contains).Should().Be("other.md",
             "a first review and a fresh one are the same act when there is nothing to keep apart from");
     }
+
+    /// <summary>
+    /// One file the filesystem calls one file is ONE session, however a caller spelled it.
+    /// </summary>
+    /// <remarks>
+    /// The gap between the comparison this gained on round 1 and the key, which was still a raw
+    /// string: on Windows a person who typed <c>DOCS\SPEC.MD</c> after reviewing <c>docs/spec.md</c>
+    /// got a second session for a document already under review — <c>status</c> missing the open
+    /// round, and a duplicate review starting. (codex, round 2.)
+    /// </remarks>
+    [Fact]
+    public void OneFileIsOneSession_HoweverItWasSpelled()
+    {
+        var typed = SessionKey.For("/repo", "main", "docs/spec.md");
+        var shouted = SessionKey.For("/repo", "main", "DOCS/SPEC.MD");
+
+        if (OperatingSystem.IsWindows())
+        {
+            shouted.Should().Be(typed, "Windows calls those one file, so they are one review");
+        }
+        else
+        {
+            shouted.Should().NotBe(typed, "here they are two files, so they are two reviews");
+        }
+    }
+
+    /// <summary>
+    /// A stage nobody mapped to a bucket is a defect, not a plan round.
+    /// </summary>
+    /// <remarks>
+    /// It had a discard arm, and codex named what that costs: a stage added to the enum and
+    /// forgotten here would select the plan roster and the plan vendor switch with no compile error
+    /// and no exception — a round quietly asking the wrong reviewers.
+    /// </remarks>
+    [Fact]
+    public void AStageWithNoBucket_Throws()
+    {
+        var act = () => PanelConfig.BucketFor((Stage)999);
+
+        act.Should().Throw<ArgumentOutOfRangeException>().WithMessage("*map it here*");
+    }
+
+    /// <summary>And every stage that IS in the enum answers, including the finished one.</summary>
+    [Fact]
+    public void EveryRealStage_HasABucket()
+    {
+        foreach (var stage in Enum.GetValues<Stage>())
+        {
+            PanelConfig.BucketFor(stage).Should().NotBeNull($"{stage} must choose a roster");
+        }
+    }
 }

@@ -95,9 +95,15 @@ public static class DocumentReader
     /// <para>So the walk is from the root DOWN, re-resolving after every step: a link found halfway
     /// moves the whole remaining walk, which is exactly what the attack relies on.</para>
     /// </remarks>
-    public static string Canonical(string path, Func<string, string> followLink)
+    /// <param name="repoRoot">
+    /// What a RELATIVE path is resolved against. It was the process working directory — which for an
+    /// MCP server is wherever its client happened to launch it — and both callers happened to pass an
+    /// absolute path already. gemini's point is the one worth taking: a guarantee that holds because
+    /// of what two callers do today is a guarantee the third caller breaks.
+    /// </param>
+    public static string Canonical(string repoRoot, string path, Func<string, string> followLink)
     {
-        var full = Path.GetFullPath(path);
+        var full = Absolute(repoRoot, path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
         var rest = full[root.Length..].Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
@@ -134,7 +140,7 @@ public static class DocumentReader
         // A name given to raw text is its own identity and is not a path; it can never contain a
         // separator, so anything that does is a path and anything that does not is tried as a name
         // first and falls back to a path.
-        var asPath = DocumentId.Of(repoPath, Canonical(Absolute(repoPath, trimmed), followLink));
+        var asPath = DocumentId.Of(repoPath, Canonical(repoPath, trimmed, followLink));
 
         return asPath.Length > 0 ? asPath : trimmed;
     }
@@ -185,7 +191,7 @@ public static class DocumentReader
             return missing;
         }
 
-        var resolved = Canonical(absolute, followLink);
+        var resolved = Canonical(repoPath, absolute, followLink);
         var id = DocumentId.Of(repoPath, resolved);
 
         return id.Length == 0

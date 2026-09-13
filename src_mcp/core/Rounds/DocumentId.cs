@@ -51,6 +51,22 @@ public static class DocumentId
         return full.StartsWith($"{root}/", Comparison) ? full[(root.Length + 1)..] : string.Empty;
     }
 
+    /// <summary>
+    /// The same identity, folded the way <see cref="Comparison"/> compares it — for KEYING only.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The identity keeps its spelling and the KEY does not, and the two are different
+    /// jobs.</b> On Windows <c>docs/spec.md</c> and <c>DOCS\SPEC.MD</c> are one file, so a person who
+    /// typed the second after reviewing the first would get a second session for a document already
+    /// under review — <c>status</c> would miss the open round and a duplicate review would start.
+    /// codex found it in the gap between the comparison this file had just been given and the key
+    /// that was still a raw string.</para>
+    /// <para>Folding the DISPLAY spelling too would be the opposite mistake, and the round before
+    /// this one was about exactly that: on Linux those are two files and merging them loses one.</para>
+    /// </remarks>
+    public static string KeyOf(string identity) =>
+        OperatingSystem.IsWindows() ? identity.ToLowerInvariant() : identity;
+
     /// <summary>One spelling for a path: forward slashes, no trailing one. The case is the disk's.</summary>
     private static string Normalised(string path) => path.Replace('\\', '/').TrimEnd('/');
 }
