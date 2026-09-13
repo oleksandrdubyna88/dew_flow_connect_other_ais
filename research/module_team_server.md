@@ -692,15 +692,49 @@ delete, and the `426` — which is unreachable while `ContractVersion.Current` a
 `Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`, `Coai:LoginWaitSeconds`,
 `Coai:LoginTimeoutSeconds`, `Coai:PerCallerQueued` (20), `Coai:PerCallerRunning` (3),
 `Coai:MinimumClientContract` (1), `Coai:QueueWaitMinutes` (10 — how long a review waits for a free account, NOT how long the
-vendor may take, which is the caller's own `timeoutSeconds`);
+vendor may take, which is the caller's own `timeoutSeconds`),
+`Coai:ExtraRoles` (review roles this server will run BESIDE the five it ships with, comma separated)
+and `Coai:AllowAnyRole` (accept any well-formed role id at all);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 
 **Startup refuses** when no scheme is configured, when a Microsoft tenant has no audiences, **when
 Google is enabled with no audiences**, when the domain list is empty without the explicit override,
-when a Local signing key is under 32 bytes, when `SessionTtlDays` is not positive, or when `DataDir`
-cannot be written — each with the sentence that names the cure. A misconfiguration that starts is a
+when a Local signing key is under 32 bytes, when `SessionTtlDays` is not positive, when `DataDir`
+cannot be written, **or when a `Coai:ExtraRoles` entry could never be a role id** — each with the
+sentence that names the cure. A misconfiguration that starts is a
 server that answers 401 or 403 to everything with nothing in the log connecting the two.
+
+### `AcceptedRoles`: which roles this server runs, decided once (2026-09-13)
+
+`RoleCatalog.Builtin.Roles` was enumerated in TWO places answering the same question in their own
+words — the unknown-role refusal in `ReviewEndpoints` and the missing-role refusal in `JobKinds`.
+A configured list would have written the third, which is the shape plan 2 shipped with three of and
+paid for. `AcceptedRoles` is that one place: constructed from configuration in `Program.cs` beside
+the other keys, registered as a singleton, and the boundary every gate and the catalog endpoint read.
+
+**Building it IS the boot guard.** `From` throws on a configured id that could never run, so an
+operator who writes `My-Role` learns at startup rather than on every request. It is deliberately not
+an eleventh parameter of `Startup.Guard`.
+
+**An id is checked for SHAPE and for LENGTH.** `\A[A-Za-z][A-Za-z0-9_]*\z`, at most 48 characters —
+the same bound the extension's `MAX_ROLE_ID_LENGTH` applies, so both halves refuse the same ids. The
+anchors are `\A…\z` rather than `^…$` because **.NET's `$` also matches immediately before a trailing
+newline**: `^[A-Za-z][A-Za-z0-9_]*$` accepts `"Requirements\n"`, which is an id carrying a line break
+into an environment variable name, a ledger key and a log line. Caught by this type's own test before
+it shipped; the client's copy of the expression has the same hole, recorded in the plan's open tail.
+
+**One role is one ledger row, and `AllowAnyRole` no longer breaks that.** A recorded role is a KEY,
+and a spelling passed through verbatim is how one role becomes two rows the day two clients disagree
+about its case. A built-in takes the catalog's spelling and a configured role the operator's; under
+`AllowAnyRole` there is no configured spelling, so the id is FOLDED — deterministic, needing no
+configuration, and the same answer on every server. The plan's first draft wrote the split down as an
+acceptable price and asked the operator about it; three reviewers refused that independently and one
+named this answer.
+
+**A refusal names the rule it broke.** A shape or length failure gets the rule; a well-formed id this
+server does not know gets the accepted list. Answering a shape failure with "Accepted: PlanCritique,
+…" under `AllowAnyRole` would tell an operator the server accepts five roles when it accepts any.
 
 **The Google refusal was added on 2026-09-11 and is the same defect as the Microsoft one, one provider
 over** (product audit of 2026-09-09, finding 9). The paragraph justifying the Microsoft guard had been
