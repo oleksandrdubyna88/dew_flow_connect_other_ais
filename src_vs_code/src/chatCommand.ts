@@ -18,8 +18,9 @@ import {
   reaskFrom,
 } from './chatPresets';
 import { ChatTabMemory, reloadedNote } from './chatTabs';
-import { CONVERSATION_VERSION, ConversationRecord, metaOf } from './chatStore';
+import { CONVERSATION_VERSION, ConversationRecord, ConversationSource, metaOf, sourceOfFile, sourceOfSession } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
+import { ConversationIndex } from './chatStoreCache';
 import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession, TurnResult } from './chatSession';
@@ -72,6 +73,7 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { Moved, filedUnder, followable, movedTo, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
   Asked,
@@ -287,6 +289,25 @@ interface Thread extends ChatMemory {
    */
   usedAt: number;
   /**
+   * WHAT THIS CONVERSATION WAS OPENED FROM — the identity that outlives the window.
+   *
+   * <p>The live key is the tab object, which dies with the window; this is the durable half, and it
+   * is what *go to* will match a tab against. A file's uri, a Claude session's id, or `none` for a
+   * conversation restored from a record written before story C1 — and `none` matches no tab at all,
+   * deliberately, because a title is never a key.</p>
+   */
+  source: ConversationSource;
+  /**
+   * The workspace root this conversation is FILED under, captured when its source was.
+   *
+   * <p>Not derived on read, and that is the correction three reviewers made to this story's plan: a
+   * Claude source is a session UUID, and a UUID names no directory, so a function of (source, roots)
+   * would fall back to the first root every time — which is the very misfiling this story removes.
+   * It is worked out once, from the file's own path or from the folder the session was found in, and
+   * read back verbatim thereafter.</p>
+   */
+  workspace: string;
+  /**
    * This conversation's store writes, one after another.
    *
    * <p>The same shape as `turns` above and for a sharper reason. A save carries the revision this
@@ -357,6 +378,30 @@ export function conversationWorkspace(): string {
 }
 
 /**
+ * The root a conversation with THIS source is filed under — the host's half of {@link filedUnder}.
+ *
+ * <p>A file says where it is; a Claude session does not, so its folder is carried from the search
+ * that found it and this is not the path that files one (see {@link pinSession}). Anything else
+ * falls back to the first root, which is what every record had before story C1.</p>
+ */
+function filedFor(source: ConversationSource): string {
+  return filedUnder(source.kind === 'file' ? fsPathOf(source.uri) : '', whereToLook(), conversationWorkspace());
+}
+
+/** A uri as a filesystem path, or empty for one that names no file. The host's spelling, so rules need none. */
+function fsPathOf(uri: string): string {
+  try {
+    const parsed = vscode.Uri.parse(uri, true);
+
+    return parsed.scheme === 'file' ? parsed.fsPath : '';
+  } catch {
+    // A source a person could not have produced, or one from a build that spelled them differently.
+    // It names no file here, which is the honest answer and not a failure.
+    return '';
+  }
+}
+
+/**
  * Where this tab's session is, however the window was opened.
  *
  * <p>A window with NO FOLDER still runs Claude Code — and it runs it in the HOME directory, which is
@@ -370,7 +415,30 @@ export function conversationWorkspace(): string {
  * window whose Claude Code was started somewhere else says where it did look rather than hunting.</p>
  */
 async function findSession(title: string): Promise<readonly Found[]> {
-  return await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+  return (await findSessionIn(title)).map((one) => one.found);
+}
+
+/** One folder's answer, WITH the folder — the provenance a pinned session is filed under. */
+interface FoundIn {
+  readonly folder: string;
+  readonly found: Found;
+}
+
+/**
+ * The same search, keeping the folder each answer came from.
+ *
+ * <p>`findSession` flattens this away, and for its callers that is right: they are deciding whether
+ * a tab has one session or several, and the folder is not part of that question. It IS part of
+ * story C1's: a session's id names no directory, so the only honest way to know which root a Claude
+ * conversation belongs to is to remember where it was found. Three reviewers refused the alternative
+ * — decoding the root out of Claude's own encoded directory name — and so would I: it is another
+ * program's encoding, undocumented, and a decoder that drifts misfiles conversations silently.</p>
+ */
+async function findSessionIn(title: string): Promise<readonly FoundIn[]> {
+  return await everyFolder(async (folder, caseBlind) => ({
+    folder,
+    found: await sessionFileIn(os.homedir(), folder, caseBlind, title),
+  }));
 }
 
 /**
@@ -408,23 +476,41 @@ function asAsked(found: Found): Asked {
  * session behind one. If it finds nothing, the button falls back to searching by name, which is
  * where it started.</p>
  */
-function pinSession(id: object, title: string, fromSession: boolean): void {
+function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void {
   if (!fromSession || title.length === 0) {
     return;
   }
   void (async () => {
-    let found: readonly Found[];
+    let found: readonly FoundIn[];
     try {
-      found = await findSession(title);
+      found = await findSessionIn(title);
     } catch {
       // Nothing is pinned and nothing is said: the button still works by name, and a tab must not
       // take down the extension host for a walk it started on its own.
       return;
     }
-    const mine = threads.get(id);
-    if (mine !== undefined && pinnable(found)) {
-      mine.sessionFile = found.find((answer) => answer.kind === 'one')!.file;
+    const mine = threads.get(entry.id);
+    if (mine === undefined || !pinnable(found.map((one) => one.found))) {
+      return;
     }
+    const one = found.find((answer) => answer.found.kind === 'one')!;
+    mine.sessionFile = (one.found as Extract<Found, { kind: 'one' }>).file;
+    const sessionId = sessionIdOf(mine.sessionFile);
+    if (sessionId.length === 0) {
+      // A file of a shape this build does not recognise. The tab keeps its pin — the Asked button
+      // reads that file happily — and the conversation keeps no source, which is the honest answer:
+      // an id invented here would match a tab that is not this one.
+      return;
+    }
+    mine.source = sourceOfSession(sessionId);
+    // THE FOLDER THE SESSION WAS FOUND IN, not this window's first root. That distinction is the
+    // whole of what three reviewers corrected in this story's plan.
+    mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace());
+    // WRITTEN EXPLICITLY. `show`'s guard compares messages, model and mark, so a source arriving on
+    // its own — which is exactly what this is, minutes after the last thing anybody said — would
+    // never reach disk through that path. Queued behind the conversation's other writes, so it
+    // cannot carry a stale revision.
+    keepQueued(entry, mine);
   })();
 }
 
@@ -545,6 +631,81 @@ export function openConversations(panels: ChatPanels): readonly OpenConversation
 }
 
 /**
+ * A file has MOVED: follow every conversation that was opened from it.
+ *
+ * <p>Two halves, and they must not both write the same record. A conversation this window holds
+ * OPEN is followed on its thread and written through the conversation's own queue — the thread is
+ * the authority for a live record, and its chain is what keeps two writes from both carrying the
+ * revision this window last accepted. Everything else is followed on DISK, through the store's
+ * `refile`, which reads and replaces inside one claim; the ids this window holds are skipped there,
+ * or the two halves would race for one conversation.</p>
+ *
+ * <p><b>Both facts move together</b> — the uri and the root it now belongs to. A file dragged from
+ * one workspace root into another changes both, and rewriting the uri alone would leave the
+ * conversation filed under the root it left, invisible in exactly the folder the person is looking
+ * at. (Two vendors, the plan round.)</p>
+ *
+ * <p>An UNTITLED buffer that is saved is not followed at all, and `chatSource.ts` says why: the
+ * editor reports no previous uri for it, so there is nothing to match a conversation against and a
+ * listener would attach one to the wrong file as readily as to the right one.</p>
+ *
+ * <p>Detached, and therefore ending in a catch that says something: a rename must not wait on a
+ * disk, and nothing above this is listening.</p>
+ */
+export function followRenames(panels: ChatPanels, index: ConversationIndex, renames: readonly Moved[]): void {
+  if (renames.length === 0) {
+    return;
+  }
+  const held = new Set<string>();
+  for (const { key } of panels.known()) {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    if (entry === undefined || thread === undefined) {
+      continue;
+    }
+    held.add(thread.saveId);
+    if (!followable(thread.source)) {
+      continue;
+    }
+    const moved = movedTo(thread.source.uri, renames, asUri, fsPathOf);
+    if (moved.length === 0) {
+      continue;
+    }
+    thread.source = sourceOfFile(moved);
+    thread.workspace = filedFor(thread.source);
+    keepQueued(entry, thread);
+  }
+  const onDisk = store;
+  if (onDisk === undefined) {
+    return;
+  }
+  void (async () => {
+    for (const meta of index.entries({ kind: 'everywhere' })) {
+      if (held.has(meta.id) || !followable(meta.source)) {
+        continue;
+      }
+      const moved = movedTo(meta.source.uri, renames, asUri, fsPathOf);
+      if (moved.length === 0) {
+        continue;
+      }
+      const next = sourceOfFile(moved);
+      const done = await onDisk.refile(meta.id, meta.source, next, filedFor(next));
+      if (done.kind === 'failed') {
+        // SAID, not swallowed. The conversation keeps the path it had, which means *go to* will not
+        // find it by the file's new name — and the person is not interrupted for it, because there
+        // is nothing they can do and the conversation is still in the picker.
+        console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${meta.id} — ${done.reason}`);
+      }
+    }
+  })().catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: following a renamed file threw', reason);
+  });
+}
+
+/** A filesystem path as a uri, the way a record spells one. The host's, so `chatSource.ts` needs none. */
+const asUri = (path: string): string => vscode.Uri.file(path).toString();
+
+/**
  * Bring the tab holding this conversation to the front, and say whether there was one.
  *
  * <p>By the STORE id, because that is the only name the picker has for a conversation: its rows come
@@ -593,7 +754,7 @@ function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
   const all: TabSnapshot[] = [];
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
-      const input = tab.input as { viewType?: unknown; uri?: { scheme?: unknown } } | undefined;
+      const input = tab.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
       all.push({
         key: tab,
         label: tab.label,
@@ -601,6 +762,10 @@ function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
         // A `TabInputText` carries the document's uri and no viewType; a webview carries the
         // reverse. Reading both is what lets one snapshot answer for both doors.
         scheme: typeof input?.uri?.scheme === 'string' ? input.uri.scheme : '',
+        // And the WHOLE uri, which is what a conversation opened from this tab is filed under and
+        // later found by. `toString()` rather than `fsPath`, because that is the spelling a record
+        // keeps and the one `sameSource` compares.
+        uri: input?.uri === undefined ? '' : input.uri.toString(),
       });
     }
   }
@@ -742,6 +907,20 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   // window, so a tab would fork itself and say it had become a copy of a conversation nobody else
   // was in. The chain also recovers from a rejection instead of staying poisoned, which is the
   // bargain `chatTabs.ts` already makes for the memento's queue.
+  keepQueued(entry, thread);
+}
+
+/**
+ * Queue a write of this conversation to the store, behind whatever it is already writing.
+ *
+ * <p>Extracted from `show` because story C1 gave the store a SECOND writer: a Claude session's id
+ * arrives from a background walk, long after the page last changed, and `show`'s dedupe guard
+ * compares messages, model and mark — so a source landing on its own would never have reached disk
+ * through that path. Both writers go through this one queue, which is what keeps two writes from
+ * both carrying the revision this window last accepted and the second being read as another
+ * window.</p>
+ */
+function keepQueued(entry: ChatEntry, thread: Thread): void {
   const step = (): Promise<void> => keepOnDisk(entry, thread).catch((reason: unknown) => {
     // The outer edge of a detached call, and therefore a catch that SAYS something: the store
     // answers in outcomes and never rejects, so anything arriving here is a defect rather than a
@@ -770,8 +949,8 @@ function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
     messages: thread.messages,
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
-    source: { kind: 'none' },
-    workspace: conversationWorkspace(),
+    source: thread.source,
+    workspace: thread.workspace,
     // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
     // plan round; a conversation answered three months after it started was recorded as having
     // started that day, and the picker draws its "started" from this field.
@@ -1585,12 +1764,21 @@ async function fromTheEditor(): Promise<{ text: string; failure: string }> {
 function matchedSource(panels: ChatPanels): {
   claude: ReturnType<typeof sourceSession>;
   source: ReturnType<typeof sourceSession>;
+  /** The active document's uri, from the SAME snapshot — what a file conversation is filed under. */
+  uri: string;
 } {
   const { active, all } = snapshots();
   const known = panels.known();
   const claude = sourceSession(active, all, known);
 
-  return { claude, source: claude ?? sourceSession(active, all, known, isOrdinaryEditorTab) };
+  return {
+    claude,
+    source: claude ?? sourceSession(active, all, known, isOrdinaryEditorTab),
+    // Read here rather than looked up again where it is needed, for the reason this function exists
+    // at all: two snapshots can see the tabs in two states, and a conversation filed under the tab
+    // that was active a moment later is filed under the wrong thing.
+    uri: active?.uri ?? '',
+  };
 }
 
 /**
@@ -1876,6 +2064,11 @@ function newConversation(
     readonly passage: string;
     readonly draft: string;
     readonly fromSession: boolean;
+    /**
+     * What this conversation is opened FROM — a file's uri, or `none` for a Claude tab, whose id is
+     * not known yet and is written by {@link pinSession} when the background walk finds it.
+     */
+    readonly source: ConversationSource;
   },
   resolved: string,
   remote: ChatSession | undefined,
@@ -1941,6 +2134,8 @@ function newConversation(
     attached: '',
     attachedPath: '',
     spend: [],
+    source: state.source,
+    workspace: filedFor(state.source),
     providerId: ready.providerId,
     modelId: ready.modelId,
     // The MAIN prompt, and the chosen model's own role: what a capture opens on, with both buttons
@@ -1979,7 +2174,7 @@ function newConversation(
   pulse?.();
 
   // In the background, while this tab's name still matches the session it came from.
-  pinSession(entry.id, state.title, state.fromSession);
+  pinSession(entry, state.title, state.fromSession);
 
   return entry;
 }
@@ -2494,6 +2689,11 @@ export function restoreConversation(
     attached: '',
     attachedPath: '',
     spend: [],
+    // CARRIED, never recomputed. The record knows which tab it came from and which root it was filed
+    // under; working either out again from this window would file a conversation restored in a
+    // second window under that window's first root instead of its own.
+    source: saved.source,
+    workspace: saved.workspace,
     providerId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     // The MAIN prompt and the restored model's own role: a reloaded tab shows the same pressed
@@ -2599,7 +2799,7 @@ export async function chatWithOtherAi(
   // copied out through the OS, because that webview cannot be read; from an ordinary file it is
   // simply read. The second door is what the operator asked for: *"хочу чтоб можно было через
   // Ctrl+Alt+A в обычных окнах тоже вызывать. например на md файлах, cs файлах"*.
-  const { claude: match, source } = matchedSource(panels);
+  const { claude: match, source, uri } = matchedSource(panels);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
       'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
@@ -2623,7 +2823,7 @@ export async function chatWithOtherAi(
     return;
   }
 
-  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined);
+  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined, uri);
 }
 
 /**
@@ -2642,6 +2842,8 @@ async function deliverPassage(
   passage: { readonly text: string },
   send: boolean,
   fromSession: boolean,
+  /** The active document's uri, carried from the one snapshot the match was made over. */
+  sourceUri: string,
   append = false,
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
@@ -2683,6 +2885,9 @@ async function deliverPassage(
     // A session tab has a file behind it; a file does not. The button that reads one back is
     // offered only where there is something to read.
     fromSession,
+    // A FILE tab is identified by its document; a Claude tab has no id until its session is found,
+    // and `pinSession` writes that one when the walk lands.
+    source: fromSession ? { kind: 'none' } : sourceOfFile(sourceUri),
   }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
@@ -2862,7 +3067,7 @@ export async function takeTheQuestion(
 
     return;
   }
-  const { claude, source } = matchedSource(panels);
+  const { claude, source, uri } = matchedSource(panels);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
       'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
@@ -2885,5 +3090,5 @@ export async function takeTheQuestion(
   // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
-  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, append);
+  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, uri, append);
 }

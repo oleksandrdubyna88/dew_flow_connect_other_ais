@@ -9,6 +9,7 @@ import {
   chatReadsThisSide,
   chatWithOtherAi,
   conversationWorkspace,
+  followRenames,
   heldConversationIds,
   keepChatsIn,
   noteChatDoor,
@@ -216,6 +217,18 @@ export function activate(context: vscode.ExtensionContext): void {
   pulseChatsThrough(() => {
     housekeeping.heartbeat.pulse();
   });
+  // A FILE THAT MOVES takes its conversation with it. `onDidRenameFiles` is the only event that
+  // carries an explicit old-to-new mapping, which is why it is the one followed: saving an untitled
+  // buffer reports no previous uri at all, so a conversation opened from one keeps its `untitled:`
+  // source and is found in the picker instead — `chatSource.ts` says why guessing there would be
+  // worse than not following. The subscription is pushed so a reload takes it down with everything
+  // else; the work itself is detached and catches its own edge.
+  context.subscriptions.push(vscode.workspace.onDidRenameFiles((moved) => {
+    followRenames(chatPanels, housekeeping.index, moved.files.map((one) => ({
+      from: one.oldUri.fsPath,
+      to: one.newUri.fsPath,
+    })));
+  }));
   // Bound once, and never asked for again: an extension host has one storage directory for its
   // whole life, and threading it through six functions paired a per-call path with a module-level
   // list of children — two things that must agree, with nothing making them.
