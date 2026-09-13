@@ -63,7 +63,13 @@ because it cannot yet tell an empty store from one it has not finished reading.
 
 **And where it cannot be sure, it asks.** Two Claude sessions with the same name, or a conversation
 about this file filed under another folder of the same window, both open the list narrowed to those,
-with a title saying why. It never picks one for you.
+with a title saying why. It never picks one for you. If it cannot read your Claude sessions at all it
+asks as well, rather than assuming there are none and offering to start a second conversation for a
+tab that already has one. Finding which conversation a Claude tab belongs to reads a folder of
+session files, so it says *Finding this conversation…* while it does.
+
+If the conversation moved while you were choosing — another window forgot it or re-filed it — you are
+told, and the full list opens, so what you were after is one search away rather than gone.
 
 **A conversation you opened from the list now belongs to its tab.** Opening one from the picker — or
 getting it back after a reload — used to leave it unattached, so pressing *go to* on its file found it

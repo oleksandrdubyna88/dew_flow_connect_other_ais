@@ -1,4 +1,4 @@
-import { ConversationMeta, ConversationRecord, ConversationSource, sameSource } from './chatStore';
+import { ConversationMeta, ConversationRecord, ConversationSource, sameSource, sourceOfSession } from './chatStore';
 import { IndexState } from './chatStoreCache';
 import { filedUnder, sameRoot } from './chatSource';
 
@@ -153,6 +153,30 @@ export interface GotoAsked {
   readonly caseBlind: boolean;
   readonly index: IndexState;
 }
+
+/**
+ * What kind of thing a tab is, decided over what a snapshot carries.
+ *
+ * <p>Here rather than in the host for the reason everything else in this module is: it is a decision,
+ * and `chatCommand.ts` is far over the file-length limit. The host reads the two facts; this says
+ * what they mean. (gemini, the code round.)</p>
+ */
+export function tabKindOf(seen: { readonly claude: boolean; readonly document: boolean }): TabKind {
+  if (seen.claude) {
+    return 'claude';
+  }
+
+  return seen.document ? 'document' : 'other';
+}
+
+/**
+ * The session a Claude tab is named by — or nothing, when its name answers to none or to several.
+ *
+ * <p>`none` is the honest answer for BOTH, and they are told apart by `ambiguous` rather than by this:
+ * one is "there is nothing to match on", the other is "there is too much". A walk that FAILED is a
+ * third thing again, and the host reports it rather than folding it in here.</p>
+ */
+export const sessionSourceOf = (id: string): ConversationSource => sourceOfSession(id);
 
 /** What the offer to start one is called, for a tab whose own name is empty. */
 export const UNNAMED_TAB = 'this tab';

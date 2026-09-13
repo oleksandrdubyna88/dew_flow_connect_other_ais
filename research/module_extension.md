@@ -2409,6 +2409,39 @@ that permission explicitly, because C2's offer would otherwise have had no valid
 `bindable` refuses a workspace mismatch, correctly, so the command would have had to bypass its own
 validation to honour its own offer.
 
+### What the code round changed
+
+**The binding target was worked out before the picker opened**, and three reviewers found it
+independently. It read as three careful guards — the tab is open, the tab holds nothing, the record
+still matches — and every one of them was asked at the moment the chord was pressed, about a picker a
+person may then browse for a minute. Closing that tab, or starting a chat in it, or another window
+re-filing the record, all happen inside that minute; the answer carried through it was a statement
+about a moment that had passed. The picker is handed a FUNCTION now rather than a handle: it is
+called when a row is accepted, with the record the store has just answered with, and it re-asks all
+three. There is no target to go stale, because there is no target until the press.
+
+**A conversation that moved said so and stopped.** Somebody who asked to go to a conversation and is
+told it is not where it was needs somewhere to go — they are told, and then given the list, so what
+they were after is one search away rather than gone. Two vendors asked for this, and the plan had
+said it before my own implementation quietly dropped it.
+
+**A session walk that FAILED was read as "no sessions".** The two are not the same answer: no session
+of that name leads to offering a new conversation, so an unreadable session directory would have
+produced a duplicate of a conversation that already existed. The walk now reports that it could not
+be done, says so on the console, and *not knowing* is a reason to ASK rather than to offer — the same
+`ambiguous` path two Claude sessions of one name take.
+
+**The walk shows progress.** It reads a directory of session files and can take seconds, and a person
+who presses a chord and sees nothing presses it again; it is the same window notification the *Asked*
+button already shows for the same walk.
+
+**The latch is set inside the `try`.** Set outside it, a synchronous throw anywhere in the work would
+never reach the `finally`, and the command would be dead until the window was reloaded.
+
+Also taken: `tabKindOf` and `sessionSourceOf` moved into `chatGoto.ts`, where the decisions live and
+where they can be tested without a host — `chatCommand.ts` is far over the file-length limit; and a
+reveal through the key already in hand rather than a second walk of the panel registry.
+
 ## Which conversation belongs to this tab (2026-09-13)
 
 Epic B's picker is a list a person searches BY HAND. This is the other half of what was asked for:

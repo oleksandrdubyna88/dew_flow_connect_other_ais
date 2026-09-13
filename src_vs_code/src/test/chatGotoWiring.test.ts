@@ -74,9 +74,9 @@ test('each of the six answers is carried out, and a seventh would be a compile e
   // reopen: through the bind, which re-reads.
   assert.match(command, /case 'reopen':[\s\S]{0,200}await bind\(/u, 'a saved conversation is bound without re-reading it');
   // pick / start / everything: all three are the picker, and only one of them preselects the offer.
-  assert.match(command, /case 'pick':[\s\S]{0,400}switchConversations\(panels, picker, \{/u, 'an ambiguity does not reach the picker');
+  assert.match(command, /case 'pick':[\s\S]{0,400}show\(\{/u, 'an ambiguity does not reach the picker');
   assert.match(command, /case 'start':[\s\S]{0,400}startOnNew: true/u, 'nothing offers to start a conversation for a tab that has none');
-  assert.match(command, /case 'everything':[\s\S]{0,200}switchConversations\(panels, picker\);/u, 'a terminal gets something other than the whole list');
+  assert.match(command, /case 'everything':[\s\S]{0,300}show\(\);/u, 'a terminal gets something other than the whole list');
   assert.match(command, /case 'building':[\s\S]{0,400}stillListing\(/u, 'an unbuilt list says nothing');
   // And the dispatch is closed.
   assert.match(command, /const unhandled: never = answer;/u, 'a seventh answer would be a press that does nothing');
@@ -94,21 +94,62 @@ test('START creates nothing — it opens the picker with the offer, and waits', 
   assert.match(start, /startOnNew: true/u, 'the offer is not under the cursor, so it is not one keystroke away');
 });
 
-test('binding is guarded three ways, each for a race the plan round named', () => {
+test('binding is decided AT THE PRESS, and guarded three ways', () => {
+  // Three reviewers found the same defect in the first draft: the target tab was worked out before a
+  // picker somebody may browse for a minute, so a row chosen at the end could be bound to a tab that
+  // had closed or since gained a conversation. Nothing is decided in advance now.
   const command = source('chatGotoCommand.ts');
-  const bind = command.slice(command.indexOf('async function bind('), command.indexOf('/** A tab a conversation may be bound to. */'));
+  const decide = command.slice(command.indexOf('function bindingTo('));
 
-  // The record can have gone or moved since the decision.
+  // It is a FUNCTION handed forward, called with the record the store has just answered with — and
+  // in EVERY arm that binds. One arm holding a precomputed handle is the whole defect back again, so
+  // this counts them rather than asking whether the shape appears anywhere.
+  assert.equal((command.match(/bindTo: bindingTo\(panels, asked, key\)/gu) ?? []).length, 2,
+    'an arm that binds is handed a target worked out in advance rather than a question asked at the press');
+  assert.match(decide, /return \(record\) =>/u, 'the target is computed once rather than at the press');
+  // The record must still be this tab's — source AND workspace.
+  assert.match(decide, /bindable\(record, asked\.source, record\.workspace, asked\.caseBlind\)/u,
+    'the record is not re-checked against the tab it is about to be bound to');
+  // The tab must still be there, and still hold nothing.
+  assert.match(decide, /!tabStillOpen\(key\)/u, 'a conversation can be bound to a tab that has been closed');
+  assert.match(decide, /panels\.get\(key\) !== undefined/u, 'a conversation can be bound to a tab that already holds one');
+  // The record is read from DISK at the press, never from the index the decision was made on.
+  const bind = command.slice(command.indexOf('async function bind('), command.indexOf('function bindingTo('));
   assert.match(bind, /await store\.read\(answer\.meta\.id\)/u, 'the record is bound from the index rather than from disk');
-  assert.match(bind, /bindable\(record, asked\.source, answer\.meta\.workspace, asked\.caseBlind\)/u,
-    'the re-read record is not checked against the tab it is about to be bound to');
-  // The tab can have gone, or have gained a conversation of its own.
-  const tab = command.slice(command.indexOf('function bindableTab('));
-  assert.match(tab, /!tabStillOpen\(key\)/u, 'a conversation can be bound to a tab that has been closed');
-  assert.match(tab, /panels\.get\(key\) !== undefined/u, 'a conversation can be bound to a tab that already holds one');
-  // And two presses cannot both get through.
+  // And two presses cannot both get through — with the latch set INSIDE the try, so a synchronous
+  // throw cannot wedge the command for the life of the window. (gemini, the code round.)
   assert.match(command, /let running = false;/u, 'nothing stops a second press while the first is reading');
-  assert.match(command, /if \(running\) \{/u, 'the latch is not read');
+  assert.match(command, /try \{\s*\n\s*running = true;/u, 'the latch is set outside the try, so a throw leaves the command dead');
+});
+
+test('a record that moved says so AND opens the list, rather than stopping', () => {
+  // Somebody who asked to go to a conversation and is told it moved needs somewhere to go. My own
+  // plan said this and my first implementation quietly dropped it. (Two vendors, the code round.)
+  const command = source('chatGotoCommand.ts');
+  const bind = command.slice(command.indexOf('async function bind('), command.indexOf('function bindingTo('));
+  const missing = bind.slice(bind.indexOf('if (record === undefined)'));
+
+  assert.match(missing.slice(0, 400), /showWarningMessage\(/u, 'a conversation that moved says nothing');
+  assert.match(missing.slice(0, 400), /show\(\);/u, 'a conversation that moved leaves the person with nowhere to go');
+});
+
+test('a walk of the session directory that FAILED is not read as “no sessions”', () => {
+  // "No session is called that" leads to offering a new conversation — so an unreadable directory
+  // would have produced a duplicate of a conversation that already existed. (Two vendors.)
+  const command = source('chatCommand.ts');
+  const walk = command.slice(command.indexOf('async function sessionsNamed('), command.indexOf('async function sessionsNamed(') + 1_400);
+
+  assert.match(walk, /unsure: true/u, 'a failed walk is indistinguishable from an empty one');
+  assert.match(walk, /console\.warn\(/u, 'a failed walk is swallowed without a word');
+  // And not knowing is a reason to ASK, never to offer to start a second conversation.
+  assert.match(command, /walked\.unsure \|\|/u, 'a walk that could not be done still leads to offering a new conversation');
+});
+
+test('the session walk shows progress, because it reads a directory and can take seconds', () => {
+  const command = source('chatCommand.ts');
+
+  assert.match(command, /withProgress\(\s*\n?\s*\{ location: vscode\.ProgressLocation\.Window, title: 'Finding this conversation…' \}/u,
+    'a person who presses the chord sees nothing at all while the sessions are read');
 });
 
 test('a conversation the picker or a reload opened without a tab is REBOUND, not merely revealed', () => {

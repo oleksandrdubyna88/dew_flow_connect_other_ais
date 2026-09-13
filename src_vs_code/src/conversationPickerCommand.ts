@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { openConversations, restoreConversation, revealConversation } from './chatCommand';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
-import { ConversationMeta } from './chatStore';
+import { ConversationMeta, ConversationRecord } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { PickerRow, pickerRows } from './conversationPicker';
 import {
@@ -133,12 +133,17 @@ export interface Narrowed {
   /** Whether the cursor starts on that row, for the answer that is really "there is none yet". */
   readonly startOnNew: boolean;
   /**
-   * The tab a CHOSEN row is bound to — absent when a choice must open under its own key.
+   * Asked WHEN A ROW IS CHOSEN: which tab may this conversation be bound to, if any?
    *
-   * <p>Absent for `cross root`, where the conversation belongs to another project and opening it is
-   * right while re-homing it is not; and absent whenever the tab already holds a conversation.</p>
+   * <p>A function rather than a handle, and that distinction was three separate findings. A picker
+   * can be on screen for a minute: the tab the command started from may have closed, or have gained
+   * a conversation of its own, and the record may have been re-filed by another window. A target
+   * worked out before any of that is a statement about a moment that has passed — so this is called
+   * at the press, with the record the store has just answered with, and returns nothing when
+   * binding is no longer right. Absent entirely for `cross root`, where the conversation belongs to
+   * another project and opening it is right while re-homing it is not.</p>
    */
-  readonly bindTo?: { readonly key: object; readonly label: string };
+  readonly bindTo?: (record: ConversationRecord) => { readonly key: object; readonly label: string } | undefined;
 }
 
 /** Open the list of conversations. */
@@ -267,7 +272,7 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
         // No panel: this is `restoreConversation`'s first caller without one. The conversation comes
         // back closed, with nothing running, exactly as it does after a reload — under the tab *go
         // to* asked it to be bound to, or under its own key for every other caller.
-        restoreConversation(panels, undefined, answer.record, deps.extensionUri, narrowed?.bindTo).panel.reveal();
+        restoreConversation(panels, undefined, answer.record, deps.extensionUri, narrowed?.bindTo?.(answer.record)).panel.reveal();
 
         return true;
       case 'gone':
