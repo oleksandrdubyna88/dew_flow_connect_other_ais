@@ -1737,6 +1737,29 @@ VS Code hands to every window of the profile. The token it describes is not shar
 hold different files. Sign in on Windows, open WSL, and the panel said *Signed in as you@company*
 over a distro with no token in it.
 
+**And since 2026-09-13 that path can be partitioned deliberately (issue #115).** `coaiDataDir()`
+mirrors the server's `PanelSettings.ResolveDataDir`: with `COAI_DATA_DIR` set and
+`COAI_DATA_SIDE=<name>`, the directory is `<dir>/<side>`, so two installations sharing one NAS keep
+their own database, sessions and tokens.
+
+**These two functions must agree exactly, and `dataDir.ts` has said so in its own docstring since
+long before this** — the extension WRITES the Team-server token into that directory and the MCP shim
+READS it, so a divergence is a silent "not signed in". That constraint is what shaped the feature:
+
+- the side is a **name the person chooses**, never derived. The plan had it built from the platform,
+  the WSL distribution and the machine name — which means computing one string twice, from
+  `Environment.MachineName` in C# and `os.hostname()` here, and those differ in case and in whether
+  they carry a domain;
+- the side grammar is an **explicit allowlist** (lower-case letters, digits, dot, dash, underscore)
+  rather than `Path.GetInvalidFileNameChars()`, which is platform-dependent — a colon is refused on
+  Windows and accepted on Linux, so `a:b` would resolve to two different directories;
+- whitespace means "unset" and a relative path is made absolute, in both halves, for the same reason;
+- and a side that was asked for and cannot be used is **refused** rather than quietly becoming the
+  shared root.
+
+`dataDirAgreesWithTheServer.test.ts` exists for exactly this seam: its subject is not the extension's
+behaviour but the agreement between the two.
+
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
 
 | Record | Scope | What it is |

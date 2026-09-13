@@ -90,6 +90,33 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 startup; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
+**A chosen directory can be partitioned per SIDE (2026-09-13, issue #115).** `COAI_DATA_DIR` has
+always moved the data somewhere that survives a Windows reinstall; what was missing is an answer to
+two installations pointed at the SAME place — Windows and WSL both on one NAS. `COAI_DATA_SIDE=<name>`
+puts each under its own subdirectory, so each keeps its own database, sessions and Team-server
+tokens. **Not a merge**, and that was the operator's decision: `rounds.id` and `findings.id` are
+`AUTOINCREMENT`, so two written-to databases collide on ids and merging would mean remapping every
+one of them along with the foreign keys that point at them.
+
+Four properties of it are load-bearing, and each was earned:
+
+- **Opt-in.** No `COAI_DATA_SIDE`, no subdirectory — the directory somebody already configured keeps
+  answering exactly where it did. Partitioning every override turned six scenario tests red, and
+  those tests are a fair proxy for a script or the bench: they set the variable and read that exact
+  path.
+- **No flat-layout fallback.** A `coai.db` sitting in the shared root is reported and never adopted.
+  The first draft used it, so that an existing overrider would not find an empty directory — and
+  three reviewers found what that does in the case the feature is FOR: Windows moves its directory to
+  the NAS root, WSL is pointed at the root, sees the database, adopts the flat layout, and both write
+  one SQLite file.
+- **A refused side never means the root.** `COAI_DATA_SIDE=wsl/node1` fails the grammar; treating
+  that as "no side" would put every misconfigured installation on the root's one database, so it
+  refuses to start instead. Seven reviewers raised this.
+- **The grammar is an explicit allowlist** — lower-case letters, digits, dot, dash, underscore —
+  because `Path.GetInvalidFileNameChars()` is platform-dependent and the extension must spell the
+  same rule. See `module_extension.md`: the extension WRITES the Team-server token where the shim
+  READS it, so any disagreement is a silent "not signed in".
+
 ## Persistence
 
 `SessionStore`: one JSON file per session key (SHA-256-prefixed name) under
