@@ -738,6 +738,42 @@ public sealed partial class PanelService
     private string Scope(string repoPath, string branch, string planText) =>
         planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
 
+    /// <summary>
+    /// Ask every configured Team server which roles it runs, unless it has already been asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>One probe per SERVER, not per vendor: <c>Coai:ExtraRoles</c> is one setting on one box,
+    /// and <see cref="RemoteProbe"/> caches by the normalised URL, so several vendors sharing a
+    /// server collapse to one request. Servers already answered are skipped entirely, so the
+    /// ordinary round — where the panel or a <c>providers</c> call has already asked — pays
+    /// nothing.</para>
+    /// <para><b>Nothing here fails a round.</b> A server that cannot be reached is recorded as
+    /// unreachable by the probe itself, which is a state the exclusion sentence can name; throwing
+    /// would turn a network blip into a refused review. Cancellation is the exception: a round whose
+    /// clock has run out should stop, not keep probing.</para>
+    /// </remarks>
+    private async Task WarmRemoteRolesAsync(CancellationToken ct)
+    {
+        var asked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in _settings.Providers.Where(p => p.Enabled && Remote(p)))
+        {
+            if (_remote.RolesOn(provider.BaseUrl).Source != RemoteRolesSource.NotAsked
+                || !asked.Add(TeamServerAuth.Normalise(provider.BaseUrl)))
+            {
+                continue;
+            }
+
+            try
+            {
+                await _remote.RunAsync(provider.Identity(), provider.Enabled, _settings.DataDir, ct);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.Warning(e, "could not ask {Server} which review roles it runs", provider.BaseUrl);
+            }
+        }
+    }
+
     private async Task<string> RunStageAsync(
         string repoPath,
         string branch,
@@ -778,6 +814,17 @@ public sealed partial class PanelService
         var budget = RoundDeadlineFor(ConfiguredReviewers(stage.IsPlanStage));
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
+
+        // ASKED BEFORE THE ROUND IS ASSEMBLED, because assembling it is synchronous and cannot.
+        //
+        // `RolesOn` reads what a Team server last said; it does not fetch, so a round built before
+        // anything had asked would see `NotAsked` and carry only the five this product ships —
+        // silently leaving out a role the server accepts perfectly well. The panel probes every few
+        // seconds while it is open, but the PANEL is the extension and this is `coai-mcp`: two
+        // processes, two caches, and nothing guarantees this one has ever asked. So it asks here,
+        // once, where there is still a Task to await on. (gemini and codex, story 4's plan round,
+        // both Blocking.)
+        await WarmRemoteRolesAsync(roundClock.Token);
 
         try
         {
