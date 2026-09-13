@@ -4,6 +4,21 @@
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.
 
+**A Team server can run the roles you wrote.** It used to run only the five it was compiled with, so
+a team that shared one was exactly the team that could not share a review role somebody had written.
+Its operator sets `Coai:ExtraRoles` on the server — or `Coai:AllowAnyRole` to accept any role at all
+— and the server runs them beside the five it ships with. A server nobody reconfigures behaves
+exactly as it does today.
+
+**And the panel tells you before a round, not after.** It asks each configured Team server which
+roles it runs and says so beside the role: *work runs Architecture, Conventions — not Requirements we
+wrote*. Until now that was only visible in a round's result, by which time you had waited for a
+review that was never going to include it.
+
+A server too old to be asked, and one that could not be reached, both still run the five that ship —
+and the sentence says which of the two happened, because one is fixed by updating a server and the
+other by looking at a network.
+
 **A reviewer in the Active rounds list reads over two lines.** What it is — vendor, role and model — on the first; what it is doing, indented, on the second. Showing the model had made that line about twice as long as the sidebar is wide, and a model id is one long unbreakable word, so the line used to break in the middle of it. A reviewer whose status has not been recorded shows no second line rather than an empty one. The rounds log page is unchanged: there a reviewer is still one line.
 
 **Review roles of your own.** A review role is a reviewer with one question. This product ships five

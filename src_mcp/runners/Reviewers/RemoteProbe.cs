@@ -40,7 +40,31 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
     private readonly ConcurrentDictionary<string, Cached> _cache = new();
     private readonly Func<DateTime> _now = utcNow ?? (() => DateTime.UtcNow);
 
+    /// <summary>
+    /// What each SERVER last said about the roles it runs, keyed by its normalised URL.
+    /// </summary>
+    /// <remarks>
+    /// Beside the health cache rather than inside it, because it is a different question with a
+    /// different key. Health is per (server, vendor, token): two vendors on one server have two
+    /// answers. Roles are per SERVER — <c>Coai:ExtraRoles</c> is one setting on one box — so asking
+    /// about one vendor teaches this machine about every vendor there.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, RemoteRoles> _roles = new(StringComparer.OrdinalIgnoreCase);
+
     private sealed record Cached(VendorHealth Health, DateTime UntilUtc, TimeSpan Backoff);
+
+    /// <summary>
+    /// What this Team server said it will run, from the last catalog it answered.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does NOT fetch. A round assembles synchronously and must not start an HTTP
+    /// request per (vendor, role) to decide whether to include one; the panel has already probed
+    /// every configured server to draw its health, so by the time a round is assembled this is
+    /// answered. When it is not, <see cref="RemoteRolesSource.NotAsked"/> says so and the caller
+    /// falls back to the five this product ships — the behaviour that predates this plan.
+    /// </remarks>
+    public RemoteRoles RolesOn(string serverUrl) =>
+        _roles.GetValueOrDefault(TeamServerAuth.Normalise(serverUrl), RemoteRoles.Unknown);
 
     /// <summary>
     /// One remote vendor's health.
@@ -128,12 +152,24 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
             using var response = await http.SendAsync(request, timeout.Token);
             var body = await response.Content.ReadAsStringAsync(timeout.Token);
 
-            return response.IsSuccessStatusCode
-                ? (Read(server, vendor, body, enabled), true)
-                : (Refused(server, (int)response.StatusCode, body, enabled), false);
+            if (!response.IsSuccessStatusCode)
+            {
+                // A refusal is not an answer ABOUT ROLES. It is recorded as unreachable so that a
+                // custom role is left out with a sentence saying the server could not be asked,
+                // rather than one claiming it said something.
+                Learn(server, null);
+
+                return (Refused(server, (int)response.StatusCode, body, enabled), false);
+            }
+
+            Learn(server, Parse(body));
+
+            return (Read(server, vendor, body, enabled), true);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {
+            Learn(server, null);
+
             return (new VendorHealth(enabled, false, "", "unavailable",
                 RemoteAsk.UnreachableMessage(server, e.Message)), false);
         }
@@ -179,6 +215,29 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
                 is not { } offered
                 ? NotOffered(server, vendor, catalog, enabled)
                 : Offered(server, catalog, offered, enabled);
+
+    /// <summary>
+    /// Remember what this server said about roles — or that it did not say.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The absent-field rule, which this family has paid for twice.</b> A catalog with no
+    /// <c>roles</c> property is a server older than this plan, and it runs the five this product
+    /// ships — the behaviour that predates the field. It is NOT "none", which would silently empty
+    /// every round, and NOT "any", which would send custom roles to a server certain to 400 them.
+    /// An empty list means the same as absent: a server that HAS the field always accepts at least
+    /// five, so <c>[]</c> can only be a bug.</para>
+    /// <para>A null catalog — unreadable, refused, unreachable — records UNREACHABLE rather than
+    /// falling back, because a failure has no opinion about roles and a client that invents one
+    /// cannot tell a person why their role did not run.</para>
+    /// </remarks>
+    private void Learn(string server, RemoteCatalog? catalog)
+    {
+        _roles[server] = catalog is null
+            ? new RemoteRoles([], false, RemoteRolesSource.Unreachable)
+            : catalog.Roles is { Count: > 0 } named
+                ? new RemoteRoles([.. named], catalog.AllowAnyRole, RemoteRolesSource.Answered)
+                : new RemoteRoles([], false, RemoteRolesSource.Shipped);
+    }
 
     private static RemoteCatalog? Parse(string body)
     {
@@ -275,7 +334,8 @@ internal sealed record RemoteCatalogVendor(string? Id, string? Runtime, RemoteSl
 /// A field added server-side is ignored here; a field removed leaves a default rather than a throw.
 /// </remarks>
 internal sealed record RemoteCatalog(
-    string? ServerVersion, bool IsAdmin, IReadOnlyList<RemoteCatalogVendor>? Vendors, string? Error);
+    string? ServerVersion, bool IsAdmin, IReadOnlyList<RemoteCatalogVendor>? Vendors, string? Error,
+    IReadOnlyList<string>? Roles = null, bool AllowAnyRole = false);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(RemoteCatalog))]

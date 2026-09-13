@@ -753,8 +753,26 @@ write. A boolean cannot be read wrongly by accident.
 field sends no such property; a client reading that as an empty set would silently drop every
 reviewer from every round, and reading it as "anything goes" would send custom roles to a server
 certain to 400 them. An EMPTY list means the same as absent, because a server that HAS the field
-always accepts at least five. That rule is the CLIENT's to honour, and it is story 4 — as are
-`CanCarry` in coai-mcp and `teamServerApi.ts` in the extension.
+always accepts at least five.
+
+**Both clients ask now, and there are THREE answers rather than two.** `RemoteRoles` in coai-mcp and
+`serverRoles.ts` in the extension read the same rule independently, and both distinguish a server
+that ANSWERED without the field from one that could not be REACHED. Collapsing those two is how a
+network blip becomes a silently smaller round: the fallback is identical — the five this product
+ships, which every Team server has always run — but only one of them can honestly say why a role was
+left out. `CanCarry` used to be `Catalog.ById(role)?.BuiltIn == true`, which is "the five this
+product ships" written as though it were a fact about the server; it has been true of every Team
+server until now and stops being true the moment an operator sets `Coai:ExtraRoles`.
+
+**The exclusion says the server's own words.** It used to read *"it accepts the five this product
+ships"* for every Team server; now it reads *"'Requirements we wrote' is not one of the roles this
+Team server runs — it runs Architecture, Conventions"*, or names the older server, or says the
+catalog could not be asked. The role is matched by its ID and SHOWN by the name the person gave it —
+an existing test caught that when the first version used the id for both.
+
+**And the panel says it BEFORE a round.** The Prompts section already holds every configured server's
+catalog to draw its health, so each role carries a line naming any server that will not run it.
+Silent when there are no Team servers, and silent when every server runs the role.
 
 **Building it IS the boot guard.** `From` throws on a configured id that could never run, so an
 operator who writes `My-Role` learns at startup rather than on every request. It is deliberately not

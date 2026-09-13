@@ -5,6 +5,7 @@ import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
+import type { TeamServerState } from '../teamServerView';
 import { vendorPalette } from '../vendorColour';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
@@ -1219,3 +1220,59 @@ test('the fan-out sentence counts a role a person added', () => {
 
   assert.match(html, /1 vendor × up to 5 roles = 5 reviewers/, 'four shipped and one of their own');
 });
+
+test('a role a Team server will not run says so in the Prompts section', () => {
+  // Before a round, not in its result. By the time the round comes back naming the exclusion,
+  // somebody has waited for a review that was never going to include it.
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+  const prompts = promptsSection(panelHtml(state({
+    settings,
+    teamServers: [serverRunning(['Architecture'])],
+  }), 'n0nce'));
+
+  assert.match(prompts, /Requirements we wrote/, 'named the way the person named it');
+  assert.match(prompts, /work runs Architecture/, 'and what that server does run');
+});
+
+test('a role every Team server runs says nothing', () => {
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+  const prompts = promptsSection(panelHtml(state({
+    settings,
+    teamServers: [serverRunning(['Requirements'])],
+  }), 'n0nce'));
+
+  assert.ok(!prompts.includes('not Requirements'));
+});
+
+test('no Team servers at all is silent about every role', () => {
+  // The ordinary case. A person with local CLIs only must never meet any of this.
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+
+  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+
+  assert.ok(!prompts.includes('could not be asked'));
+  assert.ok(!prompts.includes('older than the setting'));
+});
+
+/** One configured Team server whose catalog names exactly these roles. */
+function serverRunning(roles: readonly string[]): TeamServerState {
+  return {
+    server: { id: 'work', name: 'Work', url: 'https://coai.example.com' },
+    email: 'dev@example.com',
+    problem: '',
+    stale: false,
+    catalog: { serverVersion: '0.5.1', isAdmin: false, vendors: [], error: '', roles },
+  };
+}

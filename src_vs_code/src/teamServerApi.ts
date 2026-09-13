@@ -107,6 +107,22 @@ export interface Catalog {
   readonly isAdmin: boolean;
   readonly vendors: readonly CatalogVendor[];
   readonly error: string;
+
+  /**
+   * The review roles this server will run — the five it ships with plus whatever its
+   * `Coai:ExtraRoles` names.
+   *
+   * <p>OPTIONAL, and that is the whole compatibility story: a server older than this field sends no
+   * such property, which means <b>the five this product ships</b> — never "none", which would
+   * silently empty every round, and never "any", which would send roles to a server certain to
+   * refuse them. An empty list means the same as absent, because a server that HAS the field always
+   * accepts at least five, so `[]` can only be a bug. This is the rule `remoteVendor` was lost twice
+   * for want of.</p>
+   */
+  readonly roles?: readonly string[];
+
+  /** Whether it said it will run any well-formed role id at all, however it was named. */
+  readonly allowAnyRole?: boolean;
 }
 
 export interface Session {

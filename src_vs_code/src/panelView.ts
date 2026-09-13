@@ -18,6 +18,7 @@ import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -1229,6 +1230,27 @@ function tickHelp(dormant: boolean, last: boolean): string {
   return last ? HELP.lastRole : HELP.roleEnabled;
 }
 
+/**
+ * What a configured Team server will NOT run, said here rather than in a round's result.
+ *
+ * <p>A role a Team server refuses is already named once per (vendor, role) when the round comes
+ * back. By then somebody has waited for a review that was never going to include it. The panel
+ * already holds every configured server's catalog to draw its health, so the same fact can be stated
+ * where the role is configured — which is the argument plan 2 settled for the version-skew banner.</p>
+ *
+ * <p>Silent in the ordinary case: no Team servers, or every server running the role. A person with
+ * only local CLIs never sees any of this.</p>
+ */
+function serverNotes(state: PanelState, role: RoleRow): string {
+  const lines = roleOnServers(
+    (state.teamServers ?? []).map((one) => ({ name: one.server.id, catalog: one.catalog })),
+    role.id,
+    role.name ?? role.id,
+  );
+
+  return lines.map((line) => `  <div class="hint">${escapeHtml(line)}</div>`).join('\n');
+}
+
 function promptsBody(state: PanelState): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
@@ -1287,6 +1309,7 @@ function promptsBody(state: PanelState): string {
       : `<span class="name">${escapeHtml(label)}</span>`}</div>
 ${dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
 ${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
+${serverNotes(state, role)}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
     <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-role="${role.id}"
