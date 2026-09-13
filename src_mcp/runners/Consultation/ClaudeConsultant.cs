@@ -95,8 +95,18 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
         }
     }
 
+    /// <summary>
+    /// The CLI's own refusal to resume — read from STDERR and a failed exit only.
+    /// </summary>
+    /// <remarks>
+    /// Never from stdout, which carries the model's ANSWER: a consultant advising about an error
+    /// message would have its perfectly good turn discarded and its handle reset for quoting the
+    /// words "conversation not found". Stderr plus a non-zero exit is the CLI speaking; stdout is the
+    /// model speaking. (codex, code round.)
+    /// </remarks>
     public bool DroppedTheConversation(ProcessResult result) =>
-        ConsultantLaunches.Mentions(result, "No conversation found")
-        || ConsultantLaunches.Mentions(result, "session not found")
-        || ConsultantLaunches.Mentions(result, "No session found");
+        result.ExitCode != 0
+        && (result.StdErr.Contains("No conversation found", StringComparison.OrdinalIgnoreCase)
+            || result.StdErr.Contains("session not found", StringComparison.OrdinalIgnoreCase)
+            || result.StdErr.Contains("No session found", StringComparison.OrdinalIgnoreCase));
 }

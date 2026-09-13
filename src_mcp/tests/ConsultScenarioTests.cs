@@ -332,6 +332,22 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ACLIsProseThatHappensToBeJson_ReachesTheCallerWHOLE()
+    {
+        // The service must read each answer through its OWN adapter. Unwrapping every answer
+        // centrally mangled exactly this: a consultant asked about a configuration file answers with
+        // JSON that has an `answer` property, and the other fields were silently discarded. Only the
+        // local route is schema-bound; codex is prose.
+        const string prose = """{"answer":"rename the field","priority":1,"file":"appsettings.json"}""";
+        Answer("0198f2c1-prose", prose);
+
+        var advice = Advise(await Consult(Service(), "is this config right?"));
+
+        advice.Should().Contain("\\\"priority\\\": 1".Replace("\\\"", "\"").Replace(": 1", ":1"));
+        advice.Should().Contain("appsettings.json", "the whole answer reaches the caller, not one field of it");
+    }
+
+    [Fact]
     public async Task AProblemThatSaysNothing_IsRefusedBeforeAnythingIsLaunched()
     {
         Refusal(await Consult(Service(), "   ")).Should().Contain("problem statement is required");

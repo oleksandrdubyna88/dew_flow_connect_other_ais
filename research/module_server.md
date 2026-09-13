@@ -113,6 +113,14 @@ chats would mix them with the person's own conversations. The Team server's wire
 unchanged: `UsageKinds.LocalOnly` names the difference, and `src_server`'s test now asserts
 *known == wire ∪ local-only* rather than an equality that stopped being true of this ledger.
 
+> **Provenance of the measurements below.** Subject `fe9f181` (story 2 as committed) · harness
+> [`scripts/live-consult-all.mjs`](../scripts/live-consult-all.mjs), driving the built
+> `src_mcp/src/bin/Debug/net10.0/coai-mcp.exe` over real stdio · repository under consultation: this
+> one, with real uncommitted work in it · pinned: a number planted in turn 1 and asked back in turn 2,
+> `COAI_CONSULT_TURNS=3`, `COAI_REVIEWER_TIMEOUT_MINUTES=5`, one vendor row per run · machine:
+> Windows 11, .NET 10, codex-cli 0.153.4, claude 2.1.258, agy 1.2.2, Ollama at
+> `127.0.0.1:11434` running `qwen2.5-coder-14b-uncensored_64kv` · date 2026-09-12.
+
 **All four routes consult, and three of them remember.** Measured live on 2026-09-12, two turns each
 with a number planted in the first: `codex` resumes a thread by its id (37.1 s then 13.6 s), `claude`
 a session by the id its own envelope reports whether or not it was given one (20.1 s then 5.5 s),

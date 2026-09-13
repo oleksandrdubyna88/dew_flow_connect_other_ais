@@ -50,7 +50,7 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
 
         ((IConsultantRuntime)new CodexConsultant(new CodexRuntime())).UsageIsCumulative.Should().BeFalse();
         ((IConsultantRuntime)new ClaudeConsultant(new ClaudeRuntime())).UsageIsCumulative.Should().BeFalse();
-        ((IConsultantRuntime)new LocalConsultant(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local", _data))
+        ((IConsultantRuntime)new LocalConsultant(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local"))
             .UsageIsCumulative.Should().BeFalse();
     }
 
@@ -63,9 +63,11 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
 
         var transcript = ConsultantPrompt.Transcript([("earlier", "earlier advice"), ("the huge one", huge)], 2_000);
 
-        transcript.Should().Contain("cut here");
+        transcript.Should().Contain("[CUT:");
         transcript.Should().Contain("the huge one");
-        transcript.Length.Should().BeLessThan(3_000);
+        // INSIDE the budget it advertises: the marker's own length is reserved before the slice, so a
+        // carry cannot exceed the number the record froze. Only the dropped-turns note sits outside.
+        transcript.Length.Should().BeLessThan(2_000 + 120);
     }
 
     [Fact]
@@ -77,14 +79,21 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
         var answers = Directory.CreateDirectory(Path.Combine(store.Directory, "answers")).FullName;
         var old = Path.Combine(answers, "codex-consult-old.txt");
         var fresh = Path.Combine(answers, "codex-consult-fresh.txt");
+        // A file this product did NOT write, exactly as old as the one it did. Age is not ownership,
+        // and a sweep that removes what it did not put there is a sweep nobody can trust with a
+        // directory. (codex, code round.)
+        var somebodyElses = Path.Combine(answers, "notes-i-left-here.md");
         File.WriteAllText(old, "a diff nobody needs any more");
         File.WriteAllText(fresh, "a turn that is running right now");
+        File.WriteAllText(somebodyElses, "mine, and just as old");
         File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-9));
+        File.SetLastWriteTimeUtc(somebodyElses, DateTime.UtcNow.AddDays(-9));
 
         store.Sweep(_ => true, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7)).Should().Be(1);
 
         File.Exists(old).Should().BeFalse();
         File.Exists(fresh).Should().BeTrue("a file a running turn is still writing is younger than the window by definition");
+        File.Exists(somebodyElses).Should().BeTrue("age is not ownership");
     }
 }
 

@@ -77,16 +77,23 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// </remarks>
     public string ReadHandle(ProcessResult result)
     {
-        var found = string.Empty;
-        foreach (var line in result.StdOut.Split('\n'))
+        // Scanned from the END, and stopping at the first one found. A long turn with several steps
+        // emits thousands of events; splitting the whole stream into an array to keep the last match
+        // allocated all of them to use one. The id is the same on every event that carries it, so the
+        // last is reached first this way. (gemini, code round.)
+        var stdout = result.StdOut.AsSpan();
+        for (var end = stdout.Length; end > 0;)
         {
-            if (ConversationIdIn(line) is { } id && ConsultantHandle.IsWellFormed(id))
+            var start = stdout[..end].LastIndexOf('\n') + 1;
+            if (ConversationIdIn(stdout[start..end].ToString()) is { } id && ConsultantHandle.IsWellFormed(id))
             {
-                found = id;
+                return id;
             }
+
+            end = start - 1;
         }
 
-        return found;
+        return string.Empty;
     }
 
     public bool DroppedTheConversation(ProcessResult result) =>

@@ -106,7 +106,7 @@ with a friendly name.
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
-| The consultant (`consult`, the eighth tool) | [module_server.md](module_server.md) · [../todo/PLAN_consultant.md](../todo/PLAN_consultant.md) | **story 1 shipped 2026-09-12** — codex only, server-side: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Stories 2–6 (the other vendors, the panel section, the live card and log row, the triggers, the phase-2 counter) are open |
+| The consultant (`consult`, the eighth tool) | [module_server.md](module_server.md) · [../todo/PLAN_consultant.md](../todo/PLAN_consultant.md) | **stories 1–2 shipped 2026-09-12**, server-side and invisible so far. Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Stories 3–6 (the panel section, the live card and log row, the triggers, the phase-2 counter) are open |
 
 ## The gate has an opposite: the agent asking, rather than being judged (2026-09-12)
 
@@ -129,6 +129,25 @@ in [module_server.md](module_server.md):
 - **It leaves a trace in a vendor's own store.** Dropping `--ephemeral` is what makes a conversation
   resumable, and the price is a codex thread holding this repository's uncommitted diff on disk
   outside our control. Said in the tool description rather than hidden.
+
+### Every route is a conversation, and one of them is ours to remember (2026-09-12)
+
+The four consultants differ in one thing that reaches across modules, so it belongs here rather than
+only in [module_server.md](module_server.md): **who holds the conversation.** `codex`, `claude` and
+`agy` each keep their own and are resumed by an id read off the first turn's output — so a follow-up
+sends a handle and no diff. The LOCAL engine keeps nothing: it is one HTTP completion per turn, so
+the transcript travels in the prompt, bounded and frozen on the consultation's record.
+
+That single difference is `ConsultantMemory`, a closed union in the core, and it is why the record
+freezes the memory mode along with the vendor and the model: a server upgrade that changed an
+adapter's mode would otherwise make an open conversation stop carrying its transcript, or start
+carrying one to a vendor that already holds it.
+
+The consultant adapters COMPOSE the reviewer adapters rather than replacing them — each holds one and
+delegates the answer envelope and the token arithmetic to it, so that arithmetic has one copy. The
+constraint that buys: a vendor must be a reviewer before it can be a consultant. Every vendor here is.
+The first CONSULT-ONLY vendor is the trigger to split the seam, and it is named in
+[module_runners.md](module_runners.md) rather than built ahead of the vendor that needs it.
 
 ## The extension gained two arrows of its own (2026-09-09)
 

@@ -120,10 +120,22 @@ public static class ConsultantPrompt
                 // (codex and gemini, this story's plan round.)
                 if (kept.Count == 0)
                 {
-                    kept.Add(block[..Math.Min(block.Length, budget)] + "\n  … (this turn was cut here — it is longer than the whole carry budget)");
+                    // The marker's own length is RESERVED before the slice, so the carry stays inside
+                    // the budget it advertises: keeping `budget` characters and then appending a
+                    // marker put a 16 KB carry over 16 KB, on the one route whose context window is
+                    // the smallest here. (codex, code round.)
+                    var room = Math.Max(budget - CutMarker.Length, 0);
+                    kept.Add(block[..Math.Min(block.Length, room)] + CutMarker);
                 }
 
-                kept.Insert(0, $"(the earlier {i + 1} turn(s) of this conversation are not carried — the budget was reached)");
+                // `i` earlier turns, not `i + 1`: turn `i` is the one just handled — cut and kept
+                // when it was the newest, dropped otherwise. Saying `i + 1` on turn 1 announced that
+                // one earlier turn was lost when there had never been one. (gemini, code round.)
+                if (i > 0)
+                {
+                    kept.Insert(0, $"(the earlier {i} turn(s) of this conversation are not carried — the budget was reached)");
+                }
+
                 break;
             }
 
@@ -133,6 +145,9 @@ public static class ConsultantPrompt
 
         return string.Join("\n\n", kept);
     }
+
+    /// <summary>Said inside the text, so a cut is never something the reader has to infer.</summary>
+    private const string CutMarker = "\n  … [CUT: this turn is longer than the whole carry budget]";
 
     private static string Indent(string text) => text.Trim().Replace("\n", "\n  ");
 
