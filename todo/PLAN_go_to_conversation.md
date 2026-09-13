@@ -1,13 +1,15 @@
 # PLAN — go to the conversation, switch between them, and start a new one
 
-> Status: **PARTLY IMPLEMENTED, 2026-09-13 — epic A is built and in pull request #223; epics B, C
-> and D are not started.** What ships in A is the persistence underneath the feature and nothing a
-> person can see: the record and its validation, the atomic write, the file protocol with its lock
-> and its compare-and-swap, the dual write, and the cut-over that makes the store the source of
-> truth and empties the memento. What remains is the sweep and the index (B1), the picker (B2–B4),
-> the durable source that lets a tab find its own conversation (C1), and the reset (D1–D2) — which
-> together are everything the operator actually asked for, so this plan stays in `todo/` where the
-> majority of its value still lives.
+> Status: **PARTLY IMPLEMENTED, 2026-09-13 — epics A and B are built; A merged as pull request
+> #223 and B is in pull request #229. Epics C and D are not started.** Epic A is the persistence
+> underneath the feature and nothing a person can see: the record and its validation, the atomic
+> write, the file protocol with its lock and its compare-and-swap, the dual write, and the cut-over
+> that makes the store the source of truth and empties the memento. Epic B is the first part anybody
+> can press: the store's keeper and the index (B1), the rows as values (B2), and **CoAI: switch
+> conversations…** with its forgetting (B3–B4). What remains is the durable source that lets a tab
+> find its own conversation (C1), **CoAI: go to conversation** (C2–C3), and the new-chat reset
+> (D1–D2), so this plan stays in `todo/` — the operator asked for all four, and two of them are
+> still to build.
 >
 > Kind: **feature** — four epics, thirteen stories, one branch per epic and a gate round per story
 > (the line above said three stories and one pull request; the split into epics came out of the
