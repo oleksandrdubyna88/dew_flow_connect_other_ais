@@ -570,6 +570,20 @@ test('an answer from an earlier press cannot replace the one just asked for', ()
     'a read started earlier overwrote the one the person just asked for');
 });
 
+test('the shipped New chat button reaches the host', () => {
+  // The page ships MINIFIED, and this repository has already shipped a page whose embedded function
+  // was renamed out from under its caller. The button a person presses is the one in the bundle, so
+  // that is the one pressed here.
+  const { rendered, posted, press } = runPage();
+
+  assert.ok(rendered.has('fresh'), 'the shipped chat page has no New chat button');
+  press('fresh');
+
+  const resets = posted.filter((message) => message['command'] === 'restart');
+  assert.strictEqual(resets.length, 1, 'the shipped New chat button did not ask for exactly one reset');
+  assert.strictEqual(resets[0]?.['type'], 'command');
+});
+
 test('the shipped page says WHY there is nothing, rather than showing an empty box', () => {
   // Four situations look identical from an empty region — no session file, no folder open, two
   // sessions sharing this tab's name, and a conversation nobody has spoken in yet. The box is the

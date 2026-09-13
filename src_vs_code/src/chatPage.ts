@@ -600,8 +600,14 @@ function chatStyle(
      while you look for the line it is about, and the button that shows it has to stay reachable.
      Asked for exactly so — "неважно где я, в начале или в конце". */
   header { display: flex; align-items: baseline; gap: 12px; margin: 0; padding: 16px 20px 12px; flex: 0 0 auto; }
-  .asked { margin-left: auto; font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  /* The look of a header action. What pushes the group right is the toRight class below, and it is
+     on the FIRST of them only: an auto left margin on two flex siblings splits the free space
+     BETWEEN them, so two buttons both wearing it are pushed apart rather than grouped together at
+     the edge. (gemini, the plan round.) No backticks in this comment, deliberately: it lives inside
+     a template literal, where one would end the literal. */
+  .asked { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 10px; cursor: pointer; }
   .asked.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+  .toRight { margin-left: auto; }
   /* It OPENS: a height and an opacity that take half a second, because a block of text appearing
      under your eyes with no warning is a jolt. Asked for in those words. */
   /* VISIBILITY, not only height and opacity. Those three hide a region from the eye and leave its
@@ -824,6 +830,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 
   return `<header>
 <h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}
+<button type="button" id="fresh" class="asked toRight" title="Archive this conversation and start a new one for this tab">New chat</button>
 ${state.fromSession ? '<button type="button" id="asked" class="asked" aria-expanded="false" aria-controls="asking" title="What you asked in this session, read back from disk">Asked</button>' : ''}
 </header>
 ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" aria-hidden="true">
@@ -1349,6 +1356,22 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   }
   wirePicker();
   wireCapped();
+  // THE SAME MESSAGE the capped notice's button posts, so one host implementation serves both: they
+  // are the same gesture with the same words, and a second host path would be two places for one
+  // behaviour to drift. Its own ID, though - wireCapped finds that one with getElementById, and two
+  // elements cannot share an id: the header's would be found first and the notice's would stop
+  // working the moment a conversation capped.
+  //
+  // Wired ONCE, here, because the header is rendered with the page and is not one of the regions a
+  // state push replaces. The capped notice is the opposite case, which is why wireCapped is called
+  // again every time that region is redrawn. A second assignment of the webview's html is a new
+  // document with a new script, so nothing accumulates.
+  const fresh = document.getElementById('fresh');
+  if (fresh) {
+    fresh.addEventListener('click', function () {
+      vscode.postMessage({ type: 'command', command: 'restart' });
+    });
+  }
   // Rule 1: the tab opens looking at the last thing said, not at the passage above it. Three times,
   // because the height is not final until the fonts are: now (the first paint is already close),
   // after layout, and after the fonts settle where the host reports them. Idempotent, so the two

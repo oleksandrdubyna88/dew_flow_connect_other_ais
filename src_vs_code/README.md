@@ -121,6 +121,14 @@ press it; press it and the ordinary chat opens on that tab, from whatever you ha
 doing nothing. Where it cannot be sure — two Claude sessions with one name, or a conversation about
 this file filed under another folder — it shows those and lets you choose, with a title saying why.
 
+**New chat** in the tab's header starts again in the same tab: the conversation you were in is
+archived — whole, under the same name, in **CoAI: switch conversations…** — and the tab is yours
+again, empty, with the quotation that started the old one cleared away. The model, the prompt and the
+tab's own name stay as they were, and the next question reaches a model that has never heard any of
+it. A turn still running is ended first and waited for, so the answer you were waiting on is kept in
+the conversation that is archived. The button in the *this conversation is full* notice is the same
+one.
+
 The full description lives in the help — `⋯` → **Help** → *Chat with other AI*, in any of the five
 languages. This section is the overview; that article is the one kept in step with the code.
 
