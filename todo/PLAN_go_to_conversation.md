@@ -445,6 +445,44 @@ under it).
 | the metadata cache in memory | one entry per meta file, ≈ 300 B; at 2 700 records ≈ 800 KB, bounded by the sweep | built in the background at activation, refreshed against the directory's filename set and by `mtime` | a failed refresh keeps the last good cache and logs; a record deleted by another window leaves the cache on the next reconcile |
 | `workspaceState['coai.chatTabs']` | today ≤ 20 records — **and A4 removed that bound without adding one**: the activation-time prune went AND the week-and-twenty cut `remembered()` made on each write went with it (its code round: while the memento is still written, a legacy record whose store write failed could otherwise be dropped by an ordinary write before the next activation's migration read it). The memento is written only until the migration has SEALED it in the window, so its size is bounded by the number of conversations spoken in during that window. The STORE it feeds has no retention until story B1's sweep lands — until then `chat-conversations/` grows by one record per conversation and is retired by nothing but the trash button, which is B4 | emptied by the migration once every record is confirmed on disk AND indexed (per id, never by listing the store), the memento SEALED (its writer unbound, its queue drained) and re-read unchanged immediately before the clear, and the store asked once more that it is still there | a migration interrupted after some files and before the key is emptied re-runs; the two copies are compared by TRANSCRIPT, never by id — the store's copy a prefix of the memento's (the dual write was best-effort) is replaced by it as the disk record with the memento's words over it, an equal or longer store copy stands, diverged copies keep both (the memento's under `<id>-m`, found and compared before anything is written on a re-run); a `partial` save, a `busy`, a `refused`, an `incompatible` file or a `failed` disk leaves the key for the next activation and the writer resumes; a damaged record is quarantined under `chat-conversations/quarantine/` rather than dropped; a store that is `unavailable` — at the start or again just before the clear — migrates nothing further and the memento stays in charge, dual write and all |
 
+### B1's sweep may not delete what somebody is still holding
+
+Written into the plan after B1's gate round, where all three vendors converged. The first design had
+the sweep run at activation, delete a record whose `updatedAt` was over ninety days old, and protect
+open conversations by skipping the ids THIS window has open. Every part of that is wrong in a way
+that loses a person's words.
+
+- **The directory is shared by every window.** A window-scoped check protects nothing: window A
+  leaves a conversation open and untouched, window B activates, sees no such id among its own tabs,
+  and deletes it. So liveness is announced rather than assumed — each window keeps a small heartbeat
+  file naming the conversations it holds open, refreshed while it lives, and the sweep skips every id
+  a heartbeat younger than its window names. It is the shape the orphan ledger already uses for
+  vendor processes, and a heartbeat nobody has refreshed is collected by the same sweep.
+- **`updatedAt` cannot be the liveness signal**, which is why the heartbeat exists at all: A4 made a
+  reload deliberately NOT a use, so a tab open for three months has an old timestamp and is a
+  legitimate target by age alone.
+- **Expiry is re-checked under the lock.** Observing a record as expired and then deleting it is the
+  same check-then-act that cost this feature two rounds in epic A: a save can land in between, and
+  the delete would then destroy it. The store gains one operation that takes the lock, re-reads, and
+  deletes only if the record is still expired and unchanged.
+- **An orphaned TRANSCRIPT is quarantined, never deleted.** It is the only rule here that would
+  destroy the sole copy of somebody's words rather than a derived or expired thing — and a record is
+  legitimately alone for the instant between A2's two writes, so an unbounded rule deletes
+  conversations that are being created. It is bounded by a grace period AND set aside rather than
+  removed.
+- **One window sweeps, not six.** A marker in the directory says when the last sweep ran; a window
+  that finds a recent one does nothing. Six windows opening together is the ordinary case on this
+  machine.
+- **The index is published after the sweep, atomically**, or the picker can hold a row for a record
+  the sweep is removing.
+- **Staleness is `mtime >= last load`, with the size beside it** — not `>`. Two writes inside one
+  filesystem timestamp granularity are real, and a clock that steps backwards is real; the filename
+  set catches an added or removed file regardless, so this decides only whether to re-read one that
+  is still there.
+- **The sweep does not break locks.** A2 already owns that rule, with its residual stated in its own
+  header, and a second lock-breaking path with a different window would be two answers to one
+  question. The sweep collects only a lock far older than A2's own window, and through the store.
+
 ### A4's migration compares TRANSCRIPTS, because the store's copy may be behind
 
 Written into the plan after A4's own gate round, where codex and gemini found the same defect
