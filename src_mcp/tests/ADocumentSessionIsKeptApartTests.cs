@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -71,13 +72,52 @@ public sealed class ADocumentSessionIsKeptApartTests
         after.Should().Be(before, "the bytes changed and the document did not");
     }
 
-    /// <summary>A path's identity is its place in the repository, spelled one way.</summary>
+    /// <summary>
+    /// A path's identity is its place in the repository — forward slashes, and its OWN case.
+    /// </summary>
+    /// <remarks>
+    /// It was lower-cased, and two reviewers found the same hole from opposite ends: on a
+    /// case-sensitive filesystem that merges two genuinely distinct files into one session, and — the
+    /// security half — it makes a SIBLING directory look contained. The two tests below are each of
+    /// those.
+    /// </remarks>
     [Theory]
-    [InlineData(@"C:\repo", @"C:\repo\docs\Spec.md", "docs/spec.md")]
+    [InlineData(@"C:\repo", @"C:\repo\docs\Spec.md", "docs/Spec.md")]
     [InlineData("/repo", "/repo/docs/spec.md", "docs/spec.md")]
     [InlineData("/repo/", "/repo/spec.md", "spec.md")]
     public void APathsIdentity_IsItsRepoRelativePath(string repo, string path, string expected) =>
         DocumentId.Of(repo, path).Should().Be(expected);
+
+    /// <summary>
+    /// A sibling directory differing only in CASE is not inside, where the disk says it is not.
+    /// </summary>
+    /// <remarks>
+    /// Both sides were lower-cased, so on Linux <c>/tmp/Repo/secrets.md</c> passed containment
+    /// against <c>/tmp/repo</c> as <c>repo/secrets.md</c> — read, and sent to three vendors. codex
+    /// called it Blocking; gemini found the same root cause from the identity end.
+    /// </remarks>
+    [Fact]
+    public void ACaseDifferentSibling_IsNotInsideWhereTheDiskSaysItIsNot()
+    {
+        var inside = DocumentId.Of("/tmp/repo", "/tmp/Repo/secrets.md");
+
+        if (OperatingSystem.IsWindows())
+        {
+            inside.Should().Be("secrets.md", "Windows really does treat those as one directory");
+        }
+        else
+        {
+            inside.Should().BeEmpty("/tmp/Repo and /tmp/repo are two directories on this filesystem");
+        }
+    }
+
+    /// <summary>Two files differing only in case are two documents on a filesystem that agrees.</summary>
+    [Fact]
+    public void TwoFilesDifferingOnlyInCase_KeepTheirOwnIdentities()
+    {
+        DocumentId.Of("/repo", "/repo/Spec.md").Should().NotBe(DocumentId.Of("/repo", "/repo/spec.md"),
+            "the identity keeps the case it was given, so a case-sensitive checkout gets two reviews");
+    }
 
     /// <summary>
     /// A state with no document is a code session, and that is what every file written before this
@@ -159,4 +199,40 @@ public sealed class ADocumentSessionIsKeptApartTests
         RoundMachine.BeginDocumentRound(Fresh(Stage.CodeReview))
             .Should().BeOfType<Transition.Refused>()
             .Which.Sentence.Should().Contain("review_code");
+
+    // ---------- what the code round found (2026-09-13) ----------
+
+    /// <summary>
+    /// A document whose own name ends in an ordinal cannot be keyed by it.
+    /// </summary>
+    /// <remarks>
+    /// <c>#</c> is an ordinary character in a filename, so a real <c>notes#2.md</c> and the second
+    /// review of <c>notes.md</c> would share an identity — one person's round landing in another's
+    /// session. Refused by name rather than escaped: an escape scheme is a second thing to get
+    /// right. (codex, the code round.)
+    /// </remarks>
+    [Theory]
+    [InlineData("docs/notes#2.md#2")]
+    [InlineData("Spec#10")]
+    public void AnIdentityThatLooksLikeAnOrdinal_IsRefused(string document) =>
+        DocumentSessions.Reserved(document).Should().NotBeNull().And.Subject.Should().Contain(document);
+
+    [Theory]
+    [InlineData("docs/notes#2.md")]
+    [InlineData("docs/spec.md")]
+    [InlineData("Spec")]
+    public void AnOrdinaryIdentity_IsNotReserved(string document) =>
+        DocumentSessions.Reserved(document).Should().BeNull();
+
+    /// <summary>The ordinal walk asks only whether a file is there, never what is in it.</summary>
+    [Fact]
+    public void TheOrdinalWalk_StopsAtTheFirstFreeName()
+    {
+        var taken = new HashSet<string>(["spec.md", "spec.md#2"], StringComparer.Ordinal);
+
+        DocumentSessions.Which("spec.md", newReview: false, taken.Contains).Should().Be("spec.md#2");
+        DocumentSessions.Which("spec.md", newReview: true, taken.Contains).Should().Be("spec.md#3");
+        DocumentSessions.Which("other.md", newReview: true, taken.Contains).Should().Be("other.md",
+            "a first review and a fresh one are the same act when there is nothing to keep apart from");
+    }
 }

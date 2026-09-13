@@ -260,7 +260,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 
         var work = service.BuildWork(
-            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.Reviewers.Should().ContainSingle()
             .Which.Invocation.Role.Should().Be(RoleCatalog.ArchitectureRole, "the shipped role still runs");
@@ -285,7 +285,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 
-        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.NotAsked.Should().ContainSingle("a person needs to know the ROLE did not run");
     }
@@ -331,7 +331,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 
         var work = service.BuildWork(
-            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+            [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, servedByPlanSwitch: false, readsCheckout: true);
 
         work.Reviewers.Where(w => w.Invocation.Role == "Requirements").Select(w => w.Invocation.Provider)
             .Should().Equal(["local"], "the custom role goes to the vendors this machine runs itself");

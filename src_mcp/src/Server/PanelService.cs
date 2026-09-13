@@ -188,13 +188,18 @@ public sealed partial class PanelService
     /// unresolved and never lets them retry.
     /// </remarks>
     internal string NoRolesRefusal(Stage stage) =>
-        $"Every {StageWord(stage)}-review role is switched off, so this "
+        $"Every {ReviewKindOf(stage)}-review role is switched off, so this "
         + "round would have no reviewers in it. "
         + $"Tick at least one of {Names(Tickable(stage))} "
         + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
 
-    /// <summary>A stage as a person says it, for a sentence they are about to read.</summary>
-    private static string StageWord(Stage stage) => stage switch
+    /// <summary>Which KIND of review a stage runs, as one word inside a refusal.</summary>
+    /// <remarks>
+    /// Not <c>RoundSubject.StageName</c>, which renders a stage as a phrase for a person reading the
+    /// rounds log ("code review"). Two names one letter apart for two different jobs is what this
+    /// one was called out for; this is the adjective in "every code-review role".
+    /// </remarks>
+    private static string ReviewKindOf(Stage stage) => stage switch
     {
         Stage.PlanReview => "plan",
         Stage.DocumentReview => "document",
@@ -404,26 +409,22 @@ public sealed partial class PanelService
     /// The session identity a caller's <paramref name="document"/> means — the LATEST review of it.
     /// </summary>
     /// <remarks>
-    /// A caller passes what they passed to <c>review_document</c>: a path, or the name they gave raw
-    /// text. Either becomes the same identity <c>review_document</c> derived, and the newest review
-    /// of it is the one they are talking about — asking somebody to remember an ordinal they never
-    /// typed would be asking them to know how this file numbers things.
+    /// <para>A caller passes what they passed to <c>review_document</c>: a path, or the name they
+    /// gave raw text. It has to become the SAME identity, which is why the resolution is
+    /// <see cref="DocumentReader.IdentityOf"/> and not a second copy of it — a rooted-paths-only,
+    /// no-symlinks, wrong-case reconstruction lived here for one code round, and the consequence was
+    /// that a caller who passed a relative path could never resolve their own round. Five findings
+    /// across two vendors.</para>
+    /// <para>The NEWEST review of that document is the one they mean: asking somebody to remember an
+    /// ordinal they never typed would be asking them to know how this file numbers things.</para>
     /// </remarks>
     private string DocumentKeyFor(string repoPath, string branch, string document)
     {
-        var said = document.Trim();
-        if (said.Length == 0)
-        {
-            return string.Empty;
-        }
+        var identity = DocumentReader.IdentityOf(repoPath, document, DocumentReader.FollowLink);
 
-        // A path resolves like one; anything else is the name raw text was given, and its identity
-        // IS that name.
-        var asPath = Path.IsPathRooted(said) ? DocumentId.Of(repoPath, Path.GetFullPath(said)) : said;
-        var identity = asPath.Length == 0 ? said : asPath;
-
-        return DocumentSessions.Which(
-            identity, newReview: false, id => _store.Load(repoPath, branch, id) is not null);
+        return identity.Length == 0
+            ? string.Empty
+            : DocumentSessions.Which(identity, newReview: false, id => _store.Exists(repoPath, branch, id));
     }
 
     private static string NoSession(string document) =>
@@ -463,7 +464,8 @@ public sealed partial class PanelService
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        return RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
+        return RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
+            NeedsWorktree: false, ServedByPlanSwitch: true, ReadsCheckout: false,
             (session, workingDir, _) =>
             {
                 // The same sentence the code stage writes, carrying the one number this stage has:
@@ -489,7 +491,7 @@ public sealed partial class PanelService
                 return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork(
                         roles, workingDir, $"## The plan under review\n\n{planText}", round,
-                        isPlanStage: true,
+                        servedByPlanSwitch: true, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses)));
@@ -538,7 +540,8 @@ public sealed partial class PanelService
             return Task.FromResult(Error(ReviewScope.Refusal));
         }
 
-        return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
+        return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound,
+            NeedsWorktree: true, ServedByPlanSwitch: false, ReadsCheckout: true,
             async (session, workingDir, sha) =>
             {
                 var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
@@ -627,7 +630,8 @@ public sealed partial class PanelService
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
                 return WithSkippedByRule(
-                    BuildWork(roles, workingDir, context, round, isPlanStage: false,
+                    BuildWork(roles, workingDir, context, round,
+                        servedByPlanSwitch: false, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses),
                     notAsked);
@@ -673,27 +677,40 @@ public sealed partial class PanelService
         // Before anything is read, resolved or written: a round with no reviewer in it is not an
         // empty round, it is an unresolved one that sits open for ever. The same guard the other two
         // stages have, for the same reason.
-        if (WhyNotADocumentRound(purposeText) is { } no)
+        // Read ONCE, and carried: the guard and the deadline both need the roster, and reading it
+        // twice is how the two could come to disagree about whether it is empty.
+        var roles = _settings.Rounds.EnabledRolesOf(Stage.DocumentReview).Count;
+
+        return WhatToReview(repoPath, purposeText, roles, new DocumentRequest(documentPath, documentText, documentName)) switch
         {
-            return Task.FromResult(Refused(no));
-        }
-
-        var read = DocumentReader.Read(
-            repoPath,
-            new DocumentRequest(documentPath, documentText, documentName),
-            DocumentReader.FollowLink);
-        if (read is DocumentOutcome.Refused notADocument)
-        {
-            return Task.FromResult(Refused(notADocument.Sentence));
-        }
-
-        var document = (DocumentOutcome.Ready)read;
-        var turn = OpenDocumentSession(repoPath, branch, document, purposeText, newReview);
-
-        return turn.Session is null
-            ? Task.FromResult(Refused(turn.Sentence!))
-            : RunDocumentStageAsync(repoPath, branch, purposeText, document, turn.Session, ct);
+            DocumentOutcome.Refused no => Task.FromResult(Refused(no.Sentence)),
+            DocumentOutcome.Ready document =>
+                ReviewTheDocumentAsync(repoPath, branch, purposeText, document, roles, newReview, ct),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
     }
+
+    /// <summary>The guards that need nothing on disk, then the document itself.</summary>
+    private DocumentOutcome WhatToReview(string repoPath, string purposeText, int roles, DocumentRequest request) =>
+        WhyNotADocumentRound(purposeText, roles) is { } no
+            ? new DocumentOutcome.Refused(no)
+            : DocumentReader.Read(repoPath, request, DocumentReader.FollowLink);
+
+    private Task<string> ReviewTheDocumentAsync(
+        string repoPath,
+        string branch,
+        string purposeText,
+        DocumentOutcome.Ready document,
+        int roles,
+        bool newReview,
+        CancellationToken ct) =>
+        OpenDocumentSession(repoPath, branch, document, purposeText, newReview) switch
+        {
+            DocumentTurn.Refused no => Task.FromResult(Refused(no.Sentence)),
+            DocumentTurn.Open open => RunDocumentStageAsync(
+                repoPath, branch, purposeText, document, open.Session, roles, ct),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
 
     /// <summary>A refusal a person may have to act on is worth a line in the log as well.</summary>
     private string Refused(string sentence)
@@ -704,33 +721,73 @@ public sealed partial class PanelService
     }
 
     /// <summary>Why this cannot be a document round at all, or null.</summary>
-    private string? WhyNotADocumentRound(string purposeText) =>
-        _settings.Rounds.EnabledRolesOf(Stage.DocumentReview).Count == 0
+    private string? WhyNotADocumentRound(string purposeText, int roles) =>
+        roles == 0
             ? NoRolesRefusal(Stage.DocumentReview)
             : ReviewScope.IsSubstantial(purposeText) ? null : ReviewScope.DocumentRefusal;
 
-    /// <summary>The document session this call is about, or the sentence saying why there is none.</summary>
-    private sealed record DocumentTurn(PersistedSession? Session, string? Sentence);
+    /// <summary>
+    /// The document session this call is about, or the sentence saying why there is none.
+    /// </summary>
+    /// <remarks>
+    /// A closed union rather than two nullable fields, which is how every other outcome in this
+    /// codebase says the same thing — <c>Transition</c>, <c>ParseOutcome</c>, <c>DocumentOutcome</c>.
+    /// Two nullables can be BOTH null or both set, and neither state means anything; a union has no
+    /// way to spell them. (codex, the code round.)
+    /// </remarks>
+    private abstract record DocumentTurn
+    {
+        public sealed record Open(PersistedSession Session) : DocumentTurn;
+
+        public sealed record Refused(string Sentence) : DocumentTurn;
+
+        private DocumentTurn() { }
+    }
 
     private DocumentTurn OpenDocumentSession(
         string repoPath, string branch, DocumentOutcome.Ready document, string purposeText, bool newReview)
     {
         if (_store.Load(repoPath, branch) is null)
         {
-            return new DocumentTurn(null, "no session for this repo+branch — call open first");
+            return new DocumentTurn.Refused("no session for this repo+branch — call open first");
+        }
+
+        if (DocumentSessions.Reserved(document.Id) is { } reserved)
+        {
+            return new DocumentTurn.Refused(reserved);
+        }
+
+        // A FRESH review may not be started over a round nobody has decided on: the old session
+        // would sit awaiting a resolve that now has no way to reach it, which is the orphaning this
+        // whole design was rewritten to prevent — one ordinal further along. (codex, the code round.)
+        var current = _store.Load(repoPath, branch, DocumentSessions.Which(
+            document.Id, newReview: false, id => _store.Exists(repoPath, branch, id)));
+        if (newReview && current is { State.AwaitingResolve: true })
+        {
+            return new DocumentTurn.Refused(DocumentSessions.StillOpen(document.Id));
         }
 
         var identity = DocumentSessions.Which(
-            document.Id, newReview, id => _store.Load(repoPath, branch, id) is not null);
-        if (identity.Length == 0)
-        {
-            return new DocumentTurn(null, DocumentSessions.TooMany(document.Id));
-        }
+            document.Id, newReview, id => _store.Exists(repoPath, branch, id));
 
-        return _store.Load(repoPath, branch, identity) is { } existing
-            ? Continuing(existing, purposeText)
-            : new DocumentTurn(NewDocumentSession(repoPath, branch, identity), null);
+        return identity.Length == 0
+            ? new DocumentTurn.Refused(DocumentSessions.TooMany(document.Id))
+            : ContinuingOrNew(repoPath, branch, identity, purposeText);
     }
+
+    /// <summary>
+    /// The session at this identity: the one that is there, or a new one.
+    /// </summary>
+    /// <remarks>
+    /// The load is repeated rather than carried down from the caller, and deliberately: between the
+    /// two, another server sharing this data directory may have created it. Losing that race writes
+    /// a fresh session over somebody's open round, and re-reading here narrows the window to the
+    /// width of one call. (codex, on concurrent claims.)
+    /// </remarks>
+    private DocumentTurn ContinuingOrNew(string repoPath, string branch, string identity, string purposeText) =>
+        _store.Load(repoPath, branch, identity) is { } existing
+            ? Continuing(existing, purposeText)
+            : new DocumentTurn.Open(NewDocumentSession(repoPath, branch, identity, purposeText));
 
     /// <summary>
     /// A purpose that has changed is a different review, not a second round of this one.
@@ -743,13 +800,20 @@ public sealed partial class PanelService
     /// </remarks>
     private static DocumentTurn Continuing(PersistedSession session, string purposeText) =>
         string.Equals(session.PlanText.Trim(), purposeText.Trim(), StringComparison.Ordinal)
-            ? new DocumentTurn(session, null)
-            : new DocumentTurn(null,
+            ? new DocumentTurn.Open(session)
+            : new DocumentTurn.Refused(
                 "this review of the document was opened with a different purpose, and a different "
               + "purpose is a different review rather than another round of this one. Pass the "
               + "original purposeText to continue, or newReview: true to start a fresh review.");
 
-    private PersistedSession NewDocumentSession(string repoPath, string branch, string identity)
+    /// <param name="purposeText">
+    /// Written at CREATION, not only after the first round completes. It used to be empty until the
+    /// round's own save, so a round interrupted before that — a crash, a cancelled tool call — left a
+    /// session whose stored purpose was blank; the retry then compared blank against the same purpose
+    /// the caller sent again and refused it as a DIFFERENT one. A trap that only fires after
+    /// something else has already gone wrong. (gemini, the code round.)
+    /// </param>
+    private PersistedSession NewDocumentSession(string repoPath, string branch, string identity, string purposeText)
     {
         var session = new PersistedSession(
             new SessionState(Guid.NewGuid().ToString("N")[..8], repoPath, branch, _settings.Rounds)
@@ -763,6 +827,7 @@ public sealed partial class PanelService
             [])
         {
             OpenedUtc = DateTime.UtcNow,
+            PlanText = purposeText,
         };
         _store.Save(session);
         _log.Information(
@@ -778,6 +843,7 @@ public sealed partial class PanelService
         string purposeText,
         DocumentOutcome.Ready document,
         PersistedSession session,
+        int roles,
         CancellationToken ct)
     {
         // The snapshot is kept BEFORE the round, so a round that is then killed still leaves the
@@ -789,7 +855,11 @@ public sealed partial class PanelService
         }
 
         return RunStageAsync(repoPath, branch, purposeText,
-            new StageRun(RoundMachine.BeginDocumentRound, NeedsWorktree: false, IsPlanStage: true,
+            // A document reviewer is served by the vendor's PLAN switch — a person who set a vendor
+            // to read documents rather than diffs ticked that one — and is handed no checkout,
+            // because its job is the document it was given. Neither says it is the plan stage.
+            new StageRun(RoundMachine.BeginDocumentRound,
+                NeedsWorktree: false, ServedByPlanSwitch: true, ReadsCheckout: false,
                 (running, workingDir, _) =>
                 {
                     // The same sentence the other two stages write, carrying this one's own numbers.
@@ -807,20 +877,16 @@ public sealed partial class PanelService
                     return Task.FromResult(WithNothingSkippedByRule(
                         BuildWork(
                             roles, workingDir, DocumentContext(purposeText, document), round,
-                            // TRUE, and it is not a lie about which stage this is: inside
-                            // `BuildWork` the flag means "this reviewer reads what it was handed,
-                            // not a checkout", which is exactly a document round. It also selects
-                            // the vendor's PLAN switch, which is the right one of the two that
-                            // exist — a vendor a person set to read documents rather than diffs is
-                            // a vendor they ticked there.
-                            isPlanStage: true,
+                            servedByPlanSwitch: true, readsCheckout: false,
                             seed: StableSeed(running.State.SessionId, round))));
                 })
             {
                 Document = session.State.Document,
                 // The real number, not the plan stage's one: a document round runs one reviewer per
-                // document ROLE per vendor, and a deadline derived from one would be short.
-                RolesPerVendor = Math.Max(_settings.Rounds.EnabledRolesOf(Stage.DocumentReview).Count, 1),
+                // document ROLE per vendor, and a deadline derived from one would be short. It is
+                // the count the GUARD read, passed down rather than read again — an empty roster is
+                // refused before this line, and a second read is how that could stop being true.
+                RolesPerVendor = roles,
             },
             ct);
     }
@@ -1086,7 +1152,7 @@ public sealed partial class PanelService
         // can only be smaller — a vendor that serves the other stage, a repository with no rules —
         // so basing the budget on the configured shape is the generous direction, which is the one
         // to be wrong in.
-        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.IsPlanStage, stage.RolesPerVendor));
+        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.ServedByPlanSwitch, stage.RolesPerVendor));
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -1140,7 +1206,7 @@ public sealed partial class PanelService
             // server does with a role a person defined. The second is only discovered while the work
             // is built, which is why it travels back on it.
             var excluded = (IReadOnlyList<string>)
-                [.. ExcludedFrom(stage.IsPlanStage), .. roundWork.Excluded.Select(e => e.Sentence)];
+                [.. ExcludedFrom(stage.ServedByPlanSwitch), .. roundWork.Excluded.Select(e => e.Sentence)];
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             // The ROUND's own deadline, derived from its shape unless somebody set one. A reviewer
             // is bounded; a round was not, and the round is what a person watches — so a round could
@@ -1516,8 +1582,10 @@ public sealed partial class PanelService
         // REQUIRED, and deliberately not last: the review gate pointed out that an optional stage
         // defaults a future caller into code-stage routing with no compile error, which is exactly
         // the class of silent mistake this parameter was introduced to end. A caller that forgets it
-        // does not compile.
-        bool isPlanStage,
+        // does not compile. TWO of them since plan 4 — see StageRun, which records why one flag for
+        // two questions stopped being honest the moment there were three stages.
+        bool servedByPlanSwitch,
+        bool readsCheckout,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false)
@@ -1551,8 +1619,7 @@ public sealed partial class PanelService
         // ordinary plan round (the lenses are only dealt when asked for), and reading the ROLES
         // works today only because no code round happens to carry PlanCritique — a coincidence, and
         // the review gate said so. The caller knows which stage it is running; it passes it.
-        var isPlan = isPlanStage;
-        var fastCode = _settings.CodeWorkspace == "none" && !isPlan;
+        var fastCode = _settings.CodeWorkspace == "none" && readsCheckout;
         var launchDir = fastCode
             ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
             : worktreePath;
@@ -1563,7 +1630,7 @@ public sealed partial class PanelService
         // from the launch directory alone would tell a plan reviewer a repository was there. That
         // is the exact lie this change removed from the prompt files; only a mounted worktree is a
         // checkout.
-        var hasCheckout = !fastCode && !isPlan;
+        var hasCheckout = readsCheckout && !fastCode;
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -1572,7 +1639,7 @@ public sealed partial class PanelService
         // (research/RESULTS_vendor_overlap_2026-09-06.md): a local model was 19 % useful on a plan
         // and 3 % on code while writing more findings than both hosted vendors together, so "on for
         // the plan, off for the code" is a setting somebody actually wants.
-        var eligible = _settings.Providers.Where(p => p.Serves(isPlanStage)).Where(CanRun).ToList();
+        var eligible = _settings.Providers.Where(p => p.Serves(servedByPlanSwitch)).Where(CanRun).ToList();
         if (eligible.Count == 0)
         {
             return new RoundWork([], []);
@@ -2404,10 +2471,14 @@ public sealed partial class PanelService
 /// an analyser is right that eight is where a signature stops being readable. These four are not four
 /// independent knobs — they are one answer to "which stage is this", and every combination other than
 /// the two the callers pass is meaningless.</para>
-/// <para><b><c>IsPlanStage</c> is TOLD, not derived from <c>NeedsWorktree</c>.</b> The two happen to
-/// agree today, and this file records what deriving the stage cost twice: <c>planPrompts is
-/// { Count: &gt; 0 }</c> is empty on an ordinary plan round, and reading the ROLES works only because
-/// no code round happens to carry <c>PlanCritique</c>.</para>
+/// <para><b>Every one of these is TOLD, not derived.</b> This file records what deriving the stage
+/// cost twice: <c>planPrompts is { Count: &gt; 0 }</c> is empty on an ordinary plan round, and
+/// reading the ROLES works only because no code round happens to carry <c>PlanCritique</c>.</para>
+/// <para>And what ONE flag for two questions cost a third time. <c>IsPlanStage</c> answered both
+/// "which vendor switch serves this" and "does a reviewer get a checkout", which agreed for as long
+/// as there were two stages. A document round wants the plan stage's answer to both and is NOT the
+/// plan stage, so passing <c>isPlanStage: true</c> for it was a claim about identity made in order
+/// to get two behaviours — and two reviewers said so on its code round, separately.</para>
 /// </remarks>
 /// <summary>What a round will run, and any role it decided not to ask for.</summary>
 /// <remarks>
@@ -2445,10 +2516,18 @@ internal sealed record ExcludedRole(string Provider, string Role, string Reason)
     public string Sentence => $"{Provider}: {Reason}";
 }
 
+/// <param name="ServedByPlanSwitch">
+/// Which of a vendor's two switches decides whether it takes part: its <c>Plan</c> one when true,
+/// its <c>Code</c> one when false.
+/// </param>
+/// <param name="ReadsCheckout">
+/// Whether this round's reviewers are given the repository to explore.
+/// </param>
 internal sealed record StageRun(
     Func<SessionState, Transition> Begin,
     bool NeedsWorktree,
-    bool IsPlanStage,
+    bool ServedByPlanSwitch,
+    bool ReadsCheckout,
     Func<PersistedSession, string, string, Task<RoundWork>> MakeWork)
 {
     /// <summary>

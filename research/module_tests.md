@@ -77,8 +77,9 @@ fails that test until the tool is covered here or declared uncovered with a reas
 | `open` | yes | `EndToEndTests` — the whole story, a flawed plan through to a verdict |
 | `review_plan` | yes | `EndToEndTests`, `LiveRoundTests` |
 | `review_code` | yes | `EndToEndTests`, `StageGateTests` (refused before a plan reaches `proceed`) |
+| `review_document` | yes | `ADocumentIsReviewedEndToEndTests` — a document role nobody compiled in, with every shipped role switched off, reading a real document through the public tool: the round reports one reviewer, the finding carries that role and a DOCUMENT category (`completeness`, which the parser dropped as unknown before this plan), the reviewer's prose comes back in `notes` under its provider and role, the branch's own session is untouched, the snapshot is on disk under its content hash, and `resolve` reaches the document's session when it is given the document and says so when it is not. Asked for BY the plan round in those words: every other test of this feature can be green while `review_document` returns an empty round, because the wiring is the one thing none of them touches |
 | `resolve` | yes | `EndToEndTests`, `RoundAuditTests` — a decision is recorded for every finding |
-| `status` | yes | `McpContractTests`, `CallerSessionsTests` |
+| `status` | yes | `McpContractTests`, `CallerSessionsTests`; its `document` argument by `ADocumentIsReviewedEndToEndTests` |
 | The remote reviewer (a Team server vendor) | yes | `RemoteShimScenarioTests` — the REAL `coai-mcp --ask-remote` binary, in its own process, against a real `HttpListener` on a real socket. It is not an MCP tool, so it is not in the registry this table is derived from; it is here because the wiring between an adapter's argv and a separate process is exactly what in-process tests cannot see, and this repository has shipped that break twice |
 | A round that ANSWERED NOTHING | yes | `EndToEndTests.ARoundThatFoundNothing_SaysWhatItSent_AndKeepsWhatItWasTold` — a whole plan round and code round in which every reviewer returns an empty findings array, asserting the two `context for review:` lines, each reviewer's prompt SIZE in the opening line, and the eight raw answers on disk under `empty/`. Not an MCP tool, so it is not in the registry this table is derived from; it is here because the three facts live in three classes (`PanelService` assembles, `RoundAudit` writes, `ReviewerExecutor` keeps) and the 2026-09-08 defect was that nothing joined them |
 | A role NOBODY COMPILED IN, reviewing a change | yes | `ACustomRoleReviewsAChangeTests` — a repository, a branch, a plan gate, a code gate and a vendor answering through the fake CLI, with the four shipped code roles switched off so the round is the custom role alone: the round reports one reviewer, the finding carries that role's name, and the prompt the adapter was handed is the text from `<dataDir>/prompts/<id>.md`. Not an MCP tool, so it is not in the registry this table is derived from; it is here because every unit test of this feature would have stayed green with the enum replaced by a string and the round still asking a compiled-in list — the question "does a role a person defined actually review anything" is answered by no class alone. It also carries the plan stage's half — a plan-stage role a person added, asked for by the round rather than by a hardcoded array, read back from the round's own `reviewerStates` because two reviewers reporting the same thing merge into one finding under one role. Its unit-level siblings are `ACustomRoleReachesAReviewerTests` (each resolution path, including the plan stage's dealt lenses and the stale-prompt fallback), `TheRoundSaysWhatItCouldNotAskTests` (the edges of the two guards: a prompt file that exists and says nothing, a shipped role whose prompt somebody edited, a role that fails both guards at once, and one role refused once however many lenses it would have been dealt) and `RoleCompositionTests` (what a row is refused for) |
@@ -157,6 +158,25 @@ claim file is how one failing test makes the next three fail for unrelated reaso
 
 Design record:
 [PLAN_the_shim_scenario_waits_too_briefly.md](PLAN_the_shim_scenario_waits_too_briefly.md).
+
+## The document gate's own suites (2026-09-13)
+
+Four classes, and the split between them is the point: three prove the rules a unit at a time and the
+fourth proves they are wired to each other.
+
+| Suite | What it holds |
+|---|---|
+| `ADocumentRoleHasARoundTests` | The bucket selection, every case paired with its regression guard — the whole change is ONE predicate and the way to get it wrong is to widen it. Also that `plan:document` is in the catalog and in NO stage's round, asserted rather than assumed |
+| `ADocumentSessionIsKeptApartTests` | Identity. The two-argument session key is pinned as a LITERAL, because what it protects is every session file already on disk. An edited document keeps its session; two files differing only in case keep their own; a case-different SIBLING is not inside where the filesystem says it is not; each gate refuses the other kind by name; an identity that looks like an ordinal is refused |
+| `ADocumentIsProvenBeforeItIsReviewedTests` | Every refusal, with the resolver injected so the symlink rules are unit tests rather than a privilege the CI runner may not have. A link on a PARENT component, a sibling with the same prefix, a relative path resolved against the repository rather than the process, invalid UTF-8, a `.docx` refused before a byte is read, the size bound with both numbers in the sentence |
+| `ADocumentIsReviewedEndToEndTests` | All of it at once, through the public tool, with a scripted vendor |
+
+**Two of these rules were proved to have teeth by breaking the code and watching the failure name the
+real symptom**, which is the discipline this repository holds itself to for a regression test written
+after its fix. Reverting the containment check to a string prefix made `/repo-secrets/x.md` resolve to
+`secrets.md` — an outside path accepted WITH a plausible identity. Reverting the path walk to resolve
+only the last component made a parent-directory symlink come back `Ready` rather than `Refused`,
+which is the file being read and sent to three vendors.
 
 ## What this does NOT prove
 

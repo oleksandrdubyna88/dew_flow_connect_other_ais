@@ -258,4 +258,81 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
         edited.Id.Should().Be(first.Id);
         edited.ArtifactId.Should().NotBe(first.ArtifactId, "the snapshot changed; the document did not");
     }
+
+    // ---------- what the code round found (2026-09-13) ----------
+
+    /// <summary>
+    /// A symlink on a PARENT component escapes, and resolving only the last one misses it.
+    /// </summary>
+    /// <remarks>
+    /// Three reviewers, independently. With <c>repo/docs</c> a link to somewhere outside, the path
+    /// <c>repo/docs/secret.md</c> has an entirely ordinary final component: the old resolver returned
+    /// it unchanged, the containment check saw a path plainly inside the repository, and the read
+    /// followed the parent link. The walk resolves every component now.
+    /// </remarks>
+    [Fact]
+    public void AParentDirectorySymlink_IsRefused()
+    {
+        var elsewhere = Path.Combine(Path.GetTempPath(), "coai-outside-the-repo");
+        Directory.CreateDirectory(elsewhere);
+        Write("docs/spec.md", Body);
+
+        // The seam stands in for the link: `docs` resolves outside, `docs/spec.md` does not resolve
+        // at all. That is exactly the shape the old code could not see.
+        string Link(string p) =>
+            p.Replace("\\", "/").EndsWith("/docs", StringComparison.Ordinal) ? elsewhere : p;
+
+        try
+        {
+            Refusal(Read(new DocumentRequest(Path: Path.Combine(_repo, "docs", "spec.md")), followLink: Link))
+                .Should().Contain("inside");
+        }
+        finally
+        {
+            Directory.Delete(elsewhere, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A RELATIVE path is resolved against the repository, not against wherever this server started.
+    /// </summary>
+    /// <remarks>
+    /// `Path.GetFullPath(path)` uses the process working directory, which for an MCP server is
+    /// wherever the client launched it. A caller passing `docs/spec.md` — the ordinary thing to pass
+    /// — named a file nobody meant, and on a machine where that file happened to exist it named the
+    /// wrong one. (codex and gemini, separately.)
+    /// </remarks>
+    [Fact]
+    public void ARelativePath_IsResolvedAgainstTheRepository()
+    {
+        Write("docs/spec.md", Body);
+
+        Ready(Read(new DocumentRequest(Path: "docs/spec.md"))).Id.Should().Be("docs/spec.md");
+    }
+
+    /// <summary>
+    /// The identity `resolve` reconstructs is the identity `review_document` stored.
+    /// </summary>
+    /// <remarks>
+    /// Five findings across two vendors were one defect: `resolve` and `status` rebuilt the identity
+    /// by a different route — rooted paths only, no links, a different case rule — so a caller who
+    /// passed a relative path could never reach their own round. One resolution, three callers.
+    /// </remarks>
+    [Theory]
+    [InlineData("docs/spec.md")]
+    [InlineData("docs\\spec.md")]
+    [InlineData("./docs/spec.md")]
+    public void EveryWayOfSayingOnePath_ReachesOneIdentity(string said)
+    {
+        var written = Write("docs/spec.md", Body);
+        var stored = Ready(Read(new DocumentRequest(Path: written))).Id;
+
+        DocumentReader.IdentityOf(_repo, said, p => p).Should().Be(stored);
+        DocumentReader.IdentityOf(_repo, written, p => p).Should().Be(stored);
+    }
+
+    /// <summary>A name given to raw text reaches itself, because it is not a path at all.</summary>
+    [Fact]
+    public void ANameForRawText_IsItsOwnIdentity() =>
+        DocumentReader.IdentityOf(_repo, "Spec", p => p).Should().Be("Spec");
 }

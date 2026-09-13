@@ -30,6 +30,20 @@ public sealed class ArtifactStore(string dataDir)
     public bool Has(string artifactId) => File.Exists(FileFor(artifactId));
 
     /// <summary>
+    /// How long a snapshot is kept.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three reviewers said the same thing: a store that only ever writes is a disk that only
+    /// ever fills. A quarter of a megabyte per round, for ever, in a directory nobody looks at until
+    /// it is the reason something else failed.</para>
+    /// <para>Thirty days rather than six hours — the window the scratch sweeper next door uses —
+    /// because these are not scratch. A person opens one to see what the reviewers were actually
+    /// given, and the question "what did round 1 read" is asked weeks later or not at all. It is also
+    /// long enough that a session still open cannot outlive its own snapshot in any real use.</para>
+    /// </remarks>
+    public static readonly TimeSpan Keeps = TimeSpan.FromDays(30);
+
+    /// <summary>
     /// Keeps this snapshot, or says why it could not be kept.
     /// </summary>
     /// <returns>Null when it was written, a sentence when it was not.</returns>
@@ -44,6 +58,7 @@ public sealed class ArtifactStore(string dataDir)
         try
         {
             Directory.CreateDirectory(Dir);
+            PruneOlderThan(DateTime.UtcNow - Keeps);
             var scratch = Path.Combine(Dir, $"{artifactId}.{Guid.NewGuid():N}.writing");
             File.WriteAllText(scratch, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             File.Move(scratch, FileFor(artifactId), overwrite: true);
@@ -53,6 +68,49 @@ public sealed class ArtifactStore(string dataDir)
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return $"the document snapshot {artifactId} could not be kept: {e.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Drops snapshots — and abandoned scratch files — last written before <paramref name="cutoff"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>On the WRITE path, like <c>PruneOldAnswerDirs</c> next door, because a store with no
+    /// background of its own has no other moment: a server that never reviews another document
+    /// should not be doing work, and one that does pays a directory listing per round.</para>
+    /// <para>The LAST WRITE, not the creation time, for the reason the scratch sweeper records:
+    /// Windows file tunnelling hands a recreated name its predecessor's creation time. And
+    /// <c>.writing</c> files are swept too — a process killed between the write and the rename leaves
+    /// one, and nothing else would ever remove it.</para>
+    /// <para>Never throws. Failing to tidy is not a reason to fail a review.</para>
+    /// </remarks>
+    internal void PruneOlderThan(DateTime cutoff)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(Dir))
+            {
+                Forget(file, cutoff);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // Nothing to sweep, or nothing we may sweep. Either way the round goes ahead.
+        }
+    }
+
+    private static void Forget(string file, DateTime cutoff)
+    {
+        try
+        {
+            if (File.GetLastWriteTimeUtc(file) < cutoff)
+            {
+                File.Delete(file);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Somebody is reading it, or it went away between the listing and here. Next round.
         }
     }
 }

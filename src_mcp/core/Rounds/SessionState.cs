@@ -197,7 +197,7 @@ public sealed record PanelConfig(
     /// <para><see cref="Stage.Done"/> falls through to the plan bucket, as it always has: a finished
     /// session runs no round, so what it would have selected is never asked for.</para>
     /// </remarks>
-    public static string BucketFor(Stage stage) => stage switch
+    public static RoleBucket BucketFor(Stage stage) => stage switch
     {
         Stage.CodeReview => RoleBuckets.ResultCode,
         Stage.DocumentReview => RoleBuckets.ResultDocument,
