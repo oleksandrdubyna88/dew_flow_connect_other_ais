@@ -144,16 +144,26 @@ test('an identical transcript is adopted: it is our own record, unchanged', () =
   );
 });
 
-test('a refusal that says nothing about the disk changes nothing, and waits for the next turn', () => {
-  // The store reports what it read; when it could not, there is nothing to compare against. Forking
-  // was the first answer and A3's code round refused it: the reason a refusal carries no transcript
-  // is almost always that the store was mid-mutation of THIS conversation and never probed it, so
-  // forking would mint a copy because a lock was held for a few milliseconds. Nothing changes and
-  // the next turn tries again. (local.)
-  const next = nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']);
+test('a store busy with THIS conversation changes nothing, and waits for the next turn', () => {
+  // Forking was the first answer and A3's code round refused it: the store was mid-mutation of this
+  // very conversation and never probed it, so forking would mint a copy because a lock was held for
+  // a few milliseconds. Nothing changes and the next turn tries again. (local.)
+  //
+  // It arrives as its own outcome rather than as a refusal carrying no transcript, which is the
+  // round-after correction: a genuine conflict over an ABSENT record reports no transcript either,
+  // so reading that as "busy" would wait for ever and never fork. (gemini.)
+  const next = nextAfterSave({ kind: 'busy' }, 0, ['why']);
 
   assert.equal(next.kind, 'said', 'a conversation forked because its own store was busy for an instant');
   assert.equal(next.kind === 'said' ? next.note : '', BUSY_ELSEWHERE);
+});
+
+test('a conflict the store COULD not read is a fork, not a wait — the wedge that shortcut caused', () => {
+  // The case that separates the two names. A record deleted under this window, met at a baseline
+  // above 0, is a real conflict reported without a transcript; treating absence of words as "the
+  // store is busy" left it waiting for ever, never advancing and never forking, with every later
+  // write of that conversation queued behind it.
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 0 }, 3, ['why']).kind, 'fork');
 });
 
 test('what a failed save says names the fault AND that the conversation is still there', () => {

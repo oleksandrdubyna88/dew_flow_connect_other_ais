@@ -666,7 +666,14 @@ test('two writers with ONE baseline racing for one id: exactly one lands, whole,
   }
 });
 
-test('a conversation another window holds right now is refused — the lock is the swap', async () => {
+test('a conversation another window holds right now answers BUSY, and is not read behind its back', async () => {
+  // It answered `refused` with no transcript until A3's second round, and that overloading wedges:
+  // a genuine conflict over an ABSENT record reports no transcript either, so a caller telling the
+  // two apart that way waits for ever on a real conflict and never forks. Two facts, two names.
+  //
+  // And nothing is PROBED here. Reading the record while another process is mid-mutation of it is
+  // the unfenced read this module's lock exists to forbid, and on Windows it can meet the sharing
+  // error that mutation is holding — which would reach a person as a failed save. (gemini.)
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
@@ -674,7 +681,7 @@ test('a conversation another window holds right now is refused — the lock is t
 
     const outcome = await store.save(record(), 0, AT);
 
-    assert.equal(outcome.kind, 'refused', 'a save proceeded over a conversation somebody else holds');
+    assert.equal(outcome.kind, 'busy', 'a save proceeded over a conversation somebody else holds');
     assert.equal(existsSync(join(dir, recordName('a1'))), false, 'a refused save wrote its record anyway');
     assert.equal(JSON.parse(readFileSync(join(dir, lockName('a1')), 'utf8')).token, 'rival:1', 'the rival\u2019s lock was removed');
   } finally {
