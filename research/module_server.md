@@ -1201,6 +1201,25 @@ there is no plan before a document, the document IS the work — and adds one: a
 refuses with `newReview` named, because the same document has the same identity for ever and a
 refusal with no door would make an unchanged policy permanently unreviewable.
 
+**A document role is never sent to a Team server that has not named it.** The per-(vendor, role)
+exclusion asked `builtIn`, which meant "one of the five" for exactly as long as the product shipped
+five roles; the seed now carries seven. Without a fix a round sends a role the box has never heard of
+and is answered with a 400 naming the roles it does run — seconds, zero tokens, and a reviewer that
+was never going to answer. The Team server deploy is manual, so a tag does not put new roles on a box.
+
+`RemoteRoles.BeforeTheCatalog` is the rule, and it is a LITERAL list of the five rather than a
+predicate over the seed. A second predicate — `builtIn && programmingTask` — was drafted and refused
+on that fix's own plan round, and the refusal is the useful part: it fails UNSAFELY for the next
+built-in CODE role, which it would send. Any predicate over today's seed has to be re-derived every
+time the seed grows and is wrong in between. The list is not a predicate at all: it is a fact about
+the past — what shipped before `/api/catalog` ever named roles — so it is frozen by definition and no
+role added later can join it.
+
+`NotAsked` never reaches that decision. `RunStageAsync` awaits `WarmRemoteRolesAsync` before it builds
+any work, and that asks every configured server every round with no skip — so an exclusion is always
+evaluated against `Answered` or `Unreachable`. The state exists because the sentence for it must;
+a round cannot reach it.
+
 **`resolve` and `status` take the same `document` back.** A caller that omits it lands on the
 branch's session, which is idle and has nothing to decide; both refusals say so rather than sending
 them to run another review.

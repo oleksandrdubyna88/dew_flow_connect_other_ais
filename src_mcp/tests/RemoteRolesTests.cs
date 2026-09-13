@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -112,7 +113,7 @@ public sealed class RemoteRolesTests
     {
         var why = RemoteRoles.Unknown.WhyNot("Requirements", "Requirements", builtIn: false);
 
-        why.Should().Contain("not been asked yet");
+        why.Should().Contain("not been asked which roles it runs yet");
         RemoteRoles.Unknown.WhyNot("Architecture", "Architecture", builtIn: true)
             .Should().BeNull("the shipped five are carried by every server, asked or not");
     }
@@ -178,4 +179,102 @@ public sealed class RemoteRolesTests
     {
         RemoteRoles.From(["Requirements"], allowAny: true).AllowAny.Should().BeTrue();
     }
+
+    // ---------- a DOCUMENT built-in is newer than any server that has not said (plan 4's tail) ----------
+
+    /// <summary>
+    /// A server that has NOT said its roles cannot be sent a document role, built-in or not.
+    /// </summary>
+    /// <remarks>
+    /// <para>The fallback was <c>builtIn ? null : …</c> — "the five this product ships are carried by
+    /// every Team server" — and it was true for exactly as long as there were five. Plan 4 added two
+    /// document roles to the seed, so this client now calls seven roles built in while every deployed
+    /// server knows five: the Team server deploy is MANUAL, so shipping a tag does not put the new
+    /// roles on the box.</para>
+    /// <para>What that costs is measured elsewhere in this product's history and is always the same
+    /// shape: the round sends a role the server has never heard of, gets a 400 naming the roles it
+    /// does run, and reports a failed reviewer — seconds per round and zero tokens, for a reviewer
+    /// that was never going to answer.</para>
+    /// <para>The rule that holds instead: a server that has not said its roles predates the field
+    /// that carries them, which predates the document roles. So "would every server know this" is
+    /// "is it one of the five" — built in AND a programming task.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(RemoteRolesSource.Shipped, RoleCatalog.DocumentRole)]
+    [InlineData(RemoteRolesSource.Unreachable, RoleCatalog.DocumentRole)]
+    [InlineData(RemoteRolesSource.NotAsked, RoleCatalog.DocumentRole)]
+    [InlineData(RemoteRolesSource.Shipped, RoleCatalog.DocumentSummaryRole)]
+    [InlineData(RemoteRolesSource.Unreachable, RoleCatalog.DocumentSummaryRole)]
+    [InlineData(RemoteRolesSource.NotAsked, RoleCatalog.DocumentSummaryRole)]
+    public void ADocumentRoleIsNotSentToAServerThatHasNotSaid(RemoteRolesSource source, string role)
+    {
+        // BOTH shipped document roles, not just the first: codex pointed out on the plan round that
+        // covering one of a pair leaves the other free to reach a legacy server while the suite stays
+        // green.
+        var why = new RemoteRoles([], false, source).WhyNot(role, "The document", builtIn: true);
+
+        why.Should().NotBeNull("a deployed server runs the five and this is not one of them");
+        why.Should().Contain("The document");
+        why.Should().NotContain("you added", "it is a role this PRODUCT added, not the person");
+    }
+
+    /// <summary>
+    /// The frozen list is exactly the five, and it is a fact about the past rather than a predicate.
+    /// </summary>
+    /// <remarks>
+    /// Pinned as a literal because the two proxies that preceded it — <c>builtIn</c>, then
+    /// <c>builtIn &amp;&amp; programmingTask</c> — were each correct about the seed of the day and
+    /// silently wrong the next time it grew.
+    /// </remarks>
+    [Fact]
+    public void TheRolesEveryServerRuns_AreTheFiveThatPredateTheCatalogField()
+    {
+        RemoteRoles.BeforeTheCatalog.Should().BeEquivalentTo([
+            "PlanCritique", "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance",
+        ]);
+        RemoteRoles.BeforeTheCatalog.Should().NotContain(RoleCatalog.DocumentRole);
+        RemoteRoles.BeforeTheCatalog.Should().NotContain(RoleCatalog.DocumentSummaryRole);
+    }
+
+    /// <summary>
+    /// A role a PERSON added and a role this PRODUCT added are different news, and say so.
+    /// </summary>
+    [Fact]
+    public void WhoAddedTheRole_ChangesTheSentence()
+    {
+        var server = new RemoteRoles([], false, RemoteRolesSource.Shipped);
+
+        server.WhyNot("Requirements", "Requirements", builtIn: false).Should().Contain("you added");
+        server.WhyNot(RoleCatalog.DocumentRole, "The document", builtIn: true)
+            .Should().Contain("this product added");
+    }
+
+    /// <summary>The regression guard: the five are still carried by all three of those states.</summary>
+    [Theory]
+    [InlineData(RemoteRolesSource.Shipped)]
+    [InlineData(RemoteRolesSource.Unreachable)]
+    [InlineData(RemoteRolesSource.NotAsked)]
+    public void ACodeBuiltInIsStillCarriedByAServerThatHasNotSaid(RemoteRolesSource source)
+    {
+        foreach (var role in RemoteRoles.BeforeTheCatalog)
+        {
+            new RemoteRoles([], false, source).WhyNot(role, role, builtIn: true)
+                .Should().BeNull($"{role} has been on every Team server since before it could say so");
+        }
+    }
+
+    /// <summary>
+    /// A server that HAS said decides for itself, about a document role like any other.
+    /// </summary>
+    [Fact]
+    public void AServerThatNamedTheDocumentRoleRunsIt() =>
+        Answered(false, RoleCatalog.DocumentRole)
+            .WhyNot(RoleCatalog.DocumentRole, "The document", builtIn: true)
+            .Should().BeNull();
+
+    [Fact]
+    public void AServerThatDidNotNameTheDocumentRoleRefusesIt() =>
+        Answered(false, RoleCatalog.ArchitectureRole)
+            .WhyNot(RoleCatalog.DocumentRole, "The document", builtIn: true)
+            .Should().NotBeNull();
 }

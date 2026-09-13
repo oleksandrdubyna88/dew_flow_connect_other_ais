@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -117,7 +118,7 @@ public sealed partial record RemoteRoles(
     /// both.
     /// </param>
     public string? WhyNot(string role, string shown, bool builtIn) =>
-        Source == RemoteRolesSource.Answered ? Said(role, shown) : NotSaid(shown, builtIn);
+        Source == RemoteRolesSource.Answered ? Said(role, shown) : NotSaid(role, shown, builtIn);
 
     /// <summary>A server that told us its roles: the list decides, and it decides about the five too.</summary>
     private string? Said(string role, string shown) =>
@@ -126,23 +127,67 @@ public sealed partial record RemoteRoles(
             : $"'{shown}' is not one of the roles this Team server runs — it runs {string.Join(", ", Names)}";
 
     /// <summary>
-    /// Every other state. The shipped five are carried by all of them; only the SENTENCE differs.
+    /// The roles EVERY deployed Team server runs, whatever it has said.
     /// </summary>
     /// <remarks>
-    /// Which is the whole reason there are three: the answer about what runs is identical, and what
-    /// a person can do about it is not. An old server wants updating, an unreachable one wants a look
-    /// at the network, and one nobody has asked wants nothing at all yet.
+    /// <para><b>A literal list, and that is the point.</b> This was <c>builtIn</c> — a proxy for "one
+    /// of the five", true for exactly as long as the product shipped five roles. Plan 4 put two
+    /// DOCUMENT roles in the seed and the proxy silently started meaning seven, so a round would have
+    /// sent a role no deployed server has ever heard of and been answered with a 400 naming the ones
+    /// it does run: seconds, zero tokens, and a reviewer that was never going to answer. The Team
+    /// server deploy is manual, so a tag does not put new roles on a box.</para>
+    /// <para>A second proxy — <c>builtIn &amp;&amp; programmingTask</c> — was drafted and refused on
+    /// the plan round, and the refusal is worth keeping: it fails UNSAFELY for the next built-in CODE
+    /// role, which it would send. Any predicate over today's seed has to be re-derived every time the
+    /// seed grows, and is wrong in between.</para>
+    /// <para>This is not a predicate. It is a fact about the PAST — what this product shipped before
+    /// <c>/api/catalog</c> ever named roles — so it is frozen by definition and no role added later
+    /// can join it. A server that has not SAID its roles predates that field; therefore it runs
+    /// exactly these.</para>
     /// </remarks>
-    private string? NotSaid(string shown, bool builtIn) =>
-        builtIn ? null : $"'{shown}' is a role you added, and this Team server {Because()}";
+    public static readonly IReadOnlySet<string> BeforeTheCatalog =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            RoleCatalog.PlanRole,
+            RoleCatalog.ConventionsRole,
+            RoleCatalog.ArchitectureRole,
+            RoleCatalog.SecurityRole,
+            RoleCatalog.UxDxRole,
+        };
+
+    /// <summary>
+    /// Every other state. <see cref="BeforeTheCatalog"/> is carried by all of them; the SENTENCE
+    /// differs, and so does WHOSE role it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three states and two kinds of role, because what a person can do about it differs on
+    /// both axes. An old server wants updating, an unreachable one wants a look at the network, and
+    /// one nobody has asked wants nothing yet — while a role THEY added and a role this PRODUCT added
+    /// are different news entirely. Telling somebody that a shipped document role "is a role you
+    /// added" would send them to look for a configuration mistake they never made. (gemini, the plan
+    /// round.)</para>
+    /// </remarks>
+    private string? NotSaid(string role, string shown, bool builtIn)
+    {
+        if (BeforeTheCatalog.Contains(role))
+        {
+            return null;
+        }
+
+        return builtIn
+            ? $"'{shown}' is a role this product added after this Team server was built, and that server {Because()}"
+            : $"'{shown}' is a role you added, and this Team server {Because()}";
+    }
 
     private string Because() =>
         Source switch
         {
             RemoteRolesSource.Shipped =>
-                "is older than the setting that carries them — it runs the five this product ships",
+                "is older than the setting that names roles, so it runs only the ones this product "
+                + "shipped before it: "
+                + string.Join(", ", BeforeTheCatalog),
             RemoteRolesSource.Unreachable =>
-                "could not be asked whether it runs one — so it was left out rather than sent and refused",
-            _ => "has not been asked yet whether it runs one",
+                "could not be asked which roles it runs — so it was left out rather than sent and refused",
+            _ => "has not been asked which roles it runs yet",
         };
 }
