@@ -1551,24 +1551,20 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // was opened about. The state push below does not mention that region, so nothing else could.
     if (data.type === 'fresh') {
       if (typeof data.id === 'string' && data.id.length > 0) {
-        // MERGED, not replaced, for the reason the note handler above gives at length.
-        const held = vscode.getState() || {};
-        held.id = data.id;
-        vscode.setState(held);
+        // MERGED INTO A NEW OBJECT, not written into the one the host handed back: the state is
+        // somebody else's value and the rule here is that nothing is mutated in place. Merged rather
+        // than replaced for the reason the note handler above gives at length — naming one field
+        // would throw away everything else a future page keeps in it. (codex, the code round.)
+        vscode.setState(Object.assign({}, vscode.getState() || {}, { id: data.id }));
       }
       const quoted = document.getElementById('passage');
       if (quoted) {
         quoted.textContent = '';
       }
-      const said = document.getElementById('failure');
-      if (said && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {
-        // AND WHAT THE STATE HANDLER COMPARES AGAINST, exactly as the note handler does: a line
-        // written without saying so makes the next state carrying the same failure read as
-        // unchanged, and the sentence then stands as a stale status line.
-        const freshLine = '<div class="failure">' + data.noteHtml + '</div>';
-        said.innerHTML = freshLine;
-        lastWritten.failure = freshLine;
-      }
+      // AND NO SENTENCE HERE. It travels with the state push instead, which is the only way it
+      // survives: a state message is the whole truth about every region it mentions, so the push
+      // that follows this one would have wiped a line written here on the very next frame, and
+      // nobody would ever have read it. (gemini, twice, the code round.)
 
       return;
     }

@@ -492,8 +492,8 @@ export function pushChatNote(entry: ChatEntry, id: string, note: string): void {
  * serializer after a reload, so a tab that was reset and then reloaded must come back as the new
  * conversation rather than as the archived one.</p>
  */
-export function pushChatFresh(entry: ChatEntry, id: string, note: string): void {
-  entry.panel.post({ type: 'fresh', id, noteHtml: escapeHtml(note) });
+export function pushChatFresh(entry: ChatEntry, id: string): void {
+  entry.panel.post({ type: 'fresh', id });
 }
 
 /** The scale the page opens at, so a new tab matches the ones already open. */
