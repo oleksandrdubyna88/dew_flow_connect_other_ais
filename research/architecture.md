@@ -145,8 +145,8 @@ could infer. A shared directory cannot be swept on local knowledge, and the time
 are no help, because reading a conversation back is deliberately not a use of it.
 
 The picker reads an index built from the small metadata files, never from the transcripts; it is
-published after the sweep and in one assignment, so nothing ever renders a row for a record being
-removed.
+published after the sweep, and in one synchronous step with no await between its two assignments, so
+nothing ever renders a row for a record being removed or sees a list that disagrees with the map.
 
 **Where the vendor-shaped knowledge lives is the other decision.** `codex` reports a token total that
 counts UP across a thread; the other two price each turn. Normalising that belongs to the SESSION,

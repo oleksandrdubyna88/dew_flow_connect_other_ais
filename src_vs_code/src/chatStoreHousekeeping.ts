@@ -76,12 +76,25 @@ export function startHousekeeping(deps: HousekeepingDeps): Housekeeping {
   const heartbeat = new ConversationHeartbeat(keeper, deps.held, pid, deps.timers, clock);
   heartbeat.start();
   const announced = heartbeat.beat();
-  const ready = deps.after
-    .then(() => announced)
-    .then(async (landed): Promise<SweepReport> => {
+  // A migration that FAILED is answered, not propagated. Letting the rejection run down the chain
+  // skipped the index refresh with it, and the picker then said "still being listed" for the life of
+  // the window — over a full store, with no way to reach any of it. The sweep still must not run:
+  // a migration that did not finish may have left records the store has not taken over, and
+  // retirement by age would delete what the memento still holds. So: no sweep, and a list.
+  // (CodeRabbit, on the pull request.)
+  const migrated = deps.after.then(() => true, (reason: unknown) => {
+    console.error('ConnectOtherAIs: the conversation migration failed; nothing will be swept this session', reason);
+
+    return false;
+  });
+  const ready = migrated
+    .then(async (moved): Promise<SweepReport> => {
+      if (!moved) {
+        return { kind: 'skipped', why: 'unmigrated', reason: '' };
+      }
       // Branched on, not discarded: a first beat that did not land is tried once more now that the
       // wait is over, and a window that still cannot announce what it holds does not sweep.
-      if (!landed && !await heartbeat.beat()) {
+      if (!await announced && !await heartbeat.beat()) {
         return { kind: 'skipped', why: 'unannounced', reason: '' };
       }
 

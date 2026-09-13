@@ -16,8 +16,8 @@ its name is one word away. Choose an open one and its tab comes to the front. Ch
 it opens again where it left off: the whole conversation, nothing running until you ask something,
 and that first question carries it across to whichever model answers.
 
-**A trash button on every closed row forgets that conversation**, and `Alt+Delete` forgets the one
-under the cursor. The list stays open either way, so clearing out five of them is five presses rather
+**A trash button on every closed row forgets that conversation**, and `Alt+Delete` — `Cmd+Delete` on
+a Mac — forgets the one under the cursor. The list stays open either way, so clearing out five of them is five presses rather
 than five openings of the list — and a conversation that is open in a tab has no trash button, because
 that tab is still writing it. Close the tab first.
 
@@ -43,7 +43,7 @@ screen. It waits now, and closes only once the conversation is actually open.
 **Forgetting a conversation no longer destroys it.** The row goes the moment you press the trash,
 and nothing lists that conversation again — but the transcript is set aside on disk and only really
 deleted after the same ninety days as everything else. There is no confirmation dialog in the way of
-an ordinary action, and there does not need to be one: `Alt+Delete` aimed at the wrong row of a list
+an ordinary action, and there does not need to be one: the chord aimed at the wrong row of a list
 you were filtering is a keystroke, and what it would otherwise have taken is the only copy of what
 you and a model said to each other.
 
