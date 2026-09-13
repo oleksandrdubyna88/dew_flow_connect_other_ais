@@ -210,24 +210,32 @@ public static class ReviewEndpoints
                 + $"{MaxBudget.TotalSeconds:0}; you asked for {seconds}";
         }
 
-        // An unknown role fails NAMING the legal values rather than quietly becoming the first one.
-        // Silently substituting a role means a reviewer runs with instructions nobody asked for and
-        // the answer looks like an ordinary one. (Two reviewers, code round.)
+        // What this job IS, checked FIRST, against the role it carries. The whole table is in
+        // `JobKinds`, where it can be read as a table rather than reconstructed from branches.
         //
-        // WHICH values are legal is `AcceptedRoles`' answer, not this method's: this server runs the
-        // five it ships with plus whatever `Coai:ExtraRoles` names, and a refusal that listed the
-        // five would be describing a different server. Only when a role was actually SAID — an old
-        // client sends neither kind nor role and must keep working.
-        if (!string.IsNullOrWhiteSpace(request.Role) && roles.Refusal(request.Role) is { } badRole)
-        {
-            return badRole;
-        }
-
-        // What this job IS, checked against the role it carries. The whole table is in `JobKinds`,
-        // where it can be read as a table rather than reconstructed from branches.
+        // The order matters and used to be the other way round. A chat carrying an unknown role was
+        // told "'Invented' is not a review role. Accepted: …"; the client picked one of the names it
+        // had just been handed, sent it, and was told "a chat carries no review role". Two refusals
+        // contradicting each other, one request apart. Whether a job may carry a role at all is a
+        // question about the KIND, and it is answered before which roles exist. (gemini, story 2's
+        // code round.)
+        //
+        // For a `review` this also settles the role: `JobKinds` asks `AcceptedRoles` about both the
+        // missing one and the unknown one.
         if (JobKinds.Refusal(request.Kind, request.Role, roles) is { } wrongKind)
         {
             return wrongKind;
+        }
+
+        // An OLD client names no kind, so `JobKinds` judged nothing at all about its role — that row
+        // returns null by design, because every installed copy of the extension and the shim depends
+        // on it. Its role is checked here instead, so "is this a role this server runs" is asked of
+        // every client exactly once: there and not here for a new one, here and not there for an old.
+        if (!JobKinds.WasSaid(request.Kind)
+            && !string.IsNullOrWhiteSpace(request.Role)
+            && roles.Refusal(request.Role) is { } badRole)
+        {
+            return badRole;
         }
 
         if (Idempotency.Refusal(request.IdempotencyKey) is { } badKey)

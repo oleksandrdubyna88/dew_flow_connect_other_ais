@@ -426,6 +426,70 @@ public sealed class ReviewEndpointTests
             .Polled(one.Id, $"dev@{TeamServer.Domain}", DateTimeOffset.UtcNow);
         stored!.Role.Should().Be("Requirements", "the operator's spelling, whichever case arrived");
     }
+
+    [Fact]
+    public async Task AChatCarryingAnUnknownRoleIsToldItIsAChat_NotOfferedReviewRoles()
+    {
+        // The two refusals used to contradict each other one request apart: a chat carrying
+        // 'Invented' was told "'Invented' is not a review role. Accepted: …", so the client picked a
+        // name it had just been handed, sent it, and was told "a chat carries no review role".
+        // Whether a job may carry a role AT ALL is a question about the kind, and it is answered
+        // before which roles exist. (gemini, story 2's code round.)
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Kind = "chat", Role = "Invented" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("chat carries no review role")
+            .And.NotContain("Architecture", "a list of roles is not the answer to a question about kinds");
+    }
+
+    [Fact]
+    public async Task ANewClientSendingAnUnknownRoleIsStillRefused()
+    {
+        // The role check moved INTO JobKinds for a client that names its kind. It has to stay a
+        // check: the (review, a role) row used to fall through to null, which is a signature that
+        // says it validates and a method that does not.
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Kind = "review", Role = "Invented" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error.Should().Contain("Invented");
+    }
+
+    [Fact]
+    public async Task ANewClientSendingAConfiguredRoleIsAccepted()
+    {
+        using var server = WithExtraRole();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Kind = "review", Role = "Requirements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task SayingNothingAndSayingWhitespaceAreOneJob()
+    {
+        // `Canonical("   ")` returned three spaces, so the same review from the same person was two
+        // jobs depending on which way they said nothing — one fingerprint over "" and one over "   ".
+        // (gemini, story 2's code round.)
+        using var server = WithVendors();
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+        var sent = Request() with { IdempotencyKey = "one-key", Kind = "chat" };
+
+        var first = await client.PostAsJsonAsync("/api/reviews", sent with { Role = null });
+        var second = await client.PostAsJsonAsync("/api/reviews", sent with { Role = "   " });
+
+        first.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        second.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        (await second.Content.ReadFromJsonAsync<ReviewAcceptedDto>())!.Id
+            .Should().Be((await first.Content.ReadFromJsonAsync<ReviewAcceptedDto>())!.Id);
+    }
 }
 
 /// <summary>The runner's rules, driven against a vendor that answers however the test says.</summary>

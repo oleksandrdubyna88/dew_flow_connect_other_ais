@@ -290,6 +290,12 @@ public sealed class AcceptedRolesTests
         // gates were tested, the ingress was not. (gemini, story 2's plan round.)
         Default.Canonical(null).Should().BeEmpty();
         Default.Canonical(string.Empty).Should().BeEmpty();
-        Default.Canonical("   ").Should().Be("   ", "a refusal quotes back exactly what arrived");
+
+        // Whitespace is nothing too. It used to come back as "   ", which put three spaces into the
+        // JobRecord and into the idempotency fingerprint — so the same review, from the same person,
+        // was two jobs depending on which way they said nothing. Quoting the input back is the
+        // refusal's job. (gemini, story 2's code round.)
+        Default.Canonical("   ").Should().BeEmpty();
+        Default.Canonical("\t\n").Should().BeEmpty();
     }
 }
