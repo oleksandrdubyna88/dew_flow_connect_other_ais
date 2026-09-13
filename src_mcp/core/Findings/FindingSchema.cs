@@ -18,8 +18,9 @@ public static class FindingSchema
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["findings"],
+          "required": ["findings", "notes"],
           "properties": {
+            "notes": { "type": ["string", "null"], "description": "Prose about the whole document when the prompt asks for it; null otherwise. Never a finding: it gates nothing." },
             "findings": {
               "type": "array",
               "items": {
@@ -28,7 +29,7 @@ public static class FindingSchema
                 "required": ["severity", "category", "file", "line", "title", "why", "fix"],
                 "properties": {
                   "severity": { "type": "string", "enum": ["blocking", "major", "minor", "nit"] },
-                  "category": { "type": "string", "enum": ["architecture", "security", "reliability", "performance", "ux", "convention"] },
+                  "category": { "type": "string", "enum": ["architecture", "security", "reliability", "performance", "ux", "convention", "clarity", "completeness", "consistency", "feasibility"] },
                   "file": { "type": ["string", "null"], "description": "Repo-relative path; null for a repo-level or plan-level finding" },
                   "line": { "type": ["integer", "null"], "description": "1-based; null when the finding names no line" },
                   "title": { "type": "string", "description": "One sentence: the defect itself" },

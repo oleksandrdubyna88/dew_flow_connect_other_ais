@@ -11,6 +11,17 @@ public enum Severity
     Nit,
 }
 
+/// <summary>
+/// What a finding is ABOUT. The first six describe code; the last four describe a document.
+/// </summary>
+/// <remarks>
+/// <para><b>One list, not one per stage.</b> A document round may answer <c>Security</c> or
+/// <c>Reliability</c> — a policy has both — and a code round answering <c>Clarity</c> is a
+/// legitimate remark about a name or a comment. Two lists would be two things to keep in step, which
+/// is the drift <c>FindingSchemaTests</c> exists because of.</para>
+/// <para><b>Four, not fourteen.</b> A list a reviewer has to think about is a list reviewers answer
+/// inconsistently, and dedup counts agreement across vendors.</para>
+/// </remarks>
 public enum Category
 {
     Architecture,
@@ -19,6 +30,18 @@ public enum Category
     Performance,
     Ux,
     Convention,
+
+    /// <summary>It can be read two ways, and the two ways imply different work.</summary>
+    Clarity,
+
+    /// <summary>Something a reader must know in order to act is not in it.</summary>
+    Completeness,
+
+    /// <summary>Two parts of the document contradict each other.</summary>
+    Consistency,
+
+    /// <summary>It asks for what cannot be done as described, or not for the stated cost.</summary>
+    Feasibility,
 }
 
 /// <summary>
@@ -57,4 +80,20 @@ public sealed record Finding(
 public sealed record RejectedEntry(int Index, string Reason);
 
 /// <summary>What one reviewer's answer normalised into.</summary>
-public sealed record NormalisedReview(ImmutableArray<Finding> Findings, ImmutableArray<RejectedEntry> Rejected);
+public sealed record NormalisedReview(ImmutableArray<Finding> Findings, ImmutableArray<RejectedEntry> Rejected)
+{
+    /// <summary>
+    /// This reviewer's prose about the whole document — the summary, when one was asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It can never gate.</b> A verdict is computed from gating FINDINGS; prose has no
+    /// severity and must not acquire one because of the words in it. A round whose entire content is
+    /// a summary passes its gate, which is correct: nobody found anything wrong.</para>
+    /// <para><b>Never merged.</b> Findings are deduplicated because two vendors agreeing is stronger
+    /// evidence of one defect; three vendors' accounts of one document are three accounts, and
+    /// merging them destroys the only property that makes reading them worthwhile.</para>
+    /// <para>Empty, never null, and empty is what a code round always has: no code prompt asks for
+    /// notes, so the field arrives absent and this is the answer.</para>
+    /// </remarks>
+    public string Notes { get; init; } = string.Empty;
+}

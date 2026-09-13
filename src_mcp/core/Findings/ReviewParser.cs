@@ -59,7 +59,14 @@ public static class ReviewParser
             }
         }
 
-        return new ParseOutcome.Success(new NormalisedReview(findings.ToImmutable(), rejected.ToImmutable()));
+        return new ParseOutcome.Success(
+            new NormalisedReview(findings.ToImmutable(), rejected.ToImmutable())
+            {
+                // Trimmed to empty rather than carried as whitespace: a reviewer that filled the
+                // field with a space has said nothing, and a caller must not have to tell the two
+                // apart. Absent, null and blank are one answer.
+                Notes = raw.Notes?.Trim() ?? string.Empty,
+            });
     }
 
     private static (Finding?, string?) Normalise(RawFinding raw, string provider)
@@ -107,6 +114,10 @@ public static class ReviewParser
         "performance" => Category.Performance,
         "ux" => Category.Ux,
         "convention" => Category.Convention,
+        "clarity" => Category.Clarity,
+        "completeness" => Category.Completeness,
+        "consistency" => Category.Consistency,
+        "feasibility" => Category.Feasibility,
         _ => null,
     };
 }
