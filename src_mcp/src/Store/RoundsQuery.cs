@@ -61,7 +61,19 @@ public sealed record LoggedRound(
     /// <para>Null for a round recorded before the columns existed: it was never asked, which is a
     /// different fact from a caller that could not be identified.</para>
     /// </remarks>
-    Server.CallerDeclaration? Caller = null);
+    Server.CallerDeclaration? Caller = null,
+
+    /// <summary>
+    /// How many findings this round handed back that the caller had already ACCEPTED.
+    /// </summary>
+    /// <remarks>
+    /// Story 6's counter, and <c>-1</c> means the projection could not answer — the same convention
+    /// <c>accepted</c>/<c>rejected</c> use, because a round nobody could measure must not read as a
+    /// round where nothing survived. Carried on the log so the phase-2 question can be asked of
+    /// `--log` rather than of SQL; no page shows it yet, deliberately, since what it is for is a
+    /// decision about whether an automatic consultation should fire at all.
+    /// </remarks>
+    int ConsultMissed = -1);
 
 /// <summary>
 /// One consultation as the log page lists it: who asked, who answered, and how it ended.
@@ -285,10 +297,15 @@ public static class RoundsQuery
         // Keyed, never OFFSET. Rounds are inserted at the TOP of this ordering, so a round finishing
         // while somebody is on page two shifts every later page by one and a row is seen twice or
         // never. (Plan round, local — Major.)
-        read.CommandText = """
+        // The counter is SELECTED only when the file has it. A database last written by a binary
+        // without schema step 2 has no such column, and naming it would fail the whole rounds list —
+        // which is the page, not a section of it. The consultations list can answer "none" for the
+        // same skew; this one cannot answer anything. (Caught by story 4's own compatibility test.)
+        var counter = HasColumn(db, "rounds", "consult_missed") ? "r.consult_missed" : "-1";
+        read.CommandText = $"""
             SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
                    r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
-                   r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model
+                   r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model, {counter}
             FROM rounds r JOIN sessions s ON s.id = r.session_id
             WHERE $unbounded = 1
                OR r.started_utc < $started
@@ -321,7 +338,11 @@ public static class RoundsQuery
                 rows.GetString(10).Length + rows.GetString(11).Length + rows.GetString(13).Length == 0
                     ? null
                     : new Server.CallerDeclaration(
-                        rows.GetString(10), rows.GetString(11), rows.GetString(12), rows.GetString(13))));
+                        rows.GetString(10), rows.GetString(11), rows.GetString(12), rows.GetString(13)),
+                // Ordinal 14, after the four caller columns main added while this branch waited. A
+                // database stepped by an older binary has no column at all; the reader answers the
+                // convention's own "not measured" rather than refusing the row.
+                rows.IsDBNull(14) ? -1 : rows.GetInt32(14)));
         }
 
         return rounds;
@@ -505,6 +526,23 @@ public static class RoundsQuery
     /// <summary>Whether the message names a missing table, since the code alone is SQLite's catch-all.</summary>
     private static bool Missing(SqliteException e) =>
         e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether this file's table has that column — asked of the schema, never guessed from a version.
+    /// </summary>
+    /// <remarks>
+    /// The name is interpolated into the SQL and both callers pass literals written here; `pragma`
+    /// takes no parameters in this position, which is why it is worth saying out loud that nothing a
+    /// caller sends ever reaches it.
+    /// </remarks>
+    private static bool HasColumn(SqliteConnection db, string table, string column)
+    {
+        using var ask = db.CreateCommand();
+        ask.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $column";
+        ask.Parameters.AddWithValue("$column", column);
+
+        return Convert.ToInt64(ask.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;
+    }
 
     /// <summary>
     /// What the caller accepts, grouped three ways.

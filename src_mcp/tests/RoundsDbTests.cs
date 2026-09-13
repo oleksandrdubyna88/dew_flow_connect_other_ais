@@ -617,3 +617,127 @@ public sealed class RoundsDbTests : IDisposable
         }
     }
 }
+
+/// <summary>
+/// What the counter is allowed to call "accepted earlier", and the column it lands in.
+/// </summary>
+/// <remarks>
+/// Real SQLite over a temp directory, no fakes, for the reason <c>RoundsDbTests</c> states: the point
+/// is that the SQL runs. The scoping is the part worth pinning — a question asked one row too wide
+/// counts coincidences, and a number that counts coincidences is worse than no number at all when
+/// what it decides is whether a feature should fire on its own.
+/// </remarks>
+public sealed class ConsultMissedTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-missed-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or DirectoryNotFoundException) { }
+    }
+
+    private static SessionState Session(string id = "s1") =>
+        new(id, "D:/repo", "feat/x", new PanelConfig()) { Stage = Stage.CodeReview };
+
+    private static RoundRecord Round(string stage, int number) =>
+        new(stage, number, "revise", 1, "all 3 reviewers answered", DateTime.UtcNow)
+        {
+            StartedUtc = DateTime.UtcNow.AddMinutes(-3),
+        };
+
+    private static Finding Found(string title, string file = "src/Parser.cs", int line = 40) =>
+        new(Severity.Major, Category.Reliability, file, line, title, title + " — why", "the fix", ["codex"]);
+
+    /// <summary>A round, its findings, and what the caller decided about each of them.</summary>
+    /// <remarks>
+    /// The decisions are positional — `resolve` numbers findings by their order in the round — so
+    /// they are built from the findings here rather than by a caller repeating them.
+    /// </remarks>
+    private void Recorded(RoundsDb db, SessionState session, RoundRecord round, Finding[] findings, string?[] reasons)
+    {
+        db.RecordRound(session, round, findings);
+        db.RecordDecisions(
+            session.SessionId, round.Stage, round.Number,
+            [.. findings.Select((finding, at) => reasons[at] is { } reason
+                ? new Decision.Rejected(finding, reason)
+                : (Decision)new Decision.Accepted(finding))]);
+    }
+
+    [Fact]
+    public void OnlyACCEPTEDFindings_FromEARLIERRoundsOfTheSAMEStageAndSession_Count()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var session = Session();
+
+        // Round 1, code: one accepted, one rejected.
+        Recorded(db, session, Round("CodeReview", 1),
+            [Found("the parser drops the last token"), Found("the lock is late", file: "src/Lock.cs")],
+            [null, "out of scope"]);
+
+        // A PLAN round of the same session, accepted — a different stage, and its remarks have no file.
+        Recorded(db, session, Round("PlanReview", 1), [Found("the plan says nothing about rollback", file: "")],
+            [null]);
+
+        // Another session entirely, accepted.
+        var other = Session("s2");
+        Recorded(db, other, Round("CodeReview", 1), [Found("someone else's finding")], [null]);
+
+        var accepted = db.AcceptedEarlier(session.SessionId, "CodeReview", 2);
+
+        accepted.Select(one => one.Finding.Title).Should().Equal(["the parser drops the last token"]);
+        accepted[0].Round.Should().Be(1);
+    }
+
+    [Fact]
+    public void AFindingFromTheSAMERound_IsNotEarlierThanItself()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var session = Session();
+        Recorded(db, session, Round("CodeReview", 2), [Found("the parser drops the last token")], [null]);
+
+        db.AcceptedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AnUNRESOLVEDFinding_IsNotAnAcceptedOne()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var session = Session();
+        // Recorded, never resolved — which is a real state: the round ran and the caller has not answered.
+        db.RecordRound(session, Round("CodeReview", 1), [Found("the parser drops the last token")]);
+
+        db.AcceptedEarlier(session.SessionId, "CodeReview", 2).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheCounterLandsOnTheRound_AndIsMinusOneUntilSomethingCountsIt()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var session = Session();
+        db.RecordRound(session, Round("CodeReview", 1), [Found("the parser drops the last token")]);
+
+        Missed(1).Should().Be(-1, "a round nobody measured is not a round where nothing survived");
+
+        db.RecordConsultMissed(session.SessionId, "CodeReview", 1, 2);
+
+        Missed(1).Should().Be(2);
+        RoundsQuery.Read(_dir).Rounds.Single().ConsultMissed.Should().Be(2, "the log carries it too");
+    }
+
+    private long Missed(int number)
+    {
+        using var read = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False;Mode=ReadOnly");
+        read.Open();
+        using var ask = read.CreateCommand();
+        ask.CommandText = "SELECT consult_missed FROM rounds WHERE number = $number";
+        ask.Parameters.AddWithValue("$number", number);
+
+        return (long)ask.ExecuteScalar()!;
+    }
+}
