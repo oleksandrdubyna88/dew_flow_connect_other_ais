@@ -80,8 +80,70 @@ public sealed class ConsultationService(
 
     public ConsultationStore Store => _store;
 
+    /// <summary>
+    /// This caller's consultations still open in a checkout, newest first — what `status` reports.
+    /// </summary>
+    /// <remarks>
+    /// <para>Re-orientation, which is what <c>status</c> is for, pointed at the one thing a compacted
+    /// conversation loses that costs money: the <c>consultationId</c> its first reply carried. Without
+    /// it a follow-up opens a SECOND consultation — the working tree collected again, a model that has
+    /// already answered asked from scratch, the caller's own budget spent twice.</para>
+    /// <para>Filtered by CALLER as well as by repository. A consultation another session opened is not
+    /// this one's to resume — <see cref="ConsultationRules"/> refuses a follow-up whose caller differs
+    /// — so listing it would offer an id that comes back as a refusal. (gemini, plan round.)</para>
+    /// <para>Compared as a resolved PATH rather than as text, because the caller's spelling of a
+    /// checkout is not the server's: the tool resolves <c>repoPath</c> to the repository's top level
+    /// and the record holds that, so a call made from a subdirectory would match nothing.</para>
+    /// </remarks>
+    public IReadOnlyList<OpenConsultation> OpenIn(string repoPath)
+    {
+        // The identity's ID, since `From` answers a whole `CallerIdentity`: the VENDOR half is a
+        // display fact, and a consultation is owned by a session rather than by a brand.
+        var caller = CallerIdentity.From(env).Id is { Length: > 0 } id ? id : $"repo:{repoPath}";
+
+        return [.. _store.All()
+            .Where(record => !record.IsOver
+                && string.Equals(record.Caller, caller, StringComparison.Ordinal)
+                && SamePath(record.RepoPath, repoPath))
+            .OrderByDescending(record => record.StartedUtc, StringComparer.Ordinal)
+            .Select(record => new OpenConsultation(
+                record.Id,
+                record.Vendor,
+                record.Model,
+                record.Status,
+                record.Branch,
+                record.Turns.Count,
+                record.MaxTurns,
+                record.StartedUtc,
+                record.Alert))];
+    }
+
     public int Sweep(Func<int, bool> isAlive) =>
         _store.Sweep(isAlive, DateTime.UtcNow, settings.ConsultIdle, ConsultationStore.Retention);
+
+    /// <summary>
+    /// Re-projects every record the store still holds, and answers how many.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because the projection is allowed to fail.</b> A database that is locked or full when
+    /// a consultation writes its LAST state leaves that consultation absent from the log for ever —
+    /// a terminal record gets no further writes, so nothing would ever carry it across. The records
+    /// are the source of truth and this is the pass that lets the view catch up with them.</para>
+    /// <para>Cheap and bounded: the store already reads every file for its sweep, and the sweep reaps
+    /// a terminal record 7 days after it ended — so this is a handful of upserts of rows that are
+    /// almost always identical to what is there. Idempotent by construction, since the row is
+    /// recomputed from the record rather than accumulated. (codex, this story's plan round.)</para>
+    /// </remarks>
+    public int Reproject()
+    {
+        var records = _store.All();
+        foreach (var record in records)
+        {
+            Project(settings, log, record);
+        }
+
+        return records.Count;
+    }
 
     public async Task<string> AskAsync(string repoPath, string problem, string suspectedFilesJson, string consultationId, CancellationToken ct = default)
     {
@@ -506,11 +568,31 @@ public sealed class ConsultationService(
         return path;
     }
 
-    private static bool SamePath(string one, string other) =>
-        string.Equals(
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    /// <summary>
+    /// Two spellings of one checkout, or not.
+    /// </summary>
+    /// <remarks>
+    /// Guarded since it gained a second caller in story 4: this compares a path out of a RECORD —
+    /// written by a server that may have run on another machine — against one the tool resolved here,
+    /// and `GetFullPath` throws on a string no filesystem here can make sense of. A `status` call must
+    /// not fail over somebody else's record, and a path this machine cannot resolve is not the one
+    /// being asked about.
+    /// </remarks>
+    private static bool SamePath(string one, string other)
+    {
+        try
+        {
+            return one.Length > 0 && other.Length > 0
+                && string.Equals(
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        }
+        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     private static IReadOnlyList<string>? SuspectedFiles(string json)
     {

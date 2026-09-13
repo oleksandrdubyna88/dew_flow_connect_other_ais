@@ -1855,7 +1855,12 @@ network path does not always raise a watcher event. **One surface, not three**: 
 watcher raises a modal and holds a status-bar item because a round is BLOCKED behind its question;
 nothing is blocked here, so a consultation appears where a person is already looking and nowhere
 else. The watcher compares what it read before telling anybody — a directory polled twelve times a
-minute would otherwise rebuild the section's DOM under whatever somebody is typing into.
+minute would otherwise rebuild the section's DOM under whatever somebody is typing into — and a read
+that THROWS keeps the last good snapshot rather than blanking the region: an absent directory is the
+ordinary state and reads as none, while a rename landing on an open handle is the ordinary Windows
+case and must not take a running consultation off the screen for five seconds. `resumable` says who
+picks it up (the AI, with the id `status` hands back), because the word on its own promises a button
+a person does not have.
 
 **The sidebar is present tense and the log is the history** (the 2026-09-05 ruling, applied again):
 the card shows `asking`, `open` and `interrupted` only, and a fourth tab on the rounds log —

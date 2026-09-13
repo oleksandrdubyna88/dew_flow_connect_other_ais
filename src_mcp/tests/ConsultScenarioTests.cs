@@ -406,6 +406,35 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         listed.GetProperty("maxTurns").GetInt32().Should().Be(5);
     }
 
+    /// <summary>
+    /// Another session's open consultation is not offered to this one.
+    /// </summary>
+    /// <remarks>
+    /// <c>Existing</c> refuses a follow-up whose caller differs, so an id from somebody else's session
+    /// is an id that comes back as a refusal — listing it would be handing out a dead end. (gemini,
+    /// story 4's plan round.)
+    /// </remarks>
+    [Fact]
+    public async Task Status_SaysNothingAboutAConsultationAnotherCallerOpened()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+        await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+
+        // The same repository, a different caller session — which is what a second agent window is.
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", "somebody-else");
+        try
+        {
+            var status = JsonDocument.Parse(await Service().StatusAsync(_repo, "main")).RootElement;
+
+            status.GetProperty("consultations").GetArrayLength().Should().Be(0);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null);
+        }
+    }
+
     [Fact]
     public async Task Status_SaysNothingAboutAConsultationThatIsOver()
     {
