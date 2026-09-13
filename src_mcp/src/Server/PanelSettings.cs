@@ -262,6 +262,119 @@ public sealed record PanelSettings
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
 
+    /// <summary>The file that says a directory is a data directory rather than an empty folder.</summary>
+    private const string DatabaseFile = "coai.db";
+
+    /// <summary>
+    /// What distinguishes THIS installation from another one pointed at the same location.
+    /// </summary>
+    /// <remarks>
+    /// <para>Issue #115. The default directory already differs per platform, so two sides only
+    /// collide once somebody deliberately shares one — a NAS that survives a Windows reinstall. Then
+    /// Windows and WSL both want to write, and the decision was that each keeps its own rather than
+    /// merging: <c>rounds.id</c> and <c>findings.id</c> are AUTOINCREMENT, so two written-to
+    /// databases collide on ids and a merge would have to remap every one of them along with the
+    /// foreign keys that point at them.</para>
+    ///
+    /// <para><b>Platform AND machine, because neither alone is enough.</b> WSL takes its hostname
+    /// from the Windows host, so <see cref="Environment.MachineName"/> is the SAME string on both
+    /// sides of one box — the platform separates those. Two Macs on one NAS share a platform — the
+    /// machine name separates those. And two WSL distributions on one host share BOTH, so
+    /// <c>WSL_DISTRO_NAME</c> joins the name when it is set; that one was raised on the plan
+    /// round.</para>
+    ///
+    /// <para><c>COAI_DATA_SIDE</c> overrides the whole thing, for somebody who wants a name that
+    /// survives a machine rename — a rename otherwise starts a new side beside the old one. It is
+    /// VALIDATED rather than trusted: a side called <c>../shared</c> would escape the very root it
+    /// is meant to partition.</para>
+    /// </remarks>
+    public static string DataSide(Func<string, string?> env)
+    {
+        if (PathSafeSide(env("COAI_DATA_SIDE")) is { Length: > 0 } chosen)
+        {
+            return chosen;
+        }
+
+        var platform = OperatingSystem.IsWindows() ? "windows"
+            : OperatingSystem.IsMacOS() ? "macos"
+            : OperatingSystem.IsLinux() ? "linux"
+            : "unknown";
+
+        // A container can have no machine name at all; a side ending in a dash would be the giveaway
+        // that one was built out of nothing, so an empty part simply does not join.
+        var parts = new[] { platform, PathSafeSide(env("WSL_DISTRO_NAME")), PathSafeSide(Environment.MachineName) }
+            .Where(p => p.Length > 0);
+
+        return string.Join('-', parts);
+    }
+
+    /// <summary>One path segment, or empty — anything that could leave the directory is refused.</summary>
+    /// <remarks>
+    /// REFUSED rather than rewritten. Two different names sanitised the same way would silently
+    /// become one side sharing one database, which is the outcome this whole partition exists to
+    /// avoid.
+    /// </remarks>
+    private static string PathSafeSide(string? value)
+    {
+        var trimmed = (value ?? string.Empty).Trim().ToLowerInvariant();
+
+        return trimmed.Length == 0
+            || trimmed is "." or ".."
+            || trimmed.Contains('/')
+            || trimmed.Contains('\\')
+            || trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                ? string.Empty
+                : trimmed;
+    }
+
+    /// <summary>
+    /// Where this side's data lives, and anything the person needs told about how that was decided.
+    /// </summary>
+    /// <remarks>
+    /// <para>With no override the answer is <see cref="DefaultDataDir"/>, exactly as it has always
+    /// been — nothing moves on its own and nobody has to do anything.</para>
+    ///
+    /// <para>With one, it is always <c>&lt;dir&gt;/&lt;side&gt;</c>. <b>There is no flat-layout
+    /// fallback, and that is the whole correctness of this.</b> The first draft kept using
+    /// <c>&lt;dir&gt;</c> when a database was already sitting there, so that an existing overrider
+    /// would not find an empty directory. Three reviewers independently found what that does in the
+    /// case this feature is FOR: Windows moves its directory to the NAS root, so the database is in
+    /// the root; WSL is pointed at the same root, sees it, adopts the flat layout — and both sides
+    /// write one SQLite file. The compatibility shim would have produced the exact corruption the
+    /// partition prevents.</para>
+    ///
+    /// <para>So a database in the root is REPORTED and never adopted, and a side directory created
+    /// for the first time is reported too — a mistyped NAS path is a perfectly creatable directory,
+    /// and the failure it produces is a second history accumulating quietly beside the real one.</para>
+    /// </remarks>
+    private static (string Dir, IReadOnlyList<string> Notes) ResolveDataDir(Func<string, string?> env)
+    {
+        if (env("COAI_DATA_DIR") is not { Length: > 0 } configured)
+        {
+            return (DefaultDataDir, []);
+        }
+
+        var root = Path.GetFullPath(configured);
+        var dir = Path.Combine(root, DataSide(env));
+        var notes = new List<string>(2);
+
+        if (File.Exists(Path.Combine(root, DatabaseFile)))
+        {
+            notes.Add($"there is a {DatabaseFile} directly in {root}, from the layout before this "
+                + $"directory was shared between sides. It is NOT being used: this side reads and "
+                + $"writes {dir}. Move that database and its sessions into a side directory to keep "
+                + "its history.");
+        }
+
+        if (!Directory.Exists(dir))
+        {
+            notes.Add($"{dir} did not exist and is being created — this side starts with no history. "
+                + "If that is a surprise, check COAI_DATA_DIR for a typo before recording into it.");
+        }
+
+        return (dir, notes);
+    }
+
     public static PanelSettings FromEnvironment(Func<string, string?> env) =>
         // READ once, composed once, then read twice — the round configuration is built from the
         // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
@@ -276,7 +389,10 @@ public sealed record PanelSettings
         Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) => new PanelSettings
     {
         Rounds = Config(env, catalog),
-        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped],
+        // The data directory's own notes ride here rather than in a channel of their own: this list
+        // is already "things said out loud at startup, because silence made a working configuration
+        // look broken", and a database left behind in a shared root is exactly that.
+        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. ResolveDataDir(env).Notes],
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
@@ -300,7 +416,11 @@ public sealed record PanelSettings
         // path specified" and the round came back `call_human` with nothing reviewed. Everything
         // reported success until the answer was empty, which is the worst shape a configuration
         // mistake can take. Found by this repository's own bench on its first real run.
-        DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? Path.GetFullPath(dir) : DefaultDataDir,
+        //
+        // And PARTITIONED PER SIDE when it was overridden, so a location deliberately shared — a NAS
+        // that survives a Windows reinstall — does not end up with Windows and WSL writing one
+        // SQLite file. See ResolveDataDir; the default is untouched by it.
+        DataDir = ResolveDataDir(env).Dir,
         AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         Autonomous = Flag(env, "COAI_AUTONOMOUS"),
