@@ -2266,7 +2266,8 @@ after the sweep, or it would hold a row for a record being removed.
 
 Epic A gave a record a `source` and a `workspace`. Nothing ever wrote a real value into either:
 `source` was always `none`, and `workspace` was always the FIRST root the window had open. Story C1
-is what fills both in, and it is the thing *go to* will match a tab against.
+is what fills both in, and it is what *go to* matches a tab against — C2 and C3, below, are the
+decision and the command that do the matching.
 
 ### The workspace is captured, never derived on read
 
