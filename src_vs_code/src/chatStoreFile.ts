@@ -187,6 +187,15 @@ export type ForgetOutcome =
 /** What following a moved file came to. `kept` is not a failure — the record was not this one to move. */
 export type RefileOutcome =
   | { readonly kind: 'followed'; readonly rev: number }
+  /**
+   * The record moved and its INDEX ENTRY did not — the save committed, the metadata write failed.
+   *
+   * <p>Its own answer rather than a success, because the picker's index reads metadata ONLY: a caller
+   * told this had worked would refresh that index straight back onto the path the file left, and a
+   * later rename would compare against it and follow nothing. The next read of this conversation
+   * regenerates the entry under the same lock, which is how it repairs itself.</p>
+   */
+  | { readonly kind: 'unindexed'; readonly rev: number; readonly reason: string }
   | { readonly kind: 'kept'; readonly why: 'busy' | 'absent' | 'incompatible' | 'unavailable' | 'moved on' }
   | { readonly kind: 'failed'; readonly reason: string };
 
@@ -327,6 +336,25 @@ export function conversationsDir(dataDir: string): string {
  */
 export const QUARANTINE_DIR = 'quarantine';
 
+/**
+ * Why a follow that got past every check still did not write.
+ *
+ * <p>Neither answer can arrive: the claim is held and `saveClaimed` never takes it, and the baseline
+ * is the revision probed inside that claim. They are reported rather than assumed away, so a change
+ * to the swap's answers becomes a sentence here and not a silently wrong outcome.</p>
+ */
+function whyNotFollowed(done: Exclude<SaveOutcome, { kind: 'ok' } | { kind: 'partial' }>): string {
+  if (done.kind === 'busy') {
+    return 'the conversation was claimed by somebody while this window held its claim';
+  }
+  if (done.kind === 'refused') {
+    return 'the conversation changed under the claim';
+  }
+
+  // `incompatible` and `failed` both carry their own reason, which is the one worth repeating.
+  return done.reason;
+}
+
 /** What setting a value aside came to: where it is, or why it is not. */
 export type QuarantineOutcome =
   | { readonly kind: 'ok'; readonly at: string }
@@ -450,8 +478,17 @@ export class ChatStoreFile {
       const written = { ...seen.record, rev: seen.record.rev + 1, source: now, workspace };
       const done = await this.saveClaimed(written, seen.record.rev);
 
-      if (done.kind === 'ok' || done.kind === 'partial') {
+      if (done.kind === 'ok') {
         return { kind: 'followed', rev: done.rev };
+      }
+      if (done.kind === 'partial') {
+        // THE RECORD MOVED AND ITS INDEX ENTRY DID NOT. The save has committed — the record is the
+        // commit — but the metadata file still names the path the file left, and the picker's index
+        // reads metadata ONLY. Reporting `followed` here would have the caller refresh an index that
+        // then re-read the stale entry, and a later rename would compare against it and follow
+        // nothing. It is its own answer, so the caller can say so and the next `read` of this
+        // conversation regenerates the entry under this same lock. (CodeRabbit, on the pull request.)
+        return { kind: 'unindexed', rev: done.rev, reason: done.reason };
       }
 
       // EXHAUSTIVE BY NAME over what is left, like every other answer read in this feature. `busy`
@@ -459,12 +496,7 @@ export class ChatStoreFile {
       // either, because the baseline is the revision just probed inside that claim. Both are
       // reported rather than assumed away, so a change to the swap's answers is a sentence here and
       // not a silently wrong outcome.
-      return {
-        kind: 'failed',
-        reason: done.kind === 'busy'
-          ? 'the conversation was claimed by somebody while this window held its claim'
-          : done.kind === 'refused' ? 'the conversation changed under the claim' : done.reason,
-      };
+      return { kind: 'failed', reason: whyNotFollowed(done) };
     } finally {
       await claim.release();
     }

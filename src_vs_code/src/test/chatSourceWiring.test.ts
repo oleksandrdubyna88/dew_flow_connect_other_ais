@@ -149,6 +149,8 @@ test('the renames are put into comparable form once, not once per conversation',
   const command = source('chatCommand.ts');
   const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('const FOLLOW_TRIES'));
 
-  assert.match(follow, /const moves = prepareMoves\(renames\);/u, 'the renames are normalised inside the loop over the store');
-  assert.ok(follow.indexOf('prepareMoves(renames)') < follow.indexOf('for (const'), 'the preparation happens inside a loop');
+  assert.match(follow, /const moves = prepareMoves\(renames, NAMES_ARE_CASE_BLIND\);/u, 'the renames are normalised inside the loop over the store');
+  const prepared = follow.indexOf('prepareMoves(renames,');
+  assert.notEqual(prepared, -1, 'the renames are never put into comparable form at all');
+  assert.ok(prepared < follow.indexOf('for (const'), 'the preparation happens inside a loop');
 });

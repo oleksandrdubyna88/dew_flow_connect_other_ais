@@ -7,11 +7,13 @@ import {
   forgetting,
   mayForget,
   mustRedraw,
+  narrowedTitle,
   openElsewhere,
   opening,
   pickerTitle,
   scopeOf,
   scopeTooltip,
+  stillListing,
 } from '../conversationChoice';
 
 /**
@@ -244,4 +246,42 @@ test('a forget answer this build has no arm for fails by name, rather than being
 
     return true;
   });
+});
+
+test('a narrowed picker says WHY it is asking, and each reason gets its own sentence', () => {
+  // Somebody who pressed *go to* expecting to arrive somewhere is owed the reason they did not, and
+  // what they should do about it differs by reason: choose between two conversations, tell two
+  // Claude sessions apart, or try again in a moment. Each names the TAB, which is what they were
+  // looking at and the one thing every candidate has in common.
+  const several = narrowedTitle({ kind: 'several' }, 'main.ts', 2);
+  const ambiguous = narrowedTitle({ kind: 'ambiguous session' }, 'Fixing the lock', 3);
+  const unreadable = narrowedTitle({ kind: 'unreadable', reason: 'EACCES' }, 'main.ts', 1);
+
+  assert.match(several, /2 conversations/u, 'it does not say how many there are to choose between');
+  assert.match(several, /main\.ts/u, 'it does not name the tab');
+  assert.match(ambiguous, /Claude session/u, 'an ambiguous session reads as two conversations, which is a different problem');
+  assert.match(ambiguous, /Fixing the lock/u);
+  assert.match(unreadable, /last read/u, 'a list that may be behind is presented as current');
+  assert.equal(new Set([several, ambiguous, unreadable]).size, 3, 'two different reasons say the same thing');
+});
+
+test('a narrowing this build has no sentence for fails by name', () => {
+  const odd = { kind: 'because' } as unknown as Parameters<typeof narrowedTitle>[0];
+
+  assert.throws(() => narrowedTitle(odd, 'main.ts', 1), (thrown: Error) => {
+    assert.match(thrown.message, /because/u, 'the failure does not say what arrived');
+    assert.match(thrown.message, /several, ambiguous session and unreadable/u, 'it does not name the reasons that are legal');
+
+    return true;
+  });
+});
+
+test('an index still being built says so, and offers nothing', () => {
+  // The one answer that must not offer to start a conversation: the store may already hold one for
+  // this tab and simply not have been listed yet.
+  const said = stillListing('main.ts');
+
+  assert.match(said, /still being built/u);
+  assert.match(said, /main\.ts/u, 'it does not name the tab it cannot answer for');
+  assert.doesNotMatch(said, /new conversation/iu, 'it offers to start one while it cannot tell whether one exists');
 });

@@ -345,7 +345,7 @@ const threads = new WeakMap<object, Thread>();
  * with the answers is `oneAnswerFrom`'s to decide.</p>
  */
 async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promise<T>): Promise<readonly T[]> {
-  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+  const caseBlind = NAMES_ARE_CASE_BLIND;
 
   return await Promise.all(whereToLook().map((folder) => ask(folder, caseBlind)));
 }
@@ -357,6 +357,17 @@ async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promi
  * decision inside this file is one no unit test can reach — and this one was wrong in two readers at
  * once until an operator with no folder open found it.</p>
  */
+/**
+ * Whether this filesystem treats two spellings of one name as the same name.
+ *
+ * <p>Windows and macOS do; Linux does not. It was already the rule the session search used, in two
+ * places, and it is now also the rule paths are COMPARED by — folding case on a case-sensitive
+ * filesystem would make /work/App and /work/app one folder, picking the wrong root for a conversation
+ * and applying a rename to an unrelated one. One constant, so the answers cannot drift apart.
+ * (CodeRabbit, on the pull request.)</p>
+ */
+const NAMES_ARE_CASE_BLIND = process.platform === 'win32' || process.platform === 'darwin';
+
 function whereToLook(): readonly string[] {
   return foldersToSearch(
     (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
@@ -385,7 +396,7 @@ export function conversationWorkspace(): string {
  * falls back to the first root, which is what every record had before story C1.</p>
  */
 function filedFor(source: ConversationSource): string {
-  return filedUnder(knownFolder(source, fsPathOf), whereToLook(), conversationWorkspace());
+  return filedUnder(knownFolder(source, fsPathOf), whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
 }
 
 /**
@@ -528,7 +539,7 @@ function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void
     // whole of what three reviewers corrected in this story's plan — and a session's own source knows
     // no folder, so this is the one origin that cannot go through `reorigin`.
     mine.source = sourceOfSession(sessionId);
-    mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace());
+    mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
     // WRITTEN EXPLICITLY. `show`'s guard compares messages, model and mark, so a source arriving on
     // its own — which is exactly what this is, minutes after the last thing anybody said — would
     // never reach disk through that path. Queued behind the conversation's other writes, so it
@@ -686,7 +697,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
   }
   // Normalised ONCE, before anything is asked about them: a folder refactor reports many moves, and
   // the old paths were being put into comparable form again for every conversation in the store.
-  const moves = prepareMoves(renames);
+  const moves = prepareMoves(renames, NAMES_ARE_CASE_BLIND);
   for (const { key } of panels.known()) {
     const entry = panels.get(key);
     const thread = entry === undefined ? undefined : threads.get(entry.id);
@@ -705,7 +716,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
     return;
   }
   void (async () => {
-    let followed = 0;
+    let touched = 0;
     for (const meta of index.entries({ kind: 'everywhere' })) {
       try {
         // ASKED NOW, not from a set taken before any awaiting began. A conversation that closed while
@@ -720,7 +731,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
           continue;
         }
         if (await follow(onDisk, meta.id, meta.source, sourceOfFile(moved))) {
-          followed += 1;
+          touched += 1;
         }
       } catch (reason) {
         // PER UNIT, as `reliability.md` requires of a loop over independent things: one conversation
@@ -728,7 +739,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
         console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${meta.id}`, reason);
       }
     }
-    if (followed > 0) {
+    if (touched > 0) {
       // The picker reads the INDEX, not the disk. Without this the rows go on naming the file they
       // left and sitting in the folder they left — and a second rename would compare against that
       // stale source and follow nothing. (gemini, the code round, three times.)
@@ -754,15 +765,30 @@ const FOLLOW_WAIT_MS = 200;
  * clears is reported.</p>
  */
 async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource, next: ConversationSource): Promise<boolean> {
+  // The answer is "does the index need re-reading", NOT "did I write it". They come apart when
+  // another window followed the same rename first: nothing was written here and the rows in memory
+  // are stale all the same.
   for (let tries = 0; tries < FOLLOW_TRIES; tries += 1) {
     const done = await onDisk.refile(id, was, next, filedFor(next));
     if (done.kind === 'followed') {
       return true;
     }
+    if (done.kind === 'unindexed') {
+      // The conversation moved; the row that lists it did not. Reading the record repairs that entry
+      // under the conversation's own lock — which is what `read` already does whenever it finds the
+      // index stale — so the index has something true to refresh from afterwards.
+      await onDisk.read(id);
+      console.warn(`ConnectOtherAIs: a conversation followed a renamed file but its index entry did not: ${id} — ${done.reason}`);
+
+      return true;
+    }
     if (done.kind === 'kept' && done.why !== 'busy') {
       // Somebody else followed it first, or it is gone. Neither is a failure and neither is ours to
-      // report: the record says what it says now.
-      return false;
+      // report — but the DISK has moved under our index either way, so it still counts as touched:
+      // if every match came back like this the index would never be refreshed, and the picker would
+      // go on naming the file the conversation left while a later rename compared against that stale
+      // source. (CodeRabbit, on the pull request.)
+      return true;
     }
     if (done.kind === 'failed') {
       console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${id} — ${done.reason}`);
@@ -3098,7 +3124,7 @@ async function questionWaitingHere(looking: string): Promise<{ text: string; ref
   const folders = whereToLook();
   // Case-blindness is the FILESYSTEM's, not the platform's in general: Windows and macOS treat two
   // names differing only in case as one, and Linux does not.
-  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+  const caseBlind = NAMES_ARE_CASE_BLIND;
   const found = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Reading Claude Code\u2019s sessions\u2026' },
     async () => Promise.all(folders.map((folder) => waitingQuestion(os.homedir(), folder, caseBlind, looking))),

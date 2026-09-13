@@ -1,6 +1,7 @@
 import { ConversationRecord } from './chatStore';
 import { IndexScope } from './chatStoreCache';
 import { ForgetOutcome, ReadOutcome } from './chatStoreFile';
+import { Narrowing } from './chatGoto';
 import { OpenConversation, PickerRow } from './conversationPicker';
 
 /**
@@ -71,6 +72,49 @@ export const openElsewhere = (title: string): string =>
 /** What the picker's title says, which is the only place the scope is visible. */
 export const pickerTitle = (everywhere: boolean): string =>
   everywhere ? 'Conversations in every folder' : 'Conversations in this folder';
+
+/**
+ * What the title says when *go to* could not answer on its own and is asking.
+ *
+ * <p>The picker is the same list; the title is what makes it an ANSWER rather than a shrug. Somebody
+ * who pressed *go to* expecting to arrive somewhere is owed the reason they did not — and each of
+ * the three reasons wants a different sentence, because what they should do about it differs: choose
+ * between two conversations, tell two Claude sessions apart, or try again in a moment.</p>
+ *
+ * <p>It names the TAB, not the conversations: the tab is what they were looking at, and it is the
+ * thing all the candidates have in common.</p>
+ */
+export function narrowedTitle(why: Narrowing, tab: string, among: number): string {
+  switch (why.kind) {
+    case 'several':
+      return `${among} conversations could belong to “${tab}” — which one?`;
+    case 'ambiguous session':
+      return `More than one Claude session is called “${tab}” — which conversation did you mean?`;
+    case 'unreadable':
+      return `Conversations for “${tab}”, as they were last read — the folder did not answer just now`;
+    default: {
+      // EXHAUSTIVE BY NAME, like every other answer in this file: a fourth reason must be a compile
+      // error rather than a picker with no title.
+      const unhandled: never = why;
+
+      throw new Error(
+        `a narrowing this build has no sentence for: ${JSON.stringify(unhandled)}`
+        + ' — the reasons it may give are several, ambiguous session and unreadable',
+      );
+    }
+  }
+}
+
+/**
+ * What *go to* says when the list is not built yet.
+ *
+ * <p>It opens nothing and creates nothing: an index that is still being read is empty, and a store
+ * that is empty and a store nobody has listed yet are different facts. Offering to start a
+ * conversation here would offer a SECOND one for a tab that already has one.</p>
+ */
+export const stillListing = (tab: string): string =>
+  `The list of your conversations is still being built, so this cannot say yet whether “${tab}” has one.`
+  + ' Try again in a moment.';
 
 /**
  * What the title button offers — what pressing it WILL do, never what is on screen.
