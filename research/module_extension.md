@@ -3937,3 +3937,28 @@ model merely mentioned. And the mechanism is written down as
 digest of the English body stamped beside each translation, a third outcome on `bodyFor`, a note on
 the page, and a test that goes red on the commit that makes a translation stale rather than on an
 audit a day later.
+
+## Roles are grouped by BUCKET (2026-09-13)
+
+Two places used to discriminate by *not plan* — `rolesPage.ts`'s "Code review" group and
+`panelView.ts`'s role boxes — and one of them dropped document roles entirely, so a role with a round
+would have had no budget and no switch a person could see. Both group by `bucketOf(row)` now: **Plan
+review**, **Code review**, **Document review**. `plan:document` has no section of its own, because
+nothing runs it; its rows are drawn with the plan roles and carry a hint saying so, with the way out
+named.
+
+`activeCount(rows, bucket)` takes a `RoleBucket` — a TYPE, not a string, and that is the point. A
+bucket and a stage are both strings, so every call that used to pass `RESULT_STAGE` would have gone
+on compiling and started answering ZERO: a page that silently believes no role is active anywhere.
+The union turned each of the seven into a compile error, which is how they were all found.
+
+The five-active limit is per bucket here as it always was on the server. The divergence was invisible
+while document roles ran in nothing, and would have become step two of the manager's story on the day
+they ran: five shipped code roles active, and the page refusing to switch on a single document role
+that the server would have accepted.
+
+`claudeSnippet()` hands out TWO rule bodies now — the gate rule and `coai-document-gate.md` — because
+the first is one of the 24 bodies the conventions repository hashes against its migration baseline
+and cannot grow a section. `SNIPPET_VERSION` is that frozen file's own marker and cannot move either,
+so `DOCUMENT_VERSION` is what records a change to the pasted text, and a paste carrying no document
+half is reported as OLDER: the AI obeying it will never call `review_document`.

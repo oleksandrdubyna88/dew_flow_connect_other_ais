@@ -66,14 +66,16 @@ test('the generated catalog is the seed, field for field', () => {
   );
 });
 
-test('the panel keeps its own word for the result stage', () => {
-  // The seed says `result` because a later plan gives that stage a document kind and "result" is
-  // what both are. Everything already written in the panel says `code`, and this mapping is why
-  // none of it had to change when the catalog became generated.
+test('the panel keeps its own word for each kind of round', () => {
+  // The seed says `result` because that stage has two KINDS, and "result" is what both are. The
+  // panel's word is the bucket — `plan`, `code`, `document` — because what it is really answering
+  // is "which group does this belong to", and that has been three answers since plan 4 gave the
+  // document kind a round of its own.
   assert.deepStrictEqual(
     ROLES.map((r) => r.stage),
-    SEED.map((r) => (r.stage === 'plan' ? 'plan' : 'code')),
+    SEED.map((r) => (r.stage === 'plan' ? 'plan' : (r.programmingTask ? 'code' : 'document'))),
   );
+  assert.ok(ROLES.some((r) => r.stage === 'document'), 'the product ships document roles');
   assert.deepStrictEqual(
     ROLES.map((r) => r.label),
     SEED.map((r) => r.name),

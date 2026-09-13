@@ -597,18 +597,23 @@ test('a spending row shows the vendor and its cost apart, not run together', () 
   assert.match(html, /\.spend \.figures \{/, 'the tokens are the answer, so they are not styled as a hint');
 });
 
-// ---------- the prompts section: one frame for the plan, one for the three code roles ----------
+// ---------- the prompts section: a frame per BUCKET — plan, code, document ----------
 
-test('the plan role stands in its own frame, apart from the code roles', () => {
+test('each stage stands in its own frame, and no role appears in two', () => {
   const html = panelHtml(state(), 'n0nce');
   const groups = html.split('class="role-group"');
 
-  assert.equal(groups.length, 3, 'two frames: the plan stage, then the code stage');
-  const [, planFrame, codeFrame] = groups;
+  assert.equal(groups.length, 4, 'three frames: the plan stage, the code stage, the document stage');
+  const [, planFrame, codeFrame, documentFrame] = groups;
   assert.ok(planFrame!.includes('data-prompt="PlanCritique"'), 'the plan role is in the first frame');
   assert.ok(!planFrame!.includes('data-prompt="Architecture"'), 'and the code roles are not');
   for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
     assert.ok(codeFrame!.includes(`data-prompt="${role}"`), `${role} shares the code frame`);
+    assert.ok(!documentFrame!.includes(`data-prompt="${role}"`), `${role} is not a document role`);
+  }
+  for (const role of ['DocumentReview', 'DocumentSummary']) {
+    assert.ok(documentFrame!.includes(`data-prompt="${role}"`), `${role} is in the document frame`);
+    assert.ok(!codeFrame!.includes(`data-prompt="${role}"`), `${role} reviews no diff`);
   }
 });
 
@@ -1113,16 +1118,21 @@ test('a role switched off in the catalog is drawn as off, whatever the section�
   assert.match(box, /class="role role-[a-z]+ off/, 'dimmed');
 });
 
-test('a role that is not a programming task is not drawn among the roles that review a diff', () => {
-  // It is stored, and it takes part in no round until the stage that reviews a document exists.
-  // Drawing it here with rounds and a threshold would offer settings that do nothing.
+test('a document role is drawn in the DOCUMENT frame, with a budget and a switch', () => {
+  // It used to be drawn nowhere, because it took part in nothing. Since plan 4 it has a round —
+  // and a role with a round but no budget and no switch on this panel is a role a person cannot
+  // configure at all.
   const settings = {
     ...DEFAULTS,
     roles: [{ id: 'Brief', name: 'The brief', stage: 'result', programmingTask: false,
               prompts: [{ id: 'brief-general' }] }],
   };
+  const groups = panelHtml(state({ settings }), 'n0nce').split('class="role-group"');
 
-  assert.ok(!promptsSection(panelHtml(state({ settings }), 'n0nce')).includes('The brief'));
+  assert.ok(groups[3]!.includes('The brief'), 'in the document frame');
+  assert.ok(!groups[2]!.includes('The brief'), 'and not among the roles that read a diff');
+  assert.ok(groups[3]!.includes('id="rounds-Brief"'), 'with its rounds');
+  assert.ok(groups[3]!.includes('id="threshold-Brief"'), 'and its threshold');
 });
 
 test('the Prompts section offers the way into the roles page', () => {

@@ -33,6 +33,8 @@ public sealed class ScenarioCoverageTests
         ["open"] = "EndToEndTests — the whole story from a flawed plan to a verdict",
         ["review_plan"] = "EndToEndTests + LiveRoundTests",
         ["review_code"] = "EndToEndTests + StageGateTests (refused before a plan proceeds)",
+        ["review_document"] = "ADocumentIsReviewedEndToEndTests — a document role nobody compiled in "
+            + "reads a real document through the public tool, and its summary comes back",
         ["resolve"] = "EndToEndTests + RoundAuditTests (a decision is recorded for every finding)",
         ["status"] = "McpContractTests + CallerSessionsTests",
     };

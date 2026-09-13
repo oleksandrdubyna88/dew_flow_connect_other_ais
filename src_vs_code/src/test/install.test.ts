@@ -94,11 +94,26 @@ test('the known client targets are the three files a person would edit', () => {
   );
 });
 
-test('the CLAUDE.md snippet names all seven tools under the coai namespace', () => {
+test('the CLAUDE.md snippet names all eight tools under the coai namespace', () => {
   const snippet = claudeSnippet();
-  for (const tool of ['providers', 'open', 'review_plan', 'review_code', 'resolve', 'status', 'ask_human']) {
+  for (const tool of ['providers', 'open', 'review_plan', 'review_code', 'review_document',
+                      'resolve', 'status', 'ask_human']) {
     assert.ok(snippet.includes(`mcp__coai__${tool}`), `names ${tool}`);
   }
+});
+
+test('the snippet teaches the document gate, and its own shape', () => {
+  // A tool an AI has not been told about is a tool nobody calls, which is the whole reason the
+  // pasted block exists. The gate half could not carry it — it is one of the 24 frozen rule bodies
+  // — so the document half is a second rule file, and this is what proves it actually travels.
+  const snippet = claudeSnippet();
+
+  assert.ok(snippet.includes('Reviewing a DOCUMENT rather than a change'), 'the heading');
+  assert.ok(snippet.includes('documentName'), 'raw text needs a name');
+  assert.ok(snippet.includes('purposeText'), 'and a purpose');
+  assert.ok(snippet.includes('newReview'), 'a finished review is re-opened deliberately');
+  assert.ok(snippet.includes('notes'), 'where a summary comes back');
+  assert.ok(snippet.includes('no plan round'), 'the shape that makes it different');
 });
 
 test('the snippet names no repository — it tells the AI to read its own checkout', () => {

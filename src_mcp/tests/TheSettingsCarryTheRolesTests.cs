@@ -81,7 +81,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
     /// round did the day before this feature existed. (codex, this story's plan round.)
     /// </remarks>
     [Fact]
-    public void WithNoKeyAtAll_TheShippedFiveRunWithTheBudgetsTheyAlwaysHad()
+    public void WithNoKeyAtAll_TheShippedRolesRunWithTheBudgetsTheyAlwaysHad()
     {
         var settings = From(null);
 
@@ -92,11 +92,17 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             RoleCatalog.ArchitectureRole,
             RoleCatalog.SecurityRole,
             RoleCatalog.UxDxRole,
+            // Plan 4's two, and they take the CODE defaults below rather than the plan one: the
+            // server's fallback asks whether a role's STAGE is the plan stage, and a document
+            // role's stage is `result`.
+            RoleCatalog.DocumentRole,
+            RoleCatalog.DocumentSummaryRole,
         ]);
 
         settings.Rounds.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
         foreach (var role in (string[])
-                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole])
+                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole,
+                  RoleCatalog.UxDxRole, RoleCatalog.DocumentRole, RoleCatalog.DocumentSummaryRole])
         {
             settings.Rounds.For(role).Should().Be(new RoleGate(1, 5), $"{role} ran one round at five before this");
         }

@@ -54,14 +54,19 @@ test('the groups cover every prompt exactly once, so none is printed twice or no
 test('each role leads with its universal prompt', () => {
   // The lens is the deliberate pick; the universal one is what a round uses when nobody chose.
   // Printing a lens first would read as the default.
-  // The conventions pass is the one group of ONE: it is not a lens on a role's question, it is a
-  // different question that all three code roles ask in round 1, so it has nothing to lead.
-  for (const group of PROMPT_GROUPS) {
-    const expected = group.ids[0] === 'conventions' ? 1 : 6;
-    assert.equal(group.ids.length, expected, `${group.role}: expected a universal prompt and five lenses`);
-  }
-  const leads = PROMPT_GROUPS.filter((g) => g.ids.length === 6).map((g) => g.ids[0]);
-  assert.deepEqual(leads, ['plan-critique', 'architecture', 'security-reliability', 'uxdx-performance']);
+  // Two groups of ONE, and each is a role that asks a single question rather than a question with
+  // lenses on it: the conventions pass, which all the code roles ask in round 1, and the document
+  // summary, whose whole product is the account it writes.
+  const sizes = Object.fromEntries(PROMPT_GROUPS.map((g) => [g.ids[0], g.ids.length]));
+  assert.deepEqual(sizes, {
+    'plan-critique': 6,
+    conventions: 1,
+    architecture: 6,
+    'security-reliability': 6,
+    'uxdx-performance': 6,
+    'document-review': 3,
+    'document-summary': 1,
+  }, 'a role leads with its universal prompt, and its lenses follow');
 });
 
 test('a prompt is substantial enough to be the thing a reviewer actually reads', () => {

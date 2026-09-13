@@ -73,4 +73,24 @@ export const BUILTIN_ROLES: readonly RoleDefinition[] = [
       { id: 'ux-undo', label: 'What cannot be taken back', purpose: 'Using it wrongly on purpose: what state that leaves, and how somebody gets back.' },
     ],
   },
+  {
+    id: 'DocumentReview',
+    name: 'The document',
+    stage: 'result',
+    programmingTask: false,
+    prompts: [
+      { id: 'document-review', label: 'Universal', purpose: 'Whether the document does its job: what a reader cannot act on, what it says twice differently, what it asks for that cannot be done.' },
+      { id: 'document-decisions', label: 'Decisions & owners', purpose: 'Every decision the document implies but never makes, and everything it asks for without saying who does it.' },
+      { id: 'document-reader', label: 'The reader who has to act', purpose: 'Read as the person who must DO this: what they still cannot start, and where they would guess.' },
+    ],
+  },
+  {
+    id: 'DocumentSummary',
+    name: 'Summary',
+    stage: 'result',
+    programmingTask: false,
+    prompts: [
+      { id: 'document-summary', label: 'Universal', purpose: "What the document actually says, in the reviewer's own words — the account you read instead of the document." },
+    ],
+  },
 ];

@@ -30,7 +30,7 @@ public static class RoundSubject
         // path is the honest mistake to make and the answer is more useful than the path itself.
         if (!trimmed.Contains('\n') && trimmed.Length < 260 && fileExists(trimmed))
         {
-            return FileName(trimmed);
+            return FileNameOf(trimmed);
         }
 
         return Shorten(Heading(trimmed) ?? FirstWords(trimmed));
@@ -45,7 +45,7 @@ public static class RoundSubject
     /// path came back whole. CI caught it, and the same case reaches a server running under WSL,
     /// which is handed Windows-shaped paths routinely.
     /// </remarks>
-    private static string FileName(string path) =>
+    public static string FileNameOf(string path) =>
         path.Split('/', '\\').Last(segment => segment.Length > 0);
 
     /// <summary>The document's own title, which is what its author chose to call the work.</summary>

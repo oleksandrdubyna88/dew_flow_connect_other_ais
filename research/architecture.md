@@ -63,6 +63,36 @@ accepts at least five, so `[]` can only be a bug.
 panel probes constantly while it is open, but the panel is the EXTENSION and coai-mcp is a separate
 process with a separate cache — nothing guarantees the one building the round has ever asked.
 
+## Three gates, not two (2026-09-13)
+
+The gate had two stages, both about code: `review_plan` over a plan document and `review_code` over a
+branch diff. It has three. `review_document` reviews a DOCUMENT — a specification, a policy, a
+proposal — and it is what the fifth plan of the role series was built towards: the person who asked
+for a person-defined review role is a manager whose work product is not a diff.
+
+What changed across the containers:
+
+- **`coai-mcp`** gained `Stage.DocumentReview`, a round roster selected by BUCKET
+  (`stage × programmingTask`) rather than by stage, and a session keyed by the DOCUMENT rather than
+  by the branch — `SessionKey` has a third segment, absent for every code session, so nothing
+  already on disk moved. See [module_server.md](module_server.md) and
+  [module_core.md](module_core.md).
+- **The wire** gained four categories a document finding can use — `clarity`, `completeness`,
+  `consistency`, `feasibility` — and `notes`, one non-gating prose field per reviewer, which is where
+  a summary comes back. One schema, one enum: a document round may still answer `security`, and a
+  code round may still answer `clarity`.
+- **The extension** groups roles by bucket in three places that used to discriminate by "plan and
+  everything else", and counts the five-active limit per bucket, which is what the server had always
+  done.
+- **The Team server is unchanged.** A document round on a remote vendor is out of scope until plan 5;
+  today the document reaches only local reviewers.
+
+**No `src_server` change, and no new arrow.** A document never leaves this machine: it is read from
+inside the repository the session was opened for and handed to a local reviewer CLI. That
+confinement is a security boundary rather than a tidiness one — the tool reads a file and ships its
+contents to other vendors' models, so an unrestricted path would have been an exfiltration primitive
+with a friendly name.
+
 ## Module map
 
 | Module | Doc | Status |

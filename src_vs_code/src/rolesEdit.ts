@@ -1,6 +1,6 @@
 import {
-  MAX_ACTIVE_PER_STAGE, RESULT_STAGE, activeCount, idFor, isActive, isBuiltIn, promptIdFor, promptIdsInUse,
-  stageOf, type RoleRow,
+  MAX_ACTIVE_PER_BUCKET, RESULT_CODE, RESULT_STAGE, activeCount, bucketAt, bucketOf, idFor, isActive,
+  isBuiltIn, promptIdFor, promptIdsInUse, stageOf, type RoleRow,
 } from './roles';
 import { isShippedPrompt, type RolesCommand } from './rolesPage';
 
@@ -76,7 +76,7 @@ export function rowsAfter(current: readonly RoleRow[], command: RolesCommand): R
 function added(current: readonly RoleRow[]): RowsOutcome {
   const id = idFor('', new Set(current.map((r) => r.id.toLowerCase())));
   const promptId = promptIdFor(id, 'general', promptIdsInUse(current));
-  const room = activeCount(current, RESULT_STAGE) < MAX_ACTIVE_PER_STAGE;
+  const room = activeCount(current, RESULT_CODE) < MAX_ACTIVE_PER_BUCKET;
 
   return stored([
     ...current,
@@ -197,7 +197,7 @@ const STAGE_FULL = 'Five roles are already active in that stage. Switch one off 
 
 /** Whether this role is the last reviewer its stage has. */
 function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
-  return isActive(row) && activeCount(all, stageOf(row)) <= 1;
+  return isActive(row) && activeCount(all, bucketOf(row)) <= 1;
 }
 
 /**
@@ -206,7 +206,7 @@ function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
  * <p>The page disables both of these; this is the twin that catches a webview posting anyway.</p>
  */
 function switched(row: RoleRow, on: boolean, all: readonly RoleRow[]): RowsOutcome {
-  if (on && !isActive(row) && activeCount(all, stageOf(row)) >= MAX_ACTIVE_PER_STAGE) {
+  if (on && !isActive(row) && activeCount(all, bucketOf(row)) >= MAX_ACTIVE_PER_BUCKET) {
     return refused('Five roles are already active in this stage. Switch one off to make room.');
   }
   if (!on && lastStanding(row, all)) {
@@ -241,7 +241,9 @@ function whyNotMoved(row: RoleRow, to: string, all: readonly RoleRow[]): string 
     return EMPTY_STAGE;
   }
 
-  return activeCount(all, to) >= MAX_ACTIVE_PER_STAGE ? STAGE_FULL : '';
+  // The bucket it would land IN, not the stage it is moving to: a role keeps its kind across a
+  // move, and counting the whole stage would refuse a document role for the code roles already in it.
+  return activeCount(all, bucketAt(row, to)) >= MAX_ACTIVE_PER_BUCKET ? STAGE_FULL : '';
 }
 
 function promptRemoved(row: RoleRow, promptId: string): RowsOutcome {

@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The seven tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
+/// The eight tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
 /// namespaces by its config key, so these surface as <c>mcp__coai__review_plan</c> and so on.
 /// Every answer is a JSON string — trivial schemas, which is what an AOT binary with
 /// reflection-based JSON turned off wants, and what agents read anyway.
@@ -97,14 +97,60 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
+            async (string repoPath, string branch, string purposeText,
+                   string? documentPath = null, string? documentText = null, string? documentName = null,
+                   bool newReview = false) =>
+                await host.Current.ReviewDocumentAsync(
+                    repoPath, branch, purposeText, documentPath, documentText, documentName, newReview),
+            new McpServerToolCreateOptions
+            {
+                Name = "review_document",
+                Title = "One independent reviewer per document role, per provider, over a DOCUMENT",
+                Description = """
+                    The document gate — for work whose result is a document rather than a diff: a
+                    specification, a policy, a proposal, a brief. It needs no plan round before it
+                    and runs no code round after it; the document IS the work.
+
+                    Pass the document ONE of two ways. `documentPath` is a file inside the repository
+                    you opened the session for — read as UTF-8 text, and refused if it is outside the
+                    repository or is not text. `documentText` is the document itself, and then
+                    `documentName` is REQUIRED: it is what makes a second round be about the same
+                    document after you have edited it.
+
+                    `purposeText` is what the document is FOR — who has to act on it, what they must
+                    be able to do after reading it, what it deliberately does not cover. Required, for
+                    the same reason `review_code` requires a scope: a reviewer given only the document
+                    can say whether it is well written, never whether it does its job, and a
+                    specification can be clear, complete, consistent and about the wrong project.
+
+                    A document review is its OWN session, keyed by the document rather than by the
+                    branch — so ten documents need one branch, not ten. That means `resolve` and
+                    `status` take the same `document` back: pass the path or the name you passed
+                    here. Editing the document between rounds keeps the session; the reply says which
+                    snapshot each round read.
+
+                    When a document's review is complete, reviewing it again — unchanged, or for a
+                    different purpose — needs `newReview: true`, which starts a fresh review and
+                    leaves the finished one on the record.
+
+                    Same reply shape and the same `resolve` duty as the other gates, plus `notes`:
+                    each reviewer's prose about the whole document, unmerged and gating nothing. That
+                    is where a summary comes back.
+                    """,
+                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
+            });
+
+        yield return McpServerTool.Create(
             // `humanDecision` MUST carry a default: without one the SDK publishes it as a REQUIRED
             // argument, and then the ordinary resolve — decisions, no override, every single round
             // — fails as "An error occurred invoking 'resolve'". Found by a live run in WSL; the
             // Windows run before it had always passed the override, which is the one call that
             // does not need to work.
-            async (string repoPath, string branch, string decisions, string? humanDecision = null) =>
+            async (string repoPath, string branch, string decisions, string? humanDecision = null,
+                   string? document = null) =>
                 await host.Current.ResolveAsync(repoPath, branch, decisions,
-                    string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase)),
+                    string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase),
+                    document ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "resolve",
@@ -125,7 +171,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch) => await host.Current.StatusAsync(repoPath, branch),
+            async (string repoPath, string branch, string? document = null) =>
+                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "status",

@@ -1,7 +1,7 @@
 namespace CoaiMcp.Core.Rounds;
 
 /// <summary>
-/// What a code round must be told BEFORE it is shown a diff.
+/// What a review round must be told BEFORE it is shown the thing it is reviewing.
 /// </summary>
 /// <remarks>
 /// <para>A reviewer given only a diff can say whether the code is defensible. It cannot say whether
@@ -12,8 +12,12 @@ namespace CoaiMcp.Core.Rounds;
 /// an empty one was accepted in silence, so the reviewer's whole job quietly narrowed to "is this
 /// diff reasonable". The scope a plan round had already agreed on was not even kept between the
 /// stages.</para>
+/// <para>It was called <c>CodeScope</c> until plan 4 gave it a second caller. A document has the
+/// same two questions and the second one matters more: a specification can be clear, complete,
+/// internally consistent and for the wrong project. One rule, two callers — never a second copy of
+/// the rule, which is how the two would come to disagree about what a scope is.</para>
 /// </remarks>
-public static class CodeScope
+public static class ReviewScope
 {
     /// <summary>
     /// Short enough to be a ticket title is not a scope.
@@ -44,4 +48,17 @@ public static class CodeScope
         "goal, what must be true when it is done, and the constraints. This text becomes the SCOPE " +
         "the code stage judges the diff against, so a plan accepted on two words would leave the " +
         "code reviewers with nothing to check the change against but the change itself.";
+
+    /// <summary>The same rule, said to a caller who is reviewing a DOCUMENT.</summary>
+    /// <remarks>
+    /// A document's two questions come apart further than code's do, which is why this is required
+    /// rather than encouraged: a specification can be clear, complete, internally consistent and for
+    /// the wrong project, and only the purpose can catch that.
+    /// </remarks>
+    public const string DocumentRefusal =
+        "review_document needs the PURPOSE of the document, not only the document: pass purposeText " +
+        "saying what it is FOR — who has to act on it, what they must be able to do after reading " +
+        "it, and what it is not trying to cover. A reviewer given only a document can say whether it " +
+        "is well written; it cannot say whether it does its job, and a specification can be clear, " +
+        "complete, consistent and about the wrong project.";
 }

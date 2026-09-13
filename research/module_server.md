@@ -4,7 +4,7 @@
 > config key (which is what prefixes the tools: `mcp__coai__review_plan`). Built by hand on the
 > `ModelContextProtocol` SDK — the hosted default logs to stdout, and stdout carries JSON-RPC.
 
-## The seven tools
+## The eight tools
 
 | Tool | Backed by | Refuses when |
 |---|---|---|
@@ -12,6 +12,7 @@
 | `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session | repo/branch unresolvable |
 | `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
 | `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
+| `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
@@ -1162,3 +1163,44 @@ repository's release or pull-request process followed, with a pull request's aut
 five minutes later; an automatic deploy verified against dev, stage or test with its logs read; the
 code re-read against the repository's rules; and the assistant saying that it is autonomous and what it
 is writing right now. The question-batching rule is unchanged.
+
+## The document gate
+
+`review_document` is the third stage, and it is deliberately NOT a second meaning for the code one.
+
+**Its own session, keyed by the document.** `SessionKey.For(repo, branch, document)` gained a third
+segment, absent for every code session — so every key already on disk is byte-identical and there is
+no migration. What goes in it is the document's IDENTITY: `DocumentId.Of` for a path (repo-relative,
+lower-cased, compared against the root plus a SEPARATOR so `/repo-secrets` is not inside `/repo`), or
+the `documentName` a caller must give with raw text. **Never the content.** The plan's first draft
+keyed on a content hash and three vendors independently found the same consequence: an edit between
+rounds changes the key, so the previous round is orphaned unresolved and the `resolve`-then-repeat
+loop cannot work. The content hash survives as `DocumentRules.ArtifactIdOf` — the per-round SNAPSHOT,
+which is what makes "the document changed between rounds" observable rather than silent.
+
+**`SessionState.Document`** is the one field that says which kind a session is; `IsDocumentSession`
+is derived from it, because two fields that must agree are two fields that can disagree. Absent means
+a code session, which is what every file written before this deserialises into.
+
+**`DocumentReader`** turns what a caller sent into a document or into one sentence saying why it is
+not one: both arguments and neither are two different refusals, a path is confined to the repository
+(symlinks resolved through an injected `followLink`, so the rule is a unit test rather than a
+privilege the CI runner may not have), the payload is decoded with a THROWING UTF-8 decoder rather
+than sniffed for a NUL byte, known binary extensions are refused before a byte is read, and the
+ceiling is 256 KB — roughly 64 000 tokens, which every shipped reviewer's context can hold together
+with its prompt and its answer.
+
+**`ArtifactStore`** keeps each snapshot under `<dataDir>/documents/<id>.txt`, temp-then-rename, once
+per round. Its own file rather than a field on the session because the session file is rewritten on
+every reviewer transition — a quarter of a megabyte through that loop is a cost nobody would see
+until a round was slow for no reason anyone could point at. Nothing in the program reads it back: it
+is there for a person to open, like the prompt bodies beside it.
+
+**`RoundMachine.BeginDocumentRound`** keeps every refusal the code gate has except `PlanProceeded` —
+there is no plan before a document, the document IS the work — and adds one: a finished review
+refuses with `newReview` named, because the same document has the same identity for ever and a
+refusal with no door would make an unchanged policy permanently unreviewable.
+
+**`resolve` and `status` take the same `document` back.** A caller that omits it lands on the
+branch's session, which is idle and has nothing to decide; both refusals say so rather than sending
+them to run another review.

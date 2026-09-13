@@ -23,7 +23,7 @@ public sealed class ADocumentRoleHasARoundTests
 {
     private static RoleEntry Off(string id) => new(id, Active: false);
 
-    /// <summary>The shipped five switched off, so a round is only what the test added.</summary>
+    /// <summary>Every shipped role switched off, so a round is only what the test added.</summary>
     private static readonly RoleEntry[] NoShippedRoles =
     [
         Off(RoleCatalog.PlanRole),
@@ -31,6 +31,8 @@ public sealed class ADocumentRoleHasARoundTests
         Off(RoleCatalog.ArchitectureRole),
         Off(RoleCatalog.SecurityRole),
         Off(RoleCatalog.UxDxRole),
+        Off(RoleCatalog.DocumentRole),
+        Off(RoleCatalog.DocumentSummaryRole),
     ];
 
     private static RoleEntry Role(string id, string stage, bool programmingTask) =>

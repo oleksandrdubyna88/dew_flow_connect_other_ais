@@ -1,4 +1,4 @@
-import { GATE_RULE } from './generated/gateRule';
+import { DOCUMENT_RULE, GATE_RULE } from './generated/gateRule';
 
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
@@ -37,7 +37,7 @@ import { GATE_RULE } from './generated/gateRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '4e951347aa178972';
+export const SNIPPET_BODY_SHA = '370e20f39d1b7199';
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -78,6 +78,24 @@ export type SnippetStatus =
 
 const MARKER = /<!-- coai-snippet v(\d+) -->/;
 
+/**
+ * The DOCUMENT half's own marker.
+ *
+ * <p><b>A second version rather than a bump of the first, and not by choice.</b>
+ * `SNIPPET_VERSION` is the number written inside `coai-review-gate.md`, and that file is one of
+ * the 24 rule bodies the conventions repository hashes against its migration baseline — editing
+ * it turns that suite red, which is why the document flow is a second rule file at all. So the
+ * gate half is still v5 and always will be until the inventory retires; what moves is this.</p>
+ *
+ * <p>It is not cosmetic. A copy pasted before the document gate existed carries
+ * `coai-snippet v5` and no document marker, and the AI obeying it will never call
+ * `review_document` — the same defect the first version marker was introduced for, one rule
+ * file over.</p>
+ */
+export const DOCUMENT_VERSION = 1;
+
+const DOCUMENT_MARKER = /<!-- coai-document v(\d+) -->/;
+
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
@@ -111,7 +129,13 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
     return { kind: 'unversioned', current };
   }
   if (found === current) {
-    return { kind: 'current', current };
+    // The gate half is current and the document half may not be there at all, which is what
+    // every copy pasted before plan 4 looks like. Reported as OLDER, because that is the
+    // sentence that gets it replaced — and `found` stays the number actually in the file, so
+    // nobody is told they have a version that was never handed out.
+    return documentVersionIn(pasted) === DOCUMENT_VERSION
+      ? { kind: 'current', current }
+      : { kind: 'older', found, current };
   }
 
   return found < current ? { kind: 'older', found, current } : { kind: 'ahead', found, current };
@@ -170,6 +194,20 @@ export function copiedMessage(status: SnippetStatus): string {
   }
 }
 
+/** The document half's version out of a pasted file, or nothing when it has no such half. */
+export function documentVersionIn(text: string): number | undefined {
+  const found = DOCUMENT_MARKER.exec(text)?.[1];
+
+  return found === undefined ? undefined : Number.parseInt(found, 10);
+}
+
+/**
+ * Both rules, in the order an AI should read them: the gate, then the document gate.
+ *
+ * <p>Two files because the first one is frozen — see `DOCUMENT_VERSION`. A person pasting this
+ * gets one block either way, and the AI reading it gets both gates, which is the only thing that
+ * matters about the arrangement.</p>
+ */
 export function claudeSnippet(): string {
-  return GATE_RULE;
+  return `${GATE_RULE}\n${DOCUMENT_RULE}`;
 }

@@ -50,7 +50,15 @@ export interface PromptChoice {
  * code role here, which is what every caller and every test already reads.</p>
  */
 export const ROLES: readonly { readonly id: string; readonly label: string; readonly stage: string }[] =
-  BUILTIN_ROLES.map((r) => ({ id: r.id, label: r.name, stage: r.stage === 'plan' ? 'plan' : 'code' }));
+  // `stage` here is really the BUCKET, and has been since the day there were two kinds of round: it
+  // answers "which group does this belong to", which is what every caller of it asks. It said
+  // `'plan' : 'code'` until plan 4, so a document role came back as a code role — the panel's
+  // fan-out arithmetic and its switch list would both have counted it as one.
+  BUILTIN_ROLES.map((r) => ({
+    id: r.id,
+    label: r.name,
+    stage: r.stage === 'plan' ? 'plan' : (r.programmingTask ? 'code' : 'document'),
+  }));
 
 /**
  * Every prompt of every role, role by role.
