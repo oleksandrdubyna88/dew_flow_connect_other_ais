@@ -1546,6 +1546,32 @@ function chatScript(state: ChatPageState, regions: Regions): string {
 
       return;
     }
+    // THE SLATE, WIPED. It does everything a note does — the id for the serializer, the sentence in
+    // the line that carries sentences — and the one thing only it does: clears the quotation this tab
+    // was opened about. The state push below does not mention that region, so nothing else could.
+    if (data.type === 'fresh') {
+      if (typeof data.id === 'string' && data.id.length > 0) {
+        // MERGED, not replaced, for the reason the note handler above gives at length.
+        const held = vscode.getState() || {};
+        held.id = data.id;
+        vscode.setState(held);
+      }
+      const quoted = document.getElementById('passage');
+      if (quoted) {
+        quoted.textContent = '';
+      }
+      const said = document.getElementById('failure');
+      if (said && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {
+        // AND WHAT THE STATE HANDLER COMPARES AGAINST, exactly as the note handler does: a line
+        // written without saying so makes the next state carrying the same failure read as
+        // unchanged, and the sentence then stands as a stale status line.
+        const freshLine = '<div class="failure">' + data.noteHtml + '</div>';
+        said.innerHTML = freshLine;
+        lastWritten.failure = freshLine;
+      }
+
+      return;
+    }
     if (data.type !== 'state') { return; }
     // BEFORE any write. Read after one, scrollHeight already includes what just arrived, so a reader
     // who was at the bottom measures as a screen short of it and is never followed - rule 2 turns

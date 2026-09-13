@@ -50,6 +50,20 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
+**Start a new conversation, without losing the old one.** *Start a new conversation* in the notice
+that appears when a Team-server chat is full has been there for a while and did nothing at all. It
+works now: the conversation you were in is archived — you will find it in **CoAI: switch
+conversations…** under the same name, whole — and the tab is yours again, empty, with the quotation
+that started the old one cleared away. The model, the prompt and the tab's own name stay as they
+were.
+
+The next question reaches a model that has never heard any of it. That is the point: a long
+conversation about one subject is a model still carrying it when you ask about another, and on a
+Team server it is also the whole conversation being re-sent and billed with every question. If a
+turn is still running it is ended first and waited for, so the answer you were waiting on is kept in
+the conversation that is archived; if any of that fails, nothing is archived and nothing is cleared —
+you are told why, and the chat carries on where it was.
+
 **You can go straight to the conversation about what you are looking at.** The list was half of it;
 this is the other half. **CoAI: go to conversation** — `Ctrl+Alt+G` (`Cmd+Alt+G` on a Mac), the
 right-click menu, or the palette — is pressed on the tab you are working in. Already open in this

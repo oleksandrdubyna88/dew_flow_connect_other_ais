@@ -479,6 +479,23 @@ export function pushChatNote(entry: ChatEntry, id: string, note: string): void {
   entry.panel.post({ type: 'note', id, noteHtml: escapeHtml(note) });
 }
 
+/**
+ * The slate has been wiped: a new conversation under a new id, and the old one archived.
+ *
+ * <p>Its OWN message and not a field on the state push, for the reason `note` and `asked` each have
+ * one: a state message is the whole truth about every region it MENTIONS, and the state push does
+ * not mention the passage — so the quotation at the top of the tab, which is what the old
+ * conversation was about, would survive every push and caption a conversation it has nothing to do
+ * with. That stuck quotation is the thing this gesture was asked for.</p>
+ *
+ * <p>The id travels for the same reason it travels with a note: the page hands it back to the
+ * serializer after a reload, so a tab that was reset and then reloaded must come back as the new
+ * conversation rather than as the archived one.</p>
+ */
+export function pushChatFresh(entry: ChatEntry, id: string, note: string): void {
+  entry.panel.post({ type: 'fresh', id, noteHtml: escapeHtml(note) });
+}
+
 /** The scale the page opens at, so a new tab matches the ones already open. */
 export function chatUiScale(): number {
   return currentUiScale();
