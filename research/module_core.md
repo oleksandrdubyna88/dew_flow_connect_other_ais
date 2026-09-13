@@ -20,9 +20,17 @@ flowchart LR
   DD --> GR[GateRule.Evaluate\nblocking+major, prior rejections discounted]
   GR --> RM[RoundMachine.CompleteRound\nverdict: proceed / revise / continue / human / escalate]
   RM --> RES[RoundMachine.Resolve\ndecisions with reasons → next round's memory]
+  RES --> DB[(rounds database\nwhat was decided)]
   DD --> SF[StuckFindings.SurvivedAcceptance\nthis round vs earlier decisions of the same stage]
-  SF -. measures, calls nothing .-> RES
+  DB -. read by the server, never by Core .-> SF
+  SF -. measures, calls nothing .-> AU[audit line + consult_missed]
 ```
+
+> `SurvivedAcceptance` is pure and lives here; the earlier decisions it compares against do NOT. The
+> session state carries rejections forward (the discount rule needs them) and not acceptances, so the
+> server reads them out of the rounds database and hands them in — which is why the call site is
+> `PanelService`'s projection and not `RoundMachine.Resolve`. (gemini, story 6's second code round,
+> against a first draft of this diagram that drew the arrow the wrong way round.)
 
 ## Core entities
 
