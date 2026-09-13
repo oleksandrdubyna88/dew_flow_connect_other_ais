@@ -59,6 +59,15 @@ export interface RoundRecord {
   readonly tokensOut?: number;
   /** Only vendors that price their own runs report this; absent is "unknown", never "free". */
   readonly costUsd?: number | null;
+  /**
+   * Which AI ASKED for this round, and which model it declared. Absent in older rounds.
+   *
+   * <p>A copy the round took when it started, not a reference to the session's — because `open` is
+   * idempotent per repo+branch, so a second client opening the same pair replaces the session's
+   * declaration while this round is still running or long after it finished. Rendering from the
+   * session would relabel history; six findings across two vendors said so.</p>
+   */
+  readonly caller?: CallerDeclaration;
 }
 
 /**
@@ -85,30 +94,37 @@ export interface SessionFile {
     readonly awaitingResolve: boolean;
   };
   readonly rounds: readonly RoundRecord[];
-  /** Absent in files written by a server older than issue #174. */
+  /**
+   * Who opened this session MOST RECENTLY. Absent in files written before issue #174.
+   *
+   * <p>Not what the log renders, and the difference is the whole of what the code round found: a
+   * session is repo+branch and `open` is idempotent on that pair, so Codex opening a branch Claude
+   * reviewed yesterday replaces this. `RoundRecord.caller` is the per-round copy, and that is what
+   * a row shows.</p>
+   */
   readonly caller?: CallerDeclaration;
 }
 
 /**
- * Who opened this session, as one phrase — or nothing at all for a file that never recorded it.
+ * Who asked for a round, as one phrase — or nothing at all for a round that never recorded it.
  *
- * <p>The empty answer is the load-bearing one: a session file from before the field is a server
- * that never asked the question, which is a different fact from a caller that could not be
- * identified. Saying "unknown" about it would put a claim where there is only silence.</p>
+ * <p>The empty answer is the load-bearing one: a round from before the field is a server that never
+ * asked the question, which is a different fact from a caller that could not be identified. Saying
+ * "unknown" about it would put a claim where there is only silence.</p>
  *
  * <p>It mirrors `CallerDeclaration.Phrase` on the server, which is the copy that lands in the log
  * line and in the database. Two spellings of one sentence is a drift waiting to happen; the tests
  * on both sides assert the same strings against the same inputs.</p>
  */
-export function calledBy(session: SessionFile): string {
-  if (session.caller === undefined || session.caller === null) {
+export function calledBy(caller: CallerDeclaration | undefined): string {
+  if (caller === undefined || caller === null || typeof caller !== 'object') {
     return '';
   }
   const said = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-  const vendor = said(session.caller.vendor) || 'unknown';
-  const client = said(session.caller.client) || vendor;
-  const version = said(session.caller.clientVersion);
-  const model = said(session.caller.model) || 'model not stated';
+  const vendor = said(caller.vendor) || 'unknown';
+  const client = said(caller.client) || vendor;
+  const version = said(caller.clientVersion);
+  const model = said(caller.model) || 'model not stated';
 
   return `${client}${version === '' ? '' : ` ${version}`} · ${model}`;
 }

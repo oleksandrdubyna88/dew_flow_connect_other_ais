@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace CoaiMcp.Server;
 
 /// <summary>
@@ -88,17 +89,40 @@ public sealed record CallerDeclaration(
             .FirstOrDefault(vendor => client.StartsWith(vendor, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// One field of somebody else's: trimmed, stripped of control characters, and bounded.
+    /// One field of somebody else's: trimmed, stripped of invisible characters, and bounded.
     /// </summary>
     /// <remarks>
-    /// Control characters go because these strings end up in log lines and on a page, and a newline
-    /// inside a log line is a second log line that nobody wrote. Whitespace-only is emptiness: a
-    /// model of <c>"   "</c> is a model nobody declared, and recording it as a declaration would put
-    /// a blank where "not stated" belongs.
+    /// <para>Control characters go because these strings end up in log lines and on a page, and a
+    /// newline inside a log line is a second log line that nobody wrote. Whitespace-only is
+    /// emptiness: a model of <c>"   "</c> is a model nobody declared, and recording it as a
+    /// declaration would put a blank where "not stated" belongs.</para>
+    /// <para><b>Unicode FORMAT characters go too, and <c>char.IsControl</c> does not cover them.</b>
+    /// Raised by gemini on the code round: category <c>Cf</c> holds the bidirectional overrides
+    /// (U+202E and friends) and the zero-width joiners, none of which is a control character by
+    /// that predicate. A caller is an external AI and this string is rendered beside a vendor name
+    /// in a security log — an override reverses everything after it, so <c>claude-opus-5</c> can be
+    /// made to READ as something else entirely while the bytes say what they say. Spoofing an
+    /// identity in the record of who reviewed what is worth one extra predicate.</para>
+    /// <para>Bounded BEFORE the whole value is materialised: a caller that sends ten megabytes on
+    /// every <c>open</c> would otherwise allocate all of it twice to keep 120 characters. (codex,
+    /// same round.)</para>
     /// </remarks>
     private static string Field(string? value)
     {
-        var kept = new string((value ?? string.Empty).Where(c => !char.IsControl(c)).ToArray()).Trim();
+        // Lazy the whole way, so ten megabytes of somebody else's string never becomes an array:
+        // drop the invisible characters, drop the LEADING whitespace (before the cap, or a padded
+        // value would spend its budget on spaces), keep one more than the cap so the trailing trim
+        // still has something to remove, and only then materialise.
+        var kept = new string((value ?? string.Empty)
+            .Where(Keepable)
+            .SkipWhile(char.IsWhiteSpace)
+            .Take(LongestField + 1)
+            .ToArray()).TrimEnd();
+
         return kept.Length > LongestField ? kept[..LongestField] : kept;
     }
+
+    /// <summary>Everything that is not invisible: not a control character, not a format one.</summary>
+    private static bool Keepable(char c) =>
+        !char.IsControl(c) && char.GetUnicodeCategory(c) != UnicodeCategory.Format;
 }

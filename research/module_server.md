@@ -317,9 +317,17 @@ defending is the more interesting kind.
 ### Which AI called it, and which model (issue #174, 2026-09-13)
 
 `rounds.caller` is the calling agent's own SESSION id. Four more columns say who that agent **is**:
-`caller_vendor`, `caller_client`, `caller_client_version`, `caller_model`. They are stamped on
-`open` and carried by every round of that session (`PersistedSession.Caller`, a
-`Server/CallerDeclaration`).
+`caller_vendor`, `caller_client`, `caller_client_version`, `caller_model`.
+
+**Two fields, and they say two different true things.** `PersistedSession.Caller` is who opened this
+session most recently, stamped by `open`. `RoundRecord.Caller` is a COPY the round takes when it
+starts (`LiveRound.Record`), and that is what the database columns and the log render. The
+distinction is load-bearing and six findings across two vendors found it missing: a session is
+repo+branch and `open` is idempotent on that pair, so codex opening a branch claude reviewed
+yesterday replaces the session's declaration — and a log rendered from it would relabel history,
+showing round 1 as asked by the client that merely reopened the session. The copy also survives the
+concurrent case: a second client opening the pair while a round is still running cannot change what
+that round records.
 
 **Two sources, because the protocol only has one of them.** MCP's `initialize` carries
 `clientInfo { name, version }` — `claude-code`, `codex`, `gemini-cli` — and **no field of the
@@ -343,8 +351,21 @@ does not appear in the tool's schema.
 **Nothing here is guessed.** A caller nothing identifies is `unknown`; a caller that declared no
 model declared none, and the page says "model not stated". Both are states with a name, because the
 only alternative is a blank that reads as "claude" to whoever looks. The three declared fields are
-somebody else's strings on the way to a log line, a column and a page: trimmed, stripped of control
-characters, capped at 120 characters, and whitespace-only is emptiness.
+somebody else's strings on the way to a log line, a column and a page: trimmed, capped at 120
+characters, whitespace-only is emptiness, and stripped of every INVISIBLE character — control ones
+and Unicode category `Cf`, which `char.IsControl` does not cover and which holds the bidirectional
+overrides. An override reverses everything after it, so a declared model can be made to DISPLAY as
+another one beside a vendor name in the record of who reviewed what; the filter is one predicate and
+the spoof it prevents is in exactly the log that exists to prevent it. The normalisation is lazy to
+the cap, so a caller that sends ten megabytes on every `open` never materialises it.
+
+**What it does NOT do: follow a model switched without a new `open`.** The declaration arrives on
+`open` and nowhere else — the operator's decision — so `review_plan` and `review_code` take no model
+argument. The shared rule therefore tells the calling AI to send it on EVERY open, including one
+that resumes a session it already opened; an AI that switches model and never re-opens has its later
+rounds recorded under the model it declared last. That is a stated limit, not an accident: the
+alternative is the model on every tool call, which is a wider protocol change than the issue asks
+for.
 
 **`callerModel` needs the explicit `= null` default, not merely a nullable type.** The first build
 bound it as required and answered a two-argument `open` — what every client that predates the

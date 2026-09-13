@@ -2645,11 +2645,22 @@ away is the moment to say the association out loud.
 ### An opened round says who ASKED for it, above who answered (2026-09-13)
 
 Issue #174. The log named the reviewers that answered a round and nothing about the AI that asked
-for it — which became a question the moment a second AI started using the gate. `SessionFile` now
-carries a `caller` object (`vendor`, `client`, `clientVersion`, `model`), written by the server on
-`open`; `calledBy(session)` in `rounds.ts` turns it into one phrase and `LogRow.calledBy` carries it
-into the page, where `detail(row)` renders `asked by claude-code 7.3.1 · claude-opus-5` dimmed above
-the reviewer lines.
+for it — which became a question the moment a second AI started using the gate. **`RoundRecord` now
+carries a `caller` object** (`vendor`, `client`, `clientVersion`, `model`); `calledBy(caller)` in
+`rounds.ts` turns it into one phrase and `LogRow.calledBy` carries it into the page, where
+`detail(row)` renders `asked by claude-code 7.3.1 · claude-opus-5` dimmed above the reviewer lines.
+
+**Per ROUND, not per session, and that is the correction the code round forced.** `SessionFile.caller`
+exists too and means what it says — who opened this session most recently — but a session is
+repo+branch and `open` is idempotent on that pair, so Codex opening a branch Claude reviewed
+yesterday replaces it. Rendering a row from the session's value relabels history. Six findings
+across two vendors; the row reads `round.caller` and nothing falls back to the session.
+
+**The line is built by a function the page RUNS.** `askedByHtml(calledBy, escape)` is exported and
+embedded by assignment — `var askedByHtml = ${askedByHtml.toString()}` — beside `compareRows` and
+`rowMatches`, because `common/generated-code-tests.md` requires generated code to be executed by its
+test rather than string-matched. The escaper is a parameter: the page has `esc` and this module has
+`escapeHtml`, and a `toString()`-embedded function may only reference names the page defines.
 
 Three states, and keeping them apart is the whole of it:
 
@@ -2658,11 +2669,11 @@ Three states, and keeping them apart is the whole of it:
   mid-session — see `module_server.md`.
 - **A caller that declared none** reads `· model not stated`. Never a blank: a gap after the
   separator reads as a model somebody knew and did not bother to print.
-- **A session file from before the field** renders NOTHING at all. An absent `caller` is a server
-  that never asked the question, which is a different fact from a caller that could not be
-  identified — saying "unknown" about it would put a claim where there is only silence. The line is
-  built before `detail`'s early return for a file with no reviewer detail, so a new server read by
-  an old-looking session still shows it.
+- **A round from before the field** renders NOTHING at all. An absent `caller` is a server that
+  never asked the question, which is a different fact from a caller that could not be identified —
+  saying "unknown" about it would put a claim where there is only silence. The line is built before
+  `detail`'s early return for a round with no reviewer detail, so a new server read through an
+  old-looking round still shows it.
 
 `calledBy` mirrors `CallerDeclaration.Phrase` on the server, which is the copy that reaches the log
 line and the database column. Two spellings of one sentence is a drift waiting to happen; the tests

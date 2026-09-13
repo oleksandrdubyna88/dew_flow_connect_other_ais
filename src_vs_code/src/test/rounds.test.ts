@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { calledBy, costPhrase, elapsed, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord, SessionFile } from '../rounds';
+import { calledBy, CallerDeclaration, costPhrase, elapsed, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
 
 /**
  * What `rounds.ts` still guarantees now that the markdown log is gone.
@@ -254,44 +254,52 @@ test('a round from before the field reads exactly as it did', () => {
   assert.deepEqual(reviewerLines(older), ['codex/Architecture — done (1 finding)']);
 });
 
-// ---------- which AI called the session, and which model it declared (issue #174) ----------
+// ---------- which AI asked for a round, and which model it declared (issue #174) ----------
 
-const opened = (caller: unknown): SessionFile => ({
-  state: { sessionId: 's1', repoPath: 'D:/repo', branch: 'feat/x', stage: 'CodeReview', awaitingResolve: false },
-  rounds: [],
-  ...(caller === undefined ? {} : { caller }),
-}) as SessionFile;
+/**
+ * A declaration, fully typed — no cast.
+ *
+ * <p>`CallerDeclaration`'s own fields are optional because the server may write a file this build
+ * has never seen, so a real value needs no assertion to satisfy the compiler. The MALFORMED cases
+ * below are a different thing and say so: they are runtime-boundary data, not a fixture standing in
+ * for the type.</p>
+ */
+const declared = (over: Partial<CallerDeclaration> = {}): CallerDeclaration => ({
+  vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5', ...over,
+});
 
-test('a session names the client that opened it and the model that client declared', () => {
-  assert.equal(
-    calledBy(opened({ vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' })),
-    'claude-code 7.3.1 · claude-opus-5');
+/** JSON off a disk five processes write: whatever it is, it is not a `CallerDeclaration`. */
+const offDisk = (value: unknown): CallerDeclaration | undefined => value as CallerDeclaration | undefined;
+
+test('a round names the client that asked for it and the model that client declared', () => {
+  assert.equal(calledBy(declared()), 'claude-code 7.3.1 · claude-opus-5');
 });
 
 test('a client that declared no model says so, rather than leaving a gap', () => {
   assert.equal(
-    calledBy(opened({ vendor: 'codex', client: 'codex', clientVersion: '0.9', model: '' })),
+    calledBy(declared({ vendor: 'codex', client: 'codex', clientVersion: '0.9', model: '' })),
     'codex 0.9 · model not stated');
 });
 
 test('with no client from the handshake, the vendor is what there is to say', () => {
-  assert.equal(calledBy(opened({ vendor: 'gemini', client: '', clientVersion: '', model: '' })), 'gemini · model not stated');
+  assert.equal(
+    calledBy(declared({ vendor: 'gemini', client: '', clientVersion: '', model: '' })),
+    'gemini · model not stated');
 });
 
 test('a client with no version is not followed by a gap', () => {
-  assert.equal(
-    calledBy(opened({ vendor: 'claude', client: 'claude-code', clientVersion: '', model: 'claude-opus-5' })),
-    'claude-code · claude-opus-5');
+  assert.equal(calledBy(declared({ clientVersion: '' })), 'claude-code · claude-opus-5');
 });
 
-test('a session file from before the field says NOTHING, not "unknown"', () => {
+test('a round from before the field says NOTHING, not "unknown"', () => {
   // The promise that an older file reads exactly as it does today. An absent field is a server that
   // never recorded this, which is a different fact from a caller that could not be identified.
-  assert.equal(calledBy(opened(undefined)), '');
+  assert.equal(calledBy(undefined), '');
 });
 
 test('a caller field written by a server we do not recognise cannot crash the page', () => {
-  // It is JSON off a disk that five processes write. Every field is assumed absent until it is not.
-  assert.equal(calledBy(opened({})), 'unknown · model not stated');
-  assert.equal(calledBy(opened({ vendor: 7, client: null, model: [] })), 'unknown · model not stated');
+  assert.equal(calledBy(offDisk({})), 'unknown · model not stated');
+  assert.equal(calledBy(offDisk({ vendor: 7, client: null, model: [] })), 'unknown · model not stated');
+  assert.equal(calledBy(offDisk(null)), '', 'a null where an object belongs is an absent one');
+  assert.equal(calledBy(offDisk('claude-opus-5')), '', 'and so is a bare string');
 });

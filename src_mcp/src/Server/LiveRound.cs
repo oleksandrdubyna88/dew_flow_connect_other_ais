@@ -160,6 +160,9 @@ public sealed class LiveRound
             RunnerPid = Environment.ProcessId,
             Subject = _subject,
             ReviewerStates = [.. _states.Values.OrderBy(s => s.Provider).ThenBy(s => s.Role)],
+            // Taken from the session THIS round started from, so a later `open` by another client
+            // cannot relabel it. See RoundRecord.Caller for what the two fields say apart.
+            Caller = _session.Caller,
         };
 
     private string RunningSentence()

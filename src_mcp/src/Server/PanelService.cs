@@ -1284,10 +1284,10 @@ public sealed partial class PanelService
                 merged,
                 new Store.RoundContext(
                     planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record),
-                    // From the SESSION, not from the environment: `open` resolved it once, from the
-                    // handshake of the connection that called, and every round of this session was
-                    // driven by that same caller.
-                    session.Caller)));
+                    // From the ROUND, not from the session: `open` is idempotent per repo+branch, so
+                    // a second client opening the same pair replaces the session's declaration while
+                    // this round is still running. The round took its copy when it started.
+                    record.Caller)));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }

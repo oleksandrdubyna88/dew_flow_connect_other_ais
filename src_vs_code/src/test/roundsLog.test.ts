@@ -6,9 +6,11 @@ import {
   roundsLogHtml,
   rowMatches,
   rowsFrom,
+  askedByHtml,
 } from '../roundsLog';
 import { Escalation } from '../escalations';
-import { RoundRecord, SessionFile } from '../rounds';
+import { escapeHtml } from '../escapeHtml';
+import { calledBy, CallerDeclaration, RoundRecord, SessionFile } from '../rounds';
 import { DbFinding, DbLog, DbRound, EMPTY_TOTALS } from '../roundsDb';
 
 /**
@@ -358,25 +360,43 @@ test('a round the database has never heard of is done, not awaiting', () => {
   assert.equal(row.decided, null);
 });
 
-// ---------- which AI called the round, and which model it declared (issue #174) ----------
+// ---------- which AI asked for a round, and which model it declared (issue #174) ----------
 
-/** A session opened by a client that declared itself, as the server now records it. */
-function openedBy(caller: unknown, rounds: readonly RoundRecord[] = [round()]): SessionFile {
-  return { ...session(rounds), caller } as unknown as SessionFile;
-}
+const claude: CallerDeclaration = {
+  vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5',
+};
+const codex: CallerDeclaration = { vendor: 'codex', client: 'codex', clientVersion: '0.9', model: '' };
 
 test('a row says which AI asked for the round, and which model it declared', () => {
-  const [row] = rowsFrom(
-    [openedBy({ vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' })],
-    NOW) as [LogRow];
+  const [row] = rowsFrom([session([round({ caller: claude })])], NOW) as [LogRow];
 
   assert.equal(row.calledBy, 'claude-code 7.3.1 · claude-opus-5');
 });
 
 test('a caller that declared no model is shown as not stating one, never as a gap', () => {
-  const [row] = rowsFrom([openedBy({ vendor: 'codex', client: 'codex', clientVersion: '0.9', model: '' })], NOW) as [LogRow];
+  const [row] = rowsFrom([session([round({ caller: codex })])], NOW) as [LogRow];
 
   assert.equal(row.calledBy, 'codex 0.9 · model not stated');
+});
+
+/**
+ * The defect six findings across two vendors named on this change's code round.
+ *
+ * <p>A session is repo+branch and `open` is idempotent on that pair, so Codex opening a branch
+ * Claude reviewed yesterday replaces the session's declaration. Rendering every row from it would
+ * relabel history — round 1 shown as asked by the client that merely reopened the session. Each
+ * round carries its own copy, taken when it started.</p>
+ */
+test('each round keeps the caller that asked for IT, not the session"s latest', () => {
+  const reopened: SessionFile = {
+    ...session([round({ number: 1, caller: claude }), round({ number: 2, caller: codex })]),
+    caller: codex,
+  };
+
+  const rows = rowsFrom([reopened], NOW) as [LogRow, LogRow];
+
+  assert.equal(rows.find(r => r.number === 1)!.calledBy, 'claude-code 7.3.1 · claude-opus-5');
+  assert.equal(rows.find(r => r.number === 2)!.calledBy, 'codex 0.9 · model not stated');
 });
 
 test('a round from a session file that predates the field reads exactly as it did', () => {
@@ -385,19 +405,40 @@ test('a round from a session file that predates the field reads exactly as it di
   assert.equal(row.calledBy, '', 'a server that never asked the question said nothing, which is not "unknown"');
 });
 
-test('the page renders who asked, above the reviewers who answered', () => {
-  const rows = rowsFrom(
-    [openedBy({ vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' })],
-    NOW);
-  const html = roundsLogHtml(rows, [], 'n');
+/**
+ * The line is EXECUTED, not string-matched — `common/generated-code-tests.md`.
+ *
+ * <p>`askedByHtml` is the function the page runs: it is embedded into the page script by assignment
+ * (`var askedByHtml = ...toString()`), so calling it here calls what a reader's browser calls. A
+ * substring assertion over the page's HTML would pass on characters that happen to be present and
+ * could not see an unescaped value or a missing wrapper at all.</p>
+ */
+test('the asked-by line is built by the function the page runs', () => {
+  assert.equal(
+    askedByHtml('claude-code 7.3.1 · claude-opus-5', escapeHtml),
+    '<div class="reviewer asked">asked by claude-code 7.3.1 · claude-opus-5</div>');
+});
 
-  assert.ok(html.includes('"calledBy":"claude-code 7.3.1 · claude-opus-5"'), 'the row carries it into the page');
-  assert.ok(html.includes('asked by '), 'and the detail names it');
+test('a round that recorded no caller renders no line at all, not an empty one', () => {
+  assert.equal(askedByHtml('', escapeHtml), '', 'an empty "asked by" would be a claim about a round nobody asked');
 });
 
 test('a declared model cannot put markup on the page', () => {
-  // It is a freeform string an external AI sends us over the wire, and it is rendered.
-  const rows = rowsFrom([openedBy({ vendor: 'claude', client: '<img src=x onerror=alert(1)>', model: 'm' })], NOW);
+  // It is a freeform string an external AI sends over the wire, and it is rendered.
+  const nasty = '<img src=x onerror=alert(1)>';
 
-  assert.ok(!roundsLogHtml(rows, [], 'n').includes('<img src=x'), 'escaped in the JSON and in the markup');
+  assert.equal(
+    askedByHtml(calledBy({ vendor: 'claude', client: nasty, model: 'm' }), escapeHtml),
+    '<div class="reviewer asked">asked by &lt;img src=x onerror=alert(1)&gt; · m</div>');
+  assert.ok(
+    !roundsLogHtml(rowsFrom([session([round({ caller: { vendor: 'claude', client: nasty, model: 'm' } })])], NOW), [], 'n')
+      .includes('<img src=x'),
+    'and the row carrying it into the page is escaped there too');
+});
+
+test('the page embeds the asked-by builder by assignment, so the tested function is the run one', () => {
+  const html = roundsLogHtml(rowsFrom([session([round({ caller: claude })])], NOW), [], 'n');
+  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+
+  assert.ok(script.includes('var askedByHtml = ' + askedByHtml.toString()), 'bound by assignment, as compareRows is');
 });
