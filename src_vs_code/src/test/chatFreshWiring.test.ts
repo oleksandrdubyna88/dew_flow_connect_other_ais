@@ -146,7 +146,7 @@ test('a question typed WHILE the slate is being wiped goes back to the composer'
   const command = source('chatCommand.ts');
   const queue = between(command, 'function ask(entry: ChatEntry', 'function chatLanguage(');
   // THE WHOLE GUARD, so an arm disabled in place is as red as an arm deleted.
-  const latched = queue.indexOf('if (resetting.has(entry.id)) {');
+  const latched = queue.indexOf('if (thread.resetting) {');
 
   assert.ok(latched >= 0, 'a question asked during a reset is queued as if nothing were happening');
   assert.ok(latched < queue.indexOf('const began = thread.generation;'), 'the latch is read after the turn has already been queued');
@@ -180,6 +180,57 @@ test('a turn knows which conversation it was ASKED in, and cannot write into ano
   assert.match(turn, /const mySlate = thread\.saveId;/u, 'the turn never records which conversation it is writing into');
 });
 
+test('EVERY field of a thread is decided about, and the compiler is what checks it', () => {
+  // `Partial<Thread>` proves every field of `Freshened` is a thread field of the right type — and it
+  // cannot prove the other direction. A per-conversation field added to `Thread` and forgotten would
+  // simply survive the reset, carrying the old conversation into the new one with nothing to say so.
+  // The partition below makes that a build failure that names the field. (codex, both code rounds.)
+  const command = source('chatCommand.ts');
+
+  assert.match(command, /type Unclassified = Exclude<keyof Thread, keyof Freshened \| KeptByAReset>;/u,
+    'nothing works out which thread fields a reset has not been told about');
+  assert.match(command, /export const RESET_DECIDES_EVERY_THREAD_FIELD: Unclassified extends never \? true : Unclassified = true;/u,
+    'the partition is computed and then never asserted, so an unclassified field compiles');
+  // And the two that a reader would most expect to be reset are deliberately in the KEPT half.
+  const kept = between(command, 'type KeptByAReset =', 'type Unclassified =');
+  assert.match(kept, /'turn'/u, 'the turn number is resettable, so a late stop could name a turn of the new conversation');
+  assert.match(kept, /'title'/u, 'the tab’s own name is resettable');
+  assert.match(kept, /'generation' \| 'resetting'/u, 'the reset’s own bookkeeping is treated as part of the slate it installs');
+});
+
+test('a conversation with nowhere to be archived is NOT wiped', () => {
+  // Reading an absent store as a successful archive would wipe a conversation with nowhere for it to
+  // have gone — "archived, never deleted" broken in the one case where the deletion is total. And
+  // the empty check comes first, because a conversation with nothing in it needs no store to be
+  // archived correctly. (codex, the second code round.)
+  const command = source('chatCommand.ts');
+  const archive = between(command, 'async function archiveConversation(', 'function whyNotClosed(');
+
+  const empty = archive.indexOf('thread.messages.length === 0');
+  const missing = archive.indexOf('store === undefined');
+  assert.ok(empty >= 0 && missing > empty, 'an absent store is checked before whether there is anything to keep');
+  assert.match(archive.slice(missing, missing + 400), /kind: 'refused'/u,
+    'a window with nowhere to keep conversations wipes one anyway');
+});
+
+test('DRAINED IS NOT SAVED: the id is published only once the disk has the record', () => {
+  // The write chain is built so it cannot reject — which is what makes awaiting it safe — so a save
+  // that failed still lets the drain resolve. `rev` is the disk's own answer: zero until the store
+  // has accepted this record. (codex and gemini, the second code round.)
+  const command = source('chatCommand.ts');
+  const publish = between(command, 'async function publish(', 'async function ended(');
+  const drained = publish.indexOf('await thread.writes;');
+  const asked = publish.indexOf('thread.rev === 0');
+  const told = publish.indexOf('pushChatFresh(entry, thread.saveId)');
+
+  assert.ok(drained >= 0 && asked > drained, 'nothing asks whether the new record actually landed');
+  assert.ok(asked < told, 'the id is published before it is known that the record exists');
+  // And what happens then: the tab stays on the id it had — an archived conversation, whole and
+  // still opening, which is a better thing to reload into than a name nothing was written under.
+  assert.match(publish.slice(asked, told), /return;/u, 'a record that never landed has its id published anyway');
+  assert.match(publish.slice(asked, told), /will not survive a reload/u, 'nobody is told the new conversation is not on disk');
+});
+
 test('one reset at a time, per conversation', () => {
   // The gesture is a button and the work takes as long as ending a turn takes, so two presses are
   // ordinary. Two resets at once would dispose the same session twice, archive the same record
@@ -187,9 +238,13 @@ test('one reset at a time, per conversation', () => {
   const command = source('chatCommand.ts');
   const start = between(command, 'async function freshStart(', 'async function freshening(');
 
-  assert.match(command, /const resetting = new Set<object>\(\);/u, 'nothing stops a second press');
-  assert.match(start, /resetting\.has\(entry\.id\)/u, 'the latch is never read');
-  assert.match(start, /try \{\s*\n\s*await freshening\(entry, thread\);\s*\n\s*\} finally \{\s*\n\s*resetting\.delete\(entry\.id\);/u,
+  // ON THE THREAD, where the rest of this conversation's lifecycle lives — a module-level set of
+  // object identities outlives the threads in it if a `finally` is ever missed. (gemini, the second
+  // code round.)
+  assert.match(command, /\n  resetting: boolean;/u, 'nothing stops a second press');
+  assert.doesNotMatch(command, /new Set<object>\(\)/u, 'the latch is still a module-level set of identities');
+  assert.match(start, /thread\.resetting\)/u, 'the latch is never read');
+  assert.match(start, /try \{\s*\n\s*await freshening\(entry, thread\);\s*\n\s*\} finally \{\s*\n\s*thread\.resetting = false;/u,
     'a reset that throws leaves the latch set, and the button dead for the life of the window');
 });
 

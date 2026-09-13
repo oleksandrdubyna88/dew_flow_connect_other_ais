@@ -17,7 +17,7 @@ import {
   presetInForce,
   reaskFrom,
 } from './chatPresets';
-import { ARCHIVED, UNSAVED, couldNotEnd, freshened, sameSlate } from './chatFresh';
+import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened, sameSlate } from './chatFresh';
 import { ChatTabMemory, reloadedNote } from './chatTabs';
 import { CONVERSATION_VERSION, ConversationRecord, ConversationSource, metaOf, sourceOfFile, sourceOfSession } from './chatStore';
 import { ChatStoreFile, SaveOutcome } from './chatStoreFile';
@@ -251,6 +251,14 @@ interface Thread extends ChatMemory {
    * conversation, which is exactly where its stopped line belongs. (Two vendors, D1's plan round.)</p>
    */
   generation: number;
+  /**
+   * Whether a reset is running for this conversation right now.
+   *
+   * <p>Here rather than in a module-level set keyed by entry, which is where it started: a set of
+   * object identities outlives the threads in it if a `finally` is ever missed, and the rest of this
+   * conversation's lifecycle already lives on this object. (gemini, the second code round.)</p>
+   */
+  resetting: boolean;
   /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
    *
@@ -1390,15 +1398,41 @@ function closedSession(note: string): ChatSession {
 }
 
 /**
- * One reset at a time, per conversation.
+ * Every field of a thread a reset must LEAVE ALONE.
  *
- * <p>The gesture is a button and the work takes as long as ending a turn takes, so two presses are
- * ordinary rather than exotic. Two resets running at once would stop and dispose the same session,
- * release the same directory, archive the same record twice and publish two different fresh ids —
- * and the page would end up holding one of them while the thread held the other. (Two vendors, D1's
- * plan round.)</p>
+ * <p>Its only job is the check below, and that check is the answer to a real objection: `Partial<Thread>`
+ * proves every field of {@link Freshened} is a thread field of the right type, but it cannot prove the
+ * other direction — a per-conversation field added to `Thread` and forgotten here would simply survive
+ * the reset, carrying the old conversation into the new one with nothing to say so. (codex, both code
+ * rounds.)</p>
  */
-const resetting = new Set<object>();
+type KeptByAReset =
+  // The tab is still the conversation OF that tab, and a reset is a new subject rather than a new setup.
+  | 'title' | 'modelId' | 'providerId' | 'promptId' | 'role' | 'chosenId' | 'presses' | 'models' | 'providers'
+  // It still belongs to the same tab in the same project.
+  | 'source' | 'workspace' | 'fromSession' | 'sessionFile'
+  // Never reset anywhere: a stop names the turn it means, and a late one must not name a turn of the
+  // new conversation. `generation` and `resetting` belong to the reset itself rather than to a slate.
+  | 'turn' | 'generation' | 'resetting'
+  // Queues rather than contents.
+  | 'turns' | 'writes'
+  // Replaced by the host, which owns them: a dead session and a released directory are not values.
+  | 'session' | 'home'
+  // Deleted rather than assigned — see `UNSAVED` — and decided by whichever model answers next.
+  | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'forgetful' | 'ourDraft';
+
+/** Any field of a thread that a reset neither replaces nor has been told to keep. Must be none. */
+type Unclassified = Exclude<keyof Thread, keyof Freshened | KeptByAReset>;
+
+/**
+ * THE PARTITION, checked by the compiler rather than by hand.
+ *
+ * <p>When every field of `Thread` is either replaced by a reset or named in {@link KeptByAReset},
+ * `Unclassified` is `never` and this is a `true` that compiles. Add a field to `Thread` and classify
+ * it as neither, and the type becomes that field's own name — which `true` is not assignable to, so
+ * the build stops and names the field. It is exported so that nothing prunes it as unused.</p>
+ */
+export const RESET_DECIDES_EVERY_THREAD_FIELD: Unclassified extends never ? true : Unclassified = true;
 
 /**
  * *New chat* — the clean slate, behind the button that has always been there.
@@ -1412,14 +1446,14 @@ const resetting = new Set<object>();
  */
 async function freshStart(entry: ChatEntry): Promise<void> {
   const thread = threads.get(entry.id);
-  if (thread === undefined || resetting.has(entry.id)) {
+  if (thread === undefined || thread.resetting) {
     return;
   }
-  resetting.add(entry.id);
+  thread.resetting = true;
   try {
     await freshening(entry, thread);
   } finally {
-    resetting.delete(entry.id);
+    thread.resetting = false;
   }
 }
 
@@ -1502,6 +1536,17 @@ async function publish(entry: ChatEntry, thread: Thread, note: string): Promise<
   // saw it. (gemini, twice, the code round.)
   show(entry, false, note.length > 0 ? note : ARCHIVED);
   await thread.writes;
+  if (thread.rev === 0) {
+    // DRAINED IS NOT SAVED. The write chain is built so it cannot reject — that is what makes
+    // awaiting it safe — so a save that failed still lets the drain above resolve. `rev` is the disk's
+    // own answer: zero until the store has accepted this record, non-zero from the moment it has. The
+    // id is NOT published, so the tab stays on the one it had: an archived conversation, whole and
+    // still opening, which is a far better thing to reload into than a name nothing was ever written
+    // under. (codex and gemini, the second code round.)
+    show(entry, false, 'This new conversation could not be written to disk, so it will not survive a reload. The previous one was archived and is safe.');
+
+    return;
+  }
   pushChatFresh(entry, thread.saveId);
 }
 
@@ -1569,10 +1614,17 @@ type Archived =
  * is behind, which the next read of that record repairs.</p>
  */
 async function archiveConversation(thread: Thread): Promise<Archived> {
-  if (store === undefined || thread.messages.length === 0) {
+  if (thread.messages.length === 0) {
     // NOTHING SAID IN IT, nothing to keep: a tab reset before anybody typed would otherwise leave an
-    // empty conversation in Recent for every press.
+    // empty conversation in Recent for every press. Asked BEFORE the store, because a conversation
+    // with nothing in it needs no store to be archived correctly.
     return { kind: 'filed', note: '' };
+  }
+  if (store === undefined) {
+    // NO STORE AND SOMETHING TO KEEP. Reading that as a successful archive would wipe a conversation
+    // with nowhere for it to have gone — "archived, never deleted" broken in the one case where the
+    // deletion is total. (codex, the second code round.)
+    return { kind: 'refused', reason: 'this window has nowhere to keep conversations' };
   }
   try {
     const closed = await store.save({ ...recordOf(thread), closedAt: Date.now() }, thread.rev);
@@ -1624,7 +1676,7 @@ function ask(entry: ChatEntry, text: string): Promise<void> {
   if (thread === undefined) {
     return Promise.resolve();
   }
-  if (resetting.has(entry.id)) {
+  if (thread.resetting) {
     // TYPED WHILE THE SLATE WAS BEING WIPED. The generation has already moved, so the guard inside
     // the turn would let this through as the NEW conversation's — and it would then run against a
     // session being disposed and be dropped at the end, with the words gone. They go back to the
@@ -2730,6 +2782,7 @@ function newConversation(
     turn: 0,
     // The first slate this tab has held. Bumped by every reset; see `Thread.generation`.
     generation: 0,
+    resetting: false,
     ...memoryOf(ready.vendor),
     carry: [],
     messages: [],
@@ -3325,6 +3378,7 @@ export function restoreConversation(
     running: false,
     turn: 0,
     generation: 0,
+    resetting: false,
     // Replaced by `reopened` with the rules of whatever model actually answers — this conversation
     // asks nothing until then, so neither field is consulted before it is right. Written out rather
     // than taken from `memoryOf`, which needs a vendor, and a restored tab has none yet.
