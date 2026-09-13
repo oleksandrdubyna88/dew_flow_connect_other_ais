@@ -96,8 +96,7 @@ public sealed class RoundsQueryTests : IDisposable
         {
             var findings = new[] { Found("session file opened without FileShare"), Found("the retry never gives up") };
             db.RecordRound(Session, Round(), findings);
-            db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-                new Decision.Accepted(findings[0]), new Decision.Rejected(findings[1], "the loop has a timeout")));
+            db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "the loop has a timeout")]);
         }
 
         var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
@@ -136,10 +135,11 @@ public sealed class RoundsQueryTests : IDisposable
                 Found("c", Category.Ux, "UxDxPerformance", "gemini"),
             };
             db.RecordRound(Session, Round(), findings);
-            db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-                new Decision.Accepted(findings[0]),
-                new Decision.Accepted(findings[1]),
-                new Decision.Rejected(findings[2], "not worth the machinery")));
+            db.RecordDecisions("s1", "CodeReview", 1, [
+                Decisions.Accept(findings, 0),
+                Decisions.Accept(findings, 1),
+                Decisions.Reject(findings, 2, "not worth the machinery"),
+            ]);
         }
 
         var spots = RoundsQuery.Read(_dir).BlindSpots;
@@ -166,12 +166,14 @@ public sealed class RoundsQueryTests : IDisposable
     {
         // The more interesting kind of disagreement, and a much shorter list than the accepted one.
         var standing = Found("session file opened without FileShare");
+        // Named, so the decisions below can say WHICH finding each number means rather than relying
+        // on their own position in the list.
+        Finding[] raised = [standing, Found("something new")];
         using (var db = RoundsDb.Open(_dir, _log)!)
         {
-            db.RecordRound(Session, Round(2), [standing, Found("something new")],
+            db.RecordRound(Session, Round(2), raised,
                 new RoundContext("SCOPE", "7133c2f", "claude-code", [standing]));
-            db.RecordDecisions("s1", "CodeReview", 2, Decisions.InOrder(
-                new Decision.Rejected(standing, "still no"), new Decision.Accepted(Found("something new"))));
+            db.RecordDecisions("s1", "CodeReview", 2, [Decisions.Reject(raised, 0, "still no"), Decisions.Accept(raised, 1)]);
         }
 
         var defended = RoundsQuery.Read(_dir).Defended;
@@ -191,7 +193,7 @@ public sealed class RoundsQueryTests : IDisposable
         {
             db.RecordRound(Session, Round(2), [persuaded],
                 new RoundContext("SCOPE", "7133c2f", "claude-code", [persuaded]));
-            db.RecordDecisions("s1", "CodeReview", 2, Decisions.InOrder(new Decision.Accepted(persuaded)));
+            db.RecordDecisions("s1", "CodeReview", 2, [Decisions.Accept([persuaded], 0)]);
         }
 
         RoundsQuery.Read(_dir).Defended.Should().BeEmpty();

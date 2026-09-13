@@ -325,6 +325,40 @@ public sealed class EndToEndTests : IAsyncLifetime
         Store.RoundsQuery.Read(_data).Rounds.Single(r => r.Number == 2).ConsultMissed.Should().Be(0);
     }
 
+    /// <summary>
+    /// Two decisions about one finding is a contradiction, and it is refused rather than averaged.
+    /// </summary>
+    /// <remarks>
+    /// <para>Found by the code round over the ordinal fix, by two vendors independently. Both
+    /// entries passed every check: the range test looked at each one alone, so an accept and a
+    /// reject for the same index both became decisions. The projection then wrote both in order —
+    /// the LAST one silently winning — while <c>RecordClosing</c> counted both, so a round with one
+    /// finding closed as one accepted AND one rejected. Neither number was true.</para>
+    /// <para>Refusing is right rather than taking the last: a caller that says two things about one
+    /// finding has a bug, and guessing which half it meant hides it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ResolvingOneFindingTwiceInACall_IsRefused_RatherThanCountedTwice()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+        Script(OneMajor);
+        var round = Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"));
+        round.GetProperty("findings").GetArrayLength().Should().BeGreaterThan(0, "the round must have something to decide");
+
+        var raw = await service.ResolveAsync(_repo, "feature",
+            """[{"finding":0,"action":"accept"},{"finding":0,"action":"reject","reason":"on reflection, no"}]""");
+
+        // Asserted on the RAW answer first, so a failure says what went wrong rather than throwing
+        // KeyNotFoundException on a property this call should never have produced.
+        raw.Should().Contain("\"error\"",
+            "accepting AND rejecting finding 0 in one call is a contradiction: it must be refused, "
+            + "not recorded as two decisions about one finding");
+        Parse(raw).GetProperty("error").GetString().Should()
+            .Contain("finding 0", "the refusal must name the index that was sent twice")
+            .And.Contain("twice");
+    }
+
     [Fact]
     public async Task CodeRound_WithEveryReviewerFailing_CallsAHuman_NeverProceeds()
     {

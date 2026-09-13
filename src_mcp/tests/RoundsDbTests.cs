@@ -94,9 +94,9 @@ public sealed class RoundsDbTests : IDisposable
 
         db.RecordDecisions("s1", "CodeReview", 1,
         [
-            new DecisionAt(0, new Decision.Accepted(findings[0])),
-            new DecisionAt(1, new Decision.Rejected(findings[1], "the branch is behind main; verified absent from all three refs")),
-            new DecisionAt(2, new Decision.Accepted(findings[2])),
+            Decisions.Accept(findings, 0),
+            Decisions.Reject(findings, 1, "the branch is behind main; verified absent from all three refs"),
+            Decisions.Accept(findings, 2),
         ]);
 
         var rows = Query("SELECT title, resolution, reason FROM findings ORDER BY ordinal");
@@ -129,8 +129,8 @@ public sealed class RoundsDbTests : IDisposable
         // the number the decision was made by disagree, which is the whole point.
         db.RecordDecisions("s1", "CodeReview", 1,
         [
-            new DecisionAt(2, new Decision.Rejected(findings[2], "the third one reads the base ref, which this branch never moved")),
-            new DecisionAt(0, new Decision.Accepted(findings[0])),
+            Decisions.Reject(findings, 2, "the third one reads the base ref, which this branch never moved"),
+            Decisions.Accept(findings, 0),
         ]);
 
         var rows = Query("SELECT title, resolution FROM findings ORDER BY ordinal");
@@ -154,7 +154,7 @@ public sealed class RoundsDbTests : IDisposable
         var findings = new[] { Found("first"), Found("second"), Found("third") };
         db.RecordRound(Session, Round(), findings);
 
-        db.RecordDecisions("s1", "CodeReview", 1, [new DecisionAt(1, new Decision.Accepted(findings[1]))]);
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 1)]);
 
         var rows = Query("SELECT title, resolution FROM findings ORDER BY ordinal");
         rows[0]["resolution"].Should().Be("", "nobody decided 'first'");
@@ -232,10 +232,11 @@ public sealed class RoundsDbTests : IDisposable
         var findings = new[] { Found("a"), Found("b"), Found("c") };
         db.RecordRound(Session, Round(), findings);
 
-        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-            new Decision.Accepted(findings[0]),
-            new Decision.Rejected(findings[1], "verified absent from all three refs"),
-            new Decision.Rejected(findings[2], "same subject as the one above")));
+        db.RecordDecisions("s1", "CodeReview", 1, [
+            Decisions.Accept(findings, 0),
+            Decisions.Reject(findings, 1, "verified absent from all three refs"),
+            Decisions.Reject(findings, 2, "same subject as the one above"),
+        ]);
 
         var round = Query("SELECT accepted, rejected FROM rounds").Single();
         round["accepted"].Should().Be("1");
@@ -581,8 +582,7 @@ public sealed class RoundsDbTests : IDisposable
         using var db = RoundsDb.Open(_dir, _log)!;
         var findings = new[] { Found("first"), Found("second") };
         db.RecordRound(Session, Round(), findings);
-        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-            new Decision.Accepted(findings[0]), new Decision.Rejected(findings[1], "not this time")));
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "not this time")]);
 
         db.RecordRound(Session, Round() with { Verdict = "revise" }, findings);
 
@@ -611,8 +611,7 @@ public sealed class RoundsDbTests : IDisposable
         using var db = RoundsDb.Open(_dir, _log)!;
         var first = new[] { Found("session file opened without FileShare"), Found("the retry never gives up") };
         db.RecordRound(Session, Round(), first);
-        db.RecordDecisions("s1", "CodeReview", 1, Decisions.InOrder(
-            new Decision.Rejected(first[0], "already handled"), new Decision.Accepted(first[1])));
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Reject(first, 0, "already handled"), Decisions.Accept(first, 1)]);
 
         // The same round, run again, with a different finding first.
         db.RecordRound(Session, Round(), [Found("something else entirely"), first[1]]);

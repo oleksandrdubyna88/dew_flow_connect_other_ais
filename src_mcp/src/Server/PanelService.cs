@@ -9,6 +9,7 @@ using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Runners.Worktrees;
+using CoaiMcp.Store;
 
 namespace CoaiMcp.Server;
 
@@ -2314,6 +2315,11 @@ public sealed partial class PanelService
         // number from the decision's position here, which is the same number only while the caller
         // resolves top to bottom — and nothing makes it.
         var decisions = new List<DecisionAt>();
+        // One decision per finding. Two entries for the same index used to pass every check and
+        // then disagree with themselves: the projection wrote both in order, so the LAST one won
+        // silently, while RecordClosing counted both — a round with one finding closing as one
+        // accepted and one rejected. (Code round, codex and gemini.)
+        var decided = new HashSet<int>();
         foreach (var dto in dtos)
         {
             if (dto.Finding < 0 || dto.Finding >= session.Pending.Count)
@@ -2329,16 +2335,30 @@ public sealed partial class PanelService
                     : $"finding index {dto.Finding} does not exist — this round reported {session.Pending.Count}"));
             }
 
-            var finding = session.Pending[dto.Finding];
+            if (!decided.Add(dto.Finding))
+            {
+                return Task.FromResult(Error(
+                    $"finding {dto.Finding} was decided twice in one call — pass one entry per finding index"));
+            }
+
             var action = dto.Action.ToLowerInvariant();
             if (action is not ("accept" or "reject"))
             {
                 return Task.FromResult(Error($"action '{dto.Action}' is neither accept nor reject"));
             }
 
-            decisions.Add(new DecisionAt(dto.Finding, action == "accept"
-                ? new Decision.Accepted(finding)
-                : new Decision.Rejected(finding, dto.Reason)));
+            // The factory reads the finding OUT of Pending by this number, so the number and the
+            // finding cannot disagree. The range was checked above for the sentence it produces;
+            // this is what makes an inconsistent pair unconstructible anywhere.
+            var made = action == "accept"
+                ? DecisionAt.Accept(session.Pending, dto.Finding)
+                : DecisionAt.Reject(session.Pending, dto.Finding, dto.Reason);
+            if (made is null)
+            {
+                return Task.FromResult(Error($"finding index {dto.Finding} does not exist"));
+            }
+
+            decisions.Add(made);
         }
 
         return Task.FromResult(Finish(WithHumanDecision(session), decisions, humanSaysProceed));
