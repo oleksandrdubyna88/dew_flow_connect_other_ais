@@ -14,9 +14,9 @@ import {
   isStale,
   metaFrom,
   metaOf,
-  sameSource,
   recordFrom,
   recordName,
+  sameSource,
 } from './chatStore';
 import { claimConversation } from './chatStoreLock';
 
@@ -472,6 +472,19 @@ export class ChatStoreFile {
 
   /** The swap itself, with the claim held: probe, compare, then the two writes in order. */
   private async saveClaimed(written: ConversationRecord, base: number): Promise<SaveOutcome> {
+    // REFUSED BEFORE ANYTHING IS WRITTEN, if this build could not read it back. A record states its
+    // origin twice — `fromSession` and `source` — and `agreeOnOrigin` rejects a pair that disagrees
+    // ON READ, so a record that saves with a contradictory pair is a conversation that saves and is
+    // then unopenable for ever: `read` answers `incompatible`, the picker refuses it, and the sweep
+    // will not age it because what cannot be read cannot be dated. It was reachable only through the
+    // new `refile` and only by a caller passing the wrong source, and it cost nothing to close the
+    // whole class instead: the store does not write what it would refuse to read. (Three vendors, the
+    // code round; it was also my own open question.)
+    if (recordFrom(JSON.parse(JSON.stringify(written)) as unknown) === undefined) {
+      console.error(`ConnectOtherAIs: a conversation this build could not read back was not written: ${this.recordPath(written.id)}`);
+
+      return { kind: 'failed', reason: 'the conversation is not one this build could read back, so it was not written' };
+    }
     const seen = await this.probe(written.id);
     if (seen.kind === 'unavailable') {
       return { kind: 'failed', reason: seen.reason };

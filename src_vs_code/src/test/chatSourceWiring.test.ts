@@ -69,8 +69,12 @@ test('a tab snapshot carries the document’s uri, from the SAME read as its sch
   const snap = command.slice(command.indexOf('function snapshots('), command.indexOf('function snapshots(') + 1_400);
 
   assert.match(snap, /uri: input\?\.uri === undefined \? '' : input\.uri\.toString\(\)/u, 'a file tab has no identity to be found by');
-  // And it reaches the conversation through the one match, not a second snapshot taken later.
-  assert.match(command, /uri: active\?\.uri \?\? '',/u, 'the uri is not carried out of the match');
+  // And it is the MATCHED tab's uri, not whatever is focused. From the chat panel itself — which is
+  // how *add the question* is used — the active tab is a webview with no document, while the match
+  // falls back through every tab to the editor. Reading the active one there gave the conversation no
+  // source at all. Still out of the SAME snapshot, so the two cannot disagree about the tabs.
+  assert.match(command, /uri: all\.find\(\(tab\) => tab\.key === matched\?\.key\)\?\.uri \?\? '',/u,
+    'the uri comes from the focused tab rather than the matched one, so a chat opened from the panel has no source');
   assert.match(command, /source: fromSession \? \{ kind: 'none' \} : sourceOfFile\(sourceUri\),/u, 'a new conversation is not given its source');
 });
 
@@ -94,10 +98,57 @@ test('the follow writes a live conversation through its thread and a closed one 
   const command = source('chatCommand.ts');
   const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('export function followRenames(') + 2_600);
 
-  assert.match(follow, /held\.add\(thread\.saveId\);/u, 'nothing records which conversations this window holds open');
-  assert.match(follow, /if \(held\.has\(meta\.id\) \|\| !followable\(meta\.source\)\)/u, 'the store pass rewrites records a live thread is also writing');
+  // Asked AT THE MOMENT the store pass reaches each record, never from a set taken before any
+  // awaiting began: a conversation that closes while the loop runs is no longer followed by its
+  // thread, and a stale snapshot would have said it was — so its rename would be followed by neither.
+  assert.match(follow, /if \(heldConversationIds\(panels\)\.includes\(meta\.id\) \|\| !followable\(meta\.source\)\)/u,
+    'the store pass decides from a snapshot of what was open, so a conversation closing mid-loop loses its rename');
+  assert.doesNotMatch(follow, /const held = new Set/u, 'the live set is still snapshotted before the awaiting starts');
   assert.match(follow, /keepQueued\(entry, thread\);/u, 'a live conversation’s new source is never written');
-  assert.match(follow, /onDisk\.refile\(meta\.id, meta\.source,/u, 'a closed conversation is not followed at all');
+  assert.match(follow, /follow\(onDisk, meta\.id, meta\.source, sourceOfFile\(moved\)\)/u, 'a closed conversation is not followed at all');
+  // A busy claim is an ordinary concurrent save, not a verdict: a rename happens once and is never
+  // replayed, so giving up on the first one loses it for ever. (Four reviewers, the code round.)
+  const one = command.slice(command.indexOf('async function follow(onDisk'));
+  assert.match(one.slice(0, 1_800), /done\.why !== 'busy'/u, 'a conversation busy in another window loses its rename permanently');
+  assert.match(one.slice(0, 1_800), /FOLLOW_TRIES/u, 'the retry is unbounded, or there is none');
   // Both facts in one call, or the conversation ends up filed under the root it left.
-  assert.match(follow, /filedFor\(next\)\)/u, 'the root is not recomputed when a file moves between projects');
+  assert.match(one.slice(0, 1_800), /onDisk\.refile\(id, was, next, filedFor\(next\)\)/u, 'the root is not recomputed when a file moves between projects');
+  // And the picker reads the index, not the disk.
+  assert.match(follow, /await index\.refresh\(\);/u, 'the picker goes on naming the file the conversation left until something else refreshes it');
+});
+
+test('a restored conversation that lost its session source pins again — the self-healing, wired', () => {
+  // This is the one the code round caught me claiming and not doing. If the host dies between the
+  // pin and its queued write, the record comes back saying it came from a session and carrying no
+  // source — and nothing on the restore path ever pinned again, so it would have stayed unmatchable
+  // for ever. A record that already HAS its source is left alone: pinning walks folders, and doing
+  // that for every restored tab on every reload is a directory walk to rediscover what is already
+  // written down. (codex, the code round.)
+  const command = source('chatCommand.ts');
+  const restore = command.slice(command.indexOf('export function restoreConversation('));
+
+  assert.match(restore, /if \(saved\.fromSession && saved\.source\.kind === 'none'\) \{/u,
+    'a conversation whose source write was lost never pins again, so it stays unmatchable for ever');
+  assert.match(restore.slice(0, restore.indexOf('return entry;')), /pinSession\(entry, saved\.title, true\);/u,
+    'the restore path does not pin');
+});
+
+test('the store pass survives one conversation that cannot be followed', () => {
+  // reliability.md: a loop over independent units wraps each unit, records the failure on that unit,
+  // and carries on. The loop's job is the campaign; one record is never allowed to end it.
+  const command = source('chatCommand.ts');
+  const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('const FOLLOW_TRIES'));
+
+  assert.match(follow, /try \{/u, 'the store pass has no per-conversation guard');
+  assert.match(follow, /a conversation threw while following a renamed file/u, 'a conversation that throws is not named');
+  assert.ok(follow.indexOf('try {') < follow.indexOf('heldConversationIds(panels)'),
+    'the guard starts after the work it is meant to guard');
+});
+
+test('the renames are put into comparable form once, not once per conversation', () => {
+  const command = source('chatCommand.ts');
+  const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('const FOLLOW_TRIES'));
+
+  assert.match(follow, /const moves = prepareMoves\(renames\);/u, 'the renames are normalised inside the loop over the store');
+  assert.ok(follow.indexOf('prepareMoves(renames)') < follow.indexOf('for (const'), 'the preparation happens inside a loop');
 });

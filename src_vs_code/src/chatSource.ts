@@ -91,8 +91,15 @@ function contains(root: string, path: string): boolean {
   return other === one || other.startsWith(one.endsWith('/') ? one : `${one}/`);
 }
 
-/** A path as it compares: one kind of separator, no trailing one, and case-blind. */
-const normal = (path: string): string => path.replace(/[\\/]+/gu, '/').replace(/\/+$/u, '').toLocaleLowerCase();
+/**
+ * A path as it compares: one kind of separator, no trailing one, and case-blind.
+ *
+ * <p>`toLowerCase`, NOT `toLocaleLowerCase`. A path comparison has no business being
+ * locale-sensitive: under a Turkish locale `I` lowercases to a dotless `ı`, so two spellings of
+ * one ASCII path stop matching and the conversation is filed under no root at all. (gemini, the
+ * code round.)</p>
+ */
+const normal = (path: string): string => path.replace(/[\\/]+/gu, '/').replace(/\/+$/u, '').toLowerCase();
 
 /**
  * Where a conversation is filed, given what its source knows and what the window has open.
@@ -110,6 +117,24 @@ export function filedUnder(known: string, roots: readonly string[], fallback: st
 }
 
 /**
+ * The renames, with each old path put into comparable form ONCE.
+ *
+ * <p>{@link movedTo} is asked about every conversation in the store, and it used to re-normalise
+ * every rename's old path for each of them — a folder refactor reporting fifty moves against five
+ * hundred conversations normalised the same fifty strings five hundred times. The work belongs
+ * outside the loop, and saying so in the type keeps it there. (gemini, the code round.)</p>
+ */
+export interface Prepared {
+  readonly move: Moved;
+  /** `move.from`, normalised for comparison. */
+  readonly from: string;
+}
+
+/** Put the renames into comparable form, once, before anything is asked about them. */
+export const prepareMoves = (renames: readonly Moved[]): readonly Prepared[] =>
+  renames.map((move) => ({ move, from: normal(move.from) }));
+
+/**
  * Where a renamed file went, for a conversation whose source is a `file:` URI — or empty when this
  * rename says nothing about it.
  *
@@ -123,19 +148,25 @@ export function filedUnder(known: string, roots: readonly string[], fallback: st
  * @param renames what the editor said moved, as filesystem paths
  * @param toUri how to spell a filesystem path back as a URI — the host's, so this module needs none
  */
-export function movedTo(uri: string, renames: readonly Moved[], toUri: (path: string) => string, fsPath: (uri: string) => string): string {
+export function movedTo(
+  uri: string,
+  renames: readonly Prepared[],
+  toUri: (path: string) => string,
+  fsPath: (uri: string) => string,
+): string {
   const was = fsPath(uri);
   if (was.length === 0) {
     return '';
   }
+  const here = normal(was);
   const hit = renames
-    .filter((move) => contains(move.from, was))
-    .reduce<Moved | undefined>((closest, move) => (closest === undefined || move.from.length > closest.from.length ? move : closest), undefined);
+    .filter((one) => here === one.from || here.startsWith(`${one.from}/`))
+    .reduce<Prepared | undefined>((closest, one) => (closest === undefined || one.from.length > closest.from.length ? one : closest), undefined);
   if (hit === undefined) {
     return '';
   }
 
-  return toUri(hit.to + was.slice(hit.from.length));
+  return toUri(hit.move.to + was.slice(hit.move.from.length));
 }
 
 /**

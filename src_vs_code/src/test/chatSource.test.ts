@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { sourceOfFile, sourceOfSession } from '../chatStore';
-import { Moved, filedUnder, followable, movedTo, rootOf, sessionIdOf } from '../chatSource';
+import { Moved, filedUnder, followable, movedTo, prepareMoves, rootOf, sessionIdOf } from '../chatSource';
 
 /**
  * Which root a conversation is filed under, and what a rename moves — decided without a host.
@@ -63,16 +63,16 @@ test('a source that knows nothing keeps the first root, which is what it already
 test('a renamed file is followed, and a rename that says nothing about it changes nothing', () => {
   const renames: readonly Moved[] = [{ from: 'D:\\rsd\\one\\old.ts', to: 'D:\\rsd\\one\\new.ts' }];
 
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\old.ts'), renames, toUri, fsPath), toUri('D:\\rsd\\one\\new.ts'));
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\other.ts'), renames, toUri, fsPath), '', 'an unrelated file was rewritten');
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\old.ts'), [], toUri, fsPath), '', 'a rename that did not happen moved something');
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\old.ts'), prepareMoves(renames), toUri, fsPath), toUri('D:\\rsd\\one\\new.ts'));
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\other.ts'), prepareMoves(renames), toUri, fsPath), '', 'an unrelated file was rewritten');
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\old.ts'), prepareMoves([]), toUri, fsPath), '', 'a rename that did not happen moved something');
 });
 
 test('a renamed FOLDER moves everything under it, which the editor reports as one entry', () => {
   const renames: readonly Moved[] = [{ from: 'D:\\rsd\\one\\src', to: 'D:\\rsd\\one\\lib' }];
 
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\deep\\file.ts'), renames, toUri, fsPath), toUri('D:\\rsd\\one\\lib\\deep\\file.ts'));
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\srcs\\file.ts'), renames, toUri, fsPath), '', 'a sibling folder whose name starts the same was moved');
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\deep\\file.ts'), prepareMoves(renames), toUri, fsPath), toUri('D:\\rsd\\one\\lib\\deep\\file.ts'));
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\srcs\\file.ts'), prepareMoves(renames), toUri, fsPath), '', 'a sibling folder whose name starts the same was moved');
 });
 
 test('the CLOSEST rename wins when a file is inside two of them', () => {
@@ -83,8 +83,8 @@ test('the CLOSEST rename wins when a file is inside two of them', () => {
     { from: 'D:\\rsd\\one\\src\\chat', to: 'D:\\rsd\\two\\chat' },
   ];
 
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\chat\\page.ts'), renames, toUri, fsPath), toUri('D:\\rsd\\two\\chat\\page.ts'));
-  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\other.ts'), renames, toUri, fsPath), toUri('D:\\rsd\\one\\lib\\other.ts'));
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\chat\\page.ts'), prepareMoves(renames), toUri, fsPath), toUri('D:\\rsd\\two\\chat\\page.ts'));
+  assert.equal(movedTo(toUri('D:\\rsd\\one\\src\\other.ts'), prepareMoves(renames), toUri, fsPath), toUri('D:\\rsd\\one\\lib\\other.ts'));
 });
 
 test('a move across roots is what makes the workspace part load-bearing', () => {
@@ -92,7 +92,7 @@ test('a move across roots is what makes the workspace part load-bearing', () => 
   // swap. Writing the URI alone leaves a conversation whose source is under root two filed under root
   // one — invisible in exactly the scope the person is looking at. (Two vendors, the plan round.)
   const renames: readonly Moved[] = [{ from: 'D:\\rsd\\one\\moved.ts', to: 'D:\\rsd\\two\\moved.ts' }];
-  const now = movedTo(toUri('D:\\rsd\\one\\moved.ts'), renames, toUri, fsPath);
+  const now = movedTo(toUri('D:\\rsd\\one\\moved.ts'), prepareMoves(renames), toUri, fsPath);
 
   assert.equal(now, toUri('D:\\rsd\\two\\moved.ts'));
   assert.equal(rootOf(fsPath(now), ROOTS), 'D:\\rsd\\two', 'the moved file still answers with the root it left');
