@@ -1841,7 +1841,11 @@ IS the value, and the panel reads it at paint time like the pasted snippet besid
 supported something the next window reverts. The box carries `data-file`, which is what exempts it
 from the declared-settings test — a fact in the markup rather than a name on a list somewhere else —
 and *Restore default* is a button because an emptied box doing the same thing is true but not
-discoverable. Empty means the shipped prompt, and the hint says so: the panel cannot show those
+discoverable (the hint now says they are the same gesture). **Written beside it and renamed over
+it**, like the settings file and an answered escalation: `writeFile` truncates before it fills, and
+the server reads its prompts override-first without a second opinion, so a host killed between the
+two would simply have the consultant asked a truncated question. Two reviewers raised it on the plan
+round. Empty means the shipped prompt, and the hint says so: the panel cannot show those
 words, because they are compiled into the server.
 
 ### The MCP server section is about coai-mcp, and about nothing else (2026-09-07)

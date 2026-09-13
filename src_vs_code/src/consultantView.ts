@@ -130,7 +130,7 @@ function promptField(prompt: string): string {
   return `<div class="field">
   <label for="consultPrompt">What the consultant is asked to do</label>
   <textarea id="consultPrompt" rows="6" data-setting="consultPrompt" data-file="consult.md" placeholder="The prompt this build ships with.">${escapeHtml(prompt)}</textarea>
-  <div class="hint">Empty is the prompt this build ships with — the panel cannot show you those words, because they are compiled into the server. What you type here is written to its prompt override and read on the next consultation.</div>
+  <div class="hint">Empty is the prompt this build ships with — the panel cannot show you those words, because they are compiled into the server. What you type here is written to its prompt override and read on the next consultation. <b>Emptying the box is the same as pressing Restore default</b>: there is no such thing as a prompt that says nothing.</div>
   <button type="button" class="link" data-command="restoreConsultPrompt">Restore default</button>
 </div>`;
 }

@@ -2348,20 +2348,31 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * homes, and the hand-edit the server has always supported would have been reverted by whichever
    * window mirrored next.</p>
    *
+   * <p><b>Written beside it and renamed over it</b>, the way the settings file and an answered
+   * escalation already are. `writeFile` truncates before it fills, so a host killed between the two
+   * leaves the SERVER reading a half-written prompt — and the server reads its prompts override-first
+   * without a second opinion, so a truncated one is simply what the consultant is asked. Raised by two
+   * reviewers on this story's plan round.</p>
+   *
    * <p>A failure is swallowed the way the settings write's is, and for the same reason: this runs
    * from a keystroke pause, and a disk that will not take a file is not something a panel can fix by
-   * interrupting somebody about it. The box still holds the words, and the next pause tries again.</p>
+   * interrupting somebody about it. Nothing claims the prompt was saved — the box is repainted from
+   * the FILE, so a write that did not land shows as the words coming back on the next paint.</p>
    */
   private async saveConsultPrompt(value: unknown): Promise<void> {
     const write = consultPromptWrite(value);
     const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
     try {
       if (write.kind === 'remove') {
+        // Removing an override that was never written is the ORDINARY case, not an error.
         await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
         return;
       }
-      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!));
-      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(write.text));
+      const directory = vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!);
+      await vscode.workspace.fs.createDirectory(directory);
+      const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
+      await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
+      await vscode.workspace.fs.rename(temp, target, { overwrite: true });
     } catch {
       // Nothing to say and nothing to do; see above.
     }
