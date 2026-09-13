@@ -205,13 +205,18 @@ public sealed class TheRoundKnowsWhoCalledItTests
     /// one while the bytes say what they say is identity spoofing in exactly the record that exists
     /// to prevent it.
     /// </remarks>
+    // Named by CODE POINT, never written literally into this file. Sonar flags a source
+    // line carrying a bidirectional character and is right to: a reviewer reading the
+    // literal cannot see what it is, which is the whole hazard the test is about.
     [Theory]
-    [InlineData('‮')] // right-to-left override
-    [InlineData('​')] // zero-width space
-    [InlineData('‍')] // zero-width joiner
-    [InlineData('﻿')] // zero-width no-break space
-    public void AnInvisibleFormatCharacter_DoesNotSurviveIntoTheRecord(char invisible)
+    [InlineData(0x202E)] // right-to-left override
+    [InlineData(0x200B)] // zero-width space
+    [InlineData(0x200D)] // zero-width joiner
+    [InlineData(0xFEFF)] // zero-width no-break space
+    public void AnInvisibleFormatCharacter_DoesNotSurviveIntoTheRecord(int codePoint)
     {
+        var invisible = (char)codePoint;
+
         CallerDeclaration.From(default, "", "", "claude" + invisible + "-opus-5").Model
             .Should().Be("claude-opus-5");
     }
@@ -219,7 +224,9 @@ public sealed class TheRoundKnowsWhoCalledItTests
     [Fact]
     public void AModelThatIsNothingButInvisibleCharacters_IsNoModelAtAll()
     {
-        CallerDeclaration.From(default, "", "", "‮​﻿").Model.Should().BeEmpty();
+        var invisible = new string([(char)0x202E, (char)0x200B, (char)0xFEFF]);
+
+        CallerDeclaration.From(default, "", "", invisible).Model.Should().BeEmpty();
     }
 
     [Fact]
