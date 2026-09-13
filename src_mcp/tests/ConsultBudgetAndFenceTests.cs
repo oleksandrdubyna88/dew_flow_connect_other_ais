@@ -196,6 +196,9 @@ public sealed class ConsultPromptTextTests
 
         text.Length.Should().BeLessThan(CoaiMcp.Prompts.ProblemCap + 2_000,
             "echoing 10 MiB back to be sent again is the same bytes three times over");
-        text.Should().Contain("cut at 16 KB", "a silent truncation is a problem statement that lies");
+        text.Should().Contain($"cut here at {CoaiMcp.Prompts.ProblemCap} characters",
+            "a silent truncation is a problem statement that lies");
+        CoaiMcp.Prompts.ProblemCap.Should().Be(ConsultantPrompt.ProblemBudget,
+            "the prompt must cut at exactly what the tool would cut it to a turn later");
     }
 }
