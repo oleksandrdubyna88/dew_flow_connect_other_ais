@@ -202,13 +202,26 @@ export interface Prepared {
   readonly move: Moved;
   /** `move.from`, normalised for comparison. */
   readonly from: string;
-  /** The rule it was normalised under, so the source it is compared against is normalised the same way. */
+}
+
+/**
+ * The renames of ONE event, and the one rule they were all normalised under.
+ *
+ * <p>The rule belongs to the batch, not to each entry. Carrying it per entry meant two batches
+ * prepared under different rules could be concatenated into a list whose members disagreed, and the
+ * reader would have applied the first one's rule to all of them — a case-sensitive rename matching a
+ * differently-cased path, or missing its own. Unrepresentable now. (codex, the code round.)</p>
+ */
+export interface Moves {
   readonly caseBlind: boolean;
+  readonly list: readonly Prepared[];
 }
 
 /** Put the renames into comparable form, once, before anything is asked about them. */
-export const prepareMoves = (renames: readonly Moved[], caseBlind: boolean): readonly Prepared[] =>
-  renames.map((move) => ({ move, from: normal(move.from, caseBlind), caseBlind }));
+export const prepareMoves = (renames: readonly Moved[], caseBlind: boolean): Moves => ({
+  caseBlind,
+  list: renames.map((move) => ({ move, from: normal(move.from, caseBlind) })),
+});
 
 /**
  * Where a renamed file went, for a conversation whose source is a `file:` URI — or empty when this
@@ -226,7 +239,7 @@ export const prepareMoves = (renames: readonly Moved[], caseBlind: boolean): rea
  */
 export function movedTo(
   uri: string,
-  renames: readonly Prepared[],
+  renames: Moves,
   toUri: (path: string) => string,
   fsPath: (uri: string) => string,
 ): string {
@@ -234,12 +247,12 @@ export function movedTo(
   if (was.length === 0) {
     return '';
   }
-  // Normalised ONCE per conversation, not once per rename: every prepared move carries the same rule,
-  // because they all came from one `prepareMoves`. A folder refactor reporting two hundred moves was
-  // otherwise doing two hundred regex passes over this one path, for every conversation in the store.
-  // (gemini and codex, the code round — and it was my own regression from the case fix.)
-  const here = normal(was, renames[0]?.caseBlind ?? false);
-  const hit = renames
+  // Normalised ONCE per conversation, not once per rename, and under the batch's own rule rather
+  // than the first entry's. A folder refactor reporting two hundred moves was otherwise doing two
+  // hundred regex passes over this one path, for every conversation in the store. (gemini and codex,
+  // the code round — and it was my own regression from the case fix.)
+  const here = normal(was, renames.caseBlind);
+  const hit = renames.list
     .filter((one) => here === one.from || here.startsWith(`${one.from}/`))
     .reduce<Prepared | undefined>((closest, one) => (closest === undefined || one.from.length > closest.from.length ? one : closest), undefined);
   if (hit === undefined) {
