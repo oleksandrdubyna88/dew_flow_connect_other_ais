@@ -129,4 +129,53 @@ public sealed class RemoteRolesTests
         // had. Only a server that actually SAID otherwise can change that.
         new RemoteRoles([], false, source).WhyNot("Architecture", "Architecture", builtIn: true).Should().BeNull(source.ToString());
     }
+
+    // ---------- a catalog is a promise, and both clients must break it the same way ----------
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ARoleListCarryingNothingUsableIsReadAsSayingNothing(string? rubbish)
+    {
+        // `IReadOnlyList<string>?` is a nullable ANNOTATION, not a runtime check: `{"roles":[null]}`
+        // deserialises to a list with a null in it. Counting that as an answer made this half exclude
+        // every shipped role while the extension read the same response as "said nothing useful" —
+        // one server, two clients, two different rounds. (codex, story 4's second code round.)
+        var read = RemoteRoles.From([rubbish], allowAny: false);
+
+        read.Source.Should().Be(RemoteRolesSource.Shipped);
+        read.WhyNot("Architecture", "Architecture", builtIn: true)
+            .Should().BeNull("the floor holds whatever arrives");
+    }
+
+    [Fact]
+    public void TheUsableNamesSurviveAListThatIsOnlyPartlyRubbish()
+    {
+        var read = RemoteRoles.From([null, "Requirements", "", "Brief"], allowAny: false);
+
+        read.Source.Should().Be(RemoteRolesSource.Answered);
+        read.Names.Should().BeEquivalentTo(["Requirements", "Brief"]);
+    }
+
+    [Fact]
+    public void AnAbsentListAndAnEmptyOneAreTheSameAnswer()
+    {
+        RemoteRoles.From(null, allowAny: false).Source.Should().Be(RemoteRolesSource.Shipped);
+        RemoteRoles.From([], allowAny: false).Source.Should().Be(RemoteRolesSource.Shipped);
+    }
+
+    [Fact]
+    public void AListThatSaysNothingDropsTheAllowAnyFlagWithIt()
+    {
+        // `allowAnyRole: true` with no usable list is a catalog contradicting itself. Carrying the
+        // flag through would make one malformed response accept every role on that server.
+        RemoteRoles.From([null], allowAny: true).AllowAny.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ARealAnswerKeepsTheFlagItSent()
+    {
+        RemoteRoles.From(["Requirements"], allowAny: true).AllowAny.Should().BeTrue();
+    }
 }

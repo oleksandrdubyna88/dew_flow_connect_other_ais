@@ -739,14 +739,17 @@ public sealed partial class PanelService
         planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
 
     /// <summary>
-    /// Ask every configured Team server which roles it runs, unless it has already been asked.
+    /// Ask every configured Team server which roles it runs. EVERY round, without exception.
     /// </summary>
     /// <remarks>
     /// <para>One probe per SERVER, not per vendor: <c>Coai:ExtraRoles</c> is one setting on one box,
-    /// and <see cref="RemoteProbe"/> caches by the normalised URL, so several vendors sharing a
-    /// server collapse to one request. Servers already answered are skipped entirely, so the
-    /// ordinary round — where the panel or a <c>providers</c> call has already asked — pays
-    /// nothing.</para>
+    /// so several vendors sharing a server collapse to one request.</para>
+    /// <para><b>No server is ever skipped for having been asked before</b>, and the wording matters
+    /// because the first version did skip and a maintainer following its doc would restore the
+    /// defect: a transient failure became permanent for the process. <see cref="RemoteProbe"/> owns
+    /// freshness — it answers from its cache inside the window and backs off after a failure — so
+    /// the ordinary round pays nothing and a stale answer is the only thing that can be refreshed
+    /// here. See <see cref="AskWhichRolesAsync"/>.</para>
     /// <para><b>Nothing here fails a round.</b> A server that cannot be reached is recorded as
     /// unreachable by the probe itself, which is a state the exclusion sentence can name; throwing
     /// would turn a network blip into a refused review. Cancellation is the exception: a round whose
