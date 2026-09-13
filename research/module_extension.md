@@ -2367,6 +2367,94 @@ the picker and measures the retention window — a refactor moving a file is not
 a conversation); a timeout on the session walk (no walk here has one, and one applied at a single
 site is the defect the conventions name); and a progress indicator for background pinning.
 
+## New chat: a clean slate, behind a button that already existed (2026-09-13)
+
+A chat tab accumulates. Ten turns about a lock, then a question about something else entirely, and
+the model is still carrying the lock — worse on a Team server, which is re-sent the whole
+conversation EVERY turn and billed for it again, and where the three-turn cap then closes on a
+conversation that is mostly history nobody wants. The operator asked for the clean slate by name,
+and for the stuck quotation at the top of the tab to go with it.
+
+**The gesture was already shipped and did nothing.** `chatPage.ts` has rendered *Start a new
+conversation* in the capped notice since the cap existed, `chatMessages.ts` has parsed the command
+and `chatPanel.ts` has dispatched it — to `onRestart: () => undefined`. Story D1 is what it does;
+story D2 adds the header button, which posts the very same message, so one host implementation
+serves both.
+
+### What the guarantee IS, stated no wider than it is verified
+
+**The next question reaches a model that was never told the old conversation**: a new session object,
+a new process, an empty carry. It is NOT a promise that the old CLI's process tree is gone on every
+platform — on Windows the launcher ends the tree, and on WSL or Linux a grandchild can outlive its
+parent, which is `PLAN_closing_a_chat_ends_its_whole_tree.md`'s territory and the orphan ledger's to
+collect. An orphan holds its own context and nothing speaks to it: a process leak, not a leak of
+context BETWEEN conversations.
+
+### Nothing is switched until the old conversation is provably finished
+
+The order is the whole story, and every step of it answers a way of getting a question or an answer
+into the wrong conversation.
+
+**The slate moves first.** `Thread.generation` is bumped BEFORE anything is stopped, because a
+question QUEUED behind the running answer is on the same chain the reset is about to wait on: it
+would begin a whole new turn after the stop, the reset would wait it out, and its first act is to
+append what somebody typed — into a transcript that is about to be replaced. A turn whose queued
+generation no longer matches never begins, and the words go back to the composer they were typed in.
+
+**Then the old conversation is ended and WAITED for** — `stop()`, the turn chain, the disk queue,
+`dispose()`, and only then `home.release()`. Each of those is in that position for a reason: waiting
+is what puts the answer in flight into the OLD transcript before anything is cleared; draining the
+writes is what makes `thread.rev` the revision the disk actually holds rather than one a queued push
+is about to move on; and releasing after disposal is what stops a CLI writing on its way out into a
+directory that has already been removed. The release is best-effort and said out loud — a temp
+directory that would not go is one the sweep collects, never a reason to refuse a reset.
+
+**No timeout, and that was argued.** Three findings asked for one on the wait. A turn here is already
+bounded: `CliChatSession` settles the one in flight by any of four routes, its own timeout among
+them, and `stop()` settles it at once through the closure that IS the turn's identity; `ask` attaches
+a catch, so the chain never rejects. A second bound at this one call site would measure this site
+rather than the operation, which is the defect the conventions name. The case those findings were
+circling — the wait extended by a queued turn — is what the early generation bump answers.
+
+**And if any of it fails, nothing happens.** A half-performed reset that reports success is the one
+outcome worse than no reset: nothing is archived, nothing is cleared, and the conversation is left
+not merely live but USABLE — it takes the dead session stub and `reopen`, so the next question opens
+it a process exactly as a reload does, carrying its transcript across.
+
+### Two facts, because they answer two questions
+
+`generation` says whether a reset has BEGUN; `saveId` says whether the slate has actually been WIPED.
+Between those two moments the turn in flight is still writing into the old conversation, and its
+stopped line belongs there — so the check before a turn begins reads the generation, and the check
+before anything is written at the end of a turn reads the save id. One counter doing both would have
+had to choose which of the two to get wrong.
+
+### Archived, never deleted
+
+The old record is stamped `closedAt` with a fresh revision and appears in *Recent* in epic B's
+picker, under its own title, and opens. That happens BEFORE the new id is published, and the order is
+chosen: a crash in between leaves a conversation that is archived and still readable — the reset did
+not happen, which is the honest worst case — while publishing first would leave the tab naming an id
+no record exists for, and a reload would find nothing. A conversation nobody has said anything in is
+not archived at all, or every press would leave an empty row behind.
+
+`chatFresh.ts` holds the slate as one value with a closed type, applied in a single statement, so a
+field added to it is applied by construction rather than by somebody remembering that statement
+exists. What it does NOT name survives — the title, because the tab is still the conversation of that
+tab; the model, the provider and the prompt, because a reset is a new subject and not a new setup;
+the source and the workspace; and `turn`, which is never reset anywhere, because a stop names the
+turn it means and a late one must not be able to name a turn of the new conversation.
+
+### The page is told in a message of its own
+
+A state message is the whole truth about every region it MENTIONS, and the state push does not
+mention the passage — so the quotation at the top of the tab would survive every push and caption a
+conversation it has nothing to do with, which is the stuck citation this gesture was asked for. The
+`fresh` message clears it, carries the new id to the serializer so a tab reset and then reloaded
+comes back as the new conversation, and says one non-modal line: *the previous conversation was
+archived*. No dialog — the operator refused one by name, and the archived conversation is two clicks
+away in the picker.
+
 ## The door: go to the conversation about this tab (2026-09-13)
 
 C2 decided; this is the command that carries the decision out, and after it the feature is usable.

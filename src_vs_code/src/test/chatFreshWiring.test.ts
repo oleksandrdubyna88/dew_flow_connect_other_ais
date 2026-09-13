@@ -1,0 +1,180 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+/**
+ * That *New chat* is WIRED, and that it happens IN ORDER — the half no unit test here can reach.
+ *
+ * <p>`chatFresh.test.ts` drives the slate as a value. What it cannot see is the order the host does
+ * things in, and the order is the whole story: a reset that stopped the old turn without waiting for
+ * it, or that cleared the transcript before the answer in flight had landed, would pass every value
+ * test and file an answer into a conversation that had already been archived. This repository has no
+ * extension-host harness — `research/module_tests.md` records that as its largest gap — so what is
+ * pinned is the source, which is the house pattern here.</p>
+ */
+
+const source = (file: string): string =>
+  fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
+
+/** Where one function begins and the next one does, so an assertion cannot match a neighbour. */
+const between = (text: string, from: string, to: string): string =>
+  text.slice(text.indexOf(from), text.indexOf(to));
+
+test('the gesture that has always been there now does something', () => {
+  // `chatPage.ts` has rendered *Start a new conversation* in the capped notice since the cap
+  // existed, `chatMessages.ts` has parsed it and `chatPanel.ts` has dispatched it — to a hook that
+  // was literally `() => undefined`. A shipped button that did nothing.
+  const command = source('chatCommand.ts');
+
+  assert.doesNotMatch(command, /onRestart: \(\) => undefined/u, 'the restart hook is still a stub');
+  assert.match(command, /onRestart: \(id\) => \{[\s\S]{0,400}freshStart\(entry\)/u, 'the restart hook does not reach the reset');
+  // The page's half is unchanged, because the two buttons are one gesture: D2's header button posts
+  // the very same message, so one host implementation serves both.
+  assert.match(source('chatPage.ts'), /vscode\.postMessage\(\{ type: 'command', command: 'restart' \}\)/u);
+});
+
+test('NOTHING IS SWITCHED until the old conversation is provably finished', () => {
+  const command = source('chatCommand.ts');
+  const reset = between(command, 'async function freshening(', 'async function ended(');
+
+  // 1. The slate moves FIRST, before anything is stopped. A question queued behind the running
+  // answer would otherwise begin a whole new turn after the stop: the reset would wait it out, and
+  // it would append what somebody typed into a transcript that is about to be replaced.
+  const bumped = reset.indexOf('thread.generation += 1;');
+  const ending = reset.indexOf('ended(thread)');
+  assert.ok(bumped >= 0 && ending > bumped, 'the slate is bumped after the old conversation is ended, or not at all');
+  // 2. Ended and WAITED FOR, under the window notification every other wait here shows.
+  assert.match(reset, /ProgressLocation\.Window, title: 'Ending the previous conversation…'/u,
+    'a person who presses the button and waits is told nothing');
+  // 3. The old record is CLOSED before the new id is published, and the reset only reaches it when
+  // the ending succeeded.
+  const failed = reset.indexOf('if (failed.length > 0)');
+  const archive = reset.indexOf('archiveConversation(thread)');
+  const slate = reset.indexOf('Object.assign(thread, freshened(');
+  const told = reset.indexOf('pushChatFresh(');
+  assert.ok(failed >= 0 && failed < archive, 'the old conversation is archived before it is known that it ended');
+  assert.ok(archive < slate, 'the slate is wiped before the old conversation is archived');
+  assert.ok(slate < told, 'the page is given the new id before the thread has it');
+});
+
+test('the ending is stop, WAIT, drain, dispose, release — in that order', () => {
+  const command = source('chatCommand.ts');
+  const ending = between(command, 'async function ended(', 'async function archiveConversation(');
+
+  const stop = ending.indexOf('thread.session.stop()');
+  const turns = ending.indexOf('await thread.turns');
+  const writes = ending.indexOf('await thread.writes');
+  const dispose = ending.indexOf('thread.session.dispose()');
+  const release = ending.indexOf('thread.home.release()');
+  assert.ok(stop >= 0 && turns > stop, 'the turn is stopped without waiting for it, so its answer can arrive after the archive');
+  assert.ok(writes > turns, 'the disk queue is not drained, so the archive saves against a revision a queued push is about to move on');
+  assert.ok(dispose > writes, 'the session is disposed before the conversation has finished');
+  assert.ok(release > dispose, 'the directory is released before the session that writes into it is gone');
+  // The release is best effort and SAID: a temp directory that would not go is one the sweep
+  // collects later, never a reason to refuse a reset that has otherwise succeeded.
+  assert.match(ending.slice(release), /console\.warn\(/u, 'a directory that would not be released is swallowed');
+  assert.doesNotMatch(ending.slice(release), /return asText/u, 'a directory that would not be released refuses the whole reset');
+});
+
+test('a reset that FAILED leaves the conversation live AND usable, and archives nothing', () => {
+  // A half-performed reset that reports success is the one outcome worse than no reset. And "live"
+  // is not enough on its own: if the session was disposed before the failure, a conversation left
+  // pointing at it is one the next question cannot use. (codex, the plan round.)
+  const command = source('chatCommand.ts');
+  const reset = between(command, 'async function freshening(', 'async function ended(');
+  const branch = reset.slice(reset.indexOf('if (failed.length > 0)'), reset.indexOf('archiveConversation('));
+
+  assert.match(branch, /closedSession\(reloadedNote\(thread\.modelId\)\)/u, 'the conversation is left holding a session that may be gone');
+  assert.match(branch, /thread\.carry = carriedFrom\(thread\.messages, thread\.carryFrom\)/u,
+    'the conversation is reopened without the transcript, so the next model is handed nothing');
+  assert.match(branch, /thread\.reopen = true/u, 'nothing will open a process for it again');
+  assert.match(branch, /couldNotEnd\(failed\)/u, 'the failure is not said, or is said without its reason');
+  assert.doesNotMatch(branch, /freshened\(|pushChatFresh\(/u, 'a reset that failed still wipes the slate');
+});
+
+test('a turn knows which conversation it was ASKED in, and cannot write into another', () => {
+  const command = source('chatCommand.ts');
+
+  // Captured as the turn JOINS the chain, which is the whole point: a question queued behind an
+  // answer waits, and *New chat* pressed while it waits means its author is no longer in the
+  // conversation they typed it in.
+  const queue = between(command, 'function ask(entry: ChatEntry', 'function chatLanguage(');
+  assert.match(queue, /const began = thread\.generation;/u, 'a queued turn does not remember which conversation it was typed in');
+  assert.match(queue, /oneTurn\(entry, text, began\)/u, 'the turn is not told which conversation it belongs to');
+
+  const turn = between(command, 'async function oneTurn(', 'function outcomeOf(');
+  // Refused before ANYTHING, so a queued question is never sent and the reset is not held waiting
+  // for an answer nobody is in the conversation for — and the words go back to the composer.
+  const refused = turn.indexOf('!sameSlate(began, thread.generation)');
+  assert.ok(refused >= 0 && refused < turn.indexOf('reopened(thread)'),
+    'a turn asked in a conversation that has been reset is still sent');
+  assert.match(turn.slice(refused, refused + 600), /pushChatDraft\(entry, text\)/u, 'the words somebody typed are thrown away');
+  // And the WRITES at the end are guarded on the slate itself rather than on the generation, because
+  // those are two different questions: between a reset beginning and the slate being wiped, the turn
+  // in flight is still writing into the OLD conversation, which is where its stopped line belongs.
+  const wiped = turn.indexOf('!sameSlate(mySlate, thread.saveId)');
+  assert.ok(wiped > turn.indexOf('await thread.session.send('), 'the slate is checked before the answer is even asked for');
+  assert.ok(wiped < turn.indexOf('ledger(thread, {'),
+    'a turn from a wiped conversation is still priced into the one that replaced it');
+  assert.match(turn, /const mySlate = thread\.saveId;/u, 'the turn never records which conversation it is writing into');
+});
+
+test('one reset at a time, per conversation', () => {
+  // The gesture is a button and the work takes as long as ending a turn takes, so two presses are
+  // ordinary. Two resets at once would dispose the same session twice, archive the same record
+  // twice, and publish two different fresh ids for one tab. (Two vendors, the plan round.)
+  const command = source('chatCommand.ts');
+  const start = between(command, 'async function freshStart(', 'async function freshening(');
+
+  assert.match(command, /const resetting = new Set<object>\(\);/u, 'nothing stops a second press');
+  assert.match(start, /resetting\.has\(entry\.id\)/u, 'the latch is never read');
+  assert.match(start, /try \{\s*\n\s*await freshening\(entry, thread\);\s*\n\s*\} finally \{\s*\n\s*resetting\.delete\(entry\.id\);/u,
+    'a reset that throws leaves the latch set, and the button dead for the life of the window');
+});
+
+test('the slate is applied as ONE value, and the disk marks are deleted rather than emptied', () => {
+  const command = source('chatCommand.ts');
+  const reset = between(command, 'async function freshening(', 'async function ended(');
+
+  // One statement, so a field added to `Freshened` is applied here by construction rather than by
+  // somebody remembering this statement exists.
+  assert.match(reset, /Object\.assign\(thread, freshened\(randomUUID\(\), Date\.now\(\)\)\)/u,
+    'the reset assigns fields one by one, so the next one added will be forgotten');
+  assert.match(reset, /for \(const mark of UNSAVED\) \{\s*\n\s*delete thread\[mark\];/u,
+    'the marks that say what the disk holds are not deleted, so the new record is never written');
+});
+
+test('a conversation nobody said anything in is not archived, and the dead session is written once', () => {
+  const command = source('chatCommand.ts');
+  const archive = between(command, 'async function archiveConversation(', 'const MODEL_SWITCH');
+
+  assert.match(archive, /thread\.messages\.length === 0/u, 'resetting an untouched tab leaves an empty conversation in Recent');
+  assert.match(archive, /closedAt: Date\.now\(\)/u, 'the old record is not stamped closed');
+  // Closed, never deleted: it appears in Recent under its own id and opens.
+  assert.doesNotMatch(archive, /forget\(/u, 'the old conversation is deleted rather than archived');
+  // And the dead stub both the reload and the reset need is written once rather than twice.
+  assert.match(command, /function closedSession\(note: string\): ChatSession \{/u);
+  assert.match(command, /const closed = closedSession\(reloadedNote\(saved\.modelId\)\);/u,
+    'the reload path still builds its own copy of the dead session');
+});
+
+test('the page is told in its own message, because the state push does not mention the passage', () => {
+  // A state message is the whole truth about every region it MENTIONS, and the push does not mention
+  // the quotation at the top of the tab — so it would survive every push and caption a conversation
+  // it has nothing to do with. That stuck quotation is the thing this gesture was asked for.
+  const panel = source('chatPanel.ts');
+  const page = source('chatPage.ts');
+
+  assert.match(panel, /entry\.panel\.post\(\{ type: 'fresh', id, noteHtml: escapeHtml\(note\) \}\)/u);
+  const handler = page.slice(page.indexOf("data.type === 'fresh'"), page.indexOf("if (data.type !== 'state')"));
+  assert.match(handler, /getElementById\('passage'\)[\s\S]{0,200}textContent = ''/u, 'the old conversation’s quotation survives the reset');
+  // The id, so a tab that was reset and then reloaded comes back as the new conversation — merged
+  // into the held state rather than replacing it, as the note handler beside it does.
+  assert.match(handler, /const held = vscode\.getState\(\) \|\| \{\};[\s\S]{0,120}held\.id = data\.id;[\s\S]{0,60}vscode\.setState\(held\)/u,
+    'the reset does not reach the serializer, or throws away everything else held in that state');
+  // And the sentence, recorded in `lastWritten` for the same reason the note handler records it:
+  // without that the next state carrying the same failure reads as unchanged, and this line stands
+  // as a stale status line until the failure itself moves.
+  assert.match(handler, /lastWritten\.failure = freshLine/u, 'the archived line is left to go stale');
+});
