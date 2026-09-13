@@ -126,7 +126,10 @@ public sealed class ConsultantsTests : IDisposable
 
     // ---------- local ----------
 
-    private LocalConsultant Local() => new(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local", _data);
+    private static LocalConsultant Local() => new(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local");
+
+    /// <summary>The schema as the SERVICE provisions it — once, before any launch is built.</summary>
+    private string Schema() => ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"));
 
     [Fact]
     public void TheLocalEngineIsTheOneThatKeepsNoConversation()
@@ -142,11 +145,50 @@ public sealed class ConsultantsTests : IDisposable
     [Fact]
     public void TheLocalEngineIsBoundToTheANSWERSchema_NotTheFindingSchema()
     {
-        var args = Local().Build(Launch()).Request.Arguments;
+        var launch = new ConsultantLaunch(Repo, "help me", string.Empty, Answers, new ReviewerSettings("local"), Schema());
+
+        var args = Local().Build(launch).Request.Arguments;
 
         var schema = args[Array.IndexOf([.. args], "--schema-file") + 1];
         File.ReadAllText(schema).Should().Contain("\"answer\"").And.NotContain("findings");
         args.Should().Contain("--ask-local");
+    }
+
+    [Fact]
+    public void BuildWritesNOTHING_OnAnyRoute()
+    {
+        // A pure builder is what makes every flag a unit test, and a request that provisions a file
+        // cannot be constructed just to be looked at. The schema is put on disk once when the service
+        // is built; three reviewers found the three faces of it having been done here instead.
+        var untouched = Path.Combine(_data, "nothing-should-appear-here");
+
+        foreach (var consultant in Consultants())
+        {
+            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, Answers, new ReviewerSettings("v"), Path.Combine(untouched, "schema.json")));
+        }
+
+        Directory.Exists(untouched).Should().BeFalse("no adapter may create a directory while describing a launch");
+    }
+
+    [Fact]
+    public void TheLocalEngineUnwrapsItsEnvelope_AndTheCLIsDoNot()
+    {
+        // A CLI asked about a configuration file can legitimately answer prose that IS JSON with an
+        // `answer` property. Unwrapping every vendor's answer mangled exactly that.
+        const string envelope = """{"answer":"check the separator","priority":1}""";
+
+        ((IConsultantRuntime)Local()).ReadAdvice(envelope).Should().Be("check the separator");
+        ((IConsultantRuntime)Claude()).ReadAdvice(envelope).Should().Be(envelope);
+        ((IConsultantRuntime)Agy()).ReadAdvice(envelope).Should().Be(envelope);
+        ((IConsultantRuntime)new CodexConsultant(new CodexRuntime())).ReadAdvice(envelope).Should().Be(envelope);
+    }
+
+    [Fact]
+    public void AnEmptyEnvelopeIsAnEmptyAnswer_NotOurOwnJsonShownAsAdvice()
+    {
+        // The service has a path for "the consultant answered nothing"; returning the envelope would
+        // take it past that path and put our JSON in front of the caller.
+        ((IConsultantRuntime)Local()).ReadAdvice("""{"answer":""}""").Should().BeEmpty();
     }
 
     [Fact]
@@ -222,7 +264,7 @@ public sealed class ConsultantsTests : IDisposable
                 .Should().Contain("line two", consultant.Vendor);
         }
 
-        var local = Local().Build(Launch(prompt: "line one\nline two"));
+        var local = Local().Build(new ConsultantLaunch(Repo, "line one\nline two", string.Empty, Answers, new ReviewerSettings("local"), Schema()));
         var promptFile = local.Request.Arguments[Array.IndexOf([.. local.Request.Arguments], "--prompt-file") + 1];
         File.ReadAllText(promptFile).Should().Contain("line two");
     }
@@ -236,7 +278,7 @@ public sealed class ConsultantsTests : IDisposable
         }
     }
 
-    private IConsultantRuntime[] Consultants() =>
+    private static IConsultantRuntime[] Consultants() =>
         [new CodexConsultant(new CodexRuntime()), Claude(), Agy(), Local()];
 }
 
@@ -261,7 +303,7 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
     [InlineData("my-claude", "claude", "")]
     public void EveryVendorCliConsults(string provider, string runtime, string baseUrl)
     {
-        ConsultantResolution.For(new VendorIdentity(provider, runtime, baseUrl), _data).Should().NotBeNull();
+        ConsultantResolution.For(new VendorIdentity(provider, runtime, baseUrl)).Should().NotBeNull();
     }
 
     [Fact]
@@ -269,8 +311,10 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
     {
         var identity = new VendorIdentity("local", "local", "http://127.0.0.1:11434/v1");
 
-        ConsultantResolution.For(identity, _data).Should().NotBeNull();
-        ConsultantResolution.For(identity).Should().BeNull("with no data directory it has nowhere to write the answer schema");
+        // It takes a vendor identity and NOTHING else. A `dataDir` parameter lived here for one
+        // round, so the local route could provision its schema — and made this very call answer null
+        // for a runtime `Consulting` advertises.
+        ConsultantResolution.For(identity).Should().NotBeNull();
     }
 
     [Theory]
@@ -280,15 +324,44 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
     {
         var identity = new VendorIdentity(provider, runtime, baseUrl);
 
-        ConsultantResolution.For(identity, _data).Should().BeNull();
+        ConsultantResolution.For(identity).Should().BeNull();
         ConsultantResolution.CannotConsult(identity).Should().Contain(provider).And.Contain("Consultant section");
+    }
+
+    [Fact]
+    public void EveryRuntimeTheListADVERTISESCanActuallyBeBuilt()
+    {
+        // `Consulting` is a hand-written list and `For` is a switch, and they are read by different
+        // people: the list goes into the refusal sentence a person reads, the switch decides what
+        // actually launches. Adding the next consultant to one of them only would either advertise a
+        // runtime that refuses or hide one that works. (codex, code round — and this test is the
+        // cheaper half of its fix, since the two cannot be collapsed without the switch losing the
+        // per-vendor construction each route needs.)
+        foreach (var runtime in ConsultantResolution.Consulting)
+        {
+            var identity = new VendorIdentity(runtime, runtime, string.Empty);
+
+            ConsultantResolution.For(identity).Should().NotBeNull(
+                $"'{runtime}' is advertised as a consulting runtime, so it must resolve to an adapter");
+        }
+    }
+
+    [Fact]
+    public void ARuntimeTheListDoesNotNameIsNotQuietlyBuildable()
+    {
+        // The other direction of the same disagreement.
+        foreach (var runtime in (string[])["remote", "gemini", "something-new"])
+        {
+            ConsultantResolution.Consulting.Should().NotContain(runtime);
+            ConsultantResolution.For(new VendorIdentity(runtime, runtime, string.Empty)).Should().BeNull(runtime);
+        }
     }
 
     [Fact]
     public void AClaudeRowNeverProducesAnAgyExecutable()
     {
         // vendor-routing.md, made structural: the adapter and the executable are chosen together.
-        var consultant = ConsultantResolution.For(new VendorIdentity("claude", "claude", string.Empty), _data);
+        var consultant = ConsultantResolution.For(new VendorIdentity("claude", "claude", string.Empty));
 
         consultant.Should().BeOfType<ClaudeConsultant>();
         consultant!.Build(new ConsultantLaunch("D:/repo", "p", string.Empty, "D:/out", new ReviewerSettings("claude")))

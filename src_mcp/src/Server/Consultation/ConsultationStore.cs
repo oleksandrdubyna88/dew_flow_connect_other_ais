@@ -91,9 +91,11 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
     /// somebody's source code — and nothing was deleting them. Named as a growth surface here rather
     /// than discovered as a full disk: one turn is kilobytes, a busy week is a few hundred of them,
     /// and they go on the same clock as the record they belong to. (gemini, this story's plan round.)</para>
-    /// <para>Deleted by AGE rather than by owner: a file cannot say which consultation it came from,
-    /// and one older than the retention window belongs to a record that is itself gone. A file a
-    /// running turn is still writing is younger than the window by definition.</para>
+    /// <para>Deleted when it is OURS and old. A file cannot say which consultation it came from, so
+    /// the clock stands in for that — one older than the retention window belongs to a record that is
+    /// itself gone, and a file a running turn is still writing is younger than the window by
+    /// definition. But age is not ownership: <see cref="OurOwn"/> is what keeps a note somebody left
+    /// in this directory out of it. (codex, code round.)</para>
     /// </remarks>
     private int SweepAnswers(DateTime nowUtc, TimeSpan retention)
     {
@@ -108,7 +110,11 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
         {
             try
             {
-                if (nowUtc - File.GetLastWriteTimeUtc(path) > retention)
+                // OURS by name, as well as old. A person or another component putting a file under
+                // this directory would otherwise have it deleted on the retention clock, and a sweep
+                // that removes what it did not write is a sweep nobody can trust with a directory.
+                // (codex, code round.)
+                if (OurOwn(Path.GetFileName(path)) && nowUtc - File.GetLastWriteTimeUtc(path) > retention)
                 {
                     File.Delete(path);
                     removed++;
@@ -122,6 +128,21 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
 
         return removed;
     }
+
+    /// <summary>
+    /// A file this product wrote into the answers directory: a consultant's answer, or the prompt the
+    /// local shim was handed.
+    /// </summary>
+    /// <remarks>
+    /// The two shapes are the adapters' own: <c>&lt;vendor&gt;-consult-&lt;guid&gt;.txt</c> from a CLI
+    /// route, and <c>local-consult-&lt;guid&gt;.prompt</c> / <c>.json</c> from the local one. A sweep
+    /// that removes what it did not write is a sweep nobody can trust with a directory.
+    /// </remarks>
+    private static bool OurOwn(string name) =>
+        name.Contains("-consult-", StringComparison.Ordinal)
+        && (name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".prompt", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Whether this repository is free for the sweep to decide anything about.

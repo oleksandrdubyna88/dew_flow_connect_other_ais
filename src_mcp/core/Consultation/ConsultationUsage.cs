@@ -25,20 +25,24 @@ public static class ConsultationUsage
         IReadOnlyList<(long TokensIn, long TokensOut, double? CostUsd)> alreadyRecorded,
         (long TokensIn, long TokensOut, double? CostUsd) reported)
     {
-        if (alreadyRecorded.Count == 0)
+        // ONE pass, and the clamp applies to the first turn as well: a vendor reporting a negative
+        // count is reporting something this arithmetic does not understand, and it must not reach the
+        // ledger merely because there was nothing to subtract from it yet.
+        var soFarIn = 0L;
+        var soFarOut = 0L;
+        var soFarUsd = (double?)null;
+        foreach (var turn in alreadyRecorded)
         {
-            return reported;
+            soFarIn += turn.TokensIn;
+            soFarOut += turn.TokensOut;
+            soFarUsd = turn.CostUsd is { } spent ? (soFarUsd ?? 0) + spent : soFarUsd;
         }
-
-        var soFarIn = alreadyRecorded.Sum(t => t.TokensIn);
-        var soFarOut = alreadyRecorded.Sum(t => t.TokensOut);
-        var soFarUsd = alreadyRecorded.Any(t => t.CostUsd is not null)
-            ? alreadyRecorded.Sum(t => t.CostUsd ?? 0)
-            : (double?)null;
 
         return (
             Math.Max(reported.TokensIn - soFarIn, 0),
             Math.Max(reported.TokensOut - soFarOut, 0),
-            reported.CostUsd is { } usd && soFarUsd is { } already ? Math.Max(usd - already, 0) : reported.CostUsd);
+            reported.CostUsd is { } usd
+                ? Math.Max(usd - (soFarUsd ?? 0), 0)
+                : reported.CostUsd);
     }
 }

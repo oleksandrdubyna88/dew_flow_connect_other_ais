@@ -19,7 +19,7 @@ namespace CoaiMcp.Runners.Consultation;
 /// unconstrained local request is answered with an invented shape after a full generation has been
 /// paid for — which is what <see cref="ConsultAnswerSchema"/> exists for.</para>
 /// </remarks>
-public sealed class LocalConsultant(LocalRuntime inner, string vendor, string dataDir) : IConsultantRuntime
+public sealed class LocalConsultant(LocalRuntime inner, string vendor) : IConsultantRuntime
 {
     /// <summary>
     /// How much conversation travels into each turn.
@@ -46,10 +46,10 @@ public sealed class LocalConsultant(LocalRuntime inner, string vendor, string da
             ConsultantRoles.Consult,
             launch.Prompt,
             launch.RepoPath,
-            // NOT under `consultations/`: that directory holds one file per consultation, keyed by
-            // id, and story 2's live check found this schema being read back as a record with no id
-            // at all. A directory with a shape belongs to that shape alone.
-            ConsultAnswerSchema.EnsureFile(Path.Combine(dataDir, "schemas")),
+            // Already on disk, put there when the service was built. Provisioning it HERE made this
+            // method impure, put a filesystem write in the core, and forced the data directory into
+            // the vendor factory — three reviewers found those three faces of it on one round.
+            launch.AnswerSchemaFile,
             launch.OutputDir,
             launch.Settings);
         ConsultantLaunches.MustCarryNoLineBreak(built.Request.Arguments);
@@ -60,17 +60,20 @@ public sealed class LocalConsultant(LocalRuntime inner, string vendor, string da
     /// <summary>Nothing to read: a completion is not a conversation, and there is no id to keep.</summary>
     public string ReadHandle(ProcessResult result) => string.Empty;
 
+    /// <summary>The <c>answer</c> of the schema envelope this route alone is bound to.</summary>
+    public string ReadAdvice(string raw) => ConsultantAnswer.TextOf(raw);
+
     /// <summary>It never held one, so it can never have dropped one.</summary>
     public bool DroppedTheConversation(ProcessResult result) => false;
 }
 
 /// <summary>
-/// The consultant's answer out of a schema-bound reply, or the raw text when it is already prose.
+/// The advice out of the schema envelope the local route is bound to.
 /// </summary>
 /// <remarks>
-/// The three CLIs answer prose and this passes it straight through; the local engine answers
-/// <c>{"answer": "…"}</c> because its route refuses to run without a schema. One reader rather than a
-/// branch in the service, so "what did the consultant actually say" has a single answer.
+/// Used by that route ALONE, through <c>IConsultantRuntime.ReadAdvice</c>. Applying it to every
+/// vendor mangled a CLI's prose that happened to be JSON with an <c>answer</c> property — which is
+/// exactly what a consultant asked about a configuration file might return.
 /// </remarks>
 public static class ConsultantAnswer
 {
@@ -86,10 +89,12 @@ public static class ConsultantAnswer
         {
             using var document = JsonDocument.Parse(trimmed);
 
+            // An EMPTY answer is returned as empty, not as the envelope: the service has a path for
+            // "the consultant answered nothing", and showing `{"answer":""}` as advice would take it
+            // past that path and put our own JSON in front of the caller.
             return document.RootElement.TryGetProperty("answer", out var answer)
                    && answer.ValueKind == JsonValueKind.String
-                   && answer.GetString() is { Length: > 0 } text
-                ? text
+                ? answer.GetString() ?? string.Empty
                 : raw;
         }
         catch (JsonException)

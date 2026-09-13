@@ -16,8 +16,14 @@ public static class ConsultantResolution
     /// <summary>The runtimes this build can hold a consultation with, in the order the stories added them.</summary>
     public static IReadOnlyList<string> Consulting { get; } = ["codex", "claude", "antigravity", "local"];
 
-    /// <param name="dataDir">Where a route that needs a file of its own may write one. Only the local engine does.</param>
-    public static IConsultantRuntime? For(VendorIdentity vendor, string dataDir = "") => RuntimeResolution.NameOf(vendor) switch
+    /// <remarks>
+    /// It takes a vendor identity and nothing else. A <c>dataDir</c> parameter lived here for one
+    /// round, so the local route could provision its schema — which made
+    /// <c>For(identity)</c> answer null for a runtime <see cref="Consulting"/> advertises, and coupled
+    /// the vendor factory to the server's storage layout. The schema is provisioned once when the
+    /// service is built and travels on the launch.
+    /// </remarks>
+    public static IConsultantRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
     {
         // A custom endpoint riding the codex CLI (DeepSeek) authenticates and configures differently;
         // it consults when its provider overrides are measured, not before.
@@ -28,10 +34,10 @@ public static class ConsultantResolution
         "antigravity" =>
             new AntigravityConsultant(RuntimeResolution.For(vendor) ?? new AntigravityRuntime(vendor.Provider), vendor.Provider),
         // The local engine has no CLI and no conversation: it is a completion per turn, and the
-        // transcript is ours to carry. It needs the data directory for its answer schema, which is
-        // the one thing a consultation changes about its launch.
-        "local" when dataDir.Length > 0 =>
-            new LocalConsultant(new LocalRuntime(vendor.Provider, vendor.BaseUrl), vendor.Provider, dataDir),
+        // transcript is ours to carry.
+        "local" => new LocalConsultant(
+            RuntimeResolution.For(vendor) as LocalRuntime ?? new LocalRuntime(vendor.Provider, vendor.BaseUrl),
+            vendor.Provider),
         _ => null,
     };
 

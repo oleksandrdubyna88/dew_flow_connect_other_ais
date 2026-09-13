@@ -34,15 +34,33 @@ internal static class ConsultantLaunches
     /// </remarks>
     public static void MustCarryNoLineBreak(IReadOnlyList<string> arguments)
     {
-        foreach (var argument in arguments)
+        for (var at = 0; at < arguments.Count; at++)
         {
-            if (argument.Contains('\n') || argument.Contains('\r'))
+            if (arguments[at].Contains('\n') || arguments[at].Contains('\r'))
             {
+                // The POSITION and a sanitised head, never the value verbatim. The offending value is
+                // a configured model name or path and can carry `\r\n[a forged log line]`; anything
+                // that logs this exception would then print it as its own. (codex, code round.)
                 throw new ArgumentException(
-                    $"a consultation argument contains a line break and would be truncated by a Windows shim: '{argument}'",
+                    $"consultation argument {at} contains a line break and would be truncated by a Windows shim: "
+                    + $"'{OneLine(arguments[at])}'",
                     nameof(arguments));
             }
         }
+    }
+
+    /// <summary>A value safe to put in a message: control characters shown, and a bounded length.</summary>
+    private static string OneLine(string value)
+    {
+        var flattened = string.Concat(value.Select(c => c switch
+        {
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
+            _ => char.IsControl(c) ? "?" : c.ToString(),
+        }));
+
+        return flattened.Length <= 120 ? flattened : flattened[..120] + "…";
     }
 
     /// <summary>Whether the process said this, on either stream, however it was cased.</summary>

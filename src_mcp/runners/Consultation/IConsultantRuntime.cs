@@ -23,12 +23,17 @@ public abstract record ConsultantMemory
 /// <param name="RepoPath">The LIVE checkout the consultant runs in, read-only.</param>
 /// <param name="Handle">The vendor's own conversation id — empty for a fresh consultation.</param>
 /// <param name="OutputDir">Where the vendor may write its answer file; never inside the repository.</param>
+/// <param name="AnswerSchemaFile">
+/// Where the answer schema already sits, for the one route that insists on one. Provisioned by the
+/// service, never by <c>Build</c> — a pure builder is what makes every flag a unit test.
+/// </param>
 public sealed record ConsultantLaunch(
     string RepoPath,
     string Prompt,
     string Handle,
     string OutputDir,
-    ReviewerSettings Settings);
+    ReviewerSettings Settings,
+    string AnswerSchemaFile = "");
 
 /// <summary>The role every consultation launch carries — a string, since roles became data.</summary>
 public static class ConsultantRoles
@@ -66,6 +71,20 @@ public interface IConsultantRuntime
 
     /// <summary>The vendor's own id for this conversation, read off whatever the process said — or empty.</summary>
     string ReadHandle(ProcessResult result);
+
+    /// <summary>
+    /// The advice out of whatever shape this vendor answers in. Prose for every CLI; the one
+    /// schema-bound route unwraps its envelope.
+    /// </summary>
+    /// <remarks>
+    /// On the ADAPTER rather than in the service, because it is vendor knowledge: unwrapping every
+    /// answer unconditionally mangled a CLI's prose that happened to be JSON with an <c>answer</c>
+    /// property — a consultant asked about a configuration file could return one — and a future route
+    /// with its own envelope would have meant another branch in the service. (gemini, story 2's code
+    /// round.) An empty string is returned AS an empty string, so the service's own
+    /// "the consultant answered nothing" path fires instead of the envelope being shown as advice.
+    /// </remarks>
+    string ReadAdvice(string raw) => raw;
 
     /// <summary>The vendor no longer holds this conversation: a resume that cannot be honoured.</summary>
     bool DroppedTheConversation(ProcessResult result);

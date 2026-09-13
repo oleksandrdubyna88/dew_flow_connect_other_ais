@@ -12,6 +12,11 @@ namespace CoaiMcp.Core.Consultation;
 /// <para>So this is the smallest schema that means "just answer": one required string.
 /// <c>LocalAsk.Bounded</c> passes a schema that is not the finding schema through unchanged, so
 /// nothing has to be taught about this one.</para>
+/// <para><b>Text only.</b> Writing it to disk lives in the runners, and the write happens once when
+/// the service is built — not inside an adapter's <c>Build</c>, which is pure by contract so that
+/// every flag is a unit test. Three reviewers found that from three directions on story 2's code
+/// round: a core type touching the filesystem, a <c>Build</c> with a side effect, and a storage path
+/// leaking into the vendor factory.</para>
 /// </remarks>
 public static class ConsultAnswerSchema
 {
@@ -30,19 +35,4 @@ public static class ConsultAnswerSchema
           }
         }
         """;
-
-    /// <summary>The file, written where the launch can name it. Idempotent, and never rewritten in place.</summary>
-    public static string EnsureFile(string directory)
-    {
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, Name);
-        if (!File.Exists(path) || File.ReadAllText(path) != Json)
-        {
-            var temp = path + ".tmp";
-            File.WriteAllText(temp, Json);
-            File.Move(temp, path, overwrite: true);
-        }
-
-        return path;
-    }
 }

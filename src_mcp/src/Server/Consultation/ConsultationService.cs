@@ -37,6 +37,15 @@ public sealed class ConsultationService(
         problem => log.Warning("consultations: {Problem}", problem));
     private readonly ConsultCallCounter _counter = new(settings.DataDir);
 
+    /// <summary>
+    /// The answer schema, on disk once when this service is built rather than on every launch.
+    /// </summary>
+    /// <remarks>
+    /// Its own directory, never <c>consultations/</c>: that one holds a file per consultation keyed
+    /// by id, and story 2's live check found this schema being read back as a record with no id.
+    /// </remarks>
+    private readonly string _answerSchema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
+
     public ConsultationStore Store => _store;
 
     public int Sweep(Func<int, bool> isAlive) =>
@@ -132,7 +141,7 @@ public sealed class ConsultationService(
                   + " — a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation");
         }
 
-        var runtime = ConsultantResolution.For(row.Identity(), settings.DataDir);
+        var runtime = ConsultantResolution.For(row.Identity());
         if (runtime is null)
         {
             return Error(ConsultantResolution.CannotConsult(row.Identity()));
@@ -200,7 +209,12 @@ public sealed class ConsultationService(
         var nonce = Guid.NewGuid().ToString("N")[..8];
         var before = await _invariant.SnapshotAsync(repo, ct);
         var launch = consultant.Runtime.Build(new ConsultantLaunch(
-            repo, await PromptAsync(consultant, record, problem, files, nonce, repo, ct), record.Handle, AnswersDir, Settings(consultant)));
+            repo,
+            await PromptAsync(consultant, record, problem, files, nonce, repo, ct),
+            record.Handle,
+            AnswersDir,
+            Settings(consultant),
+            _answerSchema));
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) };
         _store.Write(asking);
         log.Information("consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);
@@ -289,10 +303,10 @@ public sealed class ConsultationService(
             return Error($"the consultant ({consultant.Row.Provider}) exited cleanly but answered nothing; its transcript is kept at {kept} — try once more with a sharper problem statement");
         }
 
-        // The three CLIs answer prose and this passes it through; the local engine answers
-        // {"answer": …} because its route refuses to run without a schema. One reader, so "what did
-        // the consultant say" has a single answer whichever route produced it.
-        var advised = ConsultantAnswer.TextOf(launched.Answer).Trim();
+        // The ADAPTER reads its own shape: prose for every CLI, an envelope for the one schema-bound
+        // route. Unwrapping every answer here mangled a CLI's prose that happened to be JSON with an
+        // `answer` property, which a consultant asked about a configuration file could return.
+        var advised = consultant.Runtime.ReadAdvice(launched.Answer).Trim();
         var spent = ThisTurnsShare(consultant, record, launched.Usage);
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd);
         var answered = record with
