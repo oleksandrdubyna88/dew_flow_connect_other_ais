@@ -218,6 +218,16 @@
         "command": "coai.chatChoose",
         "title": "CoAI: choose",
         "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.switchConversations",
+        "title": "CoAI: switch conversations…",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.forgetPickedConversation",
+        "title": "CoAI: forget the picked conversation",
+        "category": "ConnectOtherAIs"
       }
     ],
     "configuration": {
@@ -704,6 +714,10 @@
         {
           "command": "coai.answerQuestionWaiting",
           "when": "false"
+        },
+        {
+          "command": "coai.forgetPickedConversation",
+          "when": "false"
         }
       ],
       "webview/context": [
@@ -722,6 +736,10 @@
         {
           "command": "coai.addTheQuestion",
           "when": "webviewId == 'claudeVSCodePanel'"
+        },
+        {
+          "command": "coai.switchConversations",
+          "when": "webviewId == 'claudeVSCodePanel'"
         }
       ],
       "editor/context": [
@@ -734,6 +752,11 @@
           "command": "coai.chatChoose",
           "when": "editorTextFocus",
           "group": "coai@2"
+        },
+        {
+          "command": "coai.switchConversations",
+          "when": "editorTextFocus",
+          "group": "coai@3"
         }
       ]
     },
@@ -747,6 +770,16 @@
         "command": "coai.chatWithOtherAi",
         "key": "ctrl+alt+a",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "coai.switchConversations",
+        "key": "ctrl+shift+alt+g",
+        "mac": "cmd+shift+alt+g"
+      },
+      {
+        "command": "coai.forgetPickedConversation",
+        "key": "alt+delete",
+        "when": "inQuickOpen && coai.conversationsPickerOpen"
       }
     ]
   },

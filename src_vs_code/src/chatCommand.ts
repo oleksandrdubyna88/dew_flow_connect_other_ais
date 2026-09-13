@@ -18,7 +18,7 @@ import {
   reaskFrom,
 } from './chatPresets';
 import { ChatTabMemory, reloadedNote } from './chatTabs';
-import { CONVERSATION_VERSION, ConversationRecord } from './chatStore';
+import { CONVERSATION_VERSION, ConversationRecord, metaOf } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
 import { ChatEntry, ChatPanels } from './chatPanels';
@@ -85,6 +85,7 @@ import {
 } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
+import { OpenConversation } from './conversationPicker';
 import { Vendor } from './vendors';
 
 /**
@@ -269,6 +270,22 @@ interface Thread extends ChatMemory {
    * three vendors' reviewers found it on A3's plan round.</p>
    */
   createdAt: number;
+  /**
+   * When something was last SAID in this conversation — what the picker orders an open row by.
+   *
+   * <p>Not a second copy of the record's `updatedAt`: that one is stamped by the store on a write,
+   * and a window that could not reach the disk would then order its own open tabs by a number that
+   * never moved. This is the same instant seen from the other side, kept where the picker can read it
+   * without opening anything.</p>
+   *
+   * <p><b>Stamped where a change is PROVED, never on a repaint.</b> `show` runs on every push — a
+   * turn starting, a queue position moving, a failure clearing — and stamping above its guard would
+   * put a conversation nobody spoke in at the top of the list every time its tab redrew. It is the
+   * same ruling A4 made for the record's own instant when it decided that a reload is not a use: a
+   * restored tab starts at the instant the record carries, and stays there until somebody asks
+   * something.</p>
+   */
+  usedAt: number;
   /**
    * This conversation's store writes, one after another.
    *
@@ -487,6 +504,70 @@ export function heldConversationIds(panels: ChatPanels): readonly string[] {
 }
 
 /**
+ * What this window holds open, described the way a STORED row is — for the picker's *Open* section.
+ *
+ * <p>A list of ids is what the heartbeat above needs and is not a list a person can choose from. Two
+ * open conversations sharing a title are exactly the case the registry exists to handle, and the
+ * model, the turn count and the last line are what tell them apart; a row that omitted them made the
+ * open ones the least distinguishable rows on the list.</p>
+ *
+ * <p><b>Through `metaOf`, not by counting here.</b> A stored row is derived from a record by that
+ * function, and a second derivation of "how many turns" and "the last line" would be two ways for an
+ * open conversation and a closed one to describe the same thing differently — a conversation would
+ * change its description the moment its tab closed. So a record is built for the thread and the same
+ * derivation is applied to it; nothing is written.</p>
+ *
+ * <p>It lives here, with the accessor above, because the `Thread` map is private to this file: the
+ * registry knows keys and labels, and every fact a row carries is on the thread. No decision is taken
+ * here — the ORDER is `conversationChoice.ts`'s and the rows are `conversationPicker.ts`'s.</p>
+ */
+export function openConversations(panels: ChatPanels): readonly OpenConversation[] {
+  return panels.known().flatMap(({ key }) => {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    if (thread === undefined) {
+      return [];
+    }
+    // The record this conversation WOULD be saved as, stamped with when it was last used rather than
+    // with now — `recordOf` takes that instant precisely so a caller that is not saving can say what
+    // it means.
+    const meta = metaOf(recordOf(thread, thread.usedAt));
+
+    return [{
+      id: meta.id,
+      title: meta.title,
+      modelId: meta.modelId,
+      turns: meta.turns,
+      lastLine: meta.lastLine,
+      updatedAt: meta.updatedAt,
+    }];
+  });
+}
+
+/**
+ * Bring the tab holding this conversation to the front, and say whether there was one.
+ *
+ * <p>By the STORE id, because that is the only name the picker has for a conversation: its rows come
+ * from metadata files, and the live key is a `vscode.Tab` object that no row can carry. A caller that
+ * gets `false` has asked for a conversation this window does not hold — the registry moved under the
+ * picker between the list being drawn and the row being pressed — and must fall back to reopening it
+ * rather than doing nothing.</p>
+ */
+export function revealConversation(panels: ChatPanels, id: string): boolean {
+  for (const { key } of panels.known()) {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    if (entry !== undefined && thread?.saveId === id) {
+      entry.panel.reveal();
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * This extension host, so the chat can read the settings of the side it is actually on.
  *
  * <p>The same bind-once shape as `rememberChatsIn` above and as `chatOrphans.openLedger`, and for the
@@ -636,6 +717,10 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
   thread.savedCarryFrom = thread.carryFrom;
+  // AND WHEN. Below the guard, so it records that something CHANGED rather than that a page redrew —
+  // the picker orders its Open section by this, and a conversation nobody has spoken in must not
+  // climb to the top of it because its tab repainted. See `Thread.usedAt`.
+  thread.usedAt = Date.now();
   // The MEMENTO, until this window's migration has confirmed every record is on disk and
   // `retireMemento` has unbound it — a no-op from then on. It is kept this long because a store that
   // cannot be reached must not leave the person's next words written nowhere (A4's plan round).
@@ -1881,6 +1966,10 @@ function newConversation(
     // only baseline allowed to create a record rather than replace one.
     rev: 0,
     createdAt: Date.now(),
+    // Opened counts as used: a tab somebody has just made is the newest thing in this window, and a
+    // conversation with nothing said in it would otherwise sort to the bottom of the picker at the
+    // instant it is most likely to be looked for.
+    usedAt: Date.now(),
     writes: Promise.resolve(),
     title: state.title,
     reopen: false,
@@ -2353,16 +2442,24 @@ function restoredPage(
 }
 
 /**
+ * @param panel the panel VS Code handed back after a reload — and `undefined` for a caller that has
+ *   none. The picker is the first of those: it reopens a conversation nobody reloaded, so there is no
+ *   panel to fill and one is CREATED instead. It is created inside `createChatPanel` rather than here,
+ *   because the icon, the message wiring, the disposal and the zoom hook are all set up in that one
+ *   function and a second place that made a chat panel would have to remember every one of them
+ *   forever. Optional as a value rather than as a trailing parameter so that the serializer's call —
+ *   which is pinned by `chatRestore.test.ts` — reads exactly as it did.
  * @param saved the record as the store holds it — or, while the memento still holds anything, the
  *   memento's copy mapped through `fromLegacy` with `rev` 0, which is what says "no disk revision
  *   known" to the swap and lets the write decision adopt the store's copy on the first save
+ * @returns the entry, for a caller that has to reveal the tab it has just had built
  */
 export function restoreConversation(
   panels: ChatPanels,
-  panel: vscode.WebviewPanel,
+  panel: vscode.WebviewPanel | undefined,
   saved: ConversationRecord,
   extensionUri: vscode.Uri,
-): void {
+): ChatEntry {
   const config = vscode.workspace.getConfiguration('coai');
   const restored = savedPick(config, saved.modelId);
   const presets = { promptPresets: savedPrompts(config), modelPresets: savedModels(config) };
@@ -2449,6 +2546,10 @@ export function restoreConversation(
     // disk revision known — and the first save then meets whatever is there; `nextAfterSave` ADOPTS
     // it when its words are the beginning of ours, the rule kept for exactly that case.
     rev: saved.rev,
+    // And when it was last USED, which is the record's own instant rather than now: a reload is not
+    // a use, and neither is a picker reopening a conversation to look at it. The Open row it draws
+    // says how long ago somebody last said something, which is what a person is looking for.
+    usedAt: saved.updatedAt,
     // When it BEGAN, as the record says — not when it was last written. A memento copy carries only
     // its last write, and `fromLegacy` puts that in both fields, which is the best answer it has.
     createdAt: saved.createdAt,
@@ -2462,6 +2563,10 @@ export function restoreConversation(
   panels.open({}, saved.title, () => entry);
   // A restored conversation is an open one, and the sweep in every other window must hear so.
   pulse?.();
+
+  // HANDED BACK, for the caller that has no panel of its own: the serializer is given one by VS Code
+  // and ignores this, while the picker needs it to bring the tab it has just built to the front.
+  return entry;
 }
 
 /**

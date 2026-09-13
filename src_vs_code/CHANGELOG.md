@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+**You can find a conversation again.** Ten Claude tabs, a few files, and the chat you want is
+somewhere among them — or it was closed yesterday and there has been nothing to reopen it with at
+all. **CoAI: switch conversations…** is the list of every one of them: `Ctrl+Shift+Alt+G`
+(`Cmd+Shift+Alt+G` on a Mac), the right-click menu in Claude's panel or in an editor, or the command
+palette.
+
+**Open** at the top is what this window has in a tab right now, each row saying which model is
+answering, how many turns it has run, how long ago and what was last said in it. **Recent** below it
+is everything else, the most recently used first. Typing filters all of it — by the title, by the
+model, and by that last line — so a conversation you remember by one word of an answer rather than by
+its name is one word away. Choose an open one and its tab comes to the front. Choose a closed one and
+it opens again where it left off: the whole conversation, nothing running until you ask something,
+and that first question carries it across to whichever model answers.
+
+**A trash button on every closed row forgets that conversation**, and `Alt+Delete` forgets the one
+under the cursor. The list stays open either way, so clearing out five of them is five presses rather
+than five openings of the list — and a conversation that is open in a tab has no trash button, because
+that tab is still writing it. Close the tab first.
+
+**The globe in the title looks in every folder.** By default the list is this folder's conversations,
+which is almost always what you want; press it and it spans every project you have chatted in, with
+each row saying which folder it belongs to. The title always says which of the two you are looking at.
+
+A conversation that has gone since the list was drawn — another window forgot it — says so and its row
+disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
+instead, and keeps its row: nothing has been lost.
+
 ## Extension 0.39.0 — 2026-09-13
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.

@@ -26,11 +26,18 @@
  * read.</p>
  */
 
-/** The five ways into a chat, as the commands that open them. */
-export type Door = 'key' | 'default' | 'choose' | 'take' | 'add';
+/**
+ * The six ways into a chat, as the commands that open them.
+ *
+ * <p>`switch` is the odd one and is deliberately here: it opens the conversation PICKER rather than a
+ * conversation, and a person may dismiss it without opening anything. It is still the chat being
+ * reached for, which is the only question this ledger answers — *Opened* counts attempts, which is
+ * why the recording happens at the command handler and before anything that can refuse.</p>
+ */
+export type Door = 'key' | 'default' | 'choose' | 'take' | 'add' | 'switch';
 
 /** Every door this version knows how to open, in the order the commands are registered. */
-export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add'];
+export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add', 'switch'];
 
 /**
  * The doors that take a question rather than a passage — what *Asked* counts.
@@ -38,6 +45,10 @@ export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add'
  * <p>A set rather than a comparison written out at the counting site: the question "is this one of
  * the two" is asked in more than one place, and two copies of a list of names is two places for a
  * sixth door to be forgotten.</p>
+ *
+ * <p>The sixth arrived and is NOT here: `switch` opens a list of conversations, and whatever is
+ * chosen from it — an existing conversation revealed, an old one reopened — carries no question. It
+ * belongs to *Opened* and to nothing else.</p>
  */
 const ASKING: ReadonlySet<string> = new Set<string>(['take', 'add']);
 

@@ -54,6 +54,10 @@ const ALIAS: Record<string, string> = {
   'coai.answerQuestion': 'answer it in the panel',
   'coai.answerQuestionWaiting': 'the title-bar icon turns green',
   'coai.showRounds': 'show review rounds',
+  // It is hidden from the palette (`when: false`), because from there it would act on a list that is
+  // not open. The help therefore describes what the KEYBINDING does rather than naming a command a
+  // reader can never type — which is exactly what an alias is for.
+  'coai.forgetPickedConversation': 'forgets the conversation under the cursor',
 };
 
 /** Why a command needs no article. A sentence, on the record — never an empty string. */
