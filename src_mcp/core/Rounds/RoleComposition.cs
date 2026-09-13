@@ -71,11 +71,20 @@ public static partial class RoleComposition
     /// file and never from the environment or from the block a person pastes into an MCP client —
     /// working in one of the two places its settings can come from, which is worse than not working.
     /// </remarks>
-    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_]*$")]
+    /// <remarks>
+    /// <b>Anchored <c>\A…\z</c>, not <c>^…$</c>.</b> In .NET <c>$</c> matches at the end of the string
+    /// OR immediately before a trailing newline, so <c>^[A-Za-z][A-Za-z0-9_]*$</c> ACCEPTS
+    /// <c>"Requirements\n"</c> — an id carrying a line break into an environment variable name, a
+    /// session file and every recorded round. Found on the Team server's copy of this expression by
+    /// its own test; the two copies would otherwise disagree about the same id, which is worse than
+    /// either being wrong alone. (codex, plan 3 story 1's code round.)
+    /// </remarks>
+    [GeneratedRegex(@"\A[A-Za-z][A-Za-z0-9_]*\z")]
     private static partial Regex RoleId { get; }
 
     /// <summary>A prompt id is a file name under <c>&lt;dataDir&gt;/prompts/</c> — the slug shape every shipped id has.</summary>
-    [GeneratedRegex("^[a-z0-9][a-z0-9-]*$")]
+    /// <remarks>Anchored <c>\A…\z</c> for the reason the role id above is — and this one becomes a FILE NAME.</remarks>
+    [GeneratedRegex(@"\A[a-z0-9][a-z0-9-]*\z")]
     private static partial Regex PromptId { get; }
 
     /// <summary>

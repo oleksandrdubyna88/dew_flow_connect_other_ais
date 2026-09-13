@@ -55,7 +55,14 @@ public sealed partial class AcceptedRoles
     [GeneratedRegex(@"\A[A-Za-z][A-Za-z0-9_]*\z")]
     private static partial Regex RoleId { get; }
 
-    /// <summary>Every accepted spelling, keyed by the id folded — so membership ignores case.</summary>
+    /// <summary>
+    /// Every accepted role, keyed by its own spelling under an ignore-case comparer.
+    /// </summary>
+    /// <remarks>
+    /// The comparer does the folding, so <see cref="Knows"/> is a lookup with no allocation at all —
+    /// it used to lower-case the id on every call, on the request path. (gemini, this story's code
+    /// round.)
+    /// </remarks>
     private readonly Dictionary<string, string> _spelling;
 
     /// <summary>Whether any well-formed id is accepted, whoever named it.</summary>
@@ -64,10 +71,13 @@ public sealed partial class AcceptedRoles
     /// <summary>What every refusal message lists, in the order a person configured them.</summary>
     public IReadOnlyList<string> Names { get; }
 
-    private AcceptedRoles(Dictionary<string, string> spelling, IReadOnlyList<string> names, bool allowAny)
+    private AcceptedRoles(Dictionary<string, string> spelling, List<string> names, bool allowAny)
     {
         _spelling = spelling;
-        Names = names;
+        // A SNAPSHOT, not the list itself: `Names` is about to be served on the catalog endpoint, and
+        // a consumer that downcast it to `List<string>` and edited it would make this server advertise
+        // a role `Knows` refuses. (codex, this story's code round.)
+        Names = names.AsReadOnly();
         AllowAny = allowAny;
     }
 
@@ -88,18 +98,25 @@ public sealed partial class AcceptedRoles
     /// </remarks>
     public static AcceptedRoles From(IEnumerable<string> extra, bool allowAny)
     {
-        var spelling = new Dictionary<string, string>(StringComparer.Ordinal);
+        var spelling = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var names = new List<string>();
         foreach (var role in RoleCatalog.Builtin.Roles)
         {
-            spelling[Fold(role.Id)] = role.Id;
+            spelling[role.Id] = role.Id;
             names.Add(role.Id);
         }
 
+        // The SHIPPED spelling wins, deliberately. An operator who writes `architecture` into
+        // `Coai:ExtraRoles` has named a role this product already ships, and a built-in's identity is
+        // fixed — its id keys settings, open sessions and every recorded round, which is the rule
+        // plan 2 settled on the page. So the entry is accepted (it names a role this server runs) and
+        // the catalog's spelling is what gets recorded. The same first-wins rule covers two entries
+        // that differ only in case. Both are pinned by tests rather than left to be discovered.
+        // (local and gemini, this story's code round, on the silence rather than the behaviour.)
         foreach (var id in extra)
         {
             Guard(id);
-            if (spelling.TryAdd(Fold(id), id))
+            if (spelling.TryAdd(id, id))
             {
                 names.Add(id);
             }
@@ -136,7 +153,7 @@ public sealed partial class AcceptedRoles
     /// membership refuses one of them first. (gemini, the plan round.)
     /// </remarks>
     public bool Knows(string? id) =>
-        WellFormed(id) && (AllowAny || _spelling.ContainsKey(Fold(id!)));
+        WellFormed(id) && (AllowAny || _spelling.ContainsKey(id!));
 
     /// <summary>
     /// The spelling to RECORD for a role somebody named.
@@ -157,16 +174,17 @@ public sealed partial class AcceptedRoles
     /// </remarks>
     public string Canonical(string? said)
     {
-        if (string.IsNullOrEmpty(said))
+        // Shape FIRST, and it is not only tidiness: a malformed 4 KB id is about to be refused, and
+        // folding it for a lookup that cannot match allocates a 4 KB copy per request on input
+        // nobody here controls. (codex, this story's code round.)
+        if (!WellFormed(said))
         {
-            return string.Empty;
-        }
-        if (_spelling.TryGetValue(Fold(said), out var known))
-        {
-            return known;
+            return said ?? string.Empty;
         }
 
-        return AllowAny && WellFormed(said) ? Fold(said) : said;
+        return _spelling.TryGetValue(said!, out var known) ? known
+            : AllowAny ? Fold(said!)
+            : said!;
     }
 
     /// <summary>
@@ -181,6 +199,12 @@ public sealed partial class AcceptedRoles
     /// </remarks>
     public string? Refusal(string? said)
     {
+        // Missing is not malformed. "'' is not a role id" tells somebody who sent no role that the
+        // empty string was rejected, which is true and useless. (gemini, this story's code round.)
+        if (string.IsNullOrWhiteSpace(said))
+        {
+            return $"a review needs a role. Accepted: {string.Join(", ", Names)}";
+        }
         if (!WellFormed(said))
         {
             return $"'{said}' is not a role id. {ShapeRule}";

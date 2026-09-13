@@ -213,4 +213,71 @@ public sealed class AcceptedRolesTests
         roles.Names.Should().BeEquivalentTo(
             RoleCatalog.Builtin.Roles.Select(r => r.Id).Append("Requirements"));
     }
+
+    // ---------- what a configured entry may NOT quietly change ----------
+
+    [Fact]
+    public void AConfiguredEntryNamingAShippedRoleKeepsTheCatalogsSpelling()
+    {
+        // An operator writing `architecture` has named a role this product already ships, and a
+        // built-in's identity is FIXED — its id keys settings, open sessions and every recorded
+        // round, which is the rule plan 2 settled on the page. The entry is accepted, because it
+        // names a role this server runs; the catalog's spelling is what gets recorded.
+        var roles = AcceptedRoles.From([Shipped.ToLowerInvariant()], allowAny: false);
+
+        roles.Knows(Shipped).Should().BeTrue();
+        roles.Canonical(Shipped.ToLowerInvariant()).Should().Be(Shipped);
+        roles.Names.Should().ContainSingle(n => string.Equals(n, Shipped, StringComparison.OrdinalIgnoreCase),
+            "it is one role, listed once");
+    }
+
+    [Fact]
+    public void TwoConfiguredEntriesDifferingOnlyInCaseAreOneRoleAndTheFirstWins()
+    {
+        var roles = AcceptedRoles.From(["Requirements", "requirements"], allowAny: false);
+
+        roles.Names.Should().ContainSingle(n => string.Equals(n, "Requirements", StringComparison.OrdinalIgnoreCase));
+        roles.Canonical("REQUIREMENTS").Should().Be("Requirements", "the spelling that arrived first");
+    }
+
+    [Fact]
+    public void NamesCannotBeEditedByWhoeverIsHandedIt()
+    {
+        // It is about to be served on the catalog endpoint. A consumer that downcast it and edited it
+        // would make this server advertise a role `Knows` refuses. (codex, story 1's code round.)
+        var roles = AcceptedRoles.From(["Requirements"], allowAny: false);
+
+        (roles.Names as ICollection<string>)?.IsReadOnly.Should().NotBe(false);
+        var edit = () => ((IList<string>)roles.Names).Add("Invented");
+        edit.Should().Throw<NotSupportedException>();
+    }
+
+    // ---------- a refusal that is about a MISSING role, not a malformed one ----------
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ARoleThatWasNotSentIsRefusedAsMissingRatherThanAsMalformed(string? nothing)
+    {
+        // "'' is not a role id" tells somebody who sent no role that the empty string was rejected —
+        // true, and useless. (gemini, story 1's code round.)
+        var why = Default.Refusal(nothing);
+
+        why.Should().NotBeNull();
+        why.Should().Contain("needs a role").And.Contain(Shipped);
+        why.Should().NotContain("is not a role id");
+    }
+
+    // ---------- the hot path does not allocate to answer ----------
+
+    [Fact]
+    public void AMalformedIdIsHandedBackWithoutBeingFolded()
+    {
+        // It is about to be refused; folding a 4 KB id for a lookup that cannot match would allocate
+        // a 4 KB copy per request on input nobody here controls. (codex, story 1's code round.)
+        var huge = new string('R', 4096);
+
+        Default.Canonical(huge).Should().BeSameAs(huge, "handed straight back, not copied");
+    }
 }

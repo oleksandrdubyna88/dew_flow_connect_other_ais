@@ -711,7 +711,12 @@ server that answers 401 or 403 to everything with nothing in the log connecting 
 words — the unknown-role refusal in `ReviewEndpoints` and the missing-role refusal in `JobKinds`.
 A configured list would have written the third, which is the shape plan 2 shipped with three of and
 paid for. `AcceptedRoles` is that one place: constructed from configuration in `Program.cs` beside
-the other keys, registered as a singleton, and the boundary every gate and the catalog endpoint read.
+the other keys, and registered as a singleton.
+
+**As of this story nothing reads it but the container.** `ReviewEndpoints` and `JobKinds` still
+enumerate `RoleCatalog.Builtin.Roles` themselves and `CatalogDto` has no role field — stories 2 and 3
+of the plan move both onto this instance, and story 4 the two clients. It is recorded here now
+because the type and its rules are what the later stories depend on, not because they are wired.
 
 **Building it IS the boot guard.** `From` throws on a configured id that could never run, so an
 operator who writes `My-Role` learns at startup rather than on every request. It is deliberately not
