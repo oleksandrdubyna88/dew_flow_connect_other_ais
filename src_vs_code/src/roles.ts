@@ -89,6 +89,18 @@ const RESERVED = new Set([
 const SHIPPED_IDS = new Set(BUILTIN_ROLES.map((r) => r.id.toLowerCase()));
 
 /** Whether this id names a role this product ships. Matched without case, as the server matches it. */
+/**
+ * Whether this could be a role id at all — the shape and the length together.
+ *
+ * <p>Exported because a role id now arrives from somewhere this extension does not control: a Team
+ * server's catalog names the roles it runs, and that is JSON from a box somebody else configured.
+ * A name that is not an id cannot match anything and must not be read as one — `[' ']` would
+ * otherwise make a catalog look ANSWERED and every shipped role unsupported. (CodeRabbit, plan 3.)</p>
+ */
+export function isRoleId(id: unknown): id is string {
+  return typeof id === 'string' && id.length <= MAX_ROLE_ID_LENGTH && ROLE_ID.test(id);
+}
+
 export function isBuiltIn(id: string): boolean {
   return SHIPPED_IDS.has(id.toLowerCase());
 }

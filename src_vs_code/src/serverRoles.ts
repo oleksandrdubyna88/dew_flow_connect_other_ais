@@ -1,5 +1,5 @@
 import type { Catalog } from './teamServerApi';
-import { isBuiltIn } from './roles';
+import { isBuiltIn, isRoleId } from './roles';
 
 /**
  * Which of a person's own roles a configured Team server will run — said BEFORE a round, not after.
@@ -41,11 +41,16 @@ export function serverRolesFrom(catalog: Catalog | undefined): ServerRoles {
   // `Catalog` is a TypeScript INTERFACE, which is a promise about a value this code did not
   // produce: it came over HTTP from a server somebody else configured. `{"roles":[null]}` would
   // reach `name.toLowerCase()` and throw while the Prompts section was being built — one malformed
-  // response taking the whole panel down. Anything that is not a list of strings is read as an
-  // answer nobody could use, which is the `shipped` floor rather than a crash. (codex, story 4's
-  // code round.)
+  // response taking the whole panel down. (codex, story 4's code round.)
+  //
+  // And it is the ID RULE that decides what is usable, not merely "a non-empty string": `[' ']`
+  // would otherwise make a catalog look ANSWERED, and an answered catalog is the whole truth about
+  // its server — so one space would report every shipped role as unsupported. Trimmed first,
+  // because the server trims what it is sent. (CodeRabbit, plan 3.)
   const named = Array.isArray(catalog.roles)
-    ? catalog.roles.filter((name): name is string => typeof name === 'string' && name.length > 0)
+    ? catalog.roles
+      .map((name) => (typeof name === 'string' ? name.trim() : ''))
+      .filter(isRoleId)
     : [];
 
   return named.length === 0

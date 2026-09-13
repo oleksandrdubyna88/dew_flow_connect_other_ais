@@ -1276,3 +1276,21 @@ function serverRunning(roles: readonly string[]): TeamServerState {
     catalog: { serverVersion: '0.5.1', isAdmin: false, vendors: [], error: '', roles },
   };
 }
+
+test('a STALE catalog is not an answer about roles', () => {
+  // `refreshCatalog` keeps the previous catalog when a fetch fails and marks it stale, so the Team
+  // servers section can still say what it last knew. That is a different claim from "what this
+  // server runs", and passing it through would report an obsolete capability as current.
+  // (CodeRabbit, plan 3.)
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+  const stale = { ...serverRunning(['Requirements']), stale: true };
+  const prompts = promptsSection(panelHtml(state({ settings, teamServers: [stale] }), 'n0nce'));
+
+  assert.match(prompts, /could not be asked/,
+    'the cached answer said it runs Requirements; what is true is that nobody could ask');
+  assert.ok(!prompts.includes('work runs Requirements'));
+});

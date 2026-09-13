@@ -1,8 +1,11 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
 > Status: **in progress — stories 1, 2, 3 and 4 are on the branch and through the gate; the merge and the promotion are still open, 2026-09-13.** `AcceptedRoles` exists, is
-> built from configuration at boot, refuses a configured id that could never run, and is what BOTH
-> role gates and the request ingress now read; stories 3 (the wire) and 4 (both clients) are open. Scope: `src_server` (the two role gates,
+> built from configuration at boot and refuses a configured id that could never run; both role gates
+> and the request ingress read it; `/api/catalog` carries `roles` and `allowAnyRole`; and both
+> clients ask instead of guessing. What is left is the merge and the promotion — and one Definition
+> of Done line nobody can tick from a test, the verification against the DEPLOYED server.
+> Scope: `src_server` (the two role gates,
 > `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),
 > `src_vs_code` (`teamServerApi.ts` and the sentence the panel shows), and the tests for all of it.
 >
@@ -103,8 +106,10 @@ same shape, caught before it is written.
 Today an unknown role is refused, so nothing ill-formed reaches storage. The moment a configured or
 arbitrary id is accepted, one must be:
 
-- **Shape**: `^[A-Za-z][A-Za-z0-9_]*$`, the rule `RoleComposition.RoleId` already enforces on the
-  client because a role id becomes `COAI_ROUNDS_<ID>`.
+- **Shape**: `\A[A-Za-z][A-Za-z0-9_]*\z`, the rule `RoleComposition.RoleId` already enforces on the
+  client because a role id becomes `COAI_ROUNDS_<ID>`. **The anchors are `\A…\z` and this line said
+  `^…$` until story 1 found out why**: in .NET, `$` also matches immediately before a trailing
+  newline, so the `^…$` form ACCEPTS `"Requirements\n"`. Both C# copies are anchored now.
 - **Length**: at most **48 characters**, the same bound `roles.ts` `MAX_ROLE_ID_LENGTH` applies for
   the same reason. The regex alone accepts an arbitrarily long identifier, and under `AllowAnyRole` a
   4 KB alphanumeric name would reach `JobRecord`, the idempotency fingerprint and an append-only
@@ -149,9 +154,13 @@ withdrawn.**
 idempotency fingerprint is computed from the role, and `JobKinds.Refusal` reads the role on another
 path. Two requests differing only in casing would be two jobs whatever a later ledger view merges.
 
-So the role is canonicalised at the **request boundary**, once, before `Idempotency.Fingerprint`,
-before `JobRecord`, and before either gate reads it. One normalisation point, and a test that sends
-the same review twice in two casings and asserts **one** job.
+So the role is canonicalised at the **request boundary**, once, before `Idempotency.Fingerprint` and
+before `JobRecord` — the only two places a role is ever recorded, and they are built from the same
+value. **As built, this happens AFTER the gates rather than before them**, which the first draft of
+this line got wrong: the gates read what the client actually sent, so a refusal can quote it back,
+and they do their own trimming and case-insensitive matching inside `AcceptedRoles`. One
+normalisation point either way, and a test sends the same review twice in two casings under one key
+and asserts **one** job whose stored role is the operator's spelling.
 
 ### 6. The wire says both things explicitly — no sentinel
 

@@ -1243,7 +1243,15 @@ function tickHelp(dormant: boolean, last: boolean): string {
  */
 function serverNotes(state: PanelState, role: RoleRow): string {
   const lines = roleOnServers(
-    (state.teamServers ?? []).map((one) => ({ name: one.server.id, catalog: one.catalog })),
+    // A STALE catalog is not an answer about roles. `refreshCatalog` keeps the previous one when a
+    // fetch fails and marks it `stale`, so the Team servers section can still say what it last knew
+    // — but "what it last knew" is a different claim from "what this server runs", and passing it
+    // here would report an obsolete capability as current. Dropped to `undefined`, which is the
+    // unreachable state and says so. (CodeRabbit, plan 3's pull request.)
+    (state.teamServers ?? []).map((one) => ({
+      name: one.server.id,
+      catalog: one.stale ? undefined : one.catalog,
+    })),
     role.id,
     role.name ?? role.id,
   );

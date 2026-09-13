@@ -194,3 +194,26 @@ test('a hostile catalog still carries the five this product ships', () => {
   assert.strictEqual(
     serverRuns(serverRolesFrom(catalog({ roles: [null] as unknown as string[] })), shipped), true);
 });
+
+test('a name that is not a role ID does not make a catalog look answered', () => {
+  // `[' ']` used to pass the "non-empty string" filter, so the catalog read as ANSWERED — and an
+  // answered catalog is the whole truth about its server, so one space reported every shipped role
+  // as unsupported. It is the ID RULE that decides what is usable. (CodeRabbit, plan 3.)
+  for (const rubbish of [[' '], ['My-Role'], ['123Role'], ['role with spaces'], ['a'.repeat(49)]]) {
+    assert.deepStrictEqual(
+      serverRolesFrom(catalog({ roles: rubbish })), { kind: 'shipped' }, JSON.stringify(rubbish));
+  }
+});
+
+test('a name with space around it is the same name', () => {
+  // The server trims what it is sent, so a catalog naming ' Requirements ' names Requirements.
+  const read = serverRolesFrom(catalog({ roles: ['  Requirements  '] }));
+
+  assert.deepStrictEqual(read, { kind: 'answered', names: ['Requirements'], allowAny: false });
+});
+
+test('a role exactly at the id bound is still a role', () => {
+  const longest = 'R'.repeat(48);
+
+  assert.strictEqual(serverRuns(serverRolesFrom(catalog({ roles: [longest] })), longest), true);
+});
