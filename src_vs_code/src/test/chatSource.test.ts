@@ -98,15 +98,21 @@ test('a move across roots is what makes the workspace part load-bearing', () => 
   assert.equal(rootOf(fsPath(now), ROOTS), 'D:\\rsd\\two', 'the moved file still answers with the root it left');
 });
 
-test('a session id is the file name, on either platform’s separator, and never the path', () => {
+test('a session id is the file name, on either separator, and only when it LOOKS like one', () => {
   // A stored home-directory path names a machine and a person and is wrong the moment a profile
   // moves; the id names the conversation. The separator matters because this path arrives from
   // Claude rather than from the editor — a forward-slash spelling on Windows is ordinary, and a rule
   // that split on only one of them would have returned the WHOLE path as an id, silently.
-  assert.equal(sessionIdOf('D:\\Users\\me\\.claude\\projects\\enc\\9f1c3a4e-1111.jsonl'), '9f1c3a4e-1111');
-  assert.equal(sessionIdOf('/home/me/.claude/projects/enc/9f1c3a4e-1111.jsonl'), '9f1c3a4e-1111');
-  assert.equal(sessionIdOf('9f1c3a4e-1111.jsonl'), '9f1c3a4e-1111', 'a bare file name is not an id');
-  // Anything that is not one of those files writes NO source rather than a wrong one.
+  const id = '9f1c3a4e-1111-2222-3333-444455556666';
+
+  assert.equal(sessionIdOf(`D:\\Users\\me\\.claude\\projects\\enc\\${id}.jsonl`), id);
+  assert.equal(sessionIdOf('/home/me/.claude/projects/enc/' + id + '.jsonl'), id);
+  assert.equal(sessionIdOf(id + '.jsonl'), id, 'a bare file name is not an id');
+  // AND NOTHING ELSE. A stored source is never repaired — the restore path re-pins only a
+  // conversation that has NONE — so a wrong id is permanent, and any other `.jsonl` beside the
+  // sessions would have become one. (codex, the code round.)
+  assert.equal(sessionIdOf('notes.jsonl'), '', 'another file beside the sessions became a session id, permanently');
+  assert.equal(sessionIdOf('D:\\Users\\me\\.claude\\projects\\enc\\summary.jsonl'), '');
   assert.equal(sessionIdOf(''), '');
   assert.equal(sessionIdOf('D:\\Users\\me\\.claude\\projects\\enc'), '', 'a directory was read as a session');
   assert.equal(sessionIdOf('notes.txt'), '', 'a file of another kind was read as a session');

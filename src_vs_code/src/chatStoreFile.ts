@@ -480,7 +480,7 @@ export class ChatStoreFile {
     // new `refile` and only by a caller passing the wrong source, and it cost nothing to close the
     // whole class instead: the store does not write what it would refuse to read. (Three vendors, the
     // code round; it was also my own open question.)
-    if (recordFrom(JSON.parse(JSON.stringify(written)) as unknown) === undefined) {
+    if (recordFrom(written) === undefined) {
       console.error(`ConnectOtherAIs: a conversation this build could not read back was not written: ${this.recordPath(written.id)}`);
 
       return { kind: 'failed', reason: 'the conversation is not one this build could read back, so it was not written' };

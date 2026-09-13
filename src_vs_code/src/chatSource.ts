@@ -55,8 +55,46 @@ import { ConversationSource } from './chatStore';
  */
 export function sessionIdOf(file: string): string {
   const name = file.split(/[\\/]/u).pop() ?? '';
+  const id = name.endsWith('.jsonl') ? name.slice(0, -'.jsonl'.length) : '';
 
-  return name.length > '.jsonl'.length && name.endsWith('.jsonl') ? name.slice(0, -'.jsonl'.length) : '';
+  // AND IT MUST LOOK LIKE ONE. Any other `.jsonl` in that directory — a `notes.jsonl`, a file a
+  // future version of Claude writes beside the sessions — would otherwise be stored as a source, and
+  // stored sources are not repaired: the restore path re-pins only a conversation that has NONE, so a
+  // wrong one is permanent. An id that does not look like a session is no id. (codex, the code round.)
+  return SESSION_ID.test(id) ? id : '';
+}
+
+/** What Claude names a session file: a UUID, and this build stores nothing else as one. */
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+/**
+ * The folder a source itself names, or empty when it names none — exhaustive over the kinds.
+ *
+ * <p>A `file` knows where it is; a `claude` session is a UUID and knows nothing, so its folder is
+ * carried from the search that found it and this answers empty for it on purpose; `none` has nothing
+ * to say. It is HERE rather than as a ternary in the host because a fourth kind added for a later
+ * story would otherwise slip through that ternary's else branch and be filed under the first root in
+ * silence — matched for navigation and wrong in the picker. A `never` makes it a compile error
+ * instead. (codex, the code round.)</p>
+ *
+ * @param fsPath the host's uri-to-path spelling; this module has none of its own
+ */
+export function knownFolder(source: ConversationSource, fsPath: (uri: string) => string): string {
+  switch (source.kind) {
+    case 'file':
+      return fsPath(source.uri);
+    case 'claude':
+    case 'none':
+      return '';
+    default: {
+      const unhandled: never = source;
+
+      throw new Error(
+        `a conversation source this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the kinds it may be are file, claude and none',
+      );
+    }
+  }
 }
 
 /** One rename as the editor reports it — old path and new path, both as filesystem paths. */

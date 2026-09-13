@@ -73,7 +73,7 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
-import { Moved, filedUnder, followable, movedTo, prepareMoves, sessionIdOf } from './chatSource';
+import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
   Asked,
@@ -385,7 +385,26 @@ export function conversationWorkspace(): string {
  * falls back to the first root, which is what every record had before story C1.</p>
  */
 function filedFor(source: ConversationSource): string {
-  return filedUnder(source.kind === 'file' ? fsPathOf(source.uri) : '', whereToLook(), conversationWorkspace());
+  return filedUnder(knownFolder(source, fsPathOf), whereToLook(), conversationWorkspace());
+}
+
+/**
+ * A conversation's durable origin, as ONE value: what it was opened from and where that is filed.
+ *
+ * <p>The two are one fact written in two fields, and nothing in the types made them move together —
+ * a later repair that set `source` and forgot `workspace` would leave *go to* matching by the new
+ * origin while the picker went on filtering by the old root. Every path that establishes an origin
+ * goes through this, so the pair cannot be set by halves. (codex, the code round.)</p>
+ */
+function originOf(source: ConversationSource): { readonly source: ConversationSource; readonly workspace: string } {
+  return { source, workspace: filedFor(source) };
+}
+
+/** Give a live conversation a new origin — both fields, from the one value. */
+function reorigin(thread: Thread, source: ConversationSource): void {
+  const origin = originOf(source);
+  thread.source = origin.source;
+  thread.workspace = origin.workspace;
 }
 
 /** A uri as a filesystem path, or empty for one that names no file. The host's spelling, so rules need none. */
@@ -505,9 +524,10 @@ function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void
       // an id invented here would match a tab that is not this one.
       return;
     }
-    mine.source = sourceOfSession(sessionId);
     // THE FOLDER THE SESSION WAS FOUND IN, not this window's first root. That distinction is the
-    // whole of what three reviewers corrected in this story's plan.
+    // whole of what three reviewers corrected in this story's plan — and a session's own source knows
+    // no folder, so this is the one origin that cannot go through `reorigin`.
+    mine.source = sourceOfSession(sessionId);
     mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace());
     // WRITTEN EXPLICITLY. `show`'s guard compares messages, model and mark, so a source arriving on
     // its own — which is exactly what this is, minutes after the last thing anybody said — would
@@ -677,8 +697,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
     if (moved.length === 0) {
       continue;
     }
-    thread.source = sourceOfFile(moved);
-    thread.workspace = filedFor(thread.source);
+    reorigin(thread, sourceOfFile(moved));
     keepQueued(entry, thread);
   }
   const onDisk = store;
@@ -721,7 +740,7 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
 }
 
 /** How many times a conversation held by somebody else is asked again before the rename is given up on. */
-const FOLLOW_TRIES = 3;
+const FOLLOW_TRIES = 5;
 
 /** How long between those asks. Short: a save is milliseconds, and nothing is waiting on this. */
 const FOLLOW_WAIT_MS = 200;
@@ -2199,8 +2218,7 @@ function newConversation(
     attached: '',
     attachedPath: '',
     spend: [],
-    source: state.source,
-    workspace: filedFor(state.source),
+    ...originOf(state.source),
     providerId: ready.providerId,
     modelId: ready.modelId,
     // The MAIN prompt, and the chosen model's own role: what a capture opens on, with both buttons
