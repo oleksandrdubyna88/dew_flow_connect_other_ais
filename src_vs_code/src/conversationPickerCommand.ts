@@ -150,6 +150,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
   pick.ignoreFocusOut = true;
   pick.placeholder = 'Type to find a conversation by its title, its model, or the last thing said in it';
 
+  /**
+   * THIS picker's registration, compared by identity when it hides.
+   *
+   * <p>An object rather than a counter, because what the hide handler has to answer is "is the thing
+   * currently registered still me", and the registration itself is the only honest name for that.</p>
+   */
+  const mine = { hide: (): void => pick.hide(), forget: (): void => forgetRow(pick.activeItems[0]?.row) };
+
   /** Rebuild the list in place, keeping the row under the cursor where it can be kept. */
   const draw = (): void => {
     if (!onScreen) {
@@ -355,6 +363,17 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
 
   pick.onDidHide(() => {
     onScreen = false;
+    // ONLY IF THE REGISTRATION IS STILL OURS. `hide()` returns before the editor has hidden anything
+    // — the renderer is another process, and `onDidHide` arrives when it answers — so a second
+    // invocation can have replaced this picker and registered ITSELF before this handler runs.
+    // Clearing unconditionally then unregistered the picker the person is looking at and turned off
+    // the context key underneath it, and `Alt+Delete` quietly stopped working. (CodeRabbit, on the
+    // pull request.)
+    if (live !== mine) {
+      pick.dispose();
+
+      return;
+    }
     live = undefined;
     // CLEARED. A key left true outlives the picker, and Alt+Delete would then belong to us in every
     // quick pick the editor opens afterwards — a delete keybinding pointed at somebody else's list.
@@ -363,7 +382,7 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
   });
 
   draw();
-  live = { hide: () => pick.hide(), forget: () => forgetRow(pick.activeItems[0]?.row) };
+  live = mine;
   void vscode.commands.executeCommand('setContext', 'coai.conversationsPickerOpen', true);
   pick.show();
 
