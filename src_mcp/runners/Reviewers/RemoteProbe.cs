@@ -238,11 +238,12 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
     /// </remarks>
     private void Learn(string server, RemoteCatalog? catalog)
     {
+        // The READING of an answer belongs to `RemoteRoles.From`, where a test can reach it — the
+        // filter it applies has to match the extension's byte for byte, and a rule written here
+        // could only be checked through an HTTP round trip that tests the transport instead.
         _roles[server] = catalog is null
-            ? new RemoteRoles([], false, RemoteRolesSource.Unreachable)
-            : catalog.Roles is { Count: > 0 } named
-                ? new RemoteRoles([.. named], catalog.AllowAnyRole, RemoteRolesSource.Answered)
-                : new RemoteRoles([], false, RemoteRolesSource.Shipped);
+            ? RemoteRoles.Unreachable
+            : RemoteRoles.From(catalog.Roles, catalog.AllowAnyRole);
     }
 
     private static RemoteCatalog? Parse(string body)

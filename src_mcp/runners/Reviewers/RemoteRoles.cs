@@ -51,6 +51,32 @@ public sealed record RemoteRoles(
     /// <summary>Nothing is known about this server's roles.</summary>
     public static readonly RemoteRoles Unknown = new([], false, RemoteRolesSource.NotAsked);
 
+    /// <summary>A server's answer, read from the names and the flag its catalog carried.</summary>
+    /// <remarks>
+    /// <para><b>A nullable annotation is not a runtime check.</b> <c>{"roles":[null]}</c> deserialises
+    /// to a list with a null in it, and counting that as an ANSWER made this half exclude every
+    /// shipped role while the extension read the same response as "said nothing useful" — one server,
+    /// two clients, two different rounds. Anything unusable is filtered, and a list with nothing left
+    /// in it means the same as an absent one. (codex, story 4's second code round.)</para>
+    /// <para>An empty list means <see cref="RemoteRolesSource.Shipped"/> for the reason the enum
+    /// gives: a server that HAS the field always accepts at least five, so <c>[]</c> can only be a
+    /// bug, and reading it as "no roles" would empty every round against that server.</para>
+    /// </remarks>
+    public static RemoteRoles From(IReadOnlyList<string?>? named, bool allowAny)
+    {
+        var usable = (named ?? [])
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToList();
+
+        return usable.Count > 0
+            ? new RemoteRoles(usable, allowAny, RemoteRolesSource.Answered)
+            : new RemoteRoles([], false, RemoteRolesSource.Shipped);
+    }
+
+    /// <summary>The server was asked and did not answer — a timeout, a refusal, an unreadable body.</summary>
+    public static readonly RemoteRoles Unreachable = new([], false, RemoteRolesSource.Unreachable);
+
     /// <summary>
     /// Whether this server will carry a role by this name — and if not, why not in one sentence.
     /// </summary>
