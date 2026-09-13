@@ -1,7 +1,7 @@
 # PLAN — a Team server runs the roles a person wrote (3 of 5)
 
 > Status: **plan only, nothing implemented yet, 2026-09-13.** Scope: `src_server` (the two role gates,
-> `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto.Roles`), `src_mcp` (`CanCarry`, `RemoteProbe`),
+> `Coai:ExtraRoles`, `Coai:AllowAnyRole`, `CatalogDto`), `src_mcp` (`CanCarry`, `RemoteProbe`),
 > `src_vs_code` (`teamServerApi.ts` and the sentence the panel shows), and the tests for all of it.
 >
 > Related docs: [module_server.md](../research/module_server.md),
@@ -9,6 +9,13 @@
 > [architecture.md](../research/architecture.md);
 > plan 1: [PLAN_review_roles_become_data.md](../research/PLAN_review_roles_become_data.md),
 > plan 2: [PLAN_review_roles_crud_tab.md](../research/PLAN_review_roles_crud_tab.md), both shipped.
+>
+> **Revised after the plan round.** Seventeen findings, and they converged on one thing: the first
+> draft specified `Coai:ExtraRoles` carefully and `Coai:AllowAnyRole` loosely. It had no wire
+> representation, no length bound, no shape check at the boundary, and it *documented* a usage-ledger
+> split as an acceptable price. Three reviewers independently refused that last part, and one of them
+> named the answer the draft had dismissed: **case-fold the id**. The open question the draft put to
+> the operator is therefore withdrawn — it is answered below, and `AllowAnyRole` stays.
 
 ## The symptom
 
@@ -82,24 +89,35 @@ is a server that runs the five it always ran. The first is a hole, the second is
 - [`JobKind.cs:126`](../src_server/src/Jobs/JobKind.cs#L126) — *"a job sent as kind 'review' needs a
   role. Allowed: …"*
 
-Add a configured list and a third copy writes itself. **One `AcceptedRoles` service**, injected, with
-`Knows(id)` and `Names` — every gate and every message derives from it.
+Add a configured list and a third copy writes itself. **One `AcceptedRoles` service**, injected —
+every gate, every message and the catalog endpoint derive from it.
 
 This is not a tidiness argument. Plan 2 shipped with THREE independent counts of "which code roles
 will run" and the one nobody updated promised four reviewers under a section drawing five boxes. The
 same shape, caught before it is written.
 
-### 3. A role id is checked for SHAPE, not only for membership
+### 3. An id is checked for SHAPE and for LENGTH, at the boundary — and `ExtraRoles` at BOOT
 
-Today an unknown role is refused, so nothing ill-formed reaches storage. With `AllowAnyRole` an
-arbitrary string reaches `JobRecord.Role`, the idempotency fingerprint, and the usage ledger.
+Today an unknown role is refused, so nothing ill-formed reaches storage. The moment a configured or
+arbitrary id is accepted, one must be:
 
-So `AllowAnyRole` accepts **any id matching `^[A-Za-z][A-Za-z0-9_]*$`** — the rule
-`RoleComposition.RoleId` already enforces on the client, for the reason that a role id becomes
-`COAI_ROUNDS_<ID>`. "Any" means any ROLE, not any string: a 4 KB role name or one carrying a newline
-is a defect wherever it came from, and the ledger is append-only.
+- **Shape**: `^[A-Za-z][A-Za-z0-9_]*$`, the rule `RoleComposition.RoleId` already enforces on the
+  client because a role id becomes `COAI_ROUNDS_<ID>`.
+- **Length**: at most **48 characters**, the same bound `roles.ts` `MAX_ROLE_ID_LENGTH` applies for
+  the same reason. The regex alone accepts an arbitrarily long identifier, and under `AllowAnyRole` a
+  4 KB alphanumeric name would reach `JobRecord`, the idempotency fingerprint and an append-only
+  ledger. *(codex: "the proposed regex accepts an arbitrarily long identifier".)*
 
-### 4. Canonicalisation must cover the configured roles too
+**`Coai:ExtraRoles` is validated at BOOT, not at request time.** An operator who writes `My-Role` or
+`123Role` learns at startup, in a message naming the entry and the rule — the way
+`Coai:AllowedDomains` and `Coai:SessionTtlDays` already fail. A configured id that would be refused on
+every request is a server that is misconfigured, and a misconfigured server should not start quietly.
+*(local, Blocking.)*
+
+**This is enforced at the SERVER boundary, not relied upon from the client.** The client applies the
+same rule so it never offers an id the server will refuse, but the server is the boundary that holds.
+
+### 4. `AllowAnyRole` CASE-FOLDS, and the ledger split is solved rather than accepted
 
 ```csharp
 internal static string CanonicalRole(string? said) =>
@@ -108,92 +126,152 @@ internal static string CanonicalRole(string? said) =>
 
 A built-in is canonicalised; **anything else passes through verbatim**. Its own doc says why that
 matters: *"a spelling passed straight through would make one role two rows in the usage view the day
-two clients disagree about it"* — which is exactly the state a custom role is in the moment this plan
-accepts one. `Requirements` from one machine and `requirements` from another are two rows for one
-role, in an append-only ledger.
+two clients disagree about it"* — exactly the state a custom role is in the moment this plan accepts
+one.
 
-`ExtraRoles` gives the server a configured spelling to canonicalise against, so it must. Under
-`AllowAnyRole` there is no configured spelling and no honest answer — **first spelling seen wins is a
-race**, so that case canonicalises to nothing and the plan says out loud that `AllowAnyRole` can
-split a ledger row. That is the price of the escape hatch, and it is why `ExtraRoles` is the
-documented way.
+- With **`ExtraRoles`**, the server has a configured spelling, so it canonicalises to that. Matching
+  is case-insensitive; the recorded id is the one the OPERATOR configured.
+- With **`AllowAnyRole`** there is no configured spelling. The first draft concluded there was no
+  honest answer and wrote the split down as a price. **That was wrong, and three reviewers said so.**
+  There is a deterministic answer that needs no configuration and no race: **fold the id to a
+  canonical casing** and record that. `Requirements` and `requirements` become one row, on every
+  server, without an operator having listed anything.
 
-### 5. The client must ASK, not guess — and an old server must stay readable
+The author's own casing is what the panel shows, from the client's own catalog; the server's recorded
+id is a KEY, and a key's job is to be the same key. **The open question the first draft raised is
+withdrawn.**
 
-`CanCarry` hard-codes `BuiltIn == true` for a remote vendor. It has to learn what the server accepts,
-and there is one endpoint for that: `/api/catalog`, already fetched by
-[`RemoteProbe.cs:123`](../src_mcp/runners/Reviewers/RemoteProbe.cs#L123) and by
-[`teamServerApi.ts:355`](../src_vs_code/src/teamServerApi.ts#L355). `CatalogDto` gains `Roles`.
+### 5. Canonicalisation happens ONCE, at a shared ingress, before the fingerprint
 
-**The absent-field rule, which this family has paid for twice.** `remoteVendor` was dropped by every
-component written before it existed, and the signature was a 400 nobody could read. So:
+*(codex, Major.)* Normalising inside `ReviewEndpoints.Accepted` is too late and too narrow: the
+idempotency fingerprint is computed from the role, and `JobKinds.Refusal` reads the role on another
+path. Two requests differing only in casing would be two jobs whatever a later ledger view merges.
 
-| `Roles` on the wire | What the client concludes |
+So the role is canonicalised at the **request boundary**, once, before `Idempotency.Fingerprint`,
+before `JobRecord`, and before either gate reads it. One normalisation point, and a test that sends
+the same review twice in two casings and asserts **one** job.
+
+### 6. The wire says both things explicitly — no sentinel
+
+*(gemini Blocking, codex Major: the "any" marker had no defined representation.)* `CatalogDto` gains
+**two** fields rather than one overloaded one:
+
+```jsonc
+{ "serverVersion": "...", "isAdmin": false, "vendors": [ ... ],
+  "roles": ["PlanCritique", "Conventions", "Architecture", "SecurityReliability",
+            "UxDxPerformance", "Requirements"],
+  "allowAnyRole": false }
+```
+
+A sentinel inside `roles` (`["*"]`) was considered and refused: `roles.includes(role)` is the obvious
+client code and it silently answers `false` for every real role. A separate boolean cannot be read
+wrongly by accident.
+
+| What the client sees | What it concludes |
 |---|---|
-| absent (a server older than this plan) | **the five this product ships** — today's behaviour exactly |
-| a list | those ids, and only those |
-| the marker for "any" | any role the client holds |
+| no `roles` field at all | **the five this product ships** — today's behaviour exactly |
+| `roles` present, `allowAnyRole` false | those ids, matched case-insensitively, and only those |
+| `allowAnyRole` true | any id that passes the shape and length rule |
+| `roles` present but EMPTY | **the five** — a server that has the field always accepts at least five, so an empty list is a bug, not an instruction *(local, Major)* |
 
-Absent must never mean "none" (every round would silently lose its reviewers) and never mean "any"
-(every custom role would be sent to a server certain to 400 it). It means what is true today.
+Absent must never mean "none" (every round silently loses its reviewers) and never mean "any" (every
+custom role is sent to a server certain to 400 it). It means what is true today. This is the rule
+`remoteVendor` was lost for want of, twice.
 
-### 6. The panel says it BEFORE the round, not during it
+**A failed catalog fetch is not an old server.** *(codex, Major.)* A timeout, a 401 or a connection
+error leaves the client with no answer at all — which is a third state, not the fallback. Unknown
+excludes a custom role **with a visible reason naming the fetch failure**, never silently, and never
+by pretending the server said "the five".
+
+### 7. Mixed versions: the fallback is a MINIMUM, and it is named
+
+*(codex, Major.)* "Absent means the five this product ships" assumes the old server's five are this
+client's five. A client that later adds or renames a built-in would carry it to a server whose
+catalog omits `roles` and get a 400 despite the promised silent correctness.
+
+The fallback set is therefore **the built-ins as of the contract version the server reports**, not
+"whatever this client ships today" — `ContractVersion` already exists for exactly this, and
+`Startup.Version` is already on `CatalogDto`. Adding a sixth built-in is a contract change, and this
+plan writes that down so the next person adding one finds the rule rather than the bug.
+
+### 8. The panel says it BEFORE the round, not during it
 
 A role excluded for a Team server is named in the round's result. By then somebody has waited. The
-roles page and the reviewers section both know the server now, so the exclusion is visible where the
-role is configured — the same argument plan 2 settled for the version-skew banner.
+panel knows the catalog, so the exclusion belongs where the role is configured — the same argument
+plan 2 settled for the version-skew banner. **With a test that loads a catalog accepting role A but
+not role B and asserts the page says so before anything is submitted** *(codex, Major)*, including
+the loading and unavailable states.
 
-## Build order
+### 9. A refusal names the rule it broke, not a list
+
+*(gemini Minor, local Major.)* Under `AllowAnyRole`, an id failing the shape check would have been
+refused with *"Allowed: PlanCritique, Conventions, …"* — telling an operator the server only accepts
+five when it accepts anything. Shape failures and membership failures are different refusals:
+
+- shape/length → *"'123-role' is not a role id: a role id is latin, starts with a letter, carries no
+  hyphen, and is at most 48 characters — it becomes `COAI_ROUNDS_<ID>`."*
+- membership → *"'X' is not a review role here. Accepted: …"*
+
+## Build order — four stories
 
 | # | Story | Files |
 |---|---|---|
-| 1 | `AcceptedRoles`: the shipped five, plus `Coai:ExtraRoles`, or any well-formed id under `Coai:AllowAnyRole`. Shape rule, canonicalisation, `Names` for the messages. Pure, and tested alone. | `src_server/src/Jobs/AcceptedRoles.cs` (new) |
-| 2 | Both gates read it — `ReviewEndpoints.Refusal` and `JobKinds.Refusal` — and no third copy of the list exists. A structural test asserts `RoleCatalog.Builtin.Roles` is enumerated nowhere else in `src_server`. | `ReviewEndpoints.cs`, `JobKind.cs` |
-| 3 | `CanonicalRole` canonicalises against the configured roles; the ledger keeps one row per role. | `ReviewEndpoints.cs`, `UsageReader` tests |
-| 4 | `Startup` reports the accepted roles at boot, the way it reports the domain boundary — an operator who set `ExtraRoles` can see the server read it. | `Startup.cs`, `Program.cs` |
-| 5 | `CatalogDto.Roles`, and the absent-field rule proved against a payload with no such field. | `ServerJsonContext.cs`, `CatalogEndpoints.cs` |
-| 6 | `CanCarry` reads what the server said; `RemoteProbe` carries it. The exclusion sentence changes from "the five this product ships" to what the server actually accepts. | `PanelService.cs`, `RemoteProbe.cs` |
-| 7 | `teamServerApi.ts` reads `roles`; the panel says which of a person's roles this server will run. Help article, four translations, CHANGELOG. | `teamServerApi.ts`, `panelView.ts`, `helpContent.ts` + 4 |
+| **1** | **`AcceptedRoles`, the whole rule in one testable place.** The shipped five, plus `Coai:ExtraRoles`, or anything well-formed under `Coai:AllowAnyRole`. Shape + 48-char length; case-insensitive membership; canonicalisation (configured spelling, or case-folded under any-role); `Names` for the messages; the two distinct refusals. Boot-time validation of `ExtraRoles` wired into `Startup`, which already refuses to start on a bad `AllowedDomains`. | `src_server/src/Jobs/AcceptedRoles.cs` (new), `Startup.cs`, `Program.cs` |
+| **2** | **Both gates and the ingress read it.** `ReviewEndpoints.Refusal` and `JobKinds.Refusal` lose their own lists; the role is canonicalised ONCE at the request boundary, before `Idempotency.Fingerprint` and `JobRecord`. A structural test asserts `RoleCatalog.Builtin.Roles` is enumerated nowhere else in `src_server`. | `ReviewEndpoints.cs`, `JobKind.cs` |
+| **3** | **The wire.** `CatalogDto` gains `roles` and `allowAnyRole`, populated FROM `AcceptedRoles` — with endpoint tests for default, configured-list and allow-any, because a DTO property that nothing fills is the failure mode this story exists to prevent *(codex, Major)*. | `ServerJsonContext.cs`, `CatalogEndpoints.cs` |
+| **4** | **Both clients.** `CanCarry` asks instead of guessing, case-insensitively; `RemoteProbe` carries the two fields and distinguishes old / unknown / answered. `teamServerApi.ts` the same, and the panel says which roles this server will run, before a round. Help article, four translations, CHANGELOG. | `PanelService.cs`, `RemoteProbe.cs`, `teamServerApi.ts`, `panelView.ts`, `helpContent.ts` + 4 |
 
-Stories 1–4 are the server and land together; 5 is the wire; 6–7 are the two clients and can run
-beside each other. **Story 5 must ship before 6 and 7 can be verified against a real server**, and by
-[[coai-halves-ship-out-of-step]] the Team server deploy is manual — so the new field must be measured
-against the OLD server before either client is released.
+Each story is reviewed by `review_code` on its own diff, resolved, documented, tested and committed
+before the next begins. Story 3 must land before story 4 can be verified against a real server, and
+the Team server deploy is MANUAL (`workflow_dispatch`) — so the new fields are measured against the
+OLD deployed server before either client is released.
 
 ## Test plan
 
-- `AcceptedRoles` alone: default is the five; `ExtraRoles` adds; `AllowAnyRole` accepts a well-formed
-  id and REFUSES one that is not; a configured id that is not well-formed is refused **at boot**, not
-  at request time.
-- Both gates refuse an unknown role with a message naming the accepted set — the SAME set, asserted
-  from one place.
-- Canonicalisation: `requirements` and `Requirements` reach the ledger as one row when `ExtraRoles`
-  names it; the `AllowAnyRole` split is asserted as the documented price rather than left to be
-  discovered.
-- The wire: a `CatalogDto` payload with no `Roles` field leaves a client running exactly the five.
-- `CanCarry`: a custom role is carried by a server that accepts it, excluded with the server's own
-  words by one that does not, and — the case worth naming — excluded by a server too OLD to say.
+- **`AcceptedRoles` alone**: default is the five; `ExtraRoles` adds; membership is case-insensitive;
+  `AllowAnyRole` accepts a well-formed id, refuses one that is not, and refuses one over 48
+  characters — boundary and over-limit both.
+- **Boot**: a malformed `Coai:ExtraRoles` entry fails startup naming the entry and the rule.
+- **One normalisation**: the same review sent twice in two casings produces ONE job — asserted on the
+  fingerprint, not only on a ledger view.
+- **Ledger**: `requirements` and `Requirements` are one row under `ExtraRoles` AND under
+  `AllowAnyRole`.
+- **Both gates** refuse with the SAME accepted set, asserted from one place; a shape failure and a
+  membership failure produce different messages.
+- **The wire**: default, configured and allow-any payloads; and a `CatalogDto` payload with no
+  `roles` field leaves a client running exactly the five.
+- **The client**: a custom role carried by a server that accepts it; excluded with the server's own
+  words by one that does not; excluded by a server too OLD to say; and excluded with a *fetch failed*
+  reason when the catalog could not be read at all.
+- **The panel**: role A runnable and role B excluded, shown before submission, plus loading and
+  unavailable states.
 - Whole-suite: `CoaiServer.Tests`, `CoaiMcp.Tests`, the extension suite, and the three family scans.
 
 ## Definition of Done
 
 - [ ] A role a person wrote runs on a Team server that lists it in `Coai:ExtraRoles`.
 - [ ] A server with neither key set behaves exactly as it does today — same five, same messages.
-- [ ] `Coai:AllowAnyRole` accepts any well-formed role id and refuses anything that is not one.
-- [ ] One list feeds both gates and every message; a test fails if a third copy appears.
-- [ ] A client talking to a server too old to send `Roles` runs the five, silently and correctly.
+- [ ] `Coai:AllowAnyRole` accepts any well-formed role id, refuses anything that is not one, and
+      records it case-folded so one role is one ledger row.
+- [ ] A malformed `Coai:ExtraRoles` entry stops the server at boot, naming it.
+- [ ] One list feeds both gates, every message and the catalog; a test fails if a third copy appears.
+- [ ] The role is canonicalised once, before the idempotency fingerprint.
+- [ ] `CatalogDto` carries `roles` and `allowAnyRole`, populated from `AcceptedRoles`, with endpoint
+      tests for all three shapes.
+- [ ] A client talking to a server too old to send `roles` runs the five, silently and correctly; a
+      client that could not READ the catalog says so instead of guessing.
 - [ ] The panel says which of a person's roles a configured Team server will run, before a round.
 - [ ] Help article in English plus the four translations, in the same commit.
 - [ ] Every suite green, `plan-lifecycle` / `pin-check` / `adapter-check` clean.
 - [ ] **Verified against the deployed server**, not only in tests — the deploy is manual, so this is
       a step somebody performs.
 
-## The open question for the operator
+## The open tail
 
-**`AllowAnyRole` can split a usage-ledger row** (decision 4): with no configured spelling, two
-clients disagreeing about the case of a role id write two rows for one role, in a ledger that is
-append-only. `ExtraRoles` has no such problem.
-
-The alternatives are to drop `AllowAnyRole` entirely, or to canonicalise on first-seen spelling —
-which is a race, and a worse kind of wrong because it is invisible. **This plan keeps the key, and
-documents the price.** Say if it should be dropped instead; nothing else in the plan depends on it.
+- **A ledger written before this plan** may already hold rows for a custom role in more than one
+  casing, from any client that reached a server with `AllowAnyRole`. Nothing does today, because
+  nothing accepts a custom role — so there is no data to migrate on the day this ships, and a
+  migration written now would have nothing to run against. *(local suggested one; it is recorded here
+  rather than built, because the ledger cannot contain such a row until this plan ships.)*
+- **Per-caller role permissions** are still nobody's question. If one is ever asked, it is a second
+  authorisation model and it belongs beside the domain one, not inside `AcceptedRoles`.
