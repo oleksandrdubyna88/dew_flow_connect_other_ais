@@ -32,16 +32,31 @@ public sealed class DataDirIsAbsoluteTests
 
         Path.IsPathRooted(settings.DataDir).Should().BeTrue(
             "a reviewer subprocess launches somewhere else and cannot resolve our relative path");
-        settings.DataDir.Should().Be(
+        settings.DataDir.Should().StartWith(
             Path.GetFullPath(Path.Combine("artifacts", "bench", "smoke")));
     }
 
+    /// <summary>
+    /// A configured directory is rooted and kept — and, since 2026-09-13, a side is appended to it.
+    /// </summary>
+    /// <remarks>
+    /// This test read <c>Should().Be(absolute)</c> until issue #115. That exact equality was never
+    /// the guarantee it existed for: what it was written to prove is that a configured path is
+    /// ABSOLUTE by the time a reviewer subprocess is handed it, because a relative one made every
+    /// round unrunnable while reporting success. A configured directory is now partitioned per side
+    /// — <c>&lt;dir&gt;/&lt;side&gt;</c> — so that two installations can share one NAS without writing
+    /// one SQLite file, and the assertion keeps the part that was the point.
+    /// </remarks>
     [Fact]
-    public void AnAbsoluteOne_IsLeftExactlyAsItIs()
+    public void AnAbsoluteOne_IsKeptAndTheSideIsAppendedToIt()
     {
         var absolute = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "coai-data"));
 
-        From(absolute).DataDir.Should().Be(absolute);
+        var dir = From(absolute).DataDir;
+
+        dir.Should().StartWith(absolute, "the directory somebody chose is still the root of it");
+        dir.Should().NotBe(absolute, "each side keeps its own beneath it — issue #115");
+        Path.IsPathRooted(dir).Should().BeTrue();
     }
 
     [Fact]
