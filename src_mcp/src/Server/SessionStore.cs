@@ -91,6 +91,26 @@ public sealed record RoundRecord(
     }
 
     /// <summary>
+    /// Which AI ASKED for this round, and which model it declared — a copy taken when it started.
+    /// </summary>
+    /// <remarks>
+    /// <para>A copy rather than a reference to <see cref="PersistedSession.Caller"/>, and six
+    /// findings across two vendors on the #174 code round are why. The declaration arrives on
+    /// <c>open</c> and so belongs to the session — but a session is repo+branch and <c>open</c> is
+    /// idempotent on that pair, so codex opening a branch claude reviewed yesterday REPLACES it.
+    /// Rendering a row from the session's latest caller would relabel history: round 1 shown as
+    /// asked by the client that merely reopened it.</para>
+    /// <para>So the two fields say two different true things. The session's is who opened this
+    /// session most recently; this one is who asked for this round. The log renders this one.</para>
+    /// <para>Absent in rounds written before the field, which is what is true of them.</para>
+    /// </remarks>
+    public CallerDeclaration Caller
+    {
+        get => field ??= new CallerDeclaration();
+        init => field = value ?? new CallerDeclaration();
+    }
+
+    /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
     /// </summary>
     /// <remarks>

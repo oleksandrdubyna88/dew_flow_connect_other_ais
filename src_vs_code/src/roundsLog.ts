@@ -387,6 +387,26 @@ const NO_DATABASE: RowContext = {
   whole: true, inline: false,
 };
 
+/**
+ * The "asked by" line of an opened row — the function the PAGE runs, not a description of it.
+ *
+ * <p>Exported and embedded by assignment (`var askedByHtml = ${askedByHtml.toString()}`) for the
+ * same reason `compareRows` and `rowMatches` are: `common/generated-code-tests.md` says code the
+ * test generates must be EXECUTED rather than string-matched, and a substring assertion over the
+ * page's HTML cannot see whether the line was built correctly, only that its characters are in
+ * there somewhere. This way the test calls what the page calls.</p>
+ *
+ * <p>The escaper is a PARAMETER because the page has its own (`esc`) and this module has its own
+ * (`escapeHtml`), and a function embedded by `toString()` may only reference names the page
+ * defines. Passing it keeps one implementation of the line and no name games.</p>
+ *
+ * <p>An empty `calledBy` renders nothing at all — a round from before the field is a server that
+ * never asked the question, and an empty "asked by" would be a claim about it.</p>
+ */
+export function askedByHtml(calledBy: string, escape: (value: string) => string): string {
+  return calledBy === '' ? '' : '<div class="reviewer asked">asked by ' + escape(calledBy) + '</div>';
+}
+
 function rowFrom(
   session: SessionFile,
   round: RoundRecord,
@@ -433,7 +453,7 @@ function rowFrom(
     answered: round.reviewers,
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
-    calledBy: calledBy(session),
+    calledBy: calledBy(round.caller),
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
@@ -1172,6 +1192,7 @@ export function roundsLogHtml(
   // unbundled out/ in node and in headless Chromium, and failed only in the installed extension,
   // which is why the page now reports its own errors (0.29.10 found this one in a minute).
   var compareRows = ${compareRows.toString()};
+  var askedByHtml = ${askedByHtml.toString()};
   var rowMatches = ${rowMatches.toString()};
   var money = ${money.toString()};
   var cost3 = ${cost3.toString()};
@@ -1238,7 +1259,7 @@ export function roundsLogHtml(
     // WHO asked for the round, above the reviewers that answered it. Before the early return on
     // purpose: a session written by an older server has no reviewer detail, and one written by a
     // newer one against an older extension is the case this line exists for.
-    var asked = row.calledBy ? '<div class="reviewer asked">asked by ' + esc(row.calledBy) + '</div>' : '';
+    var asked = askedByHtml(row.calledBy, esc);
     if (row.reviewers.length === 0) {
       return asked + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
     }

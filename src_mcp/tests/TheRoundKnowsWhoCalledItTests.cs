@@ -155,6 +155,45 @@ public sealed class TheRoundKnowsWhoCalledItTests
         CallerDeclaration.From(default, "", "", "  claude-opus-5  ").Model.Should().Be("claude-opus-5");
     }
 
+    /// <summary>
+    /// A bidirectional override cannot be smuggled into the name of who reviewed what.
+    /// </summary>
+    /// <remarks>
+    /// Raised by gemini on the code round, and it is the one thing <c>char.IsControl</c> does not
+    /// catch: U+202E is Unicode category <c>Cf</c>, not a control character, and it reverses
+    /// everything after it. A caller is an external AI, and this string is rendered beside a vendor
+    /// in a log people read to find out who reviewed what — so a model id that DISPLAYS as another
+    /// one while the bytes say what they say is identity spoofing in exactly the record that exists
+    /// to prevent it.
+    /// </remarks>
+    [Theory]
+    [InlineData('‮')] // right-to-left override
+    [InlineData('​')] // zero-width space
+    [InlineData('‍')] // zero-width joiner
+    [InlineData('﻿')] // zero-width no-break space
+    public void AnInvisibleFormatCharacter_DoesNotSurviveIntoTheRecord(char invisible)
+    {
+        CallerDeclaration.From(default, "", "", "claude" + invisible + "-opus-5").Model
+            .Should().Be("claude-opus-5");
+    }
+
+    [Fact]
+    public void AModelThatIsNothingButInvisibleCharacters_IsNoModelAtAll()
+    {
+        CallerDeclaration.From(default, "", "", "‮​﻿").Model.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void APaddedLongModel_KeepsItsCharactersRatherThanItsPadding()
+    {
+        // The cap bounds the ALLOCATION as well as the field, so it is applied lazily — and a value
+        // whose leading spaces were counted against the budget would lose real characters off the
+        // end. Leading whitespace is dropped before the cap, which is what this pins.
+        var declared = CallerDeclaration.From(default, "", "", new string(' ', 50) + new string('m', 120));
+
+        declared.Model.Should().Be(new string('m', 120));
+    }
+
     [Fact]
     public void AnAbsurdlyLongModel_IsCapped_NotStored()
     {

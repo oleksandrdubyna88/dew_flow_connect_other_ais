@@ -79,6 +79,56 @@ public sealed class LiveRoundTests : IDisposable
     /// <para>The field is trailing and defaulted, so every session file already on disk stays valid:
     /// an older round names no model, which is the truth about it rather than a gap.</para>
     /// </remarks>
+    /// <summary>
+    /// The round records WHO ASKED for it, and keeps it when the session is reopened by somebody else.
+    /// </summary>
+    /// <remarks>
+    /// <para>Six findings across two vendors on this change's code round, and they were right. The
+    /// declaration arrives on <c>open</c> and so lives on the SESSION — but a session is repo+branch
+    /// and `open` is idempotent on that pair, so Codex opening a branch Claude reviewed yesterday
+    /// replaces it. Rendering every row from the session's latest caller would relabel history:
+    /// round 1 shown as asked by the client that merely reopened it.</para>
+    /// <para>So the round takes a copy when it starts. The session's field stays what it says it is
+    /// — who opened this session most recently — and the round says who asked for the round.</para>
+    /// </remarks>
+    [Fact]
+    public void ARoundKeepsTheCallerItWasOpenedBy_EvenAfterSomebodyElseReopensTheSession()
+    {
+        var store = new SessionStore(_dir);
+        var claude = Session() with { Caller = new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5") };
+        store.Save(claude);
+
+        _ = new LiveRound(store, claude, [Work("codex", RoleCatalog.ArchitectureRole)]);
+        var round = store.Load("D:/repo", "feature/x")!.Rounds.Single();
+
+        round.Caller.Model.Should().Be("claude-opus-5");
+        round.Caller.Client.Should().Be("claude-code");
+
+        // Codex now opens the same repo and branch. The SESSION's caller becomes codex — that is
+        // what the field means — and the round already written keeps its own.
+        store.Save(store.Load("D:/repo", "feature/x")! with
+        {
+            Caller = new CallerDeclaration("codex", "codex", "0.9", "codex-astra"),
+        });
+
+        var reopened = store.Load("D:/repo", "feature/x")!;
+        reopened.Caller.Model.Should().Be("codex-astra");
+        reopened.Rounds.Single().Caller.Model.Should().Be(
+            "claude-opus-5", "the round was asked for by claude, whoever opened the session afterwards");
+    }
+
+    [Fact]
+    public void ARoundFromASessionThatNeverRecordedACaller_RecordsNone()
+    {
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+
+        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
+
+        store.Load("D:/repo", "feature/x")!.Rounds.Single().Caller.Model.Should().BeEmpty();
+    }
+
     [Fact]
     public void EachReviewerRecordsTheModelItWasLaunchedWith()
     {
