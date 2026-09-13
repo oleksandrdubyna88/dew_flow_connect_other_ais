@@ -97,6 +97,92 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
     }
 }
 
+/// <summary>What story 2's SECOND code round found.</summary>
+public sealed class ConsultStoryTwoSecondRoundTests : IDisposable
+{
+    private readonly string _data = Directory.CreateTempSubdirectory("coai-s2b-").FullName;
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_data, recursive: true);
+        }
+        catch (IOException) { }
+    }
+
+    [Fact]
+    public void AnUnwritableSchemaDirectoryIsREPORTED_NotSwallowed()
+    {
+        // It returned a path to a file that was not there, so a read-only data directory surfaced
+        // minutes later as a child process complaining about a missing schema — nowhere near the
+        // permission that caused it.
+        var blocked = Path.Combine(_data, "not-a-directory");
+        File.WriteAllText(blocked, "a file, so no directory can be made inside it");
+
+        var provisioned = ConsultSchemaFile.Ensure(Path.Combine(blocked, "schemas"));
+
+        provisioned.Ready.Should().BeFalse();
+        provisioned.Problem.Should().Contain("answer schema").And.Contain("local-engine");
+        provisioned.Path.Should().NotBeEmpty("the path is still named, so the sentence can point at it");
+    }
+
+    [Fact]
+    public void AWritableDirectoryIsReady_AndTheSchemaIsThere()
+    {
+        var provisioned = ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"));
+
+        provisioned.Ready.Should().BeTrue();
+        provisioned.Problem.Should().BeEmpty();
+        File.ReadAllText(provisioned.Path).Should().Contain("\"answer\"");
+    }
+
+    [Fact]
+    public void ProvisioningTwiceIsOneFile_AndTheSecondCallRewritesNothing()
+    {
+        var first = ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"));
+        var written = File.GetLastWriteTimeUtc(first.Path);
+
+        var second = ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"));
+
+        second.Path.Should().Be(first.Path);
+        File.GetLastWriteTimeUtc(second.Path).Should().Be(written, "an unchanged schema is not rewritten");
+        Directory.EnumerateFiles(Path.Combine(_data, "schemas")).Should().ContainSingle("no temp file is left behind");
+    }
+
+    [Fact]
+    public void ONLYTheRouteThatNeedsTheSchemaSaysSo()
+    {
+        // A read-only data directory must not stop a consultation on a route that never wanted the
+        // file — which is three of the four.
+        ((IConsultantRuntime)new LocalConsultant(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local"))
+            .NeedsAnswerSchema.Should().BeTrue();
+
+        ((IConsultantRuntime)new CodexConsultant(new CodexRuntime())).NeedsAnswerSchema.Should().BeFalse();
+        ((IConsultantRuntime)new ClaudeConsultant(new ClaudeRuntime())).NeedsAnswerSchema.Should().BeFalse();
+        ((IConsultantRuntime)new AntigravityConsultant(new AntigravityRuntime())).NeedsAnswerSchema.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheNameASWEEPDeletesIsTheNameANADAPTERWROTE()
+    {
+        // The writer and the deleter are in different projects. An ad-hoc substring check in the
+        // sweep would leak files the day an adapter renamed its output.
+        var written = ConsultantArtefacts.Name("codex", ".txt");
+
+        ConsultantArtefacts.Ours(written).Should().BeTrue();
+        ConsultantArtefacts.Ours("local-consult-abc123.prompt").Should().BeTrue();
+        ConsultantArtefacts.Ours("notes-i-left-here.md").Should().BeFalse();
+        ConsultantArtefacts.Ours("codex-architecture-abc.txt").Should().BeFalse("a REVIEW artefact is not ours to sweep");
+    }
+
+    [Fact]
+    public void TwoLaunchesNeverShareAnArtefactName()
+    {
+        ConsultantArtefacts.Name("codex", ".txt").Should().NotBe(ConsultantArtefacts.Name("codex", ".txt"));
+    }
+}
+
 /// <summary>The cumulative-usage rule itself, in the core, where the service reads it from.</summary>
 public sealed class CumulativeUsageTests
 {

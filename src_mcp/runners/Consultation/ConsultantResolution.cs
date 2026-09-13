@@ -35,8 +35,11 @@ public static class ConsultantResolution
             new AntigravityConsultant(RuntimeResolution.For(vendor) ?? new AntigravityRuntime(vendor.Provider), vendor.Provider),
         // The local engine has no CLI and no conversation: it is a completion per turn, and the
         // transcript is ours to carry.
+        // Whatever RuntimeResolution says the row IS, not a cast to what it usually is: a downcast
+        // that fell back to `new LocalRuntime(...)` would discard any wrapper that resolution ever
+        // returns, silently, along with its configuration. (gemini, code round.)
         "local" => new LocalConsultant(
-            RuntimeResolution.For(vendor) as LocalRuntime ?? new LocalRuntime(vendor.Provider, vendor.BaseUrl),
+            RuntimeResolution.For(vendor) ?? new LocalRuntime(vendor.Provider, vendor.BaseUrl),
             vendor.Provider),
         _ => null,
     };

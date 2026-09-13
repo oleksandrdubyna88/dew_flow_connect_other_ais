@@ -129,7 +129,7 @@ public sealed class ConsultantsTests : IDisposable
     private static LocalConsultant Local() => new(new LocalRuntime("local", LocalRuntime.DefaultEndpoint), "local");
 
     /// <summary>The schema as the SERVICE provisions it — once, before any launch is built.</summary>
-    private string Schema() => ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"));
+    private string Schema() => ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas")).Path;
 
     [Fact]
     public void TheLocalEngineIsTheOneThatKeepsNoConversation()
@@ -155,20 +155,50 @@ public sealed class ConsultantsTests : IDisposable
     }
 
     [Fact]
-    public void BuildWritesNOTHING_OnAnyRoute()
+    public void NoRouteProvisionsTheSCHEMAWhileDescribingALaunch()
     {
-        // A pure builder is what makes every flag a unit test, and a request that provisions a file
-        // cannot be constructed just to be looked at. The schema is put on disk once when the service
-        // is built; three reviewers found the three faces of it having been done here instead.
+        // The schema is put on disk once when the service is built. Doing it here made a core type
+        // touch the filesystem, made a request impossible to construct merely to look at, and forced
+        // the data directory into the vendor factory — three reviewers found those three faces of the
+        // same defect on one round.
         var untouched = Path.Combine(_data, "nothing-should-appear-here");
 
         foreach (var consultant in Consultants())
         {
-            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, Answers, new ReviewerSettings("v"), Path.Combine(untouched, "schema.json")));
+            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, AnswersIn(consultant.Vendor), new ReviewerSettings("v"), Path.Combine(untouched, "schema.json")));
         }
 
-        Directory.Exists(untouched).Should().BeFalse("no adapter may create a directory while describing a launch");
+        Directory.Exists(untouched).Should().BeFalse("no adapter may provision the schema while describing a launch");
     }
+
+    [Fact]
+    public void THREERoutesWriteNothingAtAll_AndTheLOCALOneWritesItsPromptFile()
+    {
+        // The honest boundary, and the second code round was right to find the claim too broad. The
+        // three CLI routes take their prompt on stdin, so Build describes a process and touches no
+        // disk. The LOCAL route's shim reads a FILE — that is how a prompt avoids a Windows argv —
+        // and LocalRuntime.Build, which the review path has used for months, writes it. This story
+        // reuses that builder rather than forking it, so its write is inherited, not introduced.
+        //
+        // The trigger to move it: the first caller that wants to BUILD a local launch without
+        // running it — a dry run, a preview, a flag inspection. There is none today, and moving the
+        // write would change the review path for every local reviewer.
+        foreach (var consultant in Consultants().Where(c => c.Vendor != "local"))
+        {
+            var dir = AnswersIn(consultant.Vendor);
+            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, dir, new ReviewerSettings("v"), Schema()));
+
+            Directory.Exists(dir).Should().BeFalse($"{consultant.Vendor} describes a launch and writes nothing");
+        }
+
+        var local = AnswersIn("local");
+        Local().Build(new ConsultantLaunch(Repo, "the prompt", string.Empty, local, new ReviewerSettings("local"), Schema()));
+
+        var promptFile = Directory.EnumerateFiles(local, "*.prompt").Should().ContainSingle().Subject;
+        File.ReadAllText(promptFile).Should().Be("the prompt");
+    }
+
+    private string AnswersIn(string vendor) => Path.Combine(_data, "answers-" + vendor);
 
     [Fact]
     public void TheLocalEngineUnwrapsItsEnvelope_AndTheCLIsDoNot()

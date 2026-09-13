@@ -13,13 +13,22 @@ namespace CoaiMcp.Runners.Consultation;
 /// to resume and no handle to keep, which is what makes it the first and only
 /// <see cref="ConsultantMemory.WeRemember"/> here. The transcript therefore travels in the prompt,
 /// bounded by the budget declared below and frozen on the consultation's record.</para>
-/// <para>Two things it inherits from the reviewer path rather than re-deciding. The shim takes the
+/// <para>Three things it inherits from the reviewer path rather than re-deciding. The shim takes the
 /// cross-process engine lease, so one card serves one caller at a time however many rounds and
-/// consultations are in flight. And it refuses a request with no schema — deliberately, because an
+/// consultations are in flight. It refuses a request with no schema — deliberately, because an
 /// unconstrained local request is answered with an invented shape after a full generation has been
-/// paid for — which is what <see cref="ConsultAnswerSchema"/> exists for.</para>
+/// paid for — which is what <see cref="ConsultAnswerSchema"/> exists for. And <b>its
+/// <see cref="Build"/> WRITES the prompt file</b>, which is how a prompt reaches a shim without
+/// crossing a Windows argv.</para>
+/// <para><b>So Build is pure on the three CLI routes and not on this one</b>, and saying otherwise
+/// was wrong: story 2's second code round caught the claim, and the test that was supposed to hold it
+/// had been watching a different directory. <c>LocalRuntime.Build</c> has written that file since the
+/// review path shipped, and this story reuses that builder rather than forking it — the write is
+/// inherited, not introduced. The trigger to move it to the execution boundary is the first caller
+/// that wants to BUILD a local launch without running it: a dry run, a preview, a flag inspection.
+/// There is none today, and moving it would change the review path for every local reviewer.</para>
 /// </remarks>
-public sealed class LocalConsultant(LocalRuntime inner, string vendor) : IConsultantRuntime
+public sealed class LocalConsultant(IReviewerRuntime inner, string vendor) : IConsultantRuntime
 {
     /// <summary>
     /// How much conversation travels into each turn.
@@ -34,6 +43,9 @@ public sealed class LocalConsultant(LocalRuntime inner, string vendor) : IConsul
     public string Vendor => vendor;
 
     public ConsultantMemory Memory => new ConsultantMemory.WeRemember(CarryBudget);
+
+    /// <summary>The one route whose shim refuses an unconstrained request.</summary>
+    public bool NeedsAnswerSchema => true;
 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
