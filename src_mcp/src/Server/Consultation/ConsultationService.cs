@@ -336,7 +336,7 @@ public sealed class ConsultationService(
         var before = await _invariant.SnapshotAsync(repo, ct);
         var launch = consultant.Runtime.Build(new ConsultantLaunch(
             repo,
-            await PromptAsync(consultant, record, problem, files, nonce, repo, ct),
+            await PromptAsync(record, problem, files, nonce, repo, ct),
             record.Handle,
             AnswersDir,
             Settings(consultant),
@@ -370,7 +370,14 @@ public sealed class ConsultationService(
             : Settle(asking, consultant, launched, problem, nonce, started.Elapsed);
     }
 
-    private async Task<string> PromptAsync(Consultant consultant, ConsultationRecord record, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
+    /// <summary>The turn's prompt, composed from the RECORD alone.</summary>
+    /// <remarks>
+    /// It took a <c>Consultant</c> and never read it — residue from the fix the comment below
+    /// describes, when the memory mode moved off the runtime adapter and onto the record. Its
+    /// absence is now the statement: nothing about the vendor as it is configured TODAY may
+    /// reach a conversation that was opened yesterday. (SonarCloud, Major, on the pull request.)
+    /// </remarks>
+    private async Task<string> PromptAsync(ConsultationRecord record, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
     {
         var resuming = record.Turns.Count > 0 || record.Status == ConsultationStatuses.Interrupted;
         // The RECORD's frozen mode, not the runtime's current one. An upgrade that changed an
