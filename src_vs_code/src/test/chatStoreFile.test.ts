@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatStoreFile, QUARANTINE_DIR, SaveOutcome } from '../chatStoreFile';
+import { quarantinedAt } from '../chatStoreSweep';
 import { LOCK_STALE_MS, lockName } from '../chatStoreLock';
 import {
   CONVERSATION_VERSION,
@@ -417,7 +418,12 @@ test('forget takes the row away at once and SETS THE TRANSCRIPT ASIDE, so one ke
     assert.deepEqual([...(await rows(store))], [], 'a forgotten conversation still shows a row');
     // The words are still there, byte for byte, under a dated name the sweep can age.
     const set = readdirSync(join(dir, QUARANTINE_DIR));
-    assert.deepEqual(set, [`a1-forgotten-${AT}.json`], `the transcript was not set aside: ${set.join(',')}`);
+    assert.equal(set.length, 1, `the transcript was not set aside: ${set.join(',')}`);
+    // Named for the conversation, and DATED LAST so the sweep's own rule can age it — with a nonce
+    // between the two, so that two archives can never agree on a name and the rename replace one.
+    assert.match(set[0] ?? '', new RegExp(`^a1-forgotten-[0-9a-f]{8}-${AT}\\.json$`, 'u'), `the set-aside name is not the shape the sweep retires: ${set[0]}`);
+    assert.notEqual(quarantinedAt(set[0] ?? ''), undefined, 'the sweep cannot read an instant off the name, so the archive is never retired');
+    assert.equal(quarantinedAt(set[0] ?? ''), AT, 'the instant the sweep would age it by is not when it was forgotten');
     const kept = JSON.parse(readFileSync(join(dir, QUARANTINE_DIR, set[0]!), 'utf8')) as ConversationRecord;
     assert.equal(kept.passage, record().passage, 'the set-aside transcript is not the conversation that was forgotten');
   } finally {

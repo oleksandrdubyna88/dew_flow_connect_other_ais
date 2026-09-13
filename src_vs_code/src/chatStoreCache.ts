@@ -3,6 +3,7 @@ import { ConversationMeta, ConversationSource, sameSource } from './chatStore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatStoreKeeper } from './chatStoreKeeper';
 import { HeartbeatFile, Stamp, heldElsewhere } from './chatStoreSweep';
+import { processAlive } from './processAlive';
 
 /**
  * The index the picker draws from: every conversation's metadata, in memory, built from the METADATA
@@ -106,6 +107,8 @@ export class ConversationIndex {
     private readonly store: ChatStoreFile,
     /** This window, so its own heartbeat is not mistaken for somebody else's. */
     private readonly ownPid: number = process.pid,
+    /** Whether a heartbeat's writer still exists — a reload leaves its predecessor's file behind. */
+    private readonly alive: (pid: number) => boolean = processAlive,
   ) {}
 
   public state(): IndexState {
@@ -124,9 +127,13 @@ export class ConversationIndex {
    * good announcements in place, exactly as it leaves the last good rows: the honest reading of "the
    * folder would not answer" is that what it last said is still the best thing known, and erring
    * towards believing another window holds something errs towards not giving a record two writers.</p>
+   *
+   * <p>A window that has RELOADED leaves its predecessor's heartbeat on disk on purpose, so the
+   * writer's existence is asked of the operating system as well as its age — without that, every
+   * reload made the conversations that window held unopenable for half an hour.</p>
    */
   public elsewhere(now = Date.now()): ReadonlySet<string> {
-    return heldElsewhere(this.beats, now, this.ownPid);
+    return heldElsewhere(this.beats, now, this.ownPid, this.alive);
   }
 
   /**

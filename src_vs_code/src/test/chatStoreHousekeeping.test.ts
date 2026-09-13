@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { ChatStoreFile } from '../chatStoreFile';
 import { HeartbeatTimers } from '../chatStoreHeartbeat';
 import { Housekeeping, startHousekeeping } from '../chatStoreHousekeeping';
-import { HOUSEKEEPING_DIR, heartbeatName } from '../chatStoreSweep';
+import { HOUSEKEEPING_DIR, SweepReport, heartbeatName } from '../chatStoreSweep';
 import { CONVERSATION_VERSION, ConversationRecord, KEEP_FOR_MS, recordName, sourceOfSession } from '../chatStore';
 import { ChatMessage } from '../chatPage';
 
@@ -208,24 +208,40 @@ test('against a store that will not answer, nothing is swept and the index says 
   }
 });
 
-test('a defect in the chain is caught and said, never left as an unhandled rejection', async () => {
+test('a MIGRATION that failed sweeps nothing and still publishes the list, rather than neither', async () => {
+  // Both halves matter and they used to fail together. The rejection ran down the chain to the
+  // catch, which took the index refresh with it — so the picker said "your saved conversations are
+  // still being listed" for the life of the window, over a full store, with no way to reach any of
+  // it. And the sweep must still NOT run: a migration that did not finish may have left records the
+  // store has not taken over, and retirement by age would delete what the memento still holds.
+  // (CodeRabbit, on the pull request.)
   const dir = home();
   let housekeeping: Housekeeping | undefined;
   try {
+    const store = new ChatStoreFile(dir);
+    const now = Date.now();
+    await store.save(record({ id: 'old', updatedAt: now - KEEP_FOR_MS - 60_000 }, now), 0);
     const lines: string[] = [];
     const before = console.error;
     console.error = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
+    let report: SweepReport | undefined;
     try {
-      housekeeping = startHousekeeping({ store: new ChatStoreFile(dir), held: () => [], after: Promise.reject(new Error('the migration blew up')), pid: 4242, clock: Date.now, timers: quietTimers });
-      const report = await housekeeping.ready;
-      assert.equal(report, undefined, 'a rejected wait was reported as a sweep');
+      housekeeping = startHousekeeping({ store, held: () => [], after: Promise.reject(new Error('the migration blew up')), pid: 4242, clock: () => now, timers: quietTimers });
+      report = await housekeeping.ready;
       // The first beat is still in flight; let it land before the directory goes.
       await housekeeping.heartbeat.settled();
     } finally {
       console.error = before;
     }
 
-    assert.ok(lines.some((line) => line.includes('the conversation sweep or index threw') && line.includes('the migration blew up')), `the defect was not said: ${lines.join(' | ')}`);
+    assert.equal(report?.kind, 'skipped', 'a failed migration was followed by a sweep');
+    assert.equal(report?.kind === 'skipped' ? report.why : '', 'unmigrated');
+    assert.equal(existsSync(join(dir, recordName('old'))), true, 'an expired record was retired although the migration had failed');
+    // AND THE LIST IS THERE. This is the half that was broken: a window whose migration failed could
+    // not show a person one conversation, for ever.
+    assert.deepEqual(housekeeping.index.state(), { kind: 'ready', at: now }, 'the index was never published, so the picker says “still being listed” for ever');
+    assert.deepEqual(housekeeping.index.entries({ kind: 'everywhere' }).map((meta) => meta.id), ['old']);
+    assert.ok(lines.some((line) => line.includes('the conversation migration failed') && line.includes('the migration blew up')), `the defect was not said: ${lines.join(' | ')}`);
   } finally {
     housekeeping?.dispose();
     rmSync(dir, { recursive: true, force: true });

@@ -104,7 +104,7 @@ else, newest first. Typing filters by the title, by the model that answered and 
 said, so a conversation you remember by one word of its answer is one word away. Choosing an open one
 brings its tab to the front; choosing a closed one opens it again where it left off, with nothing
 running until you ask something. A trash button on every closed row forgets that conversation and
-`Alt+Delete` forgets the one under the cursor — the list stays open either way — and the globe in the
+`Alt+Delete` (`Cmd+Delete` on a Mac) forgets the one under the cursor — the list stays open either way — and the globe in the
 title widens it from this folder to every folder.
 
 Forgetting is not destroying: the row goes at once, but the conversation itself is set aside on

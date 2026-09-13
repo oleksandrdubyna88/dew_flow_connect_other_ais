@@ -44,6 +44,11 @@ import { CONVERSATION_VERSION, ConversationMeta, KEEP_FOR_MS, sourceOfSession } 
 const NOW = Date.UTC(2026, 8, 13, 12, 0, 0);
 const OWN_PID = 4242;
 
+/** Every writer still exists — the ordinary case, and what a test means unless it says otherwise. */
+const LIVE = (): boolean => true;
+/** Nobody is left: what a RELOAD leaves behind, where the file is young and its host has gone. */
+const DEAD = (): boolean => false;
+
 const stamp = (mtimeMs: number, size = 300): Stamp => ({ mtimeMs, size });
 
 function meta(over: Partial<ConversationMeta> = {}): ConversationMeta {
@@ -206,12 +211,12 @@ test('what ANOTHER window holds leaves out this one, so the picker never refuses
   const theirs = beat(7, ['theirs'], NOW);
   const gone = beat(8, ['stale'], NOW - HEARTBEAT_STALE_MS);
 
-  assert.deepEqual([...heldElsewhere([ours, theirs, gone], NOW, OWN_PID)].sort(), ['theirs']);
+  assert.deepEqual([...heldElsewhere([ours, theirs, gone], NOW, OWN_PID, LIVE)].sort(), ['theirs']);
   // Liveness is judged at the moment of ASKING, not of the survey: a picker left open must stop
   // believing a window that has since gone quiet, or it holds those conversations hostage.
-  assert.deepEqual([...heldElsewhere([theirs], NOW + HEARTBEAT_STALE_MS, OWN_PID)], [],
+  assert.deepEqual([...heldElsewhere([theirs], NOW + HEARTBEAT_STALE_MS, OWN_PID, LIVE)], [],
     'a heartbeat that went stale while the list was up still held its conversations');
-  assert.deepEqual([...heldElsewhere([], NOW, OWN_PID)], [], 'no heartbeats at all is not an empty answer');
+  assert.deepEqual([...heldElsewhere([], NOW, OWN_PID, LIVE)], [], 'no heartbeats at all is not an empty answer');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -432,7 +437,33 @@ test('a heartbeat is THIS window\u2019s if EITHER its name or its body says so',
   const bodyOnly: HeartbeatFile = { name: heartbeatName(7), stamp: stamp(NOW, 120), beat: { pid: OWN_PID, at: NOW, ids: ['a1'] } };
   const nameOnly: HeartbeatFile = { name: heartbeatName(OWN_PID), stamp: stamp(NOW, 120), beat: { pid: 7, at: NOW, ids: ['b2'] } };
 
-  assert.deepEqual([...heldElsewhere([bodyOnly], NOW, OWN_PID)], [], 'a heartbeat whose BODY says it is ours was read as another window');
-  assert.deepEqual([...heldElsewhere([nameOnly], NOW, OWN_PID)], [], 'a heartbeat whose NAME says it is ours was read as another window');
-  assert.deepEqual([...heldElsewhere([beat(7, ['c3'], NOW)], NOW, OWN_PID)], ['c3'], 'a heartbeat that is nobody ours was dropped');
+  assert.deepEqual([...heldElsewhere([bodyOnly], NOW, OWN_PID, LIVE)], [], 'a heartbeat whose BODY says it is ours was read as another window');
+  assert.deepEqual([...heldElsewhere([nameOnly], NOW, OWN_PID, LIVE)], [], 'a heartbeat whose NAME says it is ours was read as another window');
+  assert.deepEqual([...heldElsewhere([beat(7, ['c3'], NOW)], NOW, OWN_PID, LIVE)], ['c3'], 'a heartbeat that is nobody ours was dropped');
+});
+
+test('a heartbeat left by THIS window’s predecessor is not another window — the reload case', () => {
+  // Reload Window replaces the extension host: the old pid's heartbeat is deliberately left on disk,
+  // because the sweep needs it to go on protecting the tabs the new host is still restoring. But the
+  // new host has a NEW pid, so by age alone its own predecessor reads as a live rival for the whole
+  // stale window — and every conversation that window held would be unopenable and unforgettable for
+  // half an hour after a command people press daily. Asking whether the writer still exists is what
+  // tells a dead predecessor from a real second window. (CodeRabbit, on the pull request.)
+  const predecessor = beat(7, ['was-open-before-the-reload'], NOW);
+
+  assert.deepEqual([...heldElsewhere([predecessor], NOW, OWN_PID, DEAD)], [],
+    'a heartbeat whose host has gone was read as a live rival, so a reload makes conversations unreachable');
+  // And a window that really is there is still a rival, which is the whole point of the file.
+  assert.deepEqual([...heldElsewhere([predecessor], NOW, OWN_PID, LIVE)], ['was-open-before-the-reload']);
+});
+
+test('the SWEEP does not ask whether a writer exists, and must not — the two questions differ', () => {
+  // protectedIds answers "might anybody still hold this", where a generous answer costs nothing and a
+  // mean one deletes somebody's conversation. It is the same predecessor heartbeat that protects the
+  // tabs a reloading window has not restored yet, so making it liveness-aware would open the gap the
+  // heartbeat exists to close.
+  const predecessor = beat(7, ['still-being-restored'], NOW);
+
+  assert.deepEqual([...protectedIds([predecessor], NOW, [])], ['still-being-restored'],
+    'the sweep stopped protecting what a reloading window is still restoring');
 });

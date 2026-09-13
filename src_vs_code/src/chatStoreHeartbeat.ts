@@ -126,7 +126,11 @@ export class ConversationHeartbeat {
 
   /** What is held, once each, in one order — so the same set always announces as the same text. */
   private snapshot(): readonly string[] {
-    return [...new Set(this.held())].sort();
+    // A NAMED comparator, not the default: the default sorts by UTF-16 code unit, which is the one
+    // "sort" in JavaScript that does something different from what its call site reads like. The
+    // order only has to be STABLE — the text is compared against this window's own previous
+    // announcement — and `localeCompare` is what every other ordering in this feature uses.
+    return [...new Set(this.held())].sort((left, right) => left.localeCompare(right));
   }
 
   private write(ids: readonly string[]): Promise<boolean> {

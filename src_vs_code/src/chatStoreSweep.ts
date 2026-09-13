@@ -364,11 +364,29 @@ export function protectedIds(heartbeats: readonly HeartbeatFile[], now: number, 
  *
  * <p>Liveness is judged against `now` at the moment of asking rather than at the moment of the
  * survey, so a picker left open does not go on believing a window that has since gone quiet.</p>
+ *
+ * <p><b>And the writer must still exist.</b> A RELOAD is the case that forces this: the heartbeat of
+ * the host being replaced is deliberately left on disk — `chatStoreHeartbeat.ts` says why, and the
+ * sweep needs it to go on protecting the tabs the new host is still restoring — but the new host has
+ * a new pid, so without asking the operating system its own predecessor reads as a live rival for
+ * the whole stale window. Every conversation that window held would then be undeletable and
+ * unopenable for half an hour after every reload, which is a command people press daily.
+ * {@link protectedIds} deliberately does NOT ask: the sweep's question is "might anybody still hold
+ * this", where a generous answer costs nothing, and the two questions part company exactly here.
+ * (CodeRabbit, on the pull request.)</p>
+ *
+ * @param alive whether a process is still running — injected, because this module owns no I/O; the
+ *   index passes `processAlive`, and a test passes a set
  */
-export function heldElsewhere(heartbeats: readonly HeartbeatFile[], now: number, ownPid: number): ReadonlySet<string> {
+export function heldElsewhere(
+  heartbeats: readonly HeartbeatFile[],
+  now: number,
+  ownPid: number,
+  alive: (pid: number) => boolean,
+): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const file of heartbeats) {
-    if (!ourOwn(file, ownPid) && file.beat !== undefined && liveHeartbeat(file.beat, now)) {
+    if (!ourOwn(file, ownPid) && file.beat !== undefined && liveHeartbeat(file.beat, now) && alive(file.beat.pid)) {
       for (const id of file.beat.ids) {
         ids.add(id);
       }
@@ -466,7 +484,7 @@ export const planIsEmpty = (plan: SweepPlan): boolean =>
  * Why a sweep did not run, when it did not. `sweeping` and `unclaimed` are the claim's two answers;
  * `unannounced` is the housekeeping's — a window whose own heartbeat could not be written.
  */
-export type SweepSkipped = 'unavailable' | 'empty' | 'recent' | 'sweeping' | 'unclaimed' | 'unannounced';
+export type SweepSkipped = 'unavailable' | 'empty' | 'recent' | 'sweeping' | 'unclaimed' | 'unannounced' | 'unmigrated';
 
 /** What one sweep came to: either it did not run, and why, or these counts. */
 export type SweepReport =
@@ -496,6 +514,7 @@ export function describeSweep(report: SweepReport): string {
       sweeping: 'another window is sweeping now',
       unclaimed: 'this window could not claim the store, and another window may be sweeping it',
       unannounced: 'this window could not announce what it holds open, and a window that cannot say so deletes nothing',
+      unmigrated: 'the migration into the store did not finish, and nothing is retired by age until it has',
     };
 
     return `ConnectOtherAIs: the conversation sweep did not run — ${why[report.why]}${report.reason.length > 0 ? ` (${report.reason})` : ''}`;

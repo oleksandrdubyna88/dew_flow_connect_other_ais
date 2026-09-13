@@ -27,6 +27,7 @@ import {
 } from './chatLedger';
 import { capture } from './versionProbe';
 import { hostPlatform } from './hostSide';
+import { processAlive } from './processAlive';
 
 /**
  * The ledger's world-facing half: the files, the command, and the log line.
@@ -118,25 +119,6 @@ export function forget(pid: number): void {
   }
   mine = forgotten(mine, pid);
   saved();
-}
-
-/**
- * Is the process that wrote this ledger still running?
- *
- * <p>Signal 0 asks without sending anything, and the ERROR is the answer: `ESRCH` means no such
- * process, and anything else — `EPERM` most of all — means a process that exists and will not be
- * inspected by us. Treating that as dead would be the one mistake this module cannot afford: it
- * would read another window's ledger and kill the children it is using right now. So only `ESRCH`
- * is death, and everything else is life. (gemini, the code round.)</p>
- */
-function ownerAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-
-    return true;
-  } catch (reason) {
-    return (reason as NodeJS.ErrnoException).code !== 'ESRCH';
-  }
 }
 
 /**
@@ -373,7 +355,7 @@ export async function reconcile(storageDir: string, now = Date.now()): Promise<r
   const until = now + SWEEP_MS;
   // Which files may be opened is a decision, and it lives with the other decisions: a file whose
   // owner is still running belongs to a window using its children right now.
-  const ours = filesToSweep(names, process.pid, ownerAlive);
+  const ours = filesToSweep(names, process.pid, processAlive);
   for (const file of ours) {
     await tidy(join(storageDir, file.name), now, until, killed);
   }

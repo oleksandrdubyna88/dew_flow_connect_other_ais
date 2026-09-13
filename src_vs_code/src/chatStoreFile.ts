@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { abreast } from './abreast';
@@ -617,7 +618,13 @@ export class ChatStoreFile {
 
       return { kind: 'failed', reason: withCode('the conversation could not be deleted', codeOf(reason)) };
     }
-    const to = join(this.dir, QUARANTINE_DIR, `${id}-forgotten-${now}.json`);
+    // A NONCE before the instant, and the instant stays last so the sweep's own dated rule still
+    // reads it. A rename REPLACES its destination, so two archives that agreed on a name would lose
+    // the older one — and the store is allowed to mint a conversation under an id whose record has
+    // been forgotten, since a baseline-zero save meets an absent record. Vanishingly unlikely with
+    // `randomUUID` ids, and free to make impossible, on the one operation whose whole purpose is not
+    // losing what somebody said. (CodeRabbit, on the pull request.)
+    const to = join(this.dir, QUARANTINE_DIR, `${id}-forgotten-${randomUUID().slice(0, 8)}-${now}.json`);
     try {
       await mkdir(join(this.dir, QUARANTINE_DIR), { recursive: true });
       await rename(this.recordPath(id), to);
