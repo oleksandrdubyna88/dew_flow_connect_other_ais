@@ -1,4 +1,5 @@
 import { ConversationMeta } from './chatStore';
+import { IndexState } from './chatStoreCache';
 
 /**
  * What the picker offers, decided without a host.
@@ -9,9 +10,9 @@ import { ConversationMeta } from './chatStore';
  * a rule no test can reach. What is left on the `vscode` side is the widget.</p>
  *
  * <p>The shape is a list of TAGGED rows rather than a list of items with optional fields, because a
- * separator, a conversation, the offer to start a new one and the sentence shown when the store
- * could not be read are four different things that a caller must handle differently — and a union
- * makes the compiler ask.</p>
+ * separator, a conversation, the offer to start a new one and a notice are four different things that
+ * a caller must handle differently — and a union makes the compiler ask. {@link PickerRow} says what
+ * choosing each of them means.</p>
  */
 
 /** The heading above conversations that are open in a tab right now. */
@@ -19,14 +20,6 @@ export const OPEN_SECTION = 'Open';
 
 /** The heading above conversations that are only on disk. */
 export const RECENT_SECTION = 'Recent';
-
-/** The id of the row that starts a conversation rather than opening one. */
-// A COLON, which `isSafeId` refuses: these two rows are not conversations, and an id that can never
-// be a real one is what stops a crafted record ever being mistaken for the action row beside it.
-export const NEW_ROW_ID = ':new';
-
-/** The id of the row shown when the store could not be read at all. */
-export const UNREADABLE_ROW_ID = ':unreadable';
 
 /**
  * The most conversations a picker draws.
@@ -37,14 +30,38 @@ export const UNREADABLE_ROW_ID = ':unreadable';
  */
 export const MOST_ROWS = 100;
 
-/** One conversation a window currently holds open. */
+/**
+ * One conversation a window currently holds open — described by the same facts as a stored row.
+ *
+ * <p>Two open conversations sharing a title, a model and a turn count are exactly the case the
+ * registry exists to handle, and the last line and the age are what tell them apart; a row that
+ * omitted them made the open ones the least distinguishable rows on the list. (gemini, the code
+ * round.)</p>
+ */
 export interface OpenConversation {
   readonly id: string;
   readonly title: string;
   readonly modelId: string;
   readonly turns: number;
+  /** The last thing said in it, as the store's `lastLine` carries it; empty when nothing has been said yet. */
+  readonly lastLine: string;
+  /** When something was last said in it — or when it was opened, for one that has said nothing. */
+  readonly updatedAt: number;
 }
 
+/** What a notice row says instead of a conversation. */
+export type PickerNotice = 'building' | 'unreadable' | 'empty' | 'more';
+
+/**
+ * A row, tagged by what CHOOSING it means — and only a `conversation` carries an id.
+ *
+ * <p>Pressing Enter on any non-separator row of a QuickPick fires accept. So the union states, per
+ * row, what an accept handler may do: open a `conversation` (reveal it when `live`, reopen it
+ * otherwise); start one on `new`; and NOTHING on a `notice`, which has nothing to open — no `id`, so a
+ * widget cannot so much as try, and no sentinel id that a crafted record would have to be kept from.
+ * A `section` is a separator and cannot be chosen at all. That a notice is not openable used to be a
+ * rule the widget had to remember; it is now a field the compiler refuses to find. (The code round.)</p>
+ */
 export type PickerRow =
   | { readonly kind: 'section'; readonly label: string }
   | {
@@ -56,16 +73,25 @@ export type PickerRow =
     /** Whether it is open in a tab — the caller reveals one and reopens the other. */
     readonly live: boolean;
   }
-  | { readonly kind: 'new'; readonly id: string; readonly label: string; readonly detail: string }
-  | { readonly kind: 'unreadable'; readonly id: string; readonly label: string; readonly detail: string }
-  | { readonly kind: 'empty'; readonly label: string; readonly detail: string }
-  | { readonly kind: 'more'; readonly label: string };
+  | { readonly kind: 'new'; readonly label: string; readonly detail: string }
+  | { readonly kind: 'notice'; readonly notice: PickerNotice; readonly label: string; readonly detail: string };
 
 export interface PickerInput {
   /** What this window holds open, in the order it wants them shown. */
   readonly open: readonly OpenConversation[];
-  /** What the index holds, or that it could not be read — the distinction A2's typed listing exists for. */
-  readonly stored: readonly ConversationMeta[] | 'unavailable';
+  /**
+   * What the index holds, IN THE ORDER IT PUBLISHES THEM — newest first, sorted once when the rows
+   * were published. Nothing here sorts: a second sort was a sort of the whole store, before the cut to
+   * a hundred, on every keystroke of a filter.
+   */
+  readonly stored: readonly ConversationMeta[];
+  /**
+   * Where the index stands. `building` is the window's first seconds — the index is empty until the
+   * sweep and the first refresh finish, and a picker that read that as "no conversations" would say so
+   * over a full store. `unavailable` is a directory that would not answer; `stored` then holds the last
+   * good rows the index kept, and the notice says they may be behind.
+   */
+  readonly index: IndexState;
   readonly workspace: string;
   /** Whether the person asked for every workspace rather than this one. */
   readonly everywhere: boolean;
@@ -79,90 +105,142 @@ export interface PickerInput {
  *
  * <p>Open first, because what is already in a tab is what a person is most often looking for — this
  * feature exists because ten of them are open at once — and because choosing one of those is a
- * reveal, which is instant, while choosing a closed one starts something.</p>
+ * reveal, which is instant, while choosing a closed one starts something. The open ones come from
+ * the registry, not the index, so they are shown whatever state the index is in: a disk that will not
+ * answer, or an index still being built, takes nothing away from a tab that is already open.</p>
  */
 export function pickerRows(input: PickerInput): readonly PickerRow[] {
   const first: PickerRow[] = input.offerNew === undefined ? [] : [newRow(input.offerNew)];
-  if (input.stored === 'unavailable') {
-    // NOT an empty list. They are opposite facts, and only one of them means "you have none" — which
-    // is the whole reason the store's listing is typed. The offer to start one survives, because
-    // starting a conversation needs nothing from a disk that will not answer.
-    return [...first, {
-      kind: 'unreadable',
-      id: UNREADABLE_ROW_ID,
-      label: 'Your saved conversations could not be read',
-      detail: 'The folder they are kept in did not answer. Nothing has been lost; try again in a moment.',
-    }];
+  const open = input.open.map((one) => openRow(one, input.now));
+  const opened: PickerRow[] = open.length === 0 ? [] : [section(OPEN_SECTION), ...open];
+  if (input.index.kind === 'building') {
+    return [...first, ...opened, buildingNotice()];
   }
-
-  const open = input.open.map(openRow);
   const held = new Set(input.open.map((one) => one.id));
-  const closed = [...input.stored]
-    .filter((one) => !held.has(one.id))
-    .filter((one) => input.everywhere || one.workspace === input.workspace)
-    .sort((left, right) => right.updatedAt - left.updatedAt);
+  const closed = input.stored.filter((one) => !held.has(one.id) && (input.everywhere || one.workspace === input.workspace));
+  const recent = recentRows(closed, input.now);
+  if (input.index.kind === 'unavailable') {
+    // NOT an empty list. They are opposite facts, and only one of them means "you have none" — which
+    // is the whole reason the index's state is typed. The offer to start one survives, because
+    // starting a conversation needs nothing from a disk that will not answer; so do the last good
+    // rows, said to be from before the disk stopped answering.
+    return [...first, ...opened, unreadableNotice(input.index.reason, recent.length > 0), ...recent];
+  }
   if (open.length === 0 && closed.length === 0) {
-    return [...first, {
-      kind: 'empty',
-      label: input.everywhere ? 'No conversations yet' : 'No conversations in this folder yet',
-      detail: input.everywhere
-        ? 'Ask another AI about something and it will be here.'
-        : 'Nothing here yet — or they belong to another folder. Press the globe to look everywhere.',
-    }];
+    return [...first, emptyNotice(input.everywhere)];
   }
 
-  const shown = closed.slice(0, MOST_ROWS).map((one) => storedRow(one, input));
-  const cut: PickerRow[] = closed.length > shown.length
-    ? [{ kind: 'more', label: `… and ${closed.length - shown.length} older, not shown` }]
-    : [];
-
-  return [
-    ...first,
-    ...(open.length === 0 ? [] : [{ kind: 'section' as const, label: OPEN_SECTION }, ...open]),
-    ...(shown.length === 0 ? [] : [{ kind: 'section' as const, label: RECENT_SECTION }, ...shown, ...cut]),
-  ];
+  return [...first, ...opened, ...recent];
 }
+
+/** The Recent section: the newest hundred as given, each saying where it is when that could differ, and the cut stated. */
+function recentRows(closed: readonly ConversationMeta[], now: number): readonly PickerRow[] {
+  const shown = closed.slice(0, MOST_ROWS);
+  if (shown.length === 0) {
+    return [];
+  }
+  const where = folderLabels(shown.map((one) => one.workspace));
+  const cut: PickerRow[] = closed.length > shown.length ? [moreNotice(closed.length - shown.length)] : [];
+
+  return [section(RECENT_SECTION), ...shown.map((one) => storedRow(one, where.get(one.workspace) ?? '', now)), ...cut];
+}
+
+const section = (label: string): PickerRow => ({ kind: 'section', label });
 
 const newRow = (tab: string): PickerRow => ({
   kind: 'new',
-  id: NEW_ROW_ID,
   label: `New conversation for ${tab}`,
   detail: 'Nothing is created until you choose this.',
 });
 
-const openRow = (one: OpenConversation): PickerRow => ({
+const buildingNotice = (): PickerRow => ({
+  kind: 'notice',
+  notice: 'building',
+  label: 'Your saved conversations are still being listed',
+  detail: 'The list is being built; open this again in a moment.',
+});
+
+const unreadableNotice = (reason: string, rowsFollow: boolean): PickerRow => ({
+  kind: 'notice',
+  notice: 'unreadable',
+  label: 'Your saved conversations could not be read',
+  detail: `The folder they are kept in did not answer (${reason}). Nothing has been lost; try again in a moment.`
+    + `${rowsFollow ? ' The list below is as it was last read, and may be behind.' : ''}`,
+});
+
+const emptyNotice = (everywhere: boolean): PickerRow => ({
+  kind: 'notice',
+  notice: 'empty',
+  label: everywhere ? 'No conversations yet' : 'No conversations in this folder yet',
+  detail: everywhere
+    ? 'Ask another AI about something and it will be here.'
+    : 'Nothing here yet — or they belong to another folder. Press the globe to look everywhere.',
+});
+
+const moreNotice = (older: number): PickerRow => ({
+  kind: 'notice',
+  notice: 'more',
+  label: `… and ${older} older, not shown`,
+  detail: '',
+});
+
+const openRow = (one: OpenConversation, now: number): PickerRow => ({
   kind: 'conversation',
   id: one.id,
   label: one.title,
-  description: [one.modelId, turnsIn(one.turns), 'open now'].filter((part) => part.length > 0).join(' · '),
-  detail: '',
+  description: [one.modelId, turnsIn(one.turns), rowAge(now, one.updatedAt), 'open now'].filter((part) => part.length > 0).join(' · '),
+  detail: one.lastLine,
   live: true,
 });
 
-function storedRow(one: ConversationMeta, input: PickerInput): PickerRow {
-  // WHERE, but only when it could be somewhere else. A folder name on every row of a list that is
-  // all one folder is noise; on a list spanning several it is the thing telling two apart.
-  const where = input.everywhere ? folderName(one.workspace) : '';
-
-  return {
-    kind: 'conversation',
-    id: one.id,
-    label: one.title,
-    description: [one.modelId, turnsIn(one.turns), rowAge(input.now, one.updatedAt), where]
-      .filter((part) => part.length > 0)
-      .join(' · '),
-    detail: one.lastLine,
-    live: false,
-  };
-}
+const storedRow = (one: ConversationMeta, where: string, now: number): PickerRow => ({
+  kind: 'conversation',
+  id: one.id,
+  label: one.title,
+  description: [one.modelId, turnsIn(one.turns), rowAge(now, one.updatedAt), where].filter((part) => part.length > 0).join(' · '),
+  detail: one.lastLine,
+  live: false,
+});
 
 const turnsIn = (turns: number): string => (turns === 1 ? '1 turn' : `${turns} turns`);
 
-/** The last segment of a path, which is what a person calls the project. */
-function folderName(workspace: string): string {
-  const parts = workspace.split(/[\\/]/u).filter((part) => part.length > 0);
+/**
+ * WHERE each conversation is — said only when it could be somewhere else, and only as much as tells
+ * them apart.
+ *
+ * <p>Nothing when every row is one folder: a folder name on every row of a list that is all one
+ * folder is noise. The folder's name when the names differ. And for two projects whose folders share
+ * a name — `coai` under `rsd` and `coai` under `other` — the folder above, and above that, until the
+ * labels differ: `rsd\coai` beside `other\coai`, in the path's own separators. A conversation with
+ * no folder behind it is `no folder`. Two paths that are one folder spelled twice, with nothing in the
+ * spelling to tell them apart, stay alike — which is the truth — and the widening stops there.</p>
+ */
+export function folderLabels(workspaces: readonly string[]): ReadonlyMap<string, string> {
+  const distinct = [...new Set(workspaces)];
+  if (distinct.length < 2) {
+    return new Map(distinct.map((one) => [one, '']));
+  }
+  const labels = new Map(distinct.map((one) => [one, folderName(one, 1)]));
+  for (let depth = 2; ; depth += 1) {
+    const clashing = distinct.filter((one) => distinct.some((other) => other !== one && labels.get(other) === labels.get(one)));
+    const widened = clashing.filter((one) => folderName(one, depth) !== labels.get(one));
+    if (widened.length === 0) {
+      return labels;
+    }
+    for (const one of widened) {
+      labels.set(one, folderName(one, depth));
+    }
+  }
+}
 
-  return parts[parts.length - 1] ?? 'no folder';
+/** The last `depth` segments of a path, in its own separators — what a person calls the project. */
+function folderName(workspace: string, depth: number): string {
+  const parts = workspace.split(/[\\/]/u).filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return 'no folder';
+  }
+
+  return parts.slice(-depth).join(workspace.includes('\\') ? '\\' : '/');
 }
 
 /**

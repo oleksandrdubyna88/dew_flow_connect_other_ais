@@ -95,6 +95,26 @@ test('a pulse writes when the set of open conversations changed, and writes noth
   }
 });
 
+test('a pulse issued BEFORE the registry holds the entry still announces it — the ids are read on the tick, not at the pulse', async () => {
+  // `newConversation` pulses from inside the factory `panels.open` calls, before `open` has
+  // registered the entry. The pulse is a `setTimeout(0)`; the registration is synchronous in the same
+  // call stack; so by the time the beat reads what is held, the entry is there. (A finding of the code
+  // round claimed the heartbeat written by that pulse omits the conversation; this is the sequence.)
+  const dir = home();
+  try {
+    let held: readonly string[] = [];
+    const heartbeat = new ConversationHeartbeat(new Counting(dir), () => held, 7, fakeTimers(), () => NOW);
+
+    heartbeat.pulse();
+    held = ['a1']; // registered after the pulse, before the tick — as `panels.open` does
+    await heartbeat.settled();
+
+    assert.deepEqual(written(dir, 7), { kind: 'heartbeat', beat: { pid: 7, at: NOW, ids: ['a1'] } }, 'the heartbeat named what was held at the pulse, not at the tick');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the timer beats every minute whether or not anything changed, and a second start is a no-op', async () => {
   const dir = home();
   try {

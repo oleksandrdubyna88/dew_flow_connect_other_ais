@@ -5,11 +5,15 @@ import {
   HEARTBEAT_SHAPE,
   HEARTBEAT_STALE_MS,
   HeartbeatFile,
+  MARKER_SHAPE,
   NOTHING_TO_SWEEP,
   ORPHAN_GRACE_MS,
+  SWEEP_BUDGET_MS,
+  SWEEP_CLAIM_MS,
   SWEEP_EVERY_MS,
   Stamp,
   Survey,
+  SweepMarker,
   SweepReport,
   describeSweep,
   heartbeatName,
@@ -279,22 +283,61 @@ test('a quarantined value is dated by the instant in its name, and one without a
 // One window sweeps: the marker.
 // ---------------------------------------------------------------------------------------------
 
-test('a sweep is due with no marker, not due behind a recent one, and due again a day later', () => {
+const finishedAt = (finished: number): SweepMarker => ({ kind: 'finished', pid: 7, began: finished - 5_000, finished });
+const claimedAt = (began: number): SweepMarker => ({ kind: 'claimed', pid: 7, began });
+
+test('a sweep is due with no marker, not due behind a recent FINISHED one, and due again a day later', () => {
   assert.equal(sweepDue(undefined, NOW), true, 'a store that has never been swept was not swept');
-  assert.equal(sweepDue({ pid: 7, at: NOW - 3_600_000 }, NOW), false, 'a second window swept an hour after the first');
-  assert.equal(sweepDue({ pid: 7, at: NOW - SWEEP_EVERY_MS }, NOW), true, 'a day-old marker still blocked the sweep');
+  assert.equal(sweepDue(finishedAt(NOW - 3_600_000), NOW), false, 'a second window swept an hour after the first');
+  assert.equal(sweepDue(finishedAt(NOW - SWEEP_EVERY_MS), NOW), true, 'a day-old marker still blocked the sweep');
 });
 
-test('a marker from the future blocks for at most the window — a stepped clock cannot stop sweeping for a year', () => {
-  assert.equal(sweepDue({ pid: 7, at: NOW + 3_600_000 }, NOW), false);
-  assert.equal(sweepDue({ pid: 7, at: NOW + SWEEP_EVERY_MS }, NOW), true, 'a marker a day in the future blocked the sweep');
+test('a CLAIM stands only for as long as a sweep can run: not due inside the claim window, due the moment it is past', () => {
+  // The claim is what stops six windows sweeping at once; a survey that fails behind it, or a budget
+  // that runs out, leaves it to age out in minutes rather than a day. (codex and the local round.)
+  assert.equal(sweepDue(claimedAt(NOW - 1_000), NOW), false, 'a window opened beside a running sweep swept too');
+  assert.equal(sweepDue(claimedAt(NOW - SWEEP_CLAIM_MS + 1), NOW), false, 'a claim inside its window was disbelieved');
+  assert.equal(sweepDue(claimedAt(NOW - SWEEP_CLAIM_MS), NOW), true, 'a claim nobody finished blocked the sweep past its window');
+  assert.ok(SWEEP_CLAIM_MS >= SWEEP_BUDGET_MS, 'a claim can age out while the sweep that took it is still inside its budget');
 });
 
-test('the marker round-trips, and a marker of another shape reads as no marker', () => {
-  assert.deepEqual(parseMarker(JSON.parse(markerText(7, NOW))), { pid: 7, at: NOW });
-  assert.equal(parseMarker({ version: 99, pid: 7, at: new Date(NOW).toISOString() }), undefined);
-  assert.equal(parseMarker({ version: 1, pid: 7, at: 'yesterday' }), undefined);
-  assert.equal(parseMarker('text'), undefined);
+test('a marker from the future blocks for at most its window — a stepped clock cannot stop sweeping for a year', () => {
+  assert.equal(sweepDue(finishedAt(NOW + 3_600_000), NOW), false);
+  assert.equal(sweepDue(finishedAt(NOW + SWEEP_EVERY_MS), NOW), true, 'a marker a day in the future blocked the sweep');
+  assert.equal(sweepDue(claimedAt(NOW + 1_000), NOW), false);
+  assert.equal(sweepDue(claimedAt(NOW + SWEEP_CLAIM_MS), NOW), true, 'a claim from the future blocked the sweep past its window');
+});
+
+test('both kinds of marker round-trip through their text, with every instant in UTC', () => {
+  const claim = markerText(claimedAt(NOW));
+  assert.match(claim, /"began":"2026-09-13T12:00:00\.000Z"/u, 'the claim is not dated in UTC');
+  assert.doesNotMatch(claim, /finished/u, 'a claim carries a finished instant');
+  assert.deepEqual(parseMarker(JSON.parse(claim)), { kind: 'marker', marker: claimedAt(NOW) });
+
+  const done = markerText(finishedAt(NOW));
+  assert.match(done, /"finished":"2026-09-13T12:00:00\.000Z"/u);
+  assert.deepEqual(parseMarker(JSON.parse(done)), { kind: 'marker', marker: finishedAt(NOW) });
+});
+
+test('a marker of another shape is invalid, and the reason names the legal shape', () => {
+  // A malformed marker used to read silently as "no marker"; it is a value somebody could hand-edit,
+  // and its reader says why it was refused. (The code round.)
+  const began = new Date(NOW).toISOString();
+  const cases: readonly [unknown, RegExp][] = [
+    ['text', /not an object/u],
+    [{ version: 99, pid: 7, began }, /version 99 is not 1/u],
+    [{ version: 1, pid: 0, began }, /pid 0 is not a positive whole number/u],
+    [{ version: 1, pid: 7, began: 'yesterday' }, /began yesterday is not a UTC instant/u],
+    [{ version: 1, pid: 7, began, finished: 'noon' }, /finished noon is not a UTC instant/u],
+    [{ version: 1, pid: 7, at: began }, /began undefined is not a UTC instant/u],
+  ];
+  for (const [value, expected] of cases) {
+    const out = parseMarker(value);
+    assert.equal(out.kind, 'invalid', `${JSON.stringify(value)} was accepted as a marker`);
+    const reason = out.kind === 'invalid' ? out.reason : '';
+    assert.match(reason, expected);
+    assert.ok(reason.endsWith(MARKER_SHAPE), `the reason for ${JSON.stringify(value)} does not name the legal shape: ${reason}`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -351,8 +394,11 @@ test('an empty plan is empty, and a report reads as one line a person can act on
   assert.match(line, /set aside 1 orphaned transcript/u);
   assert.doesNotMatch(line, /retried|budget/u);
 
-  assert.match(describeSweep({ ...swept, failed: 2, unfinished: true }), /2 could not be done and will be retried; the budget ran out/u);
+  assert.match(describeSweep({ ...swept, failed: 2, unfinished: true }), /2 could not be done and will be retried; the budget ran out.*stays due$/u);
   assert.match(describeSweep({ kind: 'skipped', why: 'unavailable', reason: 'a file is where the conversation store should be' }),
     /did not run — the store could not be read \(a file is where the conversation store should be\)/u);
   assert.match(describeSweep({ kind: 'skipped', why: 'recent', reason: '' }), /another window swept recently$/u);
+  assert.match(describeSweep({ kind: 'skipped', why: 'sweeping', reason: '' }), /another window is sweeping now$/u);
+  assert.match(describeSweep({ kind: 'skipped', why: 'unclaimed', reason: '' }), /could not claim the store/u);
+  assert.match(describeSweep({ kind: 'skipped', why: 'unannounced', reason: '' }), /could not announce what it holds open/u);
 });

@@ -279,11 +279,17 @@ export class ChatStoreKeeper {
     return { ...file, beat: out.beat };
   }
 
-  /** When the last sweep began, or nothing — a marker that cannot be read reads as none, and the sweep runs. */
+  /**
+   * The marker the last sweep left, or nothing — for a file that is not there, one that cannot be
+   * read, or one that is not a marker. The last two are said with the path and the reason, and all
+   * three mean the sweep runs: a marker nobody can read protects nothing, and a value somebody could
+   * have hand-edited must not vanish silently into "no marker". (The code round.)
+   */
   public async marker(): Promise<SweepMarker | undefined> {
     const path = join(this.housekeeping, SWEEP_MARKER);
+    let text: string;
     try {
-      return parseMarker(parsed(await readFile(path, 'utf8')));
+      text = await readFile(path, 'utf8');
     } catch (reason) {
       if (codeOf(reason) !== 'ENOENT') {
         console.error(`ConnectOtherAIs: the conversation sweep marker could not be read, so the sweep will run: ${path}`, reason);
@@ -291,6 +297,14 @@ export class ChatStoreKeeper {
 
       return undefined;
     }
+    const out = parseMarker(parsed(text));
+    if (out.kind === 'invalid') {
+      console.error(`ConnectOtherAIs: the conversation sweep marker is torn or not one this build can read, so the sweep will run — ${out.reason}: ${path}`);
+
+      return undefined;
+    }
+
+    return out.marker;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -320,11 +334,15 @@ export class ChatStoreKeeper {
     }
   }
 
-  /** Record that a sweep began now. Before the work, so the other windows opening beside this one stand down. */
-  public async markSwept(pid: number, now: number): Promise<boolean> {
+  /**
+   * Write the marker: a CLAIM before the work, so the windows opening beside this one stand down while
+   * a sweep can still be running; a FINISHED marker after it, and only from a sweep that walked its
+   * whole plan — that is the one that holds for a day. `false` when it could not be written.
+   */
+  public async writeMarker(marker: SweepMarker): Promise<boolean> {
     const path = join(this.housekeeping, SWEEP_MARKER);
     try {
-      await writeFileAtomically(path, markerText(pid, now));
+      await writeFileAtomically(path, markerText(marker));
 
       return true;
     } catch (reason) {
@@ -504,7 +522,9 @@ export interface SweepDeps {
   readonly force?: boolean;
 }
 
-type Counter = Exclude<keyof Extract<SweepReport, { kind: 'swept' }>, 'kind' | 'unfinished'>;
+type Swept = Extract<SweepReport, { kind: 'swept' }>;
+
+type Counter = Exclude<keyof Swept, 'kind' | 'unfinished'>;
 
 const NO_TALLY: Readonly<Record<Counter, number>> = {
   retired: 0,
@@ -522,12 +542,24 @@ const NO_TALLY: Readonly<Record<Counter, number>> = {
 const counterOf = (out: DebrisOutcome, removed: Counter): Counter | undefined =>
   out.kind === 'removed' ? removed : out.kind === 'failed' ? 'failed' : undefined;
 
-/** One expired nomination: skipped if this window has opened it since the plan was made, else the store decides under the lock. */
+/**
+ * One expired nomination: skipped if this window has opened it since the plan was made, else the store
+ * decides under the lock.
+ *
+ * <p>A record that CHANGED since the listing is kept — and then READ through the store, which is what
+ * regenerates a stale index entry (the crash between a save's two renames) under the read's own lock.
+ * The retire itself writes nothing; the repair is this caller's decision, made in so many words (two
+ * reviewers, the code round). The record is not nominated again by this sweep: the next one lists
+ * the revision the record actually has, and retires it on a listing that agrees.</p>
+ */
 async function retireOne(deps: SweepDeps, id: string, rev: number): Promise<Counter | undefined> {
   if (deps.held().has(id)) {
     return undefined;
   }
   const out = await deps.store.retireIfExpired(id, rev, deps.now);
+  if (out.kind === 'kept' && out.why === 'changed') {
+    await deps.store.read(id, deps.now);
+  }
 
   return out.kind === 'retired' ? 'retired' : out.kind === 'kept' ? 'keptUnderLock' : 'failed';
 }
@@ -536,7 +568,7 @@ async function retireOne(deps: SweepDeps, id: string, rev: number): Promise<Coun
  * Carry a plan out, in the order that loses least if the budget runs out first: conversations, then the
  * files that could confuse a reader, then the debris nothing reads.
  */
-async function carryOut(plan: SweepPlan, deps: SweepDeps): Promise<SweepReport> {
+async function carryOut(plan: SweepPlan, deps: SweepDeps): Promise<Swept> {
   const clock = deps.clock ?? Date.now;
   const until = clock() + SWEEP_BUDGET_MS;
   const done: Counter[] = [];
@@ -571,12 +603,16 @@ async function carryOut(plan: SweepPlan, deps: SweepDeps): Promise<SweepReport> 
  *
  * <p>In order: the store's state, because a directory that exists and will not answer must not be read
  * as a directory full of expired things, and a store that is not there yet has nothing to sweep. Then
- * the marker, because one window sweeps and not six; it is written BEFORE the work so the others find
- * it — and left in place if the survey or the listing then fails, which delays the next attempt by a
- * day rather than letting six windows retry a directory that has just refused one. Then the survey and
- * the listing, the plan, and the plan carried out under a budget. Every deletion of a conversation goes
- * through `ChatStoreFile.retireIfExpired`, which re-checks under the lock; nothing here deletes a
- * conversation any other way. Never throws: the store and the keeper answer in outcomes.</p>
+ * the marker, because one window sweeps and not six. Then the CLAIM — written before the work so the
+ * windows opening beside this one stand down, and standing only for as long as a sweep can run; a
+ * window that cannot write it does not sweep, because six windows that cannot see each other's claims
+ * would all sweep. Then the survey and the listing, the plan, and the plan carried out under a budget.
+ * The FINISHED marker — the one that holds for a day — is written last, and only by a sweep that walked
+ * its whole plan: a survey that fails, or a budget that runs out on a backlog, leaves the claim to age
+ * out and the store due, rather than a day's marker on the strength of work that was never done (codex
+ * and the local round). Every deletion of a conversation goes through `ChatStoreFile.retireIfExpired`,
+ * which re-checks under the lock; nothing here deletes a conversation any other way. Never throws: the
+ * store and the keeper answer in outcomes.</p>
  */
 export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   const state = await deps.store.state();
@@ -586,10 +622,13 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   if (state.kind === 'empty') {
     return { kind: 'skipped', why: 'empty', reason: '' };
   }
-  if (deps.force !== true && !sweepDue(await deps.keeper.marker(), deps.now)) {
-    return { kind: 'skipped', why: 'recent', reason: '' };
+  const marker = await deps.keeper.marker();
+  if (deps.force !== true && !sweepDue(marker, deps.now)) {
+    return { kind: 'skipped', why: marker?.kind === 'claimed' ? 'sweeping' : 'recent', reason: '' };
   }
-  await deps.keeper.markSwept(deps.pid, deps.now);
+  if (!await deps.keeper.writeMarker({ kind: 'claimed', pid: deps.pid, began: deps.now })) {
+    return { kind: 'skipped', why: 'unclaimed', reason: '' };
+  }
   const surveyed = await deps.keeper.survey();
   if (surveyed.kind === 'unavailable') {
     return { kind: 'skipped', why: 'unavailable', reason: surveyed.reason };
@@ -598,6 +637,10 @@ export async function runSweep(deps: SweepDeps): Promise<SweepReport> {
   if (listed.kind === 'unavailable') {
     return { kind: 'skipped', why: 'unavailable', reason: listed.reason };
   }
+  const report = await carryOut(planSweep(surveyed.survey, listed.metas, deps.now, deps.held(), deps.pid), deps);
+  if (!report.unfinished) {
+    await deps.keeper.writeMarker({ kind: 'finished', pid: deps.pid, began: deps.now, finished: (deps.clock ?? Date.now)() });
+  }
 
-  return carryOut(planSweep(surveyed.survey, listed.metas, deps.now, deps.held(), deps.pid), deps);
+  return report;
 }

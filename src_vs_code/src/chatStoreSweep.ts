@@ -47,13 +47,18 @@ import { ConversationMeta, KEEP_FOR_MS, isSafeId } from './chatStore';
  * question. A lock far older than that window is collected by CLAIMING through the store, which runs
  * the one breaking path there is.</p>
  *
- * <h2>One window sweeps, not six</h2>
+ * <h2>One window sweeps, not six — a claim while it runs, a day's marker only once it has done its work</h2>
  *
- * <p>Six windows opening together is the ordinary case on this machine. A marker in the store's
- * housekeeping directory says when the last sweep began; a window that finds one younger than
- * {@link SWEEP_EVERY_MS} does nothing. Two windows that read "no recent marker" in the same instant both
- * sweep, and that is the accepted residual: every deletion is re-checked under the conversation's
- * lock, so the second finds nothing left to do.</p>
+ * <p>Six windows opening together is the ordinary case on this machine. One marker file in the store's
+ * housekeeping directory carries two different things in turn. A CLAIM is written before the work, so
+ * the windows opening beside this one stand down — but only for {@link SWEEP_CLAIM_MS}, as long as a
+ * sweep can still be running. What holds for {@link SWEEP_EVERY_MS} is the FINISHED marker, and it is
+ * written only by a sweep that walked its whole plan. So a survey that fails after the claim, or a
+ * budget that runs out on a backlog, leaves a claim that ages out in minutes rather than a marker that
+ * stands a day on the strength of work that was never done — the shape the code round asked for. Two
+ * windows that read "due" in the same instant both claim and both sweep, and that is the accepted
+ * residual: every deletion is re-checked under the conversation's lock, so the second finds nothing
+ * left to do.</p>
  *
  * <p>Everything here is a value over a pinned clock. No `vscode`, no `node:fs`.</p>
  */
@@ -93,6 +98,12 @@ export const SWEEP_EVERY_MS = 24 * 60 * 60 * 1000;
  */
 export const SWEEP_BUDGET_MS = 60_000;
 
+/**
+ * How long a claim stands before the window that took it is presumed to have died holding it: twice
+ * the budget. A sweep still running is inside it; a host killed mid-sweep is past it in minutes.
+ */
+export const SWEEP_CLAIM_MS = 2 * SWEEP_BUDGET_MS;
+
 /** The subdirectory of the store that holds the windows' heartbeats and the marker of the last sweep. */
 export const HOUSEKEEPING_DIR = 'housekeeping';
 
@@ -127,11 +138,16 @@ export interface HeartbeatFile extends Named {
   readonly beat: Heartbeat | undefined;
 }
 
-/** When the last sweep began, and which window began it. */
-export interface SweepMarker {
-  readonly pid: number;
-  readonly at: number;
-}
+/**
+ * The marker of the last sweep, as one of two things — the header's *one window sweeps* says why.
+ *
+ * <p>`claimed` is written BEFORE the work and stands for {@link SWEEP_CLAIM_MS}; `finished` is written
+ * only by a sweep that walked its whole plan and stands for {@link SWEEP_EVERY_MS}. A sweep that failed
+ * or ran out of budget leaves the claim, which ages out, and the store stays due.</p>
+ */
+export type SweepMarker =
+  | { readonly kind: 'claimed'; readonly pid: number; readonly began: number }
+  | { readonly kind: 'finished'; readonly pid: number; readonly began: number; readonly finished: number };
 
 /**
  * The store's directory, classified — what the sweep and the index decide over.
@@ -203,6 +219,16 @@ export function quarantinedAt(name: string): number | undefined {
   return found === null ? undefined : Number(found[1]);
 }
 
+/** Epoch milliseconds from a UTC instant as a file carries it, or nothing for anything else. */
+const instantOf = (value: unknown): number | undefined => {
+  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+
+  return Number.isFinite(at) ? at : undefined;
+};
+
+/** Whether a value is a pid as a file may name one: a positive whole number. */
+const isPid = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0;
+
 /** What a heartbeat must look like, said once, for every parse failure to name. */
 export const HEARTBEAT_SHAPE =
   `a heartbeat is {version: ${HOUSEKEEPING_VERSION}, pid: a positive whole number, at: a UTC instant, ids: conversation ids of letters, digits, dash and underscore}`;
@@ -225,11 +251,11 @@ export function parseHeartbeat(value: unknown): HeartbeatParse {
   if (row.version !== HOUSEKEEPING_VERSION) {
     return { kind: 'invalid', reason: `version ${String(row.version)} is not ${HOUSEKEEPING_VERSION}; ${HEARTBEAT_SHAPE}` };
   }
-  if (typeof row.pid !== 'number' || !Number.isInteger(row.pid) || row.pid <= 0) {
+  if (!isPid(row.pid)) {
     return { kind: 'invalid', reason: `pid ${String(row.pid)} is not a positive whole number; ${HEARTBEAT_SHAPE}` };
   }
-  const at = typeof row.at === 'string' ? Date.parse(row.at) : Number.NaN;
-  if (!Number.isFinite(at)) {
+  const at = instantOf(row.at);
+  if (at === undefined) {
     return { kind: 'invalid', reason: `at ${String(row.at)} is not a UTC instant; ${HEARTBEAT_SHAPE}` };
   }
   if (!Array.isArray(row.ids)) {
@@ -248,22 +274,55 @@ export function heartbeatText(pid: number, ids: readonly string[], now: number):
   return JSON.stringify({ version: HOUSEKEEPING_VERSION, pid, at: new Date(now).toISOString(), ids: [...ids] });
 }
 
-/** The marker read back, or nothing for a file of another shape — which reads as "no recent sweep". */
-export function parseMarker(value: unknown): SweepMarker | undefined {
-  const row = value as { version?: unknown; pid?: unknown; at?: unknown } | null;
-  if (row === null || typeof row !== 'object' || row.version !== HOUSEKEEPING_VERSION) {
-    return undefined;
+/** What a marker must look like, said once, for every parse failure to name. */
+export const MARKER_SHAPE =
+  `a sweep marker is {version: ${HOUSEKEEPING_VERSION}, pid: a positive whole number, began: a UTC instant, finished: a UTC instant, or absent for a claim}`;
+
+/** A marker read back, or WHY it is not one. */
+export type MarkerParse =
+  | { readonly kind: 'marker'; readonly marker: SweepMarker }
+  | { readonly kind: 'invalid'; readonly reason: string };
+
+/**
+ * One marker from what a file held — or the reason it is not one, for the caller to say with the
+ * path. A marker of another shape used to read silently as "no marker", and a file somebody could
+ * have hand-edited must not vanish into that; it is reported, and the sweep still runs, because a
+ * marker nobody can read protects nothing. (The code round.)
+ */
+export function parseMarker(value: unknown): MarkerParse {
+  const row = value as { version?: unknown; pid?: unknown; began?: unknown; finished?: unknown } | null;
+  if (row === null || typeof row !== 'object') {
+    return { kind: 'invalid', reason: `not an object; ${MARKER_SHAPE}` };
   }
-  const at = typeof row.at === 'string' ? Date.parse(row.at) : Number.NaN;
-  if (!Number.isFinite(at)) {
-    return undefined;
+  if (row.version !== HOUSEKEEPING_VERSION) {
+    return { kind: 'invalid', reason: `version ${String(row.version)} is not ${HOUSEKEEPING_VERSION}; ${MARKER_SHAPE}` };
+  }
+  if (!isPid(row.pid)) {
+    return { kind: 'invalid', reason: `pid ${String(row.pid)} is not a positive whole number; ${MARKER_SHAPE}` };
+  }
+  const began = instantOf(row.began);
+  if (began === undefined) {
+    return { kind: 'invalid', reason: `began ${String(row.began)} is not a UTC instant; ${MARKER_SHAPE}` };
+  }
+  if (row.finished === undefined) {
+    return { kind: 'marker', marker: { kind: 'claimed', pid: row.pid, began } };
+  }
+  const finished = instantOf(row.finished);
+  if (finished === undefined) {
+    return { kind: 'invalid', reason: `finished ${String(row.finished)} is not a UTC instant; ${MARKER_SHAPE}` };
   }
 
-  return { pid: typeof row.pid === 'number' ? row.pid : 0, at };
+  return { kind: 'marker', marker: { kind: 'finished', pid: row.pid, began, finished } };
 }
 
-export function markerText(pid: number, now: number): string {
-  return JSON.stringify({ version: HOUSEKEEPING_VERSION, pid, at: new Date(now).toISOString() });
+/** A marker as it is written: the same shape {@link parseMarker} reads, every instant in UTC. */
+export function markerText(marker: SweepMarker): string {
+  return JSON.stringify({
+    version: HOUSEKEEPING_VERSION,
+    pid: marker.pid,
+    began: new Date(marker.began).toISOString(),
+    ...(marker.kind === 'finished' ? { finished: new Date(marker.finished).toISOString() } : {}),
+  });
 }
 
 /**
@@ -296,12 +355,15 @@ export function protectedIds(heartbeats: readonly HeartbeatFile[], now: number, 
 /**
  * Whether a sweep should run, given the marker the last one left.
  *
- * <p>No marker is due. A marker within the window either way is not — a marker from the future is a
- * clock that stepped, and a day's over-caution costs nothing; one a day or more in the future would
- * block sweeping for as long as the clock was wrong, so the window is symmetric.</p>
+ * <p>No marker is due. A claim is not due while it is younger than {@link SWEEP_CLAIM_MS} — a window is
+ * sweeping, or was until a moment ago — and due once it is older: nobody finished it. A finished
+ * marker holds for {@link SWEEP_EVERY_MS}. Both windows are symmetric in time: a marker from the future
+ * is a clock that stepped, and over-caution for one window costs nothing, while a marker a window or
+ * more ahead would otherwise block sweeping for as long as the clock was wrong.</p>
  */
 export const sweepDue = (marker: SweepMarker | undefined, now: number): boolean =>
-  marker === undefined || Math.abs(now - marker.at) >= SWEEP_EVERY_MS;
+  marker === undefined
+  || (marker.kind === 'claimed' ? Math.abs(now - marker.began) >= SWEEP_CLAIM_MS : Math.abs(now - marker.finished) >= SWEEP_EVERY_MS);
 
 /** Whether a heartbeat FILE is one the sweep collects: stale by its own instant, or torn and old by its mtime. */
 function staleHeartbeatFile(file: HeartbeatFile, now: number, ownPid: number): boolean {
@@ -358,8 +420,11 @@ export function planSweep(
 export const planIsEmpty = (plan: SweepPlan): boolean =>
   Object.values(plan).every((list: readonly unknown[]) => list.length === 0);
 
-/** Why a sweep did not run, when it did not. */
-export type SweepSkipped = 'unavailable' | 'empty' | 'recent';
+/**
+ * Why a sweep did not run, when it did not. `sweeping` and `unclaimed` are the claim's two answers;
+ * `unannounced` is the housekeeping's — a window whose own heartbeat could not be written.
+ */
+export type SweepSkipped = 'unavailable' | 'empty' | 'recent' | 'sweeping' | 'unclaimed' | 'unannounced';
 
 /** What one sweep came to: either it did not run, and why, or these counts. */
 export type SweepReport =
@@ -386,6 +451,9 @@ export function describeSweep(report: SweepReport): string {
       unavailable: 'the store could not be read',
       empty: 'there is no store yet',
       recent: 'another window swept recently',
+      sweeping: 'another window is sweeping now',
+      unclaimed: 'this window could not claim the store, and another window may be sweeping it',
+      unannounced: 'this window could not announce what it holds open, and a window that cannot say so deletes nothing',
     };
 
     return `ConnectOtherAIs: the conversation sweep did not run — ${why[report.why]}${report.reason.length > 0 ? ` (${report.reason})` : ''}`;
@@ -397,5 +465,5 @@ export function describeSweep(report: SweepReport): string {
     + `removed ${report.tempsRemoved} stale temporaries, collected ${report.locksCollected} abandoned locks, `
     + `removed ${report.quarantineRemoved} old quarantined values and ${report.heartbeatsRemoved} stale heartbeats`
     + `${report.failed > 0 ? `; ${report.failed} could not be done and will be retried` : ''}`
-    + `${report.unfinished ? '; the budget ran out and the rest waits for the next sweep' : ''}`;
+    + `${report.unfinished ? '; the budget ran out and the rest waits for the next sweep, which stays due' : ''}`;
 }

@@ -132,6 +132,24 @@ test('entries are filtered by workspace and ordered newest update first; everywh
   }
 });
 
+test('the rows are sorted ONCE, when they are published: every call hands back the same list, in the same order', async () => {
+  // The picker draws these on every keystroke of a filter; a copy, a filter and a sort per call is a
+  // sort of thousands of rows per keystroke, and the picker then sorted them again. (The code round.)
+  const w = world();
+  try {
+    const now = Date.now();
+    await w.store.save(record({ id: 'a1', updatedAt: now - 3_000 }), 0);
+    await w.store.save(record({ id: 'b2', updatedAt: now - 1_000 }), 0);
+    await w.index.refresh();
+
+    assert.equal(w.index.entries(EVERYWHERE), w.index.entries(EVERYWHERE), 'the index copies and re-sorts its rows on every call');
+    assert.deepEqual(ids(w.index.entries(EVERYWHERE)), ['b2', 'a1']);
+    assert.deepEqual(ids(w.index.bySource(sourceOfFile('file:///work/a1.md'))), ['a1']);
+  } finally {
+    rmSync(w.dir, { recursive: true, force: true });
+  }
+});
+
 test('a lookup by source finds a Claude session by its id and a document by its uri, and `none` finds nothing', async () => {
   const w = world();
   try {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -78,7 +78,7 @@ test('the heartbeat beats at once; the sweep waits for what it is told to; the i
     await store.save(record({ id: 'fresh' }, now), 0);
     const migration = gate();
 
-    housekeeping = startHousekeeping({ dir, store, held: () => [], after: migration.promise, pid: 4242, clock: () => now, timers: quietTimers });
+    housekeeping = startHousekeeping({ store, held: () => [], after: migration.promise, pid: 4242, clock: () => now, timers: quietTimers });
     await tick();
 
     assert.equal(existsSync(join(dir, HOUSEKEEPING_DIR, heartbeatName(4242))), true, 'the heartbeat waited for the migration; a sweep elsewhere could not have known this window was alive');
@@ -106,12 +106,68 @@ test('what this window holds is never swept, before its heartbeat has said so or
     const now = Date.now();
     await store.save(record({ id: 'open', updatedAt: now - KEEP_FOR_MS - 60_000 }, now), 0);
 
-    housekeeping = startHousekeeping({ dir, store, held: () => ['open'], after: Promise.resolve(), pid: 4242, clock: () => now, timers: quietTimers });
+    housekeeping = startHousekeeping({ store, held: () => ['open'], after: Promise.resolve(), pid: 4242, clock: () => now, timers: quietTimers });
     const report = await quietly(() => (housekeeping as Housekeeping).ready);
 
     assert.equal(report?.kind, 'swept');
     assert.equal(existsSync(join(dir, recordName('open'))), true, 'a conversation this window holds open was swept by its age');
     assert.deepEqual(housekeeping.index.entries({ kind: 'everywhere' }).map((meta) => meta.id), ['open']);
+  } finally {
+    housekeeping?.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a first heartbeat that could not land is tried again once the wait is over, and the sweep runs only after it has landed', async () => {
+  // The sequence codex found: the first beat's boolean was awaited and discarded, so a transient write
+  // failure left this window's tabs unannounced while the sweep ran anyway.
+  const dir = home();
+  let housekeeping: Housekeeping | undefined;
+  try {
+    const store = new ChatStoreFile(dir);
+    const now = Date.now();
+    await store.save(record({ id: 'old', updatedAt: now - KEEP_FOR_MS - 60_000 }, now), 0);
+    // A directory where this window's heartbeat FILE goes: the write's rename over it fails, while
+    // the housekeeping directory itself lists fine — the survey would succeed, and so would the sweep.
+    const heartbeatPath = join(dir, HOUSEKEEPING_DIR, heartbeatName(4242));
+    mkdirSync(heartbeatPath, { recursive: true });
+    const migration = gate();
+
+    housekeeping = startHousekeeping({ store, held: () => [], after: migration.promise, pid: 4242, clock: () => now, timers: quietTimers });
+    await quietly(() => (housekeeping as Housekeeping).heartbeat.settled());
+    assert.equal(statSync(heartbeatPath).isDirectory(), true, 'the test did not make the first heartbeat fail');
+
+    // The obstacle is gone by the time the wait is over: the retry lands, and only then does the sweep run.
+    rmSync(heartbeatPath, { recursive: true, force: true });
+    migration.open();
+    const report = await quietly(() => (housekeeping as Housekeeping).ready);
+
+    assert.equal(existsSync(heartbeatPath) && statSync(heartbeatPath).isFile(), true, 'the heartbeat was not tried again after the wait — this window swept without announcing what it holds');
+    assert.equal(report?.kind, 'swept', `with the heartbeat landed, the sweep did not run: ${JSON.stringify(report)}`);
+    assert.equal(existsSync(join(dir, recordName('old'))), false);
+  } finally {
+    housekeeping?.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a window that cannot announce what it holds — twice — does not sweep at all', async () => {
+  const dir = home();
+  let housekeeping: Housekeeping | undefined;
+  try {
+    const store = new ChatStoreFile(dir);
+    const now = Date.now();
+    await store.save(record({ id: 'old', updatedAt: now - KEEP_FOR_MS - 60_000 }, now), 0);
+    mkdirSync(join(dir, HOUSEKEEPING_DIR, heartbeatName(4242)), { recursive: true });
+
+    housekeeping = startHousekeeping({ store, held: () => [], after: Promise.resolve(), pid: 4242, clock: () => now, timers: quietTimers });
+    const report = await quietly(() => (housekeeping as Housekeeping).ready);
+
+    assert.equal(existsSync(join(dir, recordName('old'))), true, 'the sweep ran although this window could not announce what it holds');
+    assert.equal(report?.kind, 'skipped', `a window that could not announce itself reported a sweep: ${JSON.stringify(report)}`);
+    assert.equal(report?.kind === 'skipped' ? report.why : '', 'unannounced');
+    // The index is still built: it deletes nothing, and a picker over a full store must not say "none".
+    assert.equal(housekeeping.index.state().kind, 'ready', 'the index was not built because the heartbeat could not be written');
   } finally {
     housekeeping?.dispose();
     rmSync(dir, { recursive: true, force: true });
@@ -125,11 +181,14 @@ test('against a store that will not answer, nothing is swept and the index says 
     const asFile = join(dir, 'chat-conversations');
     writeFileSync(asFile, 'a file where the store should be', 'utf8');
 
-    housekeeping = startHousekeeping({ dir: asFile, store: new ChatStoreFile(asFile), held: () => [], after: Promise.resolve(), pid: 4242, clock: Date.now, timers: quietTimers });
+    housekeeping = startHousekeeping({ store: new ChatStoreFile(asFile), held: () => [], after: Promise.resolve(), pid: 4242, clock: Date.now, timers: quietTimers });
     const report = await quietly(() => (housekeeping as Housekeeping).ready);
 
     assert.deepEqual(report?.kind, 'skipped');
-    assert.equal(report?.kind === 'skipped' ? report.why : '', 'unavailable');
+    // The heartbeat gate comes first, and a file where the store should be refuses the heartbeat too:
+    // this window could not announce itself, so it does not sweep — the heartbeat's own console line
+    // has already named the path. Either answer deletes nothing, which is what is being tested.
+    assert.equal(report?.kind === 'skipped' ? report.why : '', 'unannounced');
     assert.equal(readFileSync(asFile, 'utf8'), 'a file where the store should be', 'the sweep changed what it could not read');
     assert.equal(housekeeping.index.state().kind, 'unavailable', 'the index reads as empty rather than as unavailable');
   } finally {
@@ -146,7 +205,7 @@ test('a defect in the chain is caught and said, never left as an unhandled rejec
     const before = console.error;
     console.error = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
     try {
-      housekeeping = startHousekeeping({ dir, store: new ChatStoreFile(dir), held: () => [], after: Promise.reject(new Error('the migration blew up')), pid: 4242, clock: Date.now, timers: quietTimers });
+      housekeeping = startHousekeeping({ store: new ChatStoreFile(dir), held: () => [], after: Promise.reject(new Error('the migration blew up')), pid: 4242, clock: Date.now, timers: quietTimers });
       const report = await housekeeping.ready;
       assert.equal(report, undefined, 'a rejected wait was reported as a sweep');
       // The first beat is still in flight; let it land before the directory goes.

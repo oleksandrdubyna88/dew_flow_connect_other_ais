@@ -314,7 +314,8 @@ export type QuarantineOutcome =
 const SAFE_LABEL = /^[A-Za-z0-9._-]{1,120}$/u;
 
 export class ChatStoreFile {
-  public constructor(private readonly dir: string) {}
+  /** `dir` is readable so the keeper is bound to the SAME directory, never to a second copy of the path; the layout inside it stays here. */
+  public constructor(public readonly dir: string) {}
 
   /** Where a record lives. Throws on an unsafe id, so every caller guards with {@link isSafeId} first. */
   private recordPath(id: string): string {
@@ -614,9 +615,10 @@ export class ChatStoreFile {
    * check-then-act that cost epic A two rounds. So this is the ONE way the sweep deletes a conversation.
    * With the claim held the record is re-read; it goes only at exactly the revision the listing showed
    * (`seenRev`) and with its own `updatedAt` still past the window. Any other revision has been written
-   * since — its index is regenerated here, the claim being held, and it is `kept`. A held lock, an
-   * absent record, one this build cannot read and a disk that will not answer are `kept` too, each
-   * named. The two deletes are {@link forgetClaimed}'s, in its order. `now` is the clock; a test pins it.</p>
+   * since and it is `kept`, UNTOUCHED — a stale index entry under it is the sweep's to repair through
+   * {@link read}, not this method's to rewrite on the way out (two reviewers, the code round). A held
+   * lock, an absent record, one this build cannot read and a disk that will not answer are `kept` too,
+   * each named. The two deletes are {@link forgetClaimed}'s, in its order. `now` is the clock; a test pins it.</p>
    */
   public async retireIfExpired(id: string, seenRev: number, now = Date.now()): Promise<RetireOutcome> {
     if (!isSafeId(id)) {
@@ -636,15 +638,13 @@ export class ChatStoreFile {
     }
   }
 
-  /** The re-check and the two deletes, with the claim held. */
+  /** The re-check and the two deletes, with the claim held. Nothing is written on any `kept` path. */
   private async retireClaimed(id: string, seenRev: number, now: number): Promise<RetireOutcome> {
     const seen = await this.probe(id);
     if (seen.kind !== 'record') {
       return { kind: 'kept', why: seen.kind };
     }
     if (seen.record.rev !== seenRev) {
-      await this.writeMeta(seen.record);
-
       return { kind: 'kept', why: 'changed' };
     }
     if (!expired(metaOf(seen.record), now)) {

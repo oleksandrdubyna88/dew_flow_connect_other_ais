@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ConversationMeta, isSafeId } from '../chatStore';
+import { ConversationMeta } from '../chatStore';
+import { IndexState } from '../chatStoreCache';
 import {
-  NEW_ROW_ID,
+  MOST_ROWS,
   OPEN_SECTION,
+  OpenConversation,
+  PickerInput,
+  PickerRow,
   RECENT_SECTION,
-  UNREADABLE_ROW_ID,
+  folderLabels,
   pickerRows,
   rowAge,
 } from '../conversationPicker';
@@ -20,6 +24,8 @@ import {
 
 const AT = Date.UTC(2026, 8, 13, 12, 0, 0);
 const WORKSPACE = 'D:\\rsd\\one';
+const READY: IndexState = { kind: 'ready', at: AT };
+const UNAVAILABLE: IndexState = { kind: 'unavailable', reason: 'the conversation store could not be read (EACCES)', lastGoodAt: AT - 3_600_000 };
 
 const meta = (over: Partial<ConversationMeta> = {}): ConversationMeta => ({
   version: 1,
@@ -35,16 +41,33 @@ const meta = (over: Partial<ConversationMeta> = {}): ConversationMeta => ({
   ...over,
 });
 
+const open = (over: Partial<OpenConversation> = {}): OpenConversation => ({
+  id: 'a1',
+  title: 'Why the lock is fenced',
+  modelId: 'gemini-3-pro',
+  turns: 4,
+  lastLine: 'because a read and a delete are two operations',
+  updatedAt: AT - 60_000,
+  ...over,
+});
+
+/** The input, with everything a test does not care about filled in. */
+const input = (over: Partial<PickerInput>): PickerInput => ({
+  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, ...over,
+});
+
+const shown = (rows: readonly PickerRow[]): readonly string[] => rows.flatMap((row) => (row.kind === 'conversation' ? [row.id] : []));
+
+const described = (rows: readonly PickerRow[], id: string): string => {
+  const row = rows.find((one) => one.kind === 'conversation' && one.id === id);
+
+  return row?.kind === 'conversation' ? row.description : '';
+};
+
 test('open conversations come first, and are never repeated among the closed ones', () => {
   // The ten-tabs case the whole feature exists for: what is already open is what a person is most
   // likely to be looking for, and offering it twice would make the list read as two conversations.
-  const rows = pickerRows({
-    open: [{ id: 'a1', title: 'Why the lock is fenced', modelId: 'gemini-3-pro', turns: 4 }],
-    stored: [meta(), meta({ id: 'b2', title: 'The other one' })],
-    workspace: WORKSPACE,
-    everywhere: false,
-    now: AT,
-  });
+  const rows = pickerRows(input({ open: [open()], stored: [meta(), meta({ id: 'b2', title: 'The other one' })] }));
 
   assert.deepEqual(rows.map((row) => row.kind), ['section', 'conversation', 'section', 'conversation']);
   assert.equal(rows[0]?.kind === 'section' ? rows[0].label : '', OPEN_SECTION);
@@ -54,35 +77,22 @@ test('open conversations come first, and are never repeated among the closed one
     'a conversation that is open was offered a second time among the closed ones');
 });
 
-test('the closed ones are newest first, by when they were last used', () => {
-  // By `updatedAt`, never by when they began: the question a person is asking the list is "where was
-  // I", and the answer to that moved when they last said something.
-  const rows = pickerRows({
-    open: [],
+test('the picker keeps the order the index published, and sorts nothing itself', () => {
+  // The index sorts once, when it publishes; a second sort here was a sort of the whole store before
+  // the cut to a hundred, on every keystroke. The order given is the order shown. (The code round.)
+  const rows = pickerRows(input({
     stored: [
+      meta({ id: 'mid', updatedAt: AT - 60_000 }),
       meta({ id: 'old', updatedAt: AT - 900_000 }),
       meta({ id: 'new', updatedAt: AT - 1_000 }),
-      meta({ id: 'mid', updatedAt: AT - 60_000 }),
     ],
-    workspace: WORKSPACE,
-    everywhere: false,
-    now: AT,
-  });
+  }));
 
-  assert.deepEqual(
-    rows.filter((row) => row.kind === 'conversation').map((row) => (row.kind === 'conversation' ? row.id : '')),
-    ['new', 'mid', 'old'],
-  );
+  assert.deepEqual(shown(rows), ['mid', 'old', 'new'], 'the picker re-sorted what the index had already ordered');
 });
 
-test('a row says what a person needs to tell two conversations apart', () => {
-  const rows = pickerRows({
-    open: [],
-    stored: [meta({ updatedAt: AT - 7_200_000 })],
-    workspace: WORKSPACE,
-    everywhere: false,
-    now: AT,
-  });
+test('a stored row says what a person needs to tell two conversations apart', () => {
+  const rows = pickerRows(input({ stored: [meta({ updatedAt: AT - 7_200_000 })] }));
   const row = rows.find((one) => one.kind === 'conversation');
 
   assert.equal(row?.kind === 'conversation' ? row.label : '', 'Why the lock is fenced');
@@ -95,88 +105,183 @@ test('a row says what a person needs to tell two conversations apart', () => {
     'the last thing said is not on the row, so two conversations with one title are indistinguishable');
 });
 
-test('only this workspace, unless the person asked for all of them', () => {
-  const stored = [meta({ id: 'here' }), meta({ id: 'there', workspace: 'D:\\rsd\\two' })];
-  const mine = pickerRows({ open: [], stored, workspace: WORKSPACE, everywhere: false, now: AT });
-  const all = pickerRows({ open: [], stored, workspace: WORKSPACE, everywhere: true, now: AT });
+test('an OPEN row carries the same facts as a stored one — the last line and how long ago included — and says it is open', () => {
+  // Two open conversations sharing a title, a model and a turn count are the exact case the registry
+  // exists to handle; a row without the last line and the age made them indistinguishable. (gemini.)
+  const rows = pickerRows(input({
+    open: [
+      open({ id: 'a1', lastLine: 'the first answer', updatedAt: AT - 7_200_000 }),
+      open({ id: 'b2', lastLine: 'the second answer', updatedAt: AT - 30_000 }),
+    ],
+  }));
+  const row = (id: string): Extract<PickerRow, { kind: 'conversation' }> | undefined => {
+    const found = rows.find((one) => one.kind === 'conversation' && one.id === id);
 
-  assert.deepEqual(mine.filter((r) => r.kind === 'conversation').map((r) => (r.kind === 'conversation' ? r.id : '')), ['here']);
-  assert.equal(all.filter((r) => r.kind === 'conversation').length, 2);
-  // And when they are shown, the row says WHERE, or two conversations from two projects look alike.
-  const there = all.find((r) => r.kind === 'conversation' && r.id === 'there');
-  assert.match(there?.kind === 'conversation' ? there.description : '', /two/u,
-    'a conversation from another workspace does not say which');
+    return found?.kind === 'conversation' ? found : undefined;
+  };
+
+  assert.equal(row('a1')?.detail, 'the first answer', 'an open row omits the last line');
+  assert.equal(row('b2')?.detail, 'the second answer');
+  assert.match(row('a1')?.description ?? '', /2 hours ago/u, 'an open row omits how long ago');
+  assert.match(row('b2')?.description ?? '', /just now/u);
+  assert.match(row('a1')?.description ?? '', /open now/u, 'an open row does not say it is open');
+  assert.equal(row('a1')?.live, true);
+  assert.notEqual(row('a1')?.description, row('b2')?.description, 'two open conversations with one title, model and turn count are indistinguishable');
 });
 
-test('a conversation with no folder behind it is still offered, and says so', () => {
+test('only this workspace, unless the person asked for all of them', () => {
+  const stored = [meta({ id: 'here' }), meta({ id: 'there', workspace: 'D:\\rsd\\two' })];
+  const mine = pickerRows(input({ stored }));
+  const all = pickerRows(input({ stored, everywhere: true }));
+
+  assert.deepEqual(shown(mine), ['here']);
+  assert.equal(shown(all).length, 2);
+  // And when they are shown, the row says WHERE, or two conversations from two projects look alike.
+  assert.match(described(all, 'there'), /two/u, 'a conversation from another workspace does not say which');
+});
+
+test('two projects whose folders share a name are told apart by the folder above', () => {
+  const rows = pickerRows(input({
+    stored: [meta({ id: 'here', workspace: 'D:\\rsd\\coai' }), meta({ id: 'there', workspace: 'E:\\other\\coai' })],
+    workspace: 'D:\\rsd\\coai',
+    everywhere: true,
+  }));
+
+  assert.match(described(rows, 'here'), /rsd[\\/]coai/u, `two projects with one folder name render alike: ${described(rows, 'here')}`);
+  assert.match(described(rows, 'there'), /other[\\/]coai/u, `two projects with one folder name render alike: ${described(rows, 'there')}`);
+});
+
+test('the folder is shown only when the rows actually span more than one', () => {
+  // A folder name on every row of a list that is all one folder is noise — even with "everywhere" on.
+  const rows = pickerRows(input({ stored: [meta({ id: 'a1' }), meta({ id: 'b2' })], workspace: 'D:\\rsd\\elsewhere', everywhere: true }));
+
+  for (const row of rows) {
+    if (row.kind === 'conversation') {
+      assert.doesNotMatch(row.description, /\bone\b/u, `the folder is shown on every row of a list that is all one folder: ${row.description}`);
+    }
+  }
+  assert.equal(shown(rows).length, 2);
+});
+
+test('folder labels: nothing for one folder, the name when names differ, as many folders above as it takes when they clash', () => {
+  assert.deepEqual([...folderLabels(['D:\\rsd\\coai', 'D:\\rsd\\coai'])], [['D:\\rsd\\coai', '']]);
+  assert.deepEqual([...folderLabels(['D:\\rsd\\coai', 'D:\\rsd\\bench'])], [['D:\\rsd\\coai', 'coai'], ['D:\\rsd\\bench', 'bench']]);
+  // Two levels of clash: `a/x/coai`, `b/x/coai` and `c/y/coai` — the third is told apart one level up, the first two need two.
+  assert.deepEqual(
+    [...folderLabels(['/a/x/coai', '/b/x/coai', '/c/y/coai'])],
+    [['/a/x/coai', 'a/x/coai'], ['/b/x/coai', 'b/x/coai'], ['/c/y/coai', 'y/coai']],
+  );
+  // Two spellings of one folder are told apart by their spelling, in each path's own separators.
+  assert.deepEqual([...folderLabels(['D:\\rsd\\coai', 'D:/rsd/coai'])], [['D:\\rsd\\coai', 'rsd\\coai'], ['D:/rsd/coai', 'rsd/coai']]);
+  // One folder spelled twice with nothing to tell the spellings apart stays alike — that is the truth — and the loop still ends.
+  assert.deepEqual([...folderLabels(['D:\\rsd\\coai', 'D:\\rsd\\coai\\'])], [['D:\\rsd\\coai', 'D:\\rsd\\coai'], ['D:\\rsd\\coai\\', 'D:\\rsd\\coai']]);
+  assert.deepEqual([...folderLabels(['', 'D:\\rsd\\coai'])], [['', 'no folder'], ['D:\\rsd\\coai', 'coai']]);
+});
+
+test('a conversation with no folder behind it is still offered, and says so when it stands beside one that has a folder', () => {
   // A window with no folder open is an ordinary way to work, and the store files those under the
   // empty string. Dropping them would hide a whole way of using the product.
-  const rows = pickerRows({
-    open: [],
-    stored: [meta({ id: 'loose', workspace: '' })],
-    workspace: '',
-    everywhere: false,
-    now: AT,
-  });
+  const alone = pickerRows(input({ stored: [meta({ id: 'loose', workspace: '' })], workspace: '' }));
+  assert.equal(shown(alone).length, 1);
 
-  assert.equal(rows.filter((r) => r.kind === 'conversation').length, 1);
+  const beside = pickerRows(input({ stored: [meta({ id: 'loose', workspace: '' }), meta({ id: 'a1' })], workspace: '', everywhere: true }));
+  assert.match(described(beside, 'loose'), /no folder/u);
 });
 
 test('the NEW row is offered first when it is asked for, and never otherwise', () => {
   // `go to` opens the picker with this preselected when the active tab has no conversation. Nothing
   // is created until it is chosen — the operator's own rule: a hotkey that silently makes an empty
   // chat is the trap the two commands exist to avoid.
-  const withNew = pickerRows({
-    open: [], stored: [meta()], workspace: WORKSPACE, everywhere: false, now: AT, offerNew: 'README.md',
-  });
+  const withNew = pickerRows(input({ stored: [meta()], offerNew: 'README.md' }));
 
   assert.equal(withNew[0]?.kind, 'new');
-  assert.equal(withNew[0]?.kind === 'new' ? withNew[0].id : '', NEW_ROW_ID);
-  assert.match(withNew[0]?.kind === 'new' ? withNew[0].label : '', /README\.md/u,
-    'the row does not name the tab the conversation would belong to');
+  assert.match(withNew[0]?.kind === 'new' ? withNew[0].label : '', /README\.md/u, 'the row does not name the tab the conversation would belong to');
 
-  const without = pickerRows({ open: [], stored: [meta()], workspace: WORKSPACE, everywhere: false, now: AT });
+  const without = pickerRows(input({ stored: [meta()] }));
 
   assert.notEqual(without[0]?.kind, 'new');
 });
 
-test('a store that would not answer says so, instead of looking empty', () => {
+test('a store that would not answer says so, with the reason, instead of looking empty', () => {
   // The distinction A2 built the typed listing for. An empty list and a list that could not be read
   // are opposite facts, and only one of them means "you have no conversations".
-  const rows = pickerRows({
-    open: [], stored: 'unavailable', workspace: WORKSPACE, everywhere: false, now: AT,
-  });
+  const rows = pickerRows(input({ index: UNAVAILABLE }));
 
   assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.kind === 'unreadable' ? rows[0].id : '', UNREADABLE_ROW_ID);
-  assert.match(rows[0]?.kind === 'unreadable' ? rows[0].label : '', /could not be read/u);
+  assert.equal(rows[0]?.kind === 'notice' ? rows[0].notice : '', 'unreadable');
+  assert.match(rows[0]?.kind === 'notice' ? rows[0].label : '', /could not be read/u);
+  assert.match(rows[0]?.kind === 'notice' ? rows[0].detail : '', /EACCES/u, 'the notice does not carry the reason the index gave');
+});
+
+test('a store that would not answer still lists what is OPEN, and the last good rows the index kept — said to be from before', () => {
+  // The index keeps its last good rows when a refresh cannot look, so the picker can show them beside
+  // the notice; and what is open comes from the registry, which no disk can take away.
+  const rows = pickerRows(input({ open: [open({ id: 'live' })], stored: [meta({ id: 'kept' })], index: UNAVAILABLE }));
+
+  assert.deepEqual(rows.map((row) => row.kind), ['section', 'conversation', 'notice', 'section', 'conversation']);
+  assert.deepEqual(shown(rows), ['live', 'kept']);
+  assert.match(rows[2]?.kind === 'notice' ? rows[2].detail : '', /as it was last read/u, 'the last good rows are shown without saying they may be behind');
 });
 
 test('an unreadable store still offers the NEW row, because that needs no store', () => {
-  const rows = pickerRows({
-    open: [], stored: 'unavailable', workspace: WORKSPACE, everywhere: false, now: AT, offerNew: 'main.ts',
-  });
+  const rows = pickerRows(input({ index: UNAVAILABLE, offerNew: 'main.ts' }));
 
   assert.equal(rows[0]?.kind, 'new', 'a disk that would not answer took away the one action that does not need it');
 });
 
+test('while the index is still BUILDING the picker says so — never "no conversations" over a full store — and still lists what is open', () => {
+  // At activation the index is empty until the sweep and the first refresh finish. A caller that
+  // mapped that to an empty list showed "No conversations yet" over hundreds. (The code round.)
+  const building = pickerRows(input({ index: { kind: 'building' }, offerNew: 'README.md' }));
+
+  assert.deepEqual(building.map((row) => row.kind), ['new', 'notice']);
+  assert.equal(building[1]?.kind === 'notice' ? building[1].notice : '', 'building');
+  assert.match(building[1]?.kind === 'notice' ? building[1].label : '', /still being listed/u);
+  assert.doesNotMatch(building[1]?.kind === 'notice' ? building[1].label : '', /No conversations/u, 'an index that is still building read as an empty store');
+
+  const withOpen = pickerRows(input({ open: [open()], index: { kind: 'building' } }));
+  assert.deepEqual(withOpen.map((row) => row.kind), ['section', 'conversation', 'notice'], 'what is open in a tab was hidden while the index was building');
+});
+
 test('nothing at all is one row saying so, not an empty list', () => {
   // An empty QuickPick reads as a broken command. It says what is true instead.
-  const rows = pickerRows({ open: [], stored: [], workspace: WORKSPACE, everywhere: false, now: AT });
+  const rows = pickerRows(input({}));
 
   assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.kind, 'empty');
+  assert.equal(rows[0]?.kind === 'notice' ? rows[0].notice : '', 'empty');
+  assert.match(rows[0]?.kind === 'notice' ? rows[0].label : '', /in this folder/u);
+  const everywhere = pickerRows(input({ everywhere: true }));
+  assert.equal(everywhere[0]?.kind === 'notice' ? everywhere[0].label : '', 'No conversations yet');
 });
 
 test('the list is bounded, and says when it was cut', () => {
   // Ninety days at this operator's rate is hundreds of rows; a QuickPick that renders all of them is
   // slow to open for a list nobody scrolls to the end of. The cut is stated rather than silent.
   const many = Array.from({ length: 140 }, (_, at) => meta({ id: `c${at}`, updatedAt: AT - at * 1_000 }));
-  const rows = pickerRows({ open: [], stored: many, workspace: WORKSPACE, everywhere: false, now: AT });
-  const shown = rows.filter((row) => row.kind === 'conversation');
+  const rows = pickerRows(input({ stored: many }));
 
-  assert.equal(shown.length, 100, 'the whole store was rendered into the picker');
-  assert.ok(rows.some((row) => row.kind === 'more'), 'the list was cut and said nothing about it');
+  assert.equal(shown(rows).length, MOST_ROWS, 'the whole store was rendered into the picker');
+  const more = rows.find((row) => row.kind === 'notice' && row.notice === 'more');
+  assert.match(more?.kind === 'notice' ? more.label : '', /40 older/u, 'the list was cut and said nothing about it');
+});
+
+test('no row but a conversation carries an id — a notice, the cut line and the offer to start one have nothing a widget could try to open', () => {
+  // Pressing Enter on any non-separator row of a QuickPick fires accept. A row that is not a
+  // conversation must therefore have nothing an accept handler could open — expressed in the row
+  // union, so the compiler asks the widget, rather than as a rule story B3 has to remember.
+  const many = Array.from({ length: 140 }, (_, at) => meta({ id: `c${at}`, updatedAt: AT - at * 1_000 }));
+  const everyKind = [
+    ...pickerRows(input({ index: UNAVAILABLE, offerNew: 'main.ts' })),
+    ...pickerRows(input({ index: { kind: 'building' } })),
+    ...pickerRows(input({})),
+    ...pickerRows(input({ stored: many })),
+  ];
+  const withId = everyKind.filter((row) => 'id' in row);
+
+  assert.ok(withId.length > 0, 'the test built no row at all');
+  assert.deepEqual(withId.filter((row) => row.kind !== 'conversation').map((row) => row.kind), [],
+    'a row that is not a conversation carries an id the widget could try to open');
+  assert.deepEqual([...new Set(everyKind.map((row) => row.kind))].sort(), ['conversation', 'new', 'notice', 'section'], 'the test did not build every kind of row');
 });
 
 test('how long ago reads the way a person would say it', () => {
@@ -188,15 +293,4 @@ test('how long ago reads the way a person would say it', () => {
   assert.equal(rowAge(AT, AT - 5 * 86_400_000), '5 days ago');
   // And a clock that stepped backwards is not a conversation from the future.
   assert.equal(rowAge(AT, AT + 60_000), 'just now');
-});
-
-test('the two action rows carry ids no conversation can ever have', () => {
-  // They sit in the same list as conversations and are told apart by their id, so an id a record
-  // could legitimately hold would be a crafted conversation impersonating the action beside it.
-  // `isSafeId` is the one rule that says what a record's id may be, so it is the one asked here.
-  assert.equal(isSafeId(NEW_ROW_ID), false, 'the new-conversation row could be impersonated by a record');
-  assert.equal(isSafeId(UNREADABLE_ROW_ID), false, 'the unreadable-store row could be impersonated by a record');
-  // And they are not empty or whitespace, which a widget would render as a blank line.
-  assert.match(NEW_ROW_ID, /\S/u);
-  assert.match(UNREADABLE_ROW_ID, /\S/u);
 });

@@ -204,11 +204,10 @@ export function activate(context: vscode.ExtensionContext): void {
     });
   // HOUSEKEEPING, and the INDEX the picker reads (story B1): this window's heartbeat from now on, the
   // sweep after the migration, the index published after the sweep. `chatStoreHousekeeping.ts` says
-  // why each order holds; what stays here is the wiring — the keeper on the SAME directory as the
-  // store, the heartbeat fed by the registry, and the chat pulsing it whenever the set of open
-  // conversations changes. Its `ready` catches its own defects, so nothing is left unhandled here.
+  // why each order holds; what stays here is the wiring — the keeper bound to the store's own directory
+  // through the store itself, the heartbeat fed by the registry, and the chat pulsing it whenever the
+  // set of open conversations changes. Its `ready` catches its own defects, so nothing is left unhandled here.
   const housekeeping = startHousekeeping({
-    dir: conversationsDir(coaiDataDir()),
     store: chatStore,
     held: () => heldConversationIds(chatPanels),
     after: migration,

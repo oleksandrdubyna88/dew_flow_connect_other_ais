@@ -96,16 +96,16 @@ test('a save that landed between the listing and the delete is NOT destroyed —
     const store = new ChatStoreFile(dir);
     await store.save(record(), 0);
     assert.equal((await store.save(record({ updatedAt: AT - 1_000 }), 1)).kind, 'ok', 'the turn that landed was not saved');
-    // And its index entry is torn away, as a crash between the two renames would leave it — the retire
-    // holds the lock, so it is the one that may put it back.
+    // And its index entry is torn away, as a crash between the two renames would leave it. The retire
+    // does NOT put it back — it writes nothing on a `kept` path; the sweep's read does, under its own
+    // lock (`chatStoreKeeper.test.ts`).
     rmSync(join(dir, besideMeta('a1')));
 
     const out = await store.retireIfExpired('a1', 1, AT);
 
     assert.equal(why(out), 'changed', `a conversation written since the listing was ${out.kind}`);
     assert.equal(existsSync(join(dir, recordName('a1'))), true, 'the turn that landed was deleted');
-    const meta = metaFrom(JSON.parse(readFileSync(join(dir, besideMeta('a1')), 'utf8')));
-    assert.equal(meta?.rev, 2, 'the index entry was not regenerated from the record under the lock');
+    assert.equal(existsSync(join(dir, besideMeta('a1'))), false, 'the retire wrote an index entry as a side effect of keeping the record');
     assert.deepEqual(locksIn(dir), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -193,10 +193,11 @@ test('a record this build cannot read is kept, untouched — age never deletes w
   }
 });
 
-test('a stale index entry under an expired record is repaired first, and the retire waits for a listing that agrees', async () => {
+test('a listing at a stale revision is kept, and a listing at the record’s own revision retires it', async () => {
   // The crash between a save's two renames: the record is at rev 2, the index still says rev 1. The
-  // sweep listed rev 1. Deleting would be deleting on a description of the wrong save; instead the
-  // index is regenerated under the lock, and the NEXT sweep — which lists rev 2 — retires it.
+  // sweep listed rev 1. Deleting would be deleting on a description of the wrong save. The stale
+  // index entry is the sweep's to repair — through the store's read, `chatStoreKeeper.test.ts` — and
+  // the NEXT sweep, which lists rev 2, retires it.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
@@ -206,11 +207,34 @@ test('a stale index entry under an expired record is repaired first, and the ret
 
     const first = await store.retireIfExpired('a1', 1, AT);
     assert.equal(why(first), 'changed', 'a listing at the wrong revision was acted on');
-    assert.equal(metaFrom(JSON.parse(readFileSync(join(dir, besideMeta('a1')), 'utf8')))?.rev, 2, 'the stale index entry was not repaired');
+    assert.equal(metaFrom(JSON.parse(readFileSync(join(dir, besideMeta('a1')), 'utf8')))?.rev, 1, 'the retire rewrote the index entry');
 
     const second = await store.retireIfExpired('a1', 2, AT);
     assert.equal(second.kind, 'retired', 'with the listing agreeing, the expired conversation was still kept');
     assert.equal(existsSync(join(dir, recordName('a1'))), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a retire that finds the record changed under the lock writes NOTHING — the index entry is left exactly as it was', async () => {
+  // Two reviewers, independently: a method whose name is about retiring must not rewrite the index
+  // as a side effect of deciding not to. Repairing a stale entry is the sweep's decision, made through
+  // the store's read; here the retire keeps the record and touches nothing else.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0);
+    await store.save(record(), 1);
+    const staleText = JSON.stringify(metaOf(record({ rev: 1 })));
+    writeFileSync(join(dir, besideMeta('a1')), staleText, 'utf8');
+
+    const out = await store.retireIfExpired('a1', 1, AT);
+
+    assert.equal(why(out), 'changed');
+    assert.equal(readFileSync(join(dir, besideMeta('a1')), 'utf8'), staleText, 'the retire rewrote the index entry as a side effect of keeping the record');
+    assert.equal(existsSync(join(dir, recordName('a1'))), true);
+    assert.deepEqual(locksIn(dir), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
