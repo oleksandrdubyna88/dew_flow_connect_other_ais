@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**The log says which AI asked for a round.** Open a row and, above the reviewers who answered, it
+now reads *asked by claude-code 7.3.1 · claude-opus-5*. When there was only ever Claude this was not
+a question; with Codex and Gemini driving the same gate it is the first thing you want to know about
+a round you are looking at.
+
+The client and its version come from the MCP handshake, which every client sends. **The model does
+not exist anywhere in the MCP protocol**, so the calling AI has to tell us — it sends its own model
+id when it opens a session, and the shared gate rule now asks it to. An AI that sends nothing is
+shown as *model not stated*, which is the truth about it; you will never see a model named that
+nobody claimed. A model switched mid-session is picked up, because the id arrives per session rather
+than once when the client started.
+
+Rounds recorded before this look exactly as they did — they name their reviewers and say nothing
+about their caller, which is what was true of them.
+
 **You can find a conversation again.** Ten Claude tabs, a few files, and the chat you want is
 somewhere among them — or it was closed yesterday and there has been nothing to reopen it with at
 all. **CoAI: switch conversations…** is the list of every one of them: `Ctrl+Shift+Alt+G`

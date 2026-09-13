@@ -43,6 +43,36 @@ public sealed class RoundsQueryTests : IDisposable
             ReviewerStates = [new ReviewerState("codex", "Architecture", ReviewerState.Done, 2, "", 23.4)],
         };
 
+    /// <summary>Who called the round comes back with it, so the log page can say so (issue #174).</summary>
+    [Fact]
+    public void ARoundSaysWhichAiCalledIt_AndWhichModelItDeclared()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), [Found("one")], new RoundContext(
+                CalledBy: new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5")));
+        }
+
+        var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
+        round.CallerVendor.Should().Be("claude");
+        round.CallerClient.Should().Be("claude-code");
+        round.CallerClientVersion.Should().Be("7.3.1", "a name-only read would pass an implementation that dropped it");
+        round.CallerModel.Should().Be("claude-opus-5");
+    }
+
+    [Fact]
+    public void ARoundWhoseCallerDeclaredNoModel_ComesBackDeclaringNone()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), [Found("one")]);
+        }
+
+        var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
+        round.CallerModel.Should().BeEmpty();
+        round.CallerVendor.Should().Be("unknown");
+    }
+
     [Fact]
     public void ARoundComesBackWithTheFindingsItProduced_AndWhatWasDecided()
     {

@@ -9,7 +9,7 @@
 | Tool | Backed by | Refuses when |
 |---|---|---|
 | `providers` | `PanelService.ProvidersAsync` — CLI probe + vault state | never; it reports |
-| `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session | repo/branch unresolvable |
+| `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session, stamp the caller | repo/branch unresolvable |
 | `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
 | `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
@@ -313,6 +313,43 @@ and how it closed the gate — `accepted` and `rejected` counts, `-1` until it c
 having: that is the blind-spot corpus. A **rejection** is a disagreement, and one a later round
 raises again is flagged `re_raised` — the gate discounts those, and a disagreement the caller keeps
 defending is the more interesting kind.
+
+### Which AI called it, and which model (issue #174, 2026-09-13)
+
+`rounds.caller` is the calling agent's own SESSION id. Four more columns say who that agent **is**:
+`caller_vendor`, `caller_client`, `caller_client_version`, `caller_model`. They are stamped on
+`open` and carried by every round of that session (`PersistedSession.Caller`, a
+`Server/CallerDeclaration`).
+
+**Two sources, because the protocol only has one of them.** MCP's `initialize` carries
+`clientInfo { name, version }` — `claude-code`, `codex`, `gemini-cli` — and **no field of the
+protocol carries a model**. So the client comes from the handshake and the **model is declared by
+the calling AI** on `open`, as an optional `callerModel` argument. The operator settled that on
+2026-09-13 against the cheaper alternative, a `COAI_CALLER_MODEL` variable beside
+`COAI_CALLER_SESSION`: a variable is read when the client STARTS, so a `/model` switch mid-session
+would leave the log confidently naming the model somebody stopped using, and a confidently wrong log
+is worse than a silent one. A declaration tracks the switch because it is sent per `open`.
+
+**The handshake outranks the variables for the vendor.** `CallerIdentity.From` still walks
+`COAI_CALLER_SESSION`, `CLAUDE_CODE_SESSION_ID`, `CODEX_SESSION_ID`, `GEMINI_CLI_SESSION_ID` in that
+order, and now keeps the name of the one that matched (`claude`, `codex`, `gemini`; the first means
+`stated` — an id the operator supplied, which implies no vendor). But those variables are the
+PROCESS's, inherited from whatever launched this server and fixed for its life, while the handshake
+belongs to the connection that is calling. `McpServer` injected into the `open` lambda is the
+**request-scoped** one — which is also the only way to read `ClientInfo` on the `2026-07-28`
+revision, where it travels per request in `_meta` rather than being fixed at `initialize` — and it
+does not appear in the tool's schema.
+
+**Nothing here is guessed.** A caller nothing identifies is `unknown`; a caller that declared no
+model declared none, and the page says "model not stated". Both are states with a name, because the
+only alternative is a blank that reads as "claude" to whoever looks. The three declared fields are
+somebody else's strings on the way to a log line, a column and a page: trimmed, stripped of control
+characters, capped at 120 characters, and whitespace-only is emptiness.
+
+**`callerModel` needs the explicit `= null` default, not merely a nullable type.** The first build
+bound it as required and answered a two-argument `open` — what every client that predates the
+argument sends — with *"An error occurred invoking 'open'"*. `McpContractTests` covers both shapes
+over the real wire.
 
 `rounds.agent_log` holds what the caller was DOING in the stretch this round closes: a trimmed slice
 of its own CLI transcript (`~/.claude/projects/**/*.jsonl`) between the previous round and this

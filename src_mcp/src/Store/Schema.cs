@@ -4,10 +4,13 @@ namespace CoaiMcp.Store;
 /// The shape of the rounds database, as SQL.
 /// </summary>
 /// <remarks>
-/// <para>Every statement is <c>IF NOT EXISTS</c>, so opening an existing database is the same code
-/// path as creating one. There is no migration framework and there deliberately is not going to be
-/// one: this is a PROJECTION of the session files, so a schema that has to change is a file that
-/// can be deleted and written again.</para>
+/// <para>An ordered list of steps and a version number on the file — not a framework, and
+/// deliberately not going to become one. This is a PROJECTION of the session files, so a change
+/// that cannot be expressed as one additive step is a reason to delete the file and write it again
+/// rather than to acquire a migration engine.</para>
+/// <para>The creating statements are <c>IF NOT EXISTS</c> so a half-written file heals, but that is
+/// NOT what makes an existing database current: <c>CREATE TABLE IF NOT EXISTS</c> creates nothing
+/// when the table is there, so a column added later arrives as its own <c>ALTER</c> step.</para>
 /// <para>Times are ISO-8601 UTC strings, per the family's UTC rule — sortable and comparable as
 /// text, converted for a reader only in the UI.</para>
 /// </remarks>
@@ -19,9 +22,10 @@ internal static class Schema
     /// <remarks>
     /// Append, never edit: step 0 is what every existing database already ran, and rewriting it
     /// would change nothing on disk while changing what a new file gets — two shapes with one
-    /// version number, which is the failure this exists to prevent.
+    /// version number, which is the failure this exists to prevent. A step that ADDS a column
+    /// therefore goes at the end as its own <c>ALTER</c>, never into <see cref="Tables"/>.
     /// </remarks>
-    internal static readonly string[] Steps = [Tables, Search];
+    internal static readonly string[] Steps = [Tables, Search, WhoCalled];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -132,5 +136,25 @@ internal static class Schema
             INSERT INTO findings_fts (rowid, title, why, fix, file)
             VALUES (new.id, new.title, new.why, new.fix, new.file);
         END;
+        """;
+
+    /// <summary>
+    /// Which AI called the round, and which model it said it was running (issue #174).
+    /// </summary>
+    /// <remarks>
+    /// <para>An <c>ALTER</c> rather than four more lines in <see cref="Tables"/>, and that is the
+    /// whole point of the step list: <c>CREATE TABLE IF NOT EXISTS</c> creates nothing when the
+    /// table is already there, so a column added to it would be missing for ever on every file an
+    /// older build made — and the writer is best-effort, so it would swallow the error every round
+    /// rather than report it once.</para>
+    /// <para><c>caller</c> already here is the calling agent's SESSION id. These say who that agent
+    /// is. Every one defaults to empty, which is what is true of a round recorded before the
+    /// columns existed: nobody asked it, so it never answered.</para>
+    /// </remarks>
+    internal const string WhoCalled = """
+        ALTER TABLE rounds ADD COLUMN caller_vendor         TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN caller_client         TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN caller_client_version TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN caller_model          TEXT NOT NULL DEFAULT '';
         """;
 }

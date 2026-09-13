@@ -49,7 +49,19 @@ public sealed record LoggedRound(
     /// this the list could no longer say which, and every clean round would read as awaiting a
     /// resolve nobody owes.
     /// </remarks>
-    int FoundCount = 0);
+    int FoundCount = 0,
+    /// <summary>
+    /// Which AI drove this round, and which model it declared — issue #174.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted so a round from a database that predates the columns reads as an unknown caller
+    /// that declared no model, which is exactly what is true of it. The page renders both states in
+    /// words; neither is ever a blank.
+    /// </remarks>
+    string CallerVendor = "",
+    string CallerClient = "",
+    string CallerClientVersion = "",
+    string CallerModel = "");
 
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
 public sealed record BlindSpot(string Kind, string Name, int Accepted, int Total);
@@ -235,7 +247,8 @@ public static class RoundsQuery
         // never. (Plan round, local — Major.)
         read.CommandText = """
             SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
-                   r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id)
+                   r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
+                   r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model
             FROM rounds r JOIN sessions s ON s.id = r.session_id
             WHERE $unbounded = 1
                OR r.started_utc < $started
@@ -262,7 +275,11 @@ public static class RoundsQuery
                 rows.GetString(8),
                 inline.TryGetValue(id, out var mine) ? mine : [],
                 rows.GetString(5) + CursorSeparator + id,
-                rows.GetInt32(9)));
+                rows.GetInt32(9),
+                rows.GetString(10),
+                rows.GetString(11),
+                rows.GetString(12),
+                rows.GetString(13)));
         }
 
         return rounds;

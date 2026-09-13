@@ -61,6 +61,21 @@ export interface RoundRecord {
   readonly costUsd?: number | null;
 }
 
+/**
+ * Which AI opened the session, and which model it said it was running.
+ *
+ * <p>The MCP handshake carries the CLIENT — `claude-code`, `codex` — and no field of the protocol
+ * carries a model, so the calling AI declares one on `open`. Both halves of this are optional
+ * because both can honestly be unknown: a client nothing identifies is `unknown`, and a caller that
+ * declared no model declared none. Neither is ever rendered as a blank.</p>
+ */
+export interface CallerDeclaration {
+  readonly vendor?: string;
+  readonly client?: string;
+  readonly clientVersion?: string;
+  readonly model?: string;
+}
+
 export interface SessionFile {
   readonly state: {
     readonly sessionId: string;
@@ -70,6 +85,32 @@ export interface SessionFile {
     readonly awaitingResolve: boolean;
   };
   readonly rounds: readonly RoundRecord[];
+  /** Absent in files written by a server older than issue #174. */
+  readonly caller?: CallerDeclaration;
+}
+
+/**
+ * Who opened this session, as one phrase — or nothing at all for a file that never recorded it.
+ *
+ * <p>The empty answer is the load-bearing one: a session file from before the field is a server
+ * that never asked the question, which is a different fact from a caller that could not be
+ * identified. Saying "unknown" about it would put a claim where there is only silence.</p>
+ *
+ * <p>It mirrors `CallerDeclaration.Phrase` on the server, which is the copy that lands in the log
+ * line and in the database. Two spellings of one sentence is a drift waiting to happen; the tests
+ * on both sides assert the same strings against the same inputs.</p>
+ */
+export function calledBy(session: SessionFile): string {
+  if (session.caller === undefined || session.caller === null) {
+    return '';
+  }
+  const said = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  const vendor = said(session.caller.vendor) || 'unknown';
+  const client = said(session.caller.client) || vendor;
+  const version = said(session.caller.clientVersion);
+  const model = said(session.caller.model) || 'model not stated';
+
+  return `${client}${version === '' ? '' : ` ${version}`} · ${model}`;
 }
 
 /** The default data dir the server uses when `COAI_DATA_DIR` is unset. */
