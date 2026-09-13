@@ -136,6 +136,18 @@ depth is in `research/module_extension.md`; what belongs here is that the direct
 the coordination is the filesystem's rather than a server's, and that no half of this product asks
 the other about a conversation.
 
+**And that directory now has a keeper.** Nothing retired it when it was introduced — the retention
+that had bounded the editor's own state went with the editor's own state — so a sweep runs once a day
+from whichever window gets there first, behind a marker the others read and stand down on. What makes
+it safe at this level is one fact about the shape: a conversation open in ANOTHER window is protected
+by that window saying so, in a heartbeat file beside the records, rather than by anything this one
+could infer. A shared directory cannot be swept on local knowledge, and the timestamps on the records
+are no help, because reading a conversation back is deliberately not a use of it.
+
+The picker reads an index built from the small metadata files, never from the transcripts; it is
+published after the sweep and in one assignment, so nothing ever renders a row for a record being
+removed.
+
 **Where the vendor-shaped knowledge lives is the other decision.** `codex` reports a token total that
 counts UP across a thread; the other two price each turn. Normalising that belongs to the SESSION,
 because a session's lifetime is exactly a vendor thread's lifetime — it holds the id it resumes by,
