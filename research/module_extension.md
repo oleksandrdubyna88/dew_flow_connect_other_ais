@@ -1868,6 +1868,30 @@ seeded from the shared one; off, this side's is promoted to the shared one when 
 sides need nothing — their token then disagrees with the intent, and the rule re-mints it.
 
 
+### The pasted snippet has two halves, and only one of them is shared (2026-09-13)
+
+`claudeSnippet()` used to BE the gate rule: one constant, generated from the conventions submodule at
+build time. It is now the gate rule plus this product's own consultant block, and the split is the
+point. A rule about how work is done in every repository of the family is SHARED and lives in
+conventions, pinned; a rule about when to call one tool of one server is SPECIFIC and belongs to the
+project that owns it. The operator settled it in those words when the alternative on the table was a
+new shared rule and a six-repository pin cascade — and the cascade is the reason it matters: a commit
+on conventions `main` makes every consumer's pin stale at once.
+
+So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it beside `gateRule.ts`
+(prose stays prose — a backtick inside a template literal has broken this build three times), and
+the composed text carries ONE version marker, stamped here over the artifact a person actually
+pastes. The mounted rule keeps its own marker for the repositories that mount it; a paste is a
+different artefact and versions on its own, which is what `snippetStatus` reads back out of somebody's
+CLAUDE.md. `SNIPPET_VERSION` is 6 and the hash moved with it.
+
+What the block says is the five triggers a stuck AI can recognise from inside a task — the same test
+red after two fix attempts, two sources contradicting, an unmeasured design fork, the person saying
+it is still not fixed twice, and the person simply asking — plus the tool's contract and the two
+rules that make advice usable: it is MATERIAL to verify, and the next call reports the verification.
+**Never a diff**: the server collects the working tree itself, and a diff pasted into the problem
+statement is the same bytes twice, paid for twice.
+
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
 It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea

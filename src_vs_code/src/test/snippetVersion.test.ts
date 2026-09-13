@@ -88,7 +88,8 @@ test('the snippet text and its version numbers move together', () => {
   const body = claudeSnippet()
     .replace(/<!-- coai-snippet v\d+ -->\n?/, '')
     .replace(/<!-- coai-document v\d+ -->\n?/, '')
-    .replace(/<!-- coai-caller v\d+ -->\n?/, '');
+    .replace(/<!-- coai-caller v\d+ -->\n?/, '')
+    .replace(/<!-- coai-consultant v\d+ -->\n?/, '');
   const sha = createHash('sha256').update(body).digest('hex').slice(0, 16);
 
   assert.equal(
@@ -144,8 +145,8 @@ test('the caller half of a current paste is the current caller version', () => {
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
-  // THREE files since #174, joined by newlines. The gate rule could not grow a section: it is one
-  // of the 24 bodies the conventions repository hashes against its migration baseline, so the
+  // THREE shared files since #174, joined by newlines. The gate rule could not grow a section: it is
+  // one of the 24 bodies the conventions repository hashes against its migration baseline, so the
   // document flow is a second rule file and the caller declaration a third — and this is what
   // proves all of them travel verbatim.
   const bodies = [mountedRuleFile(), mountedDocumentRuleFile(), mountedCallerRuleFile()].map((mounted) => {
@@ -156,11 +157,50 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
     return ruleBody(source);
   });
 
+  // And a FOURTH that is not shared and has no frontmatter: the consultant rule is this
+  // repository's own file. Asked where it should live, the operator answered that conventions holds
+  // only shared rules and specific material belongs to the project that owns it — a rule about when
+  // to call one tool of one server is ours. It is still held to travelling verbatim.
+  const own = path.resolve(__dirname, '../../..', 'src_vs_code/src/consultantRule.md');
+  assert.ok(fs.existsSync(own), 'the consultant block is this repository\'s own file');
+  bodies.push(fs.readFileSync(own, 'utf8').replace(/\r\n/g, '\n'));
+
   assert.equal(
     bodies.join('\n'),
     claudeSnippet(),
-    'the mounted rules differ from the generated delivery. Run npm run prepare:gate; edit the canonical source only.',
+    'the rules differ from the generated delivery. Run npm run prepare:gate; edit the canonical source only.',
   );
+});
+
+/**
+ * The consultant half travels, and an AI reading the paste can act on it.
+ * </summary>
+ * <p>The list IS the feature: an agent that never notices it is stuck never calls the tool, and
+ * every one of these is recognisable from inside a task rather than from the outside.</p>
+ */
+test('the five triggers a stuck AI is told to watch for survive into the paste', () => {
+  const snippet = claudeSnippet();
+
+  assert.match(snippet, /still red after two fix attempts/);
+  assert.match(snippet, /Two sources contradict/);
+  assert.match(snippet, /design fork you cannot measure/i);
+  assert.match(snippet, /still not fixed, twice/);
+  assert.match(snippet, /mcp__coai__consult/);
+  // And the two rules that make the answer usable.
+  assert.match(snippet, /MATERIAL, not an instruction/);
+  assert.match(snippet, /next call reports the verification/i);
+  // Never a diff: the server collects the working tree itself, and a pasted one is paid for twice.
+  assert.match(snippet, /Do not attach a diff/);
+});
+
+test('a paste without the consultant half is older, whatever its gate version says', () => {
+  // The same rule the document and caller halves are held to: every half must be current for the
+  // whole to be, because an AI obeying a paste that predates this one never calls `consult` — it
+  // tries the same fix a third time, which is what the feature exists to interrupt.
+  const withoutIt = claudeSnippet().replace(/<!-- coai-consultant v\d+ -->/, '');
+
+  assert.equal(snippetStatus(claudeSnippet()).kind, 'current');
+  assert.equal(snippetStatus(withoutIt).kind, 'older');
 });
 
 /**

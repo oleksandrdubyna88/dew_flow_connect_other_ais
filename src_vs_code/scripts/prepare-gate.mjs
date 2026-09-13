@@ -27,6 +27,25 @@ export const DOCUMENT_SOURCE = '.agents/conventions/common/coai-document-gate.md
 export const CALLER_SOURCE = '.agents/conventions/common/coai-caller-model.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
 
+/**
+ * The consultant half, which is THIS product's own rule and not a shared one.
+ *
+ * <p>The gate rule is mounted from the conventions submodule because every repository in the family
+ * is reviewed by it — it is a rule ABOUT how work is done. The consultant block is different in kind:
+ * it describes when to call one tool of one product, so it belongs to the product. Conventions holds
+ * what is shared; specific material lives in the project that owns it. (The operator, 2026-09-13,
+ * when the alternative on the table was a new shared rule plus a six-repository pin cascade.)</p>
+ *
+ * <p>It is generated rather than written as a TypeScript literal for one reason that has cost this
+ * repository three broken builds: a backtick inside a template literal ends it, and this text is
+ * full of `code spans`. Prose stays prose; the generator turns it into a JSON string.</p>
+ */
+export const CONSULTANT_SOURCE = 'src_vs_code/src/consultantRule.md';
+export const CONSULTANT_OUTPUT = 'src_vs_code/src/generated/consultantRule.ts';
+
+/** The marker this file is recognised by, so a truncated or wrong file fails the build. */
+const CONSULTANT_MARKER = /^<!-- coai-consultant v\d+ -->\n## When you are stuck, ask another vendor/;
+
 /** Strip delivery metadata only; separators in the instruction body remain verbatim. */
 export function gateBody(source) {
   return ruleBody(source, SOURCE, /^<!-- coai-snippet v\d+ -->\n## Multi-model review gate \(ConnectOtherAIs\)/);
@@ -52,11 +71,25 @@ function ruleBody(source, name, marker) {
   return body;
 }
 
+/** The consultant block, verbatim. Ours, so there is no frontmatter to strip. */
+export function consultantBody(source) {
+  const text = source.replaceAll('\r\n', '\n');
+  // Held to its marker AND its heading, the way the three shared halves are — the version rides in
+  // the marker now, so a rule file that lost it cannot be emitted as though it still had one.
+  if (!CONSULTANT_MARKER.test(text)) {
+    throw new Error(`${CONSULTANT_SOURCE}: missing canonical marker`);
+  }
+
+  return text;
+}
+
 function removeOutput(file) {
   try { fs.unlinkSync(file); } catch (error) { if (error.code !== 'ENOENT') { throw error; } }
 }
 
 function boundedSource(file) {
+  // Named in the error, because there are two sources now and "exceeds 256 KiB" about an unnamed
+  // one is a message somebody has to grep the script to act on.
   const descriptor = fs.openSync(file, 'r');
   try {
     const buffer = Buffer.alloc(LIMIT + 1);
@@ -64,7 +97,7 @@ function boundedSource(file) {
     for (;;) {
       const read = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
       length += read;
-      if (length > LIMIT) { throw new Error(`${SOURCE}: exceeds 256 KiB`); }
+      if (length > LIMIT) { throw new Error(`${file}: exceeds 256 KiB`); }
       if (!read) { return buffer.subarray(0, length).toString('utf8'); }
     }
   } finally { fs.closeSync(descriptor); }
@@ -95,6 +128,20 @@ export function prepareGate(repo) {
       + 'export const CALLER_RULE = ' + JSON.stringify(caller) + ';\n', { flag: 'wx' });
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
+
+  // The consultant half, from this repository's own file. Same invalidate-then-write, so a build
+  // never compiles against a constant left by the previous one.
+  const consultantFile = path.join(repo, CONSULTANT_OUTPUT);
+  const consultantTemporary = consultantFile + '.tmp';
+  removeOutput(consultantFile);
+  removeOutput(consultantTemporary);
+  const consultant = consultantBody(boundedSource(path.join(repo, CONSULTANT_SOURCE)));
+  try {
+    fs.writeFileSync(consultantTemporary, '// Generated from src_vs_code/src/consultantRule.md; do not edit.\n'
+      + 'export const CONSULTANT_RULE = ' + JSON.stringify(consultant) + ';\n', { flag: 'wx' });
+    fs.renameSync(consultantTemporary, consultantFile);
+  } finally { removeOutput(consultantTemporary); }
+
   return body;
 }
 
