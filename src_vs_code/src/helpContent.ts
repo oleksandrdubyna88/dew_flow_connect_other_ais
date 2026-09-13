@@ -112,7 +112,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'And: tell your AI to use the gate',
       whatItIs:
-        'The ⋯ menu → **Copy the CLAUDE.md snippet** gives you a paragraph to paste into the repository you want reviewed. It tells the AI working there that a review gate exists and in what order to use it.',
+        'The ⋯ menu → **Copy the CLAUDE.md snippet** gives you a paragraph to paste into the repository you want reviewed. It tells the AI working there that a review gate exists, in what order to use it, and that a DOCUMENT is reviewed by a gate of its own.',
       why:
         'An assistant that has the tools but no instruction will not think to open a review session. The snippet is the instruction, and it lives in the repository rather than in this extension because it is a property of the project, not of your editor.',
       setup:
@@ -350,7 +350,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Under the hood: the protocol your AI follows',
       whatItIs:
-        'Seven tools, in a fixed order. `open` starts a session for a repo and branch. `review_plan` sends the plan to every reviewer. `resolve` records an accept or reject for EVERY finding. `review_code` does the same for the diff, with three roles per vendor. `providers` reports health, `status` re-orients a resumed conversation, `ask_human` escalates to you.',
+        'Eight tools, in a fixed order. `open` starts a session for a repo and branch. `review_plan` sends the plan to every reviewer. `resolve` records an accept or reject for EVERY finding. `review_code` does the same for the diff, with three roles per vendor. `review_document` is the other gate — a DOCUMENT rather than a diff, with no plan round before it and its own session per document. `providers` reports health, `status` re-orients a resumed conversation, `ask_human` escalates to you.',
       why:
         'Ordering is enforced by refusal rather than by good behaviour: `review_code` refuses until a plan round has reached *proceed*, so a skipped stage is impossible rather than discouraged.',
       setup:

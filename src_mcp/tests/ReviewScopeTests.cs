@@ -19,7 +19,7 @@ namespace CoaiMcp.Tests;
 /// an empty string was accepted in silence. The scope a plan round already agreed on was not even
 /// kept — so the one place the intent was written down was thrown away between the two stages.</para>
 /// </remarks>
-public sealed class CodeScopeTests : IDisposable
+public sealed class ReviewScopeTests : IDisposable
 {
     private readonly string _data = Directory.CreateTempSubdirectory("coai-scope-").FullName;
 
@@ -101,7 +101,7 @@ public sealed class CodeScopeTests : IDisposable
     {
         // "fix the update button" passes any is-it-empty check and tells a reviewer nothing about
         // what the change was supposed to achieve, which is the whole question it is being asked.
-        CodeScope.IsSubstantial("fix the update button").Should().BeFalse();
-        CodeScope.IsSubstantial(Scope).Should().BeTrue();
+        ReviewScope.IsSubstantial("fix the update button").Should().BeFalse();
+        ReviewScope.IsSubstantial(Scope).Should().BeTrue();
     }
 }

@@ -155,3 +155,28 @@ balanced-brace scan (naive first-to-last), the standing-rejection discount (disa
 order (reversed), and the catalog loader (written before `RoleCatalog` existed, watched failing to
 compile, then watched failing on the prompt COUNT — the plan said 26 and the seed has 25, which is
 why the number is pinned rather than the shape).
+
+## Which roles a round runs — the BUCKET
+
+`RoleCatalog.InBucket(bucket)` is what selects a round's roster, and `PanelConfig.BucketFor(Stage)`
+is the ONE place the orchestration `Stage` meets the string a role is persisted with:
+
+| `Stage` | bucket | what it reads |
+|---|---|---|
+| `PlanReview` | `plan:code` | the plan document |
+| `CodeReview` | `result:code` | the branch diff |
+| `DocumentReview` | `result:document` | a document |
+| *(none)* | `plan:document` | nothing yet — stored, composed, counted, run by no stage |
+
+A document role's own `RoleDefinition.Stage` stays the STRING `result` with
+`ProgrammingTask: false`, in the seed, in `COAI_ROLES`, in every session file. `Stage.DocumentReview`
+appears in none of them.
+
+It was `RolesOf(stage)` with `&& r.ProgrammingTask` baked in until plan 4, which is exactly where a
+document role stopped: composed, budgeted, switchable, and in no round. The kind is part of what is
+ASKED FOR now rather than a condition on the answer — and the rename was deliberate, so every call
+site became a compile error rather than a silently empty list.
+
+The five-active limit has counted per bucket since plan 1 (`RoleComposition.MaxActivePerBucket`); the
+extension counted per STAGE until plan 4, which was invisible only because document roles ran in
+nothing.

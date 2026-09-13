@@ -27,6 +27,7 @@ public sealed partial class PanelService
     private readonly IProcessLauncher _launcher;
     private readonly Serilog.ILogger _log;
     private readonly SessionStore _store;
+    private readonly ArtifactStore _artifacts;
     private readonly WorktreeManager _worktrees;
     private readonly ContextAssembler _context;
     private readonly BoundedScheduler _scheduler;
@@ -46,6 +47,7 @@ public sealed partial class PanelService
         _launcher = launcher;
         _log = log;
         _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
+        _artifacts = new ArtifactStore(settings.DataDir);
         _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(
@@ -186,10 +188,18 @@ public sealed partial class PanelService
     /// unresolved and never lets them retry.
     /// </remarks>
     internal string NoRolesRefusal(Stage stage) =>
-        $"Every {(stage == Stage.PlanReview ? "plan" : "code")}-review role is switched off, so this "
+        $"Every {StageWord(stage)}-review role is switched off, so this "
         + "round would have no reviewers in it. "
         + $"Tick at least one of {Names(Tickable(stage))} "
         + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
+
+    /// <summary>A stage as a person says it, for a sentence they are about to read.</summary>
+    private static string StageWord(Stage stage) => stage switch
+    {
+        Stage.PlanReview => "plan",
+        Stage.DocumentReview => "document",
+        _ => "code",
+    };
 
     /// <summary>
     /// The roles this refusal may offer: the code stage's, switched on or NOT.
@@ -197,14 +207,15 @@ public sealed partial class PanelService
     /// <remarks>
     /// Deliberately not <c>RolesOf</c>, which answers with the ACTIVE ones — in the only state this
     /// sentence is ever read, that can be the empty list, and "tick at least one of a role" is not
-    /// an instruction. A document role is left out for the opposite reason: ticking one cannot
-    /// satisfy a code round, so offering it would leave somebody exactly as blocked as before,
-    /// having done what they were told. (codex, on the code round of the story that removed the enum.)
+    /// an instruction. It offers only the stage's OWN bucket for the opposite reason: ticking a role
+    /// of another kind cannot satisfy this round, so offering it would leave somebody exactly as
+    /// blocked as before, having done what they were told. (codex, on the code round of the story
+    /// that removed the enum — and the reason this reads the bucket rather than the stage since
+    /// plan 4 gave a document role a round of its own to be ticked for.)
     /// </remarks>
     private IReadOnlyList<string> Tickable(Stage stage) =>
         [.. _settings.Rounds.Catalog.Roles
-            .Where(r => r.Stage == (stage == Stage.PlanReview ? RoleStages.Plan : RoleStages.Result))
-            .Where(r => r.ProgrammingTask)
+            .Where(r => r.Bucket == PanelConfig.BucketFor(stage))
             .Select(r => r.Id)];
 
     /// <summary>Role ids as a person reads them: their display names, in an English list.</summary>
@@ -376,13 +387,50 @@ public sealed partial class PanelService
         return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
     }
 
-    public Task<string> StatusAsync(string repoPath, string branch)
+    /// <param name="document">
+    /// Which document's review, when the session is one: the same <c>documentPath</c> or
+    /// <c>documentName</c> that was passed to <c>review_document</c>. Empty asks about the BRANCH's
+    /// own session, which is what every caller before plan 4 meant and still means.
+    /// </param>
+    public Task<string> StatusAsync(string repoPath, string branch, string document = "")
     {
-        var session = _store.Load(repoPath, branch);
+        var session = _store.Load(repoPath, branch, DocumentKeyFor(repoPath, branch, document));
         return Task.FromResult(session is null
-            ? Error("no session for this repo+branch — call open first")
+            ? Error(NoSession(document))
             : Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer));
     }
+
+    /// <summary>
+    /// The session identity a caller's <paramref name="document"/> means — the LATEST review of it.
+    /// </summary>
+    /// <remarks>
+    /// A caller passes what they passed to <c>review_document</c>: a path, or the name they gave raw
+    /// text. Either becomes the same identity <c>review_document</c> derived, and the newest review
+    /// of it is the one they are talking about — asking somebody to remember an ordinal they never
+    /// typed would be asking them to know how this file numbers things.
+    /// </remarks>
+    private string DocumentKeyFor(string repoPath, string branch, string document)
+    {
+        var said = document.Trim();
+        if (said.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // A path resolves like one; anything else is the name raw text was given, and its identity
+        // IS that name.
+        var asPath = Path.IsPathRooted(said) ? DocumentId.Of(repoPath, Path.GetFullPath(said)) : said;
+        var identity = asPath.Length == 0 ? said : asPath;
+
+        return DocumentSessions.Which(
+            identity, newReview: false, id => _store.Load(repoPath, branch, id) is not null);
+    }
+
+    private static string NoSession(string document) =>
+        document.Trim().Length == 0
+            ? "no session for this repo+branch — call open first"
+            : $"no review of '{document}' on this branch — call review_document for it first. If you "
+            + "meant the branch's own session, leave document empty.";
 
     // ---------- the two review stages ----------
 
@@ -445,7 +493,8 @@ public sealed partial class PanelService
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses)));
-            }),
+            })
+            { RolesPerVendor = 1 },
             ct);
     }
 
@@ -483,10 +532,10 @@ public sealed partial class PanelService
         // Only once the stage itself is reachable. "The plan stage has not passed" is the more
         // useful sentence for a caller who skipped it, and telling them to send a scope for a
         // round that could not have run either way sends them to fix the wrong thing.
-        if (_store.Load(repoPath, branch) is { State.PlanProceeded: true } && !CodeScope.IsSubstantial(scope))
+        if (_store.Load(repoPath, branch) is { State.PlanProceeded: true } && !ReviewScope.IsSubstantial(scope))
         {
             // Refused before any worktree, any launcher, any token: nothing has to run to know it.
-            return Task.FromResult(Error(CodeScope.Refusal));
+            return Task.FromResult(Error(ReviewScope.Refusal));
         }
 
         return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
@@ -582,9 +631,212 @@ public sealed partial class PanelService
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses),
                     notAsked);
-            }),
+            })
+            { RolesPerVendor = PanelConfig.CodeRoleNames.Length },
             ct);
     }
+
+    /// <summary>
+    /// The document gate — the roles a person wrote, over a document rather than a diff.
+    /// </summary>
+    /// <remarks>
+    /// <para>What plans 1, 2 and 3 were building towards, and what the person who asked for this
+    /// series actually wanted: they are not a programmer, their work product is a specification or a
+    /// policy, and what they want is several vendors' models reading it independently.</para>
+    /// <para><b>It opens its own session</b>, keyed by the document rather than by the branch — a
+    /// person with ten documents does not have ten branches. <c>open</c> is still required first,
+    /// because a document review happens IN a repository and the branch session is what proves the
+    /// caller named a real checkout.</para>
+    /// <para><b>No plan gate before it.</b> There is no plan before a document; the document is the
+    /// work. Requiring one would be asking a person to write a plan about the thing they wanted
+    /// read.</para>
+    /// </remarks>
+    /// <param name="purposeText">
+    /// What the document is FOR. Required, and held to the same substantiality rule a code round's
+    /// scope is: a specification can be clear, complete, internally consistent and about the wrong
+    /// project, and only the purpose catches that.
+    /// </param>
+    /// <param name="newReview">
+    /// Start a FRESH review of this document rather than continuing the current one. Never automatic
+    /// — see <see cref="DocumentSessions"/>.
+    /// </param>
+    public Task<string> ReviewDocumentAsync(
+        string repoPath,
+        string branch,
+        string purposeText,
+        string? documentPath = null,
+        string? documentText = null,
+        string? documentName = null,
+        bool newReview = false,
+        CancellationToken ct = default)
+    {
+        // Before anything is read, resolved or written: a round with no reviewer in it is not an
+        // empty round, it is an unresolved one that sits open for ever. The same guard the other two
+        // stages have, for the same reason.
+        if (WhyNotADocumentRound(purposeText) is { } no)
+        {
+            return Task.FromResult(Refused(no));
+        }
+
+        var read = DocumentReader.Read(
+            repoPath,
+            new DocumentRequest(documentPath, documentText, documentName),
+            DocumentReader.FollowLink);
+        if (read is DocumentOutcome.Refused notADocument)
+        {
+            return Task.FromResult(Refused(notADocument.Sentence));
+        }
+
+        var document = (DocumentOutcome.Ready)read;
+        var turn = OpenDocumentSession(repoPath, branch, document, purposeText, newReview);
+
+        return turn.Session is null
+            ? Task.FromResult(Refused(turn.Sentence!))
+            : RunDocumentStageAsync(repoPath, branch, purposeText, document, turn.Session, ct);
+    }
+
+    /// <summary>A refusal a person may have to act on is worth a line in the log as well.</summary>
+    private string Refused(string sentence)
+    {
+        _log.Warning("review_document refused: {Why}", sentence);
+
+        return Error(sentence);
+    }
+
+    /// <summary>Why this cannot be a document round at all, or null.</summary>
+    private string? WhyNotADocumentRound(string purposeText) =>
+        _settings.Rounds.EnabledRolesOf(Stage.DocumentReview).Count == 0
+            ? NoRolesRefusal(Stage.DocumentReview)
+            : ReviewScope.IsSubstantial(purposeText) ? null : ReviewScope.DocumentRefusal;
+
+    /// <summary>The document session this call is about, or the sentence saying why there is none.</summary>
+    private sealed record DocumentTurn(PersistedSession? Session, string? Sentence);
+
+    private DocumentTurn OpenDocumentSession(
+        string repoPath, string branch, DocumentOutcome.Ready document, string purposeText, bool newReview)
+    {
+        if (_store.Load(repoPath, branch) is null)
+        {
+            return new DocumentTurn(null, "no session for this repo+branch — call open first");
+        }
+
+        var identity = DocumentSessions.Which(
+            document.Id, newReview, id => _store.Load(repoPath, branch, id) is not null);
+        if (identity.Length == 0)
+        {
+            return new DocumentTurn(null, DocumentSessions.TooMany(document.Id));
+        }
+
+        return _store.Load(repoPath, branch, identity) is { } existing
+            ? Continuing(existing, purposeText)
+            : new DocumentTurn(NewDocumentSession(repoPath, branch, identity), null);
+    }
+
+    /// <summary>
+    /// A purpose that has changed is a different review, not a second round of this one.
+    /// </summary>
+    /// <remarks>
+    /// The same document read for "check the security controls" and later for "check it is
+    /// complete" is two questions. Carrying round 1's scope into round 2 silently is what the first
+    /// draft of the plan would have done, and codex named it: the second round's reviewers would
+    /// have been told to answer the first round's question with the second one's rounds.
+    /// </remarks>
+    private static DocumentTurn Continuing(PersistedSession session, string purposeText) =>
+        string.Equals(session.PlanText.Trim(), purposeText.Trim(), StringComparison.Ordinal)
+            ? new DocumentTurn(session, null)
+            : new DocumentTurn(null,
+                "this review of the document was opened with a different purpose, and a different "
+              + "purpose is a different review rather than another round of this one. Pass the "
+              + "original purposeText to continue, or newReview: true to start a fresh review.");
+
+    private PersistedSession NewDocumentSession(string repoPath, string branch, string identity)
+    {
+        var session = new PersistedSession(
+            new SessionState(Guid.NewGuid().ToString("N")[..8], repoPath, branch, _settings.Rounds)
+            {
+                Document = identity,
+                // Its own stage from the first moment. A document session never passes through the
+                // plan stage — there is nothing to plan — and leaving it at the default would make
+                // its first round refuse for a reason that is not true about it.
+                Stage = Stage.DocumentReview,
+            },
+            [])
+        {
+            OpenedUtc = DateTime.UtcNow,
+        };
+        _store.Save(session);
+        _log.Information(
+            "session {SessionId} open for document {Document} on {Branch}",
+            session.State.SessionId, identity, branch);
+
+        return session;
+    }
+
+    private Task<string> RunDocumentStageAsync(
+        string repoPath,
+        string branch,
+        string purposeText,
+        DocumentOutcome.Ready document,
+        PersistedSession session,
+        CancellationToken ct)
+    {
+        // The snapshot is kept BEFORE the round, so a round that is then killed still leaves the
+        // text somebody can open. It never fails the round: the review is the product and the
+        // snapshot is a record of it.
+        if (_artifacts.Keep(document.ArtifactId, document.Text) is { } notKept)
+        {
+            _log.Warning("{Sentence}", notKept);
+        }
+
+        return RunStageAsync(repoPath, branch, purposeText,
+            new StageRun(RoundMachine.BeginDocumentRound, NeedsWorktree: false, IsPlanStage: true,
+                (running, workingDir, _) =>
+                {
+                    // The same sentence the other two stages write, carrying this one's own numbers.
+                    _log.Information(
+                        "context for review: document {Name} ({DocumentBytes} bytes, snapshot {Artifact}), "
+                        + "purpose {PurposeBytes} bytes; no diff and no rules at this stage",
+                        document.Name,
+                        System.Text.Encoding.UTF8.GetByteCount(document.Text),
+                        document.ArtifactId,
+                        System.Text.Encoding.UTF8.GetByteCount(purposeText));
+
+                    var round = running.State.RoundsRunThisStage + 1;
+                    var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
+
+                    return Task.FromResult(WithNothingSkippedByRule(
+                        BuildWork(
+                            roles, workingDir, DocumentContext(purposeText, document), round,
+                            // TRUE, and it is not a lie about which stage this is: inside
+                            // `BuildWork` the flag means "this reviewer reads what it was handed,
+                            // not a checkout", which is exactly a document round. It also selects
+                            // the vendor's PLAN switch, which is the right one of the two that
+                            // exist — a vendor a person set to read documents rather than diffs is
+                            // a vendor they ticked there.
+                            isPlanStage: true,
+                            seed: StableSeed(running.State.SessionId, round))));
+                })
+            {
+                Document = session.State.Document,
+                // The real number, not the plan stage's one: a document round runs one reviewer per
+                // document ROLE per vendor, and a deadline derived from one would be short.
+                RolesPerVendor = Math.Max(_settings.Rounds.EnabledRolesOf(Stage.DocumentReview).Count, 1),
+            },
+            ct);
+    }
+
+    /// <summary>
+    /// What a document reviewer is handed: the purpose FIRST, then the document.
+    /// </summary>
+    /// <remarks>
+    /// The order is deliberate and it is the one thing about this prompt worth arguing over. A model
+    /// reading a long document before it is told what to look for spends the document forming its
+    /// own idea of what the document is for — which is exactly the judgement the purpose exists to
+    /// replace.
+    /// </remarks>
+    private static string DocumentContext(string purposeText, DocumentOutcome.Ready document) =>
+        $"## What this document is for\n\n{purposeText}\n\n"
+        + $"## The document under review — {document.Name}\n\n{document.Text}";
 
     /// <summary>
     /// The plan lenses this session has not spent yet, one for each vendor that can run.
@@ -809,7 +1061,7 @@ public sealed partial class PanelService
             return Error("planText is required — a reviewer that cannot see the intent reviews its own guess");
         }
 
-        var session = _store.Load(repoPath, branch);
+        var session = _store.Load(repoPath, branch, stage.Document);
         if (session is null)
         {
             return Error("no session for this repo+branch — call open first");
@@ -834,7 +1086,7 @@ public sealed partial class PanelService
         // can only be smaller — a vendor that serves the other stage, a repository with no rules —
         // so basing the budget on the configured shape is the generous direction, which is the one
         // to be wrong in.
-        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.IsPlanStage));
+        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.IsPlanStage, stage.RolesPerVendor));
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -983,11 +1235,23 @@ public sealed partial class PanelService
             {
                 _log.Information("split ordered to caller {Caller}", caller);
             }
+            // Built HERE because this is the only place that holds both a reviewer's answer and the
+            // invocation that produced it, which is the same reason the ROLE is stamped on a finding
+            // twenty lines up. A note with no name on it is three accounts in a heap.
+            var notes = (IReadOnlyList<ReviewerNote>)[.. results
+                .Where(r => r.Outcome is ReviewerOutcome.Ok { Review.Notes.Length: > 0 })
+                .Select(r => new ReviewerNote(
+                    r.Invocation.Provider.ToString(),
+                    r.Invocation.Role.ToString(),
+                    ((ReviewerOutcome.Ok)r.Outcome).Review.Notes))];
             answer = answer with
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
                 Commands = commands.Count == 0 ? null : commands,
                 CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.Preamble,
+                // Absent rather than empty when nobody wrote one, which is every code round: an
+                // empty list in every reply would teach a reader to stop seeing the field.
+                Notes = notes.Count == 0 ? null : notes,
             };
             // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making it
             // best-effort stopped the round dying and started it LYING: the caller was handed
@@ -1705,9 +1969,8 @@ public sealed partial class PanelService
     /// loses its Conventions reviewers, and dealing sends each lens to one vendor — and an upper
     /// bound is the right direction for a deadline to be wrong in.
     /// </remarks>
-    private int ConfiguredReviewers(bool isPlanStage) =>
-        _settings.Providers.Count(p => p.Serves(isPlanStage))
-        * (isPlanStage ? 1 : PanelConfig.CodeRoleNames.Length);
+    private int ConfiguredReviewers(bool isPlanStage, int rolesPerVendor) =>
+        _settings.Providers.Count(p => p.Serves(isPlanStage)) * rolesPerVendor;
 
     private TimeSpan RoundDeadlineFor(int reviewers)
     {
@@ -1873,12 +2136,18 @@ public sealed partial class PanelService
 
     // ---------- resolve ----------
 
-    public Task<string> ResolveAsync(string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false)
+    /// <param name="document">
+    /// Which document's review is being resolved, when the round was a document round: the same
+    /// <c>documentPath</c> or <c>documentName</c> that was passed to <c>review_document</c>. Empty
+    /// resolves the BRANCH's session, which is what plan and code rounds have always meant.
+    /// </param>
+    public Task<string> ResolveAsync(
+        string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false, string document = "")
     {
-        var session = _store.Load(repoPath, branch);
+        var session = _store.Load(repoPath, branch, DocumentKeyFor(repoPath, branch, document));
         if (session is null)
         {
-            return Task.FromResult(Error("no session for this repo+branch — call open first"));
+            return Task.FromResult(Error(NoSession(document)));
         }
 
         List<DecisionDto>? dtos;
@@ -1903,7 +2172,15 @@ public sealed partial class PanelService
         {
             if (dto.Finding < 0 || dto.Finding >= session.Pending.Count)
             {
-                return Task.FromResult(Error($"finding index {dto.Finding} does not exist — this round reported {session.Pending.Count}"));
+                // "this round reported 0" is a true sentence and a useless one: when there is
+                // nothing pending at all, the caller is almost never holding a bad index — they are
+                // holding the right findings and the WRONG session, because a document round lives
+                // in its own. Say that instead of sending them to recount.
+                return Task.FromResult(Error(session.Pending.Count == 0
+                    ? "this session has no findings awaiting decisions. If you are resolving a "
+                      + "DOCUMENT round, pass its document: a document review is its own session, "
+                      + "keyed by the document rather than by the branch."
+                    : $"finding index {dto.Finding} does not exist — this round reported {session.Pending.Count}"));
             }
 
             var finding = session.Pending[dto.Finding];
@@ -2172,4 +2449,25 @@ internal sealed record StageRun(
     Func<SessionState, Transition> Begin,
     bool NeedsWorktree,
     bool IsPlanStage,
-    Func<PersistedSession, string, string, Task<RoundWork>> MakeWork);
+    Func<PersistedSession, string, string, Task<RoundWork>> MakeWork)
+{
+    /// <summary>
+    /// Which session this run is about: empty for the branch's own, the document's identity for a
+    /// document round.
+    /// </summary>
+    public string Document { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How many reviewers ONE vendor runs in this round — the multiplier the deadline is derived
+    /// from.
+    /// </summary>
+    /// <remarks>
+    /// <b>Told, not derived from <see cref="IsPlanStage"/>.</b> It used to be
+    /// <c>isPlanStage ? 1 : CodeRoleNames.Length</c>, which is right for the two stages that
+    /// existed and silently wrong for a third: a document round reads a document and has no
+    /// checkout, so it would have taken the plan stage's ONE — a lower bound, and the wrong
+    /// direction for a deadline to be wrong in, where the file's own remark says an upper bound is
+    /// the right one.
+    /// </remarks>
+    public int RolesPerVendor { get; init; } = 1;
+}

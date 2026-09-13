@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
-import { MAX_ACTIVE_PER_STAGE, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
+import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
 
 /**
@@ -145,10 +145,24 @@ test('the plan stage and the code stage are drawn apart', () => {
   assert.ok(html.indexOf('data-id="Architecture"') > html.indexOf('<h2>Code review</h2>'));
 });
 
-test('a role that is not a programming task says it takes part in no round yet', () => {
+test('a RESULT-stage document role no longer says it takes part in no round', () => {
+  // It was true for two plans and stopped being true the day review_document shipped. A page that
+  // went on saying it would be telling a person their role does nothing while the round it is in
+  // is running.
   const rows: RoleRow[] = [{ id: 'Brief', stage: RESULT_STAGE, programmingTask: false, prompts: [{ id: 'brief-general' }] }];
 
-  assert.ok(block(rolesHtml(state({ rows }), 'n0nce'), 'Brief').includes('takes part in no round yet'));
+  assert.ok(!block(rolesHtml(state({ rows }), 'n0nce'), 'Brief').includes('takes part in no round'));
+});
+
+test('a PLAN-stage document role still says it takes part in no round', () => {
+  // The fourth bucket, which this plan deliberately did not build: composed, counted, stored, and
+  // run by nothing. "Not built yet" and "does not exist" are different states, and the page is
+  // where a person meets the difference — with the way out named.
+  const rows: RoleRow[] = [{ id: 'Brief', stage: PLAN_STAGE, programmingTask: false, prompts: [{ id: 'brief-general' }] }];
+  const drawn = block(rolesHtml(state({ rows }), 'n0nce'), 'Brief');
+
+  assert.ok(drawn.includes('takes part in no round yet'));
+  assert.ok(drawn.includes('review_document'), 'and the sentence says what to do about it');
 });
 
 test('the page escapes what a person typed, wherever they typed it', () => {
@@ -308,7 +322,7 @@ test('the page says a new role will arrive switched off when the stage is full',
   // It does arrive switched off, which is honest — but the person finds that out AFTER clicking,
   // from a hint on a role they have just created. Saying it beside the button is the same sentence
   // one step earlier. (local, second code round.)
-  const full = Array.from({ length: MAX_ACTIVE_PER_STAGE }, (_, i) => ({
+  const full = Array.from({ length: MAX_ACTIVE_PER_BUCKET }, (_, i) => ({
     id: `Extra${i}`, stage: RESULT_STAGE, active: true,
   }));
   const off = BUILTIN_ROLES.filter((r) => r.stage !== PLAN_STAGE).map((r) => ({ id: r.id, active: false }));

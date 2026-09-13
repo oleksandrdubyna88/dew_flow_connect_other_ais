@@ -39,6 +39,8 @@ public sealed class RolePromptsTests
         ["Architecture"] = "ARCHITECTURE reviewer",
         ["SecurityReliability"] = "SECURITY AND RELIABILITY",
         ["UxDxPerformance"] = "CODE ONLY: no browser",
+        ["DocumentReview"] = "independent reviewer of a DOCUMENT",
+        ["DocumentSummary"] = "Put the account in `notes`",
     };
 
     public static TheoryData<string> ShippedRoles()

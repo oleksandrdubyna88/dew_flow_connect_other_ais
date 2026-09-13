@@ -273,7 +273,15 @@ public static class RoundMachine
     {
         if (!s.AwaitingResolve)
         {
-            return new Transition.Refused("there is no completed round awaiting decisions — run a review first");
+            // The document clause exists because of the shape of the mistake, not the shape of the
+            // state: a caller that has just run a document round and resolves without naming the
+            // document lands on the BRANCH's session, which is idle and correct and has nothing to
+            // decide. Without the clause, the one sentence they are given sends them to run another
+            // review — the one thing that would make it worse.
+            return new Transition.Refused(
+                "there is no completed round awaiting decisions — run a review first. If you were "
+              + "resolving a DOCUMENT round, pass its document: a document review is its own "
+              + "session, keyed by the document rather than by the branch.");
         }
 
         // The override is judged by what it would CHANGE, not by how many rounds are left.

@@ -76,7 +76,7 @@ public sealed class BuiltinRoleCatalogTests
     }
 
     [Fact]
-    public void TheCatalog_IsTodaysFiveRolesAndTwentyFivePrompts_InTodaysOrder()
+    public void TheCatalog_IsTodaysSevenRolesAndTwentyNinePrompts_InTodaysOrder()
     {
         // The characterization of what `PromptCatalog.All` and `PanelConfig.AllRoles` were the day
         // the catalog became data. Ids are permanent — settings keys, session files and the rounds
@@ -87,7 +87,11 @@ public sealed class BuiltinRoleCatalogTests
         // exactly the change that must not be green: every `COAI_ROUNDS_ARCHITECTURE` and every row
         // already in a coai.db still says the old word. (codex, A1's second code round.)
         RoleCatalog.Builtin.Roles.Select(r => r.Id).Should().Equal(
-            "PlanCritique", "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance");
+            "PlanCritique", "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance",
+            // Plan 4's two, APPENDED — the order is the order a round runs the roles and the order
+            // the panel draws them, so inserting anywhere else would reshuffle five boxes a person
+            // has learned the positions of.
+            "DocumentReview", "DocumentSummary");
 
         // And the constants are those literals, so the rest of the file may keep reading them.
         (RoleCatalog.PlanRole, RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole,
@@ -97,11 +101,13 @@ public sealed class BuiltinRoleCatalogTests
 
         // Twenty-five, not twenty-six: four roles of six lenses and the conventions role's one.
         // The plan said twenty-six until this assertion was watched failing, which is the whole
-        // point of pinning a number instead of a shape.
-        RoleCatalog.Builtin.Roles.Sum(r => r.Prompts.Count).Should().Be(25);
+        // point of pinning a number instead of a shape. Twenty-nine since plan 4: the document
+        // role's three lenses and the summary role's one.
+        RoleCatalog.Builtin.Roles.Sum(r => r.Prompts.Count).Should().Be(29);
         RoleCatalog.Builtin.Roles.Select(r => r.Prompts.Count).Should().Equal(
-            [6, 1, 6, 6, 6],
-            "six choices per section, and the conventions role has one — the shape the operator asked for");
+            [6, 1, 6, 6, 6, 3, 1],
+            "six choices per section, and the conventions role has one — the shape the operator asked for; "
+            + "plan 4's document role has three lenses and its summary role one");
 
         // And each of the twenty-five by NAME. A prompt id is as permanent as a role id: it is the
         // file under `<dataDir>/prompts/`, the value stored in COAI_PROMPTS_PER_ROUND, and the
@@ -115,12 +121,23 @@ public sealed class BuiltinRoleCatalogTests
             "architecture", "arch-boundaries", "arch-evolution", "arch-coupling", "arch-naming", "arch-testability",
             "security-reliability", "sec-memory-leaks", "sec-attack", "sec-blast-radius", "sec-concurrency", "sec-supply-chain",
             "uxdx-performance", "perf-scale", "dx-ergonomics", "perf-first-run", "perf-wasted-work", "ux-undo",
+            "document-review", "document-decisions", "document-reader", "document-summary",
         ]);
 
         RoleCatalog.Builtin.ById(RoleCatalog.PlanRole)!.Stage.Should().Be(RoleStages.Plan);
         RoleCatalog.Builtin.Roles.Where(r => r.Id != RoleCatalog.PlanRole)
-            .Should().OnlyContain(r => r.Stage == RoleStages.Result && r.ProgrammingTask,
-                "every shipped role but the plan one reviews a diff");
+            .Should().OnlyContain(r => r.Stage == RoleStages.Result,
+                "every shipped role but the plan one belongs to the result stage");
+
+        // And the BUCKET each shipped role is in, which is what a round is now selected by. Pinned
+        // as a list rather than as a predicate, because the mistake this guards is a role changing
+        // kind — which no predicate about "the document ones" could catch, since it would move with
+        // the role it was describing.
+        RoleCatalog.Builtin.Roles.Select(r => r.Bucket).Should().Equal([
+            RoleBuckets.PlanCode,
+            RoleBuckets.ResultCode, RoleBuckets.ResultCode, RoleBuckets.ResultCode, RoleBuckets.ResultCode,
+            RoleBuckets.ResultDocument, RoleBuckets.ResultDocument,
+        ]);
     }
 
     [Fact]

@@ -197,11 +197,18 @@ export const DEFAULTS: CoaiSettings = {
   // where a real change could not pass: a plan round that regularly produces six findings and a
   // code role that produces five are not failures, and a gate that says they are gets ignored,
   // which is the one failure mode a gate cannot survive.
-  rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1 },
-  thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
-  // Every code role on. The four keys are also what the reader iterates, so this object is the list
-  // of roles that HAVE a switch — the plan role is absent from it deliberately.
-  roleEnabled: { Conventions: true, Architecture: true, SecurityReliability: true, UxDxPerformance: true },
+  // The two document roles take the same shipped numbers as a code role, because the server's
+  // fallback does: `ShippedFor` asks whether the role's STAGE is the plan stage, and a document
+  // role's stage is `result`. A different number here would be a panel showing one budget while
+  // the server ran another, which is the whole thing this object exists to prevent.
+  rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1,
+    DocumentReview: 1, DocumentSummary: 1 },
+  thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5,
+    DocumentReview: 5, DocumentSummary: 5 },
+  // Every code and document role on. These keys are also what the reader iterates, so this object
+  // is the list of roles that HAVE a switch — the plan role is absent from it deliberately.
+  roleEnabled: { Conventions: true, Architecture: true, SecurityReliability: true, UxDxPerformance: true,
+    DocumentReview: true, DocumentSummary: true },
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,

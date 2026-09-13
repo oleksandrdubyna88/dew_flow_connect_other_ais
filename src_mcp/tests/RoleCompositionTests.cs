@@ -54,6 +54,10 @@ public sealed class RoleCompositionTests
         config.RolesForRound(Stage.PlanReview, round: 1).Should().Equal("PlanCritique");
         config.RolesForRound(Stage.CodeReview, round: 1).Should().Equal(
             "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance");
+        // Plan 4's two, shipped switched on so review_document works out of the box — and in their
+        // OWN round, which is the whole of what that plan changed about selection.
+        config.RolesForRound(Stage.DocumentReview, round: 1).Should().Equal(
+            "DocumentReview", "DocumentSummary");
 
         config.For("PlanCritique").Should().Be(PanelConfig.PlanDefault);
         foreach (var role in config.RolesForRound(Stage.CodeReview, round: 1))
@@ -61,7 +65,9 @@ public sealed class RoleCompositionTests
             config.For(role).Should().Be(PanelConfig.CodeDefault, $"{role}'s shipped budget");
         }
 
-        config.Catalog.Roles.Should().OnlyContain(r => r.Active && r.BuiltIn && r.ProgrammingTask);
+        config.Catalog.Roles.Should().OnlyContain(r => r.Active && r.BuiltIn);
+        config.Catalog.Roles.Count(r => !r.ProgrammingTask).Should().Be(2,
+            "the product ships two DOCUMENT roles since plan 4, and they are shipped roles like any other");
         config.Catalog.Dropped.Should().BeEmpty();
     }
 
@@ -90,6 +96,10 @@ public sealed class RoleCompositionTests
             ("Architecture", true, true, RoleStages.Result, true),
             ("SecurityReliability", true, true, RoleStages.Result, true),
             ("UxDxPerformance", true, true, RoleStages.Result, true),
+            // The shipped document roles sit in the catalog beside the code ones, in seed order,
+            // and neither kind is affected by what the other does with its five slots.
+            ("DocumentReview", true, true, RoleStages.Result, false),
+            ("DocumentSummary", true, true, RoleStages.Result, false),
             ("Requirements", true, false, RoleStages.Result, true),
             ("Risks", true, false, RoleStages.Result, true),
             ("Brief", true, false, RoleStages.Plan, true));
@@ -451,13 +461,19 @@ public sealed class RoleCompositionTests
     {
         // "the result stage" alone would read as a lie to somebody whose four other document roles
         // are the only ones there. (gemini, this story's code round.)
-        var entries = Enumerable.Range(1, 6)
+        //
+        // FOUR added, not six: the product itself ships two document roles since plan 4, so the
+        // fifth slot is the last free one and the fifth added role is the one over the line. The
+        // shipped ones count towards the limit exactly like anybody else's, which is the property
+        // this now also pins.
+        var entries = Enumerable.Range(1, 4)
             .Select(i => Custom($"Doc{i}", RoleStages.Result, $"doc{i}-general") with { ProgrammingTask = false })
             .ToArray();
 
         var catalog = Composed(entries);
 
-        catalog.Dropped.Should().ContainSingle().Which.Should().Contain("Doc6").And.Contain("document");
+        catalog.Dropped.Should().ContainSingle().Which.Should().Contain("Doc4").And.Contain("document");
+        catalog.InBucket(RoleBuckets.ResultDocument).Should().HaveCount(RoleComposition.MaxActivePerBucket);
     }
 
     [Fact]

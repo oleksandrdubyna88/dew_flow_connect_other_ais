@@ -209,10 +209,14 @@ test('the manifest’s own default vendor list matches the one the code ships', 
  * nothing in the fan-out arithmetic, and never persist its switch — the panel and the server
  * describing different rounds, silently. Named by the gate on the code round; this is the guard.</p>
  */
-test('every code role has a switch, and every switch names a code role', () => {
-  const code = ROLES.filter((r) => r.stage === 'code').map((r) => r.id).sort();
+test('every role with a round has a switch, and every switch names one', () => {
+  // Both buckets that HAVE a round, since plan 4: a document role is switchable for exactly the
+  // reason a code role is — it takes part in a round, so a person must be able to take it out.
   const switchable = Object.keys(DEFAULTS.roleEnabled).sort();
+  const withRounds = ROLES.filter((r) => r.stage === 'code' || r.stage === 'document')
+    .map((r) => r.id).sort();
 
-  assert.deepEqual(switchable, code, 'the switch list and the code role list have drifted apart');
+  assert.deepEqual(switchable, withRounds, 'the switch list and the roles that run have drifted apart');
   assert.ok(!switchable.includes('PlanCritique'), 'the plan role must never gain a switch');
+  assert.ok(switchable.includes('DocumentReview'), 'a document role is switchable like any other');
 });

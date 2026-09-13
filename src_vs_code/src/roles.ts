@@ -41,8 +41,14 @@ export const RESULT_STAGE = 'result';
  * <p>The server caps at the same number and names what it capped, so nothing here is load-bearing
  * for correctness — it is load-bearing for honesty. A page that let somebody tick a sixth and then
  * showed them five would be a page that lies about what it saved.</p>
+ *
+ * <p><b>Per BUCKET, not per stage.</b> It was per stage here and per bucket on the server
+ * (`active[role.Bucket]`), and the divergence was invisible only because document roles ran in
+ * nothing: the day plan 4 gave them a round, a person with the five shipped code roles switched on
+ * could not switch on a single document role — the page refusing on behalf of a server that would
+ * have accepted it.</p>
  */
-export const MAX_ACTIVE_PER_STAGE = 5;
+export const MAX_ACTIVE_PER_BUCKET = 5;
 
 /**
  * The longest id this will generate.
@@ -302,20 +308,65 @@ export function stageOf(row: RoleRow): string {
   return row.stage ?? builtInFor(row.id)?.stage ?? RESULT_STAGE;
 }
 
+/** Whether a row reviews a DIFF, falling back to the built-in's and then to yes, as the server does. */
+export function isProgramming(row: RoleRow): boolean {
+  return row.programmingTask ?? builtInFor(row.id)?.programmingTask ?? true;
+}
+
+/**
+ * Which roles run TOGETHER: a stage and a kind of work.
+ *
+ * <p>The server's `RoleDefinition.Bucket`, spelled the same way because the two are compared by
+ * eye: a round's roster, the five-active limit and the page's grouping all read this, and a second
+ * spelling of it here would be a second thing to keep level with the other half.</p>
+ */
+export function bucketOf(row: RoleRow): RoleBucket {
+  return `${stageOf(row)}:${isProgramming(row) ? 'code' : 'document'}` as RoleBucket;
+}
+
+export const PLAN_CODE = 'plan:code';
+export const RESULT_CODE = 'result:code';
+
+/** The bucket plan 4 gave a round to. */
+export const RESULT_DOCUMENT = 'result:document';
+
+/** And the one it deliberately did not: stored, composed, counted, run by nothing. */
+export const PLAN_DOCUMENT = 'plan:document';
+
+/**
+ * The four buckets, as a TYPE.
+ *
+ * <p>Not decoration. A bucket and a stage are both strings, so every call that used to pass
+ * `RESULT_STAGE` to `activeCount` would have gone on compiling and started answering ZERO — a
+ * page that silently thinks no role is active anywhere, which is exactly the shape of the defect
+ * plan 2's own review found in `composed`. The union makes each of those a compile error instead,
+ * which is how they were all found.</p>
+ */
+export type RoleBucket =
+  typeof PLAN_CODE | typeof PLAN_DOCUMENT | typeof RESULT_CODE | typeof RESULT_DOCUMENT;
+
+/** The bucket a row would be in AT another stage — what a move is checked against. */
+export function bucketAt(row: RoleRow, stage: string): RoleBucket {
+  return bucketOf({ ...row, stage });
+}
+
 /** Whether a row takes part at all, defaulting to yes as the server defaults it. */
 export function isActive(row: RoleRow): boolean {
   return row.active ?? true;
 }
 
 /**
- * How many roles are active in one stage — the shipped ones, as the configured rows leave them.
+ * How many roles are active in one BUCKET — the shipped ones, as the configured rows leave them.
  *
  * <p>Counted over the composed picture rather than over the rows, because a row that says nothing
  * about a built-in leaves it active and a row that says `active: false` switches it off. The
  * server's cap is over the same picture, so a count taken any other way would disagree with it.</p>
+ *
+ * <p>It took a STAGE until plan 4, which is the same expression with the kind left out — and the
+ * kind is exactly what decides which roles share a round.</p>
  */
-export function activeCount(rows: readonly RoleRow[], stage: string): number {
-  return composed(rows).filter((r) => stageOf(r) === stage && isActive(r)).length;
+export function activeCount(rows: readonly RoleRow[], bucket: RoleBucket): number {
+  return composed(rows).filter((r) => bucketOf(r) === bucket && isActive(r)).length;
 }
 
 /**

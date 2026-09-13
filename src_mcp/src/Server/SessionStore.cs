@@ -234,9 +234,13 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
-    public PersistedSession? Load(string repoPath, string branch)
+    /// <param name="document">
+    /// Which DOCUMENT's session, or empty for the branch's own. Absent is the default, so every
+    /// caller that predates plan 4 keeps loading exactly the session it always loaded.
+    /// </param>
+    public PersistedSession? Load(string repoPath, string branch, string document = "")
     {
-        var file = FileFor(repoPath, branch);
+        var file = FileFor(repoPath, branch, document);
         if (!File.Exists(file))
         {
             return null;
@@ -292,7 +296,9 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     private void Write(PersistedSession session)
     {
         Directory.CreateDirectory(SessionsDir);
-        var file = FileFor(session.State.RepoPath, session.State.Branch);
+        // The document comes off the STATE rather than from a parameter: a session knows what it
+        // is about, and a save that had to be told would be a save that could be told wrong.
+        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document);
         // A scratch name per WRITE, and that is a crash fix rather than a nicety. It used to be
         // `<session>.json.tmp` — one fixed path — and this machine runs several MCP clients at once,
         // each with a server of its own, sharing a data directory; a nine-reviewer round saves on
@@ -470,10 +476,10 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// Where one session lives. Internal so a test can plant a file written by an OLDER build — the
     /// compatibility this store owns cannot be checked without writing the old shape to disk.
     /// </summary>
-    internal string FileFor(string repoPath, string branch)
+    internal string FileFor(string repoPath, string branch, string document = "")
     {
         // The session key is not a valid file name; hash it and keep a readable prefix.
-        var key = SessionKey.For(repoPath, branch);
+        var key = SessionKey.For(repoPath, branch, document);
         var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(key)))[..16];
         return Path.Combine(SessionsDir, $"session-{hash}.json");

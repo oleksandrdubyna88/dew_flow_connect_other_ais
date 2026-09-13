@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
-import { MAX_ACTIVE_PER_STAGE, PLAN_STAGE, RESULT_STAGE, composed, isActive, type RoleRow } from '../roles';
+import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, composed, isActive, type RoleRow } from '../roles';
 import { promptBelongsTo, rowsAfter, type RowsOutcome } from '../rolesEdit';
 import type { RolesCommand } from '../rolesPage';
 
@@ -127,7 +127,7 @@ test('switching on a role that is already on is not a sixth', () => {
 /** The result stage with exactly five active roles in it, and a sixth switched off. */
 function fullStage(): readonly RoleRow[] {
   const off: RoleRow[] = code.map((r) => ({ id: r.id, active: false }));
-  const five: RoleRow[] = Array.from({ length: MAX_ACTIVE_PER_STAGE }, (_, i) => ({
+  const five: RoleRow[] = Array.from({ length: MAX_ACTIVE_PER_BUCKET }, (_, i) => ({
     id: `Extra${i}`, stage: RESULT_STAGE, active: true,
   }));
 
@@ -138,7 +138,7 @@ test('adding a role into a full stage stores it switched off rather than lying a
   // `added()` always wrote `active: true`. With five already on, the server caps and the person is
   // looking at a role whose box is ticked and which is in no round.
   const off = code.map((r) => ({ id: r.id, active: false }));
-  const five = Array.from({ length: MAX_ACTIVE_PER_STAGE }, (_, i) => ({
+  const five = Array.from({ length: MAX_ACTIVE_PER_BUCKET }, (_, i) => ({
     id: `Extra${i}`, stage: RESULT_STAGE, active: true,
   }));
   const after = rowsOf(rowsAfter([...off, ...five], { kind: 'add' }));

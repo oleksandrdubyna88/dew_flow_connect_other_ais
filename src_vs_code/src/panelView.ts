@@ -17,7 +17,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
-import { composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
@@ -1332,11 +1332,12 @@ ${on ? pickers : ''}
 </div>`;
   };
 
-  const plan = all.filter((r) => stageOf(r) === 'plan').map(roleRow).join('\n');
-  // A role stored as NOT a programming task takes part in no round — the stage that reviews a
-  // document rather than a diff is a later plan — so it is not drawn among the roles that do. It is
-  // on the roles page, where it says as much about itself.
-  const code = all.filter((r) => stageOf(r) !== 'plan' && (r.programmingTask ?? true)).map(roleRow).join('\n');
+  // By BUCKET, which is what a ROUND is selected by. A document role used to be filtered out
+  // here because it took part in nothing; since plan 4 it has a round, and a role with a round
+  // but no budget and no switch on this panel is a role a person cannot configure.
+  const plan = all.filter((r) => bucketOf(r) === PLAN_CODE).map(roleRow).join('\n');
+  const code = all.filter((r) => bucketOf(r) === RESULT_CODE).map(roleRow).join('\n');
+  const documents = all.filter((r) => bucketOf(r) === RESULT_DOCUMENT).map(roleRow).join('\n');
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>
@@ -1365,6 +1366,11 @@ ${roleSwitchSkew(state.server, s)}
 ${conventionsSkew(state.server)}
 ${customRolesSkew(state.server, s)}
 ${code}
+</div>
+<div class="role-group">
+  <div class="group-head">Document stage</div>
+  <div class="hint">What <code>review_document</code> runs: reviewers that read a DOCUMENT rather than a diff \u2014 a specification, a policy, a proposal. No checkout, no change, and no plan round before it. A document review is its own session, keyed by the document, so one branch holds as many of them as you like.</div>
+${documents}
 </div>
 <div class="field">
   <button type="button" class="run" data-command="editRoles">Edit roles…</button>

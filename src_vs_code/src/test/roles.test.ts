@@ -3,11 +3,16 @@ import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import {
-  MAX_ACTIVE_PER_STAGE,
+  MAX_ACTIVE_PER_BUCKET,
   MAX_ROLE_ID_LENGTH,
+  PLAN_CODE,
+  PLAN_DOCUMENT,
   PLAN_STAGE,
+  RESULT_CODE,
+  RESULT_DOCUMENT,
   RESULT_STAGE,
   activeCount,
+  bucketOf,
   builtInFor,
   composed,
   idFor,
@@ -17,6 +22,7 @@ import {
   promptIdsInUse,
   rolesFrom,
   stageOf,
+  type RoleRow,
 } from '../roles';
 
 /**
@@ -198,18 +204,19 @@ test('a row that repeats a shipped prompt id does not double it', () => {
 });
 
 test('the active count is over the composed picture, which is what the server caps', () => {
-  const code = activeCount([], RESULT_STAGE);
-  assert.strictEqual(code, BUILTIN_ROLES.filter((r) => r.stage === RESULT_STAGE).length);
-
-  assert.strictEqual(activeCount([{ id: 'Architecture', active: false }], RESULT_STAGE), code - 1);
+  const code = activeCount([], RESULT_CODE);
   assert.strictEqual(
-    activeCount([{ id: 'Requirements', stage: RESULT_STAGE, prompts: [{ id: 'requirements-general' }] }], RESULT_STAGE),
+    code, BUILTIN_ROLES.filter((r) => r.stage === RESULT_STAGE && r.programmingTask).length);
+
+  assert.strictEqual(activeCount([{ id: 'Architecture', active: false }], RESULT_CODE), code - 1);
+  assert.strictEqual(
+    activeCount([{ id: 'Requirements', stage: RESULT_STAGE, prompts: [{ id: 'requirements-general' }] }], RESULT_CODE),
     code + 1,
   );
 });
 
 test('the cap is the number the server caps at', () => {
-  assert.strictEqual(MAX_ACTIVE_PER_STAGE, 5);
+  assert.strictEqual(MAX_ACTIVE_PER_BUCKET, 5);
 });
 
 // ---------- a row naming a built-in is an OVERRIDE, and the SERVER decides what it may override ----------
@@ -336,4 +343,47 @@ test('a field the catalog does not know survives being composed', () => {
     .find((r) => r.id === 'Requirements')!;
 
   assert.strictEqual((kept as unknown as Record<string, unknown>)['kind'], 'document');
+});
+
+// ---------- the five-active limit means the same thing in both halves (plan 4) ----------
+
+test('the count is per BUCKET, so five code roles do not block a document one', () => {
+  // The server has counted per bucket since plan 1 (`active[role.Bucket]`) and this side counted
+  // per STAGE. It was invisible while document roles ran in nothing; the day review_document
+  // shipped it became step 2 of the manager's story — five shipped code roles active, and the page
+  // refusing to switch on a single document role that the server would have accepted.
+  const doc: RoleRow = {
+    id: 'Requirements', stage: RESULT_STAGE, programmingTask: false,
+    prompts: [{ id: 'requirements-general' }],
+  };
+
+  assert.strictEqual(activeCount([doc], RESULT_CODE), activeCount([], RESULT_CODE),
+    'adding a document role changes no code count');
+  assert.strictEqual(activeCount([doc], RESULT_DOCUMENT), activeCount([], RESULT_DOCUMENT) + 1);
+});
+
+test('a shipped document role is in the document bucket and no other', () => {
+  assert.ok(activeCount([], RESULT_DOCUMENT) >= 1, 'the product ships document roles since plan 4');
+  assert.strictEqual(
+    activeCount([], RESULT_CODE) + activeCount([], RESULT_DOCUMENT) + activeCount([], PLAN_CODE),
+    BUILTIN_ROLES.length,
+    'every shipped role is in exactly one bucket',
+  );
+});
+
+test('a row that is not a programming task is in a document bucket', () => {
+  assert.strictEqual(
+    bucketOf({ id: 'Requirements', stage: RESULT_STAGE, programmingTask: false }), RESULT_DOCUMENT);
+  assert.strictEqual(
+    bucketOf({ id: 'Brief', stage: PLAN_STAGE, programmingTask: false }), PLAN_DOCUMENT);
+  assert.strictEqual(bucketOf({ id: 'Perf', stage: RESULT_STAGE }), RESULT_CODE,
+    'absent means a programming task, as the server defaults it');
+});
+
+test('a row cannot move a shipped role out of its bucket', () => {
+  // The server never takes stage or kind from a row naming a built-in, and `composed` mirrors that.
+  const moved = composed([{ id: 'Architecture', stage: PLAN_STAGE, programmingTask: false }])
+    .find((r) => r.id === 'Architecture');
+
+  assert.strictEqual(bucketOf(moved!), RESULT_CODE);
 });

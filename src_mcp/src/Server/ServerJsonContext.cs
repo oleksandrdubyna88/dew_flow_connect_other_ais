@@ -72,7 +72,20 @@ public sealed record ReviewAnswer(
     /// followed. Empty when no switch is on, which is every release before this one.
     /// </summary>
     IReadOnlyList<string>? Commands = null,
-    string? CommandsPreamble = null);
+    string? CommandsPreamble = null,
+    /// <summary>
+    /// Each reviewer's prose about the whole artefact, when its prompt asked for one — the SUMMARY.
+    /// </summary>
+    /// <remarks>
+    /// Null on every code round, and on any document round whose reviewers wrote none. Never merged
+    /// and never deduplicated: findings are merged because two vendors agreeing is stronger evidence
+    /// of one defect, and three vendors' accounts of one document are three accounts — merging them
+    /// destroys the only property that makes reading them worth the tokens.
+    /// </remarks>
+    IReadOnlyList<ReviewerNote>? Notes = null);
+
+/// <summary>One reviewer's prose, with its name on it.</summary>
+public sealed record ReviewerNote(string Provider, string Role, string Notes);
 
 /// <summary>
 /// One round's consumption. Tokens come from every vendor that reports them; <paramref name="Usd"/>

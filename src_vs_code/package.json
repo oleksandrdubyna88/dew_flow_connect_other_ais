@@ -394,7 +394,9 @@
             "Conventions": 1,
             "Architecture": 1,
             "SecurityReliability": 1,
-            "UxDxPerformance": 1
+            "UxDxPerformance": 1,
+            "DocumentReview": 1,
+            "DocumentSummary": 1
           },
           "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
         },
@@ -404,9 +406,11 @@
             "Conventions": true,
             "Architecture": true,
             "SecurityReliability": true,
-            "UxDxPerformance": true
+            "UxDxPerformance": true,
+            "DocumentReview": true,
+            "DocumentSummary": true
           },
-          "markdownDescription": "Which CODE-review roles take part. Unticking one means that role does not take part in the round at all — no reviewer is launched for it and its findings count towards nothing. Its rounds, threshold and prompts are kept and come back unchanged when it is ticked again. Plan review is not affected."
+          "markdownDescription": "Which CODE- and DOCUMENT-review roles take part. Unticking one means that role does not take part in the round at all — no reviewer is launched for it and its findings count towards nothing. Its rounds, threshold and prompts are kept and come back unchanged when it is ticked again. Plan review is not affected."
         },
         "coai.thresholds": {
           "type": "object",
@@ -415,7 +419,9 @@
             "Conventions": 5,
             "Architecture": 5,
             "SecurityReliability": 5,
-            "UxDxPerformance": 5
+            "UxDxPerformance": 5,
+            "DocumentReview": 5,
+            "DocumentSummary": 5
           },
           "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },

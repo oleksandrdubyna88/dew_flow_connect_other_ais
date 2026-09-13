@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import {
   claudeSnippet,
+  DOCUMENT_VERSION,
   SNIPPET_BODY_SHA,
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
@@ -72,17 +73,40 @@ test('a copy from the FUTURE is not called old', () => {
  * the number does not, and every pasted copy reports itself current forever. So the number is
  * pinned to the text. Editing the snippet fails this test until both are changed together, which is
  * the only moment either is cheap.</p>
+ *
+ * <p><b>There are TWO numbers now, and only one of them can move.</b> `SNIPPET_VERSION` is the
+ * marker written inside `coai-review-gate.md`, one of the 24 rule bodies the conventions repository
+ * hashes against its migration baseline — so that file cannot be edited and its number cannot be
+ * raised. Whatever changes about the pasted text, `DOCUMENT_VERSION` is the half that records it,
+ * until the inventory retires and the two rules become one again.</p>
  */
-test('the snippet text and its version number move together', () => {
-  const body = claudeSnippet().replace(/<!-- coai-snippet v\d+ -->\n?/, '');
+test('the snippet text and its version numbers move together', () => {
+  const body = claudeSnippet()
+    .replace(/<!-- coai-snippet v\d+ -->\n?/, '')
+    .replace(/<!-- coai-document v\d+ -->\n?/, '');
   const sha = createHash('sha256').update(body).digest('hex').slice(0, 16);
 
   assert.equal(
     sha,
     SNIPPET_BODY_SHA,
-    `The snippet text changed. Raise SNIPPET_VERSION to ${SNIPPET_VERSION + 1} and set `
+    `The snippet text changed. Raise DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} and set `
       + `SNIPPET_BODY_SHA to '${sha}'. Both, together — a version that does not move with the text `
-      + 'tells every pasted copy it is current forever, which is the defect this exists to catch.',
+      + 'tells every pasted copy it is current forever, which is the defect this exists to catch. '
+      + `(SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen against the migration `
+      + 'baseline, so its marker cannot be raised.)',
+  );
+});
+
+/**
+ * A paste made before the document gate existed is OLDER, even though its gate half is current.
+ */
+test('a paste with no document half is reported as older', () => {
+  const gateOnly = `${claudeSnippet().split('<!-- coai-document')[0]}`;
+
+  assert.deepEqual(
+    snippetStatus(gateOnly),
+    { kind: 'older', found: SNIPPET_VERSION, current: SNIPPET_VERSION },
+    'the AI obeying it will never call review_document, which is what "older" is for',
   );
 });
 
@@ -91,16 +115,22 @@ test('the snippet text and its version number move together', () => {
  * Missing sources fail before compile; this check independently compares the generated body
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
-test('the mounted shared rule body is byte-identical to what the menu hands out', () => {
-  const mounted = mountedRuleFile();
-  assert.ok(fs.existsSync(mounted), 'run git submodule update --init .agents/conventions');
-  const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
-  assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
+test('the mounted shared rules are byte-identical to what the menu hands out', () => {
+  // TWO files since plan 4, joined by a newline. The gate rule could not grow a section: it is one
+  // of the 24 bodies the conventions repository hashes against its migration baseline, so the
+  // document flow is a second rule file — and this is what proves both of them travel verbatim.
+  const bodies = [mountedRuleFile(), mountedDocumentRuleFile()].map((mounted) => {
+    assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
+    const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
+    assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
+
+    return ruleBody(source);
+  });
 
   assert.equal(
-    ruleBody(source),
+    bodies.join('\n'),
     claudeSnippet(),
-    `${mounted} differs from the generated delivery. Run npm run prepare:gate; edit the canonical source only.`,
+    'the mounted rules differ from the generated delivery. Run npm run prepare:gate; edit the canonical source only.',
   );
 });
 
@@ -130,6 +160,10 @@ function ruleBody(text: string): string {
 /** Source and compiled tests both live three directories below this checkout's root. */
 function mountedRuleFile(): string {
   return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-review-gate.md');
+}
+
+function mountedDocumentRuleFile(): string {
+  return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-document-gate.md');
 }
 
 test('the instruction files are searched BEFORE the mounted rule', () => {

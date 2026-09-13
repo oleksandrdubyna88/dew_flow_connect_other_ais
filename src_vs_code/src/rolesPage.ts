@@ -1,4 +1,4 @@
-import { MAX_ACTIVE_PER_STAGE, PLAN_STAGE, RESULT_STAGE, activeCount, builtInFor, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, type RoleRow } from './roles';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { escapeHtml } from './webviewHtml';
 
@@ -165,18 +165,18 @@ export function isShippedPrompt(roleId: string, promptId: string): boolean {
 /**
  * Whether this role's switch may be turned ON.
  *
- * <p>Five active per stage, and the sixth is refused HERE rather than dropped by the server. A page
+ * <p>Five active per BUCKET, and the sixth is refused HERE rather than dropped by the server. A page
  * that let somebody tick a sixth and then showed them five would be a page that lies about what it
  * saved — the server does cap, and it names what it capped, so nothing is at risk except the truth.</p>
  */
 export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return isActive(role) || activeCount(rows, stageOf(role)) < MAX_ACTIVE_PER_STAGE;
+  return isActive(role) || activeCount(rows, bucketOf(role)) < MAX_ACTIVE_PER_BUCKET;
 }
 
 /**
  * Whether this role's switch may be turned OFF.
  *
- * <p>The last one standing in a stage cannot be: a stage with no role in it produces a round with
+ * <p>The last one standing in a bucket cannot be: a bucket with no role in it produces a round with
  * no reviewer, which the session counts as unresolved and never lets a person retry. The server
  * refuses such a round with a sentence — `review_plan` and `review_code` both do — and refusing it
  * HERE, where the pointer is, beats refusing it at round time, after somebody has waited for a
@@ -186,7 +186,26 @@ export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
  * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
  */
 export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean {
-  return !isActive(role) || activeCount(rows, stageOf(role)) > 1;
+  return !isActive(role) || activeCount(rows, bucketOf(role)) > 1;
+}
+
+/**
+ * What a role's KIND means for whether it runs — said only where the answer is surprising.
+ *
+ * <p>Until plan 4 every non-programming role ran in nothing and every one of them carried the same
+ * sentence. Now one of the two buckets HAS a round, so repeating it there would be a page saying a
+ * role does nothing while the round it takes part in is running — and dropping it from the other
+ * would leave the one case that is still true unsaid. "Not built yet" and "does not exist" are
+ * different states, and this is where a person meets the difference.</p>
+ */
+function kindHint(role: RoleRow): string {
+  if (isProgramming(role) || stageOf(role) !== PLAN_STAGE) {
+    return '';
+  }
+
+  return '<p class="hint">A plan-stage role that is not a programming task is kept and takes part in '
+    + 'no round yet — there is no plan gate for non-programming work. Move it to the result stage and '
+    + '<code>review_document</code> will run it.</p>';
 }
 
 function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>): string {
@@ -234,7 +253,7 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
     ${may ? '' : last
       ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
       : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
-    ${(role.programmingTask ?? true) ? '' : '<p class="hint">A role that is not a programming task is kept and takes part in no round yet — the stage that reviews a document rather than a diff is still being built.</p>'}
+    ${kindHint(role)}
     ${shipped ? '<p class="hint">A role this product ships. Its id, its name, its stage and its kind are fixed — they key your settings, your open sessions and every round already recorded, and the review server reads none of them from your configuration. Its switch and its prompt text are yours.</p>' : ''}
   </div>
 ${prompts}
@@ -309,16 +328,26 @@ function older(version: string, since: string): boolean {
  *
  * <p>It does arrive switched off, which is honest — but the person found that out AFTER clicking,
  * from a hint on a role they had just created. Said beside the button, it is the same sentence one
- * step earlier. A new role always joins the code stage, so that is the only count to take.</p>
+ * step earlier. A new role always joins the code bucket of the result stage, so that is the only
+ * count to take.</p>
  */
 function stageIsFull(all: readonly RoleRow[]): boolean {
-  return activeCount(all, RESULT_STAGE) >= MAX_ACTIVE_PER_STAGE;
+  return activeCount(all, RESULT_CODE) >= MAX_ACTIVE_PER_BUCKET;
 }
 
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
-  const plan = all.filter((r) => stageOf(r) === PLAN_STAGE);
-  const code = all.filter((r) => stageOf(r) !== PLAN_STAGE);
+  // By BUCKET, not by "plan and everything else". That filter was right while there were two
+  // kinds of round, and drew a document role under a heading that was wrong about it the moment
+  // there were three.
+  const plan = all.filter((r) => bucketOf(r) === PLAN_CODE);
+  const code = all.filter((r) => bucketOf(r) === RESULT_CODE);
+  const documents = all.filter((r) => bucketOf(r) === RESULT_DOCUMENT);
+  // The fourth bucket has no round yet, so it gets no section of its own: its rows are drawn
+  // with the plan roles, where their stage says they belong, and their own hint says they take
+  // part in nothing. A section for something nothing runs would be a promise the product has
+  // not made.
+  const waiting = all.filter((r) => bucketOf(r) === PLAN_DOCUMENT);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -336,11 +365,15 @@ ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVer
 
 <h2>Plan review</h2>
 <p class="note">Roles that read the plan, before any code exists.</p>
-${plan.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+${[...plan, ...waiting].map((r) => roleBlock(all, r, state.texts)).join('\n')}
 
 <h2>Code review</h2>
 <p class="note">Roles that read the change itself.</p>
 ${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+
+<h2>Document review</h2>
+<p class="note">Roles that read a document rather than a diff — what <code>review_document</code> runs. A role here never sees a checkout or a change.</p>
+${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 
 <button type="button" class="add role" data-add="role">Add a role</button>
 ${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}

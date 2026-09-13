@@ -126,6 +126,14 @@ public sealed record RoleCatalog
     public const string SecurityRole = "SecurityReliability";
     public const string UxDxRole = "UxDxPerformance";
 
+    /// <summary>The two shipped roles that read a DOCUMENT rather than a diff (plan 4).</summary>
+    /// <remarks>
+    /// They ship switched on, so <c>review_document</c> works out of the box: a person whose work
+    /// product is a specification should not have to define a role before the gate will read one.
+    /// </remarks>
+    public const string DocumentRole = "DocumentReview";
+    public const string DocumentSummaryRole = "DocumentSummary";
+
     /// <summary>The one prompt that judges nothing but the project's own written rules.</summary>
     public const string ConventionsId = "conventions";
 

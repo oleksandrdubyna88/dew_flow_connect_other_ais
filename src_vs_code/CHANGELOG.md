@@ -56,6 +56,37 @@ two under a new name. Its row now says *open in another window*, pressing it tel
 and its trash button is gone for the same reason — the tab that holds it would simply write it
 back. Switch to that window to carry on with it.
 
+**The gate reviews a DOCUMENT.** A new tool, `review_document`, for work whose result is a
+specification, a policy, a proposal or a brief rather than a diff: several vendors' models read it
+independently and tell you what is wrong with it. It is what a review ROLE marked "not a programming
+task" has been waiting for since it became possible to write one — until today such a role was
+stored, shown, given a budget and a switch, and took part in no round at all.
+
+**And it gives you the summary.** Each reviewer also writes an account of the whole document in its
+own words, and the three come back separately rather than merged — three vendors' readings of one
+document is the point of asking three. It gates nothing: a summary is not a finding, whatever words
+are in it.
+
+**A document review is its own review.** It is keyed by the DOCUMENT rather than by the branch, so
+one branch holds as many as you like and you do not need a branch per document. Edit the document
+between rounds and it is still the same review; a review that has finished is re-opened deliberately
+rather than by accident.
+
+**Two new reviewers ship switched on** — *The document*, which reads for whether a reader could act
+on it, and *Summary*, which writes the account — and they have a section of their own in the panel,
+with rounds and a threshold like any other. Your own document roles sit beside them.
+
+**Two things that were quietly wrong are fixed on the way.** A finding about a document had no
+category it could use — the six were about code, and anything else was dropped — so there are now
+four more: clarity, completeness, consistency, feasibility. And the five-active limit was counted per
+STAGE here and per stage-AND-KIND by the server, which nobody could see while document roles ran in
+nothing: on the day they run, five active code roles would have blocked every document role you tried
+to switch on.
+
+A document is read only from inside the repository you opened the session for, and only if it really
+is text. Both refusals say what to do instead — this is a file that gets sent to other vendors'
+models, so where it may come from is not a detail.
+
 ## Extension 0.39.0 — 2026-09-13
 
 **A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.

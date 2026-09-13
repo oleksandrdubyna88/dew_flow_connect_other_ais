@@ -5,18 +5,35 @@ import { fileURLToPath } from 'node:url';
 
 const LIMIT = 256 * 1024;
 export const SOURCE = '.agents/conventions/common/coai-review-gate.md';
+
+/**
+ * The DOCUMENT gate, which is a second file rather than a section of the first.
+ *
+ * <p>`coai-review-gate.md` is one of the 24 rule bodies `tools/rules.test.mjs` hashes against
+ * baseline `5d6984eb` as evidence that the migration lost nothing, so a section added to it
+ * turns that suite red. The conventions repository has already settled what to do — a new file
+ * that names the frozen rule it extends — and this is the third time it has been done.</p>
+ */
+export const DOCUMENT_SOURCE = '.agents/conventions/common/coai-document-gate.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
 
 /** Strip delivery metadata only; separators in the instruction body remain verbatim. */
 export function gateBody(source) {
+  return ruleBody(source, SOURCE, /^<!-- coai-snippet v\d+ -->\n## Multi-model review gate \(ConnectOtherAIs\)/);
+}
+
+/** The same treatment for the document rule, held to its own marker. */
+export function documentBody(source) {
+  return ruleBody(source, DOCUMENT_SOURCE, /^<!-- coai-document v\d+ -->\n## Reviewing a DOCUMENT/);
+}
+
+function ruleBody(source, name, marker) {
   const text = source.replaceAll('\r\n', '\n');
-  if (!text.startsWith('---\n')) { throw new Error(`${SOURCE}: leading metadata is required`); }
+  if (!text.startsWith('---\n')) { throw new Error(`${name}: leading metadata is required`); }
   const end = text.indexOf('\n---\n', 4);
-  if (end < 0) { throw new Error(`${SOURCE}: unterminated leading metadata`); }
+  if (end < 0) { throw new Error(`${name}: unterminated leading metadata`); }
   const body = text.slice(end + 5);
-  if (!/^<!-- coai-snippet v\d+ -->\n## Multi-model review gate \(ConnectOtherAIs\)/.test(body)) {
-    throw new Error(`${SOURCE}: missing canonical gate marker`);
-  }
+  if (!marker.test(body)) { throw new Error(`${name}: missing canonical marker`); }
   return body;
 }
 
@@ -53,10 +70,12 @@ export function prepareGate(repo) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const body = gateBody(boundedSource(path.join(repo, SOURCE)));
+  const documents = documentBody(boundedSource(path.join(repo, DOCUMENT_SOURCE)));
   fs.mkdirSync(path.dirname(output), { recursive: true });
   try {
-    fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\nexport const GATE_RULE = '
-      + JSON.stringify(body) + ';\n', { flag: 'wx' });
+    fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\n'
+      + 'export const GATE_RULE = ' + JSON.stringify(body) + ';\n'
+      + 'export const DOCUMENT_RULE = ' + JSON.stringify(documents) + ';\n', { flag: 'wx' });
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
   return body;
