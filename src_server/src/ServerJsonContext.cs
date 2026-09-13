@@ -46,11 +46,31 @@ public sealed record CatalogVendorDto(
 /// refused, and the vendors are the last good ones — see <see cref="VendorCatalog"/> for why the
 /// disagreement is surfaced here rather than left in a log.
 /// </param>
+/// <param name="Roles">
+/// The review roles this server will run — the ones it ships with plus whatever <c>Coai:ExtraRoles</c>
+/// names. A client reads this to stop offering a role that is certain to be refused.
+/// <para><b>Absent means the five this product ships</b>, never "none" and never "any". A server
+/// older than this field sends no such property, and a client reading that as an empty set would
+/// silently drop every reviewer from every round; reading it as "anything goes" would send custom
+/// roles to a server certain to 400 them. An EMPTY list means the same as absent, because a server
+/// that HAS the field always accepts at least five — so <c>[]</c> is a bug rather than an
+/// instruction. This is the rule <c>remoteVendor</c> was lost twice for want of.</para>
+/// </param>
+/// <param name="AllowAnyRole">
+/// Whether this server accepts any well-formed role id at all, however it was named.
+/// <para>A separate boolean rather than a sentinel inside <see cref="Roles"/>. A marker such as
+/// <c>["*"]</c> was considered and refused: <c>roles.includes(role)</c> is the obvious client code
+/// and it answers <c>false</c> for every real role, so an entire server's configuration would be
+/// silently inverted by the one line anybody would write. A boolean cannot be read wrongly by
+/// accident. (gemini and codex, plan 3's plan round, both Blocking.)</para>
+/// </param>
 public sealed record CatalogDto(
     string ServerVersion,
     bool IsAdmin,
     IReadOnlyList<CatalogVendorDto> Vendors,
-    string Error);
+    string Error,
+    IReadOnlyList<string> Roles,
+    bool AllowAnyRole);
 
 /// <summary>What a client asks this server to run.</summary>
 /// <param name="TimeoutSeconds">

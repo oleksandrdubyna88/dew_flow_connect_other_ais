@@ -9,7 +9,8 @@ namespace CoaiServer;
 public static class CatalogEndpoints
 {
     public static void MapCatalogEndpoints(
-        this WebApplication app, VendorCatalogHost catalog, SlotRegistry slots, VendorHealthCache health, CallerFilter gate)
+        this WebApplication app, VendorCatalogHost catalog, SlotRegistry slots, VendorHealthCache health,
+        CallerFilter gate, AcceptedRoles roles)
     {
         // The CancellationToken is not decoration: a lambda whose ONLY parameter is HttpContext is
         // treated by the framework as a RequestDelegate, and a RequestDelegate returns Task, so the
@@ -38,8 +39,15 @@ public static class CatalogEndpoints
                     Summarise(slots.SlotsOf(vendor), now)))
                 .ToList();
 
+            // The ROLES come from the same instance the two gates refuse with, so what a client is
+            // told this server accepts and what it actually accepts cannot be two answers. A DTO
+            // property filled from anywhere else — or from nowhere, which is the likelier mistake —
+            // would leave `coai-mcp` excluding a role this server runs perfectly well, and every test
+            // here would still pass. (codex, plan 3's plan round.)
             return Results.Json(
-                new CatalogDto(Startup.Version, caller.IsAdmin, vendors, ErrorFor(current, catalog)),
+                new CatalogDto(
+                    Startup.Version, caller.IsAdmin, vendors, ErrorFor(current, catalog),
+                    roles.Names, roles.AllowAny),
                 ServerJsonContext.Default.CatalogDto);
         }).RequireCaller(gate);
     }
