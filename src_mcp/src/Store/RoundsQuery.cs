@@ -301,17 +301,7 @@ public static class RoundsQuery
         // without schema step 2 has no such column, and naming it would fail the whole rounds list —
         // which is the page, not a section of it. The consultations list can answer "none" for the
         // same skew; this one cannot answer anything. (Caught by story 4's own compatibility test.)
-        var counter = HasColumn(db, "rounds", "consult_missed") ? "r.consult_missed" : "-1";
-        read.CommandText = $"""
-            SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
-                   r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
-                   r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model, {counter}
-            FROM rounds r JOIN sessions s ON s.id = r.session_id
-            WHERE $unbounded = 1
-               OR r.started_utc < $started
-               OR (r.started_utc = $started AND r.id < $id)
-            ORDER BY r.started_utc DESC, r.id DESC LIMIT $limit
-            """;
+        read.CommandText = HasColumn(db, "rounds", "consult_missed") ? SqlRoundsCounted : SqlRoundsPlain;
         read.Parameters.AddWithValue("$unbounded", before is null ? 1 : 0);
         read.Parameters.AddWithValue("$started", before?.StartedUtc ?? string.Empty);
         read.Parameters.AddWithValue("$id", before?.Id ?? 0L);
@@ -528,17 +518,58 @@ public static class RoundsQuery
         e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// <summary>
+    /// The rounds page, in the two shapes a database can be in — written out rather than composed.
+    /// </summary>
+    /// <remarks>
+    /// <para>One text with the counter column spliced in was the obvious version and it reads, to any
+    /// scanner and to a person skimming, as SQL built at runtime. It was not — the two halves were
+    /// literals in this file — but a query that needs a paragraph to prove it is safe is worth more
+    /// than the eight duplicated lines that need none. (SonarCloud, Major, on the pull request.)</para>
+    /// <para>They differ in ONE token, and a change to either must be made to both. That is the cost,
+    /// and it is why the difference is on its own line in each.</para>
+    /// </remarks>
+    private const string SqlRoundsCounted = """
+        SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
+               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
+               r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
+               r.consult_missed
+        FROM rounds r JOIN sessions s ON s.id = r.session_id
+        WHERE $unbounded = 1
+           OR r.started_utc < $started
+           OR (r.started_utc = $started AND r.id < $id)
+        ORDER BY r.started_utc DESC, r.id DESC LIMIT $limit
+        """;
+
+    /// <summary>The same page against a database written before schema step 2 added the column.</summary>
+    private const string SqlRoundsPlain = """
+        SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
+               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
+               r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
+               -1
+        FROM rounds r JOIN sessions s ON s.id = r.session_id
+        WHERE $unbounded = 1
+           OR r.started_utc < $started
+           OR (r.started_utc = $started AND r.id < $id)
+        ORDER BY r.started_utc DESC, r.id DESC LIMIT $limit
+        """;
+
+    /// <summary>
     /// Whether this file's table has that column — asked of the schema, never guessed from a version.
     /// </summary>
     /// <remarks>
-    /// The name is interpolated into the SQL and both callers pass literals written here; `pragma`
-    /// takes no parameters in this position, which is why it is worth saying out loud that nothing a
-    /// caller sends ever reaches it.
+    /// BOTH names are parameters. The table used to be interpolated, under a remark of mine claiming
+    /// `pragma` takes no parameter in that position — which is simply wrong: SQLite's table-valued
+    /// pragma functions bind like any other, and it was measured rather than argued about. Nothing a
+    /// caller sends could reach the SQL either way (both call sites pass literals written here), but
+    /// a query with no string building in it needs no such argument. (SonarCloud, Major, on the pull
+    /// request.)
     /// </remarks>
     private static bool HasColumn(SqliteConnection db, string table, string column)
     {
         using var ask = db.CreateCommand();
-        ask.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $column";
+        ask.CommandText = "SELECT COUNT(*) FROM pragma_table_info($table) WHERE name = $column";
+        ask.Parameters.AddWithValue("$table", table);
         ask.Parameters.AddWithValue("$column", column);
 
         return Convert.ToInt64(ask.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;

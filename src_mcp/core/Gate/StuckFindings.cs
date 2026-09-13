@@ -88,12 +88,9 @@ public static class StuckFindings
             // defect. Materialising the matches per finding allocated a list to read two of its
             // entries. (codex + local, third code round.)
             EarlierDecision? latest = null;
-            foreach (var one in earlier)
+            foreach (var one in earlier.Where(one => FindingDedup.SameDefect(one.Finding, finding)))
             {
-                if (FindingDedup.SameDefect(one.Finding, finding))
-                {
-                    latest = one;
-                }
+                latest = one;
             }
 
             // That word has to be an acceptance. A defect accepted in round 1 and rejected in round 2

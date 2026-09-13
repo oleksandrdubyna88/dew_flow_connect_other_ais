@@ -658,7 +658,7 @@ public sealed class ConsultMissedTests : IDisposable
     /// The decisions are positional — `resolve` numbers findings by their order in the round — so
     /// they are built from the findings here rather than by a caller repeating them.
     /// </remarks>
-    private void Recorded(RoundsDb db, SessionState session, RoundRecord round, Finding[] findings, string?[] reasons)
+    private static void Recorded(RoundsDb db, SessionState session, RoundRecord round, Finding[] findings, string?[] reasons)
     {
         db.RecordRound(session, round, findings);
         db.RecordDecisions(
