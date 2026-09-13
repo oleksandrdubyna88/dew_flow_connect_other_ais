@@ -1900,6 +1900,17 @@ provides. `snippetStatus` takes where it was found, answers a sixth state — `m
 says to paste the consultant half only. Raised as Blocking on the plan round, by the reviewer that
 read the consequence through rather than the sentence.
 
+**And the mounted state has an EXIT.** The first version of it did not, which the code round caught
+twice: the note tells a mounting repository to paste the consultant block, and the reader matched only
+the gate's sentence — which that block does not contain — so the workspace stayed `mounted` for ever,
+told to paste what it had already pasted. The consultant half carries its own marker now
+(`<!-- coai-consultant v6 -->`, a different name so `snippetVersionIn` still finds exactly one of
+its own), the reader looks for it, and a mount plus a pasted block reads as current — or as `older`
+when the pasted block is from an earlier build. The clipboard agrees with the advice: in the mounted
+state the copy command puts the consultant half alone on it. And a file at a mount PATH is only
+granted mount status when its body matches the gate rule this build was compiled against, so a stale
+copy or a tampered file gets the ordinary paste answer rather than "your gate half is current".
+
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
 It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea

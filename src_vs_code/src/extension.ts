@@ -28,7 +28,7 @@ import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
-import { claudeSnippet, copiedMessage } from './claudeSnippet';
+import { copiedMessage, snippetFor } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
@@ -773,12 +773,16 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
 }
 
 async function copyClaudeSnippet(): Promise<void> {
+  // The status is read BEFORE the copy now, because it decides WHICH text goes on the clipboard: a
+  // repository that mounts the shared gate rule is told to paste the consultant half only, and
+  // handing it both halves would leave somebody cutting a hundred lines by hand.
+  const status = await pastedSnippetStatus();
   // The snippet names no repository: it is pasted into whichever one you are adopting it for, and
   // the AI reading it is already in a checkout it can name for itself.
-  await vscode.env.clipboard.writeText(claudeSnippet());
+  await vscode.env.clipboard.writeText(snippetFor(status));
   // What was taken, and what this repository already has. The version is in the menu item too, but
   // a menu is read BEFORE the click; this is the sentence that says whether the click mattered.
-  void vscode.window.showInformationMessage(copiedMessage(await pastedSnippetStatus()));
+  void vscode.window.showInformationMessage(copiedMessage(status));
 }
 
 /**

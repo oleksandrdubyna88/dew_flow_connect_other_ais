@@ -152,3 +152,50 @@ public sealed class ProblemTextTests
         ProblemText.RepeatsTurn(earlier, "I ran your check: it prints 3 not 4, at Parser.cs:88").Should().BeNull();
     }
 }
+
+/// <summary>
+/// What the person's own trigger hands the assistant.
+/// </summary>
+/// <remarks>
+/// The message makes two claims about the words it carries — that they are the person's, unrewritten,
+/// and that there is a bound on how many of them travel. Both were found on the code round: the first
+/// was contradicted by a <c>Trim()</c>, and the second did not exist.
+/// </remarks>
+public sealed class ConsultPromptTextTests
+{
+    [Fact]
+    public void ThePersonsWords_TravelAsWritten_IncludingTheirWhitespace()
+    {
+        // A command with significant spacing, or an indented code block, is exactly what somebody
+        // pastes when they are stuck — and trimming it changes the problem being diagnosed.
+        const string indented = "  git log --format=%H\n    second line kept\n";
+
+        var text = CoaiMcp.Prompts.Text(indented);
+
+        text.Should().Contain(indented, "the instruction says to send them unrewritten");
+        text.Should().Contain("without rewriting it");
+    }
+
+    [Fact]
+    public void NoWordsAtAll_AsksTheAssistantToStateTheProblemItself()
+    {
+        foreach (var nothing in (string[])["", "   ", "\n\t "])
+        {
+            CoaiMcp.Prompts.Text(nothing).Should()
+                .Contain("expected to know it", $"'{nothing}' is somebody typing the command alone")
+                .And.NotContain("without rewriting it");
+        }
+    }
+
+    [Fact]
+    public void ABuildLog_IsCutAtTheServersOwnBound_AndSaysSo()
+    {
+        var huge = new string('x', CoaiMcp.Prompts.ProblemCap * 3);
+
+        var text = CoaiMcp.Prompts.Text(huge);
+
+        text.Length.Should().BeLessThan(CoaiMcp.Prompts.ProblemCap + 2_000,
+            "echoing 10 MiB back to be sent again is the same bytes three times over");
+        text.Should().Contain("cut at 16 KB", "a silent truncation is a problem statement that lies");
+    }
+}

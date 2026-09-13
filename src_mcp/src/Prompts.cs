@@ -68,9 +68,28 @@ internal static class Prompts
         ],
     };
 
+    /// <summary>
+    /// How much of a problem statement travels. The server's own bound, so one number decides.
+    /// </summary>
+    /// <remarks>
+    /// A prompt that echoes a 10 MiB build log returns it to be sent again, which is the same bytes
+    /// three times over before a consultation starts — and <see cref="Core.Consultation.ConsultantPrompt"/>
+    /// would cut it to this anyway. Cut HERE, with a sentence saying so, rather than silently.
+    /// (codex and gemini, code round.)
+    /// </remarks>
+    internal const int ProblemCap = 16 * 1024;
+
     internal static string Text(string problem)
     {
-        var stated = problem?.Trim() ?? string.Empty;
+        // Trimmed only to DECIDE whether anything was said. The words themselves travel as written:
+        // the message tells the assistant to send them unrewritten, and leading whitespace in a code
+        // block or a command with significant spacing is exactly what a stuck person pastes.
+        var raw = problem ?? string.Empty;
+        var stated = raw.Trim().Length == 0
+            ? string.Empty
+            : raw.Length > ProblemCap
+                ? raw[..ProblemCap] + "\n\n[cut at 16 KB — send the rest as a follow-up turn if it matters]"
+                : raw;
 
         return $"""
             Consult another vendor's model about this, with the `consult` tool of the `coai` server.
