@@ -99,16 +99,26 @@ test("every consult default in the panel is the server's own fallback", () => {
 });
 
 test('the shipped consultant for every caller kind is the one the server would choose', () => {
-  for (const { id } of CALLER_KINDS) {
-    // `[CallerIdentity.Claude] = new("codex"),` — the kind is the C# constant's name, capitalised.
-    const kind = id.charAt(0).toUpperCase() + id.slice(1);
-    const m = new RegExp(`CallerIdentity[.]${kind}\\][^"]*"([a-z-]+)"`).exec(routing);
+  // `[CallerIdentity.Claude] = new("codex"),` — the kind is the C# constant's name, capitalised.
+  const shipped = new Map(
+    [...routing.matchAll(/CallerIdentity\.([A-Za-z]+)\][^"]*"([a-z-]+)"/g)]
+      .map((one) => [one[1]!.toLowerCase(), one[2]!]),
+  );
 
-    assert.ok(m, id + ' is not in ConsultantRouting.Shipped — a caller the panel offers and the server does not route');
+  // BOTH directions. The one-way walk was green for a kind the server routes and the panel has no
+  // row for — which is the worse half: the server would consult on that caller's behalf and nothing
+  // in the panel could say who, or change it. (codex, this story's code round.)
+  assert.deepStrictEqual(
+    [...shipped.keys()].sort(),
+    CALLER_KINDS.map(({ id }) => id).sort(),
+    'the panel and the server disagree about which callers EXIST',
+  );
+
+  for (const { id } of CALLER_KINDS) {
     assert.strictEqual(
       DEFAULT_CONSULT.byCaller[id]!.vendor,
-      m[1],
-      id + ': the panel shows ' + DEFAULT_CONSULT.byCaller[id]!.vendor + ', the server would ask ' + m[1],
+      shipped.get(id),
+      id + ': the panel shows ' + DEFAULT_CONSULT.byCaller[id]!.vendor + ', the server would ask ' + shipped.get(id),
     );
   }
 });

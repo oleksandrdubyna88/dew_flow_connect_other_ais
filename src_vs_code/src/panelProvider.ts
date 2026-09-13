@@ -2330,6 +2330,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * it can be edited by hand or by another window, and a cache would show a person their own edit
    * from two minutes ago with nothing saying so.</p>
    */
+  /** The last reason a prompt write failed, so one unwritable disk is one message. */
+  private promptWriteFailed = '';
+
   private async readConsultPrompt(): Promise<string> {
     try {
       return new TextDecoder().decode(
@@ -2366,6 +2369,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       if (write.kind === 'remove') {
         // Removing an override that was never written is the ORDINARY case, not an error.
         await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+        this.promptWriteFailed = '';
         return;
       }
       const directory = vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!);
@@ -2373,9 +2377,31 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
       await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
       await vscode.workspace.fs.rename(temp, target, { overwrite: true });
-    } catch {
-      // Nothing to say and nothing to do; see above.
+      // The situation is over. A failure after this is news rather than a repeat.
+      this.promptWriteFailed = '';
+    } catch (e) {
+      this.reportPromptFailure(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  /**
+   * Says, ONCE per distinct reason, that the consultant's prompt is not on disk.
+   *
+   * <p>The durable-status rule pointed at a text box: an action that failed must not look like one
+   * that succeeded, and this one used to be swallowed entirely — a read-only data directory left a
+   * person typing into a box whose words no consultation would ever read. Once per reason, and
+   * cleared by the next successful write, because this runs from a keystroke PAUSE: a message per
+   * pause over one unwritable disk is the other way to make it unusable. Raised twice on this
+   * story's code round, in two roles.</p>
+   */
+  private reportPromptFailure(why: string): void {
+    if (this.promptWriteFailed === why) {
+      return;
+    }
+    this.promptWriteFailed = why;
+    void vscode.window.showWarningMessage(
+      `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
+    );
   }
 
   private async readUsage(): Promise<UsageEntry[]> {

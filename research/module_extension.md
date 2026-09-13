@@ -1834,6 +1834,19 @@ id that pattern does not match is dropped whole rather than escaped, so a forgot
 fail loudly — it silently stops putting the caret back, in every control on the panel. Eight tests
 said so within a second.
 
+**A caller KIND is not a runtime, and `gemini` is the case that proves it.** The caller kinds are
+what `CallerIdentity.KindFrom` answers — `claude`, `codex`, `gemini`, `other` — while the vendor row
+that runs Gemini models is on the `antigravity` runtime. A name-to-name comparison therefore withheld
+the same-vendor warning from the one caller most likely to be pointed back at itself; `CALLER_RUNTIMES`
+maps a kind to the runtimes that ARE it (and `other` to none, because an arbitrary script is not any
+vendor). Two more of the same shape, both from the code round: the rows are always rendered, so a
+person deciding what to configure can still see what each caller is set to when nothing can answer;
+and a vendor switched off in *Reviewers* says **switched off in Reviewers** rather than "not
+configured any more", which used to contradict the sentence printed underneath it in the same paint.
+The caps are bounded by what the SERVER can hold (`int.TryParse`), because `settings.json` is a file
+a person edits by hand and `2147483648` is a whole positive number the panel would have displayed
+while the server ran its own default.
+
 **The prompt box is not a setting.** `coai-mcp` reads its prompts override-first from its own data
 directory, so what a person types goes to `<dataDir>/prompts/consult.md` and nowhere else — the file
 IS the value, and the panel reads it at paint time like the pasted snippet beside it. A mirrored

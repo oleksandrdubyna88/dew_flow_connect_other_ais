@@ -127,14 +127,32 @@ export function sameCallers(
 }
 
 /**
+ * The runtimes that ARE a caller kind, which is not the same question as sharing its name.
+ *
+ * <p>`gemini` is the case that proves it: the caller kind is `gemini` and the vendor row that runs
+ * Gemini models is on the `antigravity` runtime, so a name-to-name comparison silently withheld the
+ * warning from the one caller most likely to be pointed back at itself. The retired `gemini` runtime
+ * is kept beside it because a row configured before it was retired still exists in people's
+ * settings. Raised twice on this story's code round, by the same reviewer in two roles.</p>
+ */
+const CALLER_RUNTIMES: Readonly<Record<string, readonly string[]>> = {
+  claude: ['claude'],
+  codex: ['codex'],
+  gemini: ['antigravity', 'gemini'],
+  // A client that exports none of the three session variables is not any vendor, so nothing here
+  // is "itself" — and saying so of an arbitrary script would be a guess dressed as advice.
+  other: [],
+};
+
+/**
  * The note beside a row whose consultant is the caller's own vendor.
  *
  * <p>Allowed, never refused: the server cannot see the caller's MODEL, only its vendor, so
  * "Fable answering a Sonnet session" and "Sonnet answering itself" look identical from here. The
  * person can tell them apart, so the panel says what to think about rather than deciding for them.</p>
  */
-export function sameVendorNote(callerKind: string, vendor: string): string {
-  return callerKind === vendor
+export function sameVendorNote(callerKind: string, runtime: string): string {
+  return (CALLER_RUNTIMES[callerKind] ?? []).includes(runtime)
     ? 'the same vendor as the caller — worth it only with a stronger model, since a model cannot see its own blind spot'
     : '';
 }
@@ -189,6 +207,19 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/**
+ * A whole positive number the SERVER can also hold, or the shipped default.
+ *
+ * <p>The upper bound is not decoration: `settings.json` is a file a person edits by hand, and
+ * `2147483648` satisfies `Number.isInteger`, travels across the seam, and is then refused by the C#
+ * `int.TryParse` — which falls back. The panel would display one cap while another was enforced,
+ * which is the whole failure mode this module's defaults test exists to prevent, reached by a
+ * different door. Raised on this story's code round.</p>
+ */
+const SERVER_MAX = 2_147_483_647;
+
 function positive(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= SERVER_MAX
+    ? value
+    : fallback;
 }
