@@ -620,6 +620,16 @@ internal static class Program
                 log.Warning("{Mismatch}", mismatch);
             }
 
+            // The same rule for the DATA DIRECTORY, and deliberately here rather than inside the
+            // settings: these two notes are the only ones that have to look at the disk — is there a
+            // database loose in a shared root, is this side's directory new — and a settings record
+            // that stats a configured NAS would make `--version` hang on an unreachable mount rather
+            // than answer. Raised on both code rounds (issue #115).
+            foreach (var note in PanelSettings.StorageNotes(Environment.GetEnvironmentVariable))
+            {
+                log.Warning("data directory: {Note}", note);
+            }
+
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
             // in the sidebar reaches the NEXT round without restarting the MCP client.
             var host = new PanelServiceHost(Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log);

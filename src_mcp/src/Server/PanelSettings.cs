@@ -342,13 +342,52 @@ public sealed record PanelSettings
     /// for the first time is reported too — a mistyped NAS path is a perfectly creatable directory,
     /// and the failure it produces is a second history accumulating quietly beside the real one.</para>
     /// </remarks>
-    private static (string Dir, IReadOnlyList<string> Notes) ResolveDataDir(Func<string, string?> env)
+    /// <summary>
+    /// What a person needs told about how the directory was decided — the half that touches disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="ResolveDataDir"/>, and called at STARTUP rather than while
+    /// settings are parsed. Parsing is pure: every one-shot mode — <c>--version</c>, <c>--help</c>,
+    /// <c>--providers</c>, <c>--log</c> — builds a <see cref="PanelSettings"/>, and if that stats the
+    /// data directory then a configured NAS that is unreachable makes <c>--version</c> hang on a
+    /// mount rather than answering. Raised on both code rounds, and the same objection is why these
+    /// notes are not merged into <c>Unrecognised</c>, which is about configuration VALUES.</para>
+    /// </remarks>
+    public static IReadOnlyList<string> StorageNotes(Func<string, string?> env)
+    {
+        if (env("COAI_DATA_DIR")?.Trim() is not { Length: > 0 } configured)
+        {
+            return [];
+        }
+
+        var root = Path.GetFullPath(configured);
+        var dir = ResolveDataDir(env);
+        var notes = new List<string>(2);
+
+        if (dir != root && File.Exists(Path.Combine(root, DatabaseFile)))
+        {
+            notes.Add($"there is a {DatabaseFile} directly in {root}, from the layout before this "
+                + $"directory was shared between sides. It is NOT being used: this side reads and "
+                + $"writes {dir}. Move that database and its sessions into a side directory to keep "
+                + "its history.");
+        }
+
+        if (!Directory.Exists(dir))
+        {
+            notes.Add($"{dir} did not exist and is being created — this side starts with no history. "
+                + "If that is a surprise, check COAI_DATA_DIR for a typo before recording into it.");
+        }
+
+        return notes;
+    }
+
+    private static string ResolveDataDir(Func<string, string?> env)
     {
         // Whitespace is not a configured directory. `COAI_DATA_DIR=' '` reaching Path.GetFullPath
         // would be the working directory, which is not what anybody meant by setting it.
         if (env("COAI_DATA_DIR")?.Trim() is not { Length: > 0 } configured)
         {
-            return (DefaultDataDir, []);
+            return DefaultDataDir;
         }
 
         var root = Path.GetFullPath(configured);
@@ -383,30 +422,8 @@ public sealed record PanelSettings
         // refusing.
         //
         // Opting in also says what the operator said: "give them different names, side by side in
-        // one folder". `auto` derives the name; anything else IS the name.
-        if (DataSide(env) is not { Length: > 0 } side)
-        {
-            return (root, []);
-        }
-
-        var dir = Path.Combine(root, side);
-        var notes = new List<string>(2);
-
-        if (File.Exists(Path.Combine(root, DatabaseFile)))
-        {
-            notes.Add($"there is a {DatabaseFile} directly in {root}, from the layout before this "
-                + $"directory was shared between sides. It is NOT being used: this side reads and "
-                + $"writes {dir}. Move that database and its sessions into a side directory to keep "
-                + "its history.");
-        }
-
-        if (!Directory.Exists(dir))
-        {
-            notes.Add($"{dir} did not exist and is being created — this side starts with no history. "
-                + "If that is a surprise, check COAI_DATA_DIR for a typo before recording into it.");
-        }
-
-        return (dir, notes);
+        // one folder".
+        return DataSide(env) is { Length: > 0 } side ? Path.Combine(root, side) : root;
     }
 
     public static PanelSettings FromEnvironment(Func<string, string?> env) =>
@@ -433,13 +450,13 @@ public sealed record PanelSettings
         Func<string, string?> env,
         RolesSetting roles,
         RoleCatalog catalog,
-        (string Dir, IReadOnlyList<string> Notes) data) => new PanelSettings
+        string dataDir) => new PanelSettings
     {
         Rounds = Config(env, catalog),
         // The data directory's own notes ride here rather than in a channel of their own: this list
         // is already "things said out loud at startup, because silence made a working configuration
         // look broken", and a database left behind in a shared root is exactly that.
-        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. data.Notes],
+        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped],
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
@@ -467,7 +484,7 @@ public sealed record PanelSettings
         // And PARTITIONED PER SIDE when it was overridden, so a location deliberately shared — a NAS
         // that survives a Windows reinstall — does not end up with Windows and WSL writing one
         // SQLite file. See ResolveDataDir; the default is untouched by it.
-        DataDir = data.Dir,
+        DataDir = dataDir,
         AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         Autonomous = Flag(env, "COAI_AUTONOMOUS"),

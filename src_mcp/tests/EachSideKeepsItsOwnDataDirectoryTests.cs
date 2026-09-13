@@ -41,10 +41,13 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
         }
     }
 
+    /// <summary>An environment of exactly these variables, and nothing else.</summary>
+    private static Func<string, string?> Env(params (string Name, string Value)[] vars) =>
+        name => vars.FirstOrDefault(v => v.Name == name) is { Name: not null } hit ? hit.Value : null;
+
     /// <summary>Settings built from an environment of exactly these variables.</summary>
     private static PanelSettings From(params (string Name, string Value)[] vars) =>
-        PanelSettings.FromEnvironment(name =>
-            vars.FirstOrDefault(v => v.Name == name) is { Name: not null } hit ? hit.Value : null);
+        PanelSettings.FromEnvironment(Env(vars));
 
     [Fact]
     public void WithNoOverride_TheDirectoryIsExactlyWhatItHasAlwaysBeen()
@@ -95,9 +98,9 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_root, "coai.db"), "x");
 
-        var settings = From(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "windows-desktop01"));
+        var notes = PanelSettings.StorageNotes(Env(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "windows-desktop01")));
 
-        settings.Unrecognised.Should().ContainSingle(n => n.Contains("coai.db") && n.Contains(_root),
+        notes.Should().ContainSingle(n => n.Contains("coai.db") && n.Contains(_root),
             "history left in the old flat layout must not go invisible");
     }
 
@@ -106,9 +109,10 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
     {
         // A mistyped NAS path is a creatable directory. Somebody who typo'd it would otherwise
         // accumulate a second history quietly while believing they were writing to the first.
-        var settings = From(("COAI_DATA_DIR", Path.Combine(_root, "probably-a-typo")), ("COAI_DATA_SIDE", "s"));
+        var env = Env(("COAI_DATA_DIR", Path.Combine(_root, "probably-a-typo")), ("COAI_DATA_SIDE", "s"));
 
-        settings.Unrecognised.Should().Contain(n => n.Contains(settings.DataDir));
+        PanelSettings.StorageNotes(env).Should()
+            .Contain(n => n.Contains(PanelSettings.FromEnvironment(env).DataDir));
     }
 
     /// <summary>
