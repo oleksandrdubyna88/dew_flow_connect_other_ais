@@ -31,6 +31,7 @@ function row(over: Partial<LogRow> = {}): LogRow {
     findings: 1, seconds: 130, tokensIn: null, tokensOut: null, costUsd: null, costInUsd: null,
     costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false,
     answered: 'all 3 reviewers answered', vendors: ['codex'], reviewers: ['codex/Architecture — done'],
+    calledBy: 'codex 0.9 · model not stated',
     reviewerColours: ['#fff'], found: [], foundCount: 0, foundState: 'unasked', origin: 'db',
     dbKey: { sessionId: 's1', stage: 'CodeReview', number: 1 },
     ...over,

@@ -26,12 +26,23 @@ namespace CoaiMcp.Store;
 /// What the caller was doing in the stretch this round closes, from its own transcript — JSON, or
 /// empty. See <see cref="Store.AgentLog"/> for the shape and the trimming.
 /// </param>
+/// <param name="CalledBy">
+/// WHICH AI that caller is, and which model it declared — issue #174.
+/// </param>
+/// <remarks>
+/// <para><paramref name="Caller"/> is the calling agent's own session id, which is what keys its
+/// split order; <paramref name="CalledBy"/> is who that agent is. Null here rather than a default
+/// instance because <c>default(RoundContext)</c> runs no field initialiser at all — the same trap
+/// the string fields already carry a comment about, and the reason
+/// <see cref="Server.CallerDeclaration"/> is coalesced where it is written rather than here.</para>
+/// </remarks>
 public readonly record struct RoundContext(
     string PlanText = "",
     string HeadSha = "",
     string Caller = "",
     ImmutableArray<Finding> ReRaised = default,
-    string AgentLog = "")
+    string AgentLog = "",
+    Server.CallerDeclaration? CalledBy = null)
 {
     /// <summary>Whether this finding is one the caller had already rejected.</summary>
     /// <remarks>

@@ -357,3 +357,47 @@ test('a round the database has never heard of is done, not awaiting', () => {
   assert.equal(row.status, 'done');
   assert.equal(row.decided, null);
 });
+
+// ---------- which AI called the round, and which model it declared (issue #174) ----------
+
+/** A session opened by a client that declared itself, as the server now records it. */
+function openedBy(caller: unknown, rounds: readonly RoundRecord[] = [round()]): SessionFile {
+  return { ...session(rounds), caller } as unknown as SessionFile;
+}
+
+test('a row says which AI asked for the round, and which model it declared', () => {
+  const [row] = rowsFrom(
+    [openedBy({ vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' })],
+    NOW) as [LogRow];
+
+  assert.equal(row.calledBy, 'claude-code 7.3.1 · claude-opus-5');
+});
+
+test('a caller that declared no model is shown as not stating one, never as a gap', () => {
+  const [row] = rowsFrom([openedBy({ vendor: 'codex', client: 'codex', clientVersion: '0.9', model: '' })], NOW) as [LogRow];
+
+  assert.equal(row.calledBy, 'codex 0.9 · model not stated');
+});
+
+test('a round from a session file that predates the field reads exactly as it did', () => {
+  const [row] = rowsFrom([session([round()])], NOW) as [LogRow];
+
+  assert.equal(row.calledBy, '', 'a server that never asked the question said nothing, which is not "unknown"');
+});
+
+test('the page renders who asked, above the reviewers who answered', () => {
+  const rows = rowsFrom(
+    [openedBy({ vendor: 'claude', client: 'claude-code', clientVersion: '7.3.1', model: 'claude-opus-5' })],
+    NOW);
+  const html = roundsLogHtml(rows, [], 'n');
+
+  assert.ok(html.includes('"calledBy":"claude-code 7.3.1 · claude-opus-5"'), 'the row carries it into the page');
+  assert.ok(html.includes('asked by '), 'and the detail names it');
+});
+
+test('a declared model cannot put markup on the page', () => {
+  // It is a freeform string an external AI sends us over the wire, and it is rendered.
+  const rows = rowsFrom([openedBy({ vendor: 'claude', client: '<img src=x onerror=alert(1)>', model: 'm' })], NOW);
+
+  assert.ok(!roundsLogHtml(rows, [], 'n').includes('<img src=x'), 'escaped in the JSON and in the markup');
+});

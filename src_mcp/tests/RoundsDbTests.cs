@@ -285,6 +285,186 @@ public sealed class RoundsDbTests : IDisposable
         command.ExecuteNonQuery();
     }
 
+    // ---------- which AI called the round, and which model it declared (issue #174) ----------
+
+    [Fact]
+    public void WhoCalledTheRound_IsRecordedBesideWhatItFound()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+
+        db.RecordRound(Session, Round(), [Found("one")], new RoundContext(
+            CalledBy: new CallerDeclaration("codex", "codex", "7.3.1", "codex-astra")));
+
+        var row = Query("SELECT caller_vendor, caller_client, caller_client_version, caller_model FROM rounds").Single();
+        row["caller_vendor"].Should().Be("codex");
+        row["caller_client"].Should().Be("codex");
+        row["caller_client_version"].Should().Be("7.3.1");
+        row["caller_model"].Should().Be("codex-astra");
+    }
+
+    [Fact]
+    public void ARoundWhoseCallerDeclaredNothing_RecordsNothing_NotADefault()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+
+        // `default(RoundContext)` runs no field initialiser, so the declaration arrives as null —
+        // the same trap `plan_text` and `caller` already carry a comment about.
+        db.RecordRound(Session, Round(), [Found("one")]);
+
+        var row = Query("SELECT caller_vendor, caller_model FROM rounds").Single();
+        row["caller_model"].Should().BeEmpty("nobody declared one, and a default would be a claim");
+        row["caller_vendor"].Should().Be("unknown", "a state with a name, never a blank");
+    }
+
+    /// <summary>
+    /// A database written by a build that had never heard of these columns keeps working.
+    /// </summary>
+    /// <remarks>
+    /// <para>Raised as Blocking by codex on the plan round, and it is the one thing about this
+    /// change that could be silently wrong: <c>CREATE TABLE IF NOT EXISTS</c> creates nothing when
+    /// the table is already there, so four columns added to that statement would be missing on
+    /// every file an older build made — and the writer is best-effort, so it would swallow the
+    /// error every round for ever.</para>
+    /// <para>The file here is built from the DDL an older build actually wrote, spelled out rather
+    /// than taken from <c>Schema</c>: a migration test that reads the current constant would follow
+    /// it forward and stop testing the thing it was written for.</para>
+    /// </remarks>
+    [Fact]
+    public void ADatabaseFromBeforeTheseColumns_GainsThem_AndItsOwnRoundsStillRead()
+    {
+        Directory.CreateDirectory(_dir);
+        using (var older = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False"))
+        {
+            older.Open();
+            Execute(older, OldSchema);
+            Execute(older,
+                """
+                INSERT INTO sessions (id, repo_path, branch, opened_utc)
+                VALUES ('s0', 'D:/repo', 'feat/old', '2026-09-01T00:00:00Z');
+                INSERT INTO rounds (session_id, stage, number, status, verdict, started_utc, completed_utc)
+                VALUES ('s0', 'CodeReview', 1, 'done', 'proceed', '2026-09-01T00:00:00Z', '2026-09-01T00:04:00Z');
+                """);
+            Execute(older, "PRAGMA user_version=2");
+        }
+
+        using var db = RoundsDb.Open(_dir, _log);
+
+        db.Should().NotBeNull("a file this build cannot open is a log nobody can read again");
+        db!.RecordRound(Session, Round(2), [Found("written by the new build")], new RoundContext(
+            CalledBy: new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5")));
+
+        var rows = Query("SELECT number, caller_vendor, caller_model FROM rounds ORDER BY number");
+        rows.Should().HaveCount(2);
+        rows[0]["caller_vendor"].Should().BeEmpty("the old round never had one, and inventing it would be a lie about it");
+        rows[0]["caller_model"].Should().BeEmpty();
+        rows[1]["caller_model"].Should().Be("claude-opus-5");
+    }
+
+    [Fact]
+    public void TheMigrationRunsOnce_SoASecondOpenIsNotASecondAlter()
+    {
+        using (var first = RoundsDb.Open(_dir, _log)!)
+        {
+            first.RecordRound(Session, Round(), [Found("one")]);
+        }
+
+        // A repeated ALTER answers `duplicate column name`, and `Open` swallows everything and
+        // returns null — which would take the whole log down on the second start, not the first.
+        using var again = RoundsDb.Open(_dir, _log);
+
+        again.Should().NotBeNull();
+        Query("PRAGMA user_version").Single().Values.Single().Should().Be("3");
+    }
+
+    /// <summary>The `rounds` and `sessions` tables exactly as the build before #174 wrote them.</summary>
+    private const string OldSchema = """
+        CREATE TABLE sessions (
+            id          TEXT PRIMARY KEY,
+            repo_path   TEXT NOT NULL,
+            branch      TEXT NOT NULL,
+            opened_utc  TEXT NOT NULL
+        );
+
+        CREATE TABLE rounds (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id    TEXT NOT NULL REFERENCES sessions(id),
+            stage         TEXT NOT NULL,
+            number        INTEGER NOT NULL,
+            subject       TEXT NOT NULL DEFAULT '',
+            status        TEXT NOT NULL,
+            verdict       TEXT NOT NULL,
+            gating        INTEGER NOT NULL DEFAULT 0,
+            started_utc   TEXT NOT NULL,
+            completed_utc TEXT NOT NULL,
+            tokens_in     INTEGER NOT NULL DEFAULT 0,
+            tokens_out    INTEGER NOT NULL DEFAULT 0,
+            cost_usd      REAL,
+            plan_text     TEXT NOT NULL DEFAULT '',
+            head_sha      TEXT NOT NULL DEFAULT '',
+            caller        TEXT NOT NULL DEFAULT '',
+            accepted      INTEGER NOT NULL DEFAULT -1,
+            rejected      INTEGER NOT NULL DEFAULT -1,
+            agent_log     TEXT NOT NULL DEFAULT '',
+            UNIQUE (session_id, stage, number)
+        );
+
+        CREATE TABLE reviewers (
+            round_id  INTEGER NOT NULL REFERENCES rounds(id),
+            provider  TEXT NOT NULL,
+            role      TEXT NOT NULL,
+            status    TEXT NOT NULL,
+            findings  INTEGER NOT NULL DEFAULT 0,
+            seconds   REAL NOT NULL DEFAULT 0,
+            note      TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE findings (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            round_id     INTEGER NOT NULL REFERENCES rounds(id),
+            ordinal      INTEGER NOT NULL,
+            severity     TEXT NOT NULL DEFAULT '',
+            category     TEXT NOT NULL DEFAULT '',
+            file         TEXT NOT NULL DEFAULT '',
+            line         INTEGER NOT NULL DEFAULT 0,
+            title        TEXT NOT NULL DEFAULT '',
+            why          TEXT NOT NULL DEFAULT '',
+            fix          TEXT NOT NULL DEFAULT '',
+            role         TEXT NOT NULL DEFAULT '',
+            is_gating    INTEGER NOT NULL DEFAULT 0,
+            providers    TEXT NOT NULL DEFAULT '',
+            resolution   TEXT NOT NULL DEFAULT '',
+            reason       TEXT NOT NULL DEFAULT '',
+            resolved_utc TEXT NOT NULL DEFAULT '',
+            re_raised    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (round_id, ordinal)
+        );
+
+        CREATE INDEX rounds_by_time        ON rounds (started_utc DESC);
+        CREATE INDEX findings_by_round     ON findings (round_id);
+        CREATE INDEX findings_re_raised    ON findings (re_raised, resolution);
+
+        CREATE VIRTUAL TABLE findings_fts USING fts5 (
+            title, why, fix, file, content='findings', content_rowid='id'
+        );
+
+        CREATE TRIGGER findings_ai AFTER INSERT ON findings BEGIN
+            INSERT INTO findings_fts (rowid, title, why, fix, file)
+            VALUES (new.id, new.title, new.why, new.fix, new.file);
+        END;
+
+        CREATE TRIGGER findings_ad AFTER DELETE ON findings BEGIN
+            INSERT INTO findings_fts (findings_fts, rowid, title, why, fix, file)
+            VALUES ('delete', old.id, old.title, old.why, old.fix, old.file);
+        END;
+
+        CREATE TRIGGER findings_au AFTER UPDATE ON findings BEGIN
+            INSERT INTO findings_fts (findings_fts, rowid, title, why, fix, file)
+            VALUES ('delete', old.id, old.title, old.why, old.fix, old.file);
+            INSERT INTO findings_fts (rowid, title, why, fix, file)
+            VALUES (new.id, new.title, new.why, new.fix, new.file);
+        END;
+        """;
+
     [Fact]
     public void ReRecordingARound_KeepsTheDecisionsAlreadyMadeAboutItsFindings()
     {

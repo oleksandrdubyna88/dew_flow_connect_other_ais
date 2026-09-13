@@ -170,7 +170,7 @@ public sealed class CallerSessionsTests
         // Measured in this session: Claude Code exports CLAUDE_CODE_SESSION_ID to every child it
         // spawns, and an MCP server on stdio is one of those children.
         CallerIdentity.From(name => name == "CLAUDE_CODE_SESSION_ID" ? "e82c065c" : null)
-            .Should().Be("e82c065c");
+            .Id.Should().Be("e82c065c");
     }
 
     [Fact]

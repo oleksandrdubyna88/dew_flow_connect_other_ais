@@ -82,19 +82,28 @@ public sealed class RoundsDb : IDisposable
     /// on every database an older build created — and a best-effort writer would swallow the error
     /// for ever. <c>user_version</c> records where the file has got to, and each step is applied in
     /// order, once.</para>
-    /// <para>A step must be idempotent and additive. Adding a column belongs here; anything that
-    /// cannot be expressed as one is a reason to delete the file instead — it is a projection, and
-    /// the sessions it projects are still on disk.</para>
+    /// <para>A step must be additive. Adding a column belongs here; anything that cannot be
+    /// expressed as one is a reason to delete the file instead — it is a projection, and the
+    /// sessions it projects are still on disk.</para>
+    /// <para><b>A step and the number it bumps to are ONE transaction.</b> SQLite makes DDL
+    /// transactional, and an <c>ALTER TABLE ADD COLUMN</c> is not idempotent the way
+    /// <c>CREATE TABLE IF NOT EXISTS</c> is: a process killed between the alter and the
+    /// <c>user_version</c> bump would re-run the step on the next open, answer
+    /// <c>duplicate column name</c>, and — because <see cref="Open"/> answers null to ANY
+    /// exception — leave a database that never opens again, with nothing here able to repair it.
+    /// Raised by codex on the #174 plan round.</para>
     /// </remarks>
     private static void Migrate(SqliteConnection db)
     {
-        Run(db, "PRAGMA journal_mode=WAL");
+        Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
         Run(db, "PRAGMA busy_timeout=5000");
         var version = Version(db);
         for (var step = version; step < Schema.Steps.Length; step++)
         {
+            using var applying = db.BeginTransaction();
             Run(db, Schema.Steps[step]);
             Run(db, $"PRAGMA user_version={step + 1}");
+            applying.Commit();
         }
     }
 
@@ -203,16 +212,20 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = """
             INSERT INTO rounds (session_id, stage, number, subject, status, verdict, gating,
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
-                                plan_text, head_sha, caller, agent_log)
+                                plan_text, head_sha, caller, agent_log,
+                                caller_vendor, caller_client, caller_client_version, caller_model)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
-                    $plan, $sha, $caller, $agentLog)
+                    $plan, $sha, $caller, $agentLog,
+                    $vendor, $client, $clientVersion, $model)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
                 tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out, cost_usd = excluded.cost_usd,
                 plan_text = excluded.plan_text, head_sha = excluded.head_sha, caller = excluded.caller,
-                agent_log = excluded.agent_log
+                agent_log = excluded.agent_log,
+                caller_vendor = excluded.caller_vendor, caller_client = excluded.caller_client,
+                caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model
             RETURNING id
             """;
         Bind(write, "$session", state.SessionId);
@@ -233,6 +246,14 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$sha", context.HeadSha ?? string.Empty);
         Bind(write, "$caller", context.Caller ?? string.Empty);
         Bind(write, "$agentLog", context.AgentLog ?? string.Empty);
+        // Coalesced for the same reason, and it is the one that matters most: an absent declaration
+        // must record an UNKNOWN vendor and NO model, never a blank that reads as a vendor we chose
+        // not to print, and never a default model nobody stated.
+        var calledBy = context.CalledBy ?? new Server.CallerDeclaration();
+        Bind(write, "$vendor", calledBy.Vendor);
+        Bind(write, "$client", calledBy.Client);
+        Bind(write, "$clientVersion", calledBy.ClientVersion);
+        Bind(write, "$model", calledBy.Model);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

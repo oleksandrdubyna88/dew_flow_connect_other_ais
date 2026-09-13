@@ -6,7 +6,7 @@ import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
 import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
-import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { calledBy, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
@@ -94,6 +94,15 @@ export interface LogRow {
   readonly vendors: readonly string[];
   /** One line per reviewer — the same lines the sidebar shows, from the same builder. */
   readonly reviewers: readonly string[];
+  /**
+   * Which AI drove this round, and which model it declared — `claude-code 7.3.1 · claude-opus-5`.
+   *
+   * <p>Empty for a session file written before the server recorded it, and for a chat turn, which
+   * names its own model in `answered` already. Never a half-empty phrase: a caller that declared no
+   * model reads as "model not stated", because a gap there reads as a model somebody knew and did
+   * not bother to print.</p>
+   */
+  readonly calledBy: string;
   /** Parallel to `reviewers`: the vendor word's colour, so the page needs no palette of its own. */
   readonly reviewerColours: readonly string[];
   /**
@@ -317,6 +326,9 @@ function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): L
     answered: `${record.provider}/${record.model}`,
     vendors: [record.provider],
     reviewers: [`${record.provider}/${record.model} · ${record.outcome}`],
+    // A chat turn already names its model in `answered`; repeating it as a caller would be a
+    // second, quieter claim about the same thing.
+    calledBy: '',
     reviewerColours: [],
     found: [],
     foundCount: 0,
@@ -421,6 +433,7 @@ function rowFrom(
     answered: round.reviewers,
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
+    calledBy: calledBy(session),
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
@@ -1031,6 +1044,9 @@ export function roundsLogHtml(
   tr[data-key]:hover td { background: var(--vscode-list-hoverBackground); }
   tr.detail td { white-space: normal; background: var(--vscode-editorWidget-background); padding: 6px 8px 8px 28px; cursor: default; }
   .reviewer { font-size: .95em; margin: 1px 0; }
+  /* Who ASKED, above the reviewers who answered. Dimmed: it is the same for every round of a
+     session, so it is context rather than one of the lines a person is reading down. */
+  .reviewer.asked { color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
   .who { font-weight: 600; }
   .badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: .88em; }
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
@@ -1219,10 +1235,14 @@ export function roundsLogHtml(
       + a + ' ✓ ' + r + ' ✗</span>';
   }
   function detail(row) {
+    // WHO asked for the round, above the reviewers that answered it. Before the early return on
+    // purpose: a session written by an older server has no reviewer detail, and one written by a
+    // newer one against an older extension is the case this line exists for.
+    var asked = row.calledBy ? '<div class="reviewer asked">asked by ' + esc(row.calledBy) + '</div>' : '';
     if (row.reviewers.length === 0) {
-      return '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
+      return asked + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
     }
-    var lines = '';
+    var lines = asked;
     for (var i = 0; i < row.reviewers.length; i++) {
       var line = row.reviewers[i];
       var slash = line.indexOf('/');

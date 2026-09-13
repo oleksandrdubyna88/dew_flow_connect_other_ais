@@ -2642,6 +2642,32 @@ a control is `aria-describedby`. That came out of the move's own code round: pro
 row was what tied the note to the input, and a screen reader never had it — so taking the proximity
 away is the moment to say the association out loud.
 
+### An opened round says who ASKED for it, above who answered (2026-09-13)
+
+Issue #174. The log named the reviewers that answered a round and nothing about the AI that asked
+for it — which became a question the moment a second AI started using the gate. `SessionFile` now
+carries a `caller` object (`vendor`, `client`, `clientVersion`, `model`), written by the server on
+`open`; `calledBy(session)` in `rounds.ts` turns it into one phrase and `LogRow.calledBy` carries it
+into the page, where `detail(row)` renders `asked by claude-code 7.3.1 · claude-opus-5` dimmed above
+the reviewer lines.
+
+Three states, and keeping them apart is the whole of it:
+
+- **A model the caller declared** is shown. It is declared on `open` rather than read from the
+  environment, because the environment is read once when the client starts and `/model` is switched
+  mid-session — see `module_server.md`.
+- **A caller that declared none** reads `· model not stated`. Never a blank: a gap after the
+  separator reads as a model somebody knew and did not bother to print.
+- **A session file from before the field** renders NOTHING at all. An absent `caller` is a server
+  that never asked the question, which is a different fact from a caller that could not be
+  identified — saying "unknown" about it would put a claim where there is only silence. The line is
+  built before `detail`'s early return for a file with no reviewer detail, so a new server read by
+  an old-looking session still shows it.
+
+`calledBy` mirrors `CallerDeclaration.Phrase` on the server, which is the copy that reaches the log
+line and the database column. Two spellings of one sentence is a drift waiting to happen; the tests
+on both sides assert the same strings against the same inputs.
+
 ### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
 
 Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:

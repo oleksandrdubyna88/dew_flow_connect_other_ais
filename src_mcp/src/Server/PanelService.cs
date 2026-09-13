@@ -1283,7 +1283,11 @@ public sealed partial class PanelService
                 record,
                 merged,
                 new Store.RoundContext(
-                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
+                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record),
+                    // From the SESSION, not from the environment: `open` resolved it once, from the
+                    // handshake of the connection that called, and every round of this session was
+                    // driven by that same caller.
+                    session.Caller)));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
