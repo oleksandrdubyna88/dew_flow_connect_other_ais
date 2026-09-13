@@ -102,13 +102,15 @@ public sealed record RoundRecord(
     /// asked by the client that merely reopened it.</para>
     /// <para>So the two fields say two different true things. The session's is who opened this
     /// session most recently; this one is who asked for this round. The log renders this one.</para>
-    /// <para>Absent in rounds written before the field, which is what is true of them.</para>
+    /// <para><b>Nullable, and NOT normalised on the way in.</b> Every other list here is coalesced
+    /// to an empty one because absent and empty mean the same thing for them. Here they do not: a
+    /// round written before this field said nothing about its caller, and a round whose caller could
+    /// not be identified says <c>unknown</c>. A getter that materialised a default would turn the
+    /// first into the second the next time the session was saved — and it is saved on every progress
+    /// tick — so every historical round in the file would silently acquire "asked by unknown".
+    /// Raised by codex on the second code round.</para>
     /// </remarks>
-    public CallerDeclaration Caller
-    {
-        get => field ??= new CallerDeclaration();
-        init => field = value ?? new CallerDeclaration();
-    }
+    public CallerDeclaration? Caller { get; init; }
 
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
@@ -169,16 +171,11 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     /// branch, which is what makes a mid-session <c>/model</c> switch land: the declaration is sent
     /// per call rather than read once when the client started. See
     /// <see cref="CallerDeclaration"/> for why it is declared at all.</para>
-    /// <para>A session file written before this field simply has none, and deserialising it leaves
-    /// the default — an unknown vendor that declared no model, which is exactly what is true of it.
-    /// Normalised on the way in for the reason spelled out on <see cref="UsedPrompts"/>: the
-    /// serializer bypasses a property initializer for an absent one.</para>
+    /// <para>Nullable for the reason <see cref="RoundRecord.Caller"/> spells out: a session written
+    /// before this field said nothing, and saving it again must not put words in its mouth. Every
+    /// <c>open</c> sets it, so a live session always has one.</para>
     /// </remarks>
-    public CallerDeclaration Caller
-    {
-        get => field ??= new CallerDeclaration();
-        init => field = value ?? new CallerDeclaration();
-    }
+    public CallerDeclaration? Caller { get; init; }
 
     /// <summary>
     /// Prompt ids this session has already asked, so the plan stage spends every lens once.

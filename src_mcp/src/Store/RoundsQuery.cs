@@ -51,17 +51,17 @@ public sealed record LoggedRound(
     /// </remarks>
     int FoundCount = 0,
     /// <summary>
-    /// Which AI drove this round, and which model it declared — issue #174.
+    /// Which AI asked for this round, and which model it declared — issue #174.
     /// </summary>
     /// <remarks>
-    /// Defaulted so a round from a database that predates the columns reads as an unknown caller
-    /// that declared no model, which is exactly what is true of it. The page renders both states in
-    /// words; neither is ever a blank.
+    /// <para>The same shape the session file uses rather than four loose strings beside each other,
+    /// so one reader can handle both projections and the `--log` JSON does not disagree with the
+    /// file it projects. (gemini, second code round — the house rule against primitive obsession
+    /// applied to a wire contract.)</para>
+    /// <para>Null for a round recorded before the columns existed: it was never asked, which is a
+    /// different fact from a caller that could not be identified.</para>
     /// </remarks>
-    string CallerVendor = "",
-    string CallerClient = "",
-    string CallerClientVersion = "",
-    string CallerModel = "");
+    Server.CallerDeclaration? Caller = null);
 
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
 public sealed record BlindSpot(string Kind, string Name, int Accepted, int Total);
@@ -276,10 +276,12 @@ public static class RoundsQuery
                 inline.TryGetValue(id, out var mine) ? mine : [],
                 rows.GetString(5) + CursorSeparator + id,
                 rows.GetInt32(9),
-                rows.GetString(10),
-                rows.GetString(11),
-                rows.GetString(12),
-                rows.GetString(13)));
+                // An empty vendor is a round from before the columns: never asked, so it answers
+                // nothing rather than "unknown", which is what a caller we could not identify says.
+                rows.GetString(10).Length + rows.GetString(11).Length + rows.GetString(13).Length == 0
+                    ? null
+                    : new Server.CallerDeclaration(
+                        rows.GetString(10), rows.GetString(11), rows.GetString(12), rows.GetString(13))));
         }
 
         return rounds;

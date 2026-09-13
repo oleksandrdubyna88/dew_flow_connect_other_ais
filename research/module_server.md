@@ -321,13 +321,29 @@ defending is the more interesting kind.
 
 **Two fields, and they say two different true things.** `PersistedSession.Caller` is who opened this
 session most recently, stamped by `open`. `RoundRecord.Caller` is a COPY the round takes when it
-starts (`LiveRound.Record`), and that is what the database columns and the log render. The
-distinction is load-bearing and six findings across two vendors found it missing: a session is
-repo+branch and `open` is idempotent on that pair, so codex opening a branch claude reviewed
-yesterday replaces the session's declaration — and a log rendered from it would relabel history,
-showing round 1 as asked by the client that merely reopened the session. The copy also survives the
-concurrent case: a second client opening the pair while a round is still running cannot change what
-that round records.
+starts (`LiveRound.Record`), and it is the ONLY source the database row and the log read — the
+round is passed to `RecordRound` anyway, so a second copy on `RoundContext` would have been a second
+source of truth for one fact. The distinction is load-bearing and six findings across two vendors
+found it missing: a session is repo+branch and `open` is idempotent on that pair, so codex opening a
+branch claude reviewed yesterday replaces the session's declaration — and a log rendered from it
+would relabel history, showing round 1 as asked by the client that merely reopened the session. The
+copy also survives the concurrent case: a second client opening the pair while a round is still
+running cannot change what that round records.
+
+**Both fields are NULLABLE, and that is the third state.** Every other collection on a session is
+coalesced to an empty one on the way in, because absent and empty mean the same thing for them. Here
+they do not: a round written before this field was never ASKED who called it, while a caller that
+could not be identified is `unknown`. A getter that materialised a default would turn the first into
+the second the next time the session was saved — and it is saved on every progress tick — so every
+historical round in the file would quietly acquire an "asked by unknown" it never had. The database
+keeps the same distinction as an empty `caller_vendor` against the word `unknown`.
+
+**An unrecognised client is `unknown`, never the launcher's vendor.** The environment is consulted
+only when the handshake supplied no client name at all. A client calling itself `some-editor` HAS
+identified itself, and it is not claude however this process was started; borrowing the launcher's
+vendor there would be the guess everything else here refuses to make. For the same reason `stated` —
+the marker `COAI_CALLER_SESSION` puts on the identity — never becomes a vendor: it records which
+variable answered, and as a vendor it would render "asked by stated".
 
 **Two sources, because the protocol only has one of them.** MCP's `initialize` carries
 `clientInfo { name, version }` — `claude-code`, `codex`, `gemini-cli` — and **no field of the
