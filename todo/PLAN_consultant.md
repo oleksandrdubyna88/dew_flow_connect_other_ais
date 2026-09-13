@@ -580,11 +580,18 @@ lock and fence are the security half and stay on Fable.
       scripts a defect of its own. And selecting the new column broke the ROUNDS list against a
       database written before schema step 2 — caught by story 4's compatibility test, fixed by asking
       the file whether it has the column rather than assuming it.
-- [ ] **Docs (DoD of every story):** `research/module_server.md` (the ninth tool, the consultation channel,
+- [x] **Docs (DoD of every story):** `research/module_server.md` (the ninth tool, the consultation channel,
       the invariant, the lock), `module_runners.md` (consultant adapters, the working-tree collector, the
       `--ephemeral` trade), `module_extension.md` (section, card, log list), `module_core.md`,
       `architecture.md` (a new edge `coai-mcp → vendor CLI, in the LIVE tree, read-only`), Mermaid
       re-rendered; `/promote-plan` when S6 lands.
+
+      **Caught unticked by S6's own code round**, with S6 already marked done — which is the failure the
+      line exists to prevent. `module_core.md` was the one still owing: `StuckFindings` is a Core type
+      and that document said nothing about it, so it has the entity, the flow edge (dashed: it
+      measures, it calls nothing), the two decisions a reader needs and the test class. `module_runners.md`
+      needed nothing from S6 — the runners are untouched by a counter that reads the rounds database —
+      so the tick is honest rather than uniform. (codex, S6's code round.)
 
 ## Test plan
 
