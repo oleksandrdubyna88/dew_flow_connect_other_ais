@@ -2091,6 +2091,73 @@ one: the page reads a state push as the whole truth about every region it mentio
 travels with the sentence, and the page MERGES it into its stored state rather than replacing that
 state, because `setState` writes the object whole.
 
+## And then it becomes the only store (2026-09-12)
+
+The section above describes the store being FILLED beside the memento. This one is the cut-over: the
+store becomes the source of truth, the memento is emptied, and the reload serializer reads the disk.
+It is the only step in this feature that can destroy a person's history, and everything below is
+shaped by that.
+
+### The migration compares transcripts, never ids
+
+The obvious rule — skip any id the store already holds, since the dual write has been filling it for
+a version — is wrong, and two vendors' reviewers found it independently before a line was written.
+The dual write is best-effort: it can answer `busy`, `failed` or `refused` while the memento goes on
+being the truth. So the memento can hold eight turns where the store holds five, and skipping on the
+id and then emptying the key deletes three turns permanently, with every test green.
+
+What is compared is the words, by the same containment predicate the fork rule uses — moved into the
+shared module so the two cannot drift:
+
+| what the two copies look like | what happens |
+|---|---|
+| the store's is a PREFIX of the memento's, or absent | the memento's is written over it |
+| equal | nothing |
+| the store's has words the memento's does not | the store stands |
+| neither contains the other | BOTH are kept, the memento's under a deterministic suffix |
+
+### What "confirmed" means before the key is emptied
+
+Present on disk is not enough: the record must also be LISTED, because a save that committed its
+record and not its index leaves a conversation nothing can find. Only an `ok` counts. A `partial` is
+repaired and re-judged; `busy`, `refused`, `incompatible` and `failed` leave the key for the next
+activation. A record this build cannot read never counts — one that cannot be read is not proof
+anything is safe.
+
+A damaged memento entry is QUARANTINED, under the store's own folder and by the store, which owns its
+layout. Dropping it would delete it silently; counting it missing would wedge the migration into
+re-running for ever. Neither is acceptable, so it is set aside with its path said out loud.
+
+### The seal, and why it is where it is
+
+The memento's writer is unbound and its queue drained — in that order, or a write issued a moment
+before the clear lands after it and fills the key again, which makes the migration re-run on every
+activation for ever. That is one statement from the `update` it protects, and not earlier: everything
+above it can still refuse, and an edit made while a refusal was being decided would otherwise be
+written to neither store. An outcome that does not clear re-binds the writer.
+
+Nothing shrinks the memento while it is still in charge. Its own write used to cut at seven days and
+twenty records, so a conversation whose store write had failed could vanish before any migration read
+it. That cut is gone.
+
+### A reload, once the store is in charge
+
+The serializer waits for the migration before answering — VS Code calls it during activation, and an
+unmigrated conversation reads as absent, which would dispose a tab the person had open on the first
+reload after the upgrade. The wait has a ceiling, and the panel is drawn before it, so a slow disk is
+a tab that says what it is doing rather than a blank one.
+
+`absent` is the ONLY answer that disposes. `incompatible` and `unavailable` each render a tab that
+says what happened, keeps the conversation's id, and offers a retry where one can help. A reload is
+also not a USE: the restored thread shares one array with what was read, so nothing bumps the
+conversation's updated time.
+
+### What it costs
+
+Nothing retires the conversations directory yet. The memento's retention went with the memento, and
+the store's sweep is the next story — a deliberate one-story gap, recorded in the plan's growth table
+rather than left for somebody to discover.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
