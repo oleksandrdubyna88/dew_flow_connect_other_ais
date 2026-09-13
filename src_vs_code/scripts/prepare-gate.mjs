@@ -15,6 +15,16 @@ export const SOURCE = '.agents/conventions/common/coai-review-gate.md';
  * that names the frozen rule it extends — and this is the third time it has been done.</p>
  */
 export const DOCUMENT_SOURCE = '.agents/conventions/common/coai-document-gate.md';
+
+/**
+ * The CALLER rule — say which model you are when you open the gate.
+ *
+ * <p>A third file for the same reason as the second: `coai-review-gate.md` is frozen against the
+ * conventions migration baseline, so the sentence asking an AI to declare its own model could not
+ * be added to step 1 where it belongs. The rule file says so, and says where it goes when the
+ * inventory retires.</p>
+ */
+export const CALLER_SOURCE = '.agents/conventions/common/coai-caller-model.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
 
 /** Strip delivery metadata only; separators in the instruction body remain verbatim. */
@@ -25,6 +35,11 @@ export function gateBody(source) {
 /** The same treatment for the document rule, held to its own marker. */
 export function documentBody(source) {
   return ruleBody(source, DOCUMENT_SOURCE, /^<!-- coai-document v\d+ -->\n## Reviewing a DOCUMENT/);
+}
+
+/** And for the caller rule. */
+export function callerBody(source) {
+  return ruleBody(source, CALLER_SOURCE, /^<!-- coai-caller v\d+ -->\n## Say which model you are/);
 }
 
 function ruleBody(source, name, marker) {
@@ -71,11 +86,13 @@ export function prepareGate(repo) {
   });
   const body = gateBody(boundedSource(path.join(repo, SOURCE)));
   const documents = documentBody(boundedSource(path.join(repo, DOCUMENT_SOURCE)));
+  const caller = callerBody(boundedSource(path.join(repo, CALLER_SOURCE)));
   fs.mkdirSync(path.dirname(output), { recursive: true });
   try {
     fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\n'
       + 'export const GATE_RULE = ' + JSON.stringify(body) + ';\n'
-      + 'export const DOCUMENT_RULE = ' + JSON.stringify(documents) + ';\n', { flag: 'wx' });
+      + 'export const DOCUMENT_RULE = ' + JSON.stringify(documents) + ';\n'
+      + 'export const CALLER_RULE = ' + JSON.stringify(caller) + ';\n', { flag: 'wx' });
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
   return body;

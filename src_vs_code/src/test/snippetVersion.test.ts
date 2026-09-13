@@ -4,7 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import {
+  callerVersionIn,
   claudeSnippet,
+  CALLER_VERSION,
   DOCUMENT_VERSION,
   SNIPPET_BODY_SHA,
   SNIPPET_LOCATIONS,
@@ -74,26 +76,31 @@ test('a copy from the FUTURE is not called old', () => {
  * pinned to the text. Editing the snippet fails this test until both are changed together, which is
  * the only moment either is cheap.</p>
  *
- * <p><b>There are TWO numbers now, and only one of them can move.</b> `SNIPPET_VERSION` is the
+ * <p><b>There are THREE numbers now, and `SNIPPET_VERSION` is not one that can move.</b> It is the
  * marker written inside `coai-review-gate.md`, one of the 24 rule bodies the conventions repository
  * hashes against its migration baseline — so that file cannot be edited and its number cannot be
- * raised. Whatever changes about the pasted text, `DOCUMENT_VERSION` is the half that records it,
- * until the inventory retires and the two rules become one again.</p>
+ * raised. What records a change is the marker of the half that changed: `DOCUMENT_VERSION` when the
+ * document rule moves, `CALLER_VERSION` when the caller rule does. A change that arrives as a WHOLE
+ * NEW half brings its own marker with it, and raising one of the others as well would claim a rule
+ * changed that did not — a paste missing the new half is already reported as older by its absence.</p>
  */
 test('the snippet text and its version numbers move together', () => {
   const body = claudeSnippet()
     .replace(/<!-- coai-snippet v\d+ -->\n?/, '')
-    .replace(/<!-- coai-document v\d+ -->\n?/, '');
+    .replace(/<!-- coai-document v\d+ -->\n?/, '')
+    .replace(/<!-- coai-caller v\d+ -->\n?/, '');
   const sha = createHash('sha256').update(body).digest('hex').slice(0, 16);
 
   assert.equal(
     sha,
     SNIPPET_BODY_SHA,
-    `The snippet text changed. Raise DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} and set `
-      + `SNIPPET_BODY_SHA to '${sha}'. Both, together — a version that does not move with the text `
-      + 'tells every pasted copy it is current forever, which is the defect this exists to catch. '
-      + `(SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen against the migration `
-      + 'baseline, so its marker cannot be raised.)',
+    `The snippet text changed. Set SNIPPET_BODY_SHA to '${sha}', and raise the marker of the half `
+      + `that changed — DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} for the document rule, `
+      + `CALLER_VERSION to ${CALLER_VERSION + 1} for the caller rule. Both, together: a version that `
+      + 'does not move with the text tells every pasted copy it is current forever, which is the '
+      + 'defect this exists to catch. A change that adds a whole new rule file brings its own marker '
+      + `and raises neither. (SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen `
+      + 'against the migration baseline, so its marker cannot be raised.)',
   );
 });
 
@@ -111,15 +118,37 @@ test('a paste with no document half is reported as older', () => {
 });
 
 /**
+ * And a paste made before the caller rule, whose other two halves are current.
+ *
+ * <p>The AI obeying it never sends `callerModel`, so every round it drives is recorded as stating
+ * no model while the gate is perfectly able to record one — a log that is quietly less useful than
+ * the build it is running against, which is the defect all three markers exist to catch.</p>
+ */
+test('a paste with no caller half is reported as older', () => {
+  const withoutCaller = `${claudeSnippet().split('<!-- coai-caller')[0]}`;
+
+  assert.equal(callerVersionIn(withoutCaller), undefined, 'the fixture really is missing that half');
+  assert.deepEqual(
+    snippetStatus(withoutCaller),
+    { kind: 'older', found: SNIPPET_VERSION, current: SNIPPET_VERSION },
+  );
+});
+
+test('the caller half of a current paste is the current caller version', () => {
+  assert.equal(callerVersionIn(claudeSnippet()), CALLER_VERSION);
+});
+
+/**
  * The canonical body is delivered from the pinned neutral mount during build preparation.
  * Missing sources fail before compile; this check independently compares the generated body
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
-  // TWO files since plan 4, joined by a newline. The gate rule could not grow a section: it is one
+  // THREE files since #174, joined by newlines. The gate rule could not grow a section: it is one
   // of the 24 bodies the conventions repository hashes against its migration baseline, so the
-  // document flow is a second rule file — and this is what proves both of them travel verbatim.
-  const bodies = [mountedRuleFile(), mountedDocumentRuleFile()].map((mounted) => {
+  // document flow is a second rule file and the caller declaration a third — and this is what
+  // proves all of them travel verbatim.
+  const bodies = [mountedRuleFile(), mountedDocumentRuleFile(), mountedCallerRuleFile()].map((mounted) => {
     assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
     const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
     assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
@@ -164,6 +193,10 @@ function mountedRuleFile(): string {
 
 function mountedDocumentRuleFile(): string {
   return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-document-gate.md');
+}
+
+function mountedCallerRuleFile(): string {
+  return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-caller-model.md');
 }
 
 test('the instruction files are searched BEFORE the mounted rule', () => {
