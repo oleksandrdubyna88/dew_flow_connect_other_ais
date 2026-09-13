@@ -754,23 +754,43 @@ public sealed partial class PanelService
     /// </remarks>
     private async Task WarmRemoteRolesAsync(CancellationToken ct)
     {
+        // One task per distinct SERVER, run TOGETHER. Serially, an operator with five configured
+        // servers of which three were down waited for three timeouts in a row before the round could
+        // begin — out of the round's own budget, with nothing saying why. (gemini and codex, story
+        // 4's code round, from three directions.)
         var asked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var provider in _settings.Providers.Where(p => p.Enabled && Remote(p)))
-        {
-            if (_remote.RolesOn(provider.BaseUrl).Source != RemoteRolesSource.NotAsked
-                || !asked.Add(TeamServerAuth.Normalise(provider.BaseUrl)))
-            {
-                continue;
-            }
 
-            try
-            {
-                await _remote.RunAsync(provider.Identity(), provider.Enabled, _settings.DataDir, ct);
-            }
-            catch (Exception e) when (e is not OperationCanceledException)
-            {
-                _log.Warning(e, "could not ask {Server} which review roles it runs", provider.BaseUrl);
-            }
+        await Task.WhenAll(
+            _settings.Providers
+                .Where(p => p.Enabled && Remote(p) && asked.Add(TeamServerAuth.Normalise(p.BaseUrl)))
+                .Select(p => AskWhichRolesAsync(p, ct)));
+    }
+
+    /// <summary>
+    /// One server, asked. Never throws for the SERVER's sake; always throws for the ROUND's.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>There is deliberately no "already asked, skip it" test.</b> The first version had
+    /// one, and it made a single transient failure permanent: a 502 during a restart recorded
+    /// <c>Unreachable</c>, every later round saw a state that was no longer <c>NotAsked</c> and
+    /// skipped the server, and that server's custom roles stayed off for the life of the process.
+    /// The staleness ran the other way too — an operator adding a role to <c>Coai:ExtraRoles</c> was
+    /// never heard again. <see cref="RemoteProbe"/> already owns freshness: it answers from its
+    /// cache inside the window and backs off after a failure, so asking every round costs nothing
+    /// when the answer is fresh and is the only thing that can refresh it when it is not. Four
+    /// findings from two reviewers, all of them this. (Story 4's code round.)</para>
+    /// <para>Cancellation is not a server failure: a round whose clock has run out must stop, not
+    /// record every server as unreachable on its way out.</para>
+    /// </remarks>
+    private async Task AskWhichRolesAsync(ProviderSettings provider, CancellationToken ct)
+    {
+        try
+        {
+            await _remote.RunAsync(provider.Identity(), provider.Enabled, _settings.DataDir, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _log.Warning(e, "could not ask {Server} which review roles it runs", provider.BaseUrl);
         }
     }
 

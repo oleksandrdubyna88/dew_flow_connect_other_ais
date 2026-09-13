@@ -38,8 +38,30 @@ C4Container
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
+  Rel(mcp, srv, "and first: which review roles do you run?")
+  Rel(ext, srv, "the same question, for the panel's own picture")
   Rel(srv, codex, "spawn, one signed-in account per slot")
 ```
+
+### A Team server says which roles it runs, and both clients ask (2026-09-13)
+
+`/api/catalog` carries `roles` and `allowAnyRole` — the roles that server accepts, which is the five
+it ships with plus whatever its operator put in `Coai:ExtraRoles`. Both clients read it
+INDEPENDENTLY: `RemoteRoles` in coai-mcp and `serverRoles.ts` in the extension. That duplication is
+deliberate and is the same argument `RemoteCatalog` already carries — these are binaries that ship
+separately, and a client that could only parse the catalog it was compiled beside would need
+updating in lockstep with every server.
+
+**The answer has THREE states, not two**, and that is the part worth knowing at this level: a server
+that ANSWERED without the field, and one that could not be REACHED, both leave a client without a
+list. The fallback is identical — the five that ship, which every Team server has always run — but
+only one of them can honestly say why a role was left out, so a network blip never masquerades as an
+out-of-date server. An empty list means the same as an absent one: a server that has the field always
+accepts at least five, so `[]` can only be a bug.
+
+**coai-mcp asks before it assembles a round**, because assembling one is synchronous and cannot. The
+panel probes constantly while it is open, but the panel is the EXTENSION and coai-mcp is a separate
+process with a separate cache — nothing guarantees the one building the round has ever asked.
 
 ## Module map
 

@@ -38,7 +38,15 @@ export function serverRolesFrom(catalog: Catalog | undefined): ServerRoles {
     return { kind: 'unknown' };
   }
 
-  const named = catalog.roles ?? [];
+  // `Catalog` is a TypeScript INTERFACE, which is a promise about a value this code did not
+  // produce: it came over HTTP from a server somebody else configured. `{"roles":[null]}` would
+  // reach `name.toLowerCase()` and throw while the Prompts section was being built — one malformed
+  // response taking the whole panel down. Anything that is not a list of strings is read as an
+  // answer nobody could use, which is the `shipped` floor rather than a crash. (codex, story 4's
+  // code round.)
+  const named = Array.isArray(catalog.roles)
+    ? catalog.roles.filter((name): name is string => typeof name === 'string' && name.length > 0)
+    : [];
 
   return named.length === 0
     ? { kind: 'shipped' }
