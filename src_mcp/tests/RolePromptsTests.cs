@@ -17,9 +17,14 @@ namespace CoaiMcp.Tests;
 /// this class knew by a switch statement; a role a person defines has prompts this build has never
 /// heard of, and the file it wants is named by the prompt.</para>
 /// </remarks>
-public sealed class RolePromptsTests
+public sealed class RolePromptsTests : IDisposable
 {
-    private readonly string _data = Directory.CreateTempSubdirectory("coai-prompts-").FullName;
+    /// <summary>Every temporary directory this class made, gone when it ends.</summary>
+    public void Dispose()
+    {
+        _data.Dispose();
+    }
+    private readonly TempDir _data = TempDir.For("coai-prompts-");
 
     /// <summary>
     /// A line only that prompt carries, for each role whose text says something unmistakable.

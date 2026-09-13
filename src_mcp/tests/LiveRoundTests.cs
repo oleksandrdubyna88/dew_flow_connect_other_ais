@@ -14,9 +14,14 @@ namespace CoaiMcp.Tests;
 /// when the process that owned it is gone. The defect these hold shut is the one the operator saw
 /// — a ten-minute round that showed nothing at all until it ended.
 /// </summary>
-public sealed class LiveRoundTests
+public sealed class LiveRoundTests : IDisposable
 {
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-live-").FullName;
+    /// <summary>Every temporary directory this class made, gone when it ends.</summary>
+    public void Dispose()
+    {
+        _dir.Dispose();
+    }
+    private readonly TempDir _dir = TempDir.For("coai-live-");
 
     private static PersistedSession Session() =>
         new(new SessionState("s-live", "D:/repo", "feature/x", new PanelConfig()), []);

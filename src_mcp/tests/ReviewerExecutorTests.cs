@@ -39,10 +39,15 @@ internal static class FakeCliInvocations
 }
 
 [Collection("fakecli-env")]
-public sealed class ReviewerExecutorTests
+public sealed class ReviewerExecutorTests : IDisposable
 {
+    /// <summary>Every temporary directory this class made, gone when it ends.</summary>
+    public void Dispose()
+    {
+        _dir.Dispose();
+    }
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
-    private readonly string _dir = Directory.CreateTempSubdirectory("coai-exec-").FullName;
+    private readonly TempDir _dir = TempDir.For("coai-exec-");
 
     [Fact]
     public async Task Ok_FromStdout_TheGeminiPath()
@@ -306,7 +311,7 @@ public sealed class ProcessLauncherStdInTests
     public async Task TheChildStillReceivesStdIn_WhenItActuallyReadsIt()
     {
         // The guard must not turn into "stdin is optional": the prompt travels this way.
-        var record = Directory.CreateTempSubdirectory("coai-stdin-").FullName;
+        using var record = TempDir.For("coai-stdin-");
         Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
         Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
         try

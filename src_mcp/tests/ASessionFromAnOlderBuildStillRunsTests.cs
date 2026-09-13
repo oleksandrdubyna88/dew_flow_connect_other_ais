@@ -94,7 +94,7 @@ public sealed class ASessionFromAnOlderBuildStillRunsTests
         // property initializer can catch it — the same defect one layer over, and this one would take
         // down the panel rather than a round. It can only be normalised where a session comes off
         // disk, so this goes through the store rather than through the serializer.
-        var dir = Directory.CreateTempSubdirectory("coai-oldsession-").FullName;
+        using var dir = TempDir.For("coai-oldsession-");
         var store = new SessionStore(dir);
         var withoutRounds = """
             {
@@ -119,7 +119,7 @@ public sealed class ASessionFromAnOlderBuildStillRunsTests
         // deserialises separately and then calls `session.Rounds.Any(...)`, so an old file would have
         // taken down the sweep that runs at STARTUP — every window, not one round. The normalisation
         // is one method used by both readers now.
-        var dir = Directory.CreateTempSubdirectory("coai-oldsession-sweep-").FullName;
+        using var dir = TempDir.For("coai-oldsession-sweep-");
         var store = new SessionStore(dir);
         var file = store.FileFor("D:/x", "main");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);

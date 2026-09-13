@@ -178,6 +178,31 @@ after its fix. Reverting the containment check to a string prefix made `/repo-se
 only the last component made a parent-directory symlink come back `Ready` rather than `Refused`,
 which is the file being read and sent to three vendors.
 
+## The temp directory is a shared resource (2026-09-13)
+
+Three things, and the third is the one that cost an afternoon.
+
+**`TempDir` is the RAII helper.** `using var work = TempDir.For("coai-thing-");` and the directory is
+gone when the scope ends, however the test ended. Eleven classes created one and deleted it nowhere
+at all; the rest write the same delete out by hand in `Dispose`. It clears read-only attributes first,
+because git marks its object files read-only and `Directory.Delete(recursive: true)` refuses one —
+and it never throws on the way out, because a delete that loses a race with a held-open file is not a
+failing test.
+
+**A `using` on a value that ESCAPES its scope deletes what the caller was given.** The mechanical
+conversion did exactly that to `VendorStagesTests.Repository()`, which builds a git repository and
+returns its path: the round then found nothing there and answered `{ }`. A factory hands ownership
+back — `private static async Task<TempDir> Repository()` — and the caller writes `using var`.
+
+**And the suite's sweep window came down from a day to two hours**, because the cost of leftovers is
+not disk. `PanelService.BuildWork` walks the temp directory looking for its own scratch, and that walk
+costs the number of directories in it. Measured 2026-09-13 after a day of runs: **81,986** `coai-*`
+directories, and `SubmissionOrderTests` — a hundred `BuildWork` calls in a loop — went from 8 seconds
+to over four minutes, which from outside is indistinguishable from a deadlock in whatever had just
+been changed. The product now walks at most once every ten minutes per process rather than twice per
+reviewer. CI never sees any of this: a runner starts with an empty temp, so a green CI beside a
+stalled local suite is evidence FOR this cause.
+
 ## What this does NOT prove
 
 The most valuable section, and the first one people drop.

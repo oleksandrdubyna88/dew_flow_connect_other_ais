@@ -1223,3 +1223,23 @@ a round cannot reach it.
 **`resolve` and `status` take the same `document` back.** A caller that omits it lands on the
 branch's session, which is idle and has nothing to decide; both refusals say so rather than sending
 them to run another review.
+
+## PanelService is being taken apart (2026-09-13)
+
+It reached 2,600 lines, and the code round that found it said so as an accepted debt rather than a
+finding to fix inside that diff. The split is by DOMAIN — what a group of members reads and produces —
+not by size, and it is being done a cut at a time so each one is reviewable on its own.
+
+**Taken out so far: `RoundRefusals`** — every sentence a round says instead of reviewing. They belong
+together and with nothing else: they read ONE thing, the catalog, and they produce prose. Nothing in
+them starts a process, touches a disk or holds session state, which is what made this the first cut.
+`PanelService` keeps three one-line delegations so its callers are unchanged, and builds the type per
+CALL rather than holding one — the panel rewrites its settings file while the server runs, and a
+refusal built at construction would name the roles configured at startup.
+
+**The cuts this leaves, in the order their coupling allows**: provider health (`ProvidersAsync`,
+`AuthFor`, `CanRun`, `ExcludedFrom`, `ReasonFor` — reads credentials and runtimes, nothing else);
+round assembly (`BuildWork`, `ComposePrompt`, the deal and the seed); the document orchestration
+(`ReviewDocumentAsync` and its four helpers, which need a delegate back to `RunStageAsync`); and
+`resolve`. The last two are the largest and the most entangled with session state, which is why they
+are last rather than first.
