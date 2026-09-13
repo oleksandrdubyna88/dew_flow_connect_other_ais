@@ -388,7 +388,8 @@ owns, held by both suites — and `architecture.md` gains a paragraph saying so.
 - **The Team server still refuses any role but the five** — plan 3,
   [PLAN_team_server_accepts_custom_roles.md](PLAN_team_server_accepts_custom_roles.md)
   (`Coai:ExtraRoles`, `Coai:AllowAnyRole`), shipped 2026-09-13.
-- **No `review_document`, no session kind, no artifact** — plan 4, *PLAN_review_document*. A role
+- **No `review_document`, no session kind, no artifact** — plan 4,
+  [PLAN_review_document.md](PLAN_review_document.md), shipped 2026-09-13. A role
   with `programmingTask: false` is accepted and stored by this plan and **takes part in no round**,
   because `RolesOf` filters to programming roles; it is not named as dropped, because it is not
   dropped — it is waiting for the stage that runs it, and this plan's `module_server.md` entry says

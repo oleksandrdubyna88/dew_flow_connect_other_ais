@@ -49,7 +49,8 @@ The catalog is data and the panel still draws five constants.
   (`Coai:ExtraRoles`, `Coai:AllowAnyRole`), shipped 2026-09-13.
 - **No `review_document`, no artifact, no second CLAUDE.md snippet.** A role stored with
   `programmingTask: false` is saved by this plan, shown in the page, and takes part in **no round** —
-  exactly as plan 1 left it. The stage that runs one is plan 4.
+  exactly as plan 1 left it. The stage that runs one is plan 4,
+  [PLAN_review_document.md](PLAN_review_document.md), shipped 2026-09-13.
 - **No change to what a round OUTPUTS.** Same findings, same categories, same verdict. A custom role
   differs only in the question it asks, and that question is its prompt.
 

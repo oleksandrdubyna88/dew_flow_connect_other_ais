@@ -91,7 +91,9 @@ vendors they run themselves and from nobody else's.
 ## What this plan is NOT
 
 - **No `review_document`, no artifact, no document upload.** A role with `programmingTask: false` is
-  still stored, still shown, and still runs in no round. That is plan 4 and plan 5.
+  still stored, still shown, and still runs in no round. That is plan 4,
+  [PLAN_review_document.md](PLAN_review_document.md) — shipped 2026-09-13, and it runs the result
+  stage's document roles — and plan 5, which is what reaches a Team server.
 - **No change to what a round outputs.** Same findings, same categories, same verdict.
 - **No role AUTHORING on the server.** The server does not grow a roles page; it grows permission to
   run roles a client names. Where the role's prompt comes from is unchanged — the client composes the
