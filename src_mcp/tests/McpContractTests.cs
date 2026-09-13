@@ -158,13 +158,62 @@ public sealed class McpContractTests : IDisposable
                 .And.Contain("MATERIAL")
                 .And.Contain("Report the verification back");
 
-            // And with no words at all, which is the ordinary use.
-            var bare = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":""}}}
+            // And with no words at all, which is the ordinary use. BOTH shapes of it: an empty string,
+            // and the argument OMITTED — a client sends the second when somebody types the command
+            // alone, and a registration that made the parameter required would fail exactly there
+            // while every other test stayed green. (codex, story 5's plan round.)
+            foreach (var arguments in (string[])["{\"problem\":\"\"}", "{}"])
+            {
+                var bare = (await RoundTrip(server,
+                    $$$"""{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"consult","arguments":{{{arguments}}}}}""")).RootElement;
+
+                bare.TryGetProperty("error", out _).Should().BeFalse($"arguments {arguments} must be accepted: {bare}");
+                bare.GetProperty("result").GetProperty("messages")[0]
+                    .GetProperty("content").GetProperty("text").GetString()
+                    .Should().Contain("expected to know it");
+            }
+
+            // A problem carrying punctuation and a code span travels unrewritten, which is the claim
+            // the message makes about the person's words.
+            var awkward = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"consult","arguments":{"problem":"`Count()` returns 3 after two fixes; expected 4."}}}
                 """);
-            bare.RootElement.GetProperty("result").GetProperty("messages")[0]
+            awkward.RootElement.GetProperty("result").GetProperty("messages")[0]
                 .GetProperty("content").GetProperty("text").GetString()
-                .Should().Contain("expected to know it");
+                .Should().Contain("`Count()` returns 3 after two fixes; expected 4.");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// A client that never asks for prompts still learns the consultant exists.
+    /// </summary>
+    /// <remarks>
+    /// The instructions are the fallback, and nothing asserted they travel: `ServerInstructions` is
+    /// set on an options object, and an edit that stopped setting it would leave both prompt tests
+    /// green with the fallback silently gone. This reads the INITIALIZE response, which is the only
+    /// place a client sees them. (codex, story 5's plan round.)
+    /// </remarks>
+    [Fact]
+    public async Task Initialize_CarriesTheInstructions_IncludingTheConsultPrompt()
+    {
+        using var server = Start();
+        try
+        {
+            var init = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+
+            var instructions = init.RootElement.GetProperty("result").GetProperty("instructions").GetString()!;
+
+            instructions.Should()
+                .Contain("`consult` is for when YOU are stuck", "the tool has to be named for a client that lists no prompts")
+                .And.Contain("PROMPT", "and so does the other way in")
+                .And.Contain("advice, not orders");
         }
         finally
         {

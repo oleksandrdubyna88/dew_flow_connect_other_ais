@@ -1892,6 +1892,14 @@ rules that make advice usable: it is MATERIAL to verify, and the next call repor
 **Never a diff**: the server collects the working tree itself, and a diff pasted into the problem
 statement is the same bytes twice, paid for twice.
 
+**And a MOUNT is not a paste.** `SNIPPET_LOCATIONS` includes the mounted canonical rule, so a family
+repository that mounts and never pasted used to read as current — and since v6 it reads as v5 against
+v6, which would have told it to "copy it again and replace the old block". Wrong twice: there is no
+block to replace, and pasting the whole snippet would duplicate a rule the submodule already
+provides. `snippetStatus` takes where it was found, answers a sixth state — `mounted` — and the note
+says to paste the consultant half only. Raised as Blocking on the plan round, by the reviewer that
+read the consequence through rather than the sentence.
+
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
 It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea

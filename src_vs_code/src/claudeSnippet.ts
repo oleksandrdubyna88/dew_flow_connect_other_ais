@@ -69,13 +69,35 @@ export const SNIPPET_LOCATIONS: readonly string[] = [
 /** The sentence a copy is recognised by, wherever it sits. */
 export const SNIPPET_MARKER = 'Multi-model review gate (ConnectOtherAIs)';
 
+/**
+ * The locations that are a MOUNT of the shared rule rather than somebody's paste.
+ *
+ * <p>It mattered from the moment the snippet gained a second half. The gate text in a mount is
+ * current by definition — the submodule pin says so — but it is now only PART of what the button
+ * hands out, so a repository that mounts and never pasted is missing the consultant block. Telling
+ * it to "replace the old block" would be wrong twice: there is no block to replace, and pasting the
+ * whole snippet would duplicate a rule the mount already provides. (gemini, story 5's plan round.)</p>
+ */
+const MOUNTED_LOCATIONS: readonly string[] = [
+  '.agents/conventions/common/coai-review-gate.md',
+  '.claude/rules/shared/common/coai-review-gate.md',
+];
+
 /** What a workspace's pasted copy is, relative to what this build hands out. */
 export type SnippetStatus =
   | { readonly kind: 'current'; readonly current: number }
   | { readonly kind: 'older'; readonly found: number; readonly current: number }
   | { readonly kind: 'ahead'; readonly found: number; readonly current: number }
   | { readonly kind: 'unversioned'; readonly current: number }
-  | { readonly kind: 'absent'; readonly current: number };
+  | { readonly kind: 'absent'; readonly current: number }
+  /**
+   * The shared rule is MOUNTED here and nothing was pasted.
+   *
+   * <p>Its own answer rather than `older`, because the advice is different: the gate half is current
+   * by the submodule pin, and what is missing is the consultant half — which lives in this product,
+   * not in the shared store. Pasting the whole snippet over a mount would duplicate the gate rule.</p>
+   */
+  | { readonly kind: 'mounted'; readonly found: number; readonly current: number };
 
 const MARKER = /<!-- coai-snippet v(\d+) -->/;
 
@@ -134,8 +156,14 @@ const CONSULTANT_MARKER = /<!-- coai-consultant v(\d+) -->/;
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
+  const at = texts.findIndex(text => text.includes(SNIPPET_MARKER));
+  if (at < 0) {
+    return snippetStatus(undefined);
+  }
 
-  return snippetStatus(texts.find(text => text.includes(SNIPPET_MARKER)));
+  // WHERE it was found decides what to say about it: the instruction files come first precisely so
+  // a stale paste outranks a current mount, and a mount that answers means nothing was pasted.
+  return snippetStatus(texts[at], MOUNTED_LOCATIONS.includes(SNIPPET_LOCATIONS[at]!));
 }
 
 /** The version out of a file the snippet was pasted into, or nothing when it carries no marker. */
@@ -154,7 +182,7 @@ export function snippetVersionIn(text: string): number | undefined {
  * and is not the same as version zero. `ahead` is a real case too: an extension older than the
  * repository, on a machine that has not updated.</p>
  */
-export function snippetStatus(pasted: string | undefined): SnippetStatus {
+export function snippetStatus(pasted: string | undefined, fromMount = false): SnippetStatus {
   const current = SNIPPET_VERSION;
   if (pasted === undefined || !pasted.includes(SNIPPET_MARKER)) {
     return { kind: 'absent', current };
@@ -174,6 +202,12 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
       ? { kind: 'current', current }
       : { kind: 'older', found, current };
   }
+  // A MOUNT that is behind is not a stale paste: the gate half is current by its pin, and what it
+  // lacks is the half this product owns. Ahead is still ahead — a newer mount than this build knows
+  // about is a machine to update, whoever put the text there.
+  if (fromMount && found < current) {
+    return { kind: 'mounted', found, current };
+  }
 
   return found < current ? { kind: 'older', found, current } : { kind: 'ahead', found, current };
 }
@@ -191,6 +225,11 @@ export function snippetNote(status: SnippetStatus): string {
     case 'ahead':
       return `This workspace has snippet v${status.found} and this extension hands out v${status.current}. `
         + 'Somebody updated the repository from a newer build — update this one rather than pasting over it.';
+    case 'mounted':
+      return `This workspace MOUNTS the shared gate rule (v${status.found}); the snippet this build hands `
+        + `out is v${status.current} and carries a second half — when to consult another vendor — which `
+        + 'lives in ConnectOtherAIs rather than in the shared rules. Copy it from the ⋯ menu and paste '
+        + 'the consultant block; the gate half is already here and should not be duplicated.';
     case 'current':
       return '';
     case 'absent':
@@ -223,6 +262,9 @@ export function copiedMessage(status: SnippetStatus): string {
       return `${took}, and this repository is already on it — nothing to replace.`;
     case 'absent':
       return `${took} — paste it into the CLAUDE.md of the repository you want reviewed.`;
+    case 'mounted':
+      return `${took}. This repository MOUNTS the gate rule (v${status.found}), so paste the consultant `
+        + 'block only — the gate half is already here through the submodule.';
     default: {
       const unhandled: never = status;
 
