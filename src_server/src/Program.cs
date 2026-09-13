@@ -60,6 +60,15 @@ var admins = SplitCsv(config["Coai:Admins"]);
 var sessionTtlDays = config.GetValue("Coai:SessionTtlDays", 7);
 var requireHttps = config.GetValue("Coai:RequireForwardedHttps", true);
 var minimumContract = config.GetValue("Coai:MinimumClientContract", ContractVersion.DefaultMinimumSupported);
+// The review roles this server will run. Constructed HERE, with the other configuration, because
+// `From` REFUSES a configured id that could never run — so building it is the boot guard, and an
+// operator who wrote `My-Role` learns now rather than on every request, where nobody is looking.
+//
+// It is not a parameter of `Startup.Guard`: that already takes ten, and an eleventh for a check that
+// can guard itself is the shape this family has an open note about.
+var acceptedRoles = AcceptedRoles.From(
+    SplitCsv(config["Coai:ExtraRoles"]),
+    config.GetValue("Coai:AllowAnyRole", false));
 
 var msTenant = config["Auth:Microsoft:Tenant"];
 var msAudiences = SplitCsv(config["Auth:Microsoft:Audiences"]);
@@ -136,6 +145,9 @@ var sessions = new SessionStore(
     TimeSpan.FromDays(sessionTtlDays),
     (message, error) => reportSessionFailure?.Invoke(message, error));
 builder.Services.AddSingleton(sessions);
+// One instance, reached by both role gates and by the catalog endpoint, so a refusal and the list a
+// client is told about can never be two different answers.
+builder.Services.AddSingleton(acceptedRoles);
 
 // The vendor catalog and the accounts. The catalog re-reads vendors.json when it changes; the
 // registry owns the cross-process lock that keeps two launches off one account.

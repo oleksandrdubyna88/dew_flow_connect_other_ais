@@ -275,3 +275,11 @@ OLD deployed server before either client is released.
   rather than built, because the ledger cannot contain such a row until this plan ships.)*
 - **Per-caller role permissions** are still nobody's question. If one is ever asked, it is a second
   authorisation model and it belongs beside the domain one, not inside `AcceptedRoles`.
+- **`RoleComposition.RoleId` on the client has the trailing-newline hole.** Story 1's own test caught
+  it on the server: in .NET, `$` matches at the end of the string OR immediately before a trailing
+  newline, so `^[A-Za-z][A-Za-z0-9_]*$` ACCEPTS `"Requirements\n"`. The server anchors `\A…\z` now.
+  `RoleComposition` (`src_mcp/core/Rounds/RoleComposition.cs`) still uses `^…$`, and so does
+  `roles.ts`'s `ROLE_ID` — though JavaScript's `$` does not have this behaviour without the `m` flag,
+  so only the C# copy is affected. Not fixed here because it is not this story's file and a role id
+  reaching it has already passed the page's own generator; it is a one-character change whenever
+  `RoleComposition` is next opened.
