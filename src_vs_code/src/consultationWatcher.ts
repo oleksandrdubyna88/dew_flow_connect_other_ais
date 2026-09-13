@@ -155,6 +155,10 @@ function idOf(name: string): string {
 function signature(consultations: readonly Consultation[]): string {
   return consultations
     .map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`)
-    .sort()
+    // Compared explicitly rather than by the default sort, which orders by UTF-16 code unit: this
+    // string is only ever compared with another one built the same way, so any total order would do
+    // — and a sort whose ORDER is implicit is the shape that stops being harmless the day somebody
+    // reads the output rather than diffing it. (SonarCloud S2871, on the pull request.)
+    .sort((one, other) => one.localeCompare(other))
     .join('|');
 }
