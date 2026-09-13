@@ -258,4 +258,45 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
 
         work.Excluded.Should().ContainSingle().Which.Role.Should().Be("Requirements");
     }
+
+    /// <summary>
+    /// A shipped DOCUMENT role is never dealt to a Team server that has not named it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The plan round asked for this one specifically: `RemoteRolesTests` proves the predicate,
+    /// and a predicate can be right while the call site passes it the wrong thing. This drives
+    /// `BuildWork` — where the exclusion actually happens — with a real Team-server provider and no
+    /// catalog fetched, which is the state every deployed server is in until it answers.</para>
+    /// <para>Both roles, because covering one of a pair leaves the other free to reach a legacy
+    /// server while the suite stays green.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(RoleCatalog.DocumentRole)]
+    [InlineData(RoleCatalog.DocumentSummaryRole)]
+    public void ADocumentRoleIsNotDealtToATeamServerThatHasNotSaid(string role)
+    {
+        var service = Service(RoleCatalog.Builtin, withTeamServer: true);
+
+        var work = service.BuildWork(
+            [role], Scratch(), "ctx", round: 1, servedByPlanSwitch: true, readsCheckout: false);
+
+        work.Reviewers.Should().BeEmpty("the only vendor is a Team server that cannot run it");
+        work.Excluded.Should().ContainSingle()
+            .Which.Reason.Should().Contain("this product added")
+            .And.NotContain("you added", "it is a role this product shipped, not one they wrote");
+    }
+
+    /// <summary>The regression guard: a CODE built-in is still dealt to the same server.</summary>
+    [Fact]
+    public void ACodeBuiltInIsStillDealtToATeamServerThatHasNotSaid()
+    {
+        var service = Service(RoleCatalog.Builtin, withTeamServer: true);
+
+        var work = service.BuildWork(
+            [RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1,
+            servedByPlanSwitch: false, readsCheckout: true);
+
+        work.Reviewers.Should().ContainSingle("every Team server has run Architecture since before it could say so");
+        work.Excluded.Should().BeEmpty();
+    }
 }
