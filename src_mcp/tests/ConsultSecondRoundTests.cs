@@ -99,18 +99,28 @@ public sealed class ConsultSecondRoundTests : IDisposable
         var repo = Directory.CreateTempSubdirectory("coai-hooks-").FullName;
         try
         {
-            var git = Directory.CreateDirectory(Path.Combine(repo, ".git")).FullName;
-            File.WriteAllText(Path.Combine(git, "HEAD"), "ref: refs/heads/main\n");
+            // A REAL repository, and that is the whole correction. The fabricated `.git` this used to
+            // build is not one, so `SnapshotAsync` threw on its very first `git status` and the
+            // assertion passed — with or without the guard in `HooksIn`, which is the path it claimed
+            // to cover. A test that cannot fail for the reason it states is worse than no test: it
+            // reports the guard as covered. (CodeRabbit, on the pull request.)
+            var launcher = new ProcessLauncher();
+            (await launcher.RunAsync(
+                new CoaiMcp.Runners.Processes.ProcessRequest("git", ["init", "-b", "main"], repo),
+                TestContext.Current.CancellationToken)).ExitCode.Should().Be(0);
+
             // A `hooks` that is a FILE where a directory is expected: enumerating it throws.
-            File.WriteAllText(Path.Combine(git, "hooks"), "not a directory");
+            var hooks = Path.Combine(repo, ".git", "hooks");
+            Directory.Delete(hooks, recursive: true);
+            File.WriteAllText(hooks, "not a directory");
 
-            var snapshot = new FilesystemInvariant(new ProcessLauncher());
-            var act = async () => await snapshot.SnapshotAsync(repo, TestContext.Current.CancellationToken);
+            var act = async () => await new FilesystemInvariant(launcher)
+                .SnapshotAsync(repo, TestContext.Current.CancellationToken);
 
-            // It still refuses — this is not a git repository — but with git's OWN words, through the
-            // named ContextException the tool turns into a sentence, never an IO exception from a
-            // directory walk.
-            await act.Should().ThrowAsync<CoaiMcp.Runners.Context.ContextException>();
+            // The snapshot ANSWERS: a hooks path it cannot list contributes nothing, so the two
+            // snapshots of a consultation still agree instead of the invariant failing with an IO
+            // exception of its own — which would fail the consultation closed for nothing.
+            await act.Should().NotThrowAsync();
         }
         finally
         {

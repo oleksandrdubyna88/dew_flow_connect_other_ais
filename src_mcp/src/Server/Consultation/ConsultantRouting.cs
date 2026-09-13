@@ -6,7 +6,21 @@ namespace CoaiMcp.Server;
 public sealed record ConsultantChoice(string Vendor, string Model = "");
 
 /// <summary>The parsed `COAI_CONSULTANTS` setting: the map, and any sentence about what could not be read.</summary>
-public sealed record ConsultantsSetting(IReadOnlyDictionary<string, ConsultantChoice> Map, IReadOnlyList<string> Complaints);
+/// <summary>
+/// The routing map, what was wrong with it, and whether it could be read AT ALL.
+/// </summary>
+/// <remarks>
+/// <c>Unreadable</c> exists because the complaint was not enough. A <c>COAI_CONSULTANTS</c> that does
+/// not parse used to leave the SHIPPED map in force and record a sentence in the panel's
+/// "unrecognised" list — so a person who configured a consultant and mistyped the JSON had their
+/// working tree sent to a vendor they had not chosen, with the only warning on a page they were not
+/// looking at. This class's own doctrine, three lines further down, is that exactly this must not
+/// happen. (CodeRabbit, on the pull request.)
+/// </remarks>
+public sealed record ConsultantsSetting(
+    IReadOnlyDictionary<string, ConsultantChoice> Map,
+    IReadOnlyList<string> Complaints,
+    bool Unreadable = false);
 
 /// <summary>
 /// The consultant per CALLER kind — and the rule behind the shipped map.
@@ -54,7 +68,8 @@ public static class ConsultantRouting
         {
             return new ConsultantsSetting(
                 Shipped,
-                [$"COAI_CONSULTANTS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — the shipped consultants are in force"]);
+                [$"COAI_CONSULTANTS could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — consulting is refused until it is fixed"],
+                Unreadable: true);
         }
     }
 

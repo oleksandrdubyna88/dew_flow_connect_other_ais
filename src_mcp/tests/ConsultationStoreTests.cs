@@ -95,6 +95,35 @@ public sealed class ConsultationStoreTests : IDisposable
         _store.Read(record.Id).Should().BeNull();
     }
 
+    /// <summary>
+    /// A well-NAMED file whose JSON carries no id is skipped — it does not take the sweep down.
+    /// </summary>
+    /// <remarks>
+    /// The name is the guard, so such a file gets as far as being deserialised, and a missing
+    /// <c>id</c> deserialises to null however non-nullable the property is — a state this store's own
+    /// remark records having met live, when the local route's answer schema landed in this directory.
+    /// <c>Regex.IsMatch(null)</c> throws, and `All` is what `Sweep` enumerates, so ONE such file
+    /// stopped the sweep for every record behind it: interrupted consultations never reconciled,
+    /// finished ones never retired. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public void AFileWithNoIdAtAll_IsSkippedRatherThanStoppingTheSweep()
+    {
+        var real = Record(handle: "0198-bbbb");
+        _store.Write(real);
+        // Named like one of ours — 32 hex digits — and holding JSON with no `id` at all.
+        File.WriteAllText(
+            Path.Combine(_store.Directory, new string('a', 32) + ".json"),
+            "{\"repoPath\": \"D:/repo\", \"branch\": \"main\"}");
+
+        var act = () => _store.All();
+
+        act.Should().NotThrow("one unreadable file must not hide every readable one");
+        _store.All().Should().ContainSingle(one => one.Id == real.Id);
+        _store.Sweep(_ => false, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7))
+            .Should().Be(1, "the real record is still reconciled");
+    }
+
     [Fact]
     public void ASweepFlipsAnAskingRecordWhoseServerIsGone_ToInterruptedWhenItHoldsAHandle()
     {

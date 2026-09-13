@@ -63,8 +63,24 @@ internal static class ConsultantLaunches
         return flattened.Length <= 120 ? flattened : flattened[..120] + "…";
     }
 
-    /// <summary>Whether the process said this, on either stream, however it was cased.</summary>
+    /// <summary>
+    /// Whether a FAILED process said this, on either stream, however it was cased.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The exit code is part of the test, and leaving it out was a defect with teeth.</b>
+    /// This is only ever asked to decide whether a vendor DROPPED the conversation — and stdout is
+    /// where the model's ANSWER arrives on both routes that ask: antigravity reads its response out
+    /// of stdout, and codex's <c>--json</c> stream carries the agent's messages beside its events. So
+    /// a perfectly good turn whose advice happens to quote "no rollout found" was read as a resume
+    /// failure, its handle discarded and its answer thrown away.</para>
+    /// <para>Not hypothetical: the prompt carries the working tree, and the phrases live in this
+    /// repository's own plan — a consultant asked about THIS code produces them. A vendor that really
+    /// lost the conversation does not exit zero, which is the condition
+    /// <see cref="ClaudeConsultant.DroppedTheConversation"/> had from the start and the other two
+    /// adapters did not. (CodeRabbit, on the pull request.)</para>
+    /// </remarks>
     public static bool Mentions(ProcessResult result, string phrase) =>
-        result.StdErr.Contains(phrase, StringComparison.OrdinalIgnoreCase)
-        || result.StdOut.Contains(phrase, StringComparison.OrdinalIgnoreCase);
+        result.ExitCode != 0
+        && (result.StdErr.Contains(phrase, StringComparison.OrdinalIgnoreCase)
+            || result.StdOut.Contains(phrase, StringComparison.OrdinalIgnoreCase));
 }

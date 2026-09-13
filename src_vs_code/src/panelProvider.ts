@@ -373,6 +373,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * answers nothing, which is the same to the page as a machine that has run no rounds — it goes on
    * showing everything it builds from the session files.</p>
    */
+  /**
+   * Forget the cached log, because something it describes has just moved.
+   *
+   * <p>The cache exists so a page refreshing every tick does not spawn a process every tick. That is
+   * right for a page ticking on its own and wrong for a real change: a consultation ending is the
+   * last watcher event there will be, so a cache entry written a second earlier would have kept the
+   * old rows on screen until somebody clicked something. The watcher clears it and asks again.
+   * (CodeRabbit, on the pull request.)</p>
+   */
+  forgetRoundsLog(): void {
+    this.roundsLogAt = 0;
+  }
+
   async roundsLog(): Promise<DbLog> {
     // Cached for a few seconds, because the log page refreshes every tick while a round runs and
     // each read is a process spawn plus a walk of the whole findings table. The gate called that
@@ -2378,8 +2391,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
     try {
       if (write.kind === 'remove') {
-        // Removing an override that was never written is the ORDINARY case, not an error.
-        await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+        // Removing an override that was never written is the ORDINARY case, not an error — and it is
+        // the ONLY one this swallows. It used to swallow every rejection, so a permission failure or
+        // a provider error left the old prompt in force while the panel cleared its warning and the
+        // restore looked as though it had worked. (CodeRabbit, on the pull request.)
+        try {
+          await vscode.workspace.fs.delete(target);
+        } catch (error) {
+          if (!(error instanceof vscode.FileSystemError) || error.code !== 'FileNotFound') {
+            throw error;
+          }
+        }
         this.promptWriteFailed = '';
         return;
       }

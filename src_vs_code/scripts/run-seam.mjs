@@ -220,7 +220,9 @@ server.close();
 /** A checkout with something uncommitted in it, which is what a consultation is about. */
 function scratchRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'coai-seam-repo-'));
-  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  // git's OWN stderr is kept, because the guard around this reports what it says: 'ignore' threw
+  // away the one sentence that explains which git call refused and why.
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
   git('init', '--initial-branch=main');
   git('config', 'user.email', 'seam@example.invalid');
   git('config', 'user.name', 'seam');
@@ -375,7 +377,15 @@ function answerOf(reply) {
   }
 }
 
-const repoPath = scratchRepo();
+// The scratch repository is made INSIDE a guard, for the same reason the handshake below is: git
+// can refuse (`--initial-branch` wants git 2.28), and an escaping throw skipped every cleanup this
+// leg has and printed a stack where a `seam:` line belongs. (CodeRabbit, on the pull request.)
+let repoPath;
+try {
+  repoPath = scratchRepo();
+} catch (e) {
+  fail(`the scratch repository could not be made (git 2.28 or later is needed for --initial-branch): ${e.message}`);
+}
 const session = serverSession();
 const consultFail = (why) => {
   session.end();

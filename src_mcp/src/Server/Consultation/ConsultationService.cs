@@ -171,6 +171,17 @@ public sealed class ConsultationService(
                          + "back on. Nothing was sent anywhere; carry on with the person instead");
         }
 
+        // And before the arguments too: a routing setting that does not PARSE is a person who meant
+        // to choose a consultant and did not manage it. Falling back to the shipped map would send
+        // their working tree to a vendor they never picked, which is the one thing
+        // `ConsultantRouting`'s own doctrine forbids. (CodeRabbit, on the pull request.)
+        if (settings.ConsultantsUnreadable)
+        {
+            return Error("the consultant routing (COAI_CONSULTANTS) could not be read, so this installation "
+                         + "does not know which vendor you chose — and it will not pick one for you. Fix the "
+                         + "Consultant section of the ConnectOtherAIs panel. Nothing was sent anywhere");
+        }
+
         if (string.IsNullOrWhiteSpace(problem))
         {
             return Error("a problem statement is required — say what is stuck and what already broke");
@@ -210,12 +221,6 @@ public sealed class ConsultationService(
     {
         var kind = CallerIdentity.KindFrom(env);
         var caller = CallerIdentity.From(env).Id is { Length: > 0 } id ? id : $"repo:{repo}";
-        var counted = _counter.TryTake(caller, settings.ConsultCallsPerSession, DateTime.UtcNow);
-        if (!counted.Allowed)
-        {
-            return Error($"this caller session has made {counted.Used} consult calls, the cap (COAI_CONSULT_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
-                         + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person");
-        }
 
         // THE LOCK IS TAKEN BEFORE THE RECORD IS READ, and that order is the fix for a race the code
         // round found: two follow-ups could both read an `open` record, the second wait for the lock,
@@ -227,7 +232,7 @@ public sealed class ConsultationService(
             return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
         }
 
-        return await UnderTheLockAsync(new Caller(kind, caller, counted.Note), repo, problem, files, consultationId, ct);
+        return await UnderTheLockAsync(new Caller(kind, caller, string.Empty), repo, problem, files, consultationId, ct);
     }
 
     private async Task<string> UnderTheLockAsync(Caller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, CancellationToken ct)
@@ -250,13 +255,7 @@ public sealed class ConsultationService(
         var row = settings.Providers.FirstOrDefault(p => string.Equals(p.Provider, choice.Vendor, StringComparison.OrdinalIgnoreCase));
         if (row is null || !row.Enabled)
         {
-            return Error(record is null
-                ? $"the consultant for a '{caller.Kind}' caller is the vendor '{choice.Vendor}', which is "
-                  + (row is null ? "not configured" : "switched off")
-                  + " — pick an enabled vendor row for this caller in the Consultant section of the ConnectOtherAIs panel (COAI_CONSULTANTS)"
-                : $"consultation {record.Id} was opened on the vendor '{choice.Vendor}', which is no longer "
-                  + (row is null ? "configured" : "enabled")
-                  + " — a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation");
+            return Error(NoSuchVendor(choice.Vendor, caller.Kind, row is null, record?.Id));
         }
 
         var runtime = ConsultantResolution.For(row.Identity());
@@ -273,11 +272,43 @@ public sealed class ConsultationService(
             return Error(_answerSchema.Problem);
         }
 
+        // THE CALL IS COUNTED LAST, immediately before a consultant is launched, and that ordering is
+        // the whole point: it used to be taken at the top of `WithConsultantAsync`, so every refusal
+        // below — a lock somebody else held, an id belonging to another checkout, a vendor row
+        // switched off, a missing runtime, an absent answer schema — spent one of the caller's calls
+        // without a consultant ever running. `ConsultCallCounter` has no refund, so the cap could be
+        // exhausted entirely on refusals. Counting here means the number measures what it is named
+        // after: consultations. (CodeRabbit, on the pull request.)
+        var counted = _counter.TryTake(caller.Id, settings.ConsultCallsPerSession, DateTime.UtcNow);
+        if (!counted.Allowed)
+        {
+            return Error($"this caller session has made {counted.Used} consult calls, the cap (COAI_CONSULT_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
+                         + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person");
+        }
+
         var model = choice.Model.Length > 0 ? choice.Model : row.Model;
-        var consultant = new Consultant(runtime, row, model, caller);
+        var consultant = new Consultant(runtime, row, model, caller with { CounterNote = counted.Note });
 
         return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, DateTime.UtcNow, ct), repo, problem, files, ct);
     }
+
+    /// <summary>
+    /// Why this vendor cannot be consulted — and the sentence differs for a NEW consultation.
+    /// </summary>
+    /// <remarks>
+    /// A new one is a configuration problem the caller can fix by choosing another row. A RESUMED one
+    /// cannot be fixed at all: a consultation stays on the vendor it started with, so the cure is to
+    /// start a new one. Pure, and lifted out of a method that was deciding six things at once.
+    /// (CodeRabbit, on the pull request.)
+    /// </remarks>
+    private static string NoSuchVendor(string vendor, string callerKind, bool absent, string? resuming) =>
+        resuming is null
+            ? $"the consultant for a '{callerKind}' caller is the vendor '{vendor}', which is "
+              + (absent ? "not configured" : "switched off")
+              + " — pick an enabled vendor row for this caller in the Consultant section of the ConnectOtherAIs panel (COAI_CONSULTANTS)"
+            : $"consultation {resuming} was opened on the vendor '{vendor}', which is no longer "
+              + (absent ? "configured" : "enabled")
+              + " — a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation";
 
     private (ConsultationRecord? Record, string? Refusal) Existing(string consultationId, string caller, string repo, string problem)
     {
@@ -442,18 +473,7 @@ public sealed class ConsultationService(
         var advised = consultant.Runtime.ReadAdvice(launched.Answer).Trim();
         var spent = ThisTurnsShare(consultant, record, launched.Usage);
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd);
-        var answered = record with
-        {
-            Turns = [.. record.Turns, turn],
-            Handle = handle,
-            Status = record.Budget.IsLast ? ConsultationStatuses.Closed : ConsultationStatuses.Open,
-            // The sentence a LATER call is refused with is this one, so it carries the cure — the
-            // setting's name — rather than leaving the caller to find it.
-            Reason = record.Budget.IsLast ? $"all {record.MaxTurns} of its turns are used (COAI_CONSULT_TURNS sets the cap)" : string.Empty,
-            EndedUtc = record.Budget.IsLast ? turn.Utc : string.Empty,
-            UpdatedUtc = turn.Utc,
-        };
-        _store.Write(answered);
+        _store.Write(Answered(record, turn, handle));
         Record(consultant, "ok", elapsed, spent);
         log.Information("consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 
@@ -521,6 +541,30 @@ public sealed class ConsultationService(
     /// <see cref="ConsultationUsage"/>, in the core, so the test exercises the rule rather than a
     /// copy of it.
     /// </remarks>
+    /// <summary>The record this turn leaves behind — closed when the budget is spent, open otherwise.</summary>
+    /// <remarks>
+    /// Pure, and its own method because the three <c>IsLast</c> decisions are ONE decision wearing
+    /// three hats: whether this was the last turn. Reading them apart, inside an object initialiser
+    /// inside a method that also launches and logs, was the complexity the gate objected to.
+    /// (CodeRabbit, on the pull request.)
+    /// </remarks>
+    private static ConsultationRecord Answered(ConsultationRecord record, ConsultationTurn turn, string handle)
+    {
+        var last = record.Budget.IsLast;
+
+        return record with
+        {
+            Turns = [.. record.Turns, turn],
+            Handle = handle,
+            Status = last ? ConsultationStatuses.Closed : ConsultationStatuses.Open,
+            // The sentence a LATER call is refused with is this one, so it carries the cure — the
+            // setting's name — rather than leaving the caller to find it.
+            Reason = last ? $"all {record.MaxTurns} of its turns are used (COAI_CONSULT_TURNS sets the cap)" : string.Empty,
+            EndedUtc = last ? turn.Utc : string.Empty,
+            UpdatedUtc = turn.Utc,
+        };
+    }
+
     private static Usage ThisTurnsShare(Consultant consultant, ConsultationRecord record, Usage reported)
     {
         if (!consultant.Runtime.UsageIsCumulative)

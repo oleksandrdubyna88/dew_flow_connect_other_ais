@@ -169,8 +169,35 @@ public sealed class ConsultantHandleTests
     [Fact]
     public void AVendorThatDroppedTheThread_IsRecognisedByItsOwnWords()
     {
-        Codex.DroppedTheConversation(Said(string.Empty, "Error: thread/resume: no rollout found for thread id 0198")).Should().BeTrue();
-        Codex.DroppedTheConversation(Said(string.Empty, "some other failure")).Should().BeFalse();
+        // A FAILED process saying it. The exit code is half the test, and this assertion used to
+        // leave it at zero — which is how the defect below went unnoticed.
+        Codex.DroppedTheConversation(Said(string.Empty, "Error: thread/resume: no rollout found for thread id 0198", exit: 1))
+            .Should().BeTrue();
+        Codex.DroppedTheConversation(Said(string.Empty, "some other failure", exit: 1)).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The model QUOTING the phrase in its advice is not the vendor losing the conversation.
+    /// </summary>
+    /// <remarks>
+    /// Stdout is where the answer arrives on both routes that ask this question, and the consult
+    /// prompt carries the working tree — so a consultant asked about this repository, whose plan
+    /// contains both literals, can produce them in a perfectly good turn. Without the exit code the
+    /// turn is discarded and the handle reset, which costs the caller a turn and the conversation
+    /// its memory. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public void AGoodTurnQuotingTheVendorsOwnFailurePhrase_IsNotADroppedConversation()
+    {
+        var advice = "Your resume path is wrong: codex answers `thread/resume failed: no rollout found` "
+            + "when the id is stale, so branch on the exit code rather than on that text.";
+
+        Codex.DroppedTheConversation(Said(advice)).Should().BeFalse("the process succeeded — this is the ANSWER");
+        Codex.DroppedTheConversation(Said(string.Empty, advice)).Should().BeFalse("still a zero exit");
+
+        var agy = new AntigravityConsultant(new AntigravityRuntime());
+        agy.DroppedTheConversation(Said("I could not find it: conversation not found, it said.")).Should().BeFalse();
+        agy.DroppedTheConversation(Said(string.Empty, "conversation not found", exit: 1)).Should().BeTrue();
     }
 }
 

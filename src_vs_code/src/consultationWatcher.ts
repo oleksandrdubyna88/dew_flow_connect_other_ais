@@ -94,10 +94,13 @@ export class ConsultationWatcher {
     let entries: [string, vscode.FileType][];
     try {
       entries = await vscode.workspace.fs.readDirectory(dir);
-    } catch {
-      // Absent is empty; anything else keeps what we had. `stat` tells the two apart without
-      // guessing from an error message, which is not a contract any filesystem provider offers.
-      return await this.exists(dir) ? undefined : [];
+    } catch (error) {
+      // Absent is empty; anything ELSE keeps what we had — and the error's own code is what tells
+      // them apart. It used to ask `stat`, whose own failure returned false: so a permission error
+      // or a provider hiccup, which fails BOTH calls, read as "the directory is gone" and wiped every
+      // live consultation off the panel mid-conversation. A code is a contract; the absence of an
+      // answer is not. (CodeRabbit, on the pull request.)
+      return error instanceof vscode.FileSystemError && error.code === 'FileNotFound' ? [] : undefined;
     }
 
     const found: Consultation[] = [];
@@ -129,15 +132,6 @@ export class ConsultationWatcher {
     return found;
   }
 
-  private async exists(dir: vscode.Uri): Promise<boolean> {
-    try {
-      await vscode.workspace.fs.stat(dir);
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }
 
 /**

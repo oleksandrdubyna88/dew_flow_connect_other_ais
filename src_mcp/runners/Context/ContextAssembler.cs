@@ -111,27 +111,11 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         string repoPath, IReadOnlyList<string>? exclusions = null, CancellationToken ct = default)
     {
         var excludes = (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}").ToArray();
-        var files = new List<FileDiff>();
 
         var numstat = await Git(repoPath, ct, ["diff", "--numstat", "-z", "HEAD", "--", ".", .. excludes]);
-        var changes = NumstatReader.Read(numstat);
-        // ONE git process for every text file, not one per file. A review's collector can afford the
-        // per-file loop — it runs inside a round somebody expects to take minutes — but a consultation
-        // blocks an agent that is already stuck, and on Windows a process start is 30-50 ms: a fifty
-        // file refactor paid two to three seconds before the consultant was even launched.
-        // (gemini Blocking + codex, code round.) The whole diff is taken once and split on its own
-        // `diff --git` boundaries, which is the same text the per-file calls produced.
-        var whole = changes.Any(c => !c.IsBinary)
-            ? await Git(repoPath, ct, ["diff", "HEAD", "--", .. changes.Where(c => !c.IsBinary).SelectMany(c => c.Pathspecs)])
-            : string.Empty;
-        var perFile = DiffSplitter.ByFile(whole);
-
-        foreach (var change in changes)
-        {
-            files.Add(change.IsBinary
-                ? new FileDiff(change.Path, string.Empty, IsBinary: true, BinaryBytes: SizeOnDisk(repoPath, change.Path))
-                : new FileDiff(change.Path, perFile.TryGetValue(change.Path, out var text) ? text : string.Empty));
-        }
+        var changes = NumstatReader.Read(numstat).ToList();
+        var perFile = DiffSplitter.ByFile(await TrackedDiffAsync(repoPath, changes, ct));
+        var files = new List<FileDiff>(Tracked(repoPath, changes, perFile));
 
         var untracked = await Git(repoPath, ct, ["ls-files", "--others", "--exclude-standard", "-z", "--", ".", .. excludes]);
         foreach (var path in untracked.Split('\0', StringSplitOptions.RemoveEmptyEntries))
@@ -141,6 +125,29 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
 
         return files;
     }
+
+    /// <summary>
+    /// The whole text diff in ONE git process, or nothing when every change is binary.
+    /// </summary>
+    /// <remarks>
+    /// One process rather than one per file. A review's collector can afford the per-file loop — it
+    /// runs inside a round somebody expects to take minutes — but a consultation blocks an agent that
+    /// is already stuck, and on Windows a process start is 30-50 ms: a fifty-file refactor paid two to
+    /// three seconds before the consultant was even launched. (gemini Blocking + codex, code round.)
+    /// The text is split on git's own <c>diff --git</c> boundaries, which is what the per-file calls
+    /// produced anyway.
+    /// </remarks>
+    private async Task<string> TrackedDiffAsync(string repoPath, IReadOnlyList<NumstatChange> changes, CancellationToken ct) =>
+        changes.Any(c => !c.IsBinary)
+            ? await Git(repoPath, ct, ["diff", "HEAD", "--", .. changes.Where(c => !c.IsBinary).SelectMany(c => c.Pathspecs)])
+            : string.Empty;
+
+    /// <summary>Each tracked change paired with its own piece of that diff — a binary is NAMED, never inlined.</summary>
+    private static IEnumerable<FileDiff> Tracked(
+        string repoPath, IReadOnlyList<NumstatChange> changes, IReadOnlyDictionary<string, string> perFile) =>
+        changes.Select(change => change.IsBinary
+            ? new FileDiff(change.Path, string.Empty, IsBinary: true, BinaryBytes: SizeOnDisk(repoPath, change.Path))
+            : new FileDiff(change.Path, perFile.TryGetValue(change.Path, out var text) ? text : string.Empty));
 
     /// <summary>
     /// One untracked file, read only as far as it can be used.
@@ -156,7 +163,21 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         var full = Path.Combine(repoPath, path);
         try
         {
-            var length = new FileInfo(full).Length;
+            var info = new FileInfo(full);
+
+            // A LINK is named, never followed. `git ls-files --others` lists untracked symlinks, and
+            // both `Length` and `ReadAllBytes` resolve them — so a link planted in the checkout puts
+            // a file from ANYWHERE on the machine into the prompt this server sends to a third-party
+            // vendor. The consultant is promised the working tree; a path whose bytes live outside it
+            // is not the working tree, whatever it spells. Named rather than dropped, because a link
+            // somebody added is part of what changed. (CodeRabbit, on the pull request, as a
+            // path-traversal finding.)
+            if (info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                return new FileDiff(path, $"new file (untracked): {path} — a link, not followed\n");
+            }
+
+            var length = info.Length;
 
             return length > UntrackedDiff.InlineCap
                 ? UntrackedDiff.TooBig(path, length)

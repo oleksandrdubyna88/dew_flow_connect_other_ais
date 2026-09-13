@@ -1,6 +1,7 @@
 # PLAN — Consultant: the main AI asks another vendor's model when it is stuck
 
-> Status: **stories 1 and 2 IMPLEMENTED 2026-09-12; stories 3–6 open.** Scope: `src_mcp` (one tool
+> Status: **stories 1–4 IMPLEMENTED (1–2 on 2026-09-12, 3–4 on 2026-09-13); stories 5–6 open.**
+> Scope: `src_mcp` (one tool
 > `consult`, one MCP prompt, a consultation record, per-vendor resumable launches, a filesystem
 > invariant), `src_vs_code` (a *Consultant* section, a live card, a log row), one paragraph in the
 > canonical gate rule that lives in `dew_flow_conventions`. The Team server is OUT of scope: local
@@ -95,7 +96,14 @@ back in turn 2. Windows 11; cwd an empty scratch directory.
    Cost grows with the turn count, on the metered quota.
 5. **MCP SDK 2.2.0** (`Directory.Packages.props:14`) has `McpServerOptions.PromptCollection` beside
    `ToolCollection` and `McpServerPrompt.Create(Delegate, McpServerPromptCreateOptions)`.
-6. All three CLIs answered PROSE with no schema flag at all — codex through `--json`'s
+6. **The quotes above are the SHELL's, and the adapter does not use them.** Phase 0b was typed at a
+   prompt, where `sandbox_mode="read-only"` is what you write to get the string through. `-c` parses
+   its value as TOML and falls back to the raw string, so the adapter passes
+   `sandbox_mode=read-only` as one argument and no quote ever reaches `cmd.exe` through an npm shim.
+   Both were verified; the argv table below is the ADAPTER's. `--color never` is likewise turn 1 only
+   — a resumed turn does not take it. (CodeRabbit, on the pull request, against a table that showed
+   the shell's spelling as though it were the code's.)
+7. All three CLIs answered PROSE with no schema flag at all — codex through `--json`'s
    `item.completed`/`agent_message`, agy through `response`, claude through `result`.
 
 Still unmeasured, owed by the story that needs it: whether a consultant process leaves anything in
@@ -301,7 +309,7 @@ Argv per vendor (phase 0b):
 
 | | turn 1 | turn 2+ |
 |---|---|---|
-| codex | `exec -s read-only --skip-git-repo-check --color never -C <repo> --json -o <out> [-m] -` | `exec resume <handle> -c sandbox_mode="read-only" --skip-git-repo-check --color never --json -o <out> [-m] -`, cwd = `<repo>` |
+| codex | `exec -s read-only --skip-git-repo-check --color never -C <repo> --json -o <out> [-m] -` | `exec resume <handle> -c sandbox_mode=read-only --skip-git-repo-check --json -o <out> [-m] -`, cwd = `<repo>` |
 | claude | `-p --output-format json --permission-mode plan --disallowedTools Edit Write NotebookEdit --add-dir <repo> --session-id <uuid> [--model]` | same with `--resume <uuid>` |
 | agy | `--print= --input-format stream-json --output-format stream-json --mode plan --add-dir <repo> [--model]` | same plus `--conversation <id>` (S2 measures with `--add-dir`) |
 | local | `--ask-local … --schema-file <answer-schema>` (it refuses without one) | same, transcript carried |

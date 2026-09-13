@@ -34,6 +34,19 @@ public static class ConsultSchemaFile
     /// permission that caused it. The caller logs this, and the local route refuses by name.
     /// (codex and gemini, story 2's second code round.)
     /// </remarks>
+    /// <summary>Best-effort removal: a temp file we cannot delete must not replace the real error.</summary>
+    private static void Delete(string temp)
+    {
+        try
+        {
+            File.Delete(temp);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Nothing to say and nothing to do: the caller is already reporting why the write failed.
+        }
+    }
+
     public static Provisioned Ensure(string directory)
     {
         var path = Path.Combine(directory, ConsultAnswerSchema.Name);
@@ -46,8 +59,21 @@ public static class ConsultSchemaFile
             }
 
             var temp = $"{path}.{Guid.NewGuid():N}.tmp";
-            File.WriteAllText(temp, ConsultAnswerSchema.Json);
-            File.Move(temp, path, overwrite: true);
+            try
+            {
+                File.WriteAllText(temp, ConsultAnswerSchema.Json);
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                // The temp name is UNIQUE per attempt, so a failing move leaves one more file behind
+                // every time — and this runs on every `PanelService` build, which the settings host
+                // repeats whenever settings change. Nothing sweeps this directory: the answer sweep
+                // only looks at `answers`. So the failure path cleans up after itself before the
+                // outer catch turns it into a sentence. (CodeRabbit, on the pull request.)
+                Delete(temp);
+                throw;
+            }
 
             return new Provisioned(path, string.Empty);
         }

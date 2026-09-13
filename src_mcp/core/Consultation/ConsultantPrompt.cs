@@ -111,39 +111,65 @@ public static class ConsultantPrompt
         for (var i = turns.Count - 1; i >= 0; i--)
         {
             var block = $"The caller asked:\n  {Indent(turns[i].Problem)}\nYou answered:\n  {Indent(turns[i].Advice)}";
-            if (spent + block.Length > budget)
-            {
-                // The NEWEST turn alone can be bigger than the whole budget — a pasted stack trace
-                // does it — and dropping it would carry nothing but a note, leaving the consultant
-                // with no idea what it last said. It is CUT instead, with the cut said inside the
-                // text, which is the rule the extension's own carry already follows.
-                // (codex and gemini, this story's plan round.)
-                if (kept.Count == 0)
-                {
-                    // The marker's own length is RESERVED before the slice, so the carry stays inside
-                    // the budget it advertises: keeping `budget` characters and then appending a
-                    // marker put a 16 KB carry over 16 KB, on the one route whose context window is
-                    // the smallest here. (codex, code round.)
-                    var room = Math.Max(budget - CutMarker.Length, 0);
-                    kept.Add(block[..Math.Min(block.Length, room)] + CutMarker);
-                }
 
-                // `i` earlier turns, not `i + 1`: turn `i` is the one just handled — cut and kept
-                // when it was the newest, dropped otherwise. Saying `i + 1` on turn 1 announced that
-                // one earlier turn was lost when there had never been one. (gemini, code round.)
-                if (i > 0)
-                {
-                    kept.Insert(0, $"(the earlier {i} turn(s) of this conversation are not carried — the budget was reached)");
-                }
+            // EVERYTHING that will be rendered is counted, not just the blocks. `string.Join` puts a
+            // separator between each pair and the omission note below is more text again, and neither
+            // used to be spent — so a transcript that fit "exactly" rendered over the budget, on the
+            // one route whose context window is smallest. (CodeRabbit, on the pull request.)
+            var separator = kept.Count > 0 ? JoinLength : 0;
+            var note = i > 0 ? Omission(i).Length + JoinLength : 0;
+            if (spent + separator + block.Length + note > budget)
+            {
+                StopHere(kept, block, i, budget - note);
 
                 break;
             }
 
             kept.Insert(0, block);
-            spent += block.Length;
+            spent += separator + block.Length;
         }
 
-        return string.Join("\n\n", kept);
+        // And the bound is asserted on the ANSWER, not merely arrived at. The reservations above are
+        // arithmetic about text that has not been joined yet; this is the text. A carry that promises
+        // a budget and returns more than it is the defect, whichever line produced the excess.
+        var rendered = string.Join("\n\n", kept);
+
+        return rendered.Length <= budget ? rendered : rendered[..budget];
+    }
+
+    /// <summary>What is said in place of the turns that did not fit.</summary>
+    private static string Omission(int earlier) =>
+        $"(the earlier {earlier} turn(s) of this conversation are not carried — the budget was reached)";
+
+    /// <summary>The separator <c>string.Join</c> puts between two kept blocks.</summary>
+    private const int JoinLength = 2;
+
+    /// <summary>
+    /// What the carry keeps of the turn that did not fit, and what it says about the ones behind it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The NEWEST turn alone can be bigger than the whole budget — a pasted stack trace does it
+    /// — and dropping it would carry nothing but a note, leaving the consultant with no idea what it
+    /// last said. It is CUT instead, with the cut said inside the text, which is the rule the
+    /// extension's own carry already follows. The marker's own length is reserved BEFORE the slice,
+    /// so the carry stays inside the budget it advertises. (codex and gemini, the plan round; codex,
+    /// the code round.)</para>
+    /// <para><c>earlier</c> turns, not <c>earlier + 1</c>: the turn just handled is this one — cut
+    /// and kept when it was the newest, dropped otherwise. Saying one more announced a turn that had
+    /// never existed. (gemini, code round.)</para>
+    /// </remarks>
+    private static void StopHere(List<string> kept, string block, int earlier, int room)
+    {
+        if (kept.Count == 0)
+        {
+            var forText = Math.Max(room - CutMarker.Length, 0);
+            kept.Add(block[..Math.Min(block.Length, forText)] + CutMarker);
+        }
+
+        if (earlier > 0)
+        {
+            kept.Insert(0, Omission(earlier));
+        }
     }
 
     /// <summary>Said inside the text, so a cut is never something the reader has to infer.</summary>

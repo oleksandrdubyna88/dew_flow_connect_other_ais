@@ -328,6 +328,55 @@ public sealed class WorkingTreeDiffTests : IAsyncLifetime
         files[0].Text.Should().Contain("new file mode").And.Contain("+fresh");
     }
 
+    /// <summary>
+    /// An untracked LINK is named, and what it points at never reaches the prompt.
+    /// </summary>
+    /// <remarks>
+    /// <c>git ls-files --others</c> lists untracked symlinks, and both <c>FileInfo.Length</c> and
+    /// <c>File.ReadAllBytes</c> resolve them — so a link planted in a checkout put a file from
+    /// anywhere on the machine into the text this server sends to a third-party vendor. The
+    /// consultant is promised the WORKING TREE, and bytes that live outside it are not that, whatever
+    /// the path spells. (CodeRabbit, on the pull request, as a path-traversal finding.)
+    /// </remarks>
+    [Fact]
+    public async Task AnUntrackedLinkIsNamed_AndItsTargetIsNeverRead()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "coai-secret-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(outside, "SECRET-OUTSIDE-THE-TREE\n", TestContext.Current.CancellationToken);
+        try
+        {
+            if (!TryLink(Path.Combine(_repo, "leak.txt"), outside))
+            {
+                Assert.Skip("this machine cannot create a file link without elevation");
+            }
+
+            var files = await Collect();
+
+            var leak = files.Should().ContainSingle(one => one.Path == "leak.txt").Subject;
+            leak.Text.Should().Contain("a link, not followed");
+            leak.Text.Should().NotContain("SECRET-OUTSIDE-THE-TREE");
+            files.Should().NotContain(one => one.Text.Contains("SECRET-OUTSIDE-THE-TREE", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(outside);
+        }
+    }
+
+    private static bool TryLink(string link, string target)
+    {
+        try
+        {
+            File.CreateSymbolicLink(link, target);
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     [Fact]
     public async Task AnIgnoredFileDoesNot()
     {

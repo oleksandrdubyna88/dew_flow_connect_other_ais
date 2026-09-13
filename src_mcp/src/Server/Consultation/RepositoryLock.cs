@@ -75,8 +75,16 @@ internal sealed class RepositoryLock : IDisposable
 
     // The same repository spelled two ways must be one lock: case and trailing separators differ
     // between what a client sends and what git prints, and both reach here.
-    private static string Normalise(string repoPath) =>
-        Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath)).ToLowerInvariant();
+    //
+    // Case is folded only where the FILESYSTEM folds it. On Linux `/work/Foo` and `/work/foo` are two
+    // repositories, and lowercasing gave them one lock — so consulting about the second waited thirty
+    // seconds and was refused by name while nothing was wrong. (CodeRabbit, on the pull request.)
+    private static string Normalise(string repoPath)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath));
+
+        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? full.ToLowerInvariant() : full;
+    }
 
     public void Dispose() => _held.Dispose();
 }

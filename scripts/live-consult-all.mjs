@@ -45,16 +45,42 @@ const run = async (vendor) => {
       buffer = buffer.slice(at + 1);
       if (!line) continue;
       const m = JSON.parse(line);
-      if (waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); }
+      if (waiting.has(m.id)) { const pending = waiting.get(m.id); waiting.delete(m.id); pending.resolve(m); }
     }
   });
   const stderr = [];
   server.stderr.on('data', (c) => stderr.push(c.toString('utf8')));
   let nextId = 1;
-  const call = (method, params) => new Promise((resolve) => {
+  // Every call is BOUNDED, and every pending one is rejected when the server goes. A promise that
+  // nobody ever settles is not a hang in one call — it is a script whose `finally` never runs, so
+  // the server is never stopped and the temporary directory is never removed. A live consultation
+  // is minutes, so the deadline is generous; it exists to end the wait, not to time anything.
+  // (CodeRabbit, on the pull request.)
+  const CALL_DEADLINE_MS = 15 * 60 * 1000;
+  const abandon = (why) => {
+    for (const [id, pending] of waiting) {
+      waiting.delete(id);
+      pending.reject(new Error(why));
+    }
+  };
+  server.on('error', (e) => abandon(`the server could not be run: ${e.message}`));
+  server.on('exit', (code) => abandon(`the server exited (${code}) before answering`));
+  const call = (method, params) => new Promise((resolve, reject) => {
     const id = nextId++;
-    waiting.set(id, resolve);
-    server.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    const timer = setTimeout(
+      () => { waiting.delete(id); reject(new Error(`${method} did not answer within ${CALL_DEADLINE_MS / 1000}s`)); },
+      CALL_DEADLINE_MS);
+    waiting.set(id, {
+      resolve: (m) => { clearTimeout(timer); resolve(m); },
+      reject: (e) => { clearTimeout(timer); reject(e); },
+    });
+    try {
+      server.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    } catch (e) {
+      clearTimeout(timer);
+      waiting.delete(id);
+      reject(new Error(`the request could not be written: ${e.message}`));
+    }
   });
   const consult = async (args) => {
     const started = Date.now();

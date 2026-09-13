@@ -25,24 +25,36 @@ public static class ConsultationUsage
         IReadOnlyList<(long TokensIn, long TokensOut, double? CostUsd)> alreadyRecorded,
         (long TokensIn, long TokensOut, double? CostUsd) reported)
     {
-        // ONE pass, and the clamp applies to the first turn as well: a vendor reporting a negative
-        // count is reporting something this arithmetic does not understand, and it must not reach the
-        // ledger merely because there was nothing to subtract from it yet.
-        var soFarIn = 0L;
-        var soFarOut = 0L;
-        var soFarUsd = (double?)null;
-        foreach (var turn in alreadyRecorded)
+        var soFar = Total(alreadyRecorded);
+
+        // The clamp applies to the FIRST turn as well: a vendor reporting a negative count is
+        // reporting something this arithmetic does not understand, and it must not reach the ledger
+        // merely because there was nothing to subtract from it yet.
+        return (
+            Math.Max(reported.TokensIn - soFar.TokensIn, 0),
+            Math.Max(reported.TokensOut - soFar.TokensOut, 0),
+            reported.CostUsd is { } usd
+                ? Math.Max(usd - soFar.CostUsd, 0)
+                : reported.CostUsd);
+    }
+
+    /// <summary>What the earlier turns recorded between them, in one pass.</summary>
+    /// <remarks>
+    /// Its own method so the subtraction rule above reads as the one thing it is. An unpriced turn
+    /// contributes nothing rather than making the total unknown: the caller only ever subtracts it
+    /// from a cost the vendor DID report, and a null there would throw away a number somebody is
+    /// paying for. (CodeRabbit, on the pull request — the complexity ceiling is this repository's
+    /// own rule.)
+    /// </remarks>
+    private static (long TokensIn, long TokensOut, double CostUsd) Total(
+        IReadOnlyList<(long TokensIn, long TokensOut, double? CostUsd)> turns)
+    {
+        var total = (TokensIn: 0L, TokensOut: 0L, CostUsd: 0d);
+        foreach (var turn in turns)
         {
-            soFarIn += turn.TokensIn;
-            soFarOut += turn.TokensOut;
-            soFarUsd = turn.CostUsd is { } spent ? (soFarUsd ?? 0) + spent : soFarUsd;
+            total = (total.TokensIn + turn.TokensIn, total.TokensOut + turn.TokensOut, total.CostUsd + (turn.CostUsd ?? 0));
         }
 
-        return (
-            Math.Max(reported.TokensIn - soFarIn, 0),
-            Math.Max(reported.TokensOut - soFarOut, 0),
-            reported.CostUsd is { } usd
-                ? Math.Max(usd - (soFarUsd ?? 0), 0)
-                : reported.CostUsd);
+        return total;
     }
 }

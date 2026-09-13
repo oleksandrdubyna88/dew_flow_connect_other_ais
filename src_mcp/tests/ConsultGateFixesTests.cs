@@ -159,6 +159,42 @@ public sealed class DiffSplitterTests
         DiffSplitter.ByFile(diff).Should().ContainKey("gone.cs");
     }
 
+    /// <summary>
+    /// A path git had to QUOTE is still found, and under the name the numstat row carries.
+    /// </summary>
+    /// <remarks>
+    /// Git prints a path it cannot render plainly inside double quotes with C escapes: non-ASCII as
+    /// octal BYTES of UTF-8, and a tab, a quote or a backslash escaped. The numstat side is read with
+    /// <c>-z</c>, which never quotes, so the two spellings never met — the file was listed and its
+    /// diff was EMPTY, silently, in any repository holding such a name. (CodeRabbit, on the pull
+    /// request.)
+    /// </remarks>
+    [Theory]
+    [InlineData("\\303\\274ber.cs", "über.cs")]
+    [InlineData("tab\\there.cs", "tab\there.cs")]
+    [InlineData("quote\\\"here.cs", "quote\"here.cs")]
+    [InlineData("slash\\\\here.cs", "slash\\here.cs")]
+    public void AQuotedPathIsDecodedToTheNameNumstatUses(string quoted, string expected)
+    {
+        var diff = $"diff --git \"a/{quoted}\" \"b/{quoted}\"\n"
+            + $"--- \"a/{quoted}\"\n+++ \"b/{quoted}\"\n@@ -1 +1 @@\n+x\n";
+
+        var pieces = DiffSplitter.ByFile(diff);
+
+        pieces.Should().ContainKey(expected);
+        pieces[expected].Should().Contain("+x");
+    }
+
+    [Fact]
+    public void ADeletedFileWithAQuotedNameIsFoundOnItsOldSide()
+    {
+        const string quoted = "\\303\\274ber.cs";
+        var diff = $"diff --git \"a/{quoted}\" \"b/{quoted}\"\ndeleted file mode 100644\n"
+            + $"--- \"a/{quoted}\"\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n";
+
+        DiffSplitter.ByFile(diff).Should().ContainKey("über.cs");
+    }
+
     [Fact]
     public void NothingInIsNothingOut()
     {
