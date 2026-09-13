@@ -1911,6 +1911,14 @@ state the copy command puts the consultant half alone on it. And a file at a mou
 granted mount status when its body matches the gate rule this build was compiled against, so a stale
 copy or a tampered file gets the ordinary paste answer rather than "your gate half is current".
 
+The successful state carries HOW it got there. With the gate mounted and the consultant block pasted
+the answer is `current` — everything this build hands out is present — but a copy still gives the
+consultant half alone, because putting both on the clipboard of a repository that mounts the gate
+would duplicate the rule its submodule provides. And a consultant block with no version marker reads
+as `unversioned` rather than version zero, which is the decision the gate half made when its own
+marker arrived: a paste that predates versioning is a real generation, and inventing a number for it
+is worse than saying so.
+
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
 It sits directly after *Chat with other AI*, and the placement is the argument: the two are one idea

@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Consultation;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -69,15 +70,19 @@ internal static class Prompts
     };
 
     /// <summary>
-    /// How much of a problem statement travels. The server's own bound, so one number decides.
+    /// How much of a problem statement travels: the SERVER's own bound, not a second one.
     /// </summary>
     /// <remarks>
-    /// A prompt that echoes a 10 MiB build log returns it to be sent again, which is the same bytes
-    /// three times over before a consultation starts — and <see cref="Core.Consultation.ConsultantPrompt"/>
-    /// would cut it to this anyway. Cut HERE, with a sentence saying so, rather than silently.
-    /// (codex and gemini, code round.)
+    /// <para>A prompt that echoes a 10 MiB build log returns it to be sent again, which is the same
+    /// bytes three times over before a consultation starts. Cut HERE, with a sentence saying so,
+    /// rather than silently.</para>
+    /// <para>And cut at exactly what <see cref="ConsultantPrompt.BoundedProblem"/> would cut it to a
+    /// turn later, by taking that constant rather than declaring a second one — a prompt whose bound
+    /// drifted from the tool's would truncate text the tool would have carried, or promise room the
+    /// tool then takes away. Counted in CHARACTERS, which is the unit the server counts and says.
+    /// (codex and gemini, both code rounds.)</para>
     /// </remarks>
-    internal const int ProblemCap = 16 * 1024;
+    internal const int ProblemCap = ConsultantPrompt.ProblemBudget;
 
     internal static string Text(string problem)
     {
@@ -88,7 +93,7 @@ internal static class Prompts
         var stated = raw.Trim().Length == 0
             ? string.Empty
             : raw.Length > ProblemCap
-                ? raw[..ProblemCap] + "\n\n[cut at 16 KB — send the rest as a follow-up turn if it matters]"
+                ? raw[..ProblemCap] + $"\n\n[cut here at {ProblemCap} characters — send the rest as a follow-up turn if it matters]"
                 : raw;
 
         return $"""
