@@ -1,7 +1,43 @@
 # PLAN — the round knows which AI called it, and which model
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/src/Server/CallerSessions.cs`,
-> `src_mcp/src/Tools.cs`, the `rounds` table's read path, and the rounds log page.
+> Status: **IMPLEMENTED, 2026-09-13.** Scope: `src_mcp/src/Server/CallerSessions.cs`,
+> `src_mcp/src/Server/CallerDeclaration.cs`, `src_mcp/src/Tools.cs`, the `rounds` table's write and
+> read paths, the rounds log page, and one new shared rule in `dew_flow_conventions`.
+>
+> **What shipped differently from the plan below, and why — the valuable part of the record:**
+>
+> 1. **The handshake outranks the environment for the VENDOR.** The plan derived the vendor solely
+>    from the four session variables. Gemini raised it as Blocking on the plan round and was right:
+>    those variables belong to the PROCESS, inherited from whatever launched the server and fixed for
+>    its life, while `clientInfo` is negotiated on the connection that is calling. A server whose
+>    environment says claude and whose caller is codex would have recorded the launcher for ever. So
+>    `clientInfo.name` decides the vendor when it maps to a known one, and the variable is the
+>    fallback.
+> 2. **`McpServer` injection reads the REQUEST-scoped server**, which the plan assumed but did not
+>    check. The SDK's own documentation settles it twice over: an `McpServer` parameter is bound to
+>    the instance of this request's `RequestContext` and is excluded from the tool schema, and on the
+>    `2026-07-28` protocol revision `ClientInfo` travels per request in `_meta` rather than being
+>    fixed at `initialize` — so the root server would have been the wrong object to read.
+> 3. **`callerModel` needed an explicit `= null` default, not merely a nullable type.** The first
+>    build bound it as required, and a two-argument `open` — what every client predating the argument
+>    sends — came back *"An error occurred invoking 'open'"*. Caught by the contract test written for
+>    exactly that case, which is the whole reason it was written before the code.
+> 4. **The database migration is TRANSACTIONAL.** Codex raised the missing migration as Blocking; the
+>    repository already had the mechanism (`Schema.Steps` + `user_version`), so the fix was one
+>    appended `ALTER` step. But the step and the version bump were two statements, and a process
+>    killed between them would re-run the alter, hit `duplicate column name`, and — because `Open`
+>    answers null to any exception — leave a database that never opens again. They are one
+>    transaction now.
+> 5. **The shared rule is a THIRD file, not a sentence in the gate rule.** `coai-review-gate.md` is
+>    one of the 24 bodies `tools/rules.test.mjs` hashes against baseline `5d6984eb`, so step 1 could
+>    not grow a sentence. `common/coai-caller-model.md` says where it belongs when the inventory
+>    retires, and carries its own `coai-caller` marker so a paste made before it is reported as
+>    older rather than silently never sending a model.
+> 6. **The plan's step 6 is done here**: the conventions change is
+>    [dew_flow_conventions#27](https://github.com/oleksandrdubyna88/dew_flow_conventions/pull/27),
+>    merged as `db71a0d`, and the pin cascade rides with it.
+>
+> **Nothing is outstanding.** Every item of the Definition of Done below is met.
 >
 > Issue [#174](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/174): *"I used
 > to work only with Claude. Now there is Codex Astra as well, and I need to track through the MCP —
