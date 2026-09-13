@@ -79,8 +79,12 @@ test('a door this version has never heard of still counts as an opening', () => 
 });
 
 test('Asked is take and add, and nothing else', () => {
+  // `switch` opens the PICKER rather than a conversation: it takes no passage, asks no question and
+  // may end with nothing opened at all. It is an opening — the chat was reached for — and it is not
+  // an Asked. Both partitions are written out so that a seventh door has to be placed in one of them
+  // deliberately rather than landing in whichever the filter happens to put it in.
   assert.deepStrictEqual(DOORS.filter((door) => asking(door)), ['take', 'add']);
-  assert.deepStrictEqual(DOORS.filter((door) => !asking(door)), ['key', 'default', 'choose']);
+  assert.deepStrictEqual(DOORS.filter((door) => !asking(door)), ['key', 'default', 'choose', 'switch']);
 });
 
 test('a door that resolved no model keeps the empty strings rather than inventing them', () => {

@@ -356,16 +356,52 @@ test('a re-ask brings the mark back with the transcript it truncated', () => {
   );
 });
 
+/**
+ * A keybinding that acts on OUR OWN picker rather than opening anything.
+ *
+ * <p>`coai.conversationsPickerOpen` is a context key this extension sets for exactly as long as the
+ * conversation picker is on screen, so a binding carrying it can only fire while that list is already
+ * open — in front of a person who is choosing a row. Such a command acts ON the list: it forgets the
+ * conversation under the cursor, or it will one day rename or pin it. It opens no chat, records no
+ * invocation, and counting it as a door would inflate *Opened* on the spending page with presses that
+ * opened nothing.</p>
+ *
+ * <p><b>This is the rule the next person to add one will meet</b>, so it is written here rather than
+ * as a name on an exclusion list: the test below does not know about `coai.forgetPickedConversation`
+ * and never will. What it knows is that a binding scoped to our picker being open is not a way IN.</p>
+ */
+const actsOnOurPicker = (row: Contribution): boolean => (row.when ?? '').includes('coai.conversationsPickerOpen');
+
 /** Which commands a person can actually open a chat with, TAKEN FROM THE MANIFEST rather than typed. */
 function doorCommands(): readonly string[] {
   const menus = MANIFEST.contributes.menus;
   const fromMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? [])];
-  const offered = [...fromMenus, ...MANIFEST.contributes.keybindings]
+  const offered = [...fromMenus, ...MANIFEST.contributes.keybindings.filter((one) => !actsOnOurPicker(one))]
     .map((one) => one.command ?? '')
     .filter((one) => one.length > 0);
 
   return [...new Set(offered)];
 }
+
+test('a keybinding scoped to our own picker is not a door, and nothing that is a door hides behind that scope', () => {
+  // The exclusion above is a hole if it can be used to smuggle a real door out of the count, so it is
+  // checked from the other side: a command excluded by it must have EVERY one of its bindings scoped
+  // that way, and must not also be offered from a menu — where there is no picker for it to act on.
+  const excluded = MANIFEST.contributes.keybindings.filter(actsOnOurPicker).map((row) => row.command ?? '');
+  const menus = MANIFEST.contributes.menus;
+  const inMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? [])].map((row) => row.command);
+
+  assert.ok(excluded.length > 0, 'nothing is scoped to the picker any more — this exclusion is watching a door that moved');
+  for (const command of new Set(excluded)) {
+    const bindings = MANIFEST.contributes.keybindings.filter((row) => row.command === command);
+    assert.ok(bindings.every(actsOnOurPicker),
+      command + ' is bound both inside our picker and outside it, so the exclusion hides a real door');
+    assert.ok(!inMenus.includes(command),
+      command + ' is offered from a right-click menu, where the picker it acts on is not open');
+    assert.ok(!read('src/extension.ts').includes("registerCommand('" + command + "', (...args"),
+      command + ' takes what VS Code hands a menu item, which is not how a command acting on the picker is invoked');
+  }
+});
 
 /**
  * Every door records ONE invocation, and records it before anything can refuse.

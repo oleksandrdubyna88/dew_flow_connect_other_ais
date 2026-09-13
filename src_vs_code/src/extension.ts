@@ -17,6 +17,7 @@ import {
   retireMemento,
   takeTheQuestion,
 } from './chatCommand';
+import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
 import { startHousekeeping } from './chatStoreHousekeeping';
@@ -270,7 +271,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
-      // RECORDED FIRST, in every one of these five. The count on the spending page is of how often
+      // RECORDED FIRST, in every one of these six. The count on the spending page is of how often
       // the chat was reached for, so a door that then refuses — no CLI, nothing captured — is still
       // one of them. Nothing waits for the write.
       noteChatDoor('key');
@@ -312,6 +313,30 @@ export function activate(context: vscode.ExtensionContext): void {
         console.error('coai.addTheQuestion failed', reason);
         void vscode.window.showWarningMessage('The question could not be added.');
       });
+    }),
+    // The list of conversations — open and closed, this folder or every folder. It opens no chat by
+    // itself: what it opens is a choice, and the choice may be to reveal a tab that is already there.
+    // It is a DOOR all the same, because *Opened* counts the chat being reached for and this is one
+    // of the ways it is reached for; the ledger's own note says a door that then refuses still counts.
+    //
+    // The index it draws from is the housekeeping's, published after the sweep — never a listing taken
+    // here, which at ninety days of conversations is thousands of files on the way to the first frame.
+    vscode.commands.registerCommand('coai.switchConversations', () => {
+      noteChatDoor('switch');
+      switchConversations(chatPanels, {
+        index: housekeeping.index,
+        store: chatStore,
+        extensionUri: context.extensionUri,
+        workspace: conversationWorkspace,
+      });
+    }),
+    // And forgetting the row under the cursor of that list. NOT a door: it opens no chat, it acts on
+    // the list — which is why it records no invocation, and why `chatWiring.test.ts` excludes a
+    // keybinding scoped to `coai.conversationsPickerOpen` from the doors it derives from the manifest.
+    // It takes no arguments because a keybinding passes none: the row it means is the one being
+    // looked at, and only the picker knows which that is.
+    vscode.commands.registerCommand('coai.forgetPickedConversation', () => {
+      forgetPickedConversation();
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.

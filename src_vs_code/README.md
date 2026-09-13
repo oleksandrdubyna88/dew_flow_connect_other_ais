@@ -98,6 +98,15 @@ The tab is a conversation, not a viewer:
 Reloading the window keeps what was said: every open chat tab comes back with its questions and
 answers, and a line saying the reload closed the conversation.
 
+**CoAI: switch conversations…** (`Ctrl+Shift+Alt+G`, or either right-click menu) is the list of all
+of them — **Open** at the top, what this window has in a tab right now; **Recent** below, everything
+else, newest first. Typing filters by the title, by the model that answered and by the last thing
+said, so a conversation you remember by one word of its answer is one word away. Choosing an open one
+brings its tab to the front; choosing a closed one opens it again where it left off, with nothing
+running until you ask something. A trash button on every closed row forgets that conversation and
+`Alt+Delete` forgets the one under the cursor — the list stays open either way — and the globe in the
+title widens it from this folder to every folder.
+
 The full description lives in the help — `⋯` → **Help** → *Chat with other AI*, in any of the five
 languages. This section is the overview; that article is the one kept in step with the code.
 
