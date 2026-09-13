@@ -269,54 +269,29 @@ public sealed record PanelSettings
     /// What distinguishes THIS installation from another one pointed at the same location.
     /// </summary>
     /// <remarks>
-    /// <para>Issue #115. The default directory already differs per platform, so two sides only
-    /// collide once somebody deliberately shares one — a NAS that survives a Windows reinstall. Then
-    /// Windows and WSL both want to write, and the decision was that each keeps its own rather than
-    /// merging: <c>rounds.id</c> and <c>findings.id</c> are AUTOINCREMENT, so two written-to
+    /// <para>Issue #115. The default directory already differs per platform, so two installations
+    /// only collide once somebody deliberately shares one — a NAS that survives a Windows reinstall.
+    /// Then Windows and WSL both want to write, and the decision was that each keeps its own rather
+    /// than merging: <c>rounds.id</c> and <c>findings.id</c> are AUTOINCREMENT, so two written-to
     /// databases collide on ids and a merge would have to remap every one of them along with the
     /// foreign keys that point at them.</para>
     ///
-    /// <para><b>Platform AND machine, because neither alone is enough.</b> WSL takes its hostname
-    /// from the Windows host, so <see cref="Environment.MachineName"/> is the SAME string on both
-    /// sides of one box — the platform separates those. Two Macs on one NAS share a platform — the
-    /// machine name separates those. And two WSL distributions on one host share BOTH, so
-    /// <c>WSL_DISTRO_NAME</c> joins the name when it is set; that one was raised on the plan
-    /// round.</para>
+    /// <para><b>A name you choose, never one derived here.</b> The plan specified deriving it from
+    /// the platform, the WSL distribution and the machine name, and that was wrong for a reason the
+    /// extension's own <c>dataDir.ts</c> writes down in its docstring: the EXTENSION writes the
+    /// Team-server token into this directory and the MCP shim READS it, so the two halves must agree
+    /// on the path exactly. Deriving it would mean computing the same string twice, in C# from
+    /// <see cref="Environment.MachineName"/> and in TypeScript from <c>os.hostname()</c> — which
+    /// differ in case and in whether they carry a domain. The failure that produces is a silent
+    /// "not signed in", which is what that docstring exists to prevent.</para>
     ///
-    /// <para><c>COAI_DATA_SIDE</c> overrides the whole thing, for somebody who wants a name that
-    /// survives a machine rename — a rename otherwise starts a new side beside the old one. It is
-    /// VALIDATED rather than trusted: a side called <c>../shared</c> would escape the very root it
-    /// is meant to partition.</para>
+    /// <para>So the side is whatever the person put in <c>COAI_DATA_SIDE</c> — which is also what the
+    /// operator asked for in the first place: "give them different names". It is VALIDATED rather
+    /// than trusted: a side called <c>../shared</c> would escape the very root it is meant to
+    /// partition.</para>
     /// </remarks>
-    public static string DataSide(Func<string, string?> env) => SideFrom(env("COAI_DATA_SIDE"), env);
-
-    /// <summary>
-    /// The side a request asked for: a name of its own, or <c>auto</c> for the derived one.
-    /// </summary>
-    /// <remarks>
-    /// A name that could leave the directory falls back to the derived side rather than being
-    /// rewritten into a different one — <c>../shared</c> must not become <c>shared</c> and quietly
-    /// mean something else, and it must certainly not escape the root it is meant to partition.
-    /// </remarks>
-    private static string SideFrom(string? requested, Func<string, string?> env)
-    {
-        if (PathSafeSide(requested) is { Length: > 0 } chosen && chosen != "auto")
-        {
-            return chosen;
-        }
-
-        var platform = OperatingSystem.IsWindows() ? "windows"
-            : OperatingSystem.IsMacOS() ? "macos"
-            : OperatingSystem.IsLinux() ? "linux"
-            : "unknown";
-
-        // A container can have no machine name at all; a side ending in a dash would be the giveaway
-        // that one was built out of nothing, so an empty part simply does not join.
-        var parts = new[] { platform, PathSafeSide(env("WSL_DISTRO_NAME")), PathSafeSide(Environment.MachineName) }
-            .Where(p => p.Length > 0);
-
-        return string.Join('-', parts);
-    }
+    /// <summary>The side this installation was NAMED, or empty when it was not given one.</summary>
+    public static string DataSide(Func<string, string?> env) => PathSafeSide(env("COAI_DATA_SIDE"));
 
     /// <summary>One path segment, or empty — anything that could leave the directory is refused.</summary>
     /// <remarks>
@@ -378,12 +353,12 @@ public sealed record PanelSettings
         //
         // Opting in also says what the operator said: "give them different names, side by side in
         // one folder". `auto` derives the name; anything else IS the name.
-        if (env("COAI_DATA_SIDE") is not { Length: > 0 } requested)
+        if (DataSide(env) is not { Length: > 0 } side)
         {
             return (root, []);
         }
 
-        var dir = Path.Combine(root, SideFrom(requested, env));
+        var dir = Path.Combine(root, side);
         var notes = new List<string>(2);
 
         if (File.Exists(Path.Combine(root, DatabaseFile)))

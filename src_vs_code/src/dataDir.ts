@@ -17,5 +17,36 @@ export function coaiDataDir(): string {
   const configured = process.env['COAI_DATA_DIR'];
   const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
 
-  return configured ?? `${localAppData}/coai-mcp`;
+  if (configured === undefined) {
+    return `${localAppData}/coai-mcp`;
+  }
+
+  // A chosen directory can be PARTITIONED per side, so two installations — Windows and WSL — can be
+  // pointed at one NAS without writing the same SQLite file (issue #115). The rule is the server's,
+  // `PanelSettings.ResolveDataDir`, and this is the half that must agree with it: the paragraph
+  // above is about exactly this file writing a token the shim then reads.
+  //
+  // The side is a NAME, never derived, and that is why the two halves can agree at all: deriving it
+  // would mean computing one string twice, here from `os.hostname()` and there from
+  // `Environment.MachineName`, which differ in case and in whether they carry a domain.
+  const side = pathSafeSide(process.env['COAI_DATA_SIDE']);
+
+  return side.length === 0 ? configured : `${configured}/${side}`;
+}
+
+/**
+ * One path segment, or empty — the server's own rule, spelled the same way.
+ *
+ * <p>Refused rather than rewritten: two different names sanitised into one would put two sides on
+ * one database, which is the outcome the partition exists to prevent.</p>
+ */
+function pathSafeSide(value: string | undefined): string {
+  const trimmed = (value ?? '').trim().toLowerCase();
+
+  return trimmed.length === 0
+    || trimmed === '.'
+    || trimmed === '..'
+    || /[/\\:*?"<>|]/.test(trimmed)
+    ? ''
+    : trimmed;
 }
