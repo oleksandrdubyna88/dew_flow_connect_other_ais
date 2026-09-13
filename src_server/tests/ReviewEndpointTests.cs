@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 using CoaiServer;
+using Microsoft.Extensions.DependencyInjection;
 using FluentAssertions;
 using Xunit;
 
@@ -416,6 +417,14 @@ public sealed class ReviewEndpointTests
         var one = await first.Content.ReadFromJsonAsync<ReviewAcceptedDto>();
         var two = await second.Content.ReadFromJsonAsync<ReviewAcceptedDto>();
         two!.Id.Should().Be(one!.Id, "the fingerprint is computed from the canonical role");
+
+        // And the STORED role is canonical too. Asserting only the id would pass a server that
+        // canonicalised for the fingerprint and recorded the raw spelling — which is the ledger
+        // split this whole decision exists to prevent, surviving the test written to prove it gone.
+        // (codex, story 2's plan round.)
+        var stored = server.Services.GetRequiredService<JobStore>()
+            .Polled(one.Id, $"dev@{TeamServer.Domain}", DateTimeOffset.UtcNow);
+        stored!.Role.Should().Be("Requirements", "the operator's spelling, whichever case arrived");
     }
 }
 
