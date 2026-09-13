@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { ChatStoreFile, SaveOutcome } from '../chatStoreFile';
+import { ChatStoreFile, QUARANTINE_DIR, SaveOutcome } from '../chatStoreFile';
 import { LOCK_STALE_MS, lockName } from '../chatStoreLock';
 import {
   CONVERSATION_VERSION,
@@ -684,6 +684,67 @@ test('a conversation another window holds right now answers BUSY, and is not rea
     assert.equal(outcome.kind, 'busy', 'a save proceeded over a conversation somebody else holds');
     assert.equal(existsSync(join(dir, recordName('a1'))), false, 'a refused save wrote its record anyway');
     assert.equal(JSON.parse(readFileSync(join(dir, lockName('a1')), 'utf8')).token, 'rival:1', 'the rival\u2019s lock was removed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('one id is confirmed in the index by the listing\'s own rule, without listing the store', async () => {
+  // What the migration asks per filed id (twenty of them) rather than reading a store of thousands
+  // to confirm twenty. It must answer exactly what `listMeta` would: present, readable, and naming
+  // the id its file claims.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0, AT);
+
+    assert.equal(await store.listed('a1'), true);
+    assert.equal(await store.listed('nobody'), false);
+    assert.equal(await store.listed('../a1'), false, 'an unsafe id was looked up as a path');
+    // An index entry filed under one id and naming another — the listing drops it, and so must this.
+    writeFileSync(join(dir, besideMeta('b2')), readFileSync(join(dir, besideMeta('a1')), 'utf8'), 'utf8');
+    const { value: mislabelled } = await capturing(() => store.listed('b2'));
+    assert.equal(mislabelled, false, 'an index entry naming another conversation was confirmed');
+    // And a record whose index was torn away is not confirmed until a read regenerates it.
+    rmSync(join(dir, besideMeta('a1')));
+    assert.equal(await store.listed('a1'), false, 'a conversation nothing can list was confirmed as listed');
+    await store.read('a1', AT);
+    assert.equal(await store.listed('a1'), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a value this build cannot file is set aside as it was, under the store, and never reaches the listing', async () => {
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const raw = { id: 'x', savedAt: 'yesterday', messages: 'not an array' };
+    // A quarantine that landed is said at INFORMATION level — it is a record kept, not a failure —
+    // so it is that stream this test listens to, not the error one `capturing` collects.
+    const lines: string[] = [];
+    const before = console.info;
+    console.info = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
+    let out;
+    try {
+      out = await store.quarantine(raw, 'coai.chatTabs-entry-0', AT);
+    } finally {
+      console.info = before;
+    }
+
+    assert.equal(out.kind, 'ok', JSON.stringify(out));
+    const at = (out as { at: string }).at;
+    assert.equal(at, join(dir, QUARANTINE_DIR, `coai.chatTabs-entry-0-${AT}.json`), 'the file is not where the store said, or not named for its label and the clock');
+    assert.deepEqual(JSON.parse(readFileSync(at, 'utf8')), raw, 'what was set aside is not what was handed over');
+    assert.ok(lines.some((line) => line.includes(at)), 'where the value went was not said on the console');
+    const listing = await store.listMeta();
+    assert.deepEqual(listing, { kind: 'listed', metas: [] }, 'the quarantine leaked into the listing');
+    await store.save(record(), 0, AT);
+    assert.equal((await store.state()).kind, 'ready', 'a quarantine subdirectory made the store unusable');
+
+    const bad = await store.quarantine(raw, '../escape', AT);
+    assert.equal(bad.kind, 'failed', 'a label with a separator was turned into a path');
+    assert.equal(existsSync(join(dir, `escape-${AT}.json`)), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

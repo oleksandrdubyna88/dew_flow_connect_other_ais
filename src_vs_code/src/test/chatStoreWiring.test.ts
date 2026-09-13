@@ -57,14 +57,22 @@ test('the extension gives the chat a store to write to, under the coai data dire
   assert.match(wiring, /const chatStore = new ChatStoreFile\(conversationsDir\(coaiDataDir\(\)\)\)/u,
     'the chat has no store, so every conversation is written to the memento alone');
   assert.match(wiring, /keepChatsIn\(chatStore\)/u, 'the chat writes to a store other than the one the serializer reads');
-  assert.match(wiring, /importLegacyTabs\(\{ memento: context\.workspaceState, store: chatStore, workspace: conversationWorkspace\(\) \}\)/u,
-    'the migration is handed a different store, a different memento, or a different workspace than the writers use');
-  assert.match(wiring, /store: chatStore, memento: chatTabMemory/u, 'the serializer reads a store other than the one that is written');
-  // The gate: retired on success and on nothing else. `importSucceeded` is `nothing` or `migrated`;
-  // `unavailable` and `incomplete` leave the memento bound and the dual write on.
-  assert.match(wiring, /if \(importSucceeded\(report\)\) \{\s*\n\s*retireMemento\(\);\s*\n\s*\}/u,
-    'the memento is retired on some condition other than the migration having succeeded');
+  const migration = wiring.slice(wiring.indexOf('importLegacyTabs({'), wiring.indexOf('.then((report)'));
+  assert.match(migration, /memento: context\.workspaceState,/u, 'the migration reads a memento other than the one the chat writes');
+  assert.match(migration, /store: chatStore,/u, 'the migration is handed a different store than the writers use');
+  assert.match(migration, /workspace: conversationWorkspace\(\),/u, 'the migration files records under a different workspace than the dual write');
+  assert.match(wiring, /const restoreDeps: RestoreDeps = \{\s*\n\s*panels: chatPanels,\s*\n\s*store: chatStore,\s*\n\s*memento: chatTabMemory,/u,
+    'the serializer reads a store or a memento other than the one that is written');
+  // The gate: the memento is retired ONLY through the seal, which the migration calls when the key is
+  // empty or every record is confirmed — and the seal drains the queue before the key can go.
+  assert.match(migration, /seal: async \(\) => \{\s*\n\s*retireMemento\(\);\s*\n\s*await chatTabMemory\.settled\(\);/u,
+    'the memento is retired on some condition other than the migration sealing it, or without its queue drained');
+  assert.match(migration, /unseal: \(\) => \{\s*\n\s*rememberChatsIn\(chatTabMemory\);/u,
+    'a clear that did not happen after the seal leaves this window writing one store only');
   assert.equal(wiring.split('retireMemento()').length - 1, 1, 'the memento is retired from more than one place');
+  // And a migration that THREW after sealing must not leave the writer unbound either.
+  const failed = wiring.slice(wiring.indexOf('.catch((reason: unknown): ImportReport'));
+  assert.match(failed.slice(0, 500), /rememberChatsIn\(chatTabMemory\);/u, 'a defect in the migration leaves the memento sealed with its key still populated');
 });
 
 test('a conversation another window took over is kept under a NEW id, never overwritten', () => {

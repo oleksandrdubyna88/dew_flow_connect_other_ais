@@ -287,12 +287,24 @@ export function conversationsDir(dataDir: string): string {
   return join(dataDir, CONVERSATIONS_DIR);
 }
 
+/**
+ * Where what could not be filed as a conversation is kept, AS IT WAS — a subdirectory of the store,
+ * so {@link ChatStoreFile.listMeta} never reads it (a directory name is not a `<id>.meta.json`) and so
+ * the next story that moves the store moves the quarantine with it. The store owns its layout; the
+ * migration asks for the operation rather than the path.
+ */
+export const QUARANTINE_DIR = 'quarantine';
+
+/** What setting a value aside came to: where it is, or why it is not. */
+export type QuarantineOutcome =
+  | { readonly kind: 'ok'; readonly at: string }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/** What a quarantine file may be called: a label, no separators. The clock is appended by the store. */
+const SAFE_LABEL = /^[A-Za-z0-9._-]{1,120}$/u;
+
 export class ChatStoreFile {
-  /**
-   * The directory, readable so the migration can file its quarantine BESIDE the records rather than
-   * being handed the same path twice and trusted to keep the two in step.
-   */
-  public constructor(public readonly dir: string) {}
+  public constructor(private readonly dir: string) {}
 
   /** Where a record lives. Throws on an unsafe id, so every caller guards with {@link isSafeId} first. */
   private recordPath(id: string): string {
@@ -646,6 +658,47 @@ export class ChatStoreFile {
     }
 
     return meta;
+  }
+
+  /**
+   * Whether {@link listMeta} would carry this id — its index entry is there, readable, and names it.
+   *
+   * <p>For a caller that has to confirm a HANDFUL of ids: the migration files twenty records and must
+   * prove each is findable before it empties the store it came from, and listing the whole directory
+   * to answer that reads thousands of entries to confirm twenty. The same rule as the listing's, by
+   * construction — it is the listing's own per-entry read.</p>
+   */
+  public async listed(id: string): Promise<boolean> {
+    return isSafeId(id) && (await this.readListed(id)) !== undefined;
+  }
+
+  /**
+   * Set a value this build cannot file as a conversation aside, AS IT WAS, under the store.
+   *
+   * <p>Written by the migration for a memento entry that fails the validator, or a whole memento value
+   * of a shape no build wrote: neither may be dropped (a conversation deleted with no trace the moment
+   * the key is emptied) nor left in the key (a migration that re-runs for ever). The bytes are the
+   * raw value's JSON; nothing is interpreted. Said on the console WITH THE PATH, at information level
+   * — it is a record kept, not a failure.</p>
+   *
+   * @param label what the file is called, before the clock; letters, digits, dot, dash, underscore
+   * @param at the clock, so two runs cannot overwrite each other's file; a test pins it
+   */
+  public async quarantine(raw: unknown, label: string, at: number): Promise<QuarantineOutcome> {
+    if (!SAFE_LABEL.test(label)) {
+      return { kind: 'failed', reason: 'a quarantine label that cannot be a filename' };
+    }
+    const path = join(this.dir, QUARANTINE_DIR, `${label}-${at}.json`);
+    try {
+      await writeFileAtomically(path, JSON.stringify(raw) ?? 'undefined');
+      console.info(`ConnectOtherAIs: a stored chat record this build cannot read was set aside, unchanged, at ${path}`);
+
+      return { kind: 'ok', at: path };
+    } catch (reason) {
+      console.error(`ConnectOtherAIs: a stored chat record this build cannot read could not be set aside at ${path}`, reason);
+
+      return { kind: 'failed', reason: withCode('a damaged record could not be set aside', codeOf(reason)) };
+    }
   }
 
   /**

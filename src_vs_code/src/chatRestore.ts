@@ -1,4 +1,4 @@
-import { ConversationRecord, fromLegacy } from './chatStore';
+import { ConversationRecord, fromLegacy, isSafeId } from './chatStore';
 import { ReadOutcome } from './chatStoreFile';
 import { SavedTab } from './chatTabs';
 import { escapeHtml, jsonForScript } from './webviewHtml';
@@ -18,13 +18,21 @@ import { escapeHtml, jsonForScript } from './webviewHtml';
  * record this build cannot read, the sentence that names it.</p>
  *
  * <p><b>The memento is still asked, for as long as it holds anything.</b> `deserializeWebviewPanel`
- * can run before the migration has finished — the host awaits the migration first, but a migration
- * that could not clear the key (a store that would not take a write) leaves records there, and a
- * conversation not yet carried across must not read as `absent` and be disposed. A record found only
- * in the memento is restored with baseline 0, which is the state the write decision's adopt rule
- * exists for: its first save meets whatever the store holds under that id and either takes it over
- * or forks. Only when the store says absent AND the memento holds nothing is the panel disposed —
- * as before, because an empty tab pretending to be a conversation is the thing this replaces.</p>
+ * can run before the migration has finished — the host waits for it, up to {@link MIGRATION_WAIT_MS}
+ * — and a migration that could not clear the key (a store that would not take a write) leaves
+ * records there; a conversation not yet carried across must not read as `absent` and be disposed. A
+ * record found only in the memento is restored with baseline 0, which is the state the write
+ * decision's adopt rule exists for: its first save meets whatever the store holds under that id and
+ * either takes it over or forks. Only when the store says absent AND the memento holds nothing is
+ * the panel disposed — as before, because an empty tab pretending to be a conversation is the thing
+ * this replaces.</p>
+ *
+ * <p><b>And a tab is never blank while it waits.</b> Four findings from three reviewers, one defect:
+ * a person reloading with ten tabs must never see ten empty panels with no explanation for as long
+ * as a migration takes. {@link restoringHtml} is drawn BEFORE anything is awaited, and the wait has
+ * a ceiling; past it the host proceeds with what is readable, which the memento fallback makes safe
+ * — a record the migration has not written yet is found in the memento, and its first save adopts
+ * the store's copy when the migration lands it.</p>
  *
  * <p>Pure: no `vscode`, no disk. The host half (`chatRestorePanel.ts`) reads the store, hands the
  * answer here, and does what it is told.</p>
@@ -36,10 +44,24 @@ export type RestoreDecision =
   | { readonly kind: 'dispose' }
   | { readonly kind: 'notice'; readonly sentence: string; readonly retry: boolean };
 
+/**
+ * How long a restored tab waits for the migration before it proceeds with what is readable.
+ *
+ * <p>Twenty records on an ordinary disk are a fraction of a second; twenty records each meeting a
+ * lock another window holds are twenty waits of the lock's own bound (~120 ms), under three seconds.
+ * Five is past both with room, and short enough that a tab which shows *Restoring…* for that long is
+ * a tab a person is still willing to wait for. Past it, nothing is lost: the memento fallback finds
+ * what the migration has not yet written.</p>
+ */
+export const MIGRATION_WAIT_MS = 5_000;
+
 /** What the page posts when the person presses the one button a notice tab has. */
 export const RESTORE_RETRY = 'retry';
 
 export const RETRY_LABEL = 'Try again';
+
+/** What the button says while a retry is in flight — a disabled button that says nothing reads as broken. */
+export const RETRYING_LABEL = 'Retrying…';
 
 /** For a record on disk that this build cannot read. Exported so the test reads it, once. */
 export const INCOMPATIBLE_NOTICE =
@@ -51,6 +73,27 @@ export const INCOMPATIBLE_NOTICE =
 export const unavailableNotice = (reason: string): string =>
   `This conversation could not be read from disk just now: ${reason}. Nothing has been deleted — the file is where `
   + 'it was, and this tab keeps its place until it can be read.';
+
+/** What a tab says while the migration is still running. */
+export const RESTORING_NOTICE =
+  'The conversation is being read from disk. After an update this takes a moment longer, while the conversations '
+  + 'of earlier versions are carried into the new store.';
+
+/**
+ * The conversation id a reload handed back, or empty when there is nothing this build can look up.
+ *
+ * <p>The state is what the page saved with `setState`, and it is persisted by the workbench — a
+ * value this build did not write a moment ago and does not get to trust. An id must be a string of
+ * letters, digits, dash and underscore ({@link isSafeId}): that is what `randomUUID()` mints and what
+ * the store can file. Anything else names nothing on disk and nothing the migration would carry
+ * (an unfilable id is quarantined, not migrated), so the caller closes the tab rather than opening
+ * a conversation that could never be saved.</p>
+ */
+export function persistedId(state: unknown): string {
+  const id = (state as { id?: unknown } | null)?.id;
+
+  return typeof id === 'string' && isSafeId(id) ? id : '';
+}
 
 /**
  * The decision, over what the store said and what the memento still holds.
@@ -75,27 +118,37 @@ export function restoreDecision(seen: ReadOutcome, fallback: SavedTab | undefine
   }
 }
 
-/**
- * The notice tab's page.
- *
- * <p>Same CSP shape as the chat page — no inline handlers, one nonce'd script — and the script's
- * first act is `setState({ id })`: the id is what the serializer receives after the NEXT reload, so
- * a tab kept over a disk fault comes back asking for the same conversation once the disk answers.
- * The sentence goes through `escapeHtml`, the id through `jsonForScript`; both come from files a
- * person can edit.</p>
- */
+/** The notice tab's page: what happened, and the one button when one makes sense. */
 export function noticeHtml(id: string, notice: Extract<RestoreDecision, { kind: 'notice' }>, nonce: string): string {
   const button = notice.retry
     ? `<p><button id="retry" type="button">${escapeHtml(RETRY_LABEL)}</button></p>`
     : '';
 
+  return page(id, 'This conversation could not be opened', notice.sentence, button, nonce);
+}
+
+/** The page a tab shows while the migration is still running — drawn before anything is awaited. */
+export function restoringHtml(id: string, nonce: string): string {
+  return page(id, 'Restoring this conversation…', RESTORING_NOTICE, '', nonce);
+}
+
+/**
+ * One page shape for every tab that is not (yet) a conversation.
+ *
+ * <p>Same CSP shape as the chat page — no inline handlers, one nonce'd script — and the script's
+ * first act is `setState({ id })`: the id is what the serializer receives after the NEXT reload, so
+ * a tab kept over a disk fault, or reloaded again while restoring, comes back asking for the same
+ * conversation. The heading and sentence go through `escapeHtml`, the id and the labels through
+ * `jsonForScript`; a sentence carries what a file said.</p>
+ */
+function page(id: string, heading: string, sentence: string, button: string, nonce: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Conversation not opened</title>
+<title>${escapeHtml(heading)}</title>
 <style>
 body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); padding: 24px; max-width: 640px; line-height: 1.5; }
 h1 { font-size: 1.2em; font-weight: 600; margin: 0 0 12px; }
@@ -105,8 +158,8 @@ button[disabled] { opacity: 0.6; cursor: default; }
 </style>
 </head>
 <body>
-<h1>This conversation could not be opened</h1>
-<p>${escapeHtml(notice.sentence)}</p>
+<h1>${escapeHtml(heading)}</h1>
+<p>${escapeHtml(sentence)}</p>
 ${button}
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
@@ -115,6 +168,7 @@ const retry = document.getElementById('retry');
 if (retry) {
   retry.addEventListener('click', () => {
     retry.disabled = true;
+    retry.textContent = ${jsonForScript(RETRYING_LABEL)};
     vscode.postMessage({ type: ${jsonForScript(RESTORE_RETRY)} });
   });
 }

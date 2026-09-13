@@ -19,8 +19,12 @@ import { ChatMessage } from './chatPage';
  * disk: a store that cannot be reached must not leave a person's next words written nowhere, so
  * `chatCommand.ts` writes both until `retireMemento()` and the store alone afterwards.
  * {@link reloadedNote} is what a restored tab says, whichever store it came back from. What is gone:
- * the activation-time prune — nothing may shrink the memento before the migration has read it — and
- * the `forget` path, which no production caller ever had.</p>
+ * every cut — the activation-time prune, and the week-and-twenty cut `remembered` made on each
+ * write — because nothing may shrink the memento while it is still the store a later migration will
+ * read; and the `forget` path, which no production caller ever had. The migration ends the writes by
+ * SEALING this memory: `retireMemento()` so nothing new is queued, then {@link ChatTabMemory.settled}
+ * so what is queued has landed — a write queued a moment before the key is emptied would otherwise
+ * land after it and fill the key again.</p>
  *
  * <p>No `vscode` import, on purpose. Every rule here — what is written, what a corrupt record does,
  * what is pruned and when — is a decision, and a decision inside the host is a decision no test can
@@ -80,17 +84,6 @@ export const TAB_STORE_KEY = 'coai.chatTabs';
  */
 export const TAB_VERSION = 1;
 
-/** Records older than this are dropped: a week-old conversation is not one anybody is resuming. */
-export const KEEP_FOR_MS = 7 * 24 * 60 * 60 * 1000;
-
-/**
- * And no more than this many, newest first.
- *
- * <p>Age alone does not bound the store: somebody who opens thirty tabs in an afternoon has thirty
- * records within the week, and `workspaceState` is a bounded thing whose overflow is silent.</p>
- */
-export const KEEP_TABS = 20;
-
 const isMessage = (value: unknown): value is ChatMessage => {
   const row = value as { role?: unknown; text?: unknown } | null;
 
@@ -144,17 +137,21 @@ export function stored(tabs: readonly SavedTab[]): { readonly version: number; r
   return { version: TAB_VERSION, tabs };
 }
 
-/** Newest first, then cut by age and by count. */
-export function pruned(tabs: readonly SavedTab[], now: number): readonly SavedTab[] {
-  return [...tabs]
-    .sort((left, right) => right.savedAt - left.savedAt)
-    .filter((tab) => now - tab.savedAt < KEEP_FOR_MS)
-    .slice(0, KEEP_TABS);
-}
-
-/** This conversation, replacing whatever was held for it, with the store pruned on the way. */
-export function remembered(tabs: readonly SavedTab[], tab: SavedTab, now: number): readonly SavedTab[] {
-  return pruned([tab, ...tabs.filter((held) => held.id !== tab.id)], now);
+/**
+ * This conversation, replacing whatever was held for it — newest first, one record per id, and
+ * NOTHING CUT.
+ *
+ * <p>It used to prune here as well: a week, twenty records, because `workspaceState` is one JSON
+ * value whose overflow is silent. That cut had to go with story A4's cut-over (codex, A4's code
+ * round): while the memento is still being written — until the migration has confirmed every record
+ * is on disk — a legacy record whose store write failed could be dropped from the memento by an
+ * ordinary write BEFORE the next activation's migration ever read it, permanently, which is the one
+ * loss this whole story exists to prevent. Its bound is now the number of conversations spoken in
+ * before the migration succeeds, which is ordinarily one activation's worth; the store's bound is
+ * story B1's sweep.</p>
+ */
+export function remembered(tabs: readonly SavedTab[], tab: SavedTab): readonly SavedTab[] {
+  return [tab, ...tabs.filter((held) => held.id !== tab.id)];
 }
 
 export const savedTab = (tabs: readonly SavedTab[], id: string): SavedTab | undefined =>
@@ -203,7 +200,7 @@ export class ChatTabMemory {
   }
 
   remember(tab: Omit<SavedTab, 'savedAt'>): void {
-    this.write((tabs) => remembered(tabs, { ...tab, savedAt: this.clock() }, this.clock()));
+    this.write((tabs) => remembered(tabs, { ...tab, savedAt: this.clock() }));
   }
 
   /** Resolves when everything asked for so far has been written — the tests' way in, and only that. */

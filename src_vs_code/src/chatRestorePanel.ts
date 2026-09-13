@@ -3,20 +3,35 @@ import * as vscode from 'vscode';
 import { restoreConversation } from './chatCommand';
 import { chatTabIcon } from './chatIcon';
 import { ChatPanels } from './chatPanels';
-import { RESTORE_RETRY, RestoreDecision, noticeHtml, restoreDecision } from './chatRestore';
+import {
+  MIGRATION_WAIT_MS,
+  RESTORE_RETRY,
+  RestoreDecision,
+  noticeHtml,
+  persistedId,
+  restoreDecision,
+  restoringHtml,
+} from './chatRestore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatTabMemory } from './chatTabs';
 
 /**
- * The `vscode` half of bringing a chat tab back: read the store, ask `chatRestore.ts` what to do, and
- * do it. Its own module because `extension.ts` is close to the file-size limit and `chatCommand.ts`
- * is far past it, and because a retry needs a message listener the serializer's closure is the wrong
- * place to own.
+ * The `vscode` half of bringing a chat tab back: validate what the reload handed over, put something
+ * on screen, wait for the migration under a ceiling, read the store, ask `chatRestore.ts` what to do,
+ * and do it. Its own module because `extension.ts` is close to the file-size limit and
+ * `chatCommand.ts` is far past it, and because a retry needs a message listener the serializer's
+ * closure is the wrong place to own.
  *
  * <p>A restored conversation goes through `restoreConversation` and therefore through
  * `createChatPanel`, the one place a chat panel is built — the icon, the wiring and the disposal come
  * from there. A NOTICE tab is not a conversation: it is one page, one button and one listener, and
  * it wears the same icon so a tab kept over a disk fault does not look like a stranger's.</p>
+ *
+ * <p><b>Two things dispose a panel here, and both mean "nowhere".</b> A state that carries no id this
+ * build could file — nothing is on disk under it, and the migration quarantines rather than carries
+ * such a memento entry — and a conversation the store AND the memento both say is absent. Nothing
+ * else: not a permissions error, not a newer build's record, not a defect (the outer catch in
+ * `extension.ts` logs and leaves the tab).</p>
  */
 
 /** What restoring a tab needs of the host, and no more of it. */
@@ -31,9 +46,38 @@ export interface RestoreDeps {
 }
 
 /**
- * One tab, decided and done. Rejects only on a defect — the store answers in outcomes — so the
- * serializer's own catch is the outer edge.
+ * The serializer's whole body, for one panel.
+ *
+ * <p>Order is the point. The id is validated FIRST, at the boundary, and refused with the legal shape
+ * named. Then the tab is DRAWN — *Restoring…*, with the id already `setState`d — before anything is
+ * awaited, so a person reloading with ten tabs sees ten tabs saying what they are doing rather than
+ * ten blank panels. Then the migration is waited for, but only up to {@link MIGRATION_WAIT_MS}: past
+ * that the tab proceeds with what is readable, which the memento fallback in `restoreDecision` makes
+ * safe. Rejects only on a defect — the store answers in outcomes — and the caller's catch is the
+ * outer edge.</p>
  */
+export async function restoreAfterReload(
+  deps: RestoreDeps,
+  panel: vscode.WebviewPanel,
+  state: unknown,
+  migration: Promise<unknown>,
+): Promise<void> {
+  const id = persistedId(state);
+  if (id.length === 0) {
+    console.warn(
+      'ConnectOtherAIs: a restored chat tab carried no usable conversation id — an id is a string of letters, '
+      + `digits, dash and underscore — so nothing can be filed under it and the tab is closed: ${JSON.stringify(state)}`,
+    );
+    panel.dispose();
+
+    return;
+  }
+  draw(deps, panel, restoringHtml(id, nonce()));
+  await withinCeiling(migration, MIGRATION_WAIT_MS);
+  await restoreChatTab(deps, panel, id);
+}
+
+/** One tab, decided and done — the half a retry runs again. */
 export async function restoreChatTab(deps: RestoreDeps, panel: vscode.WebviewPanel, id: string): Promise<void> {
   const decision = restoreDecision(await deps.store.read(id), deps.memento.saved(id), deps.workspace());
   if (decision.kind === 'restore') {
@@ -54,7 +98,7 @@ export async function restoreChatTab(deps: RestoreDeps, panel: vscode.WebviewPan
 /**
  * The defined tab for a record that could not be read. The retry, when there is one, runs the whole
  * decision again — a disk that has come back restores the conversation into THIS panel, a disk that
- * has not redraws the notice with what it said this time.
+ * has not redraws the notice with what it said this time, which also gives the button back.
  */
 function showNotice(
   deps: RestoreDeps,
@@ -62,11 +106,7 @@ function showNotice(
   id: string,
   notice: Extract<RestoreDecision, { kind: 'notice' }>,
 ): void {
-  // The webview half of the options is settable after a reload and the page has a script; the same
-  // two lines `createChatPanel` runs for a restored panel, for the same reason.
-  panel.webview.options = { enableScripts: true, localResourceRoots: [] };
-  panel.iconPath = chatTabIcon((...segments) => vscode.Uri.joinPath(deps.extensionUri, ...segments));
-  panel.webview.html = noticeHtml(id, notice, randomBytes(16).toString('hex'));
+  draw(deps, panel, noticeHtml(id, notice, nonce()));
   if (!notice.retry) {
     return;
   }
@@ -90,3 +130,35 @@ function showNotice(
   });
   panel.onDidDispose(() => listener.dispose());
 }
+
+/**
+ * A page into the panel, configured the way `createChatPanel` configures a restored one: the
+ * webview half of the options is settable after a reload and the page has a script, and the icon
+ * is workbench chrome the reload does not bring back.
+ */
+function draw(deps: RestoreDeps, panel: vscode.WebviewPanel, html: string): void {
+  panel.webview.options = { enableScripts: true, localResourceRoots: [] };
+  panel.iconPath = chatTabIcon((...segments) => vscode.Uri.joinPath(deps.extensionUri, ...segments));
+  panel.webview.html = html;
+}
+
+/**
+ * Wait for `work`, but not past `ms`. Neither outcome is an error: the migration never rejects (its
+ * caller catches), and a ceiling reached is the tab proceeding with what is readable. The timer is
+ * cleared when the work wins, so a fast migration leaves nothing ticking.
+ */
+async function withinCeiling(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ceiling = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  try {
+    await Promise.race([work.then(() => undefined, () => undefined), ceiling]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+const nonce = (): string => randomBytes(16).toString('hex');
