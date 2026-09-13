@@ -272,7 +272,25 @@ public sealed partial class PanelService
 
     // ---------- open / status ----------
 
-    public async Task<string> OpenAsync(string repoPath, string branch, CancellationToken ct = default)
+    /// <param name="callerModel">
+    /// The model the CALLING AI says it is running — <c>claude-opus-5</c>, <c>codex-astra</c>.
+    /// </param>
+    /// <param name="client">
+    /// What the client called itself in the MCP handshake, and its version. Passed as plain strings
+    /// rather than the SDK's <c>Implementation</c> so this service stays testable without a wire.
+    /// </param>
+    /// <remarks>
+    /// Re-stamped on EVERY open of the same repo and branch, which is the whole reason the model is
+    /// declared per call: a <c>/model</c> switch mid-session reaches the next round rather than
+    /// leaving the log naming the model somebody stopped using.
+    /// </remarks>
+    public async Task<string> OpenAsync(
+        string repoPath,
+        string branch,
+        string callerModel = "",
+        string client = "",
+        string clientVersion = "",
+        CancellationToken ct = default)
     {
         if (!Directory.Exists(repoPath))
         {
@@ -299,8 +317,14 @@ public sealed partial class PanelService
                 // a save moves a scratch file over this one.
                 OpenedUtc = DateTime.UtcNow,
             };
+        session = session with
+        {
+            Caller = CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel),
+        };
         _store.Save(session);
-        _log.Information("session {SessionId} open for {Branch}", session.State.SessionId, branch);
+        _log.Information(
+            "session {SessionId} open for {Branch}, asked by {Caller}",
+            session.State.SessionId, branch, session.Caller.Phrase);
         return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
     }
 
@@ -2054,7 +2078,7 @@ public sealed partial class PanelService
     /// piece's own order tells it to say so if it disagrees.</para>
     /// </remarks>
     private static string CallerFor(PersistedSession session) =>
-        CallerIdentity.Current() is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
+        CallerIdentity.Current().Id is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
 
     private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>
         $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

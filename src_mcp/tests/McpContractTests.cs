@@ -35,14 +35,23 @@ public sealed class McpContractTests : IDisposable
 
     public void Dispose()
     {
-        try
+        foreach (var directory in (string[])[_data, .. _repos])
         {
-            Directory.Delete(_data, recursive: true);
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A temp directory that outlives one run is litter, not a failed test.
+            }
         }
-        catch (IOException) { }
     }
 
-    private Process Start(string logLevel = "debug", int escalationSeconds = 1800)
+    private Process Start(
+        string logLevel = "debug",
+        int escalationSeconds = 1800,
+        params (string Name, string Value)[] alsoInTheEnvironment)
     {
         var info = new ProcessStartInfo(ServerExe)
         {
@@ -52,6 +61,11 @@ public sealed class McpContractTests : IDisposable
             UseShellExecute = false,
         };
         info.Environment["COAI_DATA_DIR"] = _data;
+        foreach (var (name, value) in alsoInTheEnvironment)
+        {
+            info.Environment[name] = value;
+        }
+
         info.Environment["COAI_LOG_LEVEL"] = logLevel; // chatty on purpose: purity is the claim
         info.Environment["COAI_ESCALATION_SECONDS"] = escalationSeconds.ToString();
         // These test the WIRE. Translation is a vendor call with its own tests; leaving it on
@@ -258,4 +272,151 @@ public sealed class McpContractTests : IDisposable
             await server.WaitForExitAsync();
         }
     }
+
+    /// <summary>
+    /// The handshake's client and version, and the model the caller declared, reach the session.
+    /// </summary>
+    /// <remarks>
+    /// <para>Asserted over the REAL wire because that is the only place the claim can be checked:
+    /// <c>clientInfo</c> is read from the request-scoped <c>McpServer</c> the SDK injects into the
+    /// tool lambda, and no in-process test exercises the injection. The plan round asked for exactly
+    /// this (gemini, Major — "verify ClientInfo is accessible within the tool delegate scope").</para>
+    /// <para>The version is DISTINCTIVE on purpose: with a name-only assertion, an implementation
+    /// that recorded the client and dropped the version would pass. (codex, Major.)</para>
+    /// <para>And the environment is set to a DIFFERENT vendor than the handshake, which is the
+    /// precedence the plan round settled: the variables are the process's, inherited from whatever
+    /// launched this server; the handshake belongs to the connection that is calling.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheHandshakeAndTheDeclaredModel_ReachTheSessionFile()
+    {
+        var repo = await ARepository();
+        using var server = Start(alsoInTheEnvironment: ("CLAUDE_CODE_SESSION_ID", "from-the-launcher"));
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"codex","version":"7.3.1"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var opened = await RoundTrip(server, OpenCall(repo, "codex-astra"), timeoutSeconds: 60);
+            opened.RootElement.TryGetProperty("result", out var result)
+                .Should().BeTrue($"the call must be answered, not refused: {opened.RootElement}");
+            result.GetProperty("content")[0].GetProperty("text")
+                .GetString().Should().NotContain("\"error\"", "the session must actually open");
+
+            var caller = OnlySessionFile().GetProperty("caller");
+            caller.GetProperty("client").GetString().Should().Be("codex");
+            caller.GetProperty("clientVersion").GetString().Should().Be("7.3.1");
+            caller.GetProperty("model").GetString().Should().Be("codex-astra");
+            caller.GetProperty("vendor").GetString().Should().Be(
+                "codex", "the handshake belongs to this connection; the variable belongs to whatever launched us");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// A client that sends no model is recorded as having sent none — never as a default.
+    /// </summary>
+    /// <remarks>
+    /// The direct consequence of the operator's choice, and the thing most likely to be got wrong:
+    /// the argument is optional, so the honest record is "nothing stated". It also proves the schema
+    /// change is backward compatible — this is a two-argument `open`, exactly as every client that
+    /// predates `callerModel` sends it. (gemini, Major.)
+    /// </remarks>
+    [Fact]
+    public async Task AClientThatSendsNoModel_OpensAnyway_AndStatesNoModel()
+    {
+        var repo = await ARepository();
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"some-editor","version":"2"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var opened = await RoundTrip(server, OpenCall(repo), timeoutSeconds: 60);
+            opened.RootElement.GetProperty("result").TryGetProperty("isError", out var failed)
+                .Should().BeFalse($"a two-argument open is what every older client sends: {opened.RootElement}");
+            failed.ValueKind.Should().Be(JsonValueKind.Undefined);
+
+            var caller = OnlySessionFile().GetProperty("caller");
+            caller.GetProperty("model").GetString().Should().BeEmpty("nobody declared one");
+            caller.GetProperty("client").GetString().Should().Be("some-editor");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>A `tools/call` for `open`, with the model the caller declares — or none at all.</summary>
+    /// <remarks>
+    /// Composed rather than written as a raw literal: the JSON ends in `}}}`, which a `$$"""` cannot
+    /// carry, and every fragment of it ends in a quote, which a `"""` cannot carry either.
+    /// </remarks>
+    private static string OpenCall(string repo, string declaredModel = "")
+    {
+        var arguments = new Dictionary<string, string> { ["repoPath"] = repo, ["branch"] = "main" };
+        if (declaredModel.Length > 0)
+        {
+            arguments["callerModel"] = declaredModel;
+        }
+
+        return JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 2,
+            ["method"] = "tools/call",
+            ["params"] = new Dictionary<string, object> { ["name"] = "open", ["arguments"] = arguments },
+        });
+    }
+
+    /// <summary>The one session this server wrote, parsed.</summary>
+    private JsonElement OnlySessionFile()
+    {
+        var files = Directory.GetFiles(Path.Combine(_data, "sessions"), "session-*.json");
+        files.Should().ContainSingle("one open, one session");
+        return JsonDocument.Parse(File.ReadAllText(files[0])).RootElement;
+    }
+
+    /// <summary>A real git checkout with one commit — `open` resolves a SHA before it does anything.</summary>
+    private async Task<string> ARepository()
+    {
+        var repo = Directory.CreateTempSubdirectory("coai-contract-repo-").FullName;
+        await File.WriteAllTextAsync(Path.Combine(repo, "app.cs"), "v1\n");
+        foreach (var args in (string[][])[["init", "-b", "main"], ["add", "."], ["commit", "-m", "base"]])
+        {
+            var start = new ProcessStartInfo("git")
+            {
+                WorkingDirectory = repo,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            string[] all =
+                ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", .. args];
+            foreach (var argument in all)
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var git = Process.Start(start)!;
+            await git.WaitForExitAsync();
+            git.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {await git.StandardError.ReadToEndAsync()}");
+        }
+
+        _repos.Add(repo);
+        return repo.Replace('\\', '/');
+    }
+
+    private readonly List<string> _repos = [];
 }

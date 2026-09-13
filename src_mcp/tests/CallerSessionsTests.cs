@@ -182,7 +182,7 @@ public sealed class CallerSessionsTests
             "COAI_CALLER_SESSION" => "mine",
             "CLAUDE_CODE_SESSION_ID" => "theirs",
             _ => null,
-        }).Should().Be("mine");
+        }).Id.Should().Be("mine");
     }
 
     [Fact]
@@ -190,10 +190,10 @@ public sealed class CallerSessionsTests
     {
         // An exported-but-empty variable is how a client that sets nothing looks on some shells.
         CallerIdentity.From(name => name == "CLAUDE_CODE_SESSION_ID" ? "   " : null)
-            .Should().BeEmpty();
+            .Id.Should().BeEmpty();
     }
 
     [Fact]
     public void AClientThatSaysNothing_IsEmpty_AndTheServerFallsBackToTheCheckout() =>
-        CallerIdentity.From(_ => null).Should().BeEmpty();
+        CallerIdentity.From(_ => null).Id.Should().BeEmpty();
 }

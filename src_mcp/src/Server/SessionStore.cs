@@ -142,6 +142,25 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     public string PlanText { get; init; } = string.Empty;
 
     /// <summary>
+    /// Which AI opened this session, and which model it declared. Never null.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stamped by <c>open</c> and re-stamped by every later <c>open</c> of the same repo and
+    /// branch, which is what makes a mid-session <c>/model</c> switch land: the declaration is sent
+    /// per call rather than read once when the client started. See
+    /// <see cref="CallerDeclaration"/> for why it is declared at all.</para>
+    /// <para>A session file written before this field simply has none, and deserialising it leaves
+    /// the default — an unknown vendor that declared no model, which is exactly what is true of it.
+    /// Normalised on the way in for the reason spelled out on <see cref="UsedPrompts"/>: the
+    /// serializer bypasses a property initializer for an absent one.</para>
+    /// </remarks>
+    public CallerDeclaration Caller
+    {
+        get => field ??= new CallerDeclaration();
+        init => field = value ?? new CallerDeclaration();
+    }
+
+    /// <summary>
     /// Prompt ids this session has already asked, so the plan stage spends every lens once.
     /// </summary>
     /// <remarks>
