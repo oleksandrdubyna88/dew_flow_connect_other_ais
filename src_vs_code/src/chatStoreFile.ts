@@ -1,10 +1,12 @@
 import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { abreast } from './abreast';
 import { writeFileAtomically } from './atomicFile';
 import {
   ConversationMeta,
   ConversationRecord,
   besideMeta,
+  expired,
   idOfMeta,
   isSafeId,
   isStale,
@@ -65,8 +67,10 @@ import { claimConversation } from './chatStoreLock';
  * absent record. Treating it as one would let an older build replace a newer build's conversation
  * after a downgrade, and a conversation minted under a fresh id — saved with baseline zero — meets
  * whatever is already at that id. So a save over it is `incompatible` and writes nothing; the file
- * stays where it is until an explicit {@link ChatStoreFile.forget} or the sweep of story B1 clears it,
- * neither of which is built here. `read` returns nothing for it, saying so on the console.</p>
+ * stays where it is until an explicit {@link ChatStoreFile.forget} — the trash button of story B4. The
+ * sweep of story B1 deliberately leaves it: what cannot be read cannot be aged, and
+ * {@link ChatStoreFile.retireIfExpired} answers `kept` for it. `read` returns nothing for it, saying
+ * so on the console.</p>
  *
  * <h2>What a crash between the two deletes leaves, and who collects it</h2>
  *
@@ -161,6 +165,12 @@ export type SaveOutcome =
  */
 export type ForgetOutcome =
   | { readonly kind: 'ok' }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/** What retiring an expired conversation came to; `kept` names why, for the sweep to count and the next one to look at again. */
+export type RetireOutcome =
+  | { readonly kind: 'retired' }
+  | { readonly kind: 'kept'; readonly why: 'held' | 'absent' | 'changed' | 'not expired' | 'incompatible' | 'unavailable' }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /**
@@ -597,6 +607,55 @@ export class ChatStoreFile {
   }
 
   /**
+   * Retire one conversation the sweep observed as expired — but only if, UNDER ITS LOCK, it still is.
+   *
+   * <p>An index entry is a statement about a moment that has passed: a save can land between the
+   * sweep's listing and its delete, and deleting on the listing's word would destroy it — the
+   * check-then-act that cost epic A two rounds. So this is the ONE way the sweep deletes a conversation.
+   * With the claim held the record is re-read; it goes only at exactly the revision the listing showed
+   * (`seenRev`) and with its own `updatedAt` still past the window. Any other revision has been written
+   * since — its index is regenerated here, the claim being held, and it is `kept`. A held lock, an
+   * absent record, one this build cannot read and a disk that will not answer are `kept` too, each
+   * named. The two deletes are {@link forgetClaimed}'s, in its order. `now` is the clock; a test pins it.</p>
+   */
+  public async retireIfExpired(id: string, seenRev: number, now = Date.now()): Promise<RetireOutcome> {
+    if (!isSafeId(id)) {
+      return { kind: 'failed', reason: 'a conversation id that cannot be a filename' };
+    }
+    const claim = await claimConversation(this.dir, id, 'retire', now);
+    if (claim.kind === 'failed') {
+      return { kind: 'failed', reason: claim.reason };
+    }
+    if (claim.kind === 'held') {
+      return { kind: 'kept', why: 'held' };
+    }
+    try {
+      return await this.retireClaimed(id, seenRev, now);
+    } finally {
+      await claim.release();
+    }
+  }
+
+  /** The re-check and the two deletes, with the claim held. */
+  private async retireClaimed(id: string, seenRev: number, now: number): Promise<RetireOutcome> {
+    const seen = await this.probe(id);
+    if (seen.kind !== 'record') {
+      return { kind: 'kept', why: seen.kind };
+    }
+    if (seen.record.rev !== seenRev) {
+      await this.writeMeta(seen.record);
+
+      return { kind: 'kept', why: 'changed' };
+    }
+    if (!expired(metaOf(seen.record), now)) {
+      return { kind: 'kept', why: 'not expired' };
+    }
+    const gone = await this.forgetClaimed(id);
+
+    return gone.kind === 'ok' ? { kind: 'retired' } : { kind: 'failed', reason: gone.reason };
+  }
+
+  /**
    * Every readable metadata file in the directory — and only the metadata files.
    *
    * <p>A transcript is NEVER opened to draw the list: {@link idOfMeta} returns empty for anything but
@@ -627,22 +686,20 @@ export class ChatStoreFile {
       return { kind: 'unavailable', reason: withCode('the conversation store could not be listed', codeOf(reason)) };
     }
     const ids = names.map(idOfMeta).filter((id) => id.length > 0);
-    const found: (ConversationMeta | undefined)[] = new Array<ConversationMeta | undefined>(ids.length);
-    let next = 0;
-    const worker = async (): Promise<void> => {
-      while (next < ids.length) {
-        const at = next;
-        next += 1;
-        found[at] = await this.readListed(ids[at] as string);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(LIST_WIDTH, ids.length) }, worker));
+    const found = await abreast(ids.map((id) => () => this.entry(id)), LIST_WIDTH);
 
     return { kind: 'listed', metas: found.filter((meta): meta is ConversationMeta => meta !== undefined) };
   }
 
-  /** One listed entry, dropped when it is torn, unreadable, or names an id its filename does not. */
-  private async readListed(id: string): Promise<ConversationMeta | undefined> {
+  /**
+   * One index entry as the listing carries it — dropped when torn, unreadable, or naming an id its
+   * filename does not. Public for B1's index, which re-reads entries one at a time as their stamps
+   * change rather than listing thousands to learn that three moved. Never opens a transcript.
+   */
+  public async entry(id: string): Promise<ConversationMeta | undefined> {
+    if (!isSafeId(id)) {
+      return undefined;
+    }
     const meta = await this.readMeta(id);
     if (meta === undefined) {
       return undefined;
@@ -669,7 +726,7 @@ export class ChatStoreFile {
    * construction — it is the listing's own per-entry read.</p>
    */
   public async listed(id: string): Promise<boolean> {
-    return isSafeId(id) && (await this.readListed(id)) !== undefined;
+    return isSafeId(id) && (await this.entry(id)) !== undefined;
   }
 
   /**

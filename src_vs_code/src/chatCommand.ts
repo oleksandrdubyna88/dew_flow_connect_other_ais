@@ -461,6 +461,32 @@ export function keepChatsIn(onDisk: ChatStoreFile): void {
 }
 
 /**
+ * Told whenever the set of open conversations changes — a thread registered, restored, closed, or
+ * re-minted under a new id — so this window's heartbeat (`chatStoreHeartbeat.ts`) announces it at once
+ * rather than on its next minute. Bound the way the store above is; absent means no heartbeat, which
+ * is every test of this file's pure neighbours.
+ */
+let pulse: (() => void) | undefined;
+
+export function pulseChatsThrough(onChange: () => void): void {
+  pulse = onChange;
+}
+
+/**
+ * Which conversations this window holds open, by their store ids — what its heartbeat announces so
+ * that no other window sweeps one of them by its age. Read from the registry each time, never cached:
+ * a tab restored a moment ago must count.
+ */
+export function heldConversationIds(panels: ChatPanels): readonly string[] {
+  return panels.known().flatMap(({ key }) => {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+
+    return thread === undefined ? [] : [thread.saveId];
+  });
+}
+
+/**
  * This extension host, so the chat can read the settings of the side it is actually on.
  *
  * <p>The same bind-once shape as `rememberChatsIn` above and as `chatOrphans.openLedger`, and for the
@@ -787,6 +813,8 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
     // conflict with and nothing is there to adopt.
   }
   pushChatNote(entry, thread.saveId, note);
+  // The heartbeat names ids, and this conversation has a new one.
+  pulse?.();
 }
 
 /**
@@ -1857,6 +1885,9 @@ function newConversation(
     title: state.title,
     reopen: false,
   });
+  // The heartbeat, on the next tick — by which time the caller's `panels.open` has registered this
+  // entry, which is what `heldConversationIds` reads.
+  pulse?.();
 
   // In the background, while this tab's name still matches the session it came from.
   pinSession(entry.id, state.title, state.fromSession);
@@ -2083,6 +2114,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // of a callback nobody catches. Every reader of a thread starts by looking it up, so
         // removing it turns all of them into no-ops at once. (codex and gemini, the code round.)
         threads.delete(id);
+        pulse?.();
         thread?.session.dispose();
         thread?.home.release();
       },
@@ -2428,6 +2460,8 @@ export function restoreConversation(
   // or may already hold a live conversation of its own. A restored tab is its own thing until
   // somebody closes it.
   panels.open({}, saved.title, () => entry);
+  // A restored conversation is an open one, and the sweep in every other window must hear so.
+  pulse?.();
 }
 
 /**

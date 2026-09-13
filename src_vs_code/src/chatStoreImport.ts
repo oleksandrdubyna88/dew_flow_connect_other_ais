@@ -1,3 +1,4 @@
+import { abreast } from './abreast';
 import { ConversationRecord, fromLegacy, isPrefixOf, isSafeId, saidIn } from './chatStore';
 import { ChatStoreFile, SaveOutcome } from './chatStoreFile';
 import { SavedTab, TAB_STORE_KEY, TAB_VERSION, TabStore, isTab } from './chatTabs';
@@ -472,21 +473,8 @@ async function migrateRecords(
   return abreast(jobs, IMPORT_WIDTH);
 }
 
-/** The listing's worker pool, over jobs: `width` at a time, results in the jobs' order. */
-async function abreast<T>(jobs: readonly (() => Promise<T>)[], width: number): Promise<readonly T[]> {
-  const out = new Array<T>(jobs.length);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < jobs.length) {
-      const here = next;
-      next += 1;
-      out[here] = await (jobs[here] as () => Promise<T>)();
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(width, jobs.length) }, worker));
-
-  return out;
-}
+// The worker pool that used to live here is `abreast.ts`: the sweep and the index of story B1 needed
+// the same loop, and a third copy is the duplicate the reuse rule forbids.
 
 /**
  * One record: read what the store holds under its id, and let {@link newerOf} decide.
