@@ -22,8 +22,7 @@
 
 The first seven tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
 direction — the calling AI, stuck, asking one of them a question. Design record:
-[../todo/PLAN_consultant.md](../todo/PLAN_consultant.md); stories 1–4 shipped, 2026-09-12 to
-2026-09-13 — the tool and its record, all four vendor routes, the panel section, and the log tab.
+[PLAN_consultant.md](PLAN_consultant.md); all six stories shipped, 2026-09-12 to 2026-09-13.
 
 **It shares nothing with the round machine, on purpose.** `RoundMachine` refuses a round while a
 human gate is set or a round awaits `resolve` — exactly the moments an agent is stuck — and half the

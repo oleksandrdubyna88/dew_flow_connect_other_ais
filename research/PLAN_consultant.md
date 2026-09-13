@@ -1,17 +1,32 @@
 # PLAN — Consultant: the main AI asks another vendor's model when it is stuck
 
-> Status: **stories 1–4 IMPLEMENTED (1–2 on 2026-09-12, 3–4 on 2026-09-13); stories 5–6 open.**
-> Scope: `src_mcp` (one tool
-> `consult`, one MCP prompt, a consultation record, per-vendor resumable launches, a filesystem
-> invariant), `src_vs_code` (a *Consultant* section, a live card, a log row), one paragraph in the
-> canonical gate rule that lives in `dew_flow_conventions`. The Team server is OUT of scope: local
-> vendor CLIs only.
+> Status: **IMPLEMENTED, 2026-09-13.** All six stories of all three epics shipped. Scope: `src_mcp`
+> (one tool `consult`, one MCP prompt, a consultation record, per-vendor resumable launches, a
+> filesystem invariant), `src_vs_code` (a *Consultant* section, a live card, a log tab, the pasted
+> triggers), and the counter that decides whether phase 2 is ever built. The Team server was OUT of
+> scope and stayed out: local vendor CLIs only.
 >
-> **What is done.** The tool answers, all four routes hold a conversation, and every guarantee S1 and
-> S2 owed is pinned by a test. Each story went through this product's own gate on its own branch —
-> S1: 20 plan findings, then 46 and 8 code findings over two rounds; S2: 13 plan findings, then 38
-> and 10. 71 accepted and applied, 42 rejected with reasons, every decision recorded through
-> `resolve`. Suites at the end: CoaiMcp 1479 (1 pre-existing skip), CoaiServer 245, CoaiBench 113.
+> **The open tail is the operator's**, and it always was: phase 0's hand-recorded Unstuck / Echo /
+> Harm table, from 2026-09-14, which decides the DEFAULTS rather than whether the tool exists. It is
+> [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) now.
+>
+> **The three deviations from this document, all recorded in the build order below.** (1) The
+> trigger paragraph did NOT go into the shared conventions rule and there was no pin cascade — the
+> conventions repository had since frozen its 24 migrated rules, and the operator's own answer was
+> that conventions holds only shared rules while specific material belongs to the project that owns
+> it. So the consultant half is this repository's `src_vs_code/src/consultantRule.md`, and the paste
+> is two halves under one marker. (2) Story 6's counter runs on EVERY round rather than only a code
+> round, scoped to earlier rounds of the same stage. (3) Story 4's projection hangs off
+> `ConsultationStore.Write` rather than off the service, because that is the one place every state
+> passes through.
+>
+> **What is done.** The tool answers, all four routes hold a conversation, the panel edits it, the log
+> reads it back, the snippet tells a stuck agent when to call it, and `consult_missed` counts how
+> often the gate hands back a finding the caller had already accepted. Each story went through this
+> product's own gate on its own branch — S1: 20 plan findings, then 46 and 8 code findings over two
+> rounds; S2: 13 plan findings, then 38 and 10; S3: 14 then 27; S4: 9 then 24; S5: 12, then 30 and 12;
+> S6: 11, then 29 and 10. Every decision recorded through `resolve`, every rejection with a reason.
+> Suites at the end: CoaiMcp 1543 (1 skip), the extension 2094 (1 skip), the seam check green.
 >
 > **What the gate and the live runs caught that the tests had not** — the four worth remembering:
 > the invariant watched `.git/index`, which `git status` rewrites, so every consultation failed
@@ -22,11 +37,12 @@
 > every route when the local one writes its prompt file, a claim whose own test had been watching the
 > wrong directory.
 >
-> Related docs: [architecture.md](../research/architecture.md), [module_server.md](../research/module_server.md),
-> [module_runners.md](../research/module_runners.md), [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) (a PERSON talks to another
-> vendor; this plan is the AGENT doing it), [PLAN_escalation_loopback.md](../research/PLAN_escalation_loopback.md)
-> (the file channel this reuses), [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md)
+> Related docs: [architecture.md](architecture.md), [module_server.md](module_server.md),
+> [module_runners.md](module_runners.md), [module_extension.md](module_extension.md),
+> [module_core.md](module_core.md) (story 6's counter),
+> [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (a PERSON talks to another
+> vendor; this plan is the AGENT doing it), [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md)
+> (the file channel this reuses), [PLAN_multi_repo_and_uncommitted.md](../todo/PLAN_multi_repo_and_uncommitted.md)
 > (NOT a prerequisite — see *What deliberately does not change*).
 
 ## The symptom
@@ -34,7 +50,7 @@
 The main AI gets stuck. The person watches it try the same fix a third time, or pick between two
 designs with no measurement, or contradict a source it read a minute ago. Today the only way out is
 the person: they stop it, copy the problem into another vendor's chat by hand (the five steps
-[PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) removed for READING), and
+[PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) removed for READING), and
 paste the answer back. The product already has every vendor CLI wired, sandboxed, priced and logged
 — for REVIEW. Nothing lets the agent ask one of them a question.
 
@@ -43,10 +59,19 @@ spot by definition, and the one model that cannot see it is the one that produce
 why the agent must NOT be the one to describe the repository state to the consultant — see *The
 consultant sees the tree, not the agent's story*.
 
-## Phase 0 — the smoke test, owned by the operator (from 2026-09-14)
+## Phase 0 — the smoke test, owned by the operator — MOVED, still open
+
+**The one part of this plan that only a person can close**, and it was always scheduled after the
+build: the hand-recorded Unstuck / Echo / Harm table, from 2026-09-14, which decides the DEFAULTS —
+the turn cap, and which vendor answers which caller — rather than whether the tool exists. It lives in
+[PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) now, so
+that this document can say what shipped without reading as though the feature were waiting on it.
+
+What it asks for, kept here because the rest of this plan refers to it:
 
 No native code is needed to test the hypothesis. The operator puts this into ONE active
-repository's `CLAUDE.md` and records every incident by hand:
+repository's `CLAUDE.md` — or, since story 5, copies the snippet from the ⋯ menu, which carries the
+same triggers — and records every incident by hand:
 
 ```markdown
 ### Escalation & Second Opinion
@@ -85,7 +110,7 @@ back in turn 2. Windows 11; cwd an empty scratch directory.
 1. **`codex --ephemeral` kills resume.** The review flag set, verbatim, produced a thread whose resume
    failed in 0.7 s: `thread/resume failed: no rollout found for thread id …`. The consult launch drops
    that one flag — and codex then writes a session into the person's own store, the trade the chat
-   feature already makes ([PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md)).
+   feature already makes ([PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md)).
 2. **`codex exec resume` accepts neither `-s` nor `-C`.** The sandbox rides `-c sandbox_mode="read-only"`;
    the working directory must be the one the thread was started in. It does accept `--json`, `-o`,
    `--output-schema`, `--skip-git-repo-check`, `-m`.
@@ -461,7 +486,7 @@ different signal). Nothing is called.
 
 ## What deliberately does NOT change
 
-- **No snapshot commit.** [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md)
+- **No snapshot commit.** [PLAN_multi_repo_and_uncommitted.md](../todo/PLAN_multi_repo_and_uncommitted.md)
   builds a commit object because a review worktree must pin a SHA. A consultation pins nothing.
 - **No role, no review session required, no round-machine change.**
 - **No long-lived child.** The chat's `CliChatSession` is not ported.

@@ -271,7 +271,7 @@ come for free.
 behind nine reviewers would stall it at the one moment the agent is stuck. The cost, stated: a consult
 during a round is one more process on the machine, bounded by the per-session call cap.
 
-**Two flags differ from the review argv, both measured on 2026-09-12** (`todo/PLAN_consultant.md`,
+**Two flags differ from the review argv, both measured on 2026-09-12** (`research/PLAN_consultant.md`,
 phase 0b):
 
 | | review | consult | why |
