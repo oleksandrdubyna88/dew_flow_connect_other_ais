@@ -175,7 +175,11 @@ test('an OPEN conversation is revealed, never reopened', () => {
   // by us.
   const text = widget();
 
-  assert.match(text, /revealConversation\(panels,/u, 'an open conversation is not revealed by the registry that holds it');
+  // By the STORE id, through the registry — and the KEY comes back, because a *go to* press has a
+  // tab to move that registration onto and revealing without binding leaves the tab asking again.
+  assert.match(text, /whereConversationSits\(panels, row\.id\)/u, 'an open conversation is not revealed by the registry that holds it');
+  assert.match(text, /revealBound\(panels, live, narrowed\?\.bindTo === undefined \? undefined : await boundFor\(/u,
+    'a live conversation is revealed without ever being bound');
   // THREE states, not two. A tab in ANOTHER window cannot be revealed from this one and must not be
   // reopened either, so the widget has to tell that case from a conversation nobody holds.
   assert.notEqual(text.indexOf('row.where'), -1, 'the widget does not tell an open conversation from a closed one');
@@ -343,9 +347,15 @@ test('the picker is not closed until a tab is actually on screen', () => {
   // there. It waits, busy, and closes only when something opened. (gemini, the code round.)
   const text = widget();
   const accept = text.slice(text.indexOf('pick.onDidAccept'));
-  const body = accept.slice(0, accept.indexOf('pick.onDidChangeValue'));
+  const whole = accept.slice(0, accept.indexOf('pick.onDidChangeValue'));
+  // The CONVERSATION path only. The offer to start one opens nothing in this list — what it hands
+  // over to says its own sentences about a conversation rather than about these rows — so it closes
+  // first, and the rule below is about the path that can still fail with the list on screen.
+  const body = whole.slice(whole.indexOf("row.kind !== 'conversation'"));
 
   assert.doesNotMatch(body, /pick\.hide\(\)/u, 'the picker is hidden before it is known whether anything opened');
+  assert.match(whole, /pick\.hide\(\);\s*\n\s*narrowed\.onNew\(\);/u,
+    'the offer hands over without closing, so its warning lands behind a list nobody asked to keep');
   assert.match(body, /pick\.busy = true/u, 'nothing says the picker is working while a conversation is opened');
   assert.match(body, /\.then\(settle\)/u, 'the outcome of choosing does not decide what happens to the list');
   // And `settle` is the one place that decides, so the catch cannot forget to.

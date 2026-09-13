@@ -117,7 +117,7 @@ other end, and usually the one you want: pressed on the tab you are working in r
 If this window already has that conversation open it comes to the front; if it is only saved it opens
 again, bound to that tab, so every later press lands in the same place. If nothing is saved for the
 tab, the list opens with *New conversation for it* under the cursor — and nothing is created until you
-press it. From a terminal or anywhere a conversation cannot belong, it opens the full list rather than
+press it; press it and the ordinary chat opens on that tab, from whatever you have selected there. From a terminal or anywhere a conversation cannot belong, it opens the full list rather than
 doing nothing. Where it cannot be sure — two Claude sessions with one name, or a conversation about
 this file filed under another folder — it shows those and lets you choose, with a title saying why.
 

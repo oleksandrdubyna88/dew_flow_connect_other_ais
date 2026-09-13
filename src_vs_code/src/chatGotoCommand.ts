@@ -1,6 +1,15 @@
 import * as vscode from 'vscode';
-import { Goto, GotoAsked, bindable, goto } from './chatGoto';
-import { askedForGoto, restoreConversation, revealConversation, revealUnder, tabStillOpen, whereConversationSits } from './chatCommand';
+import { Goto, GotoAsked, bindable, goto, rootOfTab } from './chatGoto';
+import {
+  activeTabIs,
+  askedForGoto,
+  chatWithOtherAi,
+  restoreConversation,
+  revealBound,
+  revealConversation,
+  tabStillOpen,
+  whereConversationSits,
+} from './chatCommand';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
 import { ChatStoreFile } from './chatStoreFile';
@@ -109,6 +118,7 @@ async function arrive(
         title: narrowedTitle(answer.why, offer, answer.among.length),
         offer,
         startOnNew: false,
+        onNew: startingFor(panels, extensionUri, asked, key),
         ...(answer.bind ? { bindTo: bindingTo(panels, asked, key) } : {}),
       });
 
@@ -121,6 +131,7 @@ async function arrive(
         title: `No conversation for “${offer}” yet`,
         offer,
         startOnNew: true,
+        onNew: startingFor(panels, extensionUri, asked, key),
         bindTo: bindingTo(panels, asked, key),
       });
 
@@ -183,18 +194,46 @@ async function bind(
   // this is the gap epic B recorded and named this story as the place to close. (Two vendors.)
   const where = whereConversationSits(panels, record.id);
   if (where !== undefined) {
-    if (tab !== undefined && where !== tab.key) {
-      panels.rekey(where, tab.key);
-      revealUnder(panels, tab.key);
-
-      return;
-    }
-    // Revealed through the key already in hand, rather than by walking every panel a second time.
-    revealUnder(panels, where);
+    // Through the key already in hand rather than a second walk of the registry, and through the
+    // same helper the picker's own accept uses, so the two cannot disagree about when a live
+    // conversation is moved onto a tab.
+    revealBound(panels, where, tab?.key);
 
     return;
   }
   restoreConversation(panels, undefined, record, extensionUri, tab).panel.reveal();
+}
+
+/**
+ * What choosing *New conversation for <tab>* does.
+ *
+ * <p>The ordinary door, on the tab the row names. A conversation is born from a PASSAGE here — there
+ * is no other way to begin one and there must not be a second — so this hands over to
+ * `chatWithOtherAi` rather than building an empty one, and somebody with nothing selected is told to
+ * copy something first in the same sentence every other door says it with. Opened, nothing sent: the
+ * row promised that nothing is created until it is chosen, not that anything would be asked.</p>
+ *
+ * <p>REFUSED when that tab is no longer the one in front. The door reads whatever is active when it
+ * runs, and a person who moved away while the picker was up would otherwise get a conversation for
+ * the tab they moved TO — created on a guess, which is the single thing this answer exists to
+ * avoid. (gemini, the second code round: the offer could not be completed at all.)</p>
+ */
+function startingFor(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  asked: GotoAsked,
+  key: object | undefined,
+): () => void {
+  return () => {
+    if (key === undefined || !tabStillOpen(key) || !activeTabIs(key)) {
+      void vscode.window.showWarningMessage(
+        `Open “${asked.tab.label}” again and press once more — a conversation is started for the tab in front.`,
+      );
+
+      return;
+    }
+    void chatWithOtherAi(panels, extensionUri, [], false);
+  };
 }
 
 /**
@@ -216,7 +255,12 @@ function bindingTo(
       return undefined;
     }
 
-    return bindable(record, asked.source, record.workspace, asked.caseBlind)
+    // THE TAB'S OWN ROOT, through the very function the decision filed by. Passing the record's
+    // own workspace made this half a tautology — a root compared against itself passes for every
+    // record in the store — so a conversation another window re-filed into a different project
+    // would have bound to this tab anyway: the cross-root rule undone at the last step, in the one
+    // place it has to hold. (gemini, the second code round.)
+    return bindable(record, asked.source, rootOfTab(asked), asked.caseBlind)
       ? { key, label: asked.tab.label }
       : undefined;
   };

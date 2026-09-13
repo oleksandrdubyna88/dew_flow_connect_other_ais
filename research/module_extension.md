@@ -2409,7 +2409,7 @@ that permission explicitly, because C2's offer would otherwise have had no valid
 `bindable` refuses a workspace mismatch, correctly, so the command would have had to bypass its own
 validation to honour its own offer.
 
-### What the code round changed
+### What the code rounds changed
 
 **The binding target was worked out before the picker opened**, and three reviewers found it
 independently. It read as three careful guards — the tab is open, the tab holds nothing, the record
@@ -2441,6 +2441,41 @@ never reach the `finally`, and the command would be dead until the window was re
 Also taken: `tabKindOf` and `sessionSourceOf` moved into `chatGoto.ts`, where the decisions live and
 where they can be tested without a host — `chatCommand.ts` is far over the file-length limit; and a
 reveal through the key already in hand rather than a second walk of the panel registry.
+
+**The workspace half of the binding guard was a tautology**, and that is the second round's finding
+worth reading twice. `bindable(record, source, workspace, caseBlind)` asks whether a record is still
+this TAB's — and it was handed `record.workspace` as the thing to compare the record's workspace
+against. A root compared with itself passes for every record in the store, so the cross-root rule —
+the one this feature's worst failure would come through — was undone at the last step, in the one
+place it has to hold. The tab's own root is now asked for through `rootOfTab`, which is the function
+the decision itself files by, so the guard and the answer it guards cannot disagree.
+
+**The offer to start one could not be chosen.** The row says *Nothing is created until you choose
+this*, and choosing it did nothing at all: the picker's accept handler is total by kind and simply
+returned, because when it was written no caller offered that row. Two things changed. `Narrowed`
+carries what choosing it MEANS, and the offer is drawn only when a caller has said — a row nothing can
+complete is never shown. And what it means is the ordinary door on the tab the row names: a
+conversation is born from a PASSAGE here, so this hands over to `chatWithOtherAi` rather than building
+an empty one, and somebody with nothing selected is told to copy something first in the sentence every
+other door says it with. It is REFUSED when that tab is no longer the one in front — the door reads
+whatever is active when it runs, and a person who moved away while the picker was up would otherwise
+get a conversation for the tab they moved TO, created on a guess.
+
+**The picker's own accept revealed a live conversation without binding it.** Two vendors reported this
+as a duplicate panel and it is not one — `choose` walks the registry by the store id BEFORE anything is
+restored, so a conversation that went live while the picker was open is found and revealed rather than
+built again. What was real is the half beneath: the reopen arm moved such a conversation onto the tab
+it belongs to and the picker path did not, so a row chosen from a narrowed list left the tab unbound
+for ever and the next press asked the same question again. It was one rule kept in two places with
+only one of them keeping it; `revealBound` is now the one place, and both go through it.
+
+Declined, with reasons in the gate: two findings arguing that the press-time closure captures stale
+`asked` and `key`. Those two values ARE the question — *which conversation belongs to the tab this
+chord was pressed on* — rather than state that can drift out from under the answer, and the proposed
+fix (defining the closure inside `bind`) would capture the same two values and compile to the same
+code. The drifts named do not occur: a tab's root cannot change while the tab exists, a rename is
+followed on the record side, and the two things that CAN change — the tab closing, the tab gaining a
+conversation — are exactly what the closure re-asks.
 
 ## Which conversation belongs to this tab (2026-09-13)
 

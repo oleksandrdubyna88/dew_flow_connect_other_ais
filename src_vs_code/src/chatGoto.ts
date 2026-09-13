@@ -205,7 +205,7 @@ export function goto(asked: GotoAsked): Goto {
     // offer to create a second conversation for a tab that already has one. (Three vendors.)
     return { kind: 'building' };
   }
-  const here = belongsTo(asked);
+  const here = rootOfTab(asked);
   if (asked.index.kind === 'unavailable') {
     // Its last good rows are a statement about a moment that has passed. They are worth SHOWING —
     // they are probably right — but not worth binding a tab to without a person looking at them. The
@@ -292,7 +292,7 @@ function eligible(kind: TabKind): boolean {
  * one way and looked up the other, answering `start` for a conversation that exists. (gemini, the
  * code round.)</p>
  */
-const belongsTo = (asked: GotoAsked): string =>
+export const rootOfTab = (asked: GotoAsked): string =>
   filedUnder(asked.tab.path, asked.roots, asked.fallback, asked.caseBlind);
 
 /**

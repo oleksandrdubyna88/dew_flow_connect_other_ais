@@ -58,7 +58,9 @@ later press lands in the same place rather than opening another copy.
 
 **Nothing is created on a guess.** If the tab has no conversation yet, the list opens with *New
 conversation for it* under the cursor and waits — a chord is easy to hit by accident, and it should
-not start a model running. If the list is still being built the command says so and opens nothing,
+not start a model running. Choose that row and the ordinary chat opens on that tab, from whatever you
+have selected in it; move to a different tab first and it says so rather than starting a conversation
+for the wrong one. If the list is still being built the command says so and opens nothing,
 because it cannot yet tell an empty store from one it has not finished reading.
 
 **And where it cannot be sure, it asks.** Two Claude sessions with the same name, or a conversation

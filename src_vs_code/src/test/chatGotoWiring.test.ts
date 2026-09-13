@@ -107,8 +107,8 @@ test('binding is decided AT THE PRESS, and guarded three ways', () => {
   assert.equal((command.match(/bindTo: bindingTo\(panels, asked, key\)/gu) ?? []).length, 2,
     'an arm that binds is handed a target worked out in advance rather than a question asked at the press');
   assert.match(decide, /return \(record\) =>/u, 'the target is computed once rather than at the press');
-  // The record must still be this tab's — source AND workspace.
-  assert.match(decide, /bindable\(record, asked\.source, record\.workspace, asked\.caseBlind\)/u,
+  // The record must still be this tab's — source AND the TAB'S root, never the record's own.
+  assert.match(decide, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
     'the record is not re-checked against the tab it is about to be bound to');
   // The tab must still be there, and still hold nothing.
   assert.match(decide, /!tabStillOpen\(key\)/u, 'a conversation can be bound to a tab that has been closed');
@@ -120,6 +120,70 @@ test('binding is decided AT THE PRESS, and guarded three ways', () => {
   // throw cannot wedge the command for the life of the window. (gemini, the code round.)
   assert.match(command, /let running = false;/u, 'nothing stops a second press while the first is reading');
   assert.match(command, /try \{\s*\n\s*running = true;/u, 'the latch is set outside the try, so a throw leaves the command dead');
+});
+
+test('the record is re-checked against THE TAB’S root, never against its own', () => {
+  // The workspace half of the guard was a tautology: `bindable(record, …, record.workspace, …)`
+  // compares a record's root against itself and passes for every record in the store, so a
+  // conversation another window re-filed into a different project would bind to this tab anyway —
+  // the cross-root rule undone at the last step, which is the one place it has to hold. The tab's
+  // own root is a value `chatGoto.ts` computes, and both halves now ask the same function for it.
+  // (gemini, the second code round.)
+  const command = source('chatGotoCommand.ts');
+  const decide = command.slice(command.indexOf('function bindingTo('));
+
+  assert.match(decide, /bindable\(record, asked\.source, rootOfTab\(asked\), asked\.caseBlind\)/u,
+    'the record’s workspace is compared against something other than the tab’s own root');
+  assert.doesNotMatch(decide, /record\.workspace/u,
+    'the record’s own workspace is still being used as the thing to compare it against');
+});
+
+test('the offer to start one can be CHOSEN, and is not shown where it cannot be', () => {
+  // `start` opens the picker with *New conversation for <tab>* under the cursor and the row itself
+  // says "Nothing is created until you choose this" — and choosing it did nothing at all. The
+  // accept handler is total by kind and simply returned. (gemini, the second code round; the
+  // mechanism it named was wrong — the handler DOES check the kind — but the row was inert.)
+  const picker = source('conversationPickerCommand.ts');
+  const command = source('chatGotoCommand.ts');
+
+  // The WHOLE guard, so an arm disabled in place is as red as an arm deleted.
+  assert.match(picker, /if \(row\.kind === 'new' && narrowed\?\.onNew !== undefined\) \{/u,
+    'the accept handler has no arm for the offer row');
+  assert.match(picker, /narrowed\.onNew\(\)/u, 'choosing the offer calls nothing');
+  // A row nothing can complete is never drawn: the offer appears only when a caller said what
+  // choosing it does.
+  assert.match(picker, /narrowed\?\.onNew === undefined \? \{\} : \{ offerNew: narrowed\.offer \}/u,
+    'the offer is drawn even when no caller can complete it');
+  // And the completion is the ordinary door, on the tab the row names — refused when that tab is
+  // no longer the one in front, because starting a conversation for the wrong tab is the guess this
+  // whole answer exists to avoid.
+  assert.match(command, /onNew: startingFor\(panels, extensionUri, asked, key\)/u, 'the picker is given no way to start one');
+  const starting = command.slice(command.indexOf('function startingFor('));
+  assert.match(starting, /!tabStillOpen\(key\) \|\| !activeTabIs\(key\)/u,
+    'a conversation can be started for whatever tab happens to be in front when the row is pressed');
+  assert.match(starting, /chatWithOtherAi\(panels, extensionUri, \[\], false\)/u, 'the offer does not open a conversation');
+});
+
+test('a conversation already live is REBOUND from the picker too, not only from the reopen arm', () => {
+  // The reopen arm moves a conversation the picker or a reload opened without a tab onto the tab it
+  // belongs to. The picker path revealed it and left the tab unbound for ever, so the next press
+  // asked the same question again. Both go through one helper now. (Two vendors, the second code
+  // round — their claim that a SECOND panel was built is refuted below.)
+  const picker = source('conversationPickerCommand.ts');
+  const command = source('chatGotoCommand.ts');
+
+  assert.match(picker, /whereConversationSits\(panels, row\.id\)/u, 'the picker cannot tell where a live conversation sits');
+  assert.match(picker, /revealBound\(panels, live, narrowed\?\.bindTo === undefined \? undefined : await boundFor\(row\.id, narrowed\.bindTo\)\)/u,
+    'a live conversation is revealed without being bound');
+  assert.match(command, /revealBound\(panels, where, tab\?\.key\)/u, 'the reopen arm keeps its own copy of the rekey rule');
+  // ONE panel per saved conversation was never at risk, and that is why this is a rebind rather than
+  // a fix: the registry is walked by the store id BEFORE anything is restored, so a conversation
+  // that went live while the picker was open is found and revealed rather than built again.
+  const chooses = picker.slice(picker.indexOf('const choose = async ('));
+  assert.ok(
+    chooses.indexOf('whereConversationSits') < chooses.indexOf('deps.store.read'),
+    'a conversation is read back off disk before the registry is asked whether this window already holds it',
+  );
 });
 
 test('a record that moved says so AND opens the list, rather than stopping', () => {
@@ -160,7 +224,11 @@ test('a conversation the picker or a reload opened without a tab is REBOUND, not
   const bind = command.slice(command.indexOf('async function bind('));
 
   assert.match(bind, /whereConversationSits\(panels, record\.id\)/u, 'nothing looks for the conversation under another key');
-  assert.match(bind, /panels\.rekey\(where, tab\.key\)/u, 'an unbound conversation is revealed but never bound to its tab');
+  // Through the shared helper, because the picker's own accept reaches a live conversation too and
+  // the two were one rule kept in two places — with only one of them keeping it.
+  assert.match(bind, /revealBound\(panels, where, tab\?\.key\)/u, 'an unbound conversation is revealed but never bound to its tab');
+  assert.match(source('chatCommand.ts'), /export function revealBound[\s\S]{0,400}panels\.rekey\(where, onto\)/u,
+    'the helper both callers go through does not actually move the registration');
 });
 
 test('restoring binds only when a caller names a tab, and the reload serializer never does', () => {

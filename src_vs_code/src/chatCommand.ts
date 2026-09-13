@@ -929,6 +929,37 @@ export function revealUnder(panels: ChatPanels, key: object): void {
 }
 
 /**
+ * Reveal a conversation this window already holds — moving its registration onto `onto` first, when
+ * that is where it belongs.
+ *
+ * <p>ONE rule for the two paths that reach a live conversation: *go to*'s reopen arm and the picker's
+ * own accept. They were two copies of it and only one of them had it, so a conversation chosen from a
+ * narrowed picker was revealed and the tab it belongs to left unbound for ever — the next press asked
+ * the same question again. (Two vendors, the second code round.)</p>
+ */
+export function revealBound(panels: ChatPanels, where: object, onto: object | undefined): void {
+  if (onto !== undefined && onto !== where) {
+    panels.rekey(where, onto);
+    revealUnder(panels, onto);
+
+    return;
+  }
+  revealUnder(panels, where);
+}
+
+/**
+ * Is this tab the one in FRONT — not merely still open?
+ *
+ * <p>Asked before a conversation is STARTED for the tab a picker row names. The door that starts one
+ * reads whatever is active when it runs, so a person who moved to another tab while the picker was up
+ * would get a conversation for THAT one instead — created on a guess, which is the single thing this
+ * answer exists to avoid.</p>
+ */
+export function activeTabIs(key: object): boolean {
+  return snapshots().active?.key === key;
+}
+
+/**
  * Is this tab still on screen?
  *
  * <p>Asked immediately before a conversation is bound to it. A person can close a tab, or switch
