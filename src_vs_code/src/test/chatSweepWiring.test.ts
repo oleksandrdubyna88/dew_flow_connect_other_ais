@@ -43,7 +43,9 @@ test('the chat pulses the heartbeat at every place the set of open conversations
     return command.slice(at, at + within);
   };
 
-  assert.match(after('  panels.open({}, saved.title, () => entry);', 200), /pulse\?\.\(\);/u, 'a restored conversation is not announced');
+  // The registration takes the tab *go to* bound it to since story C3, or its own key for every
+  // other caller.
+  assert.match(after('  panels.open(bindTo?.key ?? {}, bindTo?.label ?? saved.title, () => entry);', 200), /pulse\?\.\(\);/u, 'a restored conversation is not announced');
   assert.match(after('        threads.delete(id);', 80), /pulse\?\.\(\);/u, 'a closed conversation is still announced as open');
   assert.match(after('thread.saveId = randomUUID();', 4_000), /pulse\?\.\(\);/u, 'a conversation re-minted under a new id is announced under the old');
   // The pin takes the ENTRY rather than its id since story C1: it writes the conversation's source

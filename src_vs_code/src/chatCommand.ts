@@ -72,7 +72,8 @@ import {
   stillOurs,
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
-import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { GotoAsked, TabKind } from './chatGoto';
 import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
@@ -819,6 +820,122 @@ async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource
 
 /** A filesystem path as a uri, the way a record spells one. The host's, so `chatSource.ts` needs none. */
 const asUri = (path: string): string => vscode.Uri.file(path).toString();
+
+/**
+ * Everything *go to* needs to know, gathered from the host — the other half of `chatGoto.ts`.
+ *
+ * <p>It lives here because every piece of it is private to this file: the thread registry, the tab
+ * snapshot, the session walk, the roots. What it hands back is a value, so the decision itself stays
+ * where a test can reach it. One snapshot answers for the tab and for what this window already
+ * holds, so the two cannot disagree about which tab is active.</p>
+ *
+ * <p>The Claude walk is the only slow part and it is only done for a Claude tab that has no live
+ * conversation — which is the case *go to* exists for, and the one where a person is already waiting
+ * to be taken somewhere.</p>
+ */
+export async function askedForGoto(
+  panels: ChatPanels,
+  index: ConversationIndex,
+): Promise<{ readonly asked: GotoAsked; readonly key: object | undefined }> {
+  const { active, all } = snapshots();
+  const known = panels.known();
+  const claude = sourceSession(active, all, known);
+  const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
+  const tab = all.find((one) => one.key === matched?.key) ?? active;
+  const kind = tabKind(tab);
+  const path = kind === 'document' ? fsPathOf(tab?.uri ?? '') : '';
+  const here = filedUnder(path, whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
+  const live = matched === undefined ? undefined : threads.get(panels.get(matched.key)?.id ?? {});
+  const found = kind === 'claude' && live === undefined ? await sessionsNamed(tab?.label ?? '') : [];
+  const source = kind === 'claude' ? sessionSource(found) : sourceOfFile(tab?.uri ?? '');
+
+  const asked: GotoAsked = {
+    tab: { kind, label: tab?.label ?? '', path },
+    live: live?.saveId ?? '',
+    source,
+    // Only a Claude tab can be ambiguous in this sense, and `pinnable` is the same rule the pin uses.
+    ambiguous: kind === 'claude' && found.length > 0 && !pinnable(found),
+    candidates: index.bySource(source),
+    inRoot: index.entries({ kind: 'workspace', workspace: here }),
+    roots: whereToLook(),
+    fallback: conversationWorkspace(),
+    caseBlind: NAMES_ARE_CASE_BLIND,
+    index: index.state(),
+  };
+
+  // The KEY beside the decision, not inside it: `chatGoto.ts` is pure and a tab object is a handle
+  // only this side can do anything with. It is what a conversation is bound to, and it is re-checked
+  // before that happens.
+  return { asked, key: tab?.key };
+}
+
+/** What kind of thing this tab is, as `chatGoto.ts` names them. */
+function tabKind(tab: TabSnapshot | undefined): TabKind {
+  if (tab === undefined) {
+    return 'other';
+  }
+  if (isClaudeSessionTab(tab)) {
+    return 'claude';
+  }
+
+  return isOrdinaryEditorTab(tab) ? 'document' : 'other';
+}
+
+/** Every session this name answers to, or none when the walk fails — a failed walk is not an answer. */
+async function sessionsNamed(title: string): Promise<readonly Found[]> {
+  if (title.length === 0) {
+    return [];
+  }
+  try {
+    return await findSession(title);
+  } catch {
+    // The walk is best-effort here exactly as it is in `pinSession`: a tab must not take down a
+    // command because a folder would not be read. No sessions found is the honest answer, and it
+    // leads to the picker rather than to a wrong conversation.
+    return [];
+  }
+}
+
+/** The session source a Claude tab has, when its name answers to exactly one session. */
+function sessionSource(found: readonly Found[]): ConversationSource {
+  if (!pinnable(found)) {
+    return { kind: 'none' };
+  }
+  const one = found.find((answer) => answer.kind === 'one');
+
+  return sourceOfSession(sessionIdOf(one?.kind === 'one' ? one.file : ''));
+}
+
+/**
+ * Where a conversation sits in the registry, by the id the STORE knows it by.
+ *
+ * <p>`ChatPanels.keyOf` answers for the entry's own id, which is an object a page carries; this
+ * answers for the `saveId`, which is the only name a saved record has. *Go to* needs it to move a
+ * conversation the picker or a reload opened without a tab onto the tab it belongs to.</p>
+ */
+export function whereConversationSits(panels: ChatPanels, saveId: string): object | undefined {
+  for (const { key } of panels.known()) {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    if (thread?.saveId === saveId) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Is this tab still on screen?
+ *
+ * <p>Asked immediately before a conversation is bound to it. A person can close a tab, or switch
+ * away and open a chat in it, while a record is being read or a picker is on screen — and binding a
+ * conversation to a tab that has gone registers it against something nobody is looking at.
+ * (codex, the plan round.)</p>
+ */
+export function tabStillOpen(key: object): boolean {
+  return snapshots().all.some((tab) => tab.key === key);
+}
 
 /**
  * Bring the tab holding this conversation to the front, and say whether there was one.
@@ -2773,7 +2890,26 @@ export function restoreConversation(
   panel: vscode.WebviewPanel | undefined,
   saved: ConversationRecord,
   extensionUri: vscode.Uri,
+  /**
+   * The tab this conversation is being bound TO, for story C3's *go to* — absent for the reload
+   * serializer and for the picker, which both give a restored conversation its own key.
+   *
+   * <p>The tab is checked for a conversation BEFORE anything is built. `panels.open` would reveal
+   * what is there and not call the factory, but the panel would already exist by then: a webview
+   * created for a tab that turned out to have one, with nobody to close it. The check and the
+   * registration happen with no `await` between them, which on a single-threaded host is what makes
+   * this one decision rather than a check and then an act.</p>
+   */
+  bindTo?: { readonly key: object; readonly label: string },
 ): ChatEntry {
+  const already = bindTo === undefined ? undefined : panels.get(bindTo.key);
+  if (already !== undefined) {
+    // The tab holds a conversation. Nothing is built and nothing is swapped: replacing what is in a
+    // live tab under somebody is worse than leaving them where they are. (gemini, the plan round.)
+    already.panel.reveal();
+
+    return already;
+  }
   const config = vscode.workspace.getConfiguration('coai');
   const restored = savedPick(config, saved.modelId);
   const presets = { promptPresets: savedPrompts(config), modelPresets: savedModels(config) };
@@ -2876,10 +3012,10 @@ export function restoreConversation(
     title: saved.title,
     reopen: true,
   });
-  // Its own key: the tab this conversation was opened FROM may be gone, may be a different object,
-  // or may already hold a live conversation of its own. A restored tab is its own thing until
-  // somebody closes it.
-  panels.open({}, saved.title, () => entry);
+  // ITS OWN KEY unless a caller named one. The tab a conversation was opened from may be gone, may
+  // be a different object, or may already hold a live conversation — so a reload and a picker choice
+  // both give it a key of its own, and only *go to* binds it to the tab a person is looking at.
+  panels.open(bindTo?.key ?? {}, bindTo?.label ?? saved.title, () => entry);
   // A restored conversation is an open one, and the sweep in every other window must hear so.
   pulse?.();
   // AND THIS IS THE SELF-HEALING, which until the code round was only claimed. A conversation whose

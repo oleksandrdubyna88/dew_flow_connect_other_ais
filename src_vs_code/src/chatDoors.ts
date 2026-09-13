@@ -34,10 +34,10 @@
  * reached for, which is the only question this ledger answers — *Opened* counts attempts, which is
  * why the recording happens at the command handler and before anything that can refuse.</p>
  */
-export type Door = 'key' | 'default' | 'choose' | 'take' | 'add' | 'switch';
+export type Door = 'key' | 'default' | 'choose' | 'take' | 'add' | 'switch' | 'goto';
 
 /** Every door this version knows how to open, in the order the commands are registered. */
-export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add', 'switch'];
+export const DOORS: readonly Door[] = ['key', 'default', 'choose', 'take', 'add', 'switch', 'goto'];
 
 /**
  * The doors that take a question rather than a passage — what *Asked* counts.

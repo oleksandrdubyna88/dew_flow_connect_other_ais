@@ -220,6 +220,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.goToConversation",
+        "title": "CoAI: go to conversation",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.switchConversations",
         "title": "CoAI: switch conversations…",
         "category": "ConnectOtherAIs"
@@ -744,6 +749,10 @@
           "when": "webviewId == 'claudeVSCodePanel'"
         },
         {
+          "command": "coai.goToConversation",
+          "when": "webviewId == 'claudeVSCodePanel'"
+        },
+        {
           "command": "coai.switchConversations",
           "when": "webviewId == 'claudeVSCodePanel'"
         }
@@ -763,6 +772,11 @@
           "command": "coai.switchConversations",
           "when": "editorTextFocus",
           "group": "coai@3"
+        },
+        {
+          "command": "coai.goToConversation",
+          "when": "editorTextFocus",
+          "group": "coai@4"
         }
       ]
     },
@@ -776,6 +790,12 @@
         "command": "coai.chatWithOtherAi",
         "key": "ctrl+alt+a",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "coai.goToConversation",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "activeWebviewPanelId == 'claudeVSCodePanel' || editorTextFocus"
       },
       {
         "command": "coai.switchConversations",
