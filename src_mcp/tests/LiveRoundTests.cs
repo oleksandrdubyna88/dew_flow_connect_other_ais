@@ -69,17 +69,6 @@ public sealed class LiveRoundTests : IDisposable
             []);
 
     /// <summary>
-    /// The round writes down WHICH MODEL each reviewer was launched with.
-    /// </summary>
-    /// <remarks>
-    /// <para>The invocation has carried the model since the adapters were written; the round simply
-    /// never wrote it down, so the log could say who reviewed and not with what. That is how a slow
-    /// claude reviewer came to be investigated by reading a spending ledger instead of the log
-    /// (`research/RESULTS_reviewer_input_sizes.md`).</para>
-    /// <para>The field is trailing and defaulted, so every session file already on disk stays valid:
-    /// an older round names no model, which is the truth about it rather than a gap.</para>
-    /// </remarks>
-    /// <summary>
     /// The round records WHO ASKED for it, and keeps it when the session is reopened by somebody else.
     /// </summary>
     /// <remarks>
@@ -101,8 +90,8 @@ public sealed class LiveRoundTests : IDisposable
         _ = new LiveRound(store, claude, [Work("codex", RoleCatalog.ArchitectureRole)]);
         var round = store.Load("D:/repo", "feature/x")!.Rounds.Single();
 
-        round.Caller.Model.Should().Be("claude-opus-5");
-        round.Caller.Client.Should().Be("claude-code");
+        round.Caller!.Model.Should().Be("claude-opus-5");
+        round.Caller!.Client.Should().Be("claude-code");
 
         // Codex now opens the same repo and branch. The SESSION's caller becomes codex — that is
         // what the field means — and the round already written keeps its own.
@@ -112,13 +101,23 @@ public sealed class LiveRoundTests : IDisposable
         });
 
         var reopened = store.Load("D:/repo", "feature/x")!;
-        reopened.Caller.Model.Should().Be("codex-astra");
-        reopened.Rounds.Single().Caller.Model.Should().Be(
+        reopened.Caller!.Model.Should().Be("codex-astra");
+        reopened.Rounds.Single().Caller!.Model.Should().Be(
             "claude-opus-5", "the round was asked for by claude, whoever opened the session afterwards");
     }
 
+    /// <summary>
+    /// A round from a session that never recorded a caller records NOTHING — not "unknown".
+    /// </summary>
+    /// <remarks>
+    /// The distinction the second code round insisted on, and the reason the field is nullable
+    /// rather than normalised to a default on the way in: every other collection here is coalesced
+    /// because absent and empty mean the same thing, and for this one they do not. A session is
+    /// saved on every progress tick, so a getter that materialised a default would quietly give
+    /// every historical round in the file an "asked by unknown" it never had.
+    /// </remarks>
     [Fact]
-    public void ARoundFromASessionThatNeverRecordedACaller_RecordsNone()
+    public void ARoundFromASessionThatNeverRecordedACaller_RecordsNothing()
     {
         var store = new SessionStore(_dir);
         var session = Session();
@@ -126,9 +125,20 @@ public sealed class LiveRoundTests : IDisposable
 
         _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
 
-        store.Load("D:/repo", "feature/x")!.Rounds.Single().Caller.Model.Should().BeEmpty();
+        store.Load("D:/repo", "feature/x")!.Rounds.Single().Caller.Should().BeNull();
     }
 
+    /// <summary>
+    /// The round writes down WHICH MODEL each reviewer was launched with.
+    /// </summary>
+    /// <remarks>
+    /// <para>The invocation has carried the model since the adapters were written; the round simply
+    /// never wrote it down, so the log could say who reviewed and not with what. That is how a slow
+    /// claude reviewer came to be investigated by reading a spending ledger instead of the log
+    /// (`research/RESULTS_reviewer_input_sizes.md`).</para>
+    /// <para>The field is trailing and defaulted, so every session file already on disk stays valid:
+    /// an older round names no model, which is the truth about it rather than a gap.</para>
+    /// </remarks>
     [Fact]
     public void EachReviewerRecordsTheModelItWasLaunchedWith()
     {

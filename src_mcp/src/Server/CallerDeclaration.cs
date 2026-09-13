@@ -69,11 +69,30 @@ public sealed record CallerDeclaration(
     {
         var named = Field(client);
         return new CallerDeclaration(
-            VendorOf(named) ?? (identity.Vendor is { Length: > 0 } known ? known : CallerIdentity.Unknown),
-            named,
-            Field(clientVersion),
-            Field(model));
+            VendorFor(identity, named), named, Field(clientVersion), Field(model));
     }
+
+    /// <summary>
+    /// Whose client this is: the handshake's answer, the environment's, or nobody's.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The environment is consulted only when the handshake said NOTHING.</b> Raised by
+    /// codex on the second code round, and it is the rule of this whole change applied to its own
+    /// fallback: a client that calls itself <c>some-editor</c> has identified itself, and it is not
+    /// claude however the server was launched. Adopting the launcher's vendor there would be exactly
+    /// the guess everything else here refuses to make — and a long-lived server serving a second
+    /// client is the case that makes it wrong rather than merely untidy.</para>
+    /// <para><c>Stated</c> is not a vendor and never becomes one. It records that the id came from
+    /// <c>COAI_CALLER_SESSION</c> — an operator's string, which implies nothing about whose client
+    /// this is — so as a VENDOR it resolves to <c>unknown</c>, which is the word for that state.
+    /// Rendering "asked by stated" would read as a vendor called "stated". (gemini, same round.)</para>
+    /// </remarks>
+    private static string VendorFor(CallerIdentity identity, string client) =>
+        client.Length > 0
+            ? VendorOf(client) ?? CallerIdentity.Unknown
+            : identity.Vendor is { Length: > 0 } and not CallerIdentity.Stated and { } known
+                ? known
+                : CallerIdentity.Unknown;
 
     /// <summary>
     /// The vendors a client name can be recognised as, or null for one we do not know.
@@ -82,7 +101,7 @@ public sealed record CallerDeclaration(
     /// An explicit list matched from the START of the name, not a substring search: <c>claude-code</c>
     /// is Anthropic's client and <c>gemini-cli</c> is Google's, while an editor that merely mentions
     /// a vendor somewhere in its name is not that vendor's client. A name off this list is kept
-    /// verbatim as the client and leaves the vendor to the environment.
+    /// verbatim as the client, and the vendor is <c>unknown</c> rather than borrowed.
     /// </remarks>
     private static string? VendorOf(string client) =>
         new[] { "claude", "codex", "gemini", "antigravity" }

@@ -292,8 +292,10 @@ public sealed class RoundsDbTests : IDisposable
     {
         using var db = RoundsDb.Open(_dir, _log)!;
 
-        db.RecordRound(Session, Round(), [Found("one")], new RoundContext(
-            CalledBy: new CallerDeclaration("codex", "codex", "7.3.1", "codex-astra")));
+        db.RecordRound(
+            Session,
+            Round() with { Caller = new CallerDeclaration("codex", "codex", "7.3.1", "codex-astra") },
+            [Found("one")]);
 
         var row = Query("SELECT caller_vendor, caller_client, caller_client_version, caller_model FROM rounds").Single();
         row["caller_vendor"].Should().Be("codex");
@@ -302,18 +304,29 @@ public sealed class RoundsDbTests : IDisposable
         row["caller_model"].Should().Be("codex-astra");
     }
 
+    /// <summary>
+    /// Three states, kept apart: a model, a caller that declared none, and a round never asked.
+    /// </summary>
+    /// <remarks>
+    /// The second code round insisted on the third one. A round recorded before these columns
+    /// existed was never asked the question; a caller that could not be identified is
+    /// <c>unknown</c>. Collapsing them would make every historical round claim an unknown caller it
+    /// never had — so the columns carry an empty vendor for "never asked" and the word for the
+    /// other, and the round's own field is nullable rather than defaulted.
+    /// </remarks>
     [Fact]
-    public void ARoundWhoseCallerDeclaredNothing_RecordsNothing_NotADefault()
+    public void ARoundNeverAskedWhoCalledIt_RecordsNothing_WhileAnUnidentifiedOneSaysUnknown()
     {
         using var db = RoundsDb.Open(_dir, _log)!;
 
-        // `default(RoundContext)` runs no field initialiser, so the declaration arrives as null —
-        // the same trap `plan_text` and `caller` already carry a comment about.
         db.RecordRound(Session, Round(), [Found("one")]);
+        db.RecordRound(Session, Round(2) with { Caller = new CallerDeclaration() }, [Found("two")]);
 
-        var row = Query("SELECT caller_vendor, caller_model FROM rounds").Single();
-        row["caller_model"].Should().BeEmpty("nobody declared one, and a default would be a claim");
-        row["caller_vendor"].Should().Be("unknown", "a state with a name, never a blank");
+        var rows = Query("SELECT number, caller_vendor, caller_model FROM rounds ORDER BY number");
+        rows[0]["caller_vendor"].Should().BeEmpty("this round was never asked, which is not a caller we failed to identify");
+        rows[0]["caller_model"].Should().BeEmpty();
+        rows[1]["caller_vendor"].Should().Be("unknown", "this one was asked and could not be identified");
+        rows[1]["caller_model"].Should().BeEmpty("and it declared no model, which a default would have claimed for it");
     }
 
     /// <summary>
@@ -350,8 +363,10 @@ public sealed class RoundsDbTests : IDisposable
         using var db = RoundsDb.Open(_dir, _log);
 
         db.Should().NotBeNull("a file this build cannot open is a log nobody can read again");
-        db!.RecordRound(Session, Round(2), [Found("written by the new build")], new RoundContext(
-            CalledBy: new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5")));
+        db!.RecordRound(
+            Session,
+            Round(2) with { Caller = new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5") },
+            [Found("written by the new build")]);
 
         var rows = Query("SELECT number, caller_vendor, caller_model FROM rounds ORDER BY number");
         rows.Should().HaveCount(2);

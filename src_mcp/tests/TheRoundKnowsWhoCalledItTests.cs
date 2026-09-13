@@ -100,13 +100,25 @@ public sealed class TheRoundKnowsWhoCalledItTests
         CallerDeclaration.From(CallerIdentity.From(_ => null), client, "1.0", "").Vendor.Should().Be(vendor);
     }
 
+    /// <summary>
+    /// A client that identified itself and is not recognised is UNKNOWN — never the launcher's.
+    /// </summary>
+    /// <remarks>
+    /// <para>Raised by codex on the second code round, and it is this change's own rule applied to
+    /// its own fallback. The first build borrowed the environment's vendor whenever the handshake
+    /// name was not on the list, so a server launched by Claude Code would record <c>claude</c> for
+    /// a client calling itself <c>some-editor</c>. The environment belongs to whatever started the
+    /// process; the handshake belongs to the connection that is calling, and a caller that HAS
+    /// identified itself as something we do not know is unknown rather than the launcher.</para>
+    /// <para>The name it gave is still kept verbatim, because that is the honest part.</para>
+    /// </remarks>
     [Fact]
-    public void AClientNobodyRecognises_FallsBackToTheVariableThatMatched()
+    public void AClientNobodyRecognises_IsUnknown_NotWhicheverVendorLaunchedUs()
     {
         var declared = CallerDeclaration.From(
             CallerIdentity.From(Env(("CODEX_SESSION_ID", "s"))), client: "some-editor", clientVersion: "2", model: "");
 
-        declared.Vendor.Should().Be("codex");
+        declared.Vendor.Should().Be(CallerIdentity.Unknown);
         declared.Client.Should().Be("some-editor", "what it called itself is kept whether or not we know it");
     }
 
@@ -115,6 +127,33 @@ public sealed class TheRoundKnowsWhoCalledItTests
     {
         CallerDeclaration.From(CallerIdentity.From(_ => null), "some-editor", "2", "").Vendor
             .Should().Be(CallerIdentity.Unknown);
+    }
+
+    [Fact]
+    public void WithNoClientAtAll_TheVariableIsWhatThereIs()
+    {
+        // The handshake said nothing, so the environment is the only evidence and using it is not a
+        // guess. This is the case the fallback exists for, and the only one.
+        CallerDeclaration.From(CallerIdentity.From(Env(("CODEX_SESSION_ID", "s"))), "", "", "").Vendor
+            .Should().Be("codex");
+    }
+
+    /// <summary>
+    /// An operator-supplied id is not a vendor, and is never rendered as one.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_CALLER_SESSION</c> yields the <c>stated</c> marker on the IDENTITY, which is useful
+    /// there — it records which variable answered. As a VENDOR it would render "asked by stated",
+    /// which reads as a vendor called "stated". The state has a word already. (gemini, round 2.)
+    /// </remarks>
+    [Fact]
+    public void AnOperatorSuppliedId_NeverBecomesAVendorCalledStated()
+    {
+        var identity = CallerIdentity.From(Env(("COAI_CALLER_SESSION", "whoever")));
+        identity.Vendor.Should().Be(CallerIdentity.Stated, "the identity still records which variable answered");
+
+        CallerDeclaration.From(identity, "", "", "").Vendor.Should().Be(CallerIdentity.Unknown);
+        CallerDeclaration.From(identity, "", "", "").Phrase.Should().Be("unknown · model not stated");
     }
 
     [Fact]

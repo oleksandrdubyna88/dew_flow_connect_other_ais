@@ -1282,12 +1282,9 @@ public sealed partial class PanelService
                 completed.State,
                 record,
                 merged,
+                // Which AI asked for it rides on `record` itself — see RoundContext's remarks.
                 new Store.RoundContext(
-                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record),
-                    // From the ROUND, not from the session: `open` is idempotent per repo+branch, so
-                    // a second client opening the same pair replaces the session's declaration while
-                    // this round is still running. The round took its copy when it started.
-                    record.Caller)));
+                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }

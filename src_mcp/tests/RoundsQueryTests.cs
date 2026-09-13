@@ -49,28 +49,44 @@ public sealed class RoundsQueryTests : IDisposable
     {
         using (var db = RoundsDb.Open(_dir, _log)!)
         {
-            db.RecordRound(Session, Round(), [Found("one")], new RoundContext(
-                CalledBy: new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5")));
+            db.RecordRound(
+                Session,
+                Round() with { Caller = new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5") },
+                [Found("one")]);
         }
 
         var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
-        round.CallerVendor.Should().Be("claude");
-        round.CallerClient.Should().Be("claude-code");
-        round.CallerClientVersion.Should().Be("7.3.1", "a name-only read would pass an implementation that dropped it");
-        round.CallerModel.Should().Be("claude-opus-5");
+        round.Caller!.Vendor.Should().Be("claude");
+        round.Caller!.Client.Should().Be("claude-code");
+        round.Caller!.ClientVersion.Should().Be("7.3.1", "a name-only read would pass an implementation that dropped it");
+        round.Caller!.Model.Should().Be("claude-opus-5");
     }
 
+    /// <summary>
+    /// A caller that was identified but declared no model, against one that was never asked at all.
+    /// </summary>
+    /// <remarks>
+    /// Two different facts, and the read path keeps them apart: an identified caller comes back with
+    /// a declaration whose model is empty, while a round recorded before the columns existed comes
+    /// back with NO declaration. Collapsing them would make every historical round claim an unknown
+    /// caller it never had.
+    /// </remarks>
     [Fact]
     public void ARoundWhoseCallerDeclaredNoModel_ComesBackDeclaringNone()
     {
         using (var db = RoundsDb.Open(_dir, _log)!)
         {
-            db.RecordRound(Session, Round(), [Found("one")]);
+            db.RecordRound(
+                Session,
+                Round() with { Caller = new CallerDeclaration("codex", "codex", "0.9") },
+                [Found("one")]);
+            db.RecordRound(Session, Round(2), [Found("two")]);
         }
 
-        var round = RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Subject;
-        round.CallerModel.Should().BeEmpty();
-        round.CallerVendor.Should().Be("unknown");
+        var rounds = RoundsQuery.Read(_dir).Rounds.OrderBy(r => r.Number).ToList();
+        rounds[0].Caller!.Model.Should().BeEmpty("it was asked and declared none");
+        rounds[0].Caller!.Vendor.Should().Be("codex");
+        rounds[1].Caller.Should().BeNull("this one was never asked, which is not the same thing");
     }
 
     [Fact]

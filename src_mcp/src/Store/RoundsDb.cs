@@ -246,10 +246,17 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$sha", context.HeadSha ?? string.Empty);
         Bind(write, "$caller", context.Caller ?? string.Empty);
         Bind(write, "$agentLog", context.AgentLog ?? string.Empty);
-        // Coalesced for the same reason, and it is the one that matters most: an absent declaration
-        // must record an UNKNOWN vendor and NO model, never a blank that reads as a vendor we chose
-        // not to print, and never a default model nobody stated.
-        var calledBy = context.CalledBy ?? new Server.CallerDeclaration();
+        // From the ROUND, which is the only thing that owns this: RoundRecord.Caller is the copy
+        // taken when the round started, so a second client opening the same repo and branch cannot
+        // change what an already-running round records. A second copy on RoundContext would have
+        // been a second source of truth for one fact, and a caller that filled one and not the
+        // other would have written 'unknown' over a perfectly good declaration. (gemini, round 2.)
+        //
+        // Coalesced here because the round's own field is nullable and absence is meaningful there:
+        // a round from before the field said NOTHING, while these columns are NOT NULL and an
+        // unidentified caller is 'unknown'. The database keeps the distinction as empty against
+        // 'unknown'; the session file keeps it as absent against present.
+        var calledBy = round.Caller ?? new Server.CallerDeclaration(Vendor: string.Empty);
         Bind(write, "$vendor", calledBy.Vendor);
         Bind(write, "$client", calledBy.Client);
         Bind(write, "$clientVersion", calledBy.ClientVersion);
