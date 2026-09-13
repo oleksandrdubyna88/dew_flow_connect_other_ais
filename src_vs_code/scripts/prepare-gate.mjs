@@ -135,7 +135,14 @@ export function prepareGate(repo) {
   const consultantTemporary = consultantFile + '.tmp';
   removeOutput(consultantFile);
   removeOutput(consultantTemporary);
-  const consultant = consultantBody(boundedSource(path.join(repo, CONSULTANT_SOURCE)));
+  const consultantSource = path.join(repo, CONSULTANT_SOURCE);
+  if (!fs.existsSync(consultantSource)) {
+    // Named, because this is a file somebody could move without knowing what reads it — and the
+    // message it would otherwise produce is a bare ENOENT on a path. (local, code round.)
+    throw new Error(`${CONSULTANT_SOURCE} is missing. It is the consultant half of the pasted snippet, `
+      + 'kept as markdown in this repository; restore it from git rather than editing the generated constant.');
+  }
+  const consultant = consultantBody(boundedSource(consultantSource));
   try {
     fs.writeFileSync(consultantTemporary, '// Generated from src_vs_code/src/consultantRule.md; do not edit.\n'
       + 'export const CONSULTANT_RULE = ' + JSON.stringify(consultant) + ';\n', { flag: 'wx' });
