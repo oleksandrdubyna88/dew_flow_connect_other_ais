@@ -543,7 +543,7 @@ lock and fence are the security half and stay on Fable.
 - [ ] **S5 — the triggers.** The conventions paragraph + pin cascade, `SNIPPET_VERSION` 6, `Prompts.cs`
       + `PromptCollection`, `prompts/list` over stdio against the published binary.
 - [ ] **S6 — the counter.** `StuckFindings.SurvivedAcceptance` in `Project`, the column, the audit line.
-- [ ] **Docs (DoD of every story):** `research/module_server.md` (the eighth tool, the consultation channel,
+- [ ] **Docs (DoD of every story):** `research/module_server.md` (the ninth tool, the consultation channel,
       the invariant, the lock), `module_runners.md` (consultant adapters, the working-tree collector, the
       `--ephemeral` trade), `module_extension.md` (section, card, log list), `module_core.md`,
       `architecture.md` (a new edge `coai-mcp → vendor CLI, in the LIVE tree, read-only`), Mermaid
@@ -600,7 +600,7 @@ lock and fence are the security half and stay on Fable.
 - [ ] Every refusal is a sentence naming its cure; no silent substitution of vendor or model; nothing
       in the person's tree is ever deleted or reverted by this feature.
 - [ ] The snippet paragraph is in the canonical rule, v6, and the pin cascade ran.
-- [ ] `research/module_*.md` and `architecture.md` describe the eighth tool, the consultation channel,
+- [ ] `research/module_*.md` and `architecture.md` describe the ninth tool, the consultation channel,
       the invariant, the lock and the live-tree decision; diagrams render.
 - [ ] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded;
       phase 0's Unstuck rate is recorded beside the defaults it decided.

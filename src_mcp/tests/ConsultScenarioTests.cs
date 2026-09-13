@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// by the vendor's own id, capped, counted and recorded — with nothing in the repository touched.
 /// </summary>
 /// <remarks>
-/// This is the scenario <c>ScenarioCoverageTests</c> demands for the eighth tool. Nothing here
+/// This is the scenario <c>ScenarioCoverageTests</c> demands for the ninth tool. Nothing here
 /// reaches a real model or the network.
 /// </remarks>
 [Collection("fakecli-env")]

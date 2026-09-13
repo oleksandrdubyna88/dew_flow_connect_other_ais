@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The wire itself: a real <c>coai-mcp</c> process, real stdio, real JSON-RPC. What these prove
-/// no in-process test can — the handshake works, the eight tools are advertised, and stdout
+/// no in-process test can — the handshake works, the nine tools are advertised, and stdout
 /// carries nothing but protocol.
 /// </summary>
 [Collection("fakecli-env")] // the server child inherits our env; keep FAKECLI_* quiet around it

@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The eight tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
+/// The nine tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
 /// namespaces by its config key, so these surface as <c>mcp__coai__review_plan</c> and so on.
 /// Every answer is a JSON string — trivial schemas, which is what an AOT binary with
 /// reflection-based JSON turned off wants, and what agents read anyway.
