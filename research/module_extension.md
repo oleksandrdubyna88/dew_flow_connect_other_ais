@@ -2326,6 +2326,46 @@ back** — `incompatible`, which would have made every Claude conversation unope
 story started writing session sources. The production path cannot produce the pair (`pinSession`
 returns before writing anything unless the tab has a session), and a wiring test now says so.
 
+### What the code round changed
+
+Thirty gating findings, sixteen taken. Three mattered.
+
+**The promised self-healing was not wired.** The commit said that a host dying between the pin and
+its write is repaired because a reload pins again — and `restoreConversation` copied `saved.source`
+and called nothing. Such a conversation would have stayed `source: none` for ever. It re-pins now
+when the record says it came from a session and carries none; a record that already has one is left
+alone, because pinning walks folders and doing that per restored tab per reload is a directory walk
+to rediscover what is already written down.
+
+**The uri came from the focused tab, not the matched one.** They are the same only when a person
+presses from the editor. From the chat panel itself — which is how *add the question* is used — the
+active tab is a webview with no document while the match falls back through every tab to the editor,
+so the conversation was created with no source at all: unmatchable by *go to*, unfollowable by a
+rename. It is taken from the snapshot whose key IS the matched tab now, still out of the one
+snapshot.
+
+**The store now refuses to write what it could not read back.** A record states its origin twice and
+`agreeOnOrigin` rejects a disagreeing pair ON READ, so such a record saved happily and was then
+unopenable for ever — `read` answers `incompatible`, the picker refuses it, and the sweep will not
+age it, because what cannot be read cannot be dated. It was reachable only through `refile` with a
+wrong source, and it cost nothing to close the whole class at the write instead.
+
+Also taken: the store pass wraps each conversation, so one that throws cannot end the campaign; a
+`busy` claim — an ordinary concurrent save — is retried within a bound instead of losing the rename
+for ever, which four reviewers asked for independently; liveness is asked at the moment the store
+pass reaches each record rather than from a set taken before any awaiting began, so a conversation
+closing mid-loop is followed by the store rather than by neither half; the index is refreshed once
+after a follow, without which the picker names the file the conversation left AND a second rename
+compares against that stale source; the renames are normalised once instead of once per
+conversation; and path comparison uses `toLowerCase`, since a Turkish locale maps `I` to a dotless
+`ı` and two spellings of one ASCII path stop matching.
+
+Declined, with reasons in the gate: a prefix index over sources (infrastructure for a store two
+orders of magnitude larger than ninety days holds here); bumping `updatedAt` on a rename (it orders
+the picker and measures the retention window — a refactor moving a file is not somebody returning to
+a conversation); a timeout on the session walk (no walk here has one, and one applied at a single
+site is the defect the conventions name); and a progress indicator for background pinning.
+
 ## A list of your conversations, and a way back into any of them (2026-09-13)
 
 The three sections above are machinery: a store, a cut-over, a keeper. None of it was reachable from

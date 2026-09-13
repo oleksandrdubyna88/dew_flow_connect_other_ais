@@ -135,3 +135,36 @@ test('an id that cannot be a filename is refused before anything is opened', asy
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the store refuses to WRITE a record it could not read back', () => {
+  // The sharpest defect this story could have shipped. A record states its origin twice —
+  // `fromSession` and `source` — and `agreeOnOrigin` rejects a pair that disagrees ON READ. So a
+  // record saved with a contradictory pair saves happily and is then unopenable for ever: `read`
+  // answers `incompatible`, the picker refuses it, and the sweep will not even age it, because what
+  // cannot be read cannot be dated. A test fixture of mine produced exactly that pair by accident,
+  // which is how it was found. The guard is on the WRITE now, so no path can leave one on disk.
+  // (Three vendors, the code round; it was also my own open question.)
+  return (async () => {
+    const dir = home();
+    try {
+      const store = new ChatStoreFile(dir);
+      const quiet = console.error;
+      console.error = () => undefined;
+      let out;
+      try {
+        out = await store.save(record({ source: sourceOfSession('9f1c'), fromSession: false }), 0);
+      } finally {
+        console.error = quiet;
+      }
+
+      assert.equal(out.kind, 'failed', 'a conversation that cannot be read back was written to disk');
+      assert.match(out.kind === 'failed' ? out.reason : '', /read back/u, 'the refusal does not say why');
+      assert.deepEqual(readdirSync(dir), [], 'a refused write left a file behind');
+
+      // And the honest pair goes in without complaint, so the guard is not simply refusing everything.
+      assert.equal((await store.save(record({ source: sourceOfSession('9f1c'), fromSession: true }), 0)).kind, 'ok');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  })();
+});

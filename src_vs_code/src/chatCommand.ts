@@ -73,7 +73,7 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
-import { Moved, filedUnder, followable, movedTo, sessionIdOf } from './chatSource';
+import { Moved, filedUnder, followable, movedTo, prepareMoves, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
   Asked,
@@ -396,7 +396,10 @@ function fsPathOf(uri: string): string {
     return parsed.scheme === 'file' ? parsed.fsPath : '';
   } catch {
     // A source a person could not have produced, or one from a build that spelled them differently.
-    // It names no file here, which is the honest answer and not a failure.
+    // It names no file here, which is the honest answer and not a failure — but it is SAID, because
+    // nothing else would ever mention it and the conversation quietly files under the fallback root.
+    console.warn(`ConnectOtherAIs: a conversation names a source this build cannot read as a uri: ${uri}`);
+
     return '';
   }
 }
@@ -511,7 +514,12 @@ function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void
     // never reach disk through that path. Queued behind the conversation's other writes, so it
     // cannot carry a stale revision.
     keepQueued(entry, mine);
-  })();
+  })().catch((reason: unknown) => {
+    // The outer edge of a detached call. The `try` above covers only the walk; everything after it —
+    // the id, the file, the queue — used to escape unobserved, which `reliability.md` forbids of any
+    // edge nothing is above. (gemini, the code round.)
+    console.error('ConnectOtherAIs: pinning a conversation to its Claude session threw', reason);
+  });
 }
 
 /**
@@ -656,18 +664,16 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
   if (renames.length === 0) {
     return;
   }
-  const held = new Set<string>();
+  // Normalised ONCE, before anything is asked about them: a folder refactor reports many moves, and
+  // the old paths were being put into comparable form again for every conversation in the store.
+  const moves = prepareMoves(renames);
   for (const { key } of panels.known()) {
     const entry = panels.get(key);
     const thread = entry === undefined ? undefined : threads.get(entry.id);
-    if (entry === undefined || thread === undefined) {
+    if (entry === undefined || thread === undefined || !followable(thread.source)) {
       continue;
     }
-    held.add(thread.saveId);
-    if (!followable(thread.source)) {
-      continue;
-    }
-    const moved = movedTo(thread.source.uri, renames, asUri, fsPathOf);
+    const moved = movedTo(thread.source.uri, moves, asUri, fsPathOf);
     if (moved.length === 0) {
       continue;
     }
@@ -680,26 +686,80 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
     return;
   }
   void (async () => {
+    let followed = 0;
     for (const meta of index.entries({ kind: 'everywhere' })) {
-      if (held.has(meta.id) || !followable(meta.source)) {
-        continue;
+      try {
+        // ASKED NOW, not from a set taken before any awaiting began. A conversation that closed while
+        // this loop was running is no longer followed by its thread, and a snapshot would have gone on
+        // saying it was — so its rename would have been followed by neither half. (local, the code
+        // round; it was my own open question.)
+        if (heldConversationIds(panels).includes(meta.id) || !followable(meta.source)) {
+          continue;
+        }
+        const moved = movedTo(meta.source.uri, moves, asUri, fsPathOf);
+        if (moved.length === 0) {
+          continue;
+        }
+        if (await follow(onDisk, meta.id, meta.source, sourceOfFile(moved))) {
+          followed += 1;
+        }
+      } catch (reason) {
+        // PER UNIT, as `reliability.md` requires of a loop over independent things: one conversation
+        // that cannot be followed must not stop every other conversation following the same rename.
+        console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${meta.id}`, reason);
       }
-      const moved = movedTo(meta.source.uri, renames, asUri, fsPathOf);
-      if (moved.length === 0) {
-        continue;
-      }
-      const next = sourceOfFile(moved);
-      const done = await onDisk.refile(meta.id, meta.source, next, filedFor(next));
-      if (done.kind === 'failed') {
-        // SAID, not swallowed. The conversation keeps the path it had, which means *go to* will not
-        // find it by the file's new name — and the person is not interrupted for it, because there
-        // is nothing they can do and the conversation is still in the picker.
-        console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${meta.id} — ${done.reason}`);
-      }
+    }
+    if (followed > 0) {
+      // The picker reads the INDEX, not the disk. Without this the rows go on naming the file they
+      // left and sitting in the folder they left — and a second rename would compare against that
+      // stale source and follow nothing. (gemini, the code round, three times.)
+      await index.refresh();
     }
   })().catch((reason: unknown) => {
     console.error('ConnectOtherAIs: following a renamed file threw', reason);
   });
+}
+
+/** How many times a conversation held by somebody else is asked again before the rename is given up on. */
+const FOLLOW_TRIES = 3;
+
+/** How long between those asks. Short: a save is milliseconds, and nothing is waiting on this. */
+const FOLLOW_WAIT_MS = 200;
+
+/**
+ * Move one closed conversation to where its file went, waiting out an ordinary concurrent save.
+ *
+ * <p>A `busy` claim is the commonest outcome there is — another window writing a turn — and treating
+ * it as final loses the rename FOR EVER, because a rename happens once and is not replayed. Four
+ * reviewers said so independently. So it is asked again a few times, and only a lock that never
+ * clears is reported.</p>
+ */
+async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource, next: ConversationSource): Promise<boolean> {
+  for (let tries = 0; tries < FOLLOW_TRIES; tries += 1) {
+    const done = await onDisk.refile(id, was, next, filedFor(next));
+    if (done.kind === 'followed') {
+      return true;
+    }
+    if (done.kind === 'kept' && done.why !== 'busy') {
+      // Somebody else followed it first, or it is gone. Neither is a failure and neither is ours to
+      // report: the record says what it says now.
+      return false;
+    }
+    if (done.kind === 'failed') {
+      console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${id} — ${done.reason}`);
+
+      return false;
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, FOLLOW_WAIT_MS);
+    });
+  }
+  // SAID. The conversation keeps the path it had, so *go to* will not find it by the file's new
+  // name — and the person is not interrupted, because there is nothing they can do about another
+  // window and the conversation is still in the picker.
+  console.warn(`ConnectOtherAIs: a conversation was busy in another window and could not follow a renamed file: ${id}`);
+
+  return false;
 }
 
 /** A filesystem path as a uri, the way a record spells one. The host's, so `chatSource.ts` needs none. */
@@ -1771,13 +1831,18 @@ function matchedSource(panels: ChatPanels): {
   const known = panels.known();
   const claude = sourceSession(active, all, known);
 
+  const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
+
   return {
     claude,
-    source: claude ?? sourceSession(active, all, known, isOrdinaryEditorTab),
-    // Read here rather than looked up again where it is needed, for the reason this function exists
-    // at all: two snapshots can see the tabs in two states, and a conversation filed under the tab
-    // that was active a moment later is filed under the wrong thing.
-    uri: active?.uri ?? '',
+    source: matched,
+    // THE MATCHED TAB'S uri, not the active one's. They are the same tab only when a person presses
+    // from the editor; from the chat panel itself — which is how *add the question* is used — the
+    // active tab is a webview with no document, while the match falls back through `all` to the
+    // editor. Reading `active` there filed the conversation with no source at all, leaving it
+    // unmatchable by *go to* and unfollowable by a rename. Still from THIS snapshot, so the two
+    // cannot see the tabs in two states. (gemini, the code round.)
+    uri: all.find((tab) => tab.key === matched?.key)?.uri ?? '',
   };
 }
 
@@ -2763,6 +2828,15 @@ export function restoreConversation(
   panels.open({}, saved.title, () => entry);
   // A restored conversation is an open one, and the sweep in every other window must hear so.
   pulse?.();
+  // AND THIS IS THE SELF-HEALING, which until the code round was only claimed. A conversation whose
+  // host died between the pin and its write comes back saying it came from a session and carrying no
+  // source — unmatchable by *go to* for ever, because nothing on this path ever pinned again. It
+  // pins again now. A record that already has its source is left alone: `pinSession` walks folders,
+  // and doing that for every restored tab on every reload would be a directory walk per tab to
+  // rediscover something already written down. (codex, the code round.)
+  if (saved.fromSession && saved.source.kind === 'none') {
+    pinSession(entry, saved.title, true);
+  }
 
   // HANDED BACK, for the caller that has no panel of its own: the serializer is given one by VS Code
   // and ignores this, while the picker needs it to bring the tab it has just built to the front.
