@@ -95,7 +95,28 @@ public sealed class StuckFindingsTests
             ]);
 
         survivors.Count.Should().Be(1);
-        survivors.Rounds.Should().Equal([1], "the round it was first accepted in is the one that matters");
+        survivors.Rounds.Should().Equal([2], "the acceptance in force when it came back is the latest one");
+    }
+
+    /// <summary>
+    /// Accepted, rejected, accepted again: the round NAMED is the last acceptance, not the first.
+    /// </summary>
+    /// <remarks>
+    /// It decides which history a person is pointed at. Round 1's acceptance was superseded by a
+    /// rejection and then replaced by round 3's; reporting round 1 would send somebody to read an
+    /// argument that had already been had and settled the other way. (local, third code round.)
+    /// </remarks>
+    [Fact]
+    public void ADefectAcceptedTwiceAcrossADisagreement_NamesTheLatestAcceptance()
+    {
+        var defect = Found("The parser drops the last token");
+
+        var survivors = StuckFindings.SurvivedAcceptance(
+            [defect],
+            [Accepted(1, defect), Rejected(2, defect), Accepted(3, defect)]);
+
+        survivors.Count.Should().Be(1);
+        survivors.Rounds.Should().Equal([3]);
     }
 
     [Fact]

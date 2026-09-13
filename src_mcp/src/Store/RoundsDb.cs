@@ -210,10 +210,14 @@ public sealed class RoundsDb : IDisposable
     /// <para>The input to story 6's counter. Same STAGE, because a plan-stage remark has no file and
     /// a code-stage one usually does — comparing across them would match on category alone and count
     /// coincidences.</para>
-    /// <para>Only what is needed to decide "the same defect": the category, the file, the line and
-    /// the title. The severity is filled with the row's own, and the rest of the finding is left at
-    /// its defaults, because nothing downstream reads them — <see cref="FindingDedup.SameDefect"/>
-    /// looks at four fields and this is the shape that says so.</para>
+    /// <para>The WHOLE finding is hydrated, not the four fields the current predicate happens to
+    /// read. A partial reconstruction is an undercount waiting to happen: the day
+    /// <see cref="FindingDedup.SameDefect"/> reads a fifth field — the remark, say — every row out of
+    /// here would compare empty against it, silently, and the counter would quietly stop counting.
+    /// The columns are already on the table and the reader is already open. (codex, third code
+    /// round.) The vendor list is the one thing left behind: it is a separate table, it says who
+    /// SAID the defect rather than what the defect is, and no similarity rule can be written over
+    /// it.</para>
     /// <para>Both kinds of decision travel, ordered oldest first, because the LATEST word about a
     /// defect is what decides: one accepted in round 1 and rejected in round 2 is a disagreement the
     /// caller is defending by the time it comes back. An UNRESOLVED finding is neither and is left
@@ -223,7 +227,7 @@ public sealed class RoundsDb : IDisposable
     {
         using var read = _db.CreateCommand();
         read.CommandText = """
-            SELECT r.number, f.severity, f.category, f.file, f.line, f.title, f.resolution
+            SELECT r.number, f.severity, f.category, f.file, f.line, f.title, f.resolution, f.why, f.fix
             FROM findings f JOIN rounds r ON r.id = f.round_id
             WHERE r.session_id = $session AND r.stage = $stage AND r.number < $number
               AND f.resolution IN ('accept', 'reject')
@@ -245,8 +249,8 @@ public sealed class RoundsDb : IDisposable
                     rows.GetString(3),
                     rows.GetInt32(4),
                     rows.GetString(5),
-                    string.Empty,
-                    string.Empty,
+                    rows.GetString(7),
+                    rows.GetString(8),
                     []),
                 rows.GetString(6) == "accept"));
         }

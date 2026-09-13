@@ -20,6 +20,8 @@ flowchart LR
   DD --> GR[GateRule.Evaluate\nblocking+major, prior rejections discounted]
   GR --> RM[RoundMachine.CompleteRound\nverdict: proceed / revise / continue / human / escalate]
   RM --> RES[RoundMachine.Resolve\ndecisions with reasons → next round's memory]
+  DD --> SF[StuckFindings.SurvivedAcceptance\nthis round vs earlier decisions of the same stage]
+  SF -. measures, calls nothing .-> RES
 ```
 
 ## Core entities
@@ -33,6 +35,7 @@ flowchart LR
 | `FindingDedup` | `Gate/FindingDedup.cs` | cross-provider merge; severity disagreement resolves toward caution |
 | `GateRule`, `PriorRejection`, `GateResult` | `Gate/GateRule.cs` | the counting rule incl. the standing-rejection discount |
 | `TextSimilarity` | `Gate/TextSimilarity.cs` | token Jaccard ≥ 0.5 = "same remark" — deterministic, arguable-with |
+| `StuckFindings`, `EarlierDecision`, `Survivors` | `Gate/StuckFindings.cs` | how many of this round's findings the caller had already ACCEPTED — phase 2's instrument, calling nothing |
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
@@ -146,12 +149,26 @@ somebody just created work with no further settings at all.
   exhausted stage and resets the round counter; exhausted ladder falls through to `CallHuman`.
 - **A rejection without a reason refuses the whole resolve** — the reason is what the discount rule
   compares future `why`s against.
+- **"Stuck" is a finding the caller ACCEPTED and was handed back, and it is not `re_raised`.** That one
+  is a reviewer pressing a standing REJECTION — a disagreement the caller is defending, and the more
+  interesting of the two for reading an argument. `StuckFindings.SurvivedAcceptance` counts the
+  opposite and the more expensive one: the caller agreed, changed the plan or the code, and the same
+  defect came back. The matching is `FindingDedup.SameDefect`, because a second similarity rule would
+  be a second answer to a question this module has already answered; the LATEST decision about a
+  defect decides (accepted, then rejected, then raised again is the disagreement, not this), and the
+  round NAMED is the latest ACCEPTANCE — the one that was in force when the defect returned.
+- **It measures and calls nothing, deliberately.** The operator's question is whether an automatic
+  consultation should fire when a finding survives two rounds, and that cannot be answered by an
+  impression of how often it happens. So the number lands on the round (`rounds.consult_missed`,
+  `-1` until something counted it) and one sentence goes into the audit — *"an automatic consultation
+  could have fired here"*, never *"consult now"*. A trigger that fired before anybody had read the
+  number would be the same guess with a cost attached.
 
 ## Tests
 
 `CoaiMcp.Tests`: ReviewParserTests, GeminiPayloadTests, FindingDedupTests, GateRuleTests,
-RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests. Teeth proven red for: the
-balanced-brace scan (naive first-to-last), the standing-rejection discount (disabled), the ladder
+RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests, StuckFindingsTests. Teeth proven red
+for: the balanced-brace scan (naive first-to-last), the standing-rejection discount (disabled), the ladder
 order (reversed), and the catalog loader (written before `RoleCatalog` existed, watched failing to
 compile, then watched failing on the prompt COUNT — the plan said 26 and the seed has 25, which is
 why the number is pinned rather than the shape).

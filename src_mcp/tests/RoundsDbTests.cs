@@ -696,6 +696,29 @@ public sealed class ConsultMissedTests : IDisposable
             [("the parser drops the last token", true, 1), ("the lock is late", false, 1)]);
     }
 
+    /// <summary>
+    /// A decision comes back as the WHOLE finding, not the fields today's predicate reads.
+    /// </summary>
+    /// <remarks>
+    /// The undercount this guards against is silent by construction: widen
+    /// <see cref="FindingDedup.SameDefect"/> to read the remark and every row out of here would
+    /// compare an empty string against it, matching nothing and counting nothing, with no test
+    /// failing and no line in any log. (codex, third code round.)
+    /// </remarks>
+    [Fact]
+    public void ADecisionComesBackWithTheWholeFinding_NotOnlyWhatTheRuleReadsToday()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var session = Session();
+        Recorded(db, session, Round("CodeReview", 1), [Found("the parser drops the last token")], [null]);
+
+        var decided = db.DecidedEarlier(session.SessionId, "CodeReview", 2);
+
+        decided.Should().ContainSingle();
+        decided[0].Finding.Why.Should().Be("the parser drops the last token — why");
+        decided[0].Finding.Fix.Should().Be("the fix");
+    }
+
     [Fact]
     public void AFindingFromTheSAMERound_IsNotEarlierThanItself()
     {

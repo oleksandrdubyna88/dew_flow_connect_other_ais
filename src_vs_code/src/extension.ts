@@ -28,7 +28,7 @@ import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
-import { copiedMessage, snippetFor } from './claudeSnippet';
+import { copiedMessage, snippetFor, statusWithin } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
@@ -776,7 +776,11 @@ async function copyClaudeSnippet(): Promise<void> {
   // The status is read BEFORE the copy now, because it decides WHICH text goes on the clipboard: a
   // repository that mounts the shared gate rule is told to paste the consultant half only, and
   // handing it both halves would leave somebody cutting a hundred lines by hand.
-  const status = await pastedSnippetStatus();
+  //
+  // BOUNDED, because that read is eleven files on a disk that may be a network share, and a button
+  // that waits for one of them forever writes nothing and says nothing. Past the budget the answer is
+  // `unknown`, which takes the safe half: the whole artefact, and a sentence saying so.
+  const status = await statusWithin(pastedSnippetStatus);
   // The snippet names no repository: it is pasted into whichever one you are adopting it for, and
   // the AI reading it is already in a checkout it can name for itself.
   await vscode.env.clipboard.writeText(snippetFor(status));
