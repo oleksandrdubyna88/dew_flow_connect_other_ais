@@ -28,11 +28,41 @@ namespace CoaiMcp.Tests;
 /// bakes its effort into the model id (<c>gemini-3.7-flash-high</c>), which is why it records none
 /// and why no line can read <c>gemini-3.7-flash-high (effort: high)</c>.</para>
 /// </remarks>
-public sealed class EveryAdapterRecordsWhatItLaunchedTests
+public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
 {
-    private const string Worktree = "D:/storage/coai-wt-s1-r1";
-    private const string Schema = "D:/storage/schema.json";
-    private const string OutDir = "D:/storage/out";
+    /// <summary>
+    /// A REAL directory, because two of the adapters under test write into it.
+    /// </summary>
+    /// <remarks>
+    /// <para>These paths began as the literals `D:/storage/...` copied from
+    /// <c>ReviewerRuntimeTests</c>, where they are safe: codex and gemini only compose an argv and
+    /// never touch the disk. <c>LocalRuntime.Build</c> and <c>RemoteRuntime.Build</c> do —
+    /// <c>Directory.CreateDirectory(outputDir)</c> and then a prompt file — so a literal path is a
+    /// test that depends on the machine having that drive.</para>
+    /// <para>It passed on the development machine and on every runner with a D: drive, and failed
+    /// the `win-arm64` leg of the release with `Could not find a part of the path 'D:\storage\out'`
+    /// — which is what a draft release is for. A fresh temp directory per class, swept in
+    /// <c>Dispose</c>, is what the neighbouring suites already do.</para>
+    /// </remarks>
+    private readonly string _root = Directory.CreateTempSubdirectory("coai-adapters-").FullName;
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A temp directory that outlives one run is litter, not a failed test.
+        }
+    }
+
+    private string Worktree => Path.Combine(_root, "worktree");
+
+    private string Schema => Path.Combine(_root, "schema.json");
+
+    private string OutDir => Path.Combine(_root, "out");
 
     /// <summary>Every hosted adapter, with the settings that name a model and an effort.</summary>
     public static TheoryData<string, IReviewerRuntime, ReviewerSettings> Hosted()
