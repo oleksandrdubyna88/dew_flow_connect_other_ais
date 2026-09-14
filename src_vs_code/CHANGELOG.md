@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## Extension 0.41.0 — 2026-09-14
+
+**A stuck AI can now ask another vendor's model.** The gate has always been other models judging
+work that is finished; this is the opposite direction — the assistant asking one, in the middle of
+the work, when it is not getting out. It is a new tool on the same `coai` server, `consult`, and it
+reads the LIVE working tree with your uncommitted changes in it, because what the question is about
+is almost always what is on disk right now rather than what was last committed. It never writes:
+nothing in your tree is edited, reverted or deleted by a consultation, and the check that enforces
+that refuses the call rather than guessing when it cannot be sure.
+
+**Who gets asked is yours**, in the new *Consultant* section of the panel: a vendor, and optionally
+a model, per kind of AI that got stuck. The shipped pairs never send a caller to itself — a stuck
+Claude asks codex, a stuck Codex asks claude — because a second opinion from the same model is the
+one answer that cannot help. A consultation is a short conversation rather than a single shot: five
+turns, closed after fifteen idle minutes, ten of them per AI session. The consultant is told how
+many turns are left in every one of them, so the last answer arrives as a conclusion instead of
+stopping mid-thought. While it runs it is a card in the sidebar; afterwards it is a row in the
+rounds log, with what it cost.
+
+**And the assistant has to know the tool is there**, so the rule you paste grew a fourth part that
+says when asking is worth the tokens — the same test still red after two attempts you believed in,
+two sources that contradict each other, a design fork nothing in the repository decides. Paste it
+again to pick it up; the panel already tells you when what you pasted is older than what this build
+ships.
 
 **Go to conversation answers more of the question.** Pressing it on a Claude tab whose name belongs
 to more than one session used to open the whole list of this folder's conversations, under a title
