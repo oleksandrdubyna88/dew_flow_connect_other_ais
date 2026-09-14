@@ -1,4 +1,4 @@
-import { DbFinding, DbLog, EMPTY_LOG, parseFindings, parseLog } from './roundsDb';
+import { DbFinding, DbLog, EMPTY_LOG, ManyFound, parseFindings, parseLog, parseManyFindings } from './roundsDb';
 import { capture } from './versionProbe';
 
 /**
@@ -133,6 +133,118 @@ export async function readFindings(
   // somebody a round was clean because a pipe was truncated. (Code round, codex.)
   return findings === undefined ? { state: 'failed', findings: [] } : { state: 'loaded', findings };
 }
+
+/**
+ * How long a BATCH read may take, for a batch of this size.
+ *
+ * <p>A flat eight seconds is the deadline for one round, and a thousand rounds through one process
+ * is not one round's work. It is still a ceiling rather than a wait — it only matters when the child
+ * has stopped answering — so it is generous, and proportionate rather than flat so that exporting
+ * three rounds cannot hang for a minute.</p>
+ */
+export function manyCapMs(rounds: number): number {
+  return Math.min(MANY_BASE_MS + rounds * MANY_PER_ROUND_MS, MANY_CEILING_MS);
+}
+
+const MANY_BASE_MS = 8_000;
+const MANY_PER_ROUND_MS = 50;
+const MANY_CEILING_MS = 120_000;
+
+/**
+ * Hand the server a file of keys, run something with its path, and take the file away again.
+ *
+ * <p>The keys travel in a FILE because a thousand of them do not fit on a Windows command line —
+ * 32,767 characters, and a key is a 36-character session id plus a stage and a number. The same
+ * reason `--ask-local` takes its prompt from one.</p>
+ *
+ * <p>It is a port so that every branch below is a unit test, and so the file is removed on the way
+ * out of a failure as well as a success.</p>
+ */
+export type WithKeysFile = <T>(json: string, use: (path: string) => Promise<T>) => Promise<T>;
+
+/**
+ * The findings of MANY rounds, in ONE spawn.
+ *
+ * <p><b>This is the whole point of the story.</b> A bulk export of five hundred rounds used to start
+ * five hundred processes, four at a time; it starts one now. What it costs is granularity: a cancel
+ * arriving mid-read cannot stop a child that is already reading all of them, so it takes effect when
+ * the spawn returns — which {@link manyCapMs} bounds.</p>
+ *
+ * <p><b>Exit 64 falls back; every other code does not.</b> 64 is `unknown argument`, which is the one
+ * answer that means "this server predates the mode" — the extension and the server ship separately,
+ * so the older half is a normal Tuesday, not an error. Any other non-zero code came from a server
+ * that DOES know the mode and is reporting a real failure, and re-reading the whole selection one
+ * round at a time would then be five hundred spawns failing the same way.</p>
+ */
+export async function readManyFindings(
+  executable: string,
+  keys: readonly RoundKey[],
+  run: Run = spawn(executable),
+  withKeysFile: WithKeysFile = keysFile,
+  readOne: typeof readFindings = readFindings,
+): Promise<readonly Found[]> {
+  if (keys.length === 0) {
+    return [];
+  }
+  if (executable.length === 0) {
+    return keys.map(() => FAILED);
+  }
+  const asked = JSON.stringify(
+    keys.map((key) => ({ session: key.sessionId, stage: key.stage, number: key.number })));
+  const { code, output } = await withKeysFile(asked, (path) =>
+    run(['--findings-many', '--keys-file', path], manyCapMs(keys.length)));
+
+  if (code === EX_USAGE) {
+    // The server is older than this mode. One spawn per round is what it has always answered.
+    const one: Found[] = [];
+    for (const key of keys) {
+      one.push(await readOne(executable, key, run));
+    }
+
+    return one;
+  }
+  if (code !== 0) {
+    return keys.map(() => FAILED);
+  }
+  const answered = parseManyFindings(output);
+
+  return answered === undefined ? keys.map(() => FAILED) : keys.map((key) => found(answered, key));
+}
+
+/** Unreadable, and saying nothing about the round. One value, because it carries no state. */
+const FAILED: Found = { state: 'failed', findings: [] };
+
+/**
+ * What the server said about ONE of the rounds asked about, found BY ITS KEY.
+ *
+ * <p>A round the answer does not mention is failed, not absent: the server never said it had no
+ * record — it never said anything.</p>
+ */
+function found(answered: readonly ManyFound[], key: RoundKey): Found {
+  const mine = answered.find((one) =>
+    one.sessionId === key.sessionId && one.stage === key.stage && one.number === key.number);
+  if (mine === undefined) {
+    return FAILED;
+  }
+
+  return mine.known ? { state: 'loaded', findings: mine.findings } : { state: 'absent', findings: [] };
+}
+
+/** The real keys file: written where the OS puts temporary things, and removed either way. */
+const keysFile: WithKeysFile = async (json, use) => {
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-keys-'));
+  const file = path.join(folder, 'rounds.json');
+  try {
+    await fs.writeFile(file, json, 'utf8');
+
+    return await use(file);
+  } finally {
+    await fs.rm(folder, { recursive: true, force: true }).catch(() => undefined);
+  }
+};
 
 /** The real spawn. Injectable above it, so every branch of both readers is a unit test. */
 function spawn(executable: string): Run {

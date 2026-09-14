@@ -131,6 +131,9 @@ public sealed record ResolveAnswer(string Stage, bool AwaitingResolve, int Recor
 /// <summary>A refusal or error, as data — the sentence is the interface.</summary>
 public sealed record ErrorAnswer(string Error);
 
+/// <summary>One round a batch findings read is asked about, as it arrives in the keys file.</summary>
+public sealed record RoundKeyDto(string Session = "", string Stage = "", int Number = -1);
+
 /// <summary>
 /// What `ask_human` returns: the person's decision, or why there is none yet.
 /// </summary>
@@ -166,5 +169,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(List<DecisionDto>))]
 [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "ListString")]
 [JsonSerializable(typeof(Store.LoggedLog))]
+[JsonSerializable(typeof(Store.LoggedManyFindings))]
+[JsonSerializable(typeof(List<RoundKeyDto>))]
 [JsonSerializable(typeof(Store.LoggedRoundFindings))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

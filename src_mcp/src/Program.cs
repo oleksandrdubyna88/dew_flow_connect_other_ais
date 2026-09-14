@@ -104,6 +104,7 @@ internal static class Program
         /// opened.
         /// </remarks>
         Findings,
+        FindingsMany,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -120,6 +121,7 @@ internal static class Program
                 "--ask-remote" => Startup.AskRemote,
                 "--log" => Startup.Log,
                 "--findings" => Startup.Findings,
+                "--findings-many" => Startup.FindingsMany,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -154,6 +156,9 @@ internal static class Program
 
             case Startup.Findings:
                 return FindingsJson(args);
+
+            case Startup.FindingsMany:
+                return FindingsManyJson(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -285,6 +290,79 @@ internal static class Program
     /// <para>Without that, an opened row has one blank for four different truths, which is the defect
     /// this mode was added to end.</para>
     /// </remarks>
+    /// <summary>
+    /// The findings of MANY rounds, in one process.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Its own <c>args[0]</c>, and that is the whole design.</b> A flag on <c>--findings</c>
+    /// would not be refused by an older binary: <c>Classify</c> would accept <c>--findings</c>, find
+    /// no <c>--session</c>, and exit <b>69</b> — "no such round … its findings were never recorded" —
+    /// which the extension faithfully renders as a round that recorded nothing. A whole bulk export
+    /// would have declared every selected round empty. An unknown <c>args[0]</c> exits <b>64</b>,
+    /// which is the one code a client can read as "this binary is too old" and fall back on.</para>
+    /// <para><b>The keys arrive in a FILE</b>, as <c>--ask-local</c>'s prompt does, because a
+    /// thousand of them would overflow a Windows command line. JSON:
+    /// <c>[{"session": "…", "stage": "CodeReview", "number": 1}]</c>.</para>
+    /// </remarks>
+    internal static int FindingsManyJson(string[] args)
+    {
+        var flags = Flags(args);
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        var keysFile = flags.GetValueOrDefault("--keys-file", string.Empty);
+        if (keysFile.Length == 0)
+        {
+            Note("--findings-many needs --keys-file <path> holding a JSON array of {session, stage, number}");
+
+            return 64;
+        }
+
+        List<Server.RoundKeyDto>? asked;
+        try
+        {
+            asked = System.Text.Json.JsonSerializer.Deserialize(
+                File.ReadAllText(keysFile), Server.ServerJsonContext.Default.ListRoundKeyDto);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            Note($"--findings-many could not read its keys file: {e.Message}");
+
+            return 64;
+        }
+
+        if (asked is null || asked.Count == 0)
+        {
+            Note("--findings-many was given no rounds to read");
+
+            return 64;
+        }
+
+        // The same ceiling the page's own window has. A caller asking for more than can be loaded is
+        // asking about rounds it cannot be holding.
+        if (asked.Count > Store.RoundsQuery.MaxLimit)
+        {
+            Note($"--findings-many takes at most {Store.RoundsQuery.MaxLimit} rounds; it was given {asked.Count}");
+
+            return 64;
+        }
+
+        try
+        {
+            var answer = Store.RoundsQuery.FindingsOfMany(
+                settings.DataDir,
+                [.. asked.Select(one => new Store.RoundKeyAsked(one.Session, one.Stage, one.Number))]);
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                answer, Server.ServerJsonContext.Default.LoggedManyFindings));
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+
+            return 74; // EX_IOERR — the database, not the rounds
+        }
+
+        return 0;
+    }
+
     private static int FindingsJson(string[] args)
     {
         var flags = Flags(args);

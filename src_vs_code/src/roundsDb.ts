@@ -209,6 +209,48 @@ export function parseFindings(text: string): readonly DbFinding[] | undefined {
   }
 }
 
+/**
+ * One round's entry in a BATCH answer: the key it was asked about, and what was found.
+ *
+ * <p>The key is echoed by the server and checked here rather than paired up by position. A batch
+ * read that attaches one round's findings to another round's row would write a CSV that is wrong in
+ * the one way nobody can see by looking at it.</p>
+ */
+export interface ManyFound {
+  readonly sessionId: string;
+  readonly stage: string;
+  readonly number: number;
+  /** The database has a record of this round. `false` is "never heard of it", not "found nothing". */
+  readonly known: boolean;
+  readonly findings: readonly DbFinding[];
+}
+
+/**
+ * The answer to a batch findings read, or `undefined` when it cannot be read at all.
+ *
+ * <p>`undefined` is not an empty list: a truncated pipe parsing as nothing would otherwise tell
+ * somebody that five hundred rounds were clean. The same distinction {@link parseFindings} makes,
+ * for the same reason.</p>
+ */
+export function parseManyFindings(text: string): readonly ManyFound[] | undefined {
+  try {
+    const raw = JSON.parse(text) as { rounds?: Partial<ManyFound>[] };
+    if (!Array.isArray(raw?.rounds)) {
+      return undefined;
+    }
+
+    return raw.rounds.map((one) => ({
+      sessionId: one.sessionId ?? '',
+      stage: one.stage ?? '',
+      number: one.number ?? 0,
+      known: one.known === true,
+      findings: (one.findings ?? []).map(finding),
+    }));
+  } catch {
+    return undefined;
+  }
+}
+
 function number(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

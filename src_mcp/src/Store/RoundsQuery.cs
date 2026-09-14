@@ -137,6 +137,25 @@ public sealed record LoggedTotals(
 /// <summary>One round's findings, and whether the database has ever heard of that round.</summary>
 public sealed record LoggedRoundFindings(bool Known, IReadOnlyList<LoggedFinding> Findings);
 
+/// <summary>One round of a BATCH answer: the key it was asked for, and what was found.</summary>
+/// <remarks>
+/// The key is echoed back rather than left to positional pairing. A caller matching an answer to a
+/// question by index has to trust that nothing was dropped or reordered, and the one thing a batch
+/// read must never do is attach one round's findings to another round's row.
+/// </remarks>
+public sealed record LoggedRoundOfMany(
+    string SessionId,
+    string Stage,
+    int Number,
+    bool Known,
+    IReadOnlyList<LoggedFinding> Findings);
+
+/// <summary>What a batch read answers: one entry per round asked about, in the order asked.</summary>
+public sealed record LoggedManyFindings(IReadOnlyList<LoggedRoundOfMany> Rounds);
+
+/// <summary>One round a batch read is asked about.</summary>
+public sealed record RoundKeyAsked(string SessionId, string Stage, int Number);
+
 /// <summary>What the page asks for in one go.</summary>
 public sealed record LoggedLog(
     IReadOnlyList<LoggedRound> Rounds,
@@ -222,6 +241,46 @@ public static class RoundsQuery
         var id = RoundId(db, sessionId, stage, number);
 
         return id is null ? new LoggedRoundFindings(false, []) : new LoggedRoundFindings(true, FindingsFor(db, id.Value));
+    }
+
+    /// <summary>
+    /// The findings of MANY rounds, in ONE open of the database.
+    /// </summary>
+    /// <remarks>
+    /// <para>The point of this is the process, not the query: the extension spawned this binary once
+    /// per round, and a person exporting two hundred rounds paid two hundred process start-ups and
+    /// two hundred opens of the same file. This opens it once.</para>
+    /// <para>Every round asked about gets an entry, in the order asked, carrying its own key — a
+    /// caller must never have to pair an answer to a question by position. A round the database has
+    /// never heard of answers <c>Known: false</c> rather than being left out, because a missing
+    /// entry and a round with no findings would otherwise be the same thing.</para>
+    /// </remarks>
+    public static LoggedManyFindings FindingsOfMany(string dataDir, IReadOnlyList<RoundKeyAsked> asked)
+    {
+        var file = Path.Combine(dataDir, RoundsDb.FileName);
+        if (!File.Exists(file) || asked.Count == 0)
+        {
+            return new LoggedManyFindings([.. asked.Select(one =>
+                new LoggedRoundOfMany(one.SessionId, one.Stage, one.Number, false, []))]);
+        }
+
+        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
+        db.Open();
+
+        var answered = new List<LoggedRoundOfMany>(asked.Count);
+        foreach (var one in asked)
+        {
+            // One statement per round against an OPEN connection. The saving that matters is the
+            // process and the file open, both of which happen once now; a prepared read against a
+            // warm page cache is microseconds, and a single IN-clause over a composite key would
+            // cost more in query building than it returns.
+            var id = RoundId(db, one.SessionId, one.Stage, one.Number);
+            answered.Add(id is null
+                ? new LoggedRoundOfMany(one.SessionId, one.Stage, one.Number, false, [])
+                : new LoggedRoundOfMany(one.SessionId, one.Stage, one.Number, true, FindingsFor(db, id.Value)));
+        }
+
+        return new LoggedManyFindings(answered);
     }
 
     /// <summary>The row id of one round, or nothing when the database has never heard of it.</summary>
