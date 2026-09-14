@@ -28,7 +28,7 @@ function row(over: Partial<LogRow> = {}): LogRow {
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
     subject: 'SCOPE — the thing', status: 'done', decided: null, verdict: 'proceed', gating: 1,
-    findings: 1, seconds: 130, tokensIn: null, tokensOut: null, costUsd: null, costInUsd: null,
+    findings: 1, seconds: 130, decideSeconds: null, tokensIn: null, tokensOut: null, costUsd: null, costInUsd: null,
     costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false,
     answered: 'all 3 reviewers answered', vendors: ['codex'], reviewers: ['codex/Architecture — done'],
     calledBy: 'codex 0.9 · model not stated',
@@ -314,4 +314,33 @@ test('a tick that rebuilds every row does not forget the findings one of them al
   page.deliver({ type: 'rows', rows: [row({ foundState: 'unasked', foundCount: 1 })] });
 
   assert.match(page.at('rows').innerHTML, /a name could be clearer/);
+});
+
+// ---------- the Took column says how long the deciding took, too ----------
+
+test('a round nobody has decided shows ONE time in Took, exactly as it always did', () => {
+  const page = open([row({ seconds: 130, decideSeconds: null })]);
+
+  const cell = page.at('rows').innerHTML;
+  assert.match(cell, /2m 10s/, 'the reviewers ran for 2m 10s');
+  assert.doesNotMatch(cell, /deciding/, 'there is no second number, so there is no span for one');
+});
+
+test('a decided round shows BOTH times, the deciding one quieter and titled', () => {
+  const page = open([row({ seconds: 130, decideSeconds: 300 })]);
+
+  const cell = page.at('rows').innerHTML;
+  assert.match(cell, /2m 10s/, 'how long the reviewers ran');
+  assert.match(cell, /class="deciding"[^>]*>[^<]*5m 0s/, 'and how long the deciding took, beside it');
+  // The title must say what the second number MEASURES. A round somebody came back to after lunch
+  // counts the lunch, so calling it "deciding" without qualification would overclaim.
+  assert.match(cell, /from the round finishing to its last decision/);
+});
+
+test('a deciding time of zero is a real measurement and is shown', () => {
+  // Nought seconds is what a caller that resolved in the same second actually did. It is only the
+  // UNKNOWN that must not render as zero, and the two are different states.
+  const page = open([row({ seconds: 130, decideSeconds: 0 })]);
+
+  assert.match(page.at('rows').innerHTML, /class="deciding"[^>]*>[^<]*0 s/);
 });

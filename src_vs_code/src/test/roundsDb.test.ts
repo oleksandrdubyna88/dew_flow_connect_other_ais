@@ -62,6 +62,7 @@ const LOG: DbLog = {
     ],
     cursor: '2026-09-05T07:41:00.000Z|1',
     foundCount: 2,
+    resolvedUtc: '',
   }],
   blindSpots: [
     { kind: 'category', name: 'Reliability', accepted: 7, total: 9 },

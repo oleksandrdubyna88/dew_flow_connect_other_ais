@@ -150,6 +150,82 @@ public sealed class RoundsQueryTests : IDisposable
         spots.Should().Contain(s => s.Kind == "providers" && s.Name == "codex" && s.Accepted == 2);
     }
 
+    /// <summary>
+    /// The round carries WHEN it was last decided, which is the other half of what it cost.
+    /// </summary>
+    /// <remarks>
+    /// <c>resolved_utc</c> has been stamped on every finding since <c>resolve</c> was written and read
+    /// by nothing. The Took column measures the reviewers running; this is what makes the deciding
+    /// measurable too.
+    /// </remarks>
+    [Fact]
+    public void ARoundThatWasDecided_CarriesWhenItWasLastDecided()
+    {
+        var decidedAt = new DateTimeOffset(2026, 9, 14, 10, 30, 0, TimeSpan.Zero);
+        using (var db = RoundsDb.Open(_dir, _log, new FixedClock(decidedAt))!)
+        {
+            var findings = new[] { Found("first"), Found("second") };
+            db.RecordRound(Session, Round(), findings);
+            db.RecordDecisions("s1", "CodeReview", 1,
+                [Decisions.Accept(findings, 0), Decisions.Reject(findings, 1, "not this time")]);
+        }
+
+        RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Which
+            .ResolvedUtc.Should().Be(decidedAt.UtcDateTime.ToString("O"));
+    }
+
+    [Fact]
+    public void ARoundNobodyHasDecided_CarriesNoDecisionTime()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), [Found("nobody has judged this")]);
+        }
+
+        RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Which
+            .ResolvedUtc.Should().BeEmpty("nobody has decided, which is not the same as decided at the epoch");
+    }
+
+    /// <summary>
+    /// The <c>COALESCE</c> case: <c>MAX()</c> over NO rows is SQL <c>NULL</c>, which is not a string.
+    /// </summary>
+    /// <remarks>
+    /// Raised by the code round over the plan, which had promised <c>''</c> from a bare
+    /// <c>MAX(resolved_utc)</c> and would have got <c>null</c> against a non-nullable property for
+    /// every round that raised nothing at all — the commonest round there is.
+    /// </remarks>
+    [Fact]
+    public void ARoundWithNoFindingsAtAll_CarriesNoDecisionTime_RatherThanNull()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), []);
+        }
+
+        RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Which
+            .ResolvedUtc.Should().BeEmpty("a clean round has no findings, so no finding carries a stamp");
+    }
+
+    /// <summary>A round returned to later carries the LATER visit, not the first.</summary>
+    [Fact]
+    public void ARoundDecidedInTwoSittings_CarriesTheLastDecision()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 9, 14, 10, 0, 0, TimeSpan.Zero));
+        var afterLunch = new DateTimeOffset(2026, 9, 14, 14, 0, 0, TimeSpan.Zero);
+        using (var db = RoundsDb.Open(_dir, _log, clock)!)
+        {
+            var findings = new[] { Found("first"), Found("second") };
+            db.RecordRound(Session, Round(), findings);
+            db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0)]);
+            clock.Now = afterLunch;
+            db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Reject(findings, 1, "on reflection, no")]);
+        }
+
+        RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Which
+            .ResolvedUtc.Should().Be(afterLunch.UtcDateTime.ToString("O"),
+                "the round is decided when the last of its findings was");
+    }
+
     [Fact]
     public void AnUndecidedFinding_CountsTowardsNeither()
     {
