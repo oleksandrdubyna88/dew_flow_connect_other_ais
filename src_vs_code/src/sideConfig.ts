@@ -104,18 +104,36 @@ export function refusalFor(
 }
 
 /**
+ * Whether this WINDOW has already been offered the reload.
+ *
+ * <p><b>The gate belongs here, not in one panel.</b> It began as a flag inside the phrases tab, and a
+ * reviewer put the obvious question: the roles page and the sidebar call the same reporter, so two
+ * failed role edits in a stale window raise two notifications and the "at most once" rule held for
+ * exactly one caller. It is a property of the WINDOW in any case — one window is stale or it is not,
+ * whatever is being saved in it.</p>
+ *
+ * <p>It is never reset, and that is the honest lifetime rather than a shortcut: the only thing that
+ * clears the condition is a reload, which ends this window and everything in it. Somebody who
+ * dismisses the notification still has the banner beside the box naming the command in words.</p>
+ */
+let reloadOffered = false;
+
+/**
  * A refused write, said to the person — with the action that fixes it when there is one.
  *
  * <p>The sentence itself is decided in `settingRefused.ts`, which is pure and tested. What is here
- * is the part only a host can do: show it, and — for the one refusal that HAS a one-click cure —
- * offer the click. The same shape `reportStandDown` uses for the other way a window falls behind the
+ * is the part only a host can do: show it, and — for the one refusal that HAS a cure — offer the
+ * click, once. The same shape `reportStandDown` uses for the other way a window falls behind the
  * build it is running.</p>
  *
- * <p><b>`instead` is for a caller that already has a better sentence.</b> The roles page argues, on
- * the record, that an errno and a path belong in the log rather than in front of somebody who just
- * renamed a role — and it is right about ordinary failures. It is not right about this one: a stale
- * window is not a failure of theirs to interpret, it has a cure, and no caller's sentence can offer
- * the button. So the recognised case always wins, and `instead` covers the rest.</p>
+ * <p><b>`instead` is the caller's own sentence, and it is honoured on BOTH paths.</b> It began as an
+ * ordinary-failures-only argument, from the roles page's position that an errno and a path belong in
+ * the log rather than in front of somebody who just renamed a role. Two things in the code round
+ * moved it: the phrases tab passes "The phrase you were writing was not stored." when its tab has
+ * already gone, and dropping that on the reload path concealed the one fact that mattered; and a
+ * caller whose BANNER is already carrying the full reasoning wants this notification to be short
+ * rather than the same three lines again. So the caller's sentence wins where it is given, and the
+ * ACTION is what the recognised case adds — which is the half no caller can offer for itself.</p>
  */
 export function reportRefusal(
   context: vscode.ExtensionContext,
@@ -124,14 +142,19 @@ export function reportRefusal(
   instead = '',
 ): void {
   const refusal = refusalFor(context, key, error);
+  const said = instead.length > 0 ? instead : refusal.text;
   console.error(`[coai] coai.${key} was not saved`, error);
   if (!refusal.reloadCures) {
-    void vscode.window.showErrorMessage(instead.length > 0 ? instead : refusal.text);
+    void vscode.window.showErrorMessage(said);
 
     return;
   }
+  if (reloadOffered) {
+    return;
+  }
 
-  void vscode.window.showErrorMessage(refusal.text, RELOAD).then((choice) => {
+  reloadOffered = true;
+  void vscode.window.showErrorMessage(said, RELOAD).then((choice) => {
     if (choice === RELOAD) {
       void vscode.commands.executeCommand('workbench.action.reloadWindow');
     }

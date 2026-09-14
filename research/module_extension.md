@@ -2088,8 +2088,9 @@ flowchart LR
 | `phrases.ts` | config → validated `Phrase[]` from `coai.phrases`: the phrases a person keeps so they stop retyping the same sentence. A row needs a TEXT; a row with no name is kept and named from its own first line |
 | `phrasesPage.ts` | the phrases tab's markup and what a message from it MEANS, pure: a `PhraseCommand` union, a `FIELDS` allow-list, `phraseRepaints` |
 | `phrasesEdit.ts` | what each command does to the stored rows, pure: a `RowsOutcome` union where `unchanged` is a write the host must SKIP |
-| `phrasesPanel.ts` | the thin host: read the setting, write it, repaint, and post a failed save to the page rather than redrawing over it |
+| `phrasesPanel.ts` | the thin host: read the setting, write it through `saveSetting`, repaint, and post a failed save to the page rather than redrawing over it |
 | `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
+| `settingRefused.ts` | why a `coai.*` write was refused, in words, pure: VS Code's own reason verbatim, and the ONE recognised refusal — `declaresSetting` separating a stale window (reload cures it) from a key this build never declared (it does not) |
 | `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
@@ -4870,6 +4871,61 @@ repaint draws the rows the setting still holds — which, when the write was ref
 rows missing the words somebody just typed. So `phrasesPanel` posts `saveFailed` to the page, a
 banner appears beside the box, and the box keeps its text. Both stages of the gate asked for this
 independently, and both were right that the first draft had only said "the failure is visible".
+
+### A refused save says WHY, and the two faults behind one VS Code sentence (2026-09-14)
+
+The banner above shipped saying the same thing whatever had happened: *"your settings file may be
+read-only or held by another program."* An operator read it about a settings file that was neither.
+VS Code's own reason had gone to `console.error` on the line above:
+
+    Unable to write to User Settings because coai.phrases is not a registered configuration.
+
+The window had been open since morning on the previous build; 0.42.0 was installed over it; the
+extension HOST restarted and loaded the new code — which is why the tab existed to press — while the
+workbench's configuration registry still held the older build's keys, and `coai.phrases` was one of
+six the new version added. Nothing was read-only, and the cure was a window reload.
+
+**`settingRefused.ts` decides what to say now, and it is pure.** An error's own message goes through
+verbatim; the module invents no cause. It recognises exactly one refusal, and only with a
+discriminator, because the SAME VS Code sentence has two causes and only one of them reloads:
+
+| `declaresSetting(manifest, key)` | what it means | what is said |
+|---|---|---|
+| `declared` | the running build declares the key; this window has not caught up | the stale-window sentence, and the **Reload Window** action |
+| `absent` | this build never shipped the key — a packaging fault | named as a fault in the extension, VS Code's words passed on, **no** reload offered |
+| `unknown` | the manifest could not be read | the raw reason, no cause, no cure |
+
+The `absent` row is not hypothetical: it is how this product met this error the first time, with
+three gate switches missing from `contributes.configuration`. `declaresSetting` reads
+`context.extension.packageJSON` — the manifest of the build actually running — and uses
+`Object.hasOwn` rather than `in`, so a key named `toString` cannot answer "declared".
+
+**The offer names what it costs.** Reloading cures the refusal; it does not replay the write, and it
+tears down the webview holding the words the banner has just called safe. So the sentence says to
+copy anything unsaved and make the change again afterwards, and the one-click action sits under that
+rather than under a promise it cannot keep. Three reviewers across two vendors raised this in one
+code round.
+
+**The gate on the offer lives in `sideConfig.reportRefusal`, once per WINDOW.** It began inside this
+tab, which made "at most once" true for one of the three callers — two failed role edits in a stale
+window raised two notifications. A window is stale or it is not, whatever is being saved in it. The
+banner carries the reasoning and the notification carries only the button, because the same three
+lines on two surfaces is a collision rather than emphasis.
+
+**And the tab writes through `sideConfig.saveSetting` now** — the ONE write of a `coai.*` setting. It
+had its own bare `config.update`, which is how it came to have its own idea of what a failure means.
+`coai.phrases` is still not in `OVERLAID_SETTINGS`, so it still lands in `settings.json` on every
+side; it goes through the shared door anyway, because the second copy of "which layer does this
+belong in" is the one nobody updates when that answer changes.
+
+**`saveSetting` no longer swallows a refusal**, which was a second defect found while tracing the
+first. It caught, toasted and RESOLVED — and a caller driven by `settledWrites` reads a resolved
+promise as a save that landed, so it repaints, drawing the rows without the words just typed. The
+roles tab did that on every failed write. The refusal travels now, and the three callers are
+enumerated on the function: `panelProvider.save` catches and reports; `rolesPanel.write` and
+`phrasesPanel.apply` let it reach the `settledWrites` catch, whose repaint is in a `.then` BEFORE it
+and never a `finally`. `settingRefusedWiring.test.ts` asserts that set from the source, so a fourth
+caller reddens the suite rather than silently skipping its report.
 
 **`settledWrites.ts` is `rolesPanel.ts`'s own machinery, moved.** Two rules: every write goes through
 one promise chain, because `config.update` is asynchronous and two started from two keystrokes read

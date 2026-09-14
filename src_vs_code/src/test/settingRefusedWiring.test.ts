@@ -18,8 +18,29 @@ import { test } from 'node:test';
  * shared door.</p>
  */
 
-const source = (file: string): string =>
-  fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
+const SRC = path.join(__dirname, '..', '..', 'src');
+
+const source = (file: string): string => fs.readFileSync(path.join(SRC, file), 'utf8');
+
+/**
+ * Every production source file, RECURSIVELY.
+ *
+ * <p>A flat `readdirSync` was the first version, and a reviewer pointed out what it cannot see: a
+ * panel added at `src/panels/newPanel.ts` calls `saveSetting`, never reports its rejection, and the
+ * guard below stays green. `src/` already has subdirectories, so this is a matter of when rather
+ * than whether. `test` and `generated` are skipped — the first is this file's own neighbours, the
+ * second is not written by hand.</p>
+ */
+function sourceFiles(dir = ''): string[] {
+  return fs.readdirSync(path.join(SRC, dir), { withFileTypes: true }).flatMap((entry) => {
+    const here = dir === '' ? entry.name : `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      return ['test', 'generated'].includes(entry.name) ? [] : sourceFiles(here);
+    }
+
+    return entry.name.endsWith('.ts') ? [here] : [];
+  });
+}
 
 test('the phrases tab writes through the ONE door, and no longer has a bare config.update', () => {
   const host = source('phrasesPanel.ts');
@@ -50,9 +71,7 @@ test('every host that saves a setting reports the refusal, because saveSetting n
     );
   }
 
-  const everywhere = fs
-    .readdirSync(path.join(__dirname, '..', '..', 'src'))
-    .filter((f) => f.endsWith('.ts'))
+  const everywhere = sourceFiles()
     .filter((f) => /\bsaveSetting\(/u.test(source(f)) && f !== 'sideConfig.ts');
 
   assert.deepEqual(
@@ -75,6 +94,26 @@ test('saveSetting itself no longer catches, so the refusal can reach those calle
     + 'settledWrites repaints over the words that were never stored',
   );
 });
+
+test('the reload is offered at most once per WINDOW, and the gate is in the shared reporter', () => {
+  // It began as a flag inside the phrases tab, which left "at most once" true for exactly one of the
+  // three callers: two failed role edits in a stale window raised two notifications.
+  const door = source('sideConfig.ts');
+
+  assert.match(door, /let reloadOffered = false/u, 'the once-per-window gate is not in the reporter');
+  assert.match(door, /if \(reloadOffered\) \{\s*return;/u, 'the gate is declared but never consulted');
+  assert.doesNotMatch(
+    source('phrasesPanel.ts'),
+    /reloadOffered/u,
+    'the phrases tab still keeps its own copy of the gate, which is the per-caller version of it',
+  );
+});
+
+// The promise a reload cannot keep is asserted where it belongs — against the TEXT the module
+// produces, in settingRefused.test.ts ('the cure is offered without pretending it is free'). It was
+// briefly asserted here as well, against the source, and that copy failed on the doc comment
+// explaining why the phrase had been removed: a source-level check cannot tell a sentence the code
+// SAYS from one it talks ABOUT. The behavioural assertion has no such blind spot.
 
 test('the repaint is in a then BEFORE the catch, never a finally', () => {
   // The specific shape a reviewer named: a queue that repaints in `finally` still replaces the typed

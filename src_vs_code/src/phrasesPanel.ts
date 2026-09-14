@@ -26,17 +26,6 @@ const KEY = 'phrases';
 
 let panel: vscode.WebviewPanel | undefined;
 let context: vscode.ExtensionContext | undefined;
-/**
- * Whether THIS panel instance has already offered the reload. See {@link saveFailed}.
- *
- * <p><b>Its lifetime is the panel, and that is a deliberate choice among three.</b> The tab is made
- * with `retainContextWhenHidden`, so hiding it and coming back does NOT rebuild it — the flag
- * survives, which is right: it is the same tab and the same person, and re-offering on every tab
- * switch is the spam this flag exists to stop. It resets only where a NEW panel is built, below,
- * which is what somebody trying again after a reload will do. Disposal leaves it alone because the
- * reset on the next opening is what governs. (Gate finding, gemini, on the plan round.)</p>
- */
-let reloadOffered = false;
 
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration(SECTION);
@@ -110,31 +99,48 @@ function render(): void {
  * a window that had not caught up, so VS Code would not store a key it had not registered yet. The
  * real reason was in the exception, on the line above, going to the log. `settingRefused.ts` decides
  * what to say now, and for that one refusal it names the cure.</p>
+ *
+ * <p><b>Nothing here may throw.</b> It is `settledWrites`' `report`, which runs inside the `.catch`
+ * at the end of the write chain — an exception raised in it has no handler left and becomes an
+ * unhandled rejection, which is the silence this whole change was about, arriving by another door.
+ * That is why the context is read defensively rather than through `side()`. (Code round, local.)</p>
  */
 function saveFailed(error: unknown): void {
-  const refusal = refusalFor(side(), KEY, error);
+  if (context === undefined) {
+    // Unreachable through the panel — it cannot exist before `openPhrases` set this — but this
+    // function is the last handler in the chain, so it copes rather than asserts.
+    console.error('[coai] phrases tab: a phrase could not be saved, before the tab was opened', error);
+
+    return;
+  }
+
+  const refusal = refusalFor(context, KEY, error);
   if (panel === undefined) {
     // The tab has already gone: this is the flush on dispose, and the banner it would have written
     // to went with it. A notification is the only surface left, and silence here would mean a phrase
     // somebody typed and then closed the tab on vanished without a word. (Code round, codex.)
-    reportRefusal(side(), KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
+    reportRefusal(context, KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
 
     return;
   }
 
   void panel.webview.postMessage({
     type: 'saveFailed',
-    text: `${refusal.text} What you typed is still here.`,
+    text: `${refusal.text}${refusal.reloadCures ? '' : ' What you typed is still here.'}`,
   });
 
-  if (refusal.reloadCures && !reloadOffered) {
-    // The banner NAMES the command; this offers the click, and it is the only failure that has one.
-    // ONCE per opening, because a stale window refuses every write: the banner is what stays on
-    // screen, and a notification per settled keystroke is exactly the noise the banner exists to
-    // avoid. Nothing is lost by offering it once — the condition does not go away by itself, and the
-    // banner is still saying so underneath.
-    reloadOffered = true;
-    reportRefusal(side(), KEY, error);
+  if (refusal.reloadCures) {
+    // The banner beside the box carries the reasoning; this carries the BUTTON, and says only what
+    // the banner cannot — that one click is available. Deliberately not the same three lines again:
+    // two reviewers called the duplicate surfaces a collision, and they were right. `reportRefusal`
+    // owns "at most once", per WINDOW, because that is what is stale.
+    reportRefusal(
+      context,
+      KEY,
+      error,
+      'ConnectOtherAIs cannot save settings in this window until it is reloaded — the Phrases tab '
+      + 'says why. Reloading closes that tab, so copy anything you have typed first.',
+    );
 
     return;
   }
@@ -158,9 +164,6 @@ export function openPhrases(extension: vscode.ExtensionContext): void {
 
     return;
   }
-  // A fresh opening may be a fresh window, or simply somebody trying again after the reload they
-  // were offered. Either way the offer is owed again if it still cannot save.
-  reloadOffered = false;
   panel = vscode.window.createWebviewPanel(
     'coaiPhrases',
     'Phrases',
