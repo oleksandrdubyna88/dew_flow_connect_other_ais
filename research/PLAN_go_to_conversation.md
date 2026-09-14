@@ -41,7 +41,9 @@
 >   disposes the session and its directory the way `ended()` does, opens a new one carrying nothing
 >   the way `reopened()` does, and recalls again. Run 2026-09-14: **claude, codex and agy each
 >   remembered 7431 before the reset, answered a liveness question after it, and then answered NONE**
->   — `per-turn` and `persistent` shapes both. **What that proves is the RECIPE**: dispose, new
+>   — `per-turn` and `persistent` shapes both. The run is recorded with its subject sha, its pinned
+>   conditions and its prediction beside its observation in
+>   [module_extension.md](module_extension.md), *The reset really forgets*. **What that proves is the RECIPE**: dispose, new
 >   directory, empty carry ⇒ the vendor forgets. **What it does not prove is that `freshStart`
 >   performs that recipe**, because `freshStart` lives behind `vscode` and cannot be loaded outside an
 >   extension host; a reset that failed to call `ended()`, leaked a thread id or reused the directory
