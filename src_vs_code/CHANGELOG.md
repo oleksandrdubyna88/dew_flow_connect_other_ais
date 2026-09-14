@@ -54,12 +54,12 @@ finding, the round's own columns repeated on each, and the decision in the same 
 found nothing still gets its line, so a clean round does not vanish from a file that is meant to be
 the log.
 
-**A round whose findings could not be READ is never written as a round that found nothing.** That is
-the one thing this file refuses to guess about: if the findings of any selected round cannot be
-read, no file is written at all and you are told which rounds to try again. An export that quietly
-wrote blank cells for a timed-out read would be a file that says a review was clean when nobody
-knows. A round the database has no record of is a third case again, and its decision column says
-*not recorded* rather than *open*.
+**A round whose findings could not be READ is never written as a round that found nothing.** The
+file has a `findings_read` column saying, for each round, whether its findings came back — *loaded*,
+*not recorded* for a round the database has no record of, or *failed* for a read that did not
+return. The finding columns are blank for the last two, and the message after the export names any
+round it could not read, so nothing in the file reads as clean that nobody actually knows about. If
+NOTHING could be read, no file is written and the save dialog does not open.
 
 **Every round in the log has an Export button, and it writes a CSV where you choose.** The rounds
 log was a screen and only a screen: what a review found and what was decided about it could be read

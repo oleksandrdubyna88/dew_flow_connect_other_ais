@@ -39,7 +39,7 @@ import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
-import { exportRounds, oneAtATime } from './roundsExport';
+import { exportRounds, inBatches, oneAtATime } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
@@ -111,29 +111,31 @@ export function activate(context: vscode.ExtensionContext): void {
       // and a round whose findings could not be read must not be written as one that found nothing.
       // A round whose key the page could not resolve into a database key is `absent` — never
       // recorded — which is a different cell from `open`.
-      const rounds = await Promise.all(rows.map(async (row) => {
+      // FOUR AT A TIME, not all at once: each read is a child process, and a few hundred started
+      // together exhausts handles so rounds that were readable time out. (Plan round, three vendors.)
+      const rounds = await inBatches(rows, async (row) => {
         const dbKey = row['dbKey'];
         if (typeof dbKey !== 'object' || dbKey === null) {
-          return { row, found: { state: 'absent', findings: [] as ExportableRow[] } };
+          return { row, found: { state: 'absent' as const, findings: [] as ExportableRow[] } };
         }
         const { sessionId, stage, number } = dbKey as { sessionId?: unknown; stage?: unknown; number?: unknown };
         if (typeof sessionId !== 'string' || typeof stage !== 'string' || typeof number !== 'number') {
-          return { row, found: { state: 'absent', findings: [] as ExportableRow[] } };
+          return { row, found: { state: 'absent' as const, findings: [] as ExportableRow[] } };
         }
         try {
           const found = await panelRef.roundFindings(sessionId, stage, number);
 
           // Spread rather than cast: a `DbFinding` is a closed type and the CSV writer takes the
           // open shape a bridge message has, so the copy is what makes the two agree honestly.
-          return { row, found: { state: found.state as string, findings: found.findings.map((one) => ({ ...one })) } };
+          return { row, found: { state: found.state, findings: found.findings.map((one) => ({ ...one })) } };
         } catch (reason: unknown) {
           // A spawn that could not start is a FAILED read, not an empty round. `csvOf` refuses the
           // whole file for it, which is the point.
           console.error('ConnectOtherAIs: a round\'s findings could not be read for export', reason);
 
-          return { row, found: { state: 'failed', findings: [] } };
+          return { row, found: { state: 'failed' as const, findings: [] as ExportableRow[] } };
         }
-      }));
+      });
       await exportQueue(() => exportRounds(rounds, {
         pickPath: async (name) => (await vscode.window.showSaveDialog({
           defaultUri: vscode.Uri.file(name),

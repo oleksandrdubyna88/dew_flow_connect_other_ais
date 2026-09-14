@@ -1,3 +1,4 @@
+import type { FoundState } from './roundsDbRead';
 
 /**
  * A round, as a line of a file somebody keeps.
@@ -99,6 +100,16 @@ export const FINDING_COLUMNS = [
 ] as const;
 
 export const ROUND_COLUMNS = [
+  // The session is the half of a round's identity the table does not show, and without it two
+  // rounds numbered 1 on one branch are indistinguishable in a file somebody keeps for a year.
+  // (Plan round, local.)
+  'session_id',
+  // Whether this round's findings could be READ, which is not the same as what they said. `loaded`
+  // is an answer; `not recorded` is a round the database never heard of; `failed` is a read that
+  // did not come back — and the finding columns are blank for the last two, so a reader who sorts
+  // on this column can tell a clean round from an unknown one. It is a ROUND-level fact and lives
+  // here rather than in `decision`, which has a vocabulary of its own. (Plan round, codex + gemini.)
+  'findings_read',
   'started_utc', 'started_local_exporter', 'kind', 'repository', 'repository_path', 'branch', 'stage',
   'round', 'subject', 'status', 'accepted', 'rejected', 'verdict', 'gating', 'findings_count',
   'analysis_seconds', 'decide_seconds', 'tokens_in', 'tokens_out', 'cost_in_usd', 'cost_out_usd',
@@ -148,6 +159,21 @@ export interface ExportableRow {
   readonly [field: string]: unknown;
 }
 
+/** How a round's findings came back, as the file words it. */
+export const READ_LOADED = 'loaded';
+export const READ_ABSENT = 'not recorded';
+export const READ_FAILED = 'failed';
+
+/** One field of a nested object that may be anything at all. */
+function readKey(holder: unknown, field: string): string {
+  if (typeof holder !== 'object' || holder === null) {
+    return '';
+  }
+  const value = (holder as Record<string, unknown>)[field];
+
+  return typeof value === 'string' ? value : '';
+}
+
 /** The reviewer lines, when that is what they are. */
 function joined(value: unknown): string {
   return Array.isArray(value) ? value.filter((one) => typeof one === 'string').join('; ') : '';
@@ -164,8 +190,10 @@ function decidedCount(decided: unknown, which: 'accepted' | 'rejected'): number 
 }
 
 /** What one round contributes to a line, in `ROUND_COLUMNS` order. */
-export function roundCells(row: ExportableRow): readonly unknown[] {
+export function roundCells(row: ExportableRow, state: string = READ_LOADED): readonly unknown[] {
   return [
+    readKey(row.dbKey, 'sessionId'),
+    state,
     row.startedUtc,
     exporterLocalTime(typeof row.startedUtc === 'string' ? row.startedUtc : ''),
     row.kind,
@@ -261,48 +289,93 @@ const NO_FINDING: readonly unknown[] = FINDING_COLUMNS.map(() => null);
  */
 export interface ExportRound {
   readonly row: ExportableRow;
-  readonly found: { readonly state: string; readonly findings: readonly ExportableRow[] };
+  readonly found: { readonly state: FoundState; readonly findings: readonly ExportableRow[] };
 }
 
-/** Which rounds could not be read, by the key the page knows them by. */
-export interface CsvRefusal {
-  readonly refused: readonly string[];
+/**
+ * The state, believed only if it is one of the three.
+ *
+ * <p>An unknown word is FAILED, never "not failed". The state crosses a module boundary as data,
+ * and a version mismatch or a typo — `load` for `loaded` — must not become a round that looks
+ * clean. Fail closed, keep the round's identity, and say so in the file. (Plan round, codex.)</p>
+ *
+ * <p>A `loaded` state whose findings are not an ARRAY is failed too: that is a shape nobody
+ * intended, and rendering it as a round that found nothing is the same lie by a different route.
+ * (Plan round, local.)</p>
+ */
+export function readStateOf(found: ExportRound['found'] | undefined): FoundState {
+  if (found === undefined || found === null) {
+    return 'failed';
+  }
+  if (found.state === 'absent') {
+    return 'absent';
+  }
+
+  return found.state === 'loaded' && Array.isArray(found.findings) ? 'loaded' : 'failed';
+}
+
+/** What the `findings_read` column says for each state. */
+function wordFor(state: FoundState): string {
+  if (state === 'loaded') {
+    return READ_LOADED;
+  }
+
+  return state === 'absent' ? READ_ABSENT : READ_FAILED;
+}
+
+/** What a written file could not read, so the caller can say so. */
+export interface CsvWritten {
+  readonly text: string;
+  /** The keys of rounds whose findings did not come back. Empty when everything was read. */
+  readonly unread: readonly string[];
 }
 
 /**
  * The whole file: a header, then one line per FINDING with its round's columns repeated.
  *
  * <p>A round that genuinely found nothing still gets one line — otherwise a clean round would vanish
- * from a file that is supposed to be the log — with its finding columns empty. A round the database
- * has never heard of gets the same line, and its `decision` column reads `not recorded` rather than
- * `open`, because "nobody wrote this down" and "nobody has decided yet" are different facts.</p>
+ * from a file that is supposed to be the log — with its finding columns empty and `findings_read`
+ * saying `loaded`. A round the database has never heard of says `not recorded`, and one whose read
+ * did not come back says `failed`.</p>
  *
- * <p><b>It REFUSES rather than guessing.</b> If any round's findings could not be read, no file is
- * built at all and the caller is given the keys that failed. Writing those rounds as blank lines
- * would be the lie this codebase has already paid for once.</p>
+ * <p><b>A failed read is never written as a clean round, and it no longer takes the file down with
+ * it.</b> The first version refused to build anything at all if any round failed — which is honest
+ * but, before selection controls exist, leaves somebody unable to export ANY of a log that contains
+ * one unreadable round. The plan round said so from two directions. So the file is written, the
+ * failed rounds are in it with blank finding columns and `findings_read = failed`, and the caller is
+ * told which they were. Nothing is silently clean and nothing is silently missing.</p>
+ *
+ * <p>Nothing is written only when NOTHING could be read: a file of nothing but failures has no
+ * content to justify a save dialog.</p>
  */
-export function csvOf(rounds: readonly ExportRound[]): string | CsvRefusal {
-  const refused = rounds
-    .filter((one) => one.found.state === 'failed')
+export function csvOf(rounds: readonly ExportRound[]): CsvWritten | CsvRefusal {
+  const states = rounds.map((one) => readStateOf(one.found));
+  const unread = rounds
+    .filter((_, at) => states[at] === 'failed')
     .map((one) => String(one.row.key ?? '(unnamed round)'));
-  if (refused.length > 0) {
-    return { refused };
+  if (rounds.length > 0 && unread.length === rounds.length) {
+    return { refused: unread };
   }
 
   const header = line([...ROUND_COLUMNS, ...FINDING_COLUMNS]);
+  const body = rounds.flatMap((round, at) => linesFor(round, states[at]!));
 
-  return BOM + [header, ...rounds.flatMap(linesFor)].join(LINE) + LINE;
+  return { text: BOM + [header, ...body].join(LINE) + LINE, unread };
 }
 
-/** One round: a line per finding, or one line saying it has none. */
-function linesFor(round: ExportRound): string[] {
-  const mine = roundCells(round.row);
-  if (round.found.state === 'absent') {
-    // Never recorded, which is not the same as "found nothing". The round's own columns are still
-    // true and are still written.
-    return [line([...mine, ...NO_FINDING.map((_, at) => (FINDING_COLUMNS[at] === 'decision' ? 'not recorded' : null))])];
-  }
-  if (round.found.findings.length === 0) {
+/** Which rounds could not be read at all, when that is every one of them. */
+export interface CsvRefusal {
+  readonly refused: readonly string[];
+}
+
+/** One round: a line per finding, or one line saying why it has none. */
+function linesFor(round: ExportRound, state: FoundState): string[] {
+  const mine = roundCells(round.row, wordFor(state));
+  // The finding columns stay BLANK for anything but a real answer. `not recorded` and `failed` are
+  // round-level facts and live in `findings_read`; putting either into `decision` would give that
+  // column a value outside its own vocabulary and make a downstream count of decided findings
+  // register one that does not exist. (Plan round, codex and gemini.)
+  if (state !== 'loaded' || round.found.findings.length === 0) {
     return [line([...mine, ...NO_FINDING])];
   }
 
