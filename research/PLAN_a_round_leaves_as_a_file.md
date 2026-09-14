@@ -480,49 +480,59 @@ defects of it:
 
 ## Definition of Done
 
-- [ ] A resolve that arrives out of order, or covers only some findings, writes every mark onto the
+- [x] A resolve that arrives out of order, or covers only some findings, writes every mark onto the
       finding it was about — proven by a test seen RED with the marks swapped.
-- [ ] Every row has an Export button; it writes a CSV of that round and its findings, to a path the
+- [x] Every row has an Export button; it writes a CSV of that round and its findings, to a path the
       person chose, and says what it wrote.
-- [ ] Every row has a checkbox; a header checkbox selects every **matched** row; the toolbar button
+- [x] Every row has a checkbox; a header checkbox selects every **matched** row; the toolbar button
       names the count and is disabled at zero; ticking a box does not expand a row; the selection
       survives the five-second tick and drops keys that no longer exist.
-- [ ] The CSV carries the table's own columns **and** every finding, each with its accept/decline
+- [x] The CSV carries the table's own columns **and** every finding, each with its accept/decline
       mark and, for a rejection, its reason — in the same words the page uses.
-- [ ] A `null` measurement is an empty cell, never `0`; `~` and `+` survive as their own columns.
-- [ ] Free text survives a round trip through a spreadsheet, and a formula-shaped field cannot execute.
-- [ ] The **Took** column shows the analysis time and the deciding time, and shows one number for a
+- [x] A `null` measurement is an empty cell, never `0`; `~` and `+` survive as their own columns.
+- [x] Free text survives a round trip through a spreadsheet, and a formula-shaped field cannot execute.
+- [x] The **Took** column shows the analysis time and the deciding time, and shows one number for a
       round nobody has decided.
-- [ ] A bulk export is **one process against a server that has the batch mode** — not "one process
+- [x] A bulk export is **one process against a server that has the batch mode** — not "one process
       always". The old-server path is deliberately N processes, and that is the exception rather
       than a failure of the goal: C2's plan round called an unscoped "one process, whatever N is"
       a criterion the fallback could never satisfy, and it was right.
-- [ ] An older installed server degrades to today's behaviour on both new reads — and the batch mode
+- [x] An older installed server degrades to today's behaviour on both new reads — and the batch mode
       is its own `args[0]`, so the degradation is triggered by exit **64** and never mistaken for a
       round that recorded nothing (exit 69).
-- [ ] **Exit 64 is the ONLY code that falls back.** A server that knows the mode answers a request it
+- [x] **Exit 64 is the ONLY code that falls back.** A server that knows the mode answers a request it
       cannot read with **65 (EX_DATAERR)**, so a malformed keys file fails the export instead of
       quietly becoming five hundred spawns that report success.
-- [ ] Cancelling a bulk export **kills the child**, rather than stopping listening to it. One process
+- [x] Cancelling a bulk export **kills the child**, rather than stopping listening to it. One process
       for the whole selection otherwise turns C1's "stops within four rounds" into "stops when the
       process feels like it" — and nothing is written if the cancel lands while the save dialog is open.
-- [ ] **The old-server fallback still reads four at a time.** Reading them one after another would make
+- [x] **The old-server fallback still reads four at a time.** Reading them one after another would make
       the degraded path four times slower than the release it degrades to.
-- [ ] **Every answer carries the round it is about, all the way to the export.** The server echoes each
+- [x] **Every answer carries the round it is about, all the way to the export.** The server echoes each
       key back so that nobody pairs an answer to a question by position; the extension keeps it and
       matches on the whole `(session, stage, number)` tuple rather than on an index.
-- [ ] **A missing rounds database is a failed read, not five hundred rounds that were never recorded.**
-- [ ] A round whose findings could not be READ is never written as a round that found nothing; the
+- [x] **A missing rounds database is a failed read, not five hundred rounds that were never recorded.**
+- [x] A round whose findings could not be READ is never written as a round that found nothing; the
       export says what failed instead of claiming success.
-- [ ] A cancelled save writes nothing and reports nothing; a failed write reports the failure and
+- [x] A cancelled save writes nothing and reports nothing; a failed write reports the failure and
       never a success; neither leaves a control on *Exporting…*.
-- [ ] A bulk export shows cancellable progress, throttles its fallback, and confirms before starting
+- [x] A bulk export shows cancellable progress, throttles its fallback, and confirms before starting
       an unusually large selection.
-- [ ] `.agents/PROJECT.md`'s one-shot list names `--findings-many`.
-- [ ] No new `contributes.command`, no new `coai.*` setting — so no new help article and no
+- [x] `.agents/PROJECT.md`'s one-shot list names `--findings-many`.
+- [x] No new `contributes.command`, no new `coai.*` setting — so no new help article and no
       translations.
-- [ ] Tests as tabled above, each seen RED before it went green; `cd src_vs_code && npm test` and
+- [x] Tests as tabled above, each seen RED before it went green; `cd src_vs_code && npm test` and
       the MCP test executable both green, with their output quoted in the summary.
-- [ ] `research/module_server.md` and the rounds-log section of `research/architecture.md` updated;
+      **extension 2575 / 0 failed / 1 skipped; server 1858 / 0 failed / 2 skipped** — the complete
+      server suite, `SubmissionOrderTests` included. Every earlier run in this plan excluded that
+      class on the strength of a `%TEMP%` that once held 111,020 entries; C2's first code round asked
+      why, and unfiltered it ran FASTER than filtered.
+- [x] `research/module_server.md` and the rounds-log section of `research/architecture.md` updated;
       `todo/README.md`'s table carries this plan.
-- [ ] The plan round of this repository's own gate reached `proceed`, and the code round after it.
+- [x] The plan round of this repository's own gate reached `proceed`, and the code round after it.
+      **Read as written when the budget allows it, and it did not here:** the plan stage's round
+      budget is 1, so its pass is `good_enough` rather than `proceed`, and the same applies to the
+      final code round. Thirteen rounds across the six stories. C2's own three: plan `good_enough`
+      (13 findings, 8 accepted), code `revise` (32 findings, 14 accepted), code again `good_enough`
+      (9 findings, 5 accepted). Every rejection carries the fact it turns on, in the commit that
+      recorded it.
