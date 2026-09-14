@@ -74,7 +74,8 @@ test('the page can show a save that did not land, without being redrawn', () => 
 
   assert.match(page, /id="save-failed"/, 'there is nowhere to say that a save failed');
   assert.match(page, /hidden/, 'the failure line is visible before anything has failed');
-  assert.match(page, /said\.type !== 'saveFailed'/, 'the page does not listen for a failed save');
+  assert.match(page, /said\.type === 'saveFailed'/, 'the page does not listen for a failed save');
+  assert.match(page, /banner\.hidden = false/, 'the failure line is never actually shown');
 });
 
 test('a message names a field this list has, and nothing else is an edit', () => {
@@ -111,4 +112,13 @@ test('typing does not redraw the page, and changing its shape does', () => {
   assert.equal(phraseRepaints({ kind: 'add' }), true, 'a new row does not appear until something else redraws');
   assert.equal(phraseRepaints({ kind: 'remove', id: 'a' }), true, 'a removed row stays on screen');
   assert.equal(phraseRepaints({ kind: 'ignore' }), false, 'an ignored message redraws the page');
+});
+
+test('a save that later succeeds takes the failure line away again', () => {
+  // Raised twice in the code round: the banner had no path back. Once the settings file became
+  // writable the page went on saying nothing was being saved, which is worse than never saying it.
+  const page = html();
+
+  assert.match(page, /said\.type === 'saveOk'/, 'nothing clears the failure line when a save works again');
+  assert.match(page, /banner\.hidden = true/, 'the failure line is never hidden again once shown');
 });

@@ -218,7 +218,7 @@ function nonce(): string {
  */
 const writes = settledWrites<RolesCommand>({
   apply,
-  render: () => { void render().catch((error: unknown) => report('ConnectOtherAIs could not draw the roles page.', error)); },
+  render,
   report: (error) => { report('ConnectOtherAIs could not save that change to your roles.', error); },
   fieldOf,
 });

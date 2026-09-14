@@ -4845,3 +4845,24 @@ verdict on a plan that had cited the presets tab as its precedent: the presets t
 keystroke, and the roles panel was built later, with the settling, for exactly this reason. Moving
 the machinery rather than copying it also made it testable for the first time — it could only ever
 be driven through a webview before, and this suite has no extension host.
+
+**Its code round found one defect worth the whole round.** A person may write `{ "text": "deploy it" }`
+into `settings.json`, and story 1 made a point of KEEPING such a row. The tab then showed it under an
+id the VIEW had invented, while every edit and every *Remove* was matched against the row's own —
+absent — `id`. The row sat on screen and inert: typing in it did nothing, removing it did nothing,
+and nothing said why. Three reviewers found it independently, from three different roles. `rowsOf`
+now gives every row its id with the same `withId` the rest of the family uses, so the id the page is
+told is the id the rules match and the id that is written back.
+
+Two more were taken. The failure banner had no path back — once the settings file became writable
+again the page went on saying nothing was saved — so a write that lands now posts `saveOk` and the
+line goes away. And a save that fails during the flush on dispose had nowhere to go, because the
+panel is cleared before the flush runs: it falls back to a notification, since silence there would
+mean a phrase somebody typed and then closed the tab on vanished without a word.
+
+The extraction also had a regression of its own, and the reviewer who found it was precise about
+where: `settledWrites` awaits a render that returns a promise, but `rolesPanel` had been rewired to
+`void render().catch(...)`, which discards it — so a later write could begin while the roles page was
+still reading prompt files. It passes `render` directly again, the option's type says
+`void | Promise<void>` so that is legal rather than incidental, and a test pins that a redraw
+finishes before the next write starts.

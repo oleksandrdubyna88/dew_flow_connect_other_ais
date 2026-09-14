@@ -1,5 +1,5 @@
 import { freshPhraseRow } from './phrases';
-import { record } from './savedRows';
+import { record, text, withId } from './savedRows';
 import type { PhraseCommand, PhraseRowView } from './phrasesPage';
 
 /**
@@ -24,19 +24,33 @@ export type RowsOutcome =
 
 const UNCHANGED: RowsOutcome = { kind: 'unchanged' };
 
-/** The stored value as a list of rows, with anything that is not a row left out. */
+/**
+ * The stored value as a list of rows — and **every row carrying the id it will be edited by**.
+ *
+ * <p><b>That last part is a defect three reviewers found independently.</b> A person may write
+ * `{ "text": "deploy it" }` into `settings.json`, and story 1 made a point of KEEPING such a row
+ * rather than dropping it. The tab then showed it under an id the view had invented, while every
+ * edit and every *Remove* was matched against the row's own — absent — `id`. So the row sat there
+ * inert: typing in it did nothing, removing it did nothing, and nothing said why.</p>
+ *
+ * <p>The repair is to give the row its id HERE, with the same `withId` every other list uses, so
+ * that the id the page is told is the id the rules match and the id that is written back. It reaches
+ * `settings.json` on the first edit, which is also the first moment it matters.</p>
+ */
 export function rowsOf(saved: unknown): SavedPhraseRow[] {
-  return Array.isArray(saved) ? saved.flatMap((row) => {
+  const taken = new Set<string>();
+
+  return Array.isArray(saved) ? saved.flatMap((row, index) => {
     const one = record(row);
 
-    return one === undefined ? [] : [one];
+    return one === undefined ? [] : [{ ...one, id: withId(text(one['id']), index, taken, 'phrase') }];
   }) : [];
 }
 
 /** What the page shows: the rows as stored, with the two fields it edits read as strings. */
 export function viewOf(rows: readonly SavedPhraseRow[]): readonly PhraseRowView[] {
-  return rows.map((row, index) => ({
-    id: typeof row['id'] === 'string' ? row['id'] : `row-${index + 1}`,
+  return rows.map((row) => ({
+    id: typeof row['id'] === 'string' ? row['id'] : '',
     name: typeof row['name'] === 'string' ? row['name'] : '',
     text: typeof row['text'] === 'string' ? row['text'] : '',
   }));

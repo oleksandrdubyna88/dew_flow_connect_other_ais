@@ -99,8 +99,10 @@ phrase that starts with a blank line now uses the first line that actually has w
 the button can be read.
 
 **A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
-the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases never
-leave this machine: they are not sent to the review server and not mirrored to a Team server.
+the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases stay out
+of the review machinery: never sent to the review server, never mirrored to a Team server. They do
+follow you between your own machines if you use Settings Sync, the same way your saved chat prompts
+already do.
 
 **A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
 or held by another program, the tab says so in a line above the list instead of quietly redrawing

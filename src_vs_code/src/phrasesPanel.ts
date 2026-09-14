@@ -45,6 +45,10 @@ async function apply(command: PhraseCommand): Promise<boolean> {
     return false;
   }
   await config().update(KEY, outcome.rows, vscode.ConfigurationTarget.Global);
+  // A write that lands takes the failure line away. Without this the banner had no path back: once
+  // the settings file became writable again, the page went on saying nothing was being saved, which
+  // is worse than never having said it.
+  void panel?.webview.postMessage({ type: 'saveOk' });
 
   return phraseRepaints(command);
 }
@@ -68,10 +72,18 @@ function render(): void {
  */
 function saveFailed(error: unknown): void {
   console.error('[coai] phrases tab: a phrase could not be saved', error);
-  void panel?.webview.postMessage({
+  const said = 'That change could not be saved — your settings file may be read-only or held by another program.';
+  if (panel === undefined) {
+    // The tab has already gone: this is the flush on dispose, and the banner it would have written
+    // to went with it. A notification is the only surface left, and silence here would mean a phrase
+    // somebody typed and then closed the tab on vanished without a word. (Code round, codex.)
+    void vscode.window.showErrorMessage(`${said} The phrase you were writing was not stored.`);
+
+    return;
+  }
+  void panel.webview.postMessage({
     type: 'saveFailed',
-    text: 'That change could not be saved — your settings file may be read-only or held by another program.'
-      + ' What you typed is still here; try again once it is writable.',
+    text: `${said} What you typed is still here; try again once it is writable.`,
   });
 }
 

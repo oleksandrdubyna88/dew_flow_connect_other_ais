@@ -37,8 +37,12 @@ export interface SettledWrites<C> {
 export interface SettledWritesOptions<C> {
   /** Store the command. Answers whether the page must be redrawn. */
   readonly apply: (command: C) => Promise<boolean>;
-  /** Redraw the page. Called only when `apply` asked for it. */
-  readonly render: () => void;
+  /**
+   * Redraw the page. Called only when `apply` asked for it, and AWAITED when it answers with a
+   * promise — the roles tab's redraw reads prompt files from disk, and a write that started while
+   * it was still reading would be the very interleaving this module exists to prevent.
+   */
+  readonly render: () => void | Promise<void>;
   /** A write that failed. Shown to the person by the host; never swallowed. */
   readonly report: (error: unknown) => void;
   /**
@@ -65,6 +69,8 @@ export function settledWrites<C>(options: SettledWritesOptions<C>): SettledWrite
   function run(command: C): void {
     working = working
       .then(() => options.apply(command))
+      // AWAITED, by returning it: a host whose redraw reads files (the roles tab does) would
+      // otherwise have the next write start while the redraw was still reading.
       .then((again) => (again ? options.render() : undefined))
       .catch((error: unknown) => { options.report(error); });
   }

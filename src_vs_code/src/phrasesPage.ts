@@ -159,14 +159,19 @@ function script(nonce: string): string {
     if (remove && remove.dataset) { vscode.postMessage({ type: 'remove', id: remove.dataset.id }); }
   });
   // A failed save arrives as a MESSAGE, never as a redraw: what could not be stored is still in the
-  // box, and redrawing would replace it with what the file still says.
+  // box, and redrawing would replace it with what the file still says. A save that works again takes
+  // the line away — a banner with no path back goes on saying nothing is saved long after
+  // everything is.
   window.addEventListener('message', function (event) {
     const said = event.data;
-    if (!said || said.type !== 'saveFailed') { return; }
-    const banner = document.getElementById('save-failed');
+    const banner = said ? document.getElementById('save-failed') : null;
     if (!banner) { return; }
-    banner.textContent = said.text;
-    banner.hidden = false;
+    if (said.type === 'saveFailed') {
+      banner.textContent = said.text;
+      banner.hidden = false;
+    } else if (said.type === 'saveOk') {
+      banner.hidden = true;
+    }
   });
 }());
 </script>`;
