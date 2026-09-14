@@ -2778,8 +2778,8 @@ conversation — are exactly what the closure re-asks.
 
 Epic B's picker is a list a person searches BY HAND. This is the other half of what was asked for:
 press once on the tab you are working in and arrive in the conversation about it, two days later,
-without hunting. C1 gave every conversation a durable source; `chatGoto.ts` is what reads it. The
-command is story C3 — nothing here is wired.
+without hunting. C1 gave every conversation a durable source; `chatGoto.ts` is what reads it, and the
+command that carries its answers out is story C3, in the section above.
 
 ### Six answers, and a title is never one of them
 
