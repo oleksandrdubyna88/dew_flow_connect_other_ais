@@ -9,7 +9,7 @@ import { roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
-import { readerFor, saveSetting } from './sideConfig';
+import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 /**
@@ -219,7 +219,11 @@ function nonce(): string {
 const writes = settledWrites<RolesCommand>({
   apply,
   render,
-  report: (error) => { report('ConnectOtherAIs could not save that change to your roles.', error); },
+  // Through `reportRefusal`, so the one refusal that HAS a cure — a window that has not caught up
+  // with an update cannot store a key it never registered — offers the reload instead of this page's
+  // sentence, which would leave somebody with nothing to do about it. Every other failure keeps the
+  // sentence: see the argument on `report` below about where an errno belongs.
+  report: (error) => { reportRefusal(KEY, error, 'ConnectOtherAIs could not save that change to your roles.'); },
   fieldOf,
 });
 

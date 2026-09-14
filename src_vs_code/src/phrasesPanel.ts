@@ -3,7 +3,9 @@ import * as vscode from 'vscode';
 
 import { rowsAfter, rowsOf, viewOf } from './phrasesEdit';
 import { phraseEdit, phraseRepaints, phrasesHtml, type PhraseCommand } from './phrasesPage';
+import { settingRefusal } from './settingRefused';
 import { settledWrites } from './settledWrites';
+import { reportRefusal, saveSetting } from './sideConfig';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 /**
@@ -24,9 +26,33 @@ const SECTION = 'coai';
 const KEY = 'phrases';
 
 let panel: vscode.WebviewPanel | undefined;
+let context: vscode.ExtensionContext | undefined;
+/** Whether this opening has already offered the reload. See {@link saveFailed}. */
+let reloadOffered = false;
 
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration(SECTION);
+}
+
+/**
+ * The extension context, which is what {@link saveSetting} needs to know WHICH SIDE this window is.
+ *
+ * <p>The roles page's rule, verbatim, for the reason recorded there: every write below happens while
+ * the panel is open, the panel can only be opened by {@link openPhrases}, which takes the context,
+ * and reaching this with none is a wiring mistake rather than a state worth handling quietly.</p>
+ *
+ * <p><b>`phrases` is deliberately NOT in `OVERLAID_SETTINGS`</b> — a person's saved sentences belong
+ * to the person, not to a side of the machine, which is the decision `phrases.ts` records. So this
+ * write goes to `settings.json` on every side today. It goes through `saveSetting` anyway, because
+ * the alternative is a second copy of "which layer does this belong in", and that copy is the one
+ * that will not be updated the day this answer changes.</p>
+ */
+function side(): vscode.ExtensionContext {
+  if (context === undefined) {
+    throw new Error('the phrases page was asked to save before it was opened');
+  }
+
+  return context;
 }
 
 /** Read fresh on every command, so a write is never based on a list read minutes ago. */
@@ -44,7 +70,7 @@ async function apply(command: PhraseCommand): Promise<boolean> {
   if (outcome.kind === 'unchanged') {
     return false;
   }
-  await config().update(KEY, outcome.rows, vscode.ConfigurationTarget.Global);
+  await saveSetting(side(), config(), KEY, outcome.rows);
   // A write that lands takes the failure line away. Without this the banner had no path back: once
   // the settings file became writable again, the page went on saying nothing was being saved, which
   // is worse than never having said it.
@@ -64,27 +90,48 @@ function render(): void {
 }
 
 /**
- * A write that did not land, said to the person who made it.
+ * A write that did not land, said to the person who made it — in the words of whatever refused it.
  *
  * <p>To the PAGE rather than as a notification, because the banner sits beside the box that still
  * holds the words: a toast names the problem somewhere else on the screen and is gone in seconds.
  * The console line is for the log; the sentence is for them.</p>
+ *
+ * <p><b>The sentence is no longer this function's guess.</b> It used to assert that the settings file
+ * was "read-only or held by another program" whatever had actually happened, and on 2026-09-14 that
+ * sentence was read by somebody whose settings file was neither: the extension had been updated under
+ * a window that had not caught up, so VS Code would not store a key it had not registered yet. The
+ * real reason was in the exception, on the line above, going to the log. `settingRefused.ts` decides
+ * what to say now, and for that one refusal it names the cure.</p>
  */
 function saveFailed(error: unknown): void {
-  console.error('[coai] phrases tab: a phrase could not be saved', error);
-  const said = 'That change could not be saved — your settings file may be read-only or held by another program.';
+  const refusal = settingRefusal(KEY, error);
   if (panel === undefined) {
     // The tab has already gone: this is the flush on dispose, and the banner it would have written
     // to went with it. A notification is the only surface left, and silence here would mean a phrase
     // somebody typed and then closed the tab on vanished without a word. (Code round, codex.)
-    void vscode.window.showErrorMessage(`${said} The phrase you were writing was not stored.`);
+    reportRefusal(KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
 
     return;
   }
+
   void panel.webview.postMessage({
     type: 'saveFailed',
-    text: `${said} What you typed is still here; try again once it is writable.`,
+    text: `${refusal.text} What you typed is still here.`,
   });
+
+  if (refusal.reloadCures && !reloadOffered) {
+    // The banner NAMES the command; this offers the click, and it is the only failure that has one.
+    // ONCE per opening, because a stale window refuses every write: the banner is what stays on
+    // screen, and a notification per settled keystroke is exactly the noise the banner exists to
+    // avoid. Nothing is lost by offering it once — the condition does not go away by itself, and the
+    // banner is still saying so underneath.
+    reloadOffered = true;
+    reportRefusal(KEY, error);
+
+    return;
+  }
+
+  console.error('[coai] phrases tab: a phrase could not be saved', error);
 }
 
 const writes = settledWrites<PhraseCommand>({
@@ -96,12 +143,16 @@ const writes = settledWrites<PhraseCommand>({
   fieldOf: (command) => (command.kind === 'edit' ? `${command.id}/${command.field}` : undefined),
 });
 
-export function openPhrases(): void {
+export function openPhrases(extension: vscode.ExtensionContext): void {
+  context = extension;
   if (panel !== undefined) {
     panel.reveal();
 
     return;
   }
+  // A fresh opening may be a fresh window, or simply somebody trying again after the reload they
+  // were offered. Either way the offer is owed again if it still cannot save.
+  reloadOffered = false;
   panel = vscode.window.createWebviewPanel(
     'coaiPhrases',
     'Phrases',

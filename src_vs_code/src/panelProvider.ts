@@ -38,7 +38,7 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { seedIfEmpty } from './sideSettings';
-import { readerFor, saveSetting } from './sideConfig';
+import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1447,12 +1447,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * `contributes.configuration`, VS Code will not persist a key it does not know, and the refusal
    * was swallowed — the box lit up, nothing was saved, and nothing said a word. The declaration is
    * the fix; this is what makes the NEXT one loud instead of silent.</p>
+   *
+   * <p>The NEXT one arrived on 2026-09-14 and was not a missing declaration at all: the keys were
+   * declared, and the WINDOW had not caught up with the update that declared them. That is why the
+   * catch is here rather than inside `saveSetting` — and why what it reports is
+   * {@link reportRefusal}, which offers the reload instead of describing the failure.</p>
    */
   private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
-    // Both halves of this — the per-side branch and the report when VS Code refuses — moved to
-    // `sideConfig.saveSetting` when the roles page needed them too. A second copy of "which layer
-    // does this belong in" is how the roles page came to write a per-side setting globally.
-    await saveSetting(this.context, config, key, value);
+    // The per-side branch moved to `sideConfig.saveSetting` when the roles page needed it too. A
+    // second copy of "which layer does this belong in" is how the roles page came to write a per-side
+    // setting globally. The REPORT stayed with the callers, because only a caller knows whether a
+    // notification or a banner is the right surface — this panel has no banner, so it is the toast.
+    try {
+      await saveSetting(this.context, config, key, value);
+    } catch (error: unknown) {
+      reportRefusal(key, error);
+    }
   }
 
   /**

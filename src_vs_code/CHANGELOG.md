@@ -1,5 +1,22 @@
 # Changelog
 
+## Extension 0.42.1 — 2026-09-14
+
+**A save that fails now says why, instead of guessing.** Pressing *Add a phrase* could answer "your
+settings file may be read-only or held by another program" about a settings file that was perfectly
+writable. VS Code had given a reason; the tab discarded it into the log and asserted one of its own,
+which sent people to check file permissions for a problem that was nothing of the kind.
+
+**The reason was almost always an update.** Update the extension while a VS Code window is open and
+that window keeps the settings it registered at startup, so it refuses to store a key the new version
+added — `coai.phrases` was one of six new in 0.42.0, alongside the five `consult*` ones. The line
+above the list now says that in as many words, and offers **Reload Window**, which is the whole cure.
+
+**The roles tab no longer redraws over words it failed to save.** Its writes went through a helper
+that swallowed the refusal, so the page believed every save had landed and repainted — replacing what
+somebody had typed with what the file still said. The refusal travels now, and a failed save leaves
+the text where it is.
+
 ## Extension 0.42.0 — 2026-09-14
 
 **The Phrases section.** A new fold in the panel, one button per phrase. Press one and that
