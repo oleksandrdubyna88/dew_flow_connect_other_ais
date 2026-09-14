@@ -16,12 +16,13 @@ threshold, or a human is called.
 The value is not "more review". It is **review by a model that cannot see the author's reasoning**,
 which is the only kind that catches the author's assumptions.
 
-Two halves, the shape CredsForDevs proved:
+Two halves, the shape CredsForDevs proved — and, since the Team server, an optional third:
 
 | | What it is |
 |---|---|
 | `coai-mcp` | A Native-AOT MCP server over stdio. An MCP client starts it; it runs the rounds. |
-| ConnectOtherAIs | A VS Code extension: settings, the install button, the rounds view. |
+| ConnectOtherAIs | A VS Code extension: settings, the install button, the rounds view and its log. |
+| `coai-server` | **Optional.** The Team server: one box running the vendor CLIs on one company subscription, behind your own sign-in. Nothing needs it; it has its own `server-v*` release line and its deploy is manual. |
 
 ## The protocol
 
@@ -35,8 +36,10 @@ open → review_plan → resolve → (revise, repeat) → proceed
 not discouraged — the honest limit of a design with no hooks: the server cannot make a model call
 it, but it can make a skipped stage impossible to fake.
 
-Seven tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
-`review_plan`, `review_code`, `resolve`, `status`, `ask_human`.
+Nine tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
+`review_plan`, `review_code`, `review_document`, `resolve`, `status`, `ask_human` — and `consult`,
+which is the one that gates nothing: a stuck assistant asking another vendor's model about the LIVE
+working tree, uncommitted edits included, and getting an answer rather than a verdict.
 
 ## When it needs a person
 
@@ -162,7 +165,7 @@ an orphan from a killed session is pruned by the next `open`.
 ```bash
 dotnet build dew_flow_connect_other_ais.slnx -c Debug
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe     # never `dotnet test` — MTP, no VSTest host
-cd src_vs_code && npm ci && npm test
+(cd src_vs_code && npm ci && npm test)   # subshell: the next line runs from the repo root
 node .agents/conventions/tools/plan-lifecycle.mjs
 ```
 

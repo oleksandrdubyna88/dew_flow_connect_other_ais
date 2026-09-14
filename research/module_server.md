@@ -20,7 +20,7 @@
 
 ## The consultant — the ninth tool (2026-09-12)
 
-The first eight tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
+The first eight tools are the GATE: other vendors judging a plan, a diff and a document. `consult` is the other
 direction — the calling AI, stuck, asking one of them a question. Design record:
 [PLAN_consultant.md](PLAN_consultant.md); all six stories shipped, 2026-09-12 to 2026-09-13.
 

@@ -383,7 +383,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Under the hood: the protocol your AI follows',
       whatItIs:
-        'Nine tools, in a fixed order. `open` starts a session for a repo and branch. `review_plan` sends the plan to every reviewer. `resolve` records an accept or reject for EVERY finding. `review_code` does the same for the diff, with three roles per vendor. `review_document` is the other gate — a DOCUMENT rather than a diff, with no plan round before it and its own session per document. `providers` reports health, `status` re-orients a resumed conversation, `ask_human` escalates to you. `consult` is the ninth and the only one that gates nothing: a stuck assistant asks another vendor’s model about your working tree as it stands, and gets an answer back rather than a verdict.',
+        'Nine tools, in a fixed order. `open` starts a session for a repo and branch. `review_plan` sends the plan to every reviewer. `resolve` records an accept or reject for EVERY finding. `review_code` does the same for the diff, with four roles per vendor. `review_document` is the other gate — a DOCUMENT rather than a diff, with no plan round before it and its own session per document. `providers` reports health, `status` re-orients a resumed conversation, `ask_human` escalates to you. `consult` is the ninth and the only one that gates nothing: a stuck assistant asks another vendor’s model about your working tree as it stands, and gets an answer back rather than a verdict.',
       why:
         'Ordering is enforced by refusal rather than by good behaviour: `review_code` refuses until a plan round has reached *proceed*, so a skipped stage is impossible rather than discouraged.',
       setup:
