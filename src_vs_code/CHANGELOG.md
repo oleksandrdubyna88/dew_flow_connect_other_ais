@@ -92,6 +92,10 @@ clipboard accepted the text, not the moment you press. If the clipboard is held 
 you are told so instead — nothing ever claims a copy that did not happen, because the cost of that
 lie is pasting whatever was on the clipboard before.
 
+**Press two phrases quickly and the clipboard holds the second one.** The writes are done in the
+order you pressed, rather than racing each other — otherwise the one that happened to finish last
+would win, which is not always the one you asked for last.
+
 **Hovering a phrase shows enough of it to tell two apart**, not only its first line. And a phrase
 you add or rename in the tab appears in the panel straight away, without closing anything.
 

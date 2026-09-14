@@ -495,16 +495,23 @@ ${body}
     // write resolved — the click itself never changes the label, because a button that says Copied
     // on the press says it just as confidently when the write failed.
     if (message?.type === 'copied') {
-      const id = String(message.id).replace(/["\]/g, '');
-      const pressed = document.querySelector('[data-command="copyPhrase"][data-id="' + id + '"]');
-      if (pressed !== null && pressed.dataset.said !== '1') {
+      // The button is FOUND by comparing its own dataset, never by building a selector out of the
+      // id. An id is a person's string: interpolating it makes a selector that throws on a bracket
+      // and misses on a quote, and the sanitising that was there to prevent that was itself a broken
+      // regex that swallowed the rest of this handler. Four reviewers, one root cause.
+      const wanted = String(message.id ?? '');
+      const all = document.querySelectorAll('[data-command="copyPhrase"]');
+      for (const pressed of Array.prototype.slice.call(all)) {
+        if (pressed.dataset.id !== wanted || pressed.dataset.said === '1') {
+          continue;
+        }
         const was = pressed.textContent;
         pressed.dataset.said = '1';
         pressed.textContent = 'Copied';
         setTimeout(() => {
           pressed.textContent = was;
           delete pressed.dataset.said;
-        }, 1000);
+        }, ${COPIED_FOR_MS});
       }
 
       return;
@@ -652,6 +659,9 @@ ${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).jo
 /** How much of a phrase a tooltip carries. Enough to tell two of them apart. */
 const HOVER_LIMIT = 300;
 
+/** How long a pressed phrase says *Copied* before it is a button again. */
+const COPIED_FOR_MS = 1000;
+
 /**
  * What hovering a phrase shows.
  *
@@ -659,10 +669,13 @@ const HOVER_LIMIT = 300;
  * sharing a name — or sharing an opening — are two buttons nobody can tell apart, and the line that
  * distinguishes them is often the second one. Capped, because a tooltip is not a document.</p>
  */
-function hoverFor(phrase: Phrase): string {
+export function hoverFor(phrase: Phrase): string {
   const whole = phrase.text.trim();
+  // By CHARACTER, not by code unit: slicing a string of UTF-16 units can cut an emoji or any
+  // astral character in half and put a replacement glyph in the tooltip.
+  const letters = [...whole];
 
-  return whole.length <= HOVER_LIMIT ? whole : `${whole.slice(0, HOVER_LIMIT - 1)}…`;
+  return letters.length <= HOVER_LIMIT ? whole : `${letters.slice(0, HOVER_LIMIT - 1).join('')}…`;
 }
 
 /**
@@ -2450,7 +2463,12 @@ export function staticKey(state: PanelState): string {
     state.consultPrompt,
     // The phrases, or the section is frozen for the life of the panel while the tab underneath it
     // works perfectly — which is the bug the two entries above this one were each added for.
-    // Serialised whole, so renaming a phrase or rewriting its words repaints as surely as adding one.
-    state.phrases,
+    //
+    // What is hashed is what the section RENDERS — the id, the label and the tooltip — rather than
+    // every phrase's full text. The two differ by everything past the tooltip's limit, and a person
+    // with fifty long phrases would otherwise have all of it serialised on every render of the whole
+    // panel, including renders nothing to do with phrases. A rename and a rewrite both still repaint,
+    // because both change what is drawn. (Code round, gemini and codex, one finding each.)
+    state.phrases?.map((phrase) => [phrase.id, phrase.name, hoverFor(phrase)]),
   ]);
 }
