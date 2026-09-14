@@ -940,6 +940,31 @@ async function runExport(
     report: (message) => void vscode.window.showInformationMessage(message),
     reportError: (message) => void vscode.window.showErrorMessage(message),
     ...extra,
+  }, new Date(), async (all) => {
+    // ONE spawn for the whole selection — story C2, and the reason the per-round reader above is
+    // now only the fallback inside `readManyFindings`.
+    //
+    // A row we cannot build a key from is never SENT: the server answers one entry per key it was
+    // given, so asking about a row that has no key would shift every answer after it by one. It
+    // keeps its slot here and is failed, exactly as it is above.
+    const keys = all.map((row) => {
+      const key: unknown = row['dbKey'];
+
+      return isRoundKey(key) ? key : undefined;
+    });
+    const found = await panel.roundFindingsMany(keys.filter((key) => key !== undefined));
+    let at = 0;
+
+    return keys.map((key) => {
+      if (key === undefined) {
+        return { state: 'failed' as const, findings: [] };
+      }
+      const one = found[at++];
+
+      return one === undefined
+        ? { state: 'failed' as const, findings: [] }
+        : { state: one.state, findings: one.findings.map((finding) => ({ ...finding })) };
+    });
   });
 }
 

@@ -47,10 +47,15 @@ node .agents/conventions/tools/pin-check.mjs
   one stray stdout line while serving stdio is a protocol corruption that looks like a protocol bug.
   What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
-  all. Those are `--help`, `--version`, `--log`, `--findings`, `--ask-local`, `--ask-remote` and
+  all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
+  `--ask-remote` and
   `--providers`, and their stdout is their entire interface — `--log` has been read from stdout by
-  the panel since the rounds-log page shipped (`roundsDbRead.ts`), and `--findings` since the log
-  stopped carrying every round's findings in that list (2026-09-09). This paragraph used to name only `--help` and
+  the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
+  stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
+  bulk export stopped being one spawn per round (2026-09-14). That last one is a MODE rather than a
+  flag on `--findings` deliberately: a server too old for it must exit **64** so the extension can
+  fall back, and a flag on an existing mode would have been accepted and answered **69** — "no such
+  round" — which an export would have written down as five hundred clean rounds. This paragraph used to name only `--help` and
   `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
   2026-09-07 and was right to. **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
   the rule is unchanged and absolute.

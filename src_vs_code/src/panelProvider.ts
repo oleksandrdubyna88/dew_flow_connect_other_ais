@@ -45,7 +45,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, MAX_LIMIT, readFindings, readLog } from './roundsDbRead';
+import { Found, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -425,6 +425,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return server === undefined
       ? { state: 'failed', findings: [] }
       : readFindings(server.fsPath, { sessionId, stage, number });
+  }
+
+  /**
+   * The findings of a whole SELECTION, in one spawn.
+   *
+   * <p>What a bulk export asks. The per-round call above is what a person opening one row asks, and
+   * the two stay separate because they answer different questions: one row wants the answer now, a
+   * selection wants five hundred answers without five hundred processes.</p>
+   */
+  async roundFindingsMany(keys: readonly RoundKey[]): Promise<readonly Found[]> {
+    const server = serverPath(this.context.globalStorageUri);
+
+    return server === undefined
+      ? keys.map(() => ({ state: 'failed' as const, findings: [] }))
+      : readManyFindings(server.fsPath, keys);
   }
 
   /**

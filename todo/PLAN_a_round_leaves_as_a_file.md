@@ -1,6 +1,6 @@
 # PLAN — a round leaves the page as a file, and the log says what the deciding cost
 
-> Status: **in progress, 2026-09-14 — stories A1, A2, B1, B2 and C1 shipped; C2 open.** Scope: the rounds-log page
+> Status: **in progress, 2026-09-14 — every story shipped (A1, A2, B1, B2, C1, C2); the promotion is the tail.** Scope: the rounds-log page
 > (`src_vs_code/src/roundsLog*.ts`), one new one-shot mode and one widened DTO on the server
 > (`src_mcp/src/Store/RoundsQuery.cs`, `src_mcp/src/Program.cs`).
 >
