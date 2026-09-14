@@ -32,6 +32,11 @@ COPY src_server/src/ src_server/src/
 COPY src_mcp/core/ src_mcp/core/
 COPY src_mcp/runners/ src_mcp/runners/
 COPY src_mcp/service_defaults/ src_mcp/service_defaults/
+# Not a project folder, and that is exactly why it was missed: `shared/` holds files the projects
+# EMBED from outside their own directories, and this list is written per project. `server-v0.6.0`
+# published six binaries and no image because of it — the compiler cannot read a resource that was
+# never copied, and it says so in the one place nobody reads until a tag fails.
+COPY shared/ shared/
 RUN mkdir /empty
 # The version the release tag names — the log and /api/catalog report it. A local build says so.
 ARG VERSION=0.0.0-local
