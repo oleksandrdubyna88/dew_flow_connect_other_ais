@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.42.1",
+  "version": "0.43.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -477,11 +477,17 @@
           "default": "en",
           "enum": [
             "en",
-            "ru"
+            "ru",
+            "uk",
+            "de",
+            "es"
           ],
           "enumDescriptions": [
             "English",
-            "Русский"
+            "Русский",
+            "Українська",
+            "Deutsch",
+            "Español"
           ],
           "markdownDescription": "The language of the **Help** pages only. Articles not yet translated show English with a note. The switch at the top of the help page writes this same setting."
         },

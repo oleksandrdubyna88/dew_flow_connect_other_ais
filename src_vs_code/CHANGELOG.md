@@ -1,69 +1,6 @@
 # Changelog
 
-## Extension 0.42.1 — 2026-09-14
-
-**A save that fails now says why, instead of guessing.** Pressing *Add a phrase* could answer "your
-settings file may be read-only or held by another program" about a settings file that was perfectly
-writable. VS Code had given a reason; the tab discarded it into the log and asserted one of its own,
-which sent people to check file permissions for a problem that was nothing of the kind.
-
-**The reason was almost always an update.** Update the extension while a VS Code window is open and
-that window keeps the settings it registered at startup, so it refuses to store a key the new version
-added — `coai.phrases` was one of six new in 0.42.0, alongside the five `consult*` ones. The line
-above the list now says that in as many words, and offers **Reload Window**, which is the whole cure.
-
-**The roles tab no longer redraws over words it failed to save.** Its writes went through a helper
-that swallowed the refusal, so the page believed every save had landed and repainted — replacing what
-somebody had typed with what the file still said. The refusal travels now, and a failed save leaves
-the text where it is.
-
-## Extension 0.42.0 — 2026-09-14
-
-**The Phrases section.** A new fold in the panel, one button per phrase. Press one and that
-phrase is on the clipboard, ready to paste wherever you were about to type it — usually the Claude
-Code box. The button says *Copied* for a second, and the status bar names what it took.
-
-**It says Copied only when it really is.** The confirmation comes back from the extension after the
-clipboard accepted the text, not the moment you press. If the clipboard is held by another program
-you are told so instead — nothing ever claims a copy that did not happen, because the cost of that
-lie is pasting whatever was on the clipboard before.
-
-**Press two phrases quickly and the clipboard holds the second one.** The writes are done in the
-order you pressed, rather than racing each other — otherwise the one that happened to finish last
-would win, which is not always the one you asked for last.
-
-**Hovering a phrase shows enough of it to tell two apart**, not only its first line. And a phrase
-you add or rename in the tab appears in the panel straight away, without closing anything.
-
-**Phrases you keep.** The sentences you type into the Claude Code box over and over can be saved and
-picked instead of retyped. This first part is the list itself: `coai.phrases` in your settings, read
-the way the chat presets are read — a row you mistyped is dropped on its own rather than taking every
-other phrase with it, and nothing you can put in that file makes the extension throw.
-
-**A phrase you typed by hand is never thrown away for having no name.** `{ "text": "deploy it" }` is
-what a settings file edited by hand actually looks like, so a row with words and no name keeps its
-words and is given a name from its own first line. The name is what fits on a button, and it is cut
-to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
-
-**A phrase is kept exactly as you wrote it.** The spaces and newlines around it are part of it —
-an indented snippet pastes indented, and a newline you left at the end stays there. Naming a
-phrase that starts with a blank line now uses the first line that actually has words on it, so
-the button can be read.
-
-**A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
-the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases stay out
-of the review machinery: never sent to the review server, never mirrored to a Team server. They do
-follow you between your own machines if you use Settings Sync, the same way your saved chat prompts
-already do.
-
-**A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
-or held by another program, the tab says so in a line above the list instead of quietly redrawing
-itself without the words you just typed.
-
-**Typing in the roles tab and the phrases tab is stored once, when you stop.** It used to be a write
-per keystroke in one of them — forty for a forty-character name, each one announced to every part of
-the extension. They also queue behind one another now, so a fast typist cannot have an earlier
-keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
+## Extension 0.43.0 — 2026-09-14
 
 **Tick the rounds you want and export them as one file.** Every row has a checkbox, the box in the
 header selects every round the filters currently match — across pages, not just the twenty you can
@@ -129,6 +66,123 @@ it was written in rather than pretending.
 Cancelling the save dialog does nothing and says nothing. A write that fails says what failed and
 never claims success. Two exports started at once queue rather than race for the same file.
 
+**The Took column says how long the DECIDING took, as well as how long the reviewers ran.** A round
+costs two stretches of time and the log only ever measured one of them: the fan-out, start to
+finish. The part that actually takes somebody's afternoon — reading what the reviewers found and
+deciding on each of it — was measured nowhere, although the database has stamped every decision
+since `resolve` was first written and nothing had ever read it back.
+
+A decided round now reads `2m 10s · 5m 0s`: the reviewers, then the deciding. The second number is
+quieter than the first, because the question people scan that column for is still how long the round
+took. Its tooltip says what it actually measures — *from the round finishing to its last decision* —
+because one `resolve` call stamps everything it touches with one instant, so for an ordinary round
+that is the deciding, while a round somebody came back to after lunch counts the lunch too.
+
+A round nobody has decided shows one number, exactly as before, and so does a conversation. So does
+a round read from a server too old to send the stamp: the two halves of this product ship
+separately, and an older one simply says nothing rather than saying zero. Nought is a real
+measurement — a caller that resolved within the second — and "nobody knows" is not, so the two never
+render the same way.
+
+**A round you come back to the next morning still reports what the deciding cost.** The round's own
+duration is capped at a day, because a reviewer timeout is minutes and anything longer is a broken
+clock. Deciding is not like that: an afternoon's round resolved the following morning is eighteen
+hours, and one left over a weekend is sixty — and those are exactly the rounds worth knowing the
+number for. The line under the table says what the two figures are, so nobody has to hover to find
+out there are two.
+
+**The help says all of this now, in all five languages** — the Export button, the selection, the two
+numbers in *Took*, and what the file does about a measurement nobody made. It also stopped claiming
+there are eight tools; there are nine, and `consult` is the one that gates nothing.
+
+**The help language you pick is one your settings file accepts.** Choosing *Українська*, *Deutsch*
+or *Español* on the help page wrote a value the extension's own schema listed as invalid — the page
+offered five languages and the manifest allowed two — so the choice worked while VS Code underlined
+it as a mistake. And *The gate* article no longer opens with a stray `*Ask`: a paragraph had been
+spliced into the middle of its first sentence, leaving English readers a line beginning "a human* is
+the honest default". Every translation had it right.
+
+### Shipping beside this, in `coai-mcp` 0.22.0
+
+**The *reviews documents* box is in the server this time.** Extension 0.42.0 described the third
+box on a reviewer card and the rule that it starts OFF on a Team server — but the `coai-mcp` half
+landed six minutes after `mcp-v0.21.0` was cut, so anyone who read those notes went looking for a
+box their server did not have. It is in this release.
+
+**Two macOS defects that shipped unannounced in 0.21.0**, both found by the release itself rather
+than by a pull request, because pull requests build on `ubuntu-x64` and these needed `osx-arm64`.
+`status` could not find a consultation it had just opened: paths were compared without resolving
+links, and on macOS a checkout under `/var/folders/…` is `/private/var/folders/…` to git — so a
+compacted conversation was told "nothing open", opened a SECOND consultation and paid for the same
+answer twice. Preventing exactly that is the only reason `status` exists. And `review_document`
+refused documents plainly inside the repository, naming a `/private` prefix nobody had typed,
+because only one of the two paths being compared was being resolved.
+
+## Extension 0.42.1 — 2026-09-14
+
+**A save that fails now says why, instead of guessing.** Pressing *Add a phrase* could answer "your
+settings file may be read-only or held by another program" about a settings file that was perfectly
+writable. VS Code had given a reason; the tab discarded it into the log and asserted one of its own,
+which sent people to check file permissions for a problem that was nothing of the kind.
+
+**The reason was almost always an update.** Update the extension while a VS Code window is open and
+that window keeps the settings it registered at startup, so it refuses to store a key the new version
+added — `coai.phrases` was one of six new in 0.42.0, alongside the five `consult*` ones. The line
+above the list now says that in as many words, and offers **Reload Window**, which is the whole cure.
+
+**The roles tab no longer redraws over words it failed to save.** Its writes went through a helper
+that swallowed the refusal, so the page believed every save had landed and repainted — replacing what
+somebody had typed with what the file still said. The refusal travels now, and a failed save leaves
+the text where it is.
+
+## Extension 0.42.0 — 2026-09-14
+
+**The Phrases section.** A new fold in the panel, one button per phrase. Press one and that
+phrase is on the clipboard, ready to paste wherever you were about to type it — usually the Claude
+Code box. The button says *Copied* for a second, and the status bar names what it took.
+
+**It says Copied only when it really is.** The confirmation comes back from the extension after the
+clipboard accepted the text, not the moment you press. If the clipboard is held by another program
+you are told so instead — nothing ever claims a copy that did not happen, because the cost of that
+lie is pasting whatever was on the clipboard before.
+
+**Press two phrases quickly and the clipboard holds the second one.** The writes are done in the
+order you pressed, rather than racing each other — otherwise the one that happened to finish last
+would win, which is not always the one you asked for last.
+
+**Hovering a phrase shows enough of it to tell two apart**, not only its first line. And a phrase
+you add or rename in the tab appears in the panel straight away, without closing anything.
+
+**Phrases you keep.** The sentences you type into the Claude Code box over and over can be saved and
+picked instead of retyped. This first part is the list itself: `coai.phrases` in your settings, read
+the way the chat presets are read — a row you mistyped is dropped on its own rather than taking every
+other phrase with it, and nothing you can put in that file makes the extension throw.
+
+**A phrase you typed by hand is never thrown away for having no name.** `{ "text": "deploy it" }` is
+what a settings file edited by hand actually looks like, so a row with words and no name keeps its
+words and is given a name from its own first line. The name is what fits on a button, and it is cut
+to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
+
+**A phrase is kept exactly as you wrote it.** The spaces and newlines around it are part of it —
+an indented snippet pastes indented, and a newline you left at the end stays there. Naming a
+phrase that starts with a blank line now uses the first line that actually has words on it, so
+the button can be read.
+
+**A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
+the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases stay out
+of the review machinery: never sent to the review server, never mirrored to a Team server. They do
+follow you between your own machines if you use Settings Sync, the same way your saved chat prompts
+already do.
+
+**A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
+or held by another program, the tab says so in a line above the list instead of quietly redrawing
+itself without the words you just typed.
+
+**Typing in the roles tab and the phrases tab is stored once, when you stop.** It used to be a write
+per keystroke in one of them — forty for a forty-character name, each one announced to every part of
+the extension. They also queue behind one another now, so a fast typist cannot have an earlier
+keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
+
 **When a reviewer fails, the log says why — even when the vendor writes it somewhere unusual.**
 Codex has been failing rounds with `exit 1 (the CLI said nothing on stderr)` and nothing anywhere to
 explain it. The sentence was true and useless: the gate asks codex for machine-readable output, and
@@ -168,31 +222,6 @@ back refused. Your `coai-mcp` already knew this; the panel now agrees with it.
 **A prompt that is too large is refused with a sentence.** Past about 3 MB the server says what you
 sent and what the limit is, instead of the edge returning an error page that reached you as "the
 vendor produced nothing usable".
-
-**The Took column says how long the DECIDING took, as well as how long the reviewers ran.** A round
-costs two stretches of time and the log only ever measured one of them: the fan-out, start to
-finish. The part that actually takes somebody's afternoon — reading what the reviewers found and
-deciding on each of it — was measured nowhere, although the database has stamped every decision
-since `resolve` was first written and nothing had ever read it back.
-
-A decided round now reads `2m 10s · 5m 0s`: the reviewers, then the deciding. The second number is
-quieter than the first, because the question people scan that column for is still how long the round
-took. Its tooltip says what it actually measures — *from the round finishing to its last decision* —
-because one `resolve` call stamps everything it touches with one instant, so for an ordinary round
-that is the deciding, while a round somebody came back to after lunch counts the lunch too.
-
-A round nobody has decided shows one number, exactly as before, and so does a conversation. So does
-a round read from a server too old to send the stamp: the two halves of this product ship
-separately, and an older one simply says nothing rather than saying zero. Nought is a real
-measurement — a caller that resolved within the second — and "nobody knows" is not, so the two never
-render the same way.
-
-**A round you come back to the next morning still reports what the deciding cost.** The round's own
-duration is capped at a day, because a reviewer timeout is minutes and anything longer is a broken
-clock. Deciding is not like that: an afternoon's round resolved the following morning is eighteen
-hours, and one left over a weekend is sixty — and those are exactly the rounds worth knowing the
-number for. The line under the table says what the two figures are, so nobody has to hover to find
-out there are two.
 
 ## Extension 0.41.0 — 2026-09-14
 

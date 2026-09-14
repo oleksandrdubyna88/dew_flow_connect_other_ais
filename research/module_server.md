@@ -20,7 +20,7 @@
 
 ## The consultant — the ninth tool (2026-09-12)
 
-The first seven tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
+The first eight tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
 direction — the calling AI, stuck, asking one of them a question. Design record:
 [PLAN_consultant.md](PLAN_consultant.md); all six stories shipped, 2026-09-12 to 2026-09-13.
 
@@ -130,7 +130,7 @@ is for is deciding whether that trigger should exist at all.
 **The person's own trigger is an MCP PROMPT** (2026-09-13). Four of the five triggers are the
 assistant's to notice; the fifth is the person saying so, and a sentence in a chat is a weak carrier
 for it — it competes with everything else being said, and it names neither the repository nor the
-tool. `Prompts.cs` registers one `McpServerPrompt` beside the eight tools, which a client lists as
+tool. `Prompts.cs` registers one `McpServerPrompt` beside the nine tools, which a client lists as
 `/mcp__coai__consult`. It calls nothing: a prompt is TEXT handed to the assistant, so every cap,
 refusal and invariant still applies to whatever the assistant then decides. The argument is optional
 on purpose — somebody who types the command alone is saying "you know what we are stuck on" — and

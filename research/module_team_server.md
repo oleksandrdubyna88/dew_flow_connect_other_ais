@@ -40,7 +40,7 @@ sequenceDiagram
   participant J as JobStore
   participant V as A vendor CLI
   C->>S: POST /api/reviews { kind?, idempotencyKey? }
-  Note over S: kind × role checked, key checked for shape
+  Note over S: kind × role checked, key checked for shape, prompt and body size bounded
   S->>J: Submit(job, now)
   alt this key already made a live job
     J-->>S: that job

@@ -5019,3 +5019,42 @@ end with whichever RESOLVES last on the clipboard — press A then B and the cli
 text, which is the same repaint with none of the corpus. And the `copied` post no longer swallows
 every rejection: a disposed view is dropped, anything else is reported, the way the live-region post
 beside it already behaved.
+
+### The Took column measures the deciding, not only the fan-out (2026-09-14)
+
+**Where it lives.** `MAX_DECIDING_SECONDS` and `decideSecondsOf` in `rounds.ts:206,244`;
+`resolvedUtc` on `DbRound` in `roundsDb.ts:69-72`, defaulted to `''` and carried per round; the
+rendering, the tooltip and the `.deciding` style in `roundsLog.ts:80-89,329,1185-1187`, with the
+legend under the table at `roundsLog.ts:1282`. The cross-container half — `LoggedRound.ResolvedUtc`,
+and why an older server must say nothing rather than zero — is in
+[architecture.md](architecture.md) under the rounds-log seam.
+
+**What it is.** A round costs two stretches of time and the log only ever measured one: the fan-out,
+start to finish. The other — reading what the reviewers found and deciding on each of it — was
+measured nowhere, although the database has stamped every decision since `resolve` was first written
+and nothing had ever read it back. A decided round now renders `2m 10s · 5m 0s`: the reviewers, then
+the deciding.
+
+*Nought is a measurement and "nobody knows" is not.* `decideSecondsOf` returns `null`, never `0`, for
+a round nobody has decided and for a round read from a server too old to send the stamp — both arrive
+as `''` and are the same fact. A real zero (a caller that resolved within the second) is a number
+somebody measured and renders as one. Collapsing the two would publish an afternoon of deciding as
+instant.
+
+*A stamp without a zone is UNKNOWN rather than guessed.* `instantOf` refuses
+`2026-09-06T09:00:00` — no `Z`, no offset — because `Date.parse` would read it in the READER's zone,
+and the same round would then show a different deciding time in Kyiv and in Lisbon. Everything this
+reads is written by `DateTime.ToString("O")` or by JavaScript's own ISO output; anything else is a
+hand-edited row, and the honest answer to it is no measurement.
+
+*The two durations are capped differently, on purpose.* A round's own duration is capped at a day —
+a reviewer timeout is minutes, and longer is a broken clock. Deciding is not like that: an
+afternoon's round resolved the next morning is eighteen hours and one left over a weekend is sixty,
+and those are exactly the rounds worth knowing the number for. So `MAX_DECIDING_SECONDS` is **thirty
+days**, and only a negative gap or one beyond that month is treated as a clock having moved rather
+than as deliberation.
+
+*What the tooltip has to say, because one `resolve` stamps one instant.* It measures *from the round
+finishing to its last decision*. For an ordinary round that is the deciding; for a round somebody
+came back to after lunch it counts the lunch. Saying so is cheaper than a measurement that quietly
+means two things.
