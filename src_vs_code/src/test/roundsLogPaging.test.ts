@@ -60,6 +60,8 @@ interface Stub {
   disabled: boolean;
   value: string;
   className: string;
+  checked: boolean;
+  indeterminate: boolean;
   readonly heard: Record<string, (event?: unknown) => void>;
   addEventListener(kind: string, listener: (event?: unknown) => void): void;
   getAttribute(): null;
@@ -88,7 +90,8 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
     }
     const heard: Record<string, (event?: unknown) => void> = {};
     const fresh: Stub = {
-      innerHTML: '', textContent: '', hidden: false, disabled: false, value: '', className: '', heard,
+      innerHTML: '', textContent: '', hidden: false, disabled: false, value: '', className: '',
+      checked: false, indeterminate: false, heard,
       addEventListener(kind, listener) { heard[kind] = listener; },
       getAttribute: () => null,
       setAttribute: () => undefined,
@@ -525,4 +528,23 @@ test('the clear control is hidden while nothing is selected', () => {
   const page = open([row({ key: 'k1' })]);
 
   assert.equal(page.at('clearpicked').hidden, true);
+});
+
+test('the header box says PARTLY when some of what is shown is selected', () => {
+  // An unticked box beside five selected rows says nothing here is picked, which is false.
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+
+  assert.equal(page.at('pickall').checked, false);
+  assert.equal(page.at('pickall').indeterminate, true, 'partly selected');
+});
+
+test('the header box is checked and not indeterminate when everything shown is selected', () => {
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' })]);
+
+  page.at('pickall').heard['click']?.();
+
+  assert.equal(page.at('pickall').checked, true);
+  assert.equal(page.at('pickall').indeterminate, false);
 });

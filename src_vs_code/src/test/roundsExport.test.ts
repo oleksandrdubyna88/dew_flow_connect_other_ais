@@ -442,3 +442,37 @@ test('a batch that finishes says done, whatever the stop callback answers afterw
   assert.equal(batched.done, true);
   assert.deepEqual(batched.results, [1, 2]);
 });
+
+test('cancelling during the LAST batch still counts as cancelled', async () => {
+  // `stop` was checked only at the START of each batch, so a cancel arriving while the final batch
+  // was in flight let the loop end naturally and report done: true — and the export then opened the
+  // save dialog and wrote the file. Three reviewers found it. A run of four or fewer rounds is ONE
+  // batch, so for those the check never happened at all.
+  let stop = false;
+  const batched = await inBatches(
+    [1, 2],
+    async (item) => { stop = true; return item; },
+    () => 0,
+    4,
+    () => stop);
+
+  assert.equal(batched.done, false, 'cancelled during its only batch is still cancelled');
+});
+
+test('a cancel arriving during the last batch writes no file', async () => {
+  let stop = false;
+  let asked = false;
+  const port = ports({
+    cancelled: () => stop,
+    pickPath: async () => { asked = true; return 'D:/out/rounds.csv'; },
+  });
+
+  const outcome = await readAndExport(
+    [row({ key: 'a' }), row({ key: 'b' })],
+    async () => { stop = true; return { state: 'loaded' as const, findings: [] }; },
+    port);
+
+  assert.equal(outcome, 'cancelled');
+  assert.equal(asked, false, 'no save dialog for a run that was stopped');
+  assert.deepEqual(port.written, []);
+});

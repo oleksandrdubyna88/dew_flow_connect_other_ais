@@ -1542,6 +1542,11 @@ export function roundsLogHtml(
     var all = document.getElementById('pickall');
     if (all) {
       all.checked = matched.length > 0 && matched.every(function (r) { return state.selected[r.key]; });
+      // SOME of what is shown, but not all of it. An unticked box beside five selected rows says
+      // nothing here is picked, which is false; the indeterminate mark is the standard way to say
+      // "partly". (Code round, gemini.)
+      all.indeterminate = !all.checked
+        && matched.some(function (r) { return state.selected[r.key]; });
     }
     document.getElementById('prev').disabled = state.page === 0;
     document.getElementById('next').disabled = state.page >= pages - 1;
