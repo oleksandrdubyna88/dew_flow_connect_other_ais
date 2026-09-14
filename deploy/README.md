@@ -197,15 +197,24 @@ The canary's token is given as **`COAI_TOKEN_FILE`** — a path to a `0600` file
 the process table for every account on the box and in `~/.bash_history` afterwards. A path is not.
 The wrapper points it at `/etc/coai-canary.token`.
 
-**That token EXPIRES, and an expired one looks exactly like a broken release.** It is an ordinary
-session token, so `Coai:SessionTtlDays` (7 by default) applies to it like any other. When it lapses,
-every vendor's canary is refused `401` in milliseconds, the script rolls the release back, and the
-deploy reports a version that "did not take effect" — which is true and says nothing about the
-version. It happened to `server-v0.6.0` on 2026-09-14: three vendors refused in **350 ms**, far too
-fast for anything to have reached a vendor, against a release whose auth path was byte-identical to
-the one serving. Since then the canary prints the status and says whose fault it is, so the next one
-reads `HTTP 401: the canary's own token was not accepted` rather than `the server refused the
-review`. Mint a fresh session token and write it there:
+**That token EXPIRES, and an expired one used to look exactly like a broken release.** It is an
+ordinary session token, so `Coai:SessionTtlDays` (7 by default) applies to it like any other. It
+happened to `server-v0.6.0` on 2026-09-14: three vendors refused in **350 ms**, far too fast for
+anything to have reached a vendor, against a release whose auth path was byte-identical to the one
+serving — and the deploy reported a version that "did not take effect", which is true and says
+nothing about the version.
+
+Two changes came out of that, and between them the failure now costs a second instead of an hour:
+
+- **The wrapper asks first.** `preflight_token` calls `/api/whoami` on loopback — the same
+  `RequireCaller` gate the canary's submit goes through — **before** the artefact is fetched, staged
+  or swapped. An expired token now stops the deploy having touched nothing, with a message that
+  names the cause and says the release is innocent.
+- **The canary keeps the status.** It used to read only the body, and a `401` has none — so the one
+  sentence it could print, *"the server refused the review"*, fitted a dead credential and a dead
+  vendor equally. It now reads `HTTP 401: the canary's own token was not accepted …`.
+
+Mint a fresh session token and write it there:
 
 ```bash
 install -m 600 /dev/null /etc/coai-canary.token
