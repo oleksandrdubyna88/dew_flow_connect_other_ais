@@ -93,6 +93,11 @@ export function line(values: readonly unknown[]): string {
  * and not the other is a file whose headings stop describing its contents, and that is exactly the
  * kind of defect a test written against a literal header would not see.</p>
  */
+export const FINDING_COLUMNS = [
+  'finding_ordinal', 'severity', 'category', 'file', 'line', 'title', 'why', 'fix', 'role',
+  'is_gating', 'vendors', 'decision', 'reason', 're_raised',
+] as const;
+
 export const ROUND_COLUMNS = [
   'started_utc', 'started_local_exporter', 'kind', 'repository', 'repository_path', 'branch', 'stage',
   'round', 'subject', 'status', 'accepted', 'rejected', 'verdict', 'gating', 'findings_count',
@@ -205,12 +210,101 @@ function countOf(value: number | undefined): number | null {
 }
 
 /**
- * The whole file: a header, then one line per round.
+ * The word the PAGE uses for a decision, so the file and the screen say the same thing.
  *
- * <p>Stories B2 and after widen this to one line per FINDING, with the round's columns repeated.
- * The shape is deliberately the simplest thing that is honest at this point: a round per line, the
- * table's own columns, and nothing claimed about findings that this story does not carry.</p>
+ * <p>`took` / `declined` / `open`, from `resolution` — the same mapping `foundHtml` renders in the
+ * expanded row. A file that said `accept` where the screen said `took` would be a second vocabulary
+ * for one fact.</p>
  */
-export function csvOf(rows: readonly ExportableRow[]): string {
-  return BOM + [line(ROUND_COLUMNS), ...rows.map((row) => line(roundCells(row)))].join(LINE) + LINE;
+export function decisionWord(resolution: unknown): string {
+  if (resolution === 'accept') {
+    return 'took';
+  }
+
+  return resolution === 'reject' ? 'declined' : 'open';
+}
+
+/** What one finding contributes to a line, in `FINDING_COLUMNS` order. */
+export function findingCells(finding: ExportableRow): readonly unknown[] {
+  return [
+    finding.ordinal,
+    finding.severity,
+    finding.category,
+    finding.file,
+    finding.line,
+    finding.title,
+    finding.why,
+    finding.fix,
+    finding.role,
+    finding.isGating,
+    // Comma-joined by the database, which is why it goes through the one cell writer like everything
+    // else rather than being spliced into the line as though it were already several cells.
+    finding.providers,
+    decisionWord(finding.resolution),
+    finding.reason,
+    finding.reRaised,
+  ];
+}
+
+/** The blanks a round with no finding to write still fills, so every line is the same width. */
+const NO_FINDING: readonly unknown[] = FINDING_COLUMNS.map(() => null);
+
+/**
+ * A round and what came back when its findings were asked for.
+ *
+ * <p><b>The state travels WITH the findings, and that is the whole point.</b> An empty list means
+ * two entirely different things — this round found nothing, and nobody could read what it found —
+ * and the page keeps them apart with `loaded | absent | failed` for exactly this reason. A `Map`
+ * whose missing key had to serve for both was the first shape this had, and the code round over the
+ * plan refused it: a timed-out read would have written a round of empty finding cells and the export
+ * would have reported success.</p>
+ */
+export interface ExportRound {
+  readonly row: ExportableRow;
+  readonly found: { readonly state: string; readonly findings: readonly ExportableRow[] };
+}
+
+/** Which rounds could not be read, by the key the page knows them by. */
+export interface CsvRefusal {
+  readonly refused: readonly string[];
+}
+
+/**
+ * The whole file: a header, then one line per FINDING with its round's columns repeated.
+ *
+ * <p>A round that genuinely found nothing still gets one line — otherwise a clean round would vanish
+ * from a file that is supposed to be the log — with its finding columns empty. A round the database
+ * has never heard of gets the same line, and its `decision` column reads `not recorded` rather than
+ * `open`, because "nobody wrote this down" and "nobody has decided yet" are different facts.</p>
+ *
+ * <p><b>It REFUSES rather than guessing.</b> If any round's findings could not be read, no file is
+ * built at all and the caller is given the keys that failed. Writing those rounds as blank lines
+ * would be the lie this codebase has already paid for once.</p>
+ */
+export function csvOf(rounds: readonly ExportRound[]): string | CsvRefusal {
+  const refused = rounds
+    .filter((one) => one.found.state === 'failed')
+    .map((one) => String(one.row.key ?? '(unnamed round)'));
+  if (refused.length > 0) {
+    return { refused };
+  }
+
+  const header = line([...ROUND_COLUMNS, ...FINDING_COLUMNS]);
+
+  return BOM + [header, ...rounds.flatMap(linesFor)].join(LINE) + LINE;
+}
+
+/** One round: a line per finding, or one line saying it has none. */
+function linesFor(round: ExportRound): string[] {
+  const mine = roundCells(round.row);
+  if (round.found.state === 'absent') {
+    // Never recorded, which is not the same as "found nothing". The round's own columns are still
+    // true and are still written.
+    return [line([...mine, ...NO_FINDING.map((_, at) => (FINDING_COLUMNS[at] === 'decision' ? 'not recorded' : null))])];
+  }
+  if (round.found.findings.length === 0) {
+    return [line([...mine, ...NO_FINDING])];
+  }
+
+  return round.found.findings.map((finding) => line([...mine, ...findingCells(finding)]));
 }

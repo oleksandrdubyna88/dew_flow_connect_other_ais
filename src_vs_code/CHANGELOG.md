@@ -48,6 +48,19 @@ per keystroke in one of them — forty for a forty-character name, each one anno
 the extension. They also queue behind one another now, so a fast typist cannot have an earlier
 keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
 
+**The exported file carries every finding, with what you decided about each one.** One line per
+finding, the round's own columns repeated on each, and the decision in the same words the page uses
+— *took*, *declined*, *open* — with a declined finding's reason beside it. A round that genuinely
+found nothing still gets its line, so a clean round does not vanish from a file that is meant to be
+the log.
+
+**A round whose findings could not be READ is never written as a round that found nothing.** That is
+the one thing this file refuses to guess about: if the findings of any selected round cannot be
+read, no file is written at all and you are told which rounds to try again. An export that quietly
+wrote blank cells for a timed-out read would be a file that says a review was clean when nobody
+knows. A round the database has no record of is a third case again, and its decision column says
+*not recorded* rather than *open*.
+
 **Every round in the log has an Export button, and it writes a CSV where you choose.** The rounds
 log was a screen and only a screen: what a review found and what was decided about it could be read
 and taken nowhere. Now each row ends with **Export**, and the file carries that round's own columns —

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cell, csvOf, ExportableRow, line, ROUND_COLUMNS, roundCells } from '../roundsCsv';
+import {
+  cell, csvOf, ExportableRow, ExportRound, FINDING_COLUMNS, findingCells, line, ROUND_COLUMNS, roundCells,
+} from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
 /**
@@ -40,6 +42,27 @@ function row(over: Partial<LogRow> = {}): ExportableRow {
   return { ...typed };
 }
 
+/**
+ * A round WITH its findings, as the exporter takes them.
+ *
+ * <p>The state travels with the list because an empty list means two different things — nothing was
+ * found, and nothing could be read — and the file must not render them the same way.</p>
+ */
+function round(
+  over: Partial<LogRow> = {},
+  found: { state: string; findings: readonly ExportableRow[] } = { state: 'loaded', findings: [] },
+): ExportRound {
+  return { row: row(over), found };
+}
+
+/** The file, when it was written at all — a refusal is a failure of the test that expected one. */
+function written(rounds: readonly ExportRound[]): string {
+  const built = csvOf(rounds);
+  assert.equal(typeof built, 'string', `expected a file, got a refusal: ${JSON.stringify(built)}`);
+
+  return built as string;
+}
+
 /** The file's lines, without the byte-order mark and without the trailing blank. */
 function lines(text: string): string[] {
   return text.replace(/^\uFEFF/, '').trimEnd().split('\r\n');
@@ -48,16 +71,16 @@ function lines(text: string): string[] {
 test('the file opens with a byte-order mark, exactly once', () => {
   // Excel reads a UTF-8 file as the system codepage without one, and the commonest content here is
   // a repository path or a subject in Cyrillic.
-  const text = csvOf([row()]);
+  const text = written([round()]);
 
   assert.equal(text.startsWith('\uFEFF'), true);
   assert.equal(text.indexOf('\uFEFF', 1), -1, 'and not again in the body');
 });
 
 test('a header, then one line per round', () => {
-  const text = lines(csvOf([row({ key: 'a' }), row({ key: 'b' })]));
+  const text = lines(written([round({ key: 'a' }), round({ key: 'b' })]));
 
-  assert.equal(text[0], ROUND_COLUMNS.join(','));
+  assert.equal(text[0], [...ROUND_COLUMNS, ...FINDING_COLUMNS].join(','));
   assert.equal(text.length, 3, 'a header and two rounds');
 });
 
@@ -186,7 +209,7 @@ test('an unparseable instant leaves the local column empty rather than writing I
 });
 
 test('a round with no rows at all is a header and nothing else', () => {
-  assert.deepEqual(lines(csvOf([])), [ROUND_COLUMNS.join(',')]);
+  assert.deepEqual(lines(written([])), [[...ROUND_COLUMNS, ...FINDING_COLUMNS].join(',')]);
 });
 
 test('a formula hiding behind LEADING WHITESPACE is still neutralised', () => {
@@ -268,4 +291,103 @@ test('a cell beginning with a pipe or a percent is neutralised too', () => {
     const written = cell(lead + 'danger');
     assert.equal(written.startsWith("'"), true, `${lead} must be written as text, got ${written}`);
   }
+});
+
+// ---------- the findings, and the honesty rule about a read that failed ----------
+
+function finding(over: ExportableRow = {}): ExportableRow {
+  return {
+    ordinal: 0, severity: 'Blocking', category: 'Reliability', file: 'src/Prompts.cs', line: 33,
+    title: 'Stdio protocol error', why: 'the rule requires an omitted argument', fix: 'change the default',
+    role: 'Conventions', isGating: true, providers: 'local', resolution: 'reject',
+    reason: 'refuted by a test that runs the real binary', reRaised: false,
+    ...over,
+  };
+}
+
+test('one line per FINDING, with the round columns repeated on each', () => {
+  const text = lines(written([round({}, {
+    state: 'loaded',
+    findings: [finding({ ordinal: 0, title: 'first' }), finding({ ordinal: 1, title: 'second' })],
+  })]));
+
+  assert.equal(text.length, 3, 'a header and two findings');
+  assert.match(text[1]!, /first/);
+  assert.match(text[2]!, /second/);
+  assert.match(text[1]!, /SCOPE/, 'the round columns ride on every line');
+  assert.match(text[2]!, /SCOPE/);
+});
+
+test('a round that genuinely found nothing still gets one line, with empty finding cells', () => {
+  // Otherwise a clean round would vanish from a file that is supposed to be the log.
+  const text = lines(written([round({}, { state: 'loaded', findings: [] })]));
+
+  assert.equal(text.length, 2);
+  assert.match(text[1]!, /SCOPE/);
+  assert.equal(text[1]!.endsWith(','.repeat(FINDING_COLUMNS.length)), true,
+    'every finding column is blank, and the line is still the full width');
+});
+
+test('a round the database never heard of says NOT RECORDED, which is not the same as open', () => {
+  const text = lines(written([round({}, { state: 'absent', findings: [] })]));
+
+  assert.match(text[1]!, /not recorded/);
+  assert.doesNotMatch(text[1]!, /,open,/, 'nobody has decided is a different fact from nobody wrote it down');
+});
+
+test('a round whose findings could NOT be read refuses the whole file', () => {
+  // The lie this codebase has already paid for once: an empty list rendered as a clean round. A
+  // failed read must not become blank cells, and it must not become a file at all.
+  const built = csvOf([round({ key: 'k1' }, { state: 'failed', findings: [] })]);
+
+  assert.notEqual(typeof built, 'string', 'no file is built at all when a read failed');
+  assert.deepEqual((built as { refused: string[] }).refused, ['k1']);
+});
+
+test('the refusal names the rounds that could not be read', () => {
+  const built = csvOf([
+    round({ key: 'good' }, { state: 'loaded', findings: [finding()] }),
+    round({ key: 'bad' }, { state: 'failed', findings: [] }),
+  ]);
+
+  assert.notEqual(typeof built, 'string', 'one unreadable round refuses the whole file');
+  assert.deepEqual((built as { refused: string[] }).refused, ['bad']);
+});
+
+test('the decision column says the word the PAGE says', () => {
+  // `took` / `declined` / `open`, not `accept` / `reject` / ''. One vocabulary for one fact.
+  const cells = (resolution: unknown): string =>
+    cell(findingCells(finding({ resolution }))[FINDING_COLUMNS.indexOf('decision')]);
+
+  assert.equal(cells('accept'), 'took');
+  assert.equal(cells('reject'), 'declined');
+  assert.equal(cells(''), 'open');
+  assert.equal(cells(undefined), 'open');
+});
+
+test('a rejection carries its reason, and every finding column is written', () => {
+  const cells = findingCells(finding());
+
+  assert.equal(cells.length, FINDING_COLUMNS.length);
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('reason')]), 'refuted by a test that runs the real binary');
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('is_gating')]), 'true');
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('vendors')]), 'local');
+});
+
+test('a finding off the bridge that is nonsense writes blanks rather than throwing', () => {
+  const cells = findingCells({});
+
+  assert.equal(cells.length, FINDING_COLUMNS.length);
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('title')]), '');
+  assert.equal(cell(cells[FINDING_COLUMNS.indexOf('decision')]), 'open');
+});
+
+test('a finding title that is a formula is neutralised like every other cell', () => {
+  const cells = findingCells(finding({ title: '=HYPERLINK("http://x")' }));
+
+  // The value carries quotes of its own, so the cell is WRAPPED and the apostrophe sits inside it.
+  // Either shape is neutralised; what must never appear is a cell whose first character is `=`.
+  const title = cell(cells[FINDING_COLUMNS.indexOf('title')]);
+  assert.equal(/^"?'/.test(title), true, `the apostrophe is there, wrapped or not: ${title}`);
+  assert.equal(/^"?=/.test(title), false, 'and it cannot open as a formula');
 });

@@ -1,4 +1,4 @@
-import { csvOf, ExportableRow } from './roundsCsv';
+import { csvOf, ExportRound } from './roundsCsv';
 
 /**
  * Turning a selection of rounds into a file the person chose the place for.
@@ -57,14 +57,37 @@ export function suggestedName(howMany: number, today: Date = new Date()): string
  * every path without having to infer which one it took.</p>
  */
 export async function exportRounds(
-  rows: readonly ExportableRow[],
+  rounds: readonly ExportRound[],
   ports: ExportPorts,
   today: Date = new Date(),
 ): Promise<ExportOutcome> {
-  if (rows.length === 0) {
+  if (rounds.length === 0) {
     // Nothing selected is not a failure and not a file. It reaches here only if the page and the
     // host disagree about what is selected, and the honest answer is to do nothing quietly.
     return 'cancelled';
+  }
+
+  // THE FOURTH ENDING, and it comes FIRST: a round whose findings could not be read is refused
+  // before the person is asked where to put a file. Writing it as a round with blank finding cells
+  // would say it found nothing, which is the lie `readFindings`' three-state answer exists to
+  // prevent — and asking for a path and then failing would waste the one decision they made.
+  let built: ReturnType<typeof csvOf>;
+  try {
+    built = csvOf(rounds);
+  } catch (reason: unknown) {
+    // Still inside a failure path, per the plan round: a serialisation that throws on a value
+    // nobody expected must not leave this promise unresolved.
+    ports.reportError(`The rounds could not be prepared for export: ${messageOf(reason)}`);
+
+    return 'failed';
+  }
+  if (typeof built !== 'string') {
+    ports.reportError(
+      `The findings of ${counted(built.refused.length)} could not be read, so nothing was written. `
+      + `Open ${built.refused.length === 1 ? 'that round' : 'those rounds'} in the log and try again: `
+      + built.refused.join(', '));
+
+    return 'failed';
   }
 
   // EVERYTHING is inside the failure path, not only the write. The plan named three endings and a
@@ -74,11 +97,11 @@ export async function exportRounds(
   let path: string | undefined;
   let text: string;
   try {
-    path = await ports.pickPath(suggestedName(rows.length, today));
+    path = await ports.pickPath(suggestedName(rounds.length, today));
     if (path === undefined) {
       return 'cancelled';
     }
-    text = csvOf(rows);
+    text = built;
   } catch (reason: unknown) {
     ports.reportError(`The rounds could not be prepared for export: ${messageOf(reason)}`);
 
@@ -93,7 +116,7 @@ export async function exportRounds(
     return 'failed';
   }
 
-  ports.report(`${counted(rows.length)} written to ${path}.`);
+  ports.report(`${counted(rounds.length)} written to ${path}.`);
 
   return 'written';
 }
