@@ -111,7 +111,13 @@ export const ROUND_COLUMNS = [
   // here rather than in `decision`, which has a vocabulary of its own. (Plan round, codex + gemini.)
   'findings_read',
   'started_utc', 'started_local_exporter', 'kind', 'repository', 'repository_path', 'branch', 'stage',
-  'round', 'subject', 'status', 'accepted', 'rejected', 'verdict', 'gating', 'findings_count',
+  'round', 'subject',
+  // WHICH AI asked for this round, as the opened row says it — `claude-code 7.3.1 · claude-opus-5`.
+  // It arrived on every row while this plan was being built, and a log of who reviewed what is worth
+  // much less without who asked. Empty for a round recorded before the field existed, which is the
+  // truth about it rather than a guess.
+  'asked_by',
+  'status', 'accepted', 'rejected', 'verdict', 'gating', 'findings_count',
   'analysis_seconds', 'decide_seconds', 'tokens_in', 'tokens_out', 'cost_in_usd', 'cost_out_usd',
   'cost_total_usd', 'cost_is_estimate', 'cost_partial', 'reviewers_answered', 'reviewers',
 ] as const;
@@ -203,6 +209,7 @@ export function roundCells(row: ExportableRow, state: string = READ_LOADED): rea
     row.stage,
     row.number,
     row.subject,
+    row.calledBy,
     row.status,
     // -1 is the server saying nobody has decided yet, which is not a count. It becomes an empty
     // cell for the same reason a null measurement does.

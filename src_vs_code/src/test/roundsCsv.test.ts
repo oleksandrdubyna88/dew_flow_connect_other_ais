@@ -25,7 +25,7 @@ import { LogRow } from '../roundsLog';
  */
 function row(over: Partial<LogRow> = {}): ExportableRow {
   const typed: LogRow = {
-    key: 'k1', kind: 'review',
+    key: 'k1', kind: 'review', calledBy: 'claude-code 7.3.1 · claude-opus-5',
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
     subject: 'SCOPE — the thing', status: 'done', decided: { accepted: 9, rejected: 4 },
@@ -89,6 +89,16 @@ test('every column the header names is written, in that order', () => {
   // The header and the row are built from one list, and this is what makes that load-bearing: a
   // column added to one and not the other is a file whose headings stop describing its contents.
   assert.equal(roundCells(row()).length, ROUND_COLUMNS.length);
+});
+
+test('the file says which AI asked for the round, and says nothing when nobody declared', () => {
+  const cells = roundCells(row());
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('asked_by')]), 'claude-code 7.3.1 · claude-opus-5');
+
+  // A round recorded before the field existed. Empty is the truth about it; inventing a caller,
+  // or borrowing the exporting window's own, would be a claim nothing supports.
+  const older = roundCells(row({ calledBy: '' }));
+  assert.equal(cell(older[ROUND_COLUMNS.indexOf('asked_by')]), '');
 });
 
 test('an absent measurement is an empty cell, never a zero', () => {
