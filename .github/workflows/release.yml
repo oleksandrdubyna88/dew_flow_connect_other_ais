@@ -377,6 +377,20 @@ jobs:
         working-directory: .
         run: git submodule update --init --depth 1 .agents/conventions
 
+      # AND the pin must be CURRENT, which nothing checked before a tag. `pin-check` gates every
+      # pull request, so a stale pin cannot merge — but a tag is what ships, and a tag can be cut on
+      # a main whose pin went stale an hour earlier. Every test would still pass: they compare the
+      # shipped snippet with the PINNED rule, and those two agree with each other. The version
+      # marker cannot help either, since both sides read it from the same stale file. So the
+      # extension would hand out a rule the family has moved past, silently, which is exactly the
+      # class of defect the markers exist to make impossible.
+      #
+      # Fail-closed and cheap to cure: `git submodule update --remote .agents/conventions`, commit
+      # the gitlink, tag again.
+      - name: Pin check — a release may not ship a stale shared rule
+        working-directory: .
+        run: node .agents/conventions/tools/pin-check.mjs
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22

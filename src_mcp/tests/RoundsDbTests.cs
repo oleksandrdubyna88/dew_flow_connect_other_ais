@@ -719,6 +719,54 @@ public sealed class ConsultMissedTests : IDisposable
         decided[0].Finding.Fix.Should().Be("the fix");
     }
 
+    /// <summary>
+    /// The log reader addresses every value by NAME. No ordinal, anywhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>This defect happened rather than being imagined: a merge put four caller columns into
+    /// the middle of the rounds SELECT and every read after them shifted by four, so the consult
+    /// counter read a vendor string. Nothing objects — <c>GetInt32(14)</c> is valid whatever sits at
+    /// 14 — and the symptom is a wrong number on a page, not an exception.</para>
+    /// <para>A behavioural test cannot catch the NEXT one, because the defect is a person editing a
+    /// SELECT list and the ordinals are then whatever that edit made them. What can be pinned is the
+    /// property that makes such an edit harmless: nothing is read positionally. Names do not
+    /// renumber. (The operator, on the architecture.)</para>
+    /// <para>Asserted over the whole file and over the COUNT of name-addressed reads as well, so it
+    /// cannot go green by matching nothing the day the reader is renamed or moved.</para>
+    /// </remarks>
+    [Fact]
+    public void TheLogReaderAddressesEveryValueByName_NeverByOrdinal()
+    {
+        var source = File.ReadAllText(ReaderSource());
+
+        var positional = System.Text.RegularExpressions.Regex.Matches(
+            source, @"rows\.(?:Get\w+|IsDBNull)\(\s*\d").Select(m => m.Value).ToList();
+
+        positional.Should().BeEmpty(
+            "a column read by ordinal moves when somebody inserts a column, silently and with the "
+            + "wrong VALUE rather than an error — read it by name instead");
+
+        // And the file really is the reader: if this stops matching, the assertion above is vacuous.
+        System.Text.RegularExpressions.Regex.Matches(source, @"(?:Text|Number|Big|Real|MaybeReal|NumberOr)\(rows, ")
+            .Count.Should().BeGreaterThan(20, "this is the file that reads the log");
+    }
+
+    /// <summary>The reader's own source, found from this test assembly rather than a guessed path.</summary>
+    private static string ReaderSource()
+    {
+        var here = AppContext.BaseDirectory;
+        for (var dir = new DirectoryInfo(here); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "src_mcp", "src", "Store", "RoundsQuery.cs");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new FileNotFoundException($"RoundsQuery.cs was not found above {here}");
+    }
+
     [Fact]
     public void AFindingFromTheSAMERound_IsNotEarlierThanItself()
     {

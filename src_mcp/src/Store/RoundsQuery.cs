@@ -310,29 +310,32 @@ public static class RoundsQuery
         var rounds = new List<LoggedRound>();
         while (rows.Read())
         {
-            var id = rows.GetInt64(0);
+            var id = Big(rows, "id");
+            var started = Text(rows, "started_utc");
+            var vendor = Text(rows, "caller_vendor");
+            var client = Text(rows, "caller_client");
+            var model = Text(rows, "caller_model");
             rounds.Add(new LoggedRound(
-                rows.GetString(1),
-                rows.GetString(2),
-                rows.GetString(3),
-                rows.GetInt32(4),
-                rows.GetString(5),
-                rows.GetInt32(6),
-                rows.GetInt32(7),
-                rows.GetString(8),
+                Text(rows, "repo_path"),
+                Text(rows, "branch"),
+                Text(rows, "stage"),
+                Number(rows, "number"),
+                started,
+                Number(rows, "accepted"),
+                Number(rows, "rejected"),
+                Text(rows, "session_id"),
                 inline.TryGetValue(id, out var mine) ? mine : [],
-                rows.GetString(5) + CursorSeparator + id,
-                rows.GetInt32(9),
+                started + CursorSeparator + id,
+                Number(rows, "finding_count"),
                 // An empty vendor is a round from before the columns: never asked, so it answers
                 // nothing rather than "unknown", which is what a caller we could not identify says.
-                rows.GetString(10).Length + rows.GetString(11).Length + rows.GetString(13).Length == 0
+                vendor.Length + client.Length + model.Length == 0
                     ? null
-                    : new Server.CallerDeclaration(
-                        rows.GetString(10), rows.GetString(11), rows.GetString(12), rows.GetString(13)),
-                // Ordinal 14, after the four caller columns main added while this branch waited. A
-                // database stepped by an older binary has no column at all; the reader answers the
-                // convention's own "not measured" rather than refusing the row.
-                rows.IsDBNull(14) ? -1 : rows.GetInt32(14)));
+                    : new Server.CallerDeclaration(vendor, client, Text(rows, "caller_client_version"), model),
+                // A database stepped by an older binary has no column at all, and the query that ran
+                // then selects the literal instead — either way it arrives under this name, and the
+                // reader answers the convention's own "not measured" rather than refusing the row.
+                NumberOr(rows, "consult_missed", -1)));
         }
 
         return rounds;
@@ -408,13 +411,13 @@ public static class RoundsQuery
         var byRound = new Dictionary<long, List<LoggedFinding>>();
         while (rows.Read())
         {
-            var round = rows.GetInt64(0);
+            var round = Big(rows, "round_id");
             if (!byRound.TryGetValue(round, out var mine))
             {
                 byRound[round] = mine = [];
             }
 
-            mine.Add(FindingFrom(rows, 1));
+            mine.Add(FindingFrom(rows));
         }
 
         return byRound;
@@ -434,27 +437,34 @@ public static class RoundsQuery
         var findings = new List<LoggedFinding>();
         while (rows.Read())
         {
-            findings.Add(FindingFrom(rows, 0));
+            findings.Add(FindingFrom(rows));
         }
 
         return findings;
     }
 
-    private static LoggedFinding FindingFrom(SqliteDataReader rows, int at) =>
-        new(rows.GetInt32(at),
-            rows.GetString(at + 1),
-            rows.GetString(at + 2),
-            rows.GetString(at + 3),
-            rows.GetInt32(at + 4),
-            rows.GetString(at + 5),
-            rows.GetString(at + 6),
-            rows.GetString(at + 7),
-            rows.GetString(at + 8),
-            rows.GetInt32(at + 9) == 1,
-            rows.GetString(at + 10),
-            rows.GetString(at + 11),
-            rows.GetString(at + 12),
-            rows.GetInt32(at + 13) == 1);
+    /// <summary>One finding, from whichever of the three queries produced the row.</summary>
+    /// <remarks>
+    /// It took a BASE ORDINAL and read <c>at + n</c>, which made the three callers agree only by
+    /// arithmetic: a column added to one of those queries rotated that one's fields and left the
+    /// other two right, so the wrong page would have been the only symptom. By name they are
+    /// genuinely interchangeable, which is what they were always supposed to be.
+    /// </remarks>
+    private static LoggedFinding FindingFrom(SqliteDataReader rows) =>
+        new(Number(rows, "ordinal"),
+            Text(rows, "severity"),
+            Text(rows, "category"),
+            Text(rows, "file"),
+            Number(rows, "line"),
+            Text(rows, "title"),
+            Text(rows, "why"),
+            Text(rows, "fix"),
+            Text(rows, "role"),
+            Number(rows, "is_gating") == 1,
+            Text(rows, "providers"),
+            Text(rows, "resolution"),
+            Text(rows, "reason"),
+            Number(rows, "re_raised") == 1);
 
     /// <summary>
     /// The consultations, newest first, bounded by the same limit the rounds are.
@@ -485,12 +495,12 @@ public static class RoundsQuery
             while (rows.Read())
             {
                 consultations.Add(new LoggedConsultation(
-                    rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
-                    rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetString(7),
-                    rows.GetString(8), rows.GetString(9), rows.GetString(10), rows.GetDouble(11),
-                    rows.GetInt64(12), rows.GetInt64(13),
-                    rows.IsDBNull(14) ? null : rows.GetDouble(14),
-                    rows.GetString(15), rows.GetString(16), rows.GetString(17)));
+                    Text(rows, "id"), Text(rows, "caller_kind"), Text(rows, "repo_path"), Text(rows, "branch"),
+                    Text(rows, "vendor"), Text(rows, "model"), Number(rows, "turns"), Text(rows, "status"),
+                    Text(rows, "reason"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
+                    Real(rows, "seconds"), Big(rows, "tokens_in"), Big(rows, "tokens_out"),
+                    MaybeReal(rows, "cost_usd"),
+                    Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert")));
             }
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable && Missing(e))
@@ -531,7 +541,7 @@ public static class RoundsQuery
     /// </remarks>
     private const string SqlRoundsCounted = """
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
-               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
+               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
                r.consult_missed
         FROM rounds r JOIN sessions s ON s.id = r.session_id
@@ -544,15 +554,56 @@ public static class RoundsQuery
     /// <summary>The same page against a database written before schema step 2 added the column.</summary>
     private const string SqlRoundsPlain = """
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
-               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id),
+               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
-               -1
+               -1 AS consult_missed
         FROM rounds r JOIN sessions s ON s.id = r.session_id
         WHERE $unbounded = 1
            OR r.started_utc < $started
            OR (r.started_utc = $started AND r.id < $id)
         ORDER BY r.started_utc DESC, r.id DESC LIMIT $limit
         """;
+
+    /// <summary>
+    /// A column read by NAME, because ordinals are what broke and they broke quietly.
+    /// </summary>
+    /// <remarks>
+    /// <para>A merge put four columns into the middle of one SELECT and every read after them moved
+    /// by four. Nothing objected: <c>GetInt32(14)</c> is valid whatever sits at 14, so the symptom
+    /// was a counter reading a vendor string — a WRONG NUMBER rather than an exception, on a page
+    /// nobody would think to re-check after a rebase. It was caught by a test, once. The next merge
+    /// would have had the same chance.</para>
+    /// <para>Names cannot shift, so every computed column is aliased to have one. That also makes
+    /// the two rounds queries one contract: the counted variant selects the column and the plain one
+    /// selects <c>-1 AS consult_missed</c>, and the reader no longer knows which ran.</para>
+    /// <para><c>GetOrdinal</c> is a name lookup on the reader's own schema, once per value. For a
+    /// page of two hundred rounds that is a few thousand dictionary hits against a query that has
+    /// already crossed a disk — the cost is not measurable, and the ordinal it replaces was free
+    /// only until it was wrong.</para>
+    /// </remarks>
+    private static string Text(SqliteDataReader rows, string column) => rows.GetString(rows.GetOrdinal(column));
+
+    private static int Number(SqliteDataReader rows, string column) => rows.GetInt32(rows.GetOrdinal(column));
+
+    private static long Big(SqliteDataReader rows, string column) => rows.GetInt64(rows.GetOrdinal(column));
+
+    private static double Real(SqliteDataReader rows, string column) => rows.GetDouble(rows.GetOrdinal(column));
+
+    /// <summary>A nullable REAL — an unpriced consultation is a real state, not a zero.</summary>
+    private static double? MaybeReal(SqliteDataReader rows, string column)
+    {
+        var at = rows.GetOrdinal(column);
+
+        return rows.IsDBNull(at) ? null : rows.GetDouble(at);
+    }
+
+    /// <summary>An integer that may be NULL, with the sentinel its column's convention uses.</summary>
+    private static int NumberOr(SqliteDataReader rows, string column, int whenNull)
+    {
+        var at = rows.GetOrdinal(column);
+
+        return rows.IsDBNull(at) ? whenNull : rows.GetInt32(at);
+    }
 
     /// <summary>
     /// Whether this file's table has that column — asked of the schema, never guessed from a version.
@@ -599,14 +650,14 @@ public static class RoundsQuery
         // The column is one of three names written HERE, never anything a caller sends — and it is
         // quoted anyway, so the shape cannot become an injection the day somebody makes it dynamic.
         read.CommandText = $"""
-            SELECT "{column}", SUM(resolution = 'accept'), COUNT(*)
-            FROM findings WHERE resolution <> '' GROUP BY "{column}" ORDER BY 2 DESC
+            SELECT "{column}" AS grouped, SUM(resolution = 'accept') AS accepted, COUNT(*) AS total
+            FROM findings WHERE resolution <> '' GROUP BY "{column}" ORDER BY accepted DESC
             """;
         using var rows = read.ExecuteReader();
         var spots = new List<BlindSpot>();
         while (rows.Read())
         {
-            spots.Add(new BlindSpot(column, rows.GetString(0), rows.GetInt32(1), rows.GetInt32(2)));
+            spots.Add(new BlindSpot(column, Text(rows, "grouped"), Number(rows, "accepted"), Number(rows, "total")));
         }
 
         return spots;
@@ -640,7 +691,7 @@ public static class RoundsQuery
         var defended = new List<LoggedFinding>();
         while (rows.Read())
         {
-            defended.Add(FindingFrom(rows, 0));
+            defended.Add(FindingFrom(rows));
         }
 
         return defended;
