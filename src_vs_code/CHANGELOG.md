@@ -87,6 +87,25 @@ back refused. Your `coai-mcp` already knew this; the panel now agrees with it.
 **A prompt that is too large is refused with a sentence.** Past about 3 MB the server says what you
 sent and what the limit is, instead of the edge returning an error page that reached you as "the
 vendor produced nothing usable".
+
+**The Took column says how long the DECIDING took, as well as how long the reviewers ran.** A round
+costs two stretches of time and the log only ever measured one of them: the fan-out, start to
+finish. The part that actually takes somebody's afternoon — reading what the reviewers found and
+deciding on each of it — was measured nowhere, although the database has stamped every decision
+since `resolve` was first written and nothing had ever read it back.
+
+A decided round now reads `2m 10s · 5m 0s`: the reviewers, then the deciding. The second number is
+quieter than the first, because the question people scan that column for is still how long the round
+took. Its tooltip says what it actually measures — *from the round finishing to its last decision* —
+because one `resolve` call stamps everything it touches with one instant, so for an ordinary round
+that is the deciding, while a round somebody came back to after lunch counts the lunch too.
+
+A round nobody has decided shows one number, exactly as before, and so does a conversation. So does
+a round read from a server too old to send the stamp: the two halves of this product ship
+separately, and an older one simply says nothing rather than saying zero. Nought is a real
+measurement — a caller that resolved within the second — and "nobody knows" is not, so the two never
+render the same way.
+
 ## Extension 0.41.0 — 2026-09-14
 
 **A stuck AI can now ask another vendor's model.** The gate has always been other models judging

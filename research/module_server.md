@@ -705,6 +705,15 @@ migration step throwing something unlisted must not take down a review it only r
   taking the last. Both entries used to pass every check: the projection wrote both in order so the
   later silently won, while `RecordClosing` counted both — a round with one finding closing as one
   accepted AND one rejected, with neither number true. The refusal names the index.
+- **A listed round carries `ResolvedUtc`: when it was LAST decided** (2026-09-13). `resolved_utc` had
+  been written on every finding since `resolve` was implemented and read by nothing at all. It is the
+  second half of what a round cost — `started_utc` to `completed_utc` is the reviewers running, and
+  the gap from there to this is the deciding. Filled by
+  `COALESCE((SELECT MAX(resolved_utc) FROM findings WHERE round_id = r.id), '')`: the `COALESCE` is
+  load-bearing, because `MAX()` over **no rows is SQL `NULL`**, not `''`, and a round that raised
+  nothing is the commonest round there is. The empty default sorts below every ISO string, so a
+  partly-decided round answers with its latest real decision. A server without the field is ordinary
+  skew: the page shows one time, as it did.
 - **The decision stamp comes from an injected `TimeProvider`**, not `DateTime.UtcNow`
   (`.agents/conventions/common/utc-timestamps.md`). `RoundsDb.Open` takes one, defaulting to
   `TimeProvider.System`. A clock a test cannot control is a column a test cannot assert, and

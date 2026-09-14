@@ -62,6 +62,14 @@ export interface DbRound {
    * stopped carrying findings, this is what carries that fact.</p>
    */
   readonly foundCount: number;
+  /**
+   * When this round was LAST decided, or empty when nobody has.
+   *
+   * <p>The other half of what a round cost. `startedUtc` to the session file's `completedUtc` is
+   * the reviewers running; this is how long the deciding took. A server older than the field sends
+   * nothing and the page shows one time, exactly as it did.</p>
+   */
+  readonly resolvedUtc: string;
 }
 
 /**
@@ -235,6 +243,7 @@ function round(raw: Partial<DbRound>): DbRound {
     // An OLD server carries the findings and no count, so the count is what it carries. A round
     // with neither is a round that found nothing, which is what zero says.
     foundCount: raw.foundCount ?? (raw.findings ?? []).length,
+    resolvedUtc: raw.resolvedUtc ?? '',
   };
 }
 
@@ -310,6 +319,15 @@ export function findingsByRound(log: DbLog): Map<string, readonly DbFinding[]> {
  * <p>Separate from the findings themselves because the LIST no longer carries those: a row needs
  * the number to say whether a gate is still open, and the sentences only when somebody opens it.</p>
  */
+export function resolvedByRound(log: DbLog): Map<string, string> {
+  const byRound = new Map<string, string>();
+  for (const one of log.rounds) {
+    byRound.set(roundKeyOf(one.sessionId, one.repoPath, one.branch, one.stage, one.number), one.resolvedUtc);
+  }
+
+  return byRound;
+}
+
 export function countsByRound(log: DbLog): Map<string, number> {
   const byRound = new Map<string, number>();
   for (const one of log.rounds) {

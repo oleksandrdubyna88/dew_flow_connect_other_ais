@@ -73,7 +73,23 @@ public sealed record LoggedRound(
     /// `--log` rather than of SQL; no page shows it yet, deliberately, since what it is for is a
     /// decision about whether an automatic consultation should fire at all.
     /// </remarks>
-    int ConsultMissed = -1);
+    int ConsultMissed = -1,
+
+    /// <summary>
+    /// When the caller LAST decided something about this round, or empty when it never has.
+    /// </summary>
+    /// <remarks>
+    /// <para>The stamp has been written on every finding since <c>resolve</c> was first implemented
+    /// and read by nothing at all. It is the second half of what a round costs: <c>started_utc</c>
+    /// to <c>completed_utc</c> is the reviewers running, and this is how long the deciding took.</para>
+    /// <para>The LAST decision, because one <c>resolve</c> call stamps every finding it touches with
+    /// one instant — so for the ordinary round this is that call, and for one returned to later it
+    /// is the later visit. Empty rather than null for a round nobody has decided, and for a round
+    /// with no findings at all: <c>MAX()</c> over no rows is SQL <c>NULL</c>, which is not a string.
+    /// (Code round, codex.)</para>
+    /// </remarks>
+    string ResolvedUtc = "");
+
 
 /// <summary>
 /// One consultation as the log page lists it: who asked, who answered, and how it ended.
@@ -335,7 +351,8 @@ public static class RoundsQuery
                 // A database stepped by an older binary has no column at all, and the query that ran
                 // then selects the literal instead — either way it arrives under this name, and the
                 // reader answers the convention's own "not measured" rather than refusing the row.
-                NumberOr(rows, "consult_missed", -1)));
+                NumberOr(rows, "consult_missed", -1),
+                Text(rows, "resolved_utc")));
         }
 
         return rounds;
@@ -543,7 +560,8 @@ public static class RoundsQuery
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
                r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
-               r.consult_missed
+               r.consult_missed,
+               COALESCE((SELECT MAX(f.resolved_utc) FROM findings f WHERE f.round_id = r.id), '') AS resolved_utc
         FROM rounds r JOIN sessions s ON s.id = r.session_id
         WHERE $unbounded = 1
            OR r.started_utc < $started
@@ -556,7 +574,8 @@ public static class RoundsQuery
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
                r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
-               -1 AS consult_missed
+               -1 AS consult_missed,
+               COALESCE((SELECT MAX(f.resolved_utc) FROM findings f WHERE f.round_id = r.id), '') AS resolved_utc
         FROM rounds r JOIN sessions s ON s.id = r.session_id
         WHERE $unbounded = 1
            OR r.started_utc < $started

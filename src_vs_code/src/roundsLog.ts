@@ -10,7 +10,7 @@ import { calledBy, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundReco
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
-  findingsByRound, roundKeyOf,
+  findingsByRound, resolvedByRound, roundKeyOf,
 } from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
@@ -76,6 +76,19 @@ export interface LogRow {
   readonly findings: number | null;
   /** Completed minus started; so far, for a running round; null for one that died. */
   readonly seconds: number | null;
+  /**
+   * How long the DECIDING took: the round finishing to its last recorded decision.
+   *
+   * <p>Null, never zero, whenever nobody knows — a round nobody has decided, one from a server too
+   * old to send the stamp, or one whose two instants cannot be subtracted. Zero would read as
+   * "decided instantly", which is a measurement; this is the absence of one.</p>
+   *
+   * <p><b>What it MEASURES, said plainly because the number is easy to over-read:</b> wall clock
+   * from the round finishing to the last decision recorded against it — not attention. One `resolve`
+   * call stamps every finding it touches with one instant, so for the ordinary round this is the
+   * deciding; a round returned to after lunch counts the lunch. The column's tooltip says so.</p>
+   */
+  readonly decideSeconds: number | null;
   readonly tokensIn: number | null;
   readonly tokensOut: number | null;
   readonly costUsd: number | null;
@@ -198,6 +211,7 @@ export function rowsFrom(
   const byRound = findingsByRound(log);
   const counts = countsByRound(log);
   const decided = decisionsByRound(log);
+  const resolved = resolvedByRound(log);
   // Whether the window covers the whole table. When it does, a row the list does not name is a row
   // the database has never heard of, and saying so costs nothing. When it does NOT, the same row
   // might simply be older than the window — and guessing "never recorded" would be a claim about a
@@ -219,7 +233,7 @@ export function rowsFrom(
       session.rounds.map((round) =>
         rowFrom(
           session, round, nowMs, priceOf, usage,
-          { byRound, counts, decidedBy: decided, colour, whole, inline })))
+          { byRound, counts, decidedBy: decided, resolvedBy: resolved, colour, whole, inline })))
     .sort(newestFirst);
 }
 
@@ -312,6 +326,9 @@ function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): L
     gating: 0,
     findings: null,
     seconds: record.seconds,
+    // A conversation has nothing to decide, so there is no deciding to have taken any time. Null
+    // rather than 0 for the same reason every other absent measurement on this row is null.
+    decideSeconds: null,
     tokensIn: silent ? null : record.tokensIn,
     tokensOut: silent ? null : record.tokensOut,
     costUsd: record.costUsd,
@@ -367,6 +384,8 @@ interface RowContext {
   readonly byRound: Map<string, readonly DbFinding[]>;
   readonly counts: Map<string, number>;
   readonly decidedBy: Map<string, { accepted: number; rejected: number }>;
+  /** When each round was last decided, by the same key. Empty for one nobody has decided. */
+  readonly resolvedBy: Map<string, string>;
   readonly colour: VendorPalette;
   /** Whether the list covers every round the database holds. See `rowsFrom`. */
   readonly whole: boolean;
@@ -383,7 +402,8 @@ interface RowContext {
  * (SonarCloud, on the pull request.)</p>
  */
 const NO_DATABASE: RowContext = {
-  byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]),
+  byRound: new Map(), counts: new Map(), decidedBy: new Map(), resolvedBy: new Map(),
+  colour: vendorPalette([]),
   whole: true, inline: false,
 };
 
@@ -415,7 +435,7 @@ function rowFrom(
   usage: readonly UsageEntry[],
   context: RowContext = NO_DATABASE,
 ): LogRow {
-  const { byRound, counts, decidedBy, colour, whole, inline } = context;
+  const { byRound, counts, decidedBy, resolvedBy, colour, whole, inline } = context;
   const cost = costOf(round, priceOf, usage, nowMs);
   const key = roundKeyOf(
     session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
@@ -446,6 +466,7 @@ function rowFrom(
     gating: round.gatingCount,
     findings: states.length === 0 ? null : states.reduce((sum, s) => sum + s.findings, 0),
     seconds: secondsOf(round, status, nowMs),
+    decideSeconds: decideSecondsOf(round, resolvedBy.get(key) ?? ''),
     tokensIn: round.tokensIn ?? null,
     tokensOut: round.tokensOut ?? null,
     costUsd: round.costUsd ?? null,
@@ -641,6 +662,34 @@ function secondsOf(round: RoundRecord, status: LogRow['status'], nowMs: number):
   // .NET's default date is year ONE, and a server that never recorded a start wrote exactly that.
   // Subtracting it from a real completion time produced "1065396701m 44s" once; the sidebar's
   // `elapsed` refuses the same way, with the same cap.
+  return seconds < 0 || seconds > MAX_PLAUSIBLE_SECONDS ? null : seconds;
+}
+
+/**
+ * How long the deciding took, or null when nobody knows.
+ *
+ * <p><b>The empty string is turned into null by an explicit test, before anything parses it.</b>
+ * Not left to `Date.parse('')` and a NaN check: the one value this must never produce is `0`, and
+ * every route to it goes through a coercion somebody could later "simplify" into arithmetic. A
+ * server too old to send the stamp, and a round nobody has decided, both arrive as `''` and are the
+ * same fact — nobody knows — which is not a duration of no seconds. (Code round, local.)</p>
+ *
+ * <p>A negative difference is refused too. `completedUtc` comes from the session file and
+ * `resolvedUtc` from the database, so they are two clocks on one machine; a decision stamped before
+ * the round it belongs to means one of them moved, and the honest answer is that there is no
+ * measurement rather than a duration below zero. (Code round, gemini.)</p>
+ */
+function decideSecondsOf(round: RoundRecord, resolvedUtc: string): number | null {
+  if (resolvedUtc.length === 0) {
+    return null;
+  }
+  const resolved = Date.parse(resolvedUtc);
+  const completed = Date.parse(round.completedUtc);
+  if (Number.isNaN(resolved) || Number.isNaN(completed)) {
+    return null;
+  }
+  const seconds = Math.round((resolved - completed) / 1000);
+
   return seconds < 0 || seconds > MAX_PLAUSIBLE_SECONDS ? null : seconds;
 }
 
@@ -1144,6 +1193,9 @@ export function roundsLogHtml(
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .badge.awaiting { background: var(--vscode-charts-purple); color: var(--vscode-editor-background); }
   .decided { margin-left: 6px; opacity: .85; white-space: nowrap; }
+  /* The deciding time sits beside the reviewers' time and must not compete with it: the
+     question people scan this column for is still how long the round took. */
+  .deciding { opacity: .7; }
   .empty { opacity: .75; padding: 24px 0; }
   .failed { border: 1px solid var(--vscode-inputValidation-errorBorder, #c33); background: var(--vscode-inputValidation-errorBackground, transparent); padding: 8px 12px; margin: 0 0 12px; white-space: pre-wrap; }
   .tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -1317,6 +1369,22 @@ export function roundsLogHtml(
     return m < 60 ? m + 'm ' + (s % 60) + 's' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
   }
 
+  // TWO times, when both are known: how long the reviewers ran, and how long the deciding took.
+  // One when it is not — a round nobody has decided, a conversation, or a server too old to send
+  // the stamp all read exactly as they did before. Never "1m 37s · 0s" for an unknown: the absence
+  // of a measurement is a blank, not a zero.
+  function tookCell(r) {
+    var ran = took(r.seconds);
+    if (r.decideSeconds === null || r.decideSeconds === undefined) {
+      return '<td class="num">' + ran + '</td>';
+    }
+    // The title says what the second number MEASURES, because a wall clock over a round somebody
+    // came back to after lunch counts the lunch, and "deciding" alone would overclaim.
+    return '<td class="num" title="' + esc(ran || '—') + ' the reviewers ran &#183; '
+      + esc(took(r.decideSeconds)) + ' from the round finishing to its last decision">'
+      + ran + ' <span class="deciding">&#183; ' + took(r.decideSeconds) + '</span></td>';
+  }
+
   function badge(status) {
     var said = status === 'awaiting' ? 'awaiting decisions' : status;
     return '<span class="badge ' + esc(status) + '">' + esc(said) + '</span>';
@@ -1416,7 +1484,7 @@ export function roundsLogHtml(
         + '<td>' + esc(r.verdict) + '</td>'
         + '<td class="num">' + r.gating + '</td>'
         + '<td class="num">' + num(r.findings) + '</td>'
-        + '<td class="num">' + took(r.seconds) + '</td>'
+        + tookCell(r)
         + '<td class="num">' + num(r.tokensIn) + '</td>'
         + '<td class="num">' + num(r.tokensOut) + '</td>'
         + '<td class="num cost" title="' + esc(costTitle(r, money)) + '">' + cost3(r, money) + '</td>'

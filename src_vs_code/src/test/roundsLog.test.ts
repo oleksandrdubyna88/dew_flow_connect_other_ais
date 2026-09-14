@@ -257,6 +257,7 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
       // stopped sending findings with the list, this is what a row's status reads, so a fixture
       // where the two disagree would be testing a state the server cannot produce.
       foundCount: findings.length,
+      resolvedUtc: '',
       ...over,
     }],
     blindSpots: [],
@@ -266,6 +267,66 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
     paged: true,
   };
 }
+
+// ---------- how long the deciding took ----------
+
+test('a decided round carries the deciding time beside the time its reviewers ran', () => {
+  // The round completed at 07:43:10; the caller finished deciding at 07:48:10 — five minutes.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ accepted: 2, rejected: 0, resolvedUtc: '2026-09-05T07:48:10.000Z' })) as [LogRow];
+
+  assert.equal(row.seconds, 130, 'the reviewers ran for 2m 10s, which is unchanged');
+  assert.equal(row.decideSeconds, 300);
+});
+
+test('a round nobody has decided has NO deciding time, and specifically not zero', () => {
+  // The whole point of the field. An empty stamp is "nobody knows", and 0 would read as "decided
+  // instantly" — a measurement nobody made. `'' - number` is 0 in JavaScript, which is exactly the
+  // coercion this must never reach.
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], dbLog()) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('a server too old to send the stamp leaves the deciding time unknown, not zero', () => {
+  // Version skew is ordinary here: the two halves ship separately. An older server answers a log
+  // with no `resolvedUtc` at all, and the page must show one time exactly as it did yesterday.
+  const older = dbLog();
+  const withoutField = {
+    ...older,
+    rounds: older.rounds.map(({ resolvedUtc, ...rest }) => rest as DbRound),
+  };
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], withoutField) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('a decision stamped BEFORE the round finished is refused rather than shown as negative', () => {
+  // Two clocks: `completedUtc` comes from the session file and `resolvedUtc` from the database. One
+  // of them moving is not a duration below zero.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: '2026-09-05T07:00:00.000Z' })) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('a deciding time longer than any afternoon is refused, like the round duration beside it', () => {
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: '2030-01-01T00:00:00.000Z' })) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('an unparseable stamp is unknown rather than NaN', () => {
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: 'not a date at all' })) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
 
 test('a finished round whose findings nobody has decided says so, instead of done', () => {
   // Asked for over a screenshot: the row read Status `done`, Verdict `good_enough`, and thirteen
