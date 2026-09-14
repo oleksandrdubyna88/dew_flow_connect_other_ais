@@ -2040,6 +2040,7 @@ panel with no Team servers has.
 | `coai.copyConfigBlock` | Regenerates that block from current settings — the way changed settings reach the server |
 | `coai.copyClaudeSnippet` | The CLAUDE.md text teaching a target repo's main AI the tool order |
 | `coai.showRounds` | Writes `<dataDir>/rounds.md` from the server's own session files and opens it — a REAL file, so closing it never asks to save, and it is rewritten in place while a round runs |
+| `coai.editPhrases` | Opens the **Phrases** tab: the sentences a person keeps, one button each in the panel. Add, rename, rewrite, remove; saved a moment after the last keystroke |
 
 ## How settings reach the server
 
@@ -2085,6 +2086,10 @@ flowchart LR
 | `rounds.ts` | parse the server's session files; render the view (status, elapsed, tokens, cost, the reviewers in flight); a torn file is skipped; a file from an older server with no status still renders |
 | `savedRows.ts` | the rules every list a PERSON composes shares, pure: `NAME_LIMIT`, `text`, `record`, `withId`, `nameFor`, `freshId`, `rowById` — private inside `chatPresets.ts` until a second list needed exactly them |
 | `phrases.ts` | config → validated `Phrase[]` from `coai.phrases`: the phrases a person keeps so they stop retyping the same sentence. A row needs a TEXT; a row with no name is kept and named from its own first line |
+| `phrasesPage.ts` | the phrases tab's markup and what a message from it MEANS, pure: a `PhraseCommand` union, a `FIELDS` allow-list, `phraseRepaints` |
+| `phrasesEdit.ts` | what each command does to the stored rows, pure: a `RowsOutcome` union where `unchanged` is a write the host must SKIP |
+| `phrasesPanel.ts` | the thin host: read the setting, write it, repaint, and post a failed save to the page rather than redrawing over it |
+| `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
 | `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
@@ -4808,3 +4813,35 @@ took the first line rather than the first line with words in it, so a body openi
 produced an empty label: a button nobody can see. Both are fixed in the shared module, so both lists
 gained the fix. `nameFor` also reads one line at a time instead of splitting the whole body, since
 only the first is ever wanted.
+
+### The phrases tab, and the two rules that came out of the roles panel with it (2026-09-14)
+
+`coai.editPhrases` opens a tab of the house shape — a pure page (`phrasesPage.ts`), the rules in a
+module of their own (`phrasesEdit.ts`), and a host (`phrasesPanel.ts`) that does only what a host
+can: read a setting, write one, repaint. The fourth arrangement nobody wanted was not invented.
+
+**The tab edits the ROWS, not the phrases.** `phrasesFrom` gives a row with no name a name from its
+first line, which is right on a button and wrong in an editor: somebody who cleared the name box
+would watch a derived name appear in it and then save that derived name as though they had typed it.
+So the boxes hold what the file holds, empty included, and the derived name belongs to the sidebar
+alone.
+
+**A rejected save is shown without a repaint, and that is the whole reason it is a message.** A
+repaint draws the rows the setting still holds — which, when the write was refused, are exactly the
+rows missing the words somebody just typed. So `phrasesPanel` posts `saveFailed` to the page, a
+banner appears beside the box, and the box keeps its text. Both stages of the gate asked for this
+independently, and both were right that the first draft had only said "the failure is visible".
+
+**`settledWrites.ts` is `rolesPanel.ts`'s own machinery, moved.** Two rules: every write goes through
+one promise chain, because `config.update` is asynchronous and two started from two keystrokes read
+the same rows — whichever resolves last wins, and the field reverts under the person's hands. And a
+typed field settles for 300 ms, because otherwise every keystroke is a write that VS Code broadcasts
+as a configuration change to every listener in the window. A structural command drains what is still
+settling first, in the order it was typed, and closing the tab flushes it — text somebody typed and
+then closed the tab on is the one data loss a page like this can cause.
+
+Six plan reviewers between them raised the write-per-keystroke as five findings, which is a fair
+verdict on a plan that had cited the presets tab as its precedent: the presets tab does write per
+keystroke, and the roles panel was built later, with the settling, for exactly this reason. Moving
+the machinery rather than copying it also made it testable for the first time — it could only ever
+be driven through a webview before, and this suite has no extension host.

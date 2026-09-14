@@ -278,6 +278,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'phrases',
+    en: {
+      title: "Phrases: the sentences you stopped retyping",
+      whatItIs:
+        "A list of sentences you keep, shown as buttons in the **Phrases** section of the panel. Press one and it goes on the clipboard; you paste it wherever you were about to type it — usually the Claude Code box. The list is edited in a tab of its own, **ConnectOtherAIs: Edit phrases**.",
+      why:
+        "Some instructions get typed several times a day — *make a pull request, accept it, deploy, check that it works*. Typing them again is not work, it is friction, and a sentence retyped from memory is a sentence that drifts.\n\n**It copies rather than typing into the box for you, and that was a decision rather than a shortcut.** Claude Code has no command that accepts arbitrary text: the one that does take a prompt only fills a NEW conversation, never the one you are already in. What was left was a synthetic keystroke driven through the Windows API — Windows only, about a second of it, and never measured in that direction. One `Ctrl+V` is a better price than a mechanism that could fail silently on somebody else's machine.",
+      setup:
+        "Open **Edit phrases** from the *Phrases* section of the panel, or from the command palette. Press **Add a phrase**, give it a name for the button, and write the phrase in the big box. Everything is saved a moment after you stop typing.\n\nThe name is only a label; the phrase itself is what lands on the clipboard. Leave the name empty and the button wears the phrase's own first line.",
+      usage:
+        "The **Phrases** section lists one button per phrase. Press it, paste, carry on. The list is yours alone: it is never sent to `coai-mcp` and never mirrored to a Team server, and it is the same list on both sides when *This side* is on — a phrase you wrote is not a property of the machine you wrote it on.\n\nA phrase is stored exactly as you wrote it, spaces and newlines included, so an indented snippet pastes indented and a trailing newline stays where you put it.",
+      whatCanGoWrong:
+        "**A phrase with no text is dropped.** The name is a label and the text is the thing, so a row with nothing in it is not a phrase. A row you mistyped in `settings.json` is dropped on its own and the rest of the list still works — losing every phrase because one of them was wrong would be the worse failure.\n\n**A save that cannot land says so.** If the settings file is read-only or held by another program, the tab keeps what you typed and shows a line saying it is not stored yet, rather than quietly redrawing the list without your words.\n\n**Nothing is pressed for you.** The phrase reaches the clipboard and stops there; pasting it, and sending it, stay yours.",
+    },
+  },
+  {
     id: 'recent-rounds',
     en: {
       title: "Active rounds: what is running right now",

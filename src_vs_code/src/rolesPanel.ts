@@ -7,6 +7,7 @@ import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
 import { roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
 import { promptFile, promptsDir } from './rolesPrompts';
+import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
 import { readerFor, saveSetting } from './sideConfig';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -23,9 +24,6 @@ import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 const SECTION = 'coai';
 const KEY = 'roles';
-
-/** How long to wait after the last keystroke before storing a typed field. */
-const SETTLE_MS = 300;
 
 let panel: vscode.WebviewPanel | undefined;
 let context: vscode.ExtensionContext | undefined;
@@ -212,48 +210,21 @@ function nonce(): string {
 }
 
 /**
- * Commands are applied ONE AT A TIME, in the order they arrived.
+ * Commands are applied ONE AT A TIME, and a typed field waits to settle before it is stored.
  *
- * <p>Every one of them is a read-modify-write of the same setting. Fired concurrently — which is what
- * a webview does when somebody types — two of them read the same rows, and whichever `update`
- * resolves last wins: the earlier keystroke's value overwrites the later one, and the field reverts
- * under the person's hands. A single chain is the whole fix; it is short because nothing here is
- * slow, and a queue that can only grow while a key is held is bounded by the typing.</p>
+ * <p>Both rules, and the reasons for them, are `settledWrites.ts` — they were written here and
+ * moved out when the phrases tab needed exactly them. What stays here is the only part that is
+ * this page's own: WHICH commands are typing.</p>
  */
-let working: Promise<void> = Promise.resolve();
+const writes = settledWrites<RolesCommand>({
+  apply,
+  render: () => { void render().catch((error: unknown) => report('ConnectOtherAIs could not draw the roles page.', error)); },
+  report: (error) => { report('ConnectOtherAIs could not save that change to your roles.', error); },
+  fieldOf,
+});
 
-function run(command: RolesCommand): void {
-  working = working
-    .then(() => apply(command))
-    .then((again) => (again ? render() : undefined))
-    .catch((error: unknown) => { report('ConnectOtherAIs could not save that change to your roles.', error); });
-}
-
-/** One message from the page: a typed field waits to settle, anything else goes straight through. */
-function queue(command: RolesCommand): void {
-  const field = fieldOf(command);
-  if (field !== undefined) {
-    settle(field, command);
-
-    return;
-  }
-
-  // A structural command redraws the page, and the redraw replaces whatever is half-typed in it.
-  // Store the settling fields first, in the order they were typed.
-  drain();
-  run(command);
-}
-
-/**
- * A field the person is still typing in, waiting to be stored.
- *
- * <p><b>Why not store every keystroke.</b> Each one is a write to `settings.json` or to a file, and a
- * forty-character role name was forty of them in four seconds — every one of which VS Code broadcasts
- * as a configuration change to every listener in the window. Settling for {@link SETTLE_MS} after the
- * last keystroke turns that into one write. Keyed by the field, so typing in a name and then in a
- * prompt stores both rather than the last one.</p>
- */
-const settling = new Map<string, { readonly command: RolesCommand; readonly timer: NodeJS.Timeout }>();
+const queue = (command: RolesCommand): void => { writes.queue(command); };
+const flush = (): Promise<void> => writes.flush();
 
 /** The key a typed field settles under, or nothing for a command that is not typing. */
 function fieldOf(command: RolesCommand): string | undefined {
@@ -265,33 +236,6 @@ function fieldOf(command: RolesCommand): string | undefined {
   }
 
   return undefined;
-}
-
-function settle(field: string, command: RolesCommand): void {
-  clearTimeout(settling.get(field)?.timer);
-  settling.set(field, {
-    command,
-    timer: setTimeout(() => {
-      settling.delete(field);
-      run(command);
-    }, SETTLE_MS),
-  });
-}
-
-/** Everything still settling, stored now rather than when its timer would have fired. */
-function drain(): void {
-  const pending = [...settling.values()];
-  settling.clear();
-  for (const { command, timer } of pending) {
-    clearTimeout(timer);
-    run(command);
-  }
-}
-
-/** Drained, and waited for — the tab is closing and nothing else will carry these. */
-async function flush(): Promise<void> {
-  drain();
-  await working;
 }
 
 /**

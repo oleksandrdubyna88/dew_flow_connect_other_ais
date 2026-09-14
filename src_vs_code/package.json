@@ -153,6 +153,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.editPhrases",
+        "title": "Edit phrases",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.help",
         "title": "Help",
         "category": "ConnectOtherAIs",
@@ -505,6 +510,25 @@
           "default": "Explain",
           "editPresentation": "multilineText",
           "markdownDescription": "**Replaced by `#coai.chatPromptPresets#`.** What a captured passage used to be sent with. It is read once, to carry what you had written into your first named preset, and nothing reads it after that — so edit the presets instead. It stays here for one release so that upgrade cannot lose the prompt you wrote."
+        },
+        "coai.phrases": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Your saved phrases — the sentences you stopped wanting to retype. Press one in the panel, under **Phrases**, and it goes on the clipboard ready to paste. Edit them in **ConnectOtherAIs: Edit phrases**, which is easier than editing this. A row needs a `text`; a row with no `name` keeps its words and is named from its own first line, and a row with no text is dropped rather than taking the list with it. The text is stored exactly as you wrote it, spaces and newlines included.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
         },
         "coai.chatPromptPresets": {
           "type": "array",
