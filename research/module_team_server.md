@@ -750,7 +750,7 @@ every real role, so an entire server's configuration would be inverted by the on
 write. A boolean cannot be read wrongly by accident.
 
 **And this is what makes a document review run here with no server change at all** (plan 5,
-[PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md), 2026-09-14). The seed
+[PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md), 2026-09-14). The seed
 gained `DocumentReview` and `DocumentSummary` in plan 4, so `AcceptedRoles`, both gates and
 `/api/catalog` learned them the next time this project was compiled. Nothing downstream is
 role-specific either: a job is a vendor CLI run against `job.Prompt` in a temp directory of its own,
@@ -783,6 +783,24 @@ nginx's `client_max_body_size 4m`, so the edge and the application can never dis
 them refuses. A document prompt cannot approach either: a document is capped at 256 KB before it is
 ever composed, and `ADocumentSizedPromptIsFarBelowTheBound` is a test rather than arithmetic in a
 comment, because arithmetic in a comment does not fail when somebody lowers the bound.
+
+**The three bounds are a LADDER, and the top rung is read from the file that sets it.** Prompt <
+body < edge, and each refusal is worse than the one below: a sentence, then a refusal without
+reading, then an HTML page nothing can turn into either. `TheThreeBoundsAreALadderFromTheSentenceToTheWall`
+parses `client_max_body_size` out of `deploy/nginx/coai` instead of repeating `4 * 1024 * 1024` — a
+literal there is an assumption about another directory wearing an assertion's clothes, and somebody
+lowering the edge to `2m` for an unrelated reason would leave the test green and the ladder inverted.
+The headroom for JSON escaping is asserted as a fraction (at least a sixth) rather than left implicit;
+it is deliberately not total, because a prompt of nothing but control characters escapes sixfold and
+covering that would need a body limit above the edge. Two reviewers raised the relationship on plan
+5's code round.
+
+**And the 400 has a contract request.** `http/reviews/oversized.http` sends a prompt one byte past
+the bound and one exactly at it, asserting both numbers appear in the refusal. Its payload is BUILT
+in a pre-request script from the same arithmetic rather than written out — three megabytes in a
+request file is not a request file anybody can read. The two bounds ABOVE this one have no contract
+request and say so in that file's own header: neither refusal is the application's and neither
+produces a body this suite could check.
 
 **Absent means the five this product ships** — never "none", never "any". A server older than this
 field sends no such property; a client reading that as an empty set would silently drop every

@@ -1,18 +1,44 @@
 # PLAN — a document reaches a Team server (5 of 5)
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_server` (a bound on the prompt it
-> accepts), `src_mcp` (which vendor switch serves a document round, and a sentence saying where the
-> document went), `src_vs_code` (that switch on the vendor card), and the tests and docs for all of
-> it.
+> Status: **IMPLEMENTED, 2026-09-14.** Shipped as one unit, the last plan of the user-definable
+> roles feature. Scope: `src_server` (a bound on the prompt it accepts), `src_mcp` (which vendor
+> switch serves a document round, and a sentence saying where the document went), `src_vs_code`
+> (that switch on the vendor card), `http/` (the contract request for the new refusal), and the
+> tests and docs for all of it.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_core.md](../research/module_core.md),
-> [module_extension.md](../research/module_extension.md),
-> [architecture.md](../research/architecture.md);
-> plan 1: [PLAN_review_roles_become_data.md](../research/PLAN_review_roles_become_data.md),
-> plan 2: [PLAN_review_roles_crud_tab.md](../research/PLAN_review_roles_crud_tab.md),
-> plan 3: [PLAN_team_server_accepts_custom_roles.md](../research/PLAN_team_server_accepts_custom_roles.md),
-> plan 4: [PLAN_review_document.md](../research/PLAN_review_document.md),
+> Two gate rounds — **23 findings, 11 accepted**. The plan round's Blocking finding was against this
+> plan's own fix: the first draft of the consent rule granted, from a tick about plans, exactly the
+> permission the plan exists to ask for. The code round's was a rule this repository has and this
+> change ignored — a new refusal status needs a request in the `.http` contract suite.
+>
+> **What shipped differently from the draft above.** Four things, each from the code round and each
+> written into the decision it changed:
+>
+> - **`Document` is not a `bool?`.** It is `DocumentReviews.Unspecified | Yes | No`, mapped from the
+>   nullable at the DTO boundary where a missing JSON field legitimately is one. The doctrine forbids
+>   null in business logic and this decides routing; the absent state deserved a name rather than an
+>   absence. The extension keeps `boolean | undefined`, because there it IS the wire format.
+> - **The three bounds are asserted as a ladder**, with `client_max_body_size` parsed out of
+>   `deploy/nginx/coai` rather than written as a literal — and the escaping headroom stated as a
+>   fraction, deliberately not total.
+> - **The clause begins on its own line**, not after a space: the reviewer count is a sentence and
+>   this is a second one.
+> - **`http/reviews/oversized.http`** builds its payload in a pre-request script from the same
+>   arithmetic as the bound.
+>
+> And one defect was found while building it, in code this plan did not set out to touch: the
+> extension's `serverRuns` still answered an un-answered catalog with `isBuiltIn`, the proxy
+> `coai-mcp` replaced in PR #235, so the roles page promised `DocumentReview` on Team servers
+> deployed months ago. Fixed, with a parity test that reads the C# list.
+>
+> Related docs: [module_server.md](module_server.md),
+> [module_core.md](module_core.md),
+> [module_extension.md](module_extension.md),
+> [architecture.md](architecture.md);
+> plan 1: [PLAN_review_roles_become_data.md](PLAN_review_roles_become_data.md),
+> plan 2: [PLAN_review_roles_crud_tab.md](PLAN_review_roles_crud_tab.md),
+> plan 3: [PLAN_team_server_accepts_custom_roles.md](PLAN_team_server_accepts_custom_roles.md),
+> plan 4: [PLAN_review_document.md](PLAN_review_document.md),
 > all four shipped.
 
 > **Revised after the plan round.** Nine findings, six accepted, verdict `proceed` — and one of them

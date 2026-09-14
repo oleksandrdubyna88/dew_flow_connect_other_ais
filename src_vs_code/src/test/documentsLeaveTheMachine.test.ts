@@ -2,7 +2,9 @@ import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { PanelState, panelHtml } from '../panelView';
-import { pinnedDocument, reviewsDocuments, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import {
+  documentSetting, pinnedDocument, reviewsDocuments, Vendor, vendorsEnv, vendorsFrom,
+} from '../vendors';
 
 /**
  * The third stage box: whether this reviewer reads documents, and — on a Team server — whether the
@@ -93,6 +95,22 @@ test('a stored FALSE is read as false rather than folded away', () => {
   const [read] = vendorsFrom([{ id: 'local', runtime: 'local', document: false }]);
 
   assert.equal(read?.document, false);
+});
+
+/**
+ * The three states have names, because the interesting one is the absence.
+ *
+ * <p>`coai-mcp` carries them as `DocumentReviews.Unspecified | Yes | No` — a routing rule reading a
+ * null is what its doctrine forbids. The stored field here stays `boolean | undefined` because that
+ * is the wire format `coai.vendors` holds and the settings block sends verbatim; the name is for
+ * reading and for saying which state a test is about.</p>
+ */
+test('the three states are named, and the absent one is not "no"', () => {
+  assert.equal(documentSetting(LOCAL), 'unspecified');
+  assert.equal(documentSetting({ ...LOCAL, document: true }), 'yes');
+  assert.equal(documentSetting({ ...LOCAL, document: false }), 'no');
+  assert.notEqual(documentSetting(REMOTE), 'no', 'a Team server nobody asked was never told no');
+  assert.equal(reviewsDocuments(REMOTE), false, 'it is read AS no, which is a different statement');
 });
 
 test('the switch reaches coai-mcp whenever it was said, in either direction', () => {

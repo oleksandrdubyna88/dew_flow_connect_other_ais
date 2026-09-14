@@ -39,19 +39,22 @@ public sealed record ProviderSettings(string Provider)
     public bool Code { get; init; } = true;
 
     /// <summary>
-    /// Whether this vendor reviews DOCUMENTS — and null when nobody has said.
+    /// Whether this vendor reviews DOCUMENTS — three states, and the third one is not an absence.
     /// </summary>
     /// <remarks>
-    /// <para><b>Nullable, unlike its two neighbours, and that is the whole design.</b> It is the only
-    /// way to tell a settings file written before documents existed from a person who said no. A
-    /// non-nullable <c>true</c> would start sending documents to every vendor somebody had ticked for
-    /// code alone; a non-nullable <c>false</c> would switch off a local document round that works
-    /// today. The Team server settled the same question the same way for <c>JobKind</c>, and its
-    /// remarks are worth reading beside this one.</para>
+    /// <para><b>A named type rather than a <c>bool?</c>, and that is the doctrine rather than taste.</b>
+    /// coding-style forbids null in business logic, and this decides ROUTING — as a nullable it was a
+    /// routing rule whose most interesting case had no name. <see cref="DocumentReviews.Unspecified"/>
+    /// is what a settings file written before documents existed says, and it has to stay tellable
+    /// apart from a person who said no: a plain <c>true</c> default would start sending documents to
+    /// every vendor somebody had ticked for code alone, and a plain <c>false</c> would switch off a
+    /// local document round that works today. Absence arrives as a nullable at the DTO boundary,
+    /// where a missing JSON field legitimately is one, and is given its name there. (codex, plan 5's
+    /// code round.)</para>
     /// <para>The extension writes an explicit value the moment anybody touches either stage box, so
-    /// the absent state is a migration reading rather than a state a person can sit in unawares.</para>
+    /// <c>Unspecified</c> is a migration reading rather than a state a person can sit in unawares.</para>
     /// </remarks>
-    public bool? Document { get; init; }
+    public DocumentReviews Documents { get; init; } = DocumentReviews.Unspecified;
 
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
@@ -86,13 +89,48 @@ public sealed record ProviderSettings(string Provider)
     {
         Stage.PlanReview => Plan,
         Stage.CodeReview => Code,
-        Stage.DocumentReview => Document ?? !IsRemote && Plan,
+        Stage.DocumentReview => ReviewsDocuments,
         // Exhaustive on purpose, and throwing rather than guessing: a stage added later that lands
         // here would otherwise take the code switch in silence. The same shape `PanelConfig.BucketFor`
         // already has, for the same reason.
         _ => throw new ArgumentOutOfRangeException(
             nameof(stage), stage, "no vendor switch decides this stage — add one rather than defaulting"),
     };
+
+    /// <summary>The document switch, with <see cref="DocumentReviews.Unspecified"/> read.</summary>
+    /// <remarks>
+    /// Its own member so that <see cref="Serves"/> stays one decision per line and inside the
+    /// complexity ceiling, and so the migration reading can be read on its own.
+    /// </remarks>
+    private bool ReviewsDocuments => Documents switch
+    {
+        DocumentReviews.Yes => true,
+        DocumentReviews.No => false,
+        _ => !IsRemote && Plan,
+    };
+}
+
+/// <summary>
+/// What a vendor was told about reviewing documents — including that it was told nothing.
+/// </summary>
+/// <remarks>
+/// <see cref="Unspecified"/> is the value this enum exists for. It is what every settings file
+/// written before documents existed says, and reading it is the consent rule: for a vendor this
+/// machine launches it means the plan tick, because nothing leaves the laptop and there is no
+/// permission to ask for; for a Team server it means NO, because the alternative is a tick that meant
+/// "this vendor is good at prose" granting a company document passage across the network,
+/// retroactively, on every configuration that already exists.
+/// </remarks>
+public enum DocumentReviews
+{
+    /// <summary>Nobody has said. See the remarks — this is not "no".</summary>
+    Unspecified,
+
+    /// <summary>Somebody ticked the box.</summary>
+    Yes,
+
+    /// <summary>Somebody unticked it.</summary>
+    No,
 }
 
 /// <summary>
@@ -782,9 +820,10 @@ public sealed record PanelSettings
                         // keeps reviewing both stages rather than silently reviewing neither.
                         Plan = v.Plan != false,
                         Code = v.Code != false,
-                        // And this one is carried THROUGH, absence included — the one field here
-                        // whose null is a value rather than a gap. See `VendorDto.Document`.
-                        Document = v.Document,
+                        // Absence is NAMED here rather than carried on as a null: a missing JSON
+                        // field is legitimately a nullable at this boundary, and one line past it
+                        // the state has to be a value with a name. See `VendorDto.Document`.
+                        Documents = DocumentReviewsOf(v.Document),
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
@@ -797,6 +836,19 @@ public sealed record PanelSettings
             return [];
         }
     }
+
+    /// <summary>What a caller's <c>document</c> field means, once absence has been given its name.</summary>
+    /// <remarks>
+    /// The one place the nullable stops. A missing field in JSON is honestly a null; a routing rule
+    /// reading a null is what coding-style forbids, so the translation happens here, at the boundary
+    /// where absence actually arrives.
+    /// </remarks>
+    private static DocumentReviews DocumentReviewsOf(bool? said) => said switch
+    {
+        true => DocumentReviews.Yes,
+        false => DocumentReviews.No,
+        null => DocumentReviews.Unspecified,
+    };
 
     /// <summary>
     /// Which runtime a configured vendor drives — every one this build knows, not two of them.

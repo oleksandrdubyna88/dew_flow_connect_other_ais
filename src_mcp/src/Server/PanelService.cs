@@ -1567,10 +1567,15 @@ public sealed partial class PanelService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        // A NEWLINE rather than a space. This is a second statement, not a continuation of the
+        // reviewer count, and joined by a space the two read as one run-on — a client rendering the
+        // field compactly gets a server URL glued to the last reviewer's name. It stays on this
+        // field deliberately, so an AI never told to look for a new one still sees it. (gemini, the
+        // code round.)
         return servers.Count == 0
             ? string.Empty
-            : $" The document was also sent to {string.Join(", ", servers)}, where it is reviewed on "
-                + "the team's shared subscription rather than on this machine.";
+            : $"{Environment.NewLine}The document was also sent to {string.Join(", ", servers)}, "
+                + "where it is reviewed on the team's shared subscription rather than on this machine.";
     }
 
     /// <summary>

@@ -86,7 +86,7 @@ What changed across the containers:
   everything else", and counts the five-active limit per bucket, which is what the server had always
   done.
 - **The Team server took documents in plan 5** (2026-09-14,
-  [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md)) — and needed no
+  [PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md)) — and needed no
   code to do it. `AcceptedRoles` seeds itself from the shipped catalog, so the box accepts both
   document roles the next time it is compiled, and the document travels inside the prompt exactly as
   a plan does: no new wire field, no upload, no artefact store there. What plan 5 built is the

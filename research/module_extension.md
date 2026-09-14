@@ -4721,7 +4721,7 @@ half is reported as OLDER: the AI obeying it will never call `review_document`.
 
 ### A third stage box, and the one that decides whether a file leaves this machine (2026-09-14)
 
-Plan 5, [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md). There were
+Plan 5, [PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md). There were
 two boxes and three stages, so a document round rode the PLAN tick — the nearest thing to a switch
 there was. Fair for a reviewer this machine launches; not fair at all for a Team server, where the
 same tick decides whether a document somebody was handed crosses the network to a shared box.
@@ -4732,6 +4732,12 @@ nothing. This one cannot, because the honest reading of silence depends on where
 `reviewsDocuments` answers `document ?? (runtime !== 'remote' && plan)`, and `ProviderSettings.Serves`
 in `coai-mcp` holds the same rule — one on the side that decides a round, one on the side that draws
 the box, and they must agree or the panel promises a round the gate will not run.
+
+The stored field stays `boolean | undefined` here, because that IS the wire format: `coai.vendors` is
+JSON a person edits and the settings block sends it verbatim, so a third spelling on this side would
+be a second schema to keep level. `documentSetting` gives the three states their names for reading and
+for tests; `coai-mcp` gives them a type, because there the absence would otherwise be a null inside a
+routing rule.
 
 **The box is drawn from the RULE, never from the stored field.** A box drawn from a field that can be
 absent is unticked while the round runs anyway, or ticked while it does not.

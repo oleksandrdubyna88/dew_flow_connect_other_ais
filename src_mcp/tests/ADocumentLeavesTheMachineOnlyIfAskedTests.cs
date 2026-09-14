@@ -31,14 +31,16 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
 {
-    private static ProviderSettings Local(bool? document = null, bool plan = true) =>
-        new("local") { Enabled = true, Runtime = "local", Model = "qwen", Plan = plan, Document = document };
+    private static ProviderSettings Local(
+        DocumentReviews document = DocumentReviews.Unspecified, bool plan = true) =>
+        new("local") { Enabled = true, Runtime = "local", Model = "qwen", Plan = plan, Documents = document };
 
-    private static ProviderSettings Remote(bool? document = null, bool plan = true) =>
+    private static ProviderSettings Remote(
+        DocumentReviews document = DocumentReviews.Unspecified, bool plan = true) =>
         new("team-codex")
         {
             Enabled = true, Runtime = "remote", RemoteVendor = "codex", Model = "m",
-            BaseUrl = "https://coai.example.com", Plan = plan, Document = document,
+            BaseUrl = "https://coai.example.com", Plan = plan, Documents = document,
         };
 
     /// <summary>The migration reading, and it holds only where nothing leaves the machine.</summary>
@@ -66,15 +68,15 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
     [Fact]
     public void ATeamServerTheOperatorTicked_DoesTakeThem()
     {
-        Remote(document: true).Serves(Stage.DocumentReview).Should().BeTrue(
+        Remote(DocumentReviews.Yes).Serves(Stage.DocumentReview).Should().BeTrue(
             "the whole point of the switch is that it can be turned on");
     }
 
     [Fact]
     public void AVendorTurnedOffForDocuments_TakesNoneEitherWay()
     {
-        Local(document: false).Serves(Stage.DocumentReview).Should().BeFalse();
-        Remote(document: false).Serves(Stage.DocumentReview).Should().BeFalse();
+        Local(DocumentReviews.No).Serves(Stage.DocumentReview).Should().BeFalse();
+        Remote(DocumentReviews.No).Serves(Stage.DocumentReview).Should().BeFalse();
     }
 
     /// <summary>
@@ -87,16 +89,16 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
     [Fact]
     public void DocumentsAndPlansAreSeparateDecisions()
     {
-        Local(document: true, plan: false).Serves(Stage.DocumentReview).Should().BeTrue();
-        Local(document: true, plan: false).Serves(Stage.PlanReview).Should().BeFalse();
-        Remote(document: true, plan: false).Serves(Stage.DocumentReview).Should().BeTrue();
+        Local(DocumentReviews.Yes, plan: false).Serves(Stage.DocumentReview).Should().BeTrue();
+        Local(DocumentReviews.Yes, plan: false).Serves(Stage.PlanReview).Should().BeFalse();
+        Remote(DocumentReviews.Yes, plan: false).Serves(Stage.DocumentReview).Should().BeTrue();
     }
 
     /// <summary>The master switch still outranks all three.</summary>
     [Fact]
     public void ADisabledVendorTakesNothingHoweverItIsTicked()
     {
-        var off = Local(document: true) with { Enabled = false };
+        var off = Local(DocumentReviews.Yes) with { Enabled = false };
 
         off.Serves(Stage.DocumentReview).Should().BeFalse();
     }
@@ -124,7 +126,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
         using var data = TempDir.For("coai-consent-");
         using var scratch = TempDir.For("coai-consent-wt-");
         var service = new PanelService(
-            new PanelSettings { DataDir = data, Providers = [Local(document: false)] },
+            new PanelSettings { DataDir = data, Providers = [Local(DocumentReviews.No)] },
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
@@ -144,7 +146,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
         using var data = TempDir.For("coai-consent-");
         using var scratch = TempDir.For("coai-consent-wt-");
         var service = new PanelService(
-            new PanelSettings { DataDir = data, Providers = [Local(document: true)] },
+            new PanelSettings { DataDir = data, Providers = [Local(DocumentReviews.Yes)] },
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),

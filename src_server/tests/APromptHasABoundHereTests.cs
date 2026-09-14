@@ -151,15 +151,86 @@ public sealed class APromptHasABoundHereTests
             "the 30 MB default is thirty times what this box will ever be asked to review");
     }
 
+    /// <summary>
+    /// The three bounds are a LADDER, and the top rung is read from the site file that sets it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Prompt &lt; body &lt; edge. Each rung refuses something the one above it would have let
+    /// through, and each refusal is worse than the one below: the prompt bound answers a 400 with a
+    /// sentence, the body bound answers without reading the request, and nginx answers an HTML page
+    /// the shim reads as an unparseable vendor failure. A change that inverts any pair silently moves
+    /// every refusal up a rung.</para>
+    /// <para><b>`client_max_body_size` is read from `deploy/nginx/coai` rather than written here.</b>
+    /// It was a literal `4 * 1024 * 1024` in this test, which is an assumption about a file in another
+    /// directory wearing an assertion's clothes: somebody lowering the edge to `2m` for a reason that
+    /// has nothing to do with this would leave the test green and the ladder inverted. Two reviewers
+    /// raised the relationship on plan 5's code round; this is what makes it checked rather than
+    /// asserted.</para>
+    /// </remarks>
     [Fact]
-    public void TheTransportLimitLeavesRoomForTheEnvelopeAndStaysUnderNginx()
+    public void TheThreeBoundsAreALadderFromTheSentenceToTheWall()
     {
-        ReviewEndpoints.MaxBodyBytes.Should().BeGreaterThan(
-            ReviewEndpoints.MaxPromptBytes,
-            "a prompt AT the bound travels inside a JSON envelope with a vendor, a model and a role");
+        var nginx = NginxBodyLimit();
+
+        ReviewEndpoints.MaxPromptBytes.Should().BeLessThan(
+            (int)ReviewEndpoints.MaxBodyBytes,
+            "a prompt AT the bound travels inside a JSON envelope with a vendor, a model and a role, "
+            + "and its own escaping — so the body limit must never refuse a prompt this server "
+            + "intended to answer with a sentence");
         ReviewEndpoints.MaxBodyBytes.Should().BeLessThan(
-            4 * 1024 * 1024,
-            "deploy/nginx/coai sets client_max_body_size 4m: past that the edge answers with HTML "
-            + "and this server never hears about it");
+            nginx,
+            "past client_max_body_size the edge answers with HTML and this server never hears about "
+            + "it, so the application's refusal must be the one a caller meets first");
+    }
+
+    /// <summary>
+    /// The headroom the prompt bound has for JSON escaping, stated as a number somebody can argue with.
+    /// </summary>
+    /// <remarks>
+    /// A prompt is escaped into a JSON string on the way here, and escaping only grows it. Plain text
+    /// grows by a fraction of a percent — quotes, backslashes and newlines — so a sixth is generous
+    /// for anything a review actually carries. It is NOT total, and cannot be: a prompt of nothing but
+    /// control characters escapes sixfold, and covering that would need a body limit above the edge.
+    /// What the number buys is that every realistic payload meets the sentence rather than the wall.
+    /// </remarks>
+    [Fact]
+    public void ThePromptBoundLeavesAtLeastASixthForEscaping()
+    {
+        var headroom = (ReviewEndpoints.MaxBodyBytes - ReviewEndpoints.MaxPromptBytes)
+            / (double)ReviewEndpoints.MaxPromptBytes;
+
+        headroom.Should().BeGreaterThanOrEqualTo(1 / 6d);
+    }
+
+    /// <summary>
+    /// `client_max_body_size 4m;` from the deployed site file, in bytes.
+    /// </summary>
+    /// <remarks>
+    /// nginx's `m` is a MEBIbyte, which is why this multiplies by 1024 twice — reading it as a
+    /// megabyte would understate the edge by five per cent and make this test pass a ladder that is
+    /// tighter than the real one.
+    /// </remarks>
+    private static long NginxBodyLimit()
+    {
+        var site = Path.Combine(RepoRoot(), "deploy", "nginx", "coai");
+        File.Exists(site).Should().BeTrue($"the site file is what sets the edge's limit ({site})");
+        var said = System.Text.RegularExpressions.Regex.Match(
+            File.ReadAllText(site), @"^\s*client_max_body_size\s+(\d+)m;",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+        said.Success.Should().BeTrue("deploy/nginx/coai no longer sets client_max_body_size in MiB");
+
+        return long.Parse(said.Groups[1].Value) * 1024 * 1024;
+    }
+
+    /// <summary>Up from the test binary until the folder holding `deploy/` is found.</summary>
+    private static string RepoRoot()
+    {
+        var at = AppContext.BaseDirectory;
+        while (at is { Length: > 0 } && !Directory.Exists(Path.Combine(at, "deploy")))
+        {
+            at = Path.GetDirectoryName(at);
+        }
+
+        return at ?? AppContext.BaseDirectory;
     }
 }
