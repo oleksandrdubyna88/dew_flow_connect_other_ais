@@ -1,12 +1,12 @@
 # PLAN — a round leaves the page as a file, and the log says what the deciding cost
 
-> Status: **in progress, 2026-09-14 — every story shipped (A1, A2, B1, B2, C1, C2); the promotion is the tail.** Scope: the rounds-log page
+> Status: **IMPLEMENTED, 2026-09-14.** All six stories shipped (A1, A2, B1, B2, C1, C2). Scope: the rounds-log page
 > (`src_vs_code/src/roundsLog*.ts`), one new one-shot mode and one widened DTO on the server
 > (`src_mcp/src/Store/RoundsQuery.cs`, `src_mcp/src/Program.cs`).
 >
-> Related docs: [research/architecture.md](../research/architecture.md),
-> [research/module_server.md](../research/module_server.md),
-> [research/PLAN_local_db.md](../research/PLAN_local_db.md) (the writing half, shipped).
+> Related docs: [research/architecture.md](architecture.md),
+> [research/module_server.md](module_server.md),
+> [research/PLAN_local_db.md](PLAN_local_db.md) (the writing half, shipped).
 
 ## The three asks, in the operator's words
 
@@ -432,7 +432,51 @@ Two smaller observations, recorded and **not** acted on without being asked:
   task did not otherwise need to touch.
 - `reviewers.model` is never persisted (`RoundsDb.RecordReviewers`), although `ReviewerState.Model`
   exists — the model survives only in the session file. Out of scope here; it is the subject of
-  [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md).
+  [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md).
+
+## What shipped differently from this plan
+
+Recorded here because the deviations are the most useful part of a finished plan.
+
+- **`--findings-many` is its own `args[0]`, not a flag on `--findings`.** The plan round proved the
+  flag could not work: an older binary accepts `--findings --keys-file …`, finds no `--session`, and
+  exits **69** — "no such round" — which a client renders faithfully, so a bulk export against
+  yesterday's server would have written every selected round down as recorded-nothing. Only an
+  unknown `args[0]` gives the **64** a fallback can read.
+- **A server that knows a one-shot mode never exits 64.** A malformed request is **65 (EX_DATAERR)**
+  and an unreadable database is **74 (EX_IOERR)**. Found twice, independently, in the C2 plan round:
+  answering 64 to a bad keys file would have let a request fault present as an old server, and the
+  export would have quietly become five hundred spawns reporting success.
+- **Cancelling kills the child.** C2 as planned accepted that one process cannot be cancelled
+  halfway. Three reviewers refused that trade, and they were right: it was a regression against C1,
+  which could stop between batches. `capture` polls an optional `stop` and kills.
+- **The old-server fallback stayed four at a time.** The first implementation read it strictly
+  sequentially, which made the degraded path four times slower than the release it degrades to.
+- **Every answer carries its own round key, all the way to the file.** The plan had the server echo
+  the key back; the first implementation then dropped it at the panel boundary and paired by
+  position. Three reviewers objected in one round, and one more in the next, one boundary further
+  out.
+- **`RecordClosing` counts from the findings table**, not from the batch that triggered it — the
+  A1 defect one level up, found in C2's second code round: a round decided in two sittings had its
+  summary overwritten by the second one.
+- **The CSV gained an `asked_by` column** that this plan never specified. `calledBy` arrived on every
+  row from another branch while this one was being built, and "the same data visible in the table"
+  is what the operator asked for.
+- **`SubmissionOrderTests` is no longer excluded.** Every run in this plan passed
+  `--filter-not-class` for it, on the strength of a machine that once held 111,020 `%TEMP%` entries.
+  A reviewer asked why; unfiltered it ran FASTER than filtered. The exclusion was measuring an old
+  state of the machine.
+
+## The open tail
+
+Nothing in this plan is unbuilt. Two things it touched are worth someone's attention and are not
+defects of it:
+
+- **`--findings` answers 69 for a missing database**, so a single opened row still reads "not
+  recorded" where the batch mode now says the read failed. Shipped behaviour from an earlier plan,
+  deliberately not changed here.
+- **`roundsLogPage.test.ts` still asserts over the page's source text.** The two controls this plan
+  added are tested by RUNNING the page; converting the rest is a refactor of a pre-existing file.
 
 ## Definition of Done
 

@@ -192,7 +192,7 @@ export async function readManyFindings(
     return keys.map((key) => ({ key, found: FAILED }));
   }
   const asked = JSON.stringify(
-    keys.map((key) => ({ session: key.sessionId, stage: key.stage, number: key.number })));
+    keys.map((key) => ({ sessionId: key.sessionId, stage: key.stage, number: key.number })));
   const { code, output } = await withKeysFile(asked, (path) =>
     run(['--findings-many', '--keys-file', path], manyCapMs(keys.length)));
 

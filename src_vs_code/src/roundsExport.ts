@@ -183,7 +183,7 @@ export type ReadFindings = (row: ExportableRow) => Promise<ExportRound['found']>
  * changes. It answers one `found` per row IN ORDER, and answering a different number of rows is a
  * failure of the reader rather than something this has to guess about. (Code round, gemini.)</p>
  */
-export type ReadAllFindings = (rows: readonly ExportableRow[]) => Promise<readonly ExportRound['found'][]>;
+export type ReadAllFindings = (rows: readonly ExportableRow[]) => Promise<readonly ExportRound[]>;
 
 /**
  * Read every round's findings, then write them.
@@ -208,18 +208,24 @@ export async function readAndExport(
     // ONE call for the whole selection. Its failures are its own to report, and a reader that
     // answers a different number of rows than it was asked about is not answering about these
     // rounds — every one of them is failed rather than paired up by position and hoped for.
-    let all: readonly ExportRound['found'][];
+    let all: readonly ExportRound[];
     try {
       all = await readAll(rows);
     } catch (reason: unknown) {
       console.error('ConnectOtherAIs: the batch read of findings failed', reason);
       all = [];
     }
-    const paired = rows.map((row, at) => ({
+
+    // Matched by the ROW ITSELF, never by its position in the list. The reader answers in order, so
+    // an index works today and would go on working until something streamed, retried, de-duplicated
+    // or dropped an entry — at which point one round's findings would be written onto another
+    // round's row and the file would look perfectly normal. Identity is exact, needs no knowledge of
+    // how a round is keyed, and a row the reader did not answer about is failed rather than
+    // borrowing its neighbour's answer. (Code round, codex.)
+    const byRow = new Map(all.map((one) => [one.row, one.found]));
+    const paired = rows.map((row) => ({
       row,
-      found: all.length === rows.length
-        ? all[at]!
-        : { state: 'failed' as const, findings: [] as ExportableRow[] },
+      found: byRow.get(row) ?? { state: 'failed' as const, findings: [] as ExportableRow[] },
     }));
     ports.progress?.(rows.length, rows.length);
 

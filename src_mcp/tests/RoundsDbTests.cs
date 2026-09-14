@@ -162,6 +162,32 @@ public sealed class RoundsDbTests : IDisposable
         rows[2]["resolution"].Should().Be("", "nobody decided 'third'");
     }
 
+    /// <summary>
+    /// A round decided in TWO sittings still counts what the whole round decided.
+    /// </summary>
+    /// <remarks>
+    /// The closing counts used to be taken from the batch of decisions that triggered them, which is
+    /// right only when everything is decided in one call. A caller that accepts one finding now and
+    /// rejects another later — which this class already proves is supported — had the round's
+    /// summary OVERWRITTEN by the second call: accepted fell back to nought while the findings table
+    /// plainly said otherwise. The same defect the ordinal fix removed, one level up. (Code round,
+    /// gemini.)
+    /// </remarks>
+    [Fact]
+    public void ARoundDecidedInTwoSittings_CountsWhatTheWholeRoundDecided()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var findings = new[] { Found("first"), Found("second") };
+        db.RecordRound(Session, Round(), findings);
+
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0)]);
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Reject(findings, 1, "the loop has a timeout")]);
+
+        var round = Query("SELECT accepted, rejected FROM rounds").Single();
+        round["accepted"].Should().Be("1", "the first sitting accepted one, and a later sitting cannot un-accept it");
+        round["rejected"].Should().Be("1", "and the second sitting rejected one");
+    }
+
     [Fact]
     public void AnUndecidedFindingSaysSo_RatherThanReadingAsRejected()
     {

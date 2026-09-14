@@ -302,7 +302,10 @@ internal static class Program
     /// which is the one code a client can read as "this binary is too old" and fall back on.</para>
     /// <para><b>The keys arrive in a FILE</b>, as <c>--ask-local</c>'s prompt does, because a
     /// thousand of them would overflow a Windows command line. JSON:
-    /// <c>[{"session": "…", "stage": "CodeReview", "number": 1}]</c>.</para>
+    /// <c>[{"sessionId": "…", "stage": "CodeReview", "number": 1}]</c> — and every entry must carry
+    /// all three. A key missing its number used to deserialise to the default and then be answered
+    /// as a round that was never recorded, which turns a malformed request into a false statement
+    /// about somebody's round. (Code round, codex.)</para>
     /// <para><b>And this mode never exits 64, whatever is wrong with the request</b> — the plan
     /// round found that, twice and independently. 64 is the client's signal to fall back to one
     /// spawn per round, because it is what an OLD binary answers to an argument it never heard of.
@@ -373,11 +376,22 @@ internal static class Program
             return 74; // EX_IOERR — the database, not the rounds
         }
 
+        // Every key, whole, before anything is read. An incomplete one is a bad request and says
+        // so; answering it would put "not recorded" beside a round nobody actually asked about.
+        // Every key, whole, before anything is read. An incomplete one is a bad request and says
+        // so; answering it would put "not recorded" beside a round nobody actually asked about.
+        if (asked.Exists(one => one.SessionId.Length == 0 || one.Stage.Length == 0 || one.Number < 0))
+        {
+            Note("--findings-many: every key needs a sessionId, a stage and a number of its own");
+
+            return BadRequest;
+        }
+
         try
         {
             var answer = Store.RoundsQuery.FindingsOfMany(
                 settings.DataDir,
-                [.. asked.Select(one => new Store.RoundKeyAsked(one.Session, one.Stage, one.Number))]);
+                [.. asked.Select(one => new Store.RoundKeyAsked(one.SessionId, one.Stage, one.Number))]);
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 answer, Server.ServerJsonContext.Default.LoggedManyFindings));
         }
