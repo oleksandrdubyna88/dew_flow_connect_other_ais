@@ -4718,3 +4718,43 @@ the first is one of the 24 bodies the conventions repository hashes against its 
 and cannot grow a section. `SNIPPET_VERSION` is that frozen file's own marker and cannot move either,
 so `DOCUMENT_VERSION` is what records a change to the pasted text, and a paste carrying no document
 half is reported as OLDER: the AI obeying it will never call `review_document`.
+
+### A third stage box, and the one that decides whether a file leaves this machine (2026-09-14)
+
+Plan 5, [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md). There were
+two boxes and three stages, so a document round rode the PLAN tick — the nearest thing to a switch
+there was. Fair for a reviewer this machine launches; not fair at all for a Team server, where the
+same tick decides whether a document somebody was handed crosses the network to a shared box.
+
+**`Vendor.document` is OPTIONAL where `plan` and `code` are not.** Those two fold an absent value to
+`true` on the way in, because "yes" is what a configuration written before them meant by saying
+nothing. This one cannot, because the honest reading of silence depends on where the reviewer runs:
+`reviewsDocuments` answers `document ?? (runtime !== 'remote' && plan)`, and `ProviderSettings.Serves`
+in `coai-mcp` holds the same rule — one on the side that decides a round, one on the side that draws
+the box, and they must agree or the panel promises a round the gate will not run.
+
+**The box is drawn from the RULE, never from the stored field.** A box drawn from a field that can be
+absent is unticked while the round runs anyway, or ticked while it does not.
+
+**Touching either stage box pins the absent value.** `pinnedDocument` returns what the document switch
+was silently meaning, and `panelProvider`'s vendor write applies it before the field being changed.
+Otherwise unticking *plan* on a local reviewer takes its document rounds away as an invisible side
+effect of a decision about plans — and ticking it hands them over. The panel is where a person
+decides, so the moment they decide anything on that card, what was inferred becomes something they
+said.
+
+**Where it sits.** A card with no prices takes all three boxes together above the endpoint; a priced
+card hangs plan and code on its two price rows (issue #124, above) and has no third price, so the
+document box gets a line of its own at the BOTTOM — still nowhere near the master switch, which is
+what #124 was about.
+
+**And the roles page stopped promising document roles on an old server.** `serverRuns` answered an
+un-answered catalog with `isBuiltIn` — a proxy for "one of the five this product ships", true for
+exactly as long as the product shipped five. Plan 4 made the seed seven, so this page told a person
+that a Team server deployed months ago would run `DocumentReview`; it will not, and the round comes
+back a 400 naming the roles it does run. `coai-mcp` replaced its copy of that proxy with the literal
+`RemoteRoles.BeforeTheCatalog` and this half was missed — one server, two clients, two different
+answers. `BEFORE_THE_CATALOG` in `serverRoles.ts` is the same frozen list, and
+`beforeTheCatalogParity.test.ts` reads the C# source and fails when the two disagree: neither copy
+can be deleted, because they run in different processes and the extension cannot ask the gate, so the
+only thing left was to make them fail together.

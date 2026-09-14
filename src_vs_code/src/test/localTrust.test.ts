@@ -84,7 +84,14 @@ test('the row announces a remote endpoint', () => {
 test('the row says nothing extra for a local endpoint', () => {
   const page = html({ ...LOCAL_PRESET, baseUrl: 'http://127.0.0.1:11434/v1' });
 
-  assert.doesNotMatch(page, /leaves this machine/i);
+  // Pinned to the MARKER this warning is rendered with — `class="stale remote"`, which the test
+  // above asserts positively — rather than to a phrase from its prose. It used to match
+  // /leaves this machine/i, and a tooltip added elsewhere on the same card for an unrelated feature
+  // (plan 5's document switch, which has to say exactly that about a Team server) made this test
+  // fail while the behaviour it describes was perfectly correct. An assertion that a page does not
+  // contain some WORDS is an assertion about every other feature on the page.
+  assert.doesNotMatch(page, /class="stale remote"/, 'a loopback endpoint earns no remote warning');
+  assert.doesNotMatch(page, new RegExp(remoteWarning('https://api.example.com/v1').slice(0, 40)));
 });
 
 test('a selection the engine no longer lists is marked, not shown as current', () => {

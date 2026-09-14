@@ -52,6 +52,14 @@ if (args is ["login", ..])
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog(CoaiMcp.ServiceDefaults.CoaiLogging.CreateDewFlowLogger("coai-server"));
 
+// How much this server will READ before it decides anything — the transport half of the prompt
+// bound, refused by the host without the body ever being deserialised. The default is 30 MB, which
+// is thirty times what this box is ever asked to review and roughly twenty times the memory it is
+// allowed (`MEM_LIMIT` 1500m). It stays under nginx's `client_max_body_size 4m` so the edge and the
+// application can never disagree about which of them refuses; the sentence a person reads comes from
+// `ReviewEndpoints.Refusal`, one limit below this one. See `ReviewEndpoints.MaxBodyBytes`.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = ReviewEndpoints.MaxBodyBytes);
+
 var config = builder.Configuration;
 var dataDir = config["Coai:DataDir"] ?? "/data";
 var allowedDomains = SplitCsv(config["Coai:AllowedDomains"]);

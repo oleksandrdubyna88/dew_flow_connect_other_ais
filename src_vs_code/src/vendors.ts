@@ -27,6 +27,20 @@ export interface Vendor {
    */
   readonly plan: boolean;
   readonly code: boolean;
+  /**
+   * Whether this vendor reviews DOCUMENTS — and absent means nobody has said, unlike its neighbours.
+   *
+   * <p><b>Optional where `plan` and `code` are not, and that is the design.</b> Those two fold an
+   * absent value to `true` on the way in, because "yes" is what a configuration written before they
+   * existed meant by saying nothing. This one cannot, because the honest reading of silence depends
+   * on where the reviewer runs: for a vendor on this machine it is the plan tick, and for a Team
+   * server it is NO — a company document must not cross the network because somebody once ticked a
+   * box about plans. {@link reviewsDocuments} is that rule, and `coai-mcp` holds the same one.</p>
+   *
+   * <p>Touching either stage box pins this to its current effective value, so the absent state is a
+   * migration reading rather than somewhere a person sits unawares. See {@link pinnedDocument}.</p>
+   */
+  readonly document?: boolean | undefined;
   /** OpenAI-compatible endpoint, for a vendor riding the Codex runtime. Empty = the CLI's own. */
   readonly baseUrl: string;
   /**
@@ -231,6 +245,9 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // update. Only an explicit `false` narrows a vendor to one stage.
       plan: v['plan'] !== false,
       code: v['code'] !== false,
+      // Written only when it IS said — `coai.vendors` is JSON a person reads, and the difference
+      // between "absent" and "false" is load-bearing here in a way it is not for the two above.
+      ...(typeof v['document'] === 'boolean' ? { document: v['document'] } : {}),
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
       // Only written when there IS one, so a codex row is byte-identical to what it always was —
       // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
@@ -334,6 +351,46 @@ export function vendorsEnv(vendors: readonly Vendor[]): string {
         // block a person opens still carries only what differs from the defaults.
         ...(v.plan ? {} : { plan: false }),
         ...(v.code ? {} : { code: false }),
+        // And this one is written whenever it was SAID, in either direction — the one field here
+        // whose absence is a value rather than a default. `coai-mcp` reads an absent `document` as
+        // "the plan tick for a local vendor, no for a Team server", which is the whole consent rule;
+        // emitting `true` only when narrowed would have thrown away the half that says yes.
+        ...(v.document === undefined ? {} : { document: v.document }),
       })),
   );
+}
+
+/**
+ * Whether this vendor reviews documents, once an absent switch has been read.
+ *
+ * <p><b>Absent answers differently depending on where the reviewer runs.</b> For a vendor this
+ * machine launches itself, absent is the plan tick — the reading the document round shipped with,
+ * nothing leaves the laptop, and there is no permission to ask for. For a Team server, absent is NO:
+ * the tick would otherwise grant permission for a company document to cross the network,
+ * retroactively, on every configuration written before documents existed. A tick that means "this
+ * vendor is good at prose" cannot also mean "this file may go to the shared box".</p>
+ *
+ * <p>The same rule lives in `ProviderSettings.Serves`, which is the one that actually decides a
+ * round; this is what the panel draws so the box agrees with what will happen.</p>
+ */
+export function reviewsDocuments(vendor: Vendor): boolean {
+  return vendor.document ?? (vendor.runtime !== 'remote' && vendor.plan);
+}
+
+/**
+ * The `document` value to write ALONGSIDE a change to another stage box.
+ *
+ * <p>Empty unless this vendor's document switch is still absent and the box being changed is the
+ * `plan` one. In that case the absent value is pinned to what it means right now — so somebody who
+ * unticks *plan* on a local vendor does not silently lose their document rounds as a side effect,
+ * and somebody who ticks it does not silently gain them.</p>
+ *
+ * <p>Which is the whole point of the migration reading ending at the first touch: the panel is where
+ * a person decides, so the moment they decide anything here, the thing that was inferred becomes
+ * something they said.</p>
+ */
+export function pinnedDocument(vendor: Vendor, key: string): { document?: boolean } {
+  return key === 'plan' && vendor.document === undefined
+    ? { document: reviewsDocuments(vendor) }
+    : {};
 }

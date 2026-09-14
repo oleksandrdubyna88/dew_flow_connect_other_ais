@@ -792,7 +792,17 @@ test('each stage box sits on the row of the price it belongs to', () => {
   for (const kind of ['plan', 'code']) {
     assert.equal(html.split(`data-setting="${kind}" data-vendor="v1"`).length - 1, 1, `one ${kind} control`);
   }
-  assert.ok(!html.includes('class="field stages'), 'the standalone stages row is gone where there are prices');
+  // The standalone row on a priced card holds the DOCUMENT box and nothing else. It used to hold
+  // none at all, which was the whole of #124: three boxes in a row four lines under the vendor's own
+  // checkbox read as one group of three, although the master switch is a different kind of decision.
+  // Plan 5 added a third stage and there are only two price rows to hang boxes on, so this one gets
+  // a line at the BOTTOM of the card — far from the master switch, which is what #124 was about.
+  const standalone = [...html.matchAll(/<div class="field stages">[\s\S]*?<\/div>\s*<\/div>/g)].map((m) => m[0]);
+  assert.equal(standalone.length, 1, 'exactly one standalone row, for the box with no price to ride');
+  assert.ok(standalone[0]!.includes('data-setting="document"'), 'and it is the document box');
+  for (const kind of ['plan', 'code']) {
+    assert.ok(!standalone[0]!.includes(`data-setting="${kind}"`), `${kind} rides its price row, not this one`);
+  }
 });
 
 test('a Team-server row keeps its stages row, having no prices to put them on', () => {

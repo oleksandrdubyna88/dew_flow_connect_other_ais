@@ -19,6 +19,14 @@ namespace CoaiMcp.Server;
 /// Whether this vendor reviews CODE. Absent means yes, which is what keeps an existing
 /// configuration reviewing exactly what it reviewed before an update.
 /// </param>
+/// <param name="Document">
+/// Whether this vendor reviews DOCUMENTS — and absent stays ABSENT, unlike its two neighbours.
+/// <para>The other two fold to <c>true</c> here in the parser, because "yes" is what an older
+/// configuration meant by saying nothing. This one cannot: for a vendor on this machine absent means
+/// the plan tick, and for a Team server it means no — a document must not cross the network because
+/// somebody once ticked a box about plans. Folding here would throw away the difference before
+/// <c>ProviderSettings.Serves</c> could read it.</para>
+/// </param>
 internal sealed record VendorDto(
     string? Id,
     string? Runtime,
@@ -27,6 +35,7 @@ internal sealed record VendorDto(
     string? ExecutablePath = null,
     bool? Plan = null,
     bool? Code = null,
+    bool? Document = null,
     /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
     string? RemoteVendor = null);
 

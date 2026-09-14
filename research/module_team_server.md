@@ -749,6 +749,41 @@ considered and refused: `roles.includes(role)` is the obvious client code and it
 every real role, so an entire server's configuration would be inverted by the one line anybody would
 write. A boolean cannot be read wrongly by accident.
 
+**And this is what makes a document review run here with no server change at all** (plan 5,
+[PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md), 2026-09-14). The seed
+gained `DocumentReview` and `DocumentSummary` in plan 4, so `AcceptedRoles`, both gates and
+`/api/catalog` learned them the next time this project was compiled. Nothing downstream is
+role-specific either: a job is a vendor CLI run against `job.Prompt` in a temp directory of its own,
+and a document is simply what that prompt happens to contain — the document travels inside it exactly
+as a plan does, with no new wire field, no upload and no artefact store on the box. `ADocumentRoleRunsHereTests`
+names the two roles rather than deriving them from the seed like every other test here, so losing
+them is a red test rather than a round that quietly stops asking, and runs one end to end from the
+queue to an answer.
+
+**Until the box is REDEPLOYED it runs the five it was built with, and says so.** The deploy is
+manual (`workflow_dispatch`), so a tag does not put new roles on the machine: an old box answers
+`/api/catalog` with its own list and `coai-mcp` excludes the document role by name, in that server's
+own words. The one-call check before expecting otherwise is in [deploy/README.md](../deploy/README.md).
+
+### The prompt is bounded here, not only by whoever sent it (2026-09-14)
+
+`AcceptedRoles`' own remarks state the rule — *a client is not a boundary; anything reaching the
+endpoints is checked here* — and the prompt was the field with no such check. `Refusal` asked whether
+it was empty and nothing else, so the only thing between this box and a 30 MB body was nginx, which
+refuses with an HTML page the shim reads as an unparseable vendor failure: a wall with no sentence,
+on the endpoint whose whole design is that a refusal explains itself.
+
+Two limits, answering two questions. **`ReviewEndpoints.MaxPromptBytes`** is 3 MiB, measured in UTF-8
+bytes because that is what travels — a character count lets a document of Cyrillic or CJK through at
+three times the size it claims — and the refusal names both numbers. **`MaxBodyBytes`** is that plus
+an envelope allowance, set on `Kestrel.Limits.MaxRequestBodySize` in `Program.cs`, so an oversized
+body is refused before it is read at all; a check after deserialisation has already buffered the
+whole payload, which is a bound that protects nothing on a box limited to 1.5 GB. Both stay under
+nginx's `client_max_body_size 4m`, so the edge and the application can never disagree about which of
+them refuses. A document prompt cannot approach either: a document is capped at 256 KB before it is
+ever composed, and `ADocumentSizedPromptIsFarBelowTheBound` is a test rather than arithmetic in a
+comment, because arithmetic in a comment does not fail when somebody lowers the bound.
+
 **Absent means the five this product ships** — never "none", never "any". A server older than this
 field sends no such property; a client reading that as an empty set would silently drop every
 reviewer from every round, and reading it as "anything goes" would send custom roles to a server

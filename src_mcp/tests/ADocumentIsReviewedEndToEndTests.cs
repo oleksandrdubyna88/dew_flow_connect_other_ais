@@ -194,7 +194,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var work = service.BuildWork(
             ["Spec"], _repo,
             $"## What this document is for\n\n{Purpose}\n\n## The document under review — spec.md\n\n{Document}",
-            round: 1, servedByPlanSwitch: true, readsCheckout: false);
+            round: 1, stage: Stage.PlanReview, readsCheckout: false);
 
         work.Reviewers.Should().ContainSingle();
         var prompt = work.Reviewers[0].Invocation.Request.StdIn;

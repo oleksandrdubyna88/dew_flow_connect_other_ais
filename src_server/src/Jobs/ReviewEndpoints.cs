@@ -27,6 +27,37 @@ public static class ReviewEndpoints
     /// <inheritdoc cref="MinBudget"/>
     public static readonly TimeSpan MaxBudget = TimeSpan.FromMinutes(30);
 
+    /// <summary>The largest prompt this server will review.</summary>
+    /// <remarks>
+    /// <para><b>Three MiB, derived rather than chosen.</b> It has to sit comfortably above a real
+    /// code round's prompt — <c>deploy/nginx/coai</c> records that 1 MB truncated real reviews, which
+    /// is why the edge allows 4 — and comfortably BELOW that 4 MB, so that everything in between
+    /// meets this server's own sentence instead of nginx's HTML error page. A document prompt cannot
+    /// approach it: a document is capped at 256 KB before it is ever composed.</para>
+    /// <para><b>Why the server bounds this at all when the client already does.</b>
+    /// <see cref="AcceptedRoles"/> states the rule for the role beside it — <i>the client applies the
+    /// same rules so it never offers an id this server would refuse, but a client is not a boundary;
+    /// anything reaching the endpoints is checked here</i>. The prompt was the field that had no such
+    /// check: a caller could send whatever nginx let through, and on a box whose binding constraint
+    /// is 1.5 GB of memory that is the field it matters most for.</para>
+    /// </remarks>
+    public const int MaxPromptBytes = 3 * 1024 * 1024;
+
+    /// <summary>The largest REQUEST this server will read, prompt and envelope together.</summary>
+    /// <remarks>
+    /// <para>A different limit answering a different question, and both are needed. This one is
+    /// enforced by the host before anything is deserialised, which is what protects the process from
+    /// a body it was never going to accept; <see cref="MaxPromptBytes"/> is measured afterwards and
+    /// produces a sentence somebody can act on. A single check after deserialisation would have
+    /// buffered the whole payload first — a bound that protects nothing. (Two reviewers,
+    /// independently, on plan 5's plan round.)</para>
+    /// <para>The allowance over the prompt is for the JSON envelope: the vendor, the model, the role,
+    /// the timeout, an idempotency key, and whatever escaping the prompt's own bytes need. It stays
+    /// under nginx's <c>client_max_body_size 4m</c> so the two limits can never disagree about which
+    /// of them refuses.</para>
+    /// </remarks>
+    public const long MaxBodyBytes = MaxPromptBytes + (512 * 1024);
+
     /// <summary>What a caller refused for a full queue is told to wait.</summary>
     private const string RetryAfterSeconds = "30";
 
@@ -201,6 +232,18 @@ public static class ReviewEndpoints
         if (string.IsNullOrWhiteSpace(request.Prompt))
         {
             return "a review needs a prompt";
+        }
+
+        // BYTES, never characters. UTF-8 is what travels and what every limit above this one counts,
+        // so a character check would let a document of Cyrillic or CJK through at three times the
+        // size it claims — and then meet nginx, which answers an HTML page nothing here can turn into
+        // a sentence. (gemini, plan 5's plan round.)
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(request.Prompt);
+        if (bytes > MaxPromptBytes)
+        {
+            return $"the prompt is {bytes:N0} bytes and the limit is {MaxPromptBytes:N0}. That limit "
+                + "is about what this server will hold in memory for one review, not about what your "
+                + "model can read: send less context, or review the change in parts.";
         }
 
         var seconds = request.TimeoutSeconds;

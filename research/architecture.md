@@ -85,14 +85,22 @@ What changed across the containers:
 - **The extension** groups roles by bucket in three places that used to discriminate by "plan and
   everything else", and counts the five-active limit per bucket, which is what the server had always
   done.
-- **The Team server is unchanged.** A document round on a remote vendor is out of scope until plan 5;
-  today the document reaches only local reviewers.
+- **The Team server took documents in plan 5** (2026-09-14,
+  [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md)) — and needed no
+  code to do it. `AcceptedRoles` seeds itself from the shipped catalog, so the box accepts both
+  document roles the next time it is compiled, and the document travels inside the prompt exactly as
+  a plan does: no new wire field, no upload, no artefact store there. What plan 5 built is the
+  CONSENT — a third vendor switch whose absent value is the plan tick for a reviewer on this machine
+  and NO for a Team server — a bound on the prompt at the server rather than only at the client, and
+  a clause on a document round naming the servers that received it.
 
-**No `src_server` change, and no new arrow.** A document never leaves this machine: it is read from
-inside the repository the session was opened for and handed to a local reviewer CLI. That
-confinement is a security boundary rather than a tidiness one — the tool reads a file and ships its
-contents to other vendors' models, so an unrestricted path would have been an exfiltration primitive
-with a friendly name.
+**Where a document may go.** It is read from inside the repository the session was opened for and
+nowhere else: `DocumentReader.Canonical` walks the path root-down, re-resolving after every step, and
+refuses anything outside. That confinement is a security boundary rather than a tidiness one — the
+tool reads a file and ships its contents to other vendors' models, so an unrestricted path would have
+been an exfiltration primitive with a friendly name. It bounds which FILE may be reviewed and says
+nothing about where the review runs; plan 5 is the decision about that, and it is a person's to make
+per vendor rather than one this product takes for them.
 
 ## Module map
 

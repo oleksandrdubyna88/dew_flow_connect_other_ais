@@ -32,7 +32,7 @@ import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
-import { Vendor } from './vendors';
+import { reviewsDocuments, Vendor } from './vendors';
 
 /**
  * The panel's HTML, as a pure function of what it shows.
@@ -849,6 +849,11 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   // master switch is a different kind of decision from the two stages.
   const plan = stageBox('plan', id, vendor.plan, vendor.enabled, 'reviews plans', help('vendorStages'));
   const code = stageBox('code', id, vendor.code, vendor.enabled, 'reviews code');
+  // The third one is drawn from the RULE rather than from the stored field, because the stored field
+  // can be absent and an unticked box would then be lying about what the next round will do. See
+  // `reviewsDocuments`, which `ProviderSettings.Serves` mirrors on the side that decides.
+  const document = stageBox(
+    'document', id, reviewsDocuments(vendor), vendor.enabled, 'reviews documents', help('vendorDocuments'));
   const executable = runtimeFields(vendor, id, remote);
   const prices = priceFields(vendor, id, local, remote, price, plan, code);
   // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
@@ -856,7 +861,15 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   // server's CLI runs on the server and its price is the company's subscription, so it has no price
   // fields here, and moving the boxes unconditionally would have left every remote reviewer with no
   // way to say which stages it serves. The row is layout only — each box carries its own dimming.
-  const stages = prices.length > 0 ? '' : `<div class="field stages">${plan}${code}</div>`;
+  // Two placements for one row, and the position is the part issue #124 paid for. A card with no
+  // prices has nowhere else to put its stage boxes, so all three sit together above the endpoint. A
+  // PRICED card hangs plan and code on the two price rows — which is what #124 moved them onto, to
+  // stop three boxes reading as one group with the master switch four lines above — and there is no
+  // third price to hang the document box on. So it gets a line of its own at the BOTTOM of the card,
+  // where it is still nowhere near the vendor's own checkbox. A box with no home is a decision
+  // nobody can make.
+  const stages = prices.length > 0 ? '' : `<div class="field stages">${plan}${code}${document}</div>`;
+  const documentRow = prices.length > 0 ? `<div class="field stages">${document}</div>` : '';
 
   return `<div class="vendor" style="border-left-color:${colour}">
   <div class="head">
@@ -882,7 +895,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels, allowedRemote))}</div>
   </div>
-  ${stages}${endpoint}${executable}${prices}
+  ${stages}${endpoint}${executable}${prices}${documentRow}
 </div>`;
 }
 
@@ -896,7 +909,9 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
  * hosted card's boxes stay bright while the remote card's dim, which is what two reviewers caught on
  * the plan round of issue #124.</p>
  */
-function stageBox(kind: 'plan' | 'code', id: string, on: boolean, enabled: boolean, text: string, tip = ''): string {
+function stageBox(
+  kind: 'plan' | 'code' | 'document', id: string, on: boolean, enabled: boolean, text: string, tip = '',
+): string {
   return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
     + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}>`
     + ` ${text}${tip}</label></span>`;
