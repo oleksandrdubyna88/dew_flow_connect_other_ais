@@ -92,17 +92,52 @@ session_token() {
     printf '%s' "${COAI_TOKEN:?neither COAI_TOKEN_FILE nor COAI_TOKEN is set — the canary needs a session token}"
 }
 
+# What an HTTP status means for THIS request, when the submit produced no id.
+#
+# The canary used to throw the status away and say "the server refused the review" for every
+# outcome. That one sentence covers a rejected credential, a role this server does not run, a body
+# too large and a vendor that is genuinely unavailable — and it points at the release in all four,
+# when in three of them the release is fine. A deploy of 0.6.0 on 2026-09-14 was rolled back by
+# three of these in 350 ms, which is far too fast for anything to have reached a vendor, and the
+# hour it took to establish that is the reason this function exists.
+refusal_hint() {
+    case "$1" in
+        401) printf '%s' "the canary's own token was not accepted — it is a SESSION token and they expire (Coai__SessionTtlDays, 7 by default). Mint a fresh one and write it to /etc/coai-canary.token. This says nothing about the release" ;;
+        403) printf '%s' "the token authenticated but its email is outside Coai__AllowedDomains — again the canary's credential, not the release" ;;
+        400) printf '%s' "the server judged the request itself; the body below says which field" ;;
+        413) printf '%s' "the body was refused unread — nginx's client_max_body_size or Kestrel's limit" ;;
+        426) printf '%s' "this server no longer serves the contract version the canary claims" ;;
+        5*)  printf '%s' "the server failed on it — the journal for this unit has the exception" ;;
+        000) printf '%s' "no HTTP response at all: DNS, TLS or the edge, rather than the server" ;;
+        *)   printf '%s' "an unexpected status for a submit" ;;
+    esac
+}
+
 canary() {
-    local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg
+    local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg submit http
     cfg=$(mktemp)
     chmod 600 "$cfg"
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
     trap 'rm -f "$cfg"' RETURN
 
-    id=$(curl -sS --connect-timeout 10 --max-time 30 -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
-        -d "{\"vendor\":\"$vendor\",\"model\":\"$model\",\"prompt\":\"Answer with exactly this JSON and nothing else: {\\\"findings\\\":[]}\",\"role\":\"PlanCritique\",\"timeoutSeconds\":$budget}" \
-        | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))')
-    [[ -n "$id" && "$id" != "None" ]] || { say "  $vendor: the server refused the review"; return 1; }
+    # The status is CAPTURED, not discarded. `-w` appends it on its own line after the body, which
+    # is the one shape that survives an empty body — and an empty body is exactly what a 401 has,
+    # so the failure that most needs naming is the one a body alone cannot name.
+    submit=$(curl -sS --connect-timeout 10 --max-time 30 -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
+        -w $'\n%{http_code}' \
+        -d "{\"vendor\":\"$vendor\",\"model\":\"$model\",\"prompt\":\"Answer with exactly this JSON and nothing else: {\\\"findings\\\":[]}\",\"role\":\"PlanCritique\",\"timeoutSeconds\":$budget}") \
+        || { say "  $vendor: the submit did not come back at all — $(refusal_hint 000)"; return 1; }
+    http=${submit##*$'\n'}
+    body=${submit%$'\n'*}
+    # `|| true`: a non-JSON body is the interesting case, not an error to abort on — under `set -e`
+    # the failing python would take the whole deploy down before this could report anything.
+    id=$(printf '%s' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))' 2>/dev/null || true)
+    if [[ -z "$id" || "$id" == "None" ]]; then
+        say "  $vendor: the server refused the review — HTTP $http: $(refusal_hint "$http")"
+        # Bounded, because a body can be an HTML error page from the edge and this goes to a CI log.
+        [[ -n "$body" ]] && say "    it answered: $(printf '%.300s' "$body")"
+        return 1
+    fi
 
     # Polled to a TERMINAL state, never judged on one bounded wait: a `wait` shorter than the
     # review's own budget returns `running` for a healthy slow reviewer, and calling that a

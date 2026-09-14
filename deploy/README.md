@@ -195,6 +195,22 @@ What it does that the old hand-run sequence did not:
 The canary's token is given as **`COAI_TOKEN_FILE`** — a path to a `0600` file — rather than
 `COAI_TOKEN=<value>`, for the same reason it never reaches `-H`: a value on the command line is in
 the process table for every account on the box and in `~/.bash_history` afterwards. A path is not.
+The wrapper points it at `/etc/coai-canary.token`.
+
+**That token EXPIRES, and an expired one looks exactly like a broken release.** It is an ordinary
+session token, so `Coai:SessionTtlDays` (7 by default) applies to it like any other. When it lapses,
+every vendor's canary is refused `401` in milliseconds, the script rolls the release back, and the
+deploy reports a version that "did not take effect" — which is true and says nothing about the
+version. It happened to `server-v0.6.0` on 2026-09-14: three vendors refused in **350 ms**, far too
+fast for anything to have reached a vendor, against a release whose auth path was byte-identical to
+the one serving. Since then the canary prints the status and says whose fault it is, so the next one
+reads `HTTP 401: the canary's own token was not accepted` rather than `the server refused the
+review`. Mint a fresh session token and write it there:
+
+```bash
+install -m 600 /dev/null /etc/coai-canary.token
+printf '%s' "<a fresh Team-server session token>" > /etc/coai-canary.token
+```
 
 ### One-time, on a host that predates this layout
 

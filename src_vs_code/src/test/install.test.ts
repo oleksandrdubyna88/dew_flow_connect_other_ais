@@ -1126,3 +1126,54 @@ test('every job that publishes a release may write to contents', () => {
       `${job} creates, edits or publishes a release — it needs contents: write`);
   }
 });
+
+test('a canary refusal names the HTTP status, and says when it is the CANARY that is wrong', () => {
+  // Measured on the 0.6.0 deploy of 2026-09-14: three vendors "refused the review" in 350 ms — far
+  // too fast for anything to have reached a vendor — and the release was rolled back. The one
+  // sentence the canary had covers a rejected credential, an unknown role, an oversized body and a
+  // vendor that is genuinely unavailable, and it points at the RELEASE in all four. It took an hour
+  // to establish that the auth path was byte-identical between the two releases and the canary's own
+  // session token had simply expired, which the server had said plainly in a status nobody kept.
+  const script = deployScript('systemd-release.sh');
+
+  // The status is captured. `-w` after the body is the one shape that survives an EMPTY body, which
+  // is exactly what a 401 has — so the failure that most needs naming is the one a body cannot name.
+  assert.match(
+    script,
+    /-w \$'\\n%\{http_code\}'/,
+    'the submit asks curl for the status alongside the body',
+  );
+  assert.match(script, /http=\$\{submit##\*\$'\\n'\}/, 'and takes it off the end');
+
+  // The refusal says it. Both halves: the number, and what the number means for this request.
+  assert.match(
+    script,
+    /the server refused the review — HTTP \$http: \$\(refusal_hint "\$http"\)/,
+    'the refusal interpolates the status AND its explanation — a message with only one of the two '
+      + 'is the message that cost the hour',
+  );
+
+  // The two statuses that are the canary's own fault must say so, or the next reader spends the
+  // hour again looking at a release that was fine.
+  const hint = /^refusal_hint\(\)[\s\S]*?\n\}/m.exec(script);
+  assert.ok(hint, 'refusal_hint exists');
+  assert.match(hint[0], /401\)[^;]*SESSION token[^;]*expire/, '401 is the token, and it expires');
+  assert.match(hint[0], /401\)[^;]*says nothing about the release/, 'and it clears the release');
+  assert.match(hint[0], /403\)[^;]*AllowedDomains/, '403 is the domain, not the release');
+  for (const status of ['400', '413', '426', '5*', '000']) {
+    assert.ok(
+      hint[0].includes(`${status})`),
+      `${status} has its own sentence rather than falling to "an unexpected status"`,
+    );
+  }
+});
+
+test('a non-JSON body does not take the deploy down before it can be reported', () => {
+  // `set -e` is on, and the id is read with python. A 401 has an empty body, so that python exits
+  // non-zero — which would end the script at the one line whose whole job is to explain why.
+  assert.match(
+    deployScript('systemd-release.sh'),
+    /2>\/dev\/null \|\| true\)/,
+    'the id read tolerates a body that is not JSON, because that IS the interesting case',
+  );
+});
