@@ -272,6 +272,25 @@ export function pinnable(answers: readonly Found[]): boolean {
 }
 
 /**
+ * Did MORE THAN ONE session answer to this name?
+ *
+ * <p>Beside `pinnable` because it reads the same answers and must not drift from it, and separate
+ * from it because "not pinnable" is two different situations: nothing was found, and too much was.
+ * Only the second is evidence that a saved conversation of this name belongs to one of the sessions
+ * in front of somebody, which is the one thing `chatGoto`'s name fallback is allowed to lean on.</p>
+ *
+ * <p><b>Counted over the answers, never over the array.</b> `findSession` returns one outcome PER
+ * FOLDER, and a single folder can answer `several` — so `answers.length > 1` means "more than one
+ * folder was searched", which in a one-root workspace is false however many sessions share the name.
+ * That is precisely what the first version asked, and it made the fallback dead in the commonest
+ * case there is. (CodeRabbit, on the pull request.)</p>
+ */
+export function severalMatch(answers: readonly Found[]): boolean {
+  return answers.some((answer) => answer.kind === 'several')
+    || answers.filter((answer) => answer.kind === 'one').length > 1;
+}
+
+/**
  * The most turns that cross to a webview at once, and the most of each.
  *
  * <p>A day-long session holds hundreds of turns and some of them are whole files pasted in. All of

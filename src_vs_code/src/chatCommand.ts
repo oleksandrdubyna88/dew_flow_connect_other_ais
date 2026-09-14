@@ -85,6 +85,7 @@ import {
   pinnable,
   promptsFrom,
   sessionFileIn,
+  severalMatch,
   waitingQuestion,
 } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
@@ -902,8 +903,11 @@ export async function askedForGoto(
     ambiguous: kind === 'claude' && (walked.unsure || (walked.found.length > 0 && !pinnable(walked.found))),
     // THE POSITIVE FACT, and the only thing that licenses the name fallback in `goto`: more than one
     // session really does answer to this name. A walk that could not be done arrives as `false` and
-    // asks, and so will any future reason to be ambiguous.
-    severalSessions: walked.found.length > 1,
+    // asks, and so will any future reason to be ambiguous. Asked of the ANSWERS rather than of the
+    // array — `findSession` returns one outcome per FOLDER and a single folder can answer `several`,
+    // so a length test was false in a one-root workspace however many sessions shared the name, and
+    // the fallback was dead in the commonest case there is. (CodeRabbit, on the pull request.)
+    severalSessions: severalMatch(walked.found),
     // How many tabs are called what this one is called — this tab included, so never below 1. It is
     // what lets a NAME be evidence: with two tabs of one name it identifies neither.
     namesakes: all.filter((one) => one.label === (tab?.label ?? '')).length,
