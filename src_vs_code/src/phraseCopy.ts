@@ -64,34 +64,51 @@ const SAID_FOR_MS = 3000;
  */
 export function phraseCopier(ports: CopyPorts): { copy(phrases: readonly Phrase[], id: string | undefined): Promise<CopyReport> } {
   let live: Said | undefined;
+  /**
+   * One write at a time, in the order the buttons were pressed.
+   *
+   * <p>Two presses start two asynchronous writes, and whichever RESOLVES last is what the clipboard
+   * ends up holding — so pressing A and then B could leave A on it, which is the one thing a copy
+   * button must never do. Chaining them makes the last press the last write. (Code round, codex.)</p>
+   */
+  let working: Promise<unknown> = Promise.resolve();
 
   function tell(said: string): void {
     live?.dispose();
     live = ports.say(said, SAID_FOR_MS);
   }
 
+  async function once(phrases: readonly Phrase[], id: string | undefined): Promise<CopyReport> {
+    const decision = phraseToCopy(phrases, id);
+    if (decision.kind === 'refused') {
+      tell(decision.said);
+
+      return { copied: false, said: decision.said };
+    }
+    try {
+      await ports.writeText(decision.phrase.text);
+    } catch {
+      // The write is the only thing that can fail here, and a person who is told nothing pastes
+      // whatever was on the clipboard before — which is the failure this sentence exists to stop.
+      const refused = 'The phrase could not be copied — the clipboard is held by another program.';
+      tell(refused);
+
+      return { copied: false, said: refused };
+    }
+    const done = `Copied “${decision.phrase.name}” — paste it with Ctrl+V.`;
+    tell(done);
+
+    return { copied: true, said: done };
+  }
+
   return {
-    async copy(phrases, id): Promise<CopyReport> {
-      const decision = phraseToCopy(phrases, id);
-      if (decision.kind === 'refused') {
-        tell(decision.said);
+    copy(phrases, id): Promise<CopyReport> {
+      // Chained onto whatever is in flight, and onto its FAILURE too — a refused write must not
+      // break the queue for the press after it.
+      const next = working.then(() => once(phrases, id), () => once(phrases, id));
+      working = next;
 
-        return { copied: false, said: decision.said };
-      }
-      try {
-        await ports.writeText(decision.phrase.text);
-      } catch {
-        // The write is the only thing that can fail here, and a person who is told nothing pastes
-        // whatever was on the clipboard before — which is the failure this sentence exists to stop.
-        const refused = 'The phrase could not be copied — the clipboard is held by another program.';
-        tell(refused);
-
-        return { copied: false, said: refused };
-      }
-      const done = `Copied “${decision.phrase.name}” — paste it with Ctrl+V.`;
-      tell(done);
-
-      return { copied: true, said: done };
+      return next;
     },
   };
 }

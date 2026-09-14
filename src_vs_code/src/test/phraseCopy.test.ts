@@ -106,3 +106,32 @@ test('the decision is separable: which phrase, or the sentence instead', () => {
   assert.deepStrictEqual(phraseToCopy(PHRASES, undefined).kind, 'refused',
     'a message carrying no id at all was treated as naming one');
 });
+
+test('two presses land in the order they were pressed, so the last one is on the clipboard', async () => {
+  // Two asynchronous writes started together end with whichever RESOLVES last on the clipboard, so
+  // pressing A then B could leave A on it. (Code round 2026-09-14, codex, Major.)
+  const written: string[] = [];
+  const slow = new Map<string, () => void>();
+  const copier = phraseCopier({
+    writeText: async (text) => {
+      await new Promise<void>((resolve) => { slow.set(text, resolve); });
+      written.push(text);
+    },
+    say: () => ({ dispose: () => undefined }),
+  });
+
+  const first = copier.copy(PHRASES, 'a');
+  const second = copier.copy(PHRASES, 'b');
+  await new Promise<void>((resolve) => { setImmediate(resolve); });
+
+  // Only the FIRST write has been started: the second is queued behind it rather than racing it.
+  assert.equal(slow.size, 1, 'both writes were in flight at once, so whichever finished last wins');
+  slow.get('make a pr, accept it, deploy')?.();
+  await first;
+  await new Promise<void>((resolve) => { setImmediate(resolve); });
+  slow.get('  indented\nand two lines\n')?.();
+  await second;
+
+  assert.deepStrictEqual(written, ['make a pr, accept it, deploy', '  indented\nand two lines\n'],
+    'the presses landed out of order, so the clipboard holds the phrase pressed first');
+});

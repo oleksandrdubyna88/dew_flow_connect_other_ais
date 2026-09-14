@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
 import { chatSettingsFrom, clearedByWriting } from './chatSettings';
-import { phrasesFrom } from './phrases';
+import { phrasesFrom, type Phrase } from './phrases';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
@@ -668,7 +668,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       chat: chatSettingsFrom((key: string) => config.get(key)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section so that `staticKey` can see it change.
-      phrases: phrasesFrom(config.get('phrases')),
+      phrases: this.phrases(),
       // Only while something IS focused — and by the time a paint gets past the hold below, that
       // means the hold ran out under it. An ordinary paint carries nothing and steals nobody's
       // focus.
@@ -1855,13 +1855,30 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * gemini, Blocking.)</p>
    */
   private async copyPhrase(id: string | undefined): Promise<void> {
-    const phrases = phrasesFrom(vscode.workspace.getConfiguration('coai').get('phrases'));
-    const report = await this.copier.copy(phrases, id);
+    const report = await this.copier.copy(this.phrases(), id);
     if (!report.copied || id === undefined) {
       return;
     }
-    // The disposal is expected and dropped, the way every other post from here treats it.
-    this.held.view?.webview.postMessage({ type: 'copied', id }).then(undefined, () => undefined);
+    // A disposed view is expected and dropped; anything else keeps its reporter, exactly as the live
+    // region's post does. Swallowing every rejection would hide a webview that had stopped accepting
+    // messages, and the button would then never confirm with nothing anywhere saying why.
+    this.held.view?.webview.postMessage({ type: 'copied', id }).then(undefined, (error: unknown) => {
+      if (!isDisposedRejection(error)) {
+        console.error('ConnectOtherAIs: the panel could not be told that a phrase was copied', error);
+      }
+    });
+  }
+
+  /**
+   * The phrase catalog, read in ONE place.
+   *
+   * <p>The render and the copy each used to read the configuration for themselves. Two readers of
+   * one list is how the panel comes to show a button whose id the copy then refuses — the moment a
+   * second source is added (a workspace list, a team list) only one of them would learn about it.
+   * (Code round, codex.)</p>
+   */
+  private phrases(): readonly Phrase[] {
+    return phrasesFrom(vscode.workspace.getConfiguration('coai').get('phrases'));
   }
 
   private async addTeamServer(): Promise<void> {

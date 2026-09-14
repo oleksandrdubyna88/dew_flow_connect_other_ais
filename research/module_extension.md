@@ -4891,3 +4891,25 @@ disposed before the next is set, so five copies in five seconds leave one line r
 script on the click, which a reviewer called Blocking and was right to: a button that confirms on
 the press confirms just as confidently when the clipboard was held by something else, and the person
 then pastes whatever was there before. The host posts `copied` with the id afterwards, and only then.
+
+**And its code round found the defect that justified the whole convention.** The acknowledgement was
+first tested by matching the assembled page for `message?.type === 'copied'` and for the word
+`Copied`. Both matched. What they matched contained `/["\]/g` — an unterminated character class,
+written by a heredoc that ate a backslash — so the regex literal ran on past its own line and
+swallowed the rest of the handler. Three reviewers found it; no test could, because none of them ran
+anything. `common/generated-code-tests.md` requires an executable artefact to be EXECUTED, and
+`panelPhrasesScript.test.ts` now does: the panel's script is run against a synthetic document with
+`new Function`, a `copied` message is dispatched, and the button's actual text is asserted before and
+after the second elapses. The first thing it asserts is that the script parses at all.
+
+The repair also removed what caused it. The button is found by comparing `dataset.id` rather than by
+interpolating an id into a CSS selector — so there is nothing to escape, an id holding a quote or a
+bracket is matched like any other, and the sanitising regex that had been added to make the selector
+safe is simply gone.
+
+Three more were taken. Clipboard writes are serialised in press order, because two started together
+end with whichever RESOLVES last on the clipboard — press A then B and the clipboard could hold A.
+`staticKey` hashes what the section RENDERS (id, label, tooltip) rather than every phrase's full
+text, which is the same repaint with none of the corpus. And the `copied` post no longer swallows
+every rejection: a disposed view is dropped, anything else is reported, the way the live-region post
+beside it already behaved.
