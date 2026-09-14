@@ -241,10 +241,14 @@ journalctl -u coai-server -n 50 --no-pager
 
 ### Which ROLES this box will run
 
-A deploy here is what puts new review roles on the machine — there is no other route, and a tag
-alone does not do it. `AcceptedRoles` is built from the catalog the binary was COMPILED with, so a
-box running an older release accepts only the roles that release shipped, and `coai-mcp` correctly
-leaves the rest out of a round rather than sending one it will refuse.
+A deploy here is what puts new **built-in** review roles on the machine, and a tag alone does not do
+it. `AcceptedRoles` starts from the catalog the binary was COMPILED with, so a box running an older
+release knows only the roles that release shipped, and `coai-mcp` correctly leaves the rest out of a
+round rather than sending one it will refuse.
+
+A role an OPERATOR adds needs no deploy: `Coai:ExtraRoles` and `Coai:AllowAnyRole` are configuration,
+read at startup, so a restart is enough. The two are different questions and the check below answers
+both — whatever the box lists is what it will run.
 
 So after deploying a release that adds a role, check that this box knows it. The document roles
 arrived in plan 4 and are the current example:
