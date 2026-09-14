@@ -27,6 +27,7 @@ const { agyAdapter } = await import(`${OUT}agyAdapter.js`);
 const { claudeAdapter } = await import(`${OUT}claudeAdapter.js`);
 const { codexAdapter } = await import(`${OUT}codexAdapter.js`);
 const { launchSpecFor } = await import(`${OUT}cliChatLaunch.js`);
+const { NEW_CONVERSATION } = await import(`${OUT}chatAdapter.js`);
 const { resolvedExecutable } = await import(`${OUT}versionProbe.js`);
 
 const BUDGETS = { startupMs: 60_000, turnMs: 240_000 };
@@ -60,12 +61,14 @@ async function conversation(name, vendor, adapter) {
   if (!resolved) { console.log(name.padEnd(12) + 'NOT INSTALLED'); return false; }
   const session = new CliChatSession(
     (resume) => {
-      // A ChatLaunch, not a bare resume id. It became one when the model picker started deciding
-      // which model the CLI is told to use, and a string lands in that parameter as an object whose
-      // .model is undefined - which throws inside modelRefusal before any process starts. Every turn
-      // of this script then failed with "the model process could not be started", for three days,
-      // spending nothing and proving nothing. Guarded now by liveScripts.test.ts.
-      const spec = launchSpecFor(vendor, home, { resume, model: '' }, resolved);
+      // SPREAD FROM THE DEFAULT, never written out by hand. This parameter used to be the resume id
+      // alone; it became a ChatLaunch when the model picker started deciding which model the CLI is
+      // told to use, and this script kept passing the bare string for three days - a string is not
+      // undefined, so the parameter default never applied and modelRefusal read .length of undefined
+      // before any process started. Spreading NEW_CONVERSATION means a field ADDED to ChatLaunch
+      // arrives here with its own default instead of being missing, so this cannot rot the same way
+      // twice. (codex and the local reviewer, the round on the repair.)
+      const spec = launchSpecFor(vendor, home, { ...NEW_CONVERSATION, resume }, resolved);
 
       return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
     },

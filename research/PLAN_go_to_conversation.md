@@ -36,13 +36,24 @@
 >   excluded from coverage BY NAME, because no test here can execute a line of them, and the list is
 >   asserted to match that set exactly.
 >
-> - **The last Definition-of-Done item is no longer manual.** It said the isolation guarantee was to
->   be checked by hand with a planted number on all three CLI adapters. `scripts/live-fresh.mjs` does
->   it — plant, recall (the CONTROL), dispose the session and its directory, open a new one carrying
->   nothing, recall again — and it was run: **claude, codex and agy each remembered 7431 before the
->   reset and answered NONE after it**, `per-turn` and `persistent` shapes both. Writing it found that
->   `scripts/live-chat.mjs`, the only other real-vendor check this repository has, had been broken
->   since 2026-09-11 and failing at process start for every vendor.
+> - **The last Definition-of-Done item has a harness, and it covers HALF of what the item asked
+>   for — the half no test could reach at all.** `scripts/live-fresh.mjs` plants a number, recalls it,
+>   disposes the session and its directory the way `ended()` does, opens a new one carrying nothing
+>   the way `reopened()` does, and recalls again. Run 2026-09-14: **claude, codex and agy each
+>   remembered 7431 before the reset, answered a liveness question after it, and then answered NONE**
+>   — `per-turn` and `persistent` shapes both. **What that proves is the RECIPE**: dispose, new
+>   directory, empty carry ⇒ the vendor forgets. **What it does not prove is that `freshStart`
+>   performs that recipe**, because `freshStart` lives behind `vscode` and cannot be loaded outside an
+>   extension host; a reset that failed to call `ended()`, leaked a thread id or reused the directory
+>   would pass this script every time. The half it does not cover is pinned by `chatFreshWiring.test.ts`
+>   reading the source, and closing the gap properly is the open tail below. (gemini was right to
+>   refuse the claim that the item was simply done.)
+> - **And writing it found the other live check broken.** `scripts/live-chat.mjs`, the only other
+>   real-vendor check this repository has and the one that found three defects no unit test could,
+>   had been failing at process start for every vendor since 2026-09-11 — a parameter became a
+>   `ChatLaunch` and the script kept passing a string. `liveScripts.test.ts` is what notices next
+>   time, and both scripts now spread `NEW_CONVERSATION` so a field added to that interface arrives
+>   with its default rather than going missing.
 >
 > **The open tail, for a plan of its own.** An extension-host harness — `@vscode/test-electron`, which
 > `research/module_tests.md` records as this repository's largest single gap and which every one of
