@@ -97,9 +97,7 @@ public sealed class ConsultationService(
     /// </remarks>
     public IReadOnlyList<OpenConsultation> OpenIn(string repoPath)
     {
-        // The identity's ID, since `From` answers a whole `CallerIdentity`: the VENDOR half is a
-        // display fact, and a consultation is owned by a session rather than by a brand.
-        var caller = CallerIdentity.From(env).Id is { Length: > 0 } id ? id : $"repo:{repoPath}";
+        var caller = CallerOf(repoPath);
 
         return [.. _store.All()
             .Where(record => !record.IsOver
@@ -220,7 +218,7 @@ public sealed class ConsultationService(
     private async Task<string> WithConsultantAsync(string repo, string problem, IReadOnlyList<string> files, string consultationId, CancellationToken ct)
     {
         var kind = CallerIdentity.KindFrom(env);
-        var caller = CallerIdentity.From(env).Id is { Length: > 0 } id ? id : $"repo:{repo}";
+        var caller = CallerOf(repo);
 
         // THE LOCK IS TAKEN BEFORE THE RECORD IS READ, and that order is the fix for a race the code
         // round found: two follow-ups could both read an `open` record, the second wait for the lock,
@@ -653,6 +651,41 @@ public sealed class ConsultationService(
     /// that had already answered asked from scratch, the caller's budget spent twice. That is the
     /// exact loss this method exists to prevent, so it has to resolve what git resolved.</para>
     /// </remarks>
+    /// <summary>
+    /// Who owns a consultation — the calling session, or the CHECKOUT when no session names itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>The ID rather than the whole <see cref="CallerIdentity"/>, since the VENDOR half is a
+    /// display fact and a consultation is owned by a session rather than by a brand.</para>
+    /// <para><b>One function because two copies of this were the bug.</b> Writing a consultation and
+    /// listing one had a line each, and they were not the same line: the write had already resolved
+    /// the repository to its top level through git, the read used whatever the session was opened
+    /// with. The same directory therefore produced two owners, so <c>status</c> filtered out the
+    /// consultation it was asked about — on macOS, where <c>/var</c> is a link and those two
+    /// spellings always differ. The fix for one such pair is not a second careful line; it is one
+    /// line with no twin.</para>
+    /// <para>The path is canonicalised for the same reason <see cref="SamePath"/> canonicalises:
+    /// whoever calls this may hold either spelling, and an identity that depends on which one is
+    /// not an identity.</para>
+    /// </remarks>
+    private string CallerOf(string repoPath) =>
+        CallerIdentity.From(env).Id is { Length: > 0 } id ? id : RepoIdentity(repoPath, DocumentReader.FollowLink);
+
+    /// <summary>The owner a checkout is, told the same way from either spelling of it.</summary>
+    internal static string RepoIdentity(string repoPath, Func<string, string> followLink)
+    {
+        try
+        {
+            return $"repo:{Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(repoPath, followLink))}";
+        }
+        catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            // A path this machine cannot resolve still has to name SOMETHING, and naming it after
+            // itself keeps the two sides agreeing — which is the whole job here.
+            return $"repo:{repoPath}";
+        }
+    }
+
     internal static bool SamePath(string one, string other, Func<string, string> followLink)
     {
         try
