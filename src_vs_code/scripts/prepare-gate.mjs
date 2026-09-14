@@ -77,7 +77,7 @@ export function consultantBody(source) {
   // Held to its marker AND its heading, the way the three shared halves are — the version rides in
   // the marker now, so a rule file that lost it cannot be emitted as though it still had one.
   if (!CONSULTANT_MARKER.test(text)) {
-    throw new Error(`${CONSULTANT_SOURCE}: missing canonical marker`);
+    throw new Error(`${CONSULTANT_SOURCE}: missing the coai-consultant marker or its heading`);
   }
 
   return text;
