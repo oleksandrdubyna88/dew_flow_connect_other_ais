@@ -101,6 +101,22 @@ test('the file says which AI asked for the round, and says nothing when nobody d
   assert.equal(cell(older[ROUND_COLUMNS.indexOf('asked_by')]), '');
 });
 
+test('a finding with no ordinal fails the ROUND, even reaching csvOf directly', () => {
+  // The parser refuses these, but `csvOf` is also called with rows the host copied straight off a
+  // webview message, so the guard has to be at this door too — or a fabricated finding re-enters by
+  // the other route and is published as an OPEN finding nobody raised. (Operator ruling, 2026-09-14.)
+  assert.equal(readStateOf({ state: 'loaded', findings: [{}] }), 'failed');
+  assert.equal(readStateOf({ state: 'loaded', findings: [{ title: 'no ordinal' }] }), 'failed');
+  assert.equal(readStateOf({ state: 'loaded', findings: [{ ordinal: 'first' }] }), 'failed');
+  assert.equal(readStateOf({ state: 'loaded', findings: [{ ordinal: 0 }, {}] }), 'failed',
+    'one bad entry fails the round: a shorter list reads as a cleaner round');
+
+  // And a real one still loads.
+  assert.equal(readStateOf({ state: 'loaded', findings: [{ ordinal: 0, title: 'real' }] }), 'loaded');
+  assert.equal(readStateOf({ state: 'loaded', findings: [] }), 'loaded',
+    'a round that genuinely found nothing is still a clean round');
+});
+
 test('an absent measurement is an empty cell, never a zero', () => {
   // The whole reason `null` exists on these fields. A round from an older server recorded no
   // tokens, and writing 0 would say it used none — a measurement nobody made.

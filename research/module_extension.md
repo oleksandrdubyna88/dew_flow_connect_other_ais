@@ -4305,6 +4305,19 @@ empty list when the text is not JSON or carries no findings array, because an em
 it says the round was clean — and a truncated pipe must not be allowed to make it. `parseManyFindings`
 applies the same rule per entry: a round that says `known: true` and then omits its findings array is
 a shape nobody intended, and it fails the WHOLE answer rather than being normalised to a clean round.
+A `known` that is not a boolean fails it too, since `=== true` would quietly turn `"yes"` into
+`absent` — "never heard of this round" — about a round the server was saying something else about.
+
+*And a finding must arrive with an ORDINAL, or it is not a finding.* `finding()` fills every field it
+is not given, so `{}` used to become a real-looking finding numbered 0 with no title and no
+resolution, which the CSV published as an OPEN finding nobody raised. The operator ruled on
+2026-09-14 that the system must not synthesise an entity from an empty object: no data is a
+validation failure, never a fabricated row. `isFinding` tests the ordinal — a finding's identity, and
+the number a `resolve` decision is keyed by — and leaves every other field defaultable, because
+demanding them all would make this build reject a record the server has legitimately widened. One bad
+entry fails the WHOLE list rather than being dropped: a shorter list reads as a cleaner round, which
+is the same lie by a quieter route. `readStateOf` applies the identical test at `csvOf`'s own door,
+because the host copies rows off a webview message without passing them through the parser.
 
 *A bulk export is one spawn, and the fallback is still four at a time.* `readManyFindings` asks
 `--findings-many` with a keys file and gets every selected round back at once. Exit **64** — and only
