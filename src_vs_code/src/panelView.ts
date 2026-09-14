@@ -20,8 +20,8 @@ import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
-import { CLIENT_TARGETS, clientTargetsLine, mcpServerBlock } from './mcpBlock';
-import { DataLocation } from './dataDir';
+import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
+import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from './dataDir';
 import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
@@ -1120,9 +1120,13 @@ function storageBlock(storage: DataLocation | undefined): string {
 <div class="stale">${escapeHtml(storage.refusal)}</div>`;
   }
 
-  const side = storage.side.length === 0
-    ? '<div class="hint">No side is named, so this is the directory itself. Set <code>COAI_DATA_SIDE</code> only when two installations share one directory — a NAS reached from both Windows and WSL — and each needs its own database.</div>'
-    : `<div class="hint">Side <b>${escapeHtml(storage.side)}</b>, so this window keeps its own database, sessions and sign-ins apart from any other side sharing that directory.</div>`;
+  const side = storage.side.length > 0
+    ? `<div class="hint">Side <b>${escapeHtml(storage.side)}</b>, so this window keeps its own database, sessions and sign-ins apart from any other side sharing that directory.</div>`
+    : storage.ignoredSide.length > 0
+      // A setting somebody made on purpose that is doing nothing. Saying "no side is named" here
+      // would be the panel disagreeing with their own configuration in front of them.
+      ? `<div class="stale">You have set <code>COAI_DATA_SIDE=${escapeHtml(storage.ignoredSide)}</code>, but no <code>COAI_DATA_DIR</code> — so nothing is partitioned and this is the default directory. A side only divides a directory you chose.</div>`
+      : '<div class="hint">No side is named, so this is the directory itself. Set <code>COAI_DATA_SIDE</code> only when two installations share one directory — a NAS reached from both Windows and WSL — and each needs its own database.</div>';
 
   const notes = storage.notes
     .map((note) => `<div class="stale">${escapeHtml(note)}</div>`)
@@ -1132,35 +1136,55 @@ function storageBlock(storage: DataLocation | undefined): string {
 <div class="status">${escapeHtml(storage.directory)}</div>
 ${side}
 ${notes}
-<div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart. To point a server here, put this in its entry:</div>
-<pre class="paste">${escapeHtml(mcpServerBlock('<the coai-mcp path from the ⋯ menu>', dataEnv(storage)))}</pre>
-<div class="hint">It goes in ${escapeHtml(clientTargetsLine(CLIENT_TARGETS))}</div>
+<div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
+${pointAServerHere(storage)}
 ${movingHint(storage)}`;
 }
 
-/** The two variables as the client entry carries them — the side only when there is one. */
-function dataEnv(storage: DataLocation): Record<string, string> {
-  const directory = storage.side.length === 0
-    ? storage.directory
-    : storage.directory.slice(0, storage.directory.length - (storage.side.length + 1));
+/**
+ * The variables a client entry needs so its server reads what this window reads.
+ *
+ * <p><b>An <code>env</code> fragment, not a whole <code>mcpServers</code> block</b>, and that is the
+ * code round's doing: the block needs the path to the binary, this section does not have it, and
+ * rendering the block with a placeholder where the path goes produced something that looks
+ * paste-ready and cannot start a server. Two reviewers raised it. The whole block, with the real
+ * path, is what <i>Install the MCP server…</i> already puts on the clipboard; this is the two keys
+ * to add beside it.</p>
+ *
+ * <p>The values come from {@link DataLocation.env} — read off the ENVIRONMENT where they were set,
+ * never taken back out of the resolved path. They travel through the same
+ * <code>JSON.stringify</code> the install flow uses, which is what makes <code>C:\\Users\\…</code>
+ * and a UNC path survive being pasted.</p>
+ */
+function pointAServerHere(storage: DataLocation): string {
+  if (Object.keys(storage.env).length === 0) {
+    // The default directory needs no variable at all, so there is nothing to paste and no reason
+    // to imply there is.
+    return '<div class="hint">This is the default directory, so a server needs no configuration to find it — any client entry without a <code>COAI_DATA_DIR</code> reads the same place.</div>';
+  }
 
-  return storage.side.length === 0
-    ? { COAI_DATA_DIR: directory }
-    : { COAI_DATA_DIR: directory, COAI_DATA_SIDE: storage.side };
+  return `<div class="hint">To point a server here, add these to the <code>env</code> of its entry — the rest of the block, with the path to the binary, is what <b>Install the MCP server…</b> in the ⋯ menu puts on your clipboard:</div>
+<pre class="paste">${escapeHtml(JSON.stringify({ env: storage.env }, null, 2))}</pre>
+<div class="hint">It goes in ${escapeHtml(clientTargetsLine(CLIENT_TARGETS))}</div>`;
 }
 
 /**
  * What to move when the directory changes, and — the half that matters — what NOT to.
  *
  * <p>Two reviewers asked for this by name on the plan round, because a panel that shows a path and
- * says nothing else leaves a person to guess, and the two wrong guesses are both silent.
- * <code>worktrees/</code> is scratch, pruned on every <code>open</code>: copying it moves nothing of
- * value and can carry a checkout of somebody's repository onto a NAS. The token files belong to the
- * side that signed in — copying those hands one machine's sign-in to another, which is the one thing
- * the per-side layout exists to prevent.</p>
+ * says nothing else leaves a person to guess, and both wrong guesses are silent. The lists
+ * themselves live in <code>dataDir.ts</code> beside the resolution rule, because they are a fact
+ * about the storage rather than about this page: the day the server writes a new persistent
+ * directory, that is where somebody would look.</p>
+ *
+ * <p>The destination warning is the code round's: "COPY the database into &lt;dir&gt;" is an
+ * instruction that silently destroys a side's history if that side already has one.</p>
  */
 function movingHint(storage: DataLocation): string {
-  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY <code>coai.db</code>, <code>sessions/</code>, <code>unparseable/</code> and <code>empty/</code> into ${escapeHtml(storage.directory)}, start it again, and check that the rounds list here still shows your history before deleting anything. Leave <code>worktrees/</code> behind: it is scratch, pruned on every <code>open</code>. Leave the token files behind too — a sign-in belongs to the side that made it.</div>`;
+  const move = DATA_TO_MOVE.map((name) => `<code>${escapeHtml(name)}</code>`).join(', ');
+  const leave = DATA_TO_LEAVE.map((name) => `<code>${escapeHtml(name)}</code>`).join(' and ');
+
+  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY ${move} into ${escapeHtml(storage.directory)}, start it again, and check that the rounds list here still shows your history before deleting anything from the old place. <b>Only into an empty one:</b> if there is already a <code>coai.db</code> where you are copying to, that side has its own history and copying over it destroys that history — back it up and decide which one you are keeping first. Leave ${leave} behind: the first is scratch, pruned on every <code>open</code>, and the second holds sign-ins that belong to the side that made them.</div>`;
 }
 
 function questionsSection(questions: readonly Escalation[]): string {

@@ -1,4 +1,7 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+
+/** The server's own name for it (`RoundsDb.FileName`), and the file a person would move. */
+const DATABASE_FILE = 'coai.db';
 
 /**
  * Where `coai-mcp` keeps its state, and the ONE answer to that question.
@@ -55,7 +58,12 @@ export function coaiDataDir(): string {
       `COAI_DATA_SIDE='${asked}' is not a usable directory name. A side may contain ${SIDE_GRAMMAR}.`);
   }
 
-  return `${root}/${asked}`;
+  // `join`, not string concatenation: `resolve` gives a NATIVE root (C:\srv\coai on Windows) and a
+  // forward slash after it produced a mixed-separator path that the C# half, which uses
+  // Path.Combine, never writes. Both resolve to the same directory, so nothing was broken — but the
+  // two halves printed different strings for one place, which is precisely what the shared vectors
+  // exist to catch and what the panel now puts on screen. (codex, code round.)
+  return join(root, asked);
 }
 
 /** The side-name grammar, spelled exactly as `PanelSettings.IsSafeSide` spells it in C#. */
@@ -88,30 +96,44 @@ export function dataSideName(): string {
  */
 export function whereData(exists: (path: string) => boolean): DataLocation {
   const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
-  const side = dataSideName();
+  const named = dataSideName();
 
   // A side that cannot be used is reported, never guessed at. The server REFUSES TO START on this,
   // so a panel that threw here would hide the one sentence that explains why nothing works.
-  if (configured.length > 0 && side.length > 0 && !isSafeSide(side)) {
+  if (configured.length > 0 && named.length > 0 && !isSafeSide(named)) {
     return {
       directory: '',
-      side,
-      refusal: `COAI_DATA_SIDE='${side}' is not a usable directory name, so the server refuses to `
+      side: named,
+      ignoredSide: '',
+      refusal: `COAI_DATA_SIDE='${named}' is not a usable directory name, so the server refuses to `
         + `start. A side may contain ${SIDE_GRAMMAR}.`,
       notes: [],
+      env: {},
     };
   }
 
   const directory = coaiDataDir();
+
+  // A side named while NO directory is configured partitions nothing: `coaiDataDir` ignores it and
+  // returns the default. Reporting it as the side in use would be a lie about the one thing this
+  // section exists to state — "this window keeps its database apart" — and it would then be handed
+  // to a paste block as though it meant something. Named separately so the panel can say what is
+  // actually true: you set a side, and nothing is using it. (gemini, code round.)
   if (configured.length === 0) {
-    // The default has not moved, and nothing about it is worth warning anybody over.
-    return { directory, side, refusal: '', notes: [] };
+    return {
+      directory,
+      side: '',
+      ignoredSide: named,
+      refusal: '',
+      notes: [],
+      env: {},
+    };
   }
 
   const root = resolve(configured);
   const notes: string[] = [];
 
-  if (directory !== root && exists(`${root}/${DATABASE_FILE}`)) {
+  if (directory !== root && exists(join(root, DATABASE_FILE))) {
     notes.push(
       `There is a ${DATABASE_FILE} directly in ${root}, from the layout before this directory was `
       + `shared between sides. It is NOT being used — this window reads and writes ${directory}. `
@@ -124,23 +146,67 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
       + 'check COAI_DATA_DIR for a typo before recording into it.');
   }
 
-  return { directory, side, refusal: '', notes };
+  return {
+    directory,
+    side: named,
+    ignoredSide: '',
+    refusal: '',
+    notes,
+    // Built from the ENVIRONMENT, which is where these values came from — never taken back out of
+    // the rendered path. Five reviewers reached the same conclusion by different routes: slicing a
+    // side name off the end of a resolved directory is arithmetic that is wrong the moment a side
+    // maps to anything but `<root>/<side>`, and silently wrong on a drive root.
+    env: { COAI_DATA_DIR: root, COAI_DATA_SIDE: named },
+  };
 }
 
 /** What `whereData` answers: where this window reads, and what to say about it. */
 export interface DataLocation {
   /** The resolved directory — empty only when the side was refused. */
   readonly directory: string;
-  /** The side name, or empty when none was asked for. */
+  /** The side actually in effect, or empty. */
   readonly side: string;
+  /**
+   * A side that was named and is doing nothing, because no directory is configured.
+   *
+   * <p>Its own field rather than a silence: `COAI_DATA_SIDE` without `COAI_DATA_DIR` is a setting
+   * somebody made on purpose and that has no effect, which is exactly the state this section exists
+   * to make visible.</p>
+   */
+  readonly ignoredSide: string;
   /** Why there is no directory, or empty. A refusal is a state, not an exception, on this surface. */
   readonly refusal: string;
   /** What a person should be told — a loose database, a directory that is not there yet. */
   readonly notes: readonly string[];
+  /**
+   * What a client entry needs so its server reads the same directory this window does.
+   *
+   * <p>Empty when there is nothing to say: the default directory needs no variable, and a refused
+   * side has no configuration worth offering. `COAI_DATA_SIDE` is present whenever a side is,
+   * including none — the key is omitted by the caller rather than carrying an empty value.</p>
+   */
+  readonly env: Readonly<Record<string, string>>;
 }
 
-/** The server's own name for it (`RoundsDb.FileName`), and the file a person would move. */
-const DATABASE_FILE = 'coai.db';
+/**
+ * What moves when the directory does, and — the half that is easy to get wrong — what does not.
+ *
+ * <p>Here rather than in the renderer because it is a fact about the STORAGE, not about the page:
+ * the day the server writes a new persistent directory, this is the list that has to grow, and a
+ * sentence buried in a panel is not where anybody would look for it. (codex, code round.)</p>
+ */
+export const DATA_TO_MOVE: readonly string[] = [DATABASE_FILE, 'sessions/', 'unparseable/', 'empty/'];
+
+/**
+ * What to leave behind, with the reason each one is a trap.
+ *
+ * <p>Both are silent when got wrong, which is why they are named rather than left to judgement:
+ * `worktrees/` is scratch pruned on every `open`, so copying it moves a checkout of somebody's
+ * repository onto a NAS for no benefit; and a token belongs to the side that signed in, so copying
+ * one hands a machine's sign-in to another — the thing the per-side layout exists to prevent.</p>
+ */
+export const DATA_TO_LEAVE: readonly string[] = ['worktrees/', 'servers/'];
+
 
 /**
  * The server's own rule, and deliberately narrower than any filesystem's.

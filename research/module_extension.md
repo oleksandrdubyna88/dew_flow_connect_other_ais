@@ -1785,6 +1785,23 @@ and hands over the line that makes a client's server read the same one, so the c
 glance. It also answers the "chosen directory" question the plan left open: there is no picker,
 because the directory being offered is the one this window already resolved.
 
+**The code round then took out the arithmetic.** The first build reconstructed the root
+`COAI_DATA_DIR` by slicing the side name off the end of the resolved directory — and five reviewers
+reached the same conclusion by different routes. It is wrong the moment a side maps to anything but
+`<root>/<side>`, wrong on a drive root, and silently wrong when `COAI_DATA_SIDE` is set while
+`COAI_DATA_DIR` is not: there `coaiDataDir()` ignores the side and returns the DEFAULT path, which
+was then sliced by the length of a side that had never been applied to it. `DataLocation.env` now
+carries the two variables read off the environment where they were set, and `ignoredSide` names a
+side that is doing nothing so the panel can say so instead of claiming a partition that does not
+exist.
+
+**And `coaiDataDir` joins with `join`.** `resolve()` returns a native root, so `${root}/${asked}`
+produced `C:\srv\coai/windows` — a mixed-separator string the C# half, which uses `Path.Combine`,
+never writes. Both resolve to the same directory, so nothing was broken; but the two halves printed
+different strings for one place, which is what the shared vectors exist to catch and what the panel
+now puts on screen. The vector tests had the same defect in their EXPECTATIONS, concatenating with a
+forward slash, and would have failed on the platform this feature is for.
+
 Three more things the round insisted on, each cheap and each load-bearing:
 
 - **A refused side is rendered, never thrown.** `coaiDataDir()` throws on an unusable
@@ -1792,13 +1809,25 @@ Three more things the round insisted on, each cheap and each load-bearing:
   somebody opens this section to find out what is wrong. `whereData` returns the refusal as a state,
   and `whereThisWindowKeepsItsData` in the provider catches anything else the filesystem can throw,
   so the page never loses the sentence that explains itself.
-- **The pasted block goes through `mcpServerBlock`**, the same `JSON.stringify` the install flow
-  uses, which is what makes a UNC path and `C:\Users\…` survive being pasted. Hand-built strings
-  hold invalid escapes and the client reports a malformed config instead of a bad path.
-- **It names what NOT to move.** `worktrees/` is scratch pruned on every `open`, and the token files
-  belong to the side that signed in — copying those hands one machine's sign-in to another, which is
-  the one thing the per-side layout exists to prevent. Both wrong guesses are silent, so the
-  inventory is asserted by a test rather than left to the prose.
+- **It offers an `env` FRAGMENT, not a whole `mcpServers` block.** The block needs the path to the
+  binary and this section does not have it; the first build rendered the block anyway with a
+  placeholder where the path goes, which looks paste-ready and cannot start a server. Two reviewers
+  raised it. The whole block, with the real path, is what *Install the MCP server…* already puts on
+  the clipboard — this is the two keys to add beside it, through the same `JSON.stringify`, which is
+  what makes a UNC path and `C:\Users\…` survive a paste.
+- **It names what NOT to move.** `worktrees/` is scratch pruned on every `open`, and `servers/`
+  holds sign-ins that belong to the side that made them — copying those hands one machine's sign-in
+  to another, which is the one thing the per-side layout exists to prevent. Both wrong guesses are
+  silent, so the inventory lives in `dataDir.ts` as `DATA_TO_MOVE` / `DATA_TO_LEAVE` — a fact about
+  the storage rather than about this page, where somebody would look the day the server writes a new
+  persistent directory — and a test asserts the page renders from them.
+- **It says the destination must be empty.** "COPY `coai.db` into that directory" is an instruction
+  somebody follows, and if the destination already holds a database the rounds it recorded are gone
+  before the later "check your history" step can notice.
+- **The existence probes are asynchronous.** The primary use case for a chosen directory is a NAS,
+  and a synchronous `existsSync` against a disconnected SMB share blocks the extension host for as
+  long as the share takes to time out — every panel interaction hung, with nothing on screen to say
+  why.
 
 Nothing here moves anything. Copying stays out of scope: a partial copy, a file in use, a database
 being written while it is read — the instructions say to stop the server, copy, verify the rounds

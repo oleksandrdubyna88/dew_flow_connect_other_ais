@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { coaiDataDir, dataSideName, whereData } from '../dataDir';
 
@@ -56,10 +56,10 @@ test('a chosen directory with no side named is used exactly as chosen', () => {
 
 test('a named side is appended, so two installations on one NAS do not share a token', () => {
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' }, () => {
-    assert.equal(coaiDataDir(), `${ROOT}/windows`);
+    assert.equal(coaiDataDir(), join(ROOT, 'windows'));
   });
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'wsl' }, () => {
-    assert.equal(coaiDataDir(), `${ROOT}/wsl`);
+    assert.equal(coaiDataDir(), join(ROOT, 'wsl'));
   });
 });
 
@@ -96,7 +96,7 @@ test('a whitespace-only directory means unset, as it does in the server', () => 
 test('the side is lower-cased, as the server lower-cases it', () => {
   // Two halves disagreeing on case is the same silent "not signed in" as disagreeing on the name.
   withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'Windows' }, () => {
-    assert.equal(coaiDataDir(), `${ROOT}/windows`);
+    assert.equal(coaiDataDir(), join(ROOT, 'windows'));
   });
 });
 
@@ -133,12 +133,19 @@ interface Vector {
 const VECTORS: readonly Vector[] = JSON.parse(
   readFileSync(resolve(__dirname, '../../..', 'shared/data-side-vectors.json'), 'utf8'),
 ).vectors;
-
-/** `<root>` and `<default>` stand for paths the two languages spell for themselves. */
+/**
+ * `<root>` and `<default>` stand for paths the two languages spell for themselves.
+ *
+ * <p>Built with `join`, never by concatenating the vector text: on Windows ROOT is
+ * `C:\srv\coai` and appending `/windows` produced a mixed-separator string that the
+ * production resolver — and `Path.Combine` on the C# side — never writes. The first version
+ * did exactly that and would have failed on the platform this feature is FOR. (codex, code
+ * round; the `replaceAll` it also flagged was a no-op.)</p>
+ */
 function expected(vector: Vector): string {
   return vector.dir === '<default>'
     ? coaiDataDirWithNothingSet()
-    : vector.dir.replace('<root>', ROOT).replaceAll('/', vector.dir.includes('<root>') ? '/' : '/');
+    : join(ROOT, ...vector.dir.replace('<root>', '').split('/').filter((part) => part.length > 0));
 }
 
 function coaiDataDirWithNothingSet(): string {
@@ -184,7 +191,7 @@ test('every shared vector warns about exactly what the server warns about', () =
       () => {
         const resolved = expected(vector);
         const where = whereData((path) =>
-          path === `${ROOT}/coai.db` ? vector.rootHasDatabase : path !== resolved || vector.dirExists);
+          path === join(ROOT, 'coai.db') ? vector.rootHasDatabase : path !== resolved || vector.dirExists);
 
         const kinds = where.notes.map((n) => (n.includes('coai.db') ? 'loose-database' : 'new-directory'));
         assert.deepEqual(kinds, [...vector.notes], vector.why);
