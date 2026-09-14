@@ -108,7 +108,7 @@ test('a live script never reports a pass for a run that measured nothing', () =>
   // refusal all produce an answer with no planted number in it, and reading that as "it forgot" is a
   // pass earned by the vendor being broken.
   assert.match(fresh, /const ALIVE = /u, 'nothing asks the session after the reset whether it is answering at all');
-  assert.match(fresh, /const answering = answered\(alive, '4'\)/u, 'the liveness answer is not read');
+  assert.match(fresh, /const answering = answeredExactly\(alive, '4'\)/u, 'the liveness answer is not read');
   assert.match(fresh, /if \(!answering\) \{/u, 'a session that could not answer still yields a verdict about the number');
   // A turn that FAILED is not a conversation that remembered — it was reported as "still knows it",
   // naming the vendor as leaking context when the truth was a broken turn. (gemini, the code round.)
@@ -132,10 +132,24 @@ test('an answer is matched as an ANSWER, not as a substring of prose', () => {
   // gemini, the code round, four findings between them.)
   const fresh = scriptText('live-fresh.mjs');
 
-  assert.doesNotMatch(fresh, /\.answer\.includes\(/u, 'an answer is still matched by substring somewhere in this script');
-  assert.match(fresh, /const answered = \(turn, value\) =>/u, 'there is no one place that decides whether a turn answered with a value');
-  assert.match(fresh, /\(\?:\^\|\[\^0-9\]\)\$\{value\}\(\?:\[\^0-9\]\|\$\)/u,
-    'the answer test does not require the value to stand as a token of its own');
+  // TWO comparisons, each failing toward "no pass" — that asymmetry is what makes them controls.
+  // Where a pass needs PROOF the value was answered, only the whole trimmed reply will do; where a
+  // pass needs the value ABSENT, anything carrying it counts as present.
+  assert.match(fresh, /const answeredExactly = \(turn, value\) => turn\.ok && bare\(turn\.answer\) === value;/u,
+    'a pass can be earned by a reply that merely mentions the value — "retry in 4 minutes" satisfies '
+    + 'both a substring test and a token test, which is how a rate-limited vendor passes a liveness control');
+  assert.match(fresh, /const mentions = \(turn, value\) => turn\.ok && bare\(turn\.answer\)\.includes\(value\);/u,
+    'the check for the value being GONE is exact, so a model that says "the number was 7431" reads as '
+    + 'having forgotten it — the false pass this script exists to avoid');
+  assert.match(fresh, /const kept = answeredExactly\(remembered, NUMBER\)/u, 'the first control is not the exact one');
+  assert.match(fresh, /const answering = answeredExactly\(alive, '4'\)/u, 'the liveness control is not the exact one');
+  assert.match(fresh, /return mentions\(recalled, NUMBER\) \? 'still knows it' : 'forgot'/u,
+    'the verdict is not taken from the loose comparison, so a chatty answer reads as forgetting');
+  // AND NO PATTERN IS BUILT FROM THE VALUE. It comes from `--number` on the command line; the
+  // digits-only validation upstream makes it harmless in fact, but a regex assembled from an argument
+  // is the shape of the defect, and CodeQL called it high-severity js/regex-injection — the one
+  // finding on this change that three human reviewers all missed.
+  assert.doesNotMatch(fresh, /new RegExp\(/u, 'a regular expression is built from a command-line argument again');
 });
 
 test('the command line is parsed, and a bad one costs nothing', () => {
