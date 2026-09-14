@@ -340,6 +340,21 @@ test('a conversation can be restored WITHOUT a panel, and the panel is then crea
     'a second place builds a chat panel — the icon, the wiring and the disposal are set up in createChatPanel and nowhere else');
 });
 
+test('a NARROWED picker opens already searching for the tab it was opened about', () => {
+  // *Go to* opens this because it could not answer on its own, and the list it opened was every
+  // conversation of the root in date order — under a title naming a tab most of those rows have
+  // nothing to do with. The tab's own name goes in the box, so the question is mostly answered
+  // before it is asked; one backspace is the whole list back. (Found by the operator, testing 0.40.0.)
+  const text = widget();
+
+  assert.match(text, /let query = narrowed === undefined \? '' : narrowed\.offer;/u,
+    'a narrowed picker starts with an empty search, so it asks a question it could have answered');
+  assert.match(text, /pick\.value = query;/u,
+    'the seeded search is not put in the box, so the list is narrowed for a reason nobody can see or clear');
+  // The GENERAL list is not seeded: it was opened to show everything.
+  assert.doesNotMatch(text, /let query = narrowed\?\.offer/u);
+});
+
 test('the picker is not closed until a tab is actually on screen', () => {
   // Every way choosing can fail says something about THIS LIST — "it has been taken off this list",
   // "the row stays", "it is open in another window". A picker hidden before the work made all three

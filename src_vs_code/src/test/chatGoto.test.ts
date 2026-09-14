@@ -78,6 +78,90 @@ test('the root a tab belongs to is one the host can ask for, and it is the root 
   }))), 'pick');
 });
 
+test('an ambiguous tab whose NAME matches exactly one conversation opens it', () => {
+  // The name is the last thing left, and only here: everywhere else this module matches a source and
+  // never a title. On this path there is no source to be wrong about — the tab's own session could
+  // not be resolved — so the alternative is not "match by source instead", it is "show everything and
+  // ask". Which is what it did: a title reading «more than one Claude session is called X» above
+  // forty rows mostly not called X. (Found by the operator, testing 0.40.0.)
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const mine = meta({ id: 'astra', title: 'speak with Astra', source: sourceOfSession('11111111-2222-3333-4444-555555555555') });
+  const other = meta({ id: 'other', title: 'Logging analysis' });
+
+  assert.deepEqual(
+    goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [other, mine] })),
+    { kind: 'reopen', meta: mine },
+    'a tab whose name matches one conversation still opens a list of everything',
+  );
+});
+
+test('several of that name narrow the question to THOSE, not to everything', () => {
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const one = meta({ id: 'a1', title: 'speak with Astra' });
+  const two = meta({ id: 'a2', title: 'speak with Astra' });
+  const other = meta({ id: 'x', title: 'Logging analysis' });
+  const answer = goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [other, one, two] }));
+
+  assert.equal(kindOf(answer), 'pick');
+  assert.deepEqual(
+    answer.kind === 'pick' ? answer.among : [],
+    [one, two],
+    'the picker for an ambiguous tab still offers conversations that are not called what the tab is called',
+  );
+});
+
+test('and a name that matches NOTHING falls back to the whole root, as it always did', () => {
+  // A list of everything is still better than nothing when the name says nothing either.
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const other = meta({ id: 'x', title: 'Logging analysis' });
+  const answer = goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [other] }));
+
+  assert.equal(kindOf(answer), 'pick');
+  assert.deepEqual(answer.kind === 'pick' ? answer.among : [], [other]);
+});
+
+test('an EMPTY tab name matches nothing rather than everything', () => {
+  // The difference between a fallback and a bug: an unnamed tab must not adopt the one conversation
+  // that happens to have been saved with an empty title.
+  const tab = { kind: 'claude' as const, label: '', path: '' };
+  const nameless = meta({ id: 'n', title: '' });
+  const answer = goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [nameless] }));
+
+  assert.equal(kindOf(answer), 'pick', 'a nameless tab reopened a conversation on the strength of a shared emptiness');
+});
+
+test('the name is a fallback ONLY where there is no source — never beside a good one', () => {
+  // The rule the whole module rests on: a tab whose source resolved and matched nothing HAS no
+  // conversation, and a conversation of the same name belongs to some other tab. Matching it here
+  // would be the silent wrong-conversation this feature exists to prevent, arriving through the
+  // fallback added to fix something else.
+  const tab = { kind: 'document' as const, label: 'main.ts', path: HERE_PATH };
+  const namesake = meta({ id: 'ns', title: 'main.ts', source: sourceOfFile('file:///D:/rsd/one/OTHER.ts') });
+
+  assert.equal(
+    kindOf(goto(asked({ tab, ambiguous: false, inRoot: [namesake], candidates: [] }))),
+    'start',
+    'a resolved tab with no conversation of its own adopted one that merely shares its name',
+  );
+
+  // AND THE SAME FOR A CLAUDE TAB WHOSE SESSION RESOLVED. This is the case the guard is actually
+  // made of — the branch the name fallback lives on is a Claude branch, so a test that only proves
+  // it for a document proves nothing about the condition that keeps it there. (Found by breaking
+  // `asked.ambiguous &&` out of the guard and watching the suite stay green.)
+  const resolved = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  assert.equal(
+    kindOf(goto(asked({
+      tab: resolved,
+      ambiguous: false,
+      source: sourceOfSession('99999999-8888-7777-6666-555555555555'),
+      inRoot: [meta({ id: 'ns2', title: 'speak with Astra' })],
+      candidates: [],
+    }))),
+    'start',
+    'a Claude tab whose own session resolved still adopted a conversation that merely shares its name',
+  );
+});
+
 test('what this window already holds is revealed, and nothing is read to find out', () => {
   // The ten-tabs case, and the reason the whole feature was asked for. It is decided on the TAB
   // rather than on a source, so it is right even for a conversation that has none.

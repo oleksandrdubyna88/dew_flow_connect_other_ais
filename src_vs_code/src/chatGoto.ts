@@ -214,11 +214,38 @@ export function goto(asked: GotoAsked): Goto {
     return { kind: 'pick', among: asked.inRoot, why: { kind: 'unreadable', reason: asked.index.reason }, offer, bind: true };
   }
   if (asked.ambiguous && asked.tab.kind === 'claude') {
-    // The TAB's own identity is in doubt, not the conversations'. So the root's conversations are
-    // shown and the person tells the two sessions apart. Only a Claude tab can be ambiguous in this
-    // sense — a document is named by its uri, which answers to one thing or to nothing — so the flag
-    // is read only where it can mean something rather than trusted wherever it is set. (codex.)
-    return { kind: 'pick', among: asked.inRoot, why: { kind: 'ambiguous session' }, offer, bind: true };
+    // The TAB's own identity is in doubt, not the conversations'. Only a Claude tab can be ambiguous
+    // in this sense — a document is named by its uri, which answers to one thing or to nothing — so
+    // the flag is read only where it can mean something rather than trusted wherever it is set.
+    // (codex, the plan round.)
+    //
+    // THE NAME IS THE LAST THING LEFT, and only here. Everywhere else this module matches a source
+    // and never a title, because a title is somebody else's word for a thing and two tabs can share
+    // one — handing a conversation to a tab that never owned it is this feature's worst failure. But
+    // on THIS path there is no source to be wrong about: the tab's own session could not be
+    // resolved, so the alternative is not "match by source instead", it is "show forty rows and ask".
+    // The first version did exactly that, under a title reading "more than one Claude session is
+    // called X" above a list of conversations mostly not called X. (Found by the operator, testing
+    // 0.40.0: *"должно брать имя с вкладки… если находит только 1 разговор с таким именем —
+    // логично открывать его самому"*.)
+    //
+    // A unique match opens. It is NOT bound to the tab — `bindable` refuses a source of `none`, and
+    // it is right to: what has been guessed from a name is not something to write down as ownership.
+    // Several matches narrow the question to them. None leaves the old behaviour, because a list of
+    // everything is still better than nothing when the name says nothing either.
+    const named = sameName(asked.inRoot, asked.tab.label);
+    const only = named.length === 1 ? named[0] : undefined;
+    if (only !== undefined) {
+      return { kind: 'reopen', meta: only };
+    }
+
+    return {
+      kind: 'pick',
+      among: named.length > 0 ? named : asked.inRoot,
+      why: { kind: 'ambiguous session' },
+      offer,
+      bind: true,
+    };
   }
   // ONE PASS over the source matches, split by whether they are this tab's project or another's.
   const mine: ConversationMeta[] = [];
@@ -284,6 +311,17 @@ function eligible(kind: TabKind): boolean {
  * is the line this whole story rests on: every conversation written before C1 has no source, and
  * handing one of them to a tab that never owned it would be this feature's worst failure.</p>
  */
+/**
+ * The conversations in this root that were opened from a tab of this NAME.
+ *
+ * <p>A record's title is the label of the tab it was opened from, captured then. So this asks "was
+ * anything here started from a tab called that", which is a guess — and it is used in exactly one
+ * place, where the honest answer to the better question is already "I cannot tell". An empty label
+ * matches nothing rather than everything, which is the difference between a fallback and a bug.</p>
+ */
+const sameName = (rows: readonly ConversationMeta[], label: string): readonly ConversationMeta[] =>
+  (label.trim().length === 0 ? [] : rows.filter((meta) => meta.title === label));
+
 /**
  * The root this tab belongs to — its own, or the fallback for a tab under none of them.
  *

@@ -15,6 +15,10 @@ import * as path from 'node:path';
  * the dispatch is exhaustive. (codex, the plan round, asked for exactly this.)</p>
  */
 
+/** Where one function begins and the next one does, so an assertion cannot match a neighbour. */
+const between = (text: string, from: string, to: string): string =>
+  text.slice(text.indexOf(from), text.indexOf(to));
+
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
@@ -158,8 +162,8 @@ test('the offer to start one can be CHOSEN, and is not shown where it cannot be'
   // no longer the one in front, because starting a conversation for the wrong tab is the guess this
   // whole answer exists to avoid.
   assert.match(command, /onNew: startingFor\(panels, extensionUri, asked, key\)/u, 'the picker is given no way to start one');
-  const starting = command.slice(command.indexOf('function startingFor('));
-  assert.match(starting, /!tabStillOpen\(key\) \|\| !activeTabIs\(key\)/u,
+  const starting = between(command, 'function startingFor(', 'function bindingTo(');
+  assert.match(starting, /!activeTabIs\(asked\.tab\.label\)/u,
     'a conversation can be started for whatever tab happens to be in front when the row is pressed');
   assert.match(starting, /chatWithOtherAi\(panels, extensionUri, \[\], false\)/u, 'the offer does not open a conversation');
 });
@@ -184,6 +188,27 @@ test('a conversation already live is REBOUND from the picker too, not only from 
     chooses.indexOf('whereConversationSits') < chooses.indexOf('deps.store.read'),
     'a conversation is read back off disk before the registry is asked whether this window already holds it',
   );
+});
+
+test('the offer is refused by NAME, never by a captured tab object', () => {
+  // The bug the operator found in 0.40.0: this compared a `vscode.Tab` captured when the chord was
+  // pressed against the one in front when the row was chosen, and VS Code hands out a NEW Tab object
+  // whenever a tab changes — a Claude Code tab renames itself as the assistant refines the session
+  // title, which is the behaviour `rekeysByLabel` already exists to work around. So identity was
+  // false for the tab still sitting in front, and the offer refused EVERY press.
+  const command = source('chatGotoCommand.ts');
+  const starting = between(command, 'function startingFor(', 'function bindingTo(');
+
+  assert.match(starting, /!activeTabIs\(asked\.tab\.label\)/u, 'the refusal is not decided by the tab’s name');
+  // THE CONDITION, not the prose around it: the comment above it names the call it replaced, and an
+  // assertion that reads comments is one a comment can satisfy.
+  assert.doesNotMatch(starting, /if \([^)]*(?:tabStillOpen|activeTabIs)\(key\)/u,
+    'the refusal still compares a captured tab object, which goes stale the moment the tab is renamed');
+  // And the host side takes a label rather than a key, so the mistake cannot be made from here again.
+  assert.match(source('chatCommand.ts'), /export function activeTabIs\(label: string\): boolean \{[\s\S]{0,200}snapshots\(\)\.active\?\.label === label/u,
+    'activeTabIs compares something other than the label');
+  assert.match(source('chatCommand.ts'), /label\.length > 0 &&/u,
+    'an unnamed tab matches an unnamed front tab, so the offer would fire for whatever is there');
 });
 
 test('a record that moved says so AND opens the list, rather than stopping', () => {

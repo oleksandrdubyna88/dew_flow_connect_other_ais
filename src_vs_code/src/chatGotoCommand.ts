@@ -225,7 +225,12 @@ function startingFor(
   key: object | undefined,
 ): () => void {
   return () => {
-    if (key === undefined || !tabStillOpen(key) || !activeTabIs(key)) {
+    // BY NAME, never by the captured tab object. See `activeTabIs`: a `vscode.Tab` is replaced when
+    // the tab changes, a Claude Code tab renames itself as the assistant works, and comparing
+    // identity here refused every press — including the one where the right tab was in front all
+    // along. `tabStillOpen(key)` is gone from this check for the same reason; a tab whose name is
+    // in front is open by definition.
+    if (key === undefined || !activeTabIs(asked.tab.label)) {
       void vscode.window.showWarningMessage(
         `Open “${asked.tab.label}” again and press once more — a conversation is started for the tab in front.`,
       );

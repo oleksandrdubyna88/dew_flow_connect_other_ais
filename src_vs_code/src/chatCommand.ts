@@ -980,15 +980,24 @@ export function revealBound(panels: ChatPanels, where: object, onto: object | un
 }
 
 /**
- * Is this tab the one in FRONT — not merely still open?
+ * Is the tab in front the one this NAME belongs to?
  *
  * <p>Asked before a conversation is STARTED for the tab a picker row names. The door that starts one
  * reads whatever is active when it runs, so a person who moved to another tab while the picker was up
- * would get a conversation for THAT one instead — created on a guess, which is the single thing this
- * answer exists to avoid.</p>
+ * would get a conversation for THAT one instead — created on a guess.</p>
+ *
+ * <p><b>By label, and that is the whole repair.</b> This took a `vscode.Tab` and compared identity,
+ * which made the offer row refuse EVERY time it was pressed rather than only when somebody had
+ * moved: VS Code hands out a NEW `Tab` object when a tab changes, and a Claude Code tab changes
+ * constantly — it renames itself as the assistant refines the session's title, which is the very
+ * behaviour `Thread.sessionFile` exists to survive and `rekeysByLabel` exists to work around. A key
+ * captured when the chord was pressed is therefore a stale object by the time a person has read a
+ * list and chosen a row, and `key === key` was false for the tab still sitting in front of them.
+ * A label is a string: it survives the object being replaced, and it is what the refusal talks
+ * about. (Found by the operator, testing 0.40.0.)</p>
  */
-export function activeTabIs(key: object): boolean {
-  return snapshots().active?.key === key;
+export function activeTabIs(label: string): boolean {
+  return label.length > 0 && snapshots().active?.label === label;
 }
 
 /**
