@@ -1970,6 +1970,32 @@ picker offers — because that rule has one precondition nothing was checking: t
 must be the same value. The gate's own defaults diverged for a day once, and a new install read one
 number off the screen while another one ran.
 
+**A legacy entry resolves into a definition when it is READ (2026-09-14, story A1 of
+[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)).**
+`ConsultantChoice` carries `runtime`, `baseUrl` and `executablePath` beside `vendor` and `model`, and
+`runtime: ''` is a LEGACY reference — every map written before this, and the four shipped pairs, which
+stay byte-for-byte the legacy pairs `ConsultantRouting.Shipped` holds. `resolveConsultant` is the one
+rule, stated once for the reader, the section, the wire and (story B3) the server: **(a)** a reviewer
+row with that id, **enabled or disabled**, lends its runtime, its model unless the entry names one, its
+endpoint and its CLI path — matched case-insensitively, because `ConsultationService` has always looked
+the row up with `OrdinalIgnoreCase` while `vendorsFrom` lower-cases ids; **(b)** else an id that is
+itself a consulting runtime is that runtime with nothing borrowed; **(c)** else the entry is
+UNAVAILABLE, preserved raw with a reason a person can act on. The vendor id is rewritten by no arm — it
+keys the vault entry and the ledger. It runs inside `consultSettingsFrom`, on every read, and writes
+nothing: a migration that waits for an edit never runs for the person who never edits the section,
+and the opening symptom — the shipped `codex → claude` dead with no `claude` reviewer row — was a panel
+nobody had touched. `ConsultSettings` therefore holds TWO maps. `byCaller`, resolved, is what the
+section draws and a consultation runs on; `stored`, unresolved, is what `isDefaultConsult`,
+`sameCallers` (all five fields) and `envBlock` compare against the shipped pairs — a pristine map
+resolved against customised reviewer rows differs from the shipped pairs in every field and is still
+exactly what the server runs with no key, so comparing the resolved side would have every untouched
+install writing `COAI_CONSULTANTS`. `panelServerDefaultsAgreement.test.ts` pins that from the reader's
+direction, because its older `envBlock(DEFAULTS)` assertion never passes through the reader and stayed
+green with the comparison on the wrong side. Until story B4 has measured a definition against an OLD
+server half, `envBlock` projects the STORED entry back to `{vendor, model}` through an explicitly
+temporary `legacyPair`, so the wire is byte-identical to before — a legacy `codex` entry whose row is
+on `gpt-5.6-luna` now READS as `gpt-5.6-luna` and still SENDS `""`.
+
 **A fourth `SettingWrite` kind arrived with it.** The four rows share two setting names and are told
 apart by `data-caller`, exactly as the round budgets are told apart by `data-role`; travelling in the
 vendor slot would have had the provider hunt for a vendor called `claude` when the row means "what
@@ -2116,7 +2142,7 @@ flowchart LR
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
-| `consultSettings.ts` | pure: the five consult settings, the shipped caller map (a mirror of `ConsultantRouting.Shipped`), which vendor rows may consult and why one may not |
+| `consultSettings.ts` | pure: the five consult settings, the shipped caller map (a mirror of `ConsultantRouting.Shipped`, legacy-shaped), `resolveConsultant` — the one rule that turns a legacy entry into a definition on read, or names it unavailable — and which vendor rows may consult and why one may not |
 | `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box |
 | `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
 | `consultations.ts` | pure: one consultation record, and the card the sidebar draws while it runs |

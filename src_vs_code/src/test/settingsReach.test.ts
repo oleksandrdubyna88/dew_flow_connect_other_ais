@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CoaiSettings, DEFAULTS, envBlock } from '../settingsShape';
+import { ConsultantChoice } from '../consultSettings';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { selectedFor } from '../prompts';
@@ -12,6 +13,14 @@ import { selectedFor } from '../prompts';
  * empty and readable — and makes forgetting one field invisible: the panel saves, the file has no
  * key, the server uses its own default, and nothing anywhere says so. This walks every field.</p>
  */
+/** Four definitions, none of them a shipped pair — every field the consultant owns, set. */
+const CHANGED_CALLERS: Readonly<Record<string, ConsultantChoice>> = {
+  claude: { vendor: 'claude', runtime: 'claude', model: 'claude-opus-5', baseUrl: '', executablePath: '' },
+  codex: { vendor: 'codex', runtime: 'codex', model: '', baseUrl: '', executablePath: '/opt/codex/bin/codex' },
+  gemini: { vendor: 'antigravity', runtime: 'antigravity', model: '', baseUrl: '', executablePath: '' },
+  other: { vendor: 'local', runtime: 'local', model: 'qwen', baseUrl: 'http://localhost:11434/v1', executablePath: '' },
+};
+
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   rounds: { PlanCritique: 5, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 },
   thresholds: { PlanCritique: 1, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
@@ -34,13 +43,10 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
             prompts: [{ id: 'requirements-general', label: 'General' }] }],
   // Every part of it changed at once, because this walk changes ONE top-level setting at a time and
   // `consult` is one setting holding five things — a caller map that differs, and four numbers.
+  // The same map on both sides, as a value written as definitions and read back would carry it.
   consult: {
-    byCaller: {
-      claude: { vendor: 'claude', model: 'claude-opus-5' },
-      codex: { vendor: 'codex', model: '' },
-      gemini: { vendor: 'antigravity', model: '' },
-      other: { vendor: 'local', model: 'qwen' },
-    },
+    byCaller: CHANGED_CALLERS,
+    stored: CHANGED_CALLERS,
     turns: 3,
     callsPerSession: 4,
     idleMinutes: 30,
