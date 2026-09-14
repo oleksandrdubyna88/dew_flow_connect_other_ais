@@ -499,7 +499,22 @@ defects of it:
   recorded" where the batch mode now says the read failed. Shipped behaviour from an earlier plan,
   deliberately not changed here.
 - **`roundsLogPage.test.ts` still asserts over the page's source text.** The two controls this plan
-  added are tested by RUNNING the page; converting the rest is a refactor of a pre-existing file.
+  added are tested by RUNNING the page; converting the rest is a refactor of a pre-existing file —
+  now its own ticket, [../todo/PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md),
+  with the prohibition on NEW source-text assertions already in force.
+- **The cross-side contract test READS the server's source; it does not run the server.**
+  `manyFindingsContract.test.ts` asserts that the field names `parseManyFindings` looks for are the
+  ones `LoggedRoundOfMany` and `RoundKeyDto` declare, following `dataDirAgreesWithTheServer.test.ts`,
+  the pattern this repository already uses for this seam. It has teeth — renaming `SessionId` on the
+  server reddens the extension suite, verified by doing it — but it would not catch a change that
+  keeps the names and alters the SERIALISATION: a naming policy, a converter, a null-handling option.
+  What would catch that is one test that runs the built `coai-mcp --findings-many` and feeds its real
+  stdout to `parseManyFindings`. It is not here because it makes `npm test` depend on a `dotnet
+  build`, and a test that SKIPS when the binary is absent is the failure mode
+  `common/testing.md` names outright ("nobody had run it against a live engine"). The C# side does
+  run the real binary for these modes (`LogCliScenarioTests`), so the untested gap is narrow: the
+  wire format as the TypeScript parser sees it. Raised by codex in C2's first code round and by
+  CodeRabbit on the pull request; worth a plan of its own, with the skip question answered first.
 
 ## Definition of Done
 
