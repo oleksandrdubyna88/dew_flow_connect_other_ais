@@ -287,6 +287,30 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### A field added to the round list, and what "an older half" does with it (2026-09-14)
+
+`coai-mcp --log` is the other seam between the two containers, and it gained a member:
+`LoggedRound.ResolvedUtc`, the latest `resolved_utc` over a round's findings. The extension turns it
+into the second figure in the log's **Took** column — `started_utc → completed_utc` is the reviewers
+running, and `completed_utc → ResolvedUtc` is how long the deciding took. The stamp itself is not
+new; `resolve` has written it since the table existed, and nothing had ever read it back.
+
+It is worth recording here because it is the ordinary case of this seam rather than a special one,
+and because the two halves ship separately in both directions:
+
+- **Older server, newer extension.** The field is absent from the JSON, `parseLog` defaults it to
+  the empty string, and the page shows one time exactly as it did before. No fallback machinery, no
+  probe, no version check — the default IS the compatibility.
+- **Newer server, older extension.** An extra member on an object the old `Partial<DbRound>` reads
+  field by field, and it is ignored.
+
+The rule the seam imposes on the value: **empty is "nobody knows" and is the only spelling of it.**
+The server sends `''` for an undecided round (`COALESCE` over `MAX()`, which is `NULL` on no rows),
+the parser normalises a missing or null field to `''`, and the duration refuses `''` before parsing
+anything. A second absent value — `null` alongside `''` — was proposed in the code round and
+declined for that reason: two spellings of absence are two things to keep in step, and the first
+place they diverge is a round reported as decided in no time at all.
+
 ### The second one: the review ROLES (2026-09-12)
 
 The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#

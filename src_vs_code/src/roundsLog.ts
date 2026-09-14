@@ -6,7 +6,7 @@ import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
 import { shortNumber, UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
-import { calledBy, MAX_DECIDING_SECONDS, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
@@ -466,7 +466,7 @@ function rowFrom(
     gating: round.gatingCount,
     findings: states.length === 0 ? null : states.reduce((sum, s) => sum + s.findings, 0),
     seconds: secondsOf(round, status, nowMs),
-    decideSeconds: decideSecondsOf(round, resolvedBy.get(key) ?? ''),
+    decideSeconds: decideSecondsOf(round.completedUtc, resolvedBy.get(key) ?? ''),
     tokensIn: round.tokensIn ?? null,
     tokensOut: round.tokensOut ?? null,
     costUsd: round.costUsd ?? null,
@@ -663,34 +663,6 @@ function secondsOf(round: RoundRecord, status: LogRow['status'], nowMs: number):
   // Subtracting it from a real completion time produced "1065396701m 44s" once; the sidebar's
   // `elapsed` refuses the same way, with the same cap.
   return seconds < 0 || seconds > MAX_PLAUSIBLE_SECONDS ? null : seconds;
-}
-
-/**
- * How long the deciding took, or null when nobody knows.
- *
- * <p><b>The empty string is turned into null by an explicit test, before anything parses it.</b>
- * Not left to `Date.parse('')` and a NaN check: the one value this must never produce is `0`, and
- * every route to it goes through a coercion somebody could later "simplify" into arithmetic. A
- * server too old to send the stamp, and a round nobody has decided, both arrive as `''` and are the
- * same fact — nobody knows — which is not a duration of no seconds. (Code round, local.)</p>
- *
- * <p>A negative difference is refused too. `completedUtc` comes from the session file and
- * `resolvedUtc` from the database, so they are two clocks on one machine; a decision stamped before
- * the round it belongs to means one of them moved, and the honest answer is that there is no
- * measurement rather than a duration below zero. (Code round, gemini.)</p>
- */
-function decideSecondsOf(round: RoundRecord, resolvedUtc: string): number | null {
-  if (resolvedUtc.length === 0) {
-    return null;
-  }
-  const resolved = Date.parse(resolvedUtc);
-  const completed = Date.parse(round.completedUtc);
-  if (Number.isNaN(resolved) || Number.isNaN(completed)) {
-    return null;
-  }
-  const seconds = Math.round((resolved - completed) / 1000);
-
-  return seconds < 0 || seconds > MAX_DECIDING_SECONDS ? null : seconds;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1380,9 +1352,15 @@ export function roundsLogHtml(
     }
     // The title says what the second number MEASURES, because a wall clock over a round somebody
     // came back to after lunch counts the lunch, and "deciding" alone would overclaim.
-    return '<td class="num" title="' + esc(ran || '—') + ' the reviewers ran &#183; '
-      + esc(took(r.decideSeconds)) + ' from the round finishing to its last decision">'
-      + ran + ' <span class="deciding">&#183; ' + took(r.decideSeconds) + '</span></td>';
+    // The em dash stands in for a round whose OWN duration is unknown — an interrupted one, say —
+    // in the cell as well as in the title. Without it the cell opened on a floating middle dot.
+    // (Code round, gemini.)
+    var shown = ran || '—';
+
+    return '<td class="num" title="' + esc(shown) + ' the reviewers ran &#183; '
+      + esc(took(r.decideSeconds)) + ' from the round finishing to its last decision, '
+      + 'which counts any time nobody was looking at it">'
+      + shown + ' <span class="deciding">&#183; ' + took(r.decideSeconds) + '</span></td>';
   }
 
   function badge(status) {

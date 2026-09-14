@@ -210,15 +210,22 @@ public sealed class RoundsQueryTests : IDisposable
     [Fact]
     public void ARoundDecidedInTwoSittings_CarriesTheLastDecision()
     {
-        var clock = new FixedClock(new DateTimeOffset(2026, 9, 14, 10, 0, 0, TimeSpan.Zero));
+        var beforeLunch = new DateTimeOffset(2026, 9, 14, 10, 0, 0, TimeSpan.Zero);
         var afterLunch = new DateTimeOffset(2026, 9, 14, 14, 0, 0, TimeSpan.Zero);
-        using (var db = RoundsDb.Open(_dir, _log, clock)!)
+        var findings = new[] { Found("first"), Found("second") };
+
+        // A CLOCK EACH, rather than one advanced between the two calls. Two sittings are two
+        // moments in time, and a test that mutates its own fixture to express that is a test whose
+        // second half depends on the first having run. (Code round, codex.)
+        using (var morning = RoundsDb.Open(_dir, _log, new FixedClock(beforeLunch))!)
         {
-            var findings = new[] { Found("first"), Found("second") };
-            db.RecordRound(Session, Round(), findings);
-            db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0)]);
-            clock.Now = afterLunch;
-            db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Reject(findings, 1, "on reflection, no")]);
+            morning.RecordRound(Session, Round(), findings);
+            morning.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept(findings, 0)]);
+        }
+
+        using (var afternoon = RoundsDb.Open(_dir, _log, new FixedClock(afterLunch))!)
+        {
+            afternoon.RecordDecisions("s1", "CodeReview", 1, [Decisions.Reject(findings, 1, "on reflection, no")]);
         }
 
         RoundsQuery.Read(_dir).Rounds.Should().ContainSingle().Which

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { calledBy, CallerDeclaration, costPhrase, elapsed, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
+import { calledBy, CallerDeclaration, costPhrase, decideSecondsOf, elapsed, instantOf, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
 
 /**
  * What `rounds.ts` still guarantees now that the markdown log is gone.
@@ -302,4 +302,33 @@ test('a caller field written by a server we do not recognise cannot crash the pa
   assert.equal(calledBy(offDisk({ vendor: 7, client: null, model: [] })), 'unknown · model not stated');
   assert.equal(calledBy(offDisk(null)), '', 'a null where an object belongs is an absent one');
   assert.equal(calledBy(offDisk('claude-opus-5')), '', 'and so is a bare string');
+});
+
+// ---------- an instant must name its zone ----------
+
+test('an instant that names its zone is parsed, and one that does not is refused', () => {
+  // Asserted on the pure function rather than only through a row: read through a row, a zone-less
+  // stamp can come back null because the RESULT was negative on this machine's offset rather than
+  // because the stamp was refused, and the test then passes for the wrong reason in one timezone
+  // and fails in another. This pins the condition itself.
+  assert.equal(instantOf('2026-09-05T07:48:10.000Z'), Date.parse('2026-09-05T07:48:10.000Z'));
+  assert.equal(instantOf('2026-09-05T09:48:10+02:00'), Date.parse('2026-09-05T07:48:10.000Z'));
+  assert.equal(instantOf('2026-09-05T09:48:10+0200'), Date.parse('2026-09-05T07:48:10.000Z'));
+
+  assert.equal(instantOf('2026-09-05T07:48:10'), undefined, 'no zone at all');
+  assert.equal(instantOf('2026-09-05'), undefined, 'a bare date is not an instant');
+  assert.equal(instantOf(''), undefined);
+  assert.equal(instantOf('not a date at all'), undefined);
+});
+
+test('deciding seconds refuses what it cannot measure, and measures what it can', () => {
+  const finished = '2026-09-05T07:43:10.000Z';
+
+  assert.equal(decideSecondsOf(finished, '2026-09-05T07:48:10.000Z'), 300);
+  assert.equal(decideSecondsOf(finished, finished), 0, 'nought is a measurement, not an absence');
+
+  assert.equal(decideSecondsOf(finished, ''), null, 'nobody has decided');
+  assert.equal(decideSecondsOf(finished, '2026-09-05T07:00:00.000Z'), null, 'a clock moved');
+  assert.equal(decideSecondsOf(finished, '2030-01-01T00:00:00.000Z'), null, 'past the bound');
+  assert.equal(decideSecondsOf('', '2026-09-05T07:48:10.000Z'), null, 'the round never finished');
 });

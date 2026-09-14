@@ -11,7 +11,7 @@ import {
 import { Escalation } from '../escalations';
 import { escapeHtml } from '../escapeHtml';
 import { calledBy, CallerDeclaration, RoundRecord, SessionFile } from '../rounds';
-import { DbFinding, DbLog, DbRound, EMPTY_TOTALS } from '../roundsDb';
+import { DbFinding, DbLog, DbRound, EMPTY_TOTALS, parseLog } from '../roundsDb';
 
 /**
  * The rounds log: every round of every session, as rows a table can sort, filter and search.
@@ -292,12 +292,8 @@ test('a round nobody has decided has NO deciding time, and specifically not zero
 test('a server too old to send the stamp leaves the deciding time unknown, not zero', () => {
   // Version skew is ordinary here: the two halves ship separately. An older server answers a log
   // with no `resolvedUtc` at all, and the page must show one time exactly as it did yesterday.
-  const older = dbLog();
-  const withoutField = {
-    ...older,
-    rounds: older.rounds.map(({ resolvedUtc, ...rest }) => rest as DbRound),
-  };
-  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], withoutField) as [LogRow];
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [], wireWith((one) => delete one['resolvedUtc'])) as [LogRow];
 
   assert.equal(row.decideSeconds, null);
 });
@@ -337,14 +333,37 @@ test('a deciding time longer than a working month is refused as a broken clock',
 test('a stamp the server sends as null is unknown, not zero', () => {
   // `parseLog` reads a payload another program wrote. A field present and null is a different
   // shape from a field absent, and both must land on the same answer. (Plan round, local.)
-  const base = dbLog();
-  const nulled = {
-    ...base,
-    rounds: base.rounds.map((one) => ({ ...one, resolvedUtc: null as unknown as string })),
-  };
-  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], nulled) as [LogRow];
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    wireWith((one) => { one['resolvedUtc'] = null; })) as [LogRow];
 
   assert.equal(row.decideSeconds, null);
+});
+
+test('a stamp with no timezone is unknown, not read in whatever zone the reader sits in', () => {
+  // Date.parse takes `2026-09-05T07:48:10` and reads it as LOCAL time, so the same stored round
+  // would report a different deciding time in Kyiv and in Lisbon. That is the precise shape of the
+  // defect the family's UTC rule was written after. (Code round, codex.)
+  // TWO DAYS ahead, deliberately. The obvious fixture — the same day, five minutes later — passes
+  // on this machine with the guard REMOVED, because at UTC+3 a zone-less 07:48:10 reads as
+  // 04:48:10Z, lands BEFORE the round finished, and the negative-difference guard returns null for
+  // the wrong reason. Two days out, every real offset (-12 to +14) still leaves a positive,
+  // plausible difference, so only the missing timezone can make this null.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: '2026-09-07T12:00:00' })) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('a stamp with an OFFSET rather than a Z is a real instant and is accepted', () => {
+  // The refusal is of an instant that names no zone at all, not of one that names a zone this
+  // machine is not in.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: '2026-09-05T09:48:10+02:00' })) as [LogRow];
+
+  assert.equal(row.decideSeconds, 300, 'the same instant as 07:48:10Z');
 });
 
 test('a round only PARTLY decided still reports how far the deciding got, and still reads awaiting', () => {
@@ -370,6 +389,22 @@ test('an unparseable stamp is unknown rather than NaN', () => {
 
   assert.equal(row.decideSeconds, null);
 });
+
+/**
+ * A log as it arrives over the WIRE, with one round's fields tampered with.
+ *
+ * <p>Skew fixtures go through `parseLog`, which is the real boundary, rather than being hand-built
+ * as a `DbRound` the compiler has been told to stop checking. A field a server does not send is
+ * ABSENT from its JSON and a field it sends empty is null — neither is expressible as a complete
+ * `DbRound`, and casting one into the shape was the shortcut the code round refused. The cast that
+ * remains describes the untyped wire, not the domain type. (Code round, codex and gemini.)</p>
+ */
+function wireWith(tamper: (round: Record<string, unknown>) => void): DbLog {
+  const wire = JSON.parse(JSON.stringify(dbLog())) as { rounds: Record<string, unknown>[] };
+  wire.rounds.forEach(tamper);
+
+  return parseLog(JSON.stringify(wire), true);
+}
 
 test('a finished round whose findings nobody has decided says so, instead of done', () => {
   // Asked for over a screenshot: the row read Status `done`, Verdict `good_enough`, and thirteen
