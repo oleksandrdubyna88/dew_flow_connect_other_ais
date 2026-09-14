@@ -120,6 +120,12 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
                     new ProviderSettings("company-codex")
                     {
                         Enabled = true, Runtime = "remote", Model = "m", RemoteVendor = "codex", BaseUrl = TeamServer,
+                        // OPTED IN to documents, deliberately. A Team server nobody ticked serves no
+                        // document round at all, so a document test against one would pass without
+                        // ever reaching the question it is named for — whether the ROLE is carried.
+                        // Consent is tested where consent lives; this file tests what happens after
+                        // it has been given. (CodeRabbit, plan 5's pull request.)
+                        Documents = DocumentReviews.Yes,
                     },
                 ]
                 : [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
@@ -278,7 +284,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         var service = Service(RoleCatalog.Builtin, withTeamServer: true);
 
         var work = service.BuildWork(
-            [role], Scratch(), "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false);
+            [role], Scratch(), "ctx", round: 1, stage: Stage.DocumentReview, readsCheckout: false);
 
         work.Reviewers.Should().BeEmpty("the only vendor is a Team server that cannot run it");
         work.Excluded.Should().ContainSingle()

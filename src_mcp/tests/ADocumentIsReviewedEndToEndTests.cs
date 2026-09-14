@@ -194,7 +194,11 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var work = service.BuildWork(
             ["Spec"], _repo,
             $"## What this document is for\n\n{Purpose}\n\n## The document under review — spec.md\n\n{Document}",
-            round: 1, stage: Stage.PlanReview, readsCheckout: false);
+            // The stage this test is NAMED for. It rode `Stage.PlanReview` because that is what the
+            // flag it replaced meant, so a vendor ticked for plans and not documents would have
+            // produced reviewer work here while the round it stands for produced none.
+            // (CodeRabbit, plan 5's pull request.)
+            round: 1, stage: Stage.DocumentReview, readsCheckout: false);
 
         work.Reviewers.Should().ContainSingle();
         var prompt = work.Reviewers[0].Invocation.Request.StdIn;
