@@ -114,7 +114,8 @@ import {
   rowBelongsTo,
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { asText } from './asText';
 import { coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
@@ -647,7 +648,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usageWindow: this.usageWindow,
       latestServerVersion: published,
       latestTeamServerVersion: this.latestTeamServer,
-      storage: whereThisWindowKeepsItsData(),
+      storage: await whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
@@ -2503,15 +2504,48 @@ function nonce(): string {
  * filesystem can throw — a permission error on the existence check, a path the platform rejects —
  * must also reach the page as a sentence instead of a blank section.</p>
  */
-function whereThisWindowKeepsItsData(): DataLocation {
+async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
   try {
-    return whereData((path) => existsSync(path));
+    // The two paths are probed BEFORE the pure rule runs, off the event loop. The primary use case
+    // for a chosen directory is a NAS, and a synchronous existsSync against a disconnected SMB share
+    // blocks the extension host for as long as the share takes to time out — every panel
+    // interaction hung, with nothing on screen to say why. Raised on the code round by codex and
+    // gemini. A probe that throws is a probe that answered "not there", which is the honest reading
+    // of a permission error on a path we are only describing.
+    const present = new Set<string>();
+    const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
+    for (const path of configured.length === 0 ? [] : probePaths()) {
+      if (await reachable(path)) {
+        present.add(path);
+      }
+    }
+
+    return whereData((path) => present.has(path));
   } catch (error) {
     return {
       directory: '',
       side: dataSideName(),
+      ignoredSide: '',
       refusal: `This window could not work out where its data lives: ${asText(error)}`,
       notes: [],
+      env: {},
     };
+  }
+}
+
+/** The two paths the notes ask about — the shared root's database, and this side's directory. */
+function probePaths(): readonly string[] {
+  const root = resolve((process.env['COAI_DATA_DIR'] ?? '').trim());
+
+  return [join(root, 'coai.db'), coaiDataDir()];
+}
+
+/** Whether a path is there, without ever throwing and without blocking the host. */
+async function reachable(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
   }
 }

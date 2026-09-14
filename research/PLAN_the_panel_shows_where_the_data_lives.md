@@ -29,6 +29,27 @@
 > 6. **The move/do-not-move inventory is asserted**, not left to prose — two reviewers asked for it
 >    by name, because both wrong guesses (`worktrees/`, the token files) are silent.
 >
+> **What the CODE round then changed, and it was the larger correction of the two:**
+>
+> 7. **The root is carried, never reconstructed.** The first build sliced the side name off the end
+>    of the resolved directory to recover `COAI_DATA_DIR` for the paste block. Five reviewers reached
+>    the same conclusion by different routes: wrong the moment a side maps to anything but
+>    `<root>/<side>`, wrong on a drive root, and silently wrong when a side is named while no
+>    directory is configured — there `coaiDataDir()` ignores the side and returns the DEFAULT path,
+>    which was then sliced by the length of a side never applied to it. `DataLocation.env` carries
+>    the variables read off the environment, and `ignoredSide` lets the panel say "you set a side and
+>    nothing is using it" instead of claiming a partition that does not exist.
+> 8. **The block offered is an `env` fragment.** The first build rendered a whole `mcpServers` block
+>    with a placeholder where the binary path belongs — paste-ready in appearance and unable to start
+>    anything. The full block is the install flow's, which has the path.
+> 9. **`join`, not string concatenation.** `resolve()` returns a native root, so `${root}/${asked}`
+>    produced `C:\srv\coai/windows`, which the C# half's `Path.Combine` never writes. The vector
+>    tests had the same defect in their expectations and would have failed on Windows — the platform
+>    this feature is for.
+> 10. **The probes are asynchronous**, because the use case is a NAS and a disconnected share would
+>     block the extension host, and **the destination must be empty**, because copying a database
+>     over a side's own history destroys it before the "check your history" step can notice.
+>
 > **Nothing is outstanding.** Every item of the Definition of Done below is met.
 >
 > The tail of [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),

@@ -5,6 +5,7 @@ import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
+import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
 import type { TeamServerState } from '../teamServerView';
 import { vendorPalette } from '../vendorColour';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
@@ -1307,15 +1308,22 @@ test('a STALE catalog is not an answer about roles', () => {
 
 // ---------- where this window keeps its data (issue #115) ----------
 
-const WHERE = {
+/**
+ * A location, complete. No cast: the compiler checking this fixture is what caught every call site
+ * when `env` and `ignoredSide` were added, which is the whole value of a typed fixture.
+ */
+const where = (over: Partial<DataLocation> = {}): DataLocation => ({
   directory: '/srv/coai/windows',
   side: 'windows',
+  ignoredSide: '',
   refusal: '',
-  notes: [] as readonly string[],
-};
+  notes: [],
+  env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },
+  ...over,
+});
 
 test('the section says which directory THIS WINDOW reads, and names the side', () => {
-  const html = panelHtml(state({ storage: WHERE }), 'n');
+  const html = panelHtml(state({ storage: where() }), 'n');
 
   assert.match(html, /Where this window keeps its data/);
   assert.ok(html.includes('/srv/coai/windows'), 'the resolved directory, not the raw variable');
@@ -1323,26 +1331,84 @@ test('the section says which directory THIS WINDOW reads, and names the side', (
 });
 
 test('with no side named it says so plainly, rather than showing an empty one', () => {
-  const html = panelHtml(state({ storage: { ...WHERE, directory: '/srv/coai', side: '' } }), 'n');
+  const html = panelHtml(
+    state({ storage: where({ directory: '/srv/coai', side: '', env: { COAI_DATA_DIR: '/srv/coai' } }) }),
+    'n');
 
   assert.match(html, /No side is named/);
   assert.ok(!html.includes('<b></b>'), 'an empty bold side would read as a side that is set and blank');
 });
 
-test('the line to paste carries the directory this side resolved, and names the file it goes in', () => {
-  const html = panelHtml(state({ storage: WHERE }), 'n');
+/**
+ * A side set while no directory is — a setting somebody made that is doing nothing.
+ *
+ * <p>`coaiDataDir()` ignores `COAI_DATA_SIDE` when there is no `COAI_DATA_DIR`, so the default
+ * directory is NOT partitioned. Reporting that side as the one in use would be the panel claiming
+ * this window keeps its database apart when it does not — and it used to, before gemini raised it
+ * on the code round.</p>
+ */
+test('a side set with no directory is reported as doing nothing, not as the side in use', () => {
+  const html = panelHtml(
+    state({
+      storage: where({
+        directory: '/home/me/.local/share/coai-mcp',
+        side: '',
+        ignoredSide: 'windows',
+        env: {},
+      }),
+    }),
+    'n');
 
-  assert.ok(html.includes('COAI_DATA_DIR'), 'the variable that chooses the directory');
-  assert.ok(html.includes('/srv/coai&quot;'), 'the ROOT, not the side directory — the server appends the side');
-  assert.ok(html.includes('COAI_DATA_SIDE'), 'and the side beside it');
+  assert.match(html, /no <code>COAI_DATA_DIR<\/code>/);
+  assert.ok(!html.includes('<b>windows</b>'), 'it is not the side in use, and must not read as one');
+  assert.ok(!html.includes('No side is named'), 'a side IS named — it is simply doing nothing');
+});
+
+/**
+ * The variables come from the ENVIRONMENT, never from arithmetic on the rendered path.
+ *
+ * <p>Five reviewers reached this by different routes on the code round. Slicing a side name off the
+ * end of a resolved directory is wrong the moment a side maps to anything but `<root>/<side>`, and
+ * silently wrong when no directory is configured at all — there the default path was sliced by the
+ * length of a side that had never been applied to it.</p>
+ */
+test('the variables to paste are the ones that were set, not a path taken apart', () => {
+  const html = panelHtml(state({ storage: where() }), 'n');
+
+  assert.ok(html.includes('&quot;COAI_DATA_DIR&quot;: &quot;/srv/coai&quot;'), 'the root, verbatim');
+  assert.ok(html.includes('&quot;COAI_DATA_SIDE&quot;: &quot;windows&quot;'));
   assert.match(html, /\.mcp\.json/, 'and where it goes');
 });
 
-test('with no side, the pasted block carries no side key at all', () => {
-  const html = panelHtml(state({ storage: { ...WHERE, directory: '/srv/coai', side: '' } }), 'n');
+/**
+ * An `env` fragment, never a whole block with a placeholder where the binary path belongs.
+ *
+ * <p>Two reviewers on the code round: the first version rendered a full `mcpServers` block with a
+ * placeholder as the command. Pasted, it cannot start anything — which is worse than offering
+ * nothing, because it looks finished.</p>
+ */
+test('the block offered is the env fragment, with no placeholder pretending to be a path', () => {
+  const html = panelHtml(state({ storage: where() }), 'n');
 
-  assert.ok(html.includes('COAI_DATA_DIR'));
-  assert.ok(!html.includes('COAI_DATA_SIDE&quot;'), 'a key that does nothing invites the question of what it is for');
+  // The block this section renders, and nothing else on the page — a page-wide search would be
+  // answered by the install flow's own block, which is a different thing that legitimately has a
+  // command in it.
+  const section = html.slice(html.indexOf('Where this window keeps its data'));
+  const block = section.slice(section.indexOf('<pre class="paste">'), section.indexOf('</pre>'));
+
+  assert.ok(!block.includes('coai-mcp path from'), 'a placeholder in a paste-ready block is a trap');
+  assert.ok(!block.includes('command'), 'this section has no binary path, so it offers no command');
+  assert.ok(block.includes('&quot;env&quot;'), 'what it offers is the env fragment');
+  assert.match(section, /Install the MCP server/, 'and it says where the rest of the block comes from');
+});
+
+test('the default directory offers no variables at all, because it needs none', () => {
+  const html = panelHtml(
+    state({ storage: where({ directory: '/home/me/.local/share/coai-mcp', side: '', env: {} }) }),
+    'n');
+
+  assert.match(html, /needs no configuration to find it/);
+  assert.ok(!html.includes('COAI_DATA_DIR&quot;'), 'offering a variable here would invite a change nobody needs');
 });
 
 test("the server's own notes are rendered where a person sees them", () => {
@@ -1350,7 +1416,7 @@ test("the server's own notes are rendered where a person sees them", () => {
     'There is a coai.db directly in /srv/coai, from the layout before this directory was shared.',
     '/srv/coai/windows is not there yet, so this side starts with no history.',
   ];
-  const html = panelHtml(state({ storage: { ...WHERE, notes } }), 'n');
+  const html = panelHtml(state({ storage: where({ notes }) }), 'n');
 
   for (const note of notes) {
     assert.ok(html.includes(escapeHtml(note)), note);
@@ -1358,30 +1424,48 @@ test("the server's own notes are rendered where a person sees them", () => {
 });
 
 /**
- * The inventory, which two reviewers asked for by name on the plan round.
+ * The inventory, which reviewers asked for on both rounds.
  *
  * <p>A panel that shows a path and says nothing else leaves a person to guess, and both wrong
  * guesses are silent: copying `worktrees/` carries a checkout of somebody's repository onto a NAS
- * for no benefit, and copying the token files hands one machine's sign-in to another — the one
- * thing the per-side layout exists to prevent.</p>
+ * for no benefit, and copying `servers/` hands one machine's sign-in to another — the one thing the
+ * per-side layout exists to prevent. The lists come from `dataDir.ts`, so this asserts what the
+ * page renders FROM them rather than a second copy of them.</p>
  */
 test('it names what to move and what to leave behind', () => {
-  const html = panelHtml(state({ storage: WHERE }), 'n');
+  const html = panelHtml(state({ storage: where() }), 'n');
 
-  for (const move of ['coai.db', 'sessions/', 'unparseable/', 'empty/']) {
-    assert.ok(html.includes(move), `it must name ${move} as something to move`);
+  for (const name of DATA_TO_MOVE) {
+    assert.ok(html.includes(`<code>${name}</code>`), `it must name ${name} as something to move`);
   }
-  assert.match(html, /Leave <code>worktrees\/<\/code> behind/);
-  assert.match(html, /Leave the token files behind/);
-  assert.match(html, /Stop the server first/, 'a database being copied while it is written is the failure here');
+  for (const name of DATA_TO_LEAVE) {
+    assert.ok(html.includes(`<code>${name}</code>`), `it must name ${name} as something to leave`);
+  }
+  assert.match(html, /Stop the server first/, 'a database copied while it is written is the failure here');
+});
+
+/**
+ * Copying INTO a side that already has history destroys it.
+ *
+ * <p>codex, code round: "COPY coai.db into that directory" is an instruction somebody follows, and
+ * if the destination already holds a database the rounds it recorded are gone before the later
+ * "check your history" step can notice.</p>
+ */
+test('it says the destination must not already hold a database', () => {
+  const html = panelHtml(state({ storage: where() }), 'n');
+
+  assert.match(html, /Only into an empty one/);
+  assert.match(html, /destroys that history/);
 });
 
 test('a refused side is a sentence on the page, not a section that vanished', () => {
   const refusal = "COAI_DATA_SIDE='wsl/node1' is not a usable directory name, so the server refuses to start.";
-  const html = panelHtml(state({ storage: { directory: '', side: 'wsl/node1', refusal, notes: [] } }), 'n');
+  const html = panelHtml(
+    state({ storage: where({ directory: '', side: 'wsl/node1', refusal, notes: [], env: {} }) }),
+    'n');
 
   assert.ok(html.includes(escapeHtml(refusal)), 'the one sentence that explains why nothing works');
-  assert.ok(!html.includes('Leave <code>worktrees/</code>'), 'and no advice about a directory there is not');
+  assert.ok(!html.includes('Stop the server first'), 'and no advice about a directory there is not');
 });
 
 test('a fixture that carries no storage renders no section at all', () => {
