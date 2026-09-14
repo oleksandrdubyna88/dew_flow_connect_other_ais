@@ -303,7 +303,24 @@ internal static class Program
     /// <para><b>The keys arrive in a FILE</b>, as <c>--ask-local</c>'s prompt does, because a
     /// thousand of them would overflow a Windows command line. JSON:
     /// <c>[{"session": "…", "stage": "CodeReview", "number": 1}]</c>.</para>
+    /// <para><b>And this mode never exits 64, whatever is wrong with the request</b> — the plan
+    /// round found that, twice and independently. 64 is the client's signal to fall back to one
+    /// spawn per round, because it is what an OLD binary answers to an argument it never heard of.
+    /// A binary that DOES know the mode answering 64 to an unreadable keys file would have the
+    /// client read a bad request as an old server: five hundred processes, and a successful-looking
+    /// export hiding the corruption behind the path the fallback exists for. A malformed request is
+    /// <see cref="BadRequest"/> instead, which no client retries.</para>
     /// </remarks>
+    /// <summary>
+    /// EX_DATAERR — the request itself was wrong, and asking again a different way will not help.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT 64. 64 means "this binary is too old for the mode" and is the one code the
+    /// extension answers by falling back to one spawn per round; a request fault must never be able
+    /// to look like that.
+    /// </remarks>
+    private const int BadRequest = 65;
+
     internal static int FindingsManyJson(string[] args)
     {
         var flags = Flags(args);
@@ -313,7 +330,7 @@ internal static class Program
         {
             Note("--findings-many needs --keys-file <path> holding a JSON array of {session, stage, number}");
 
-            return 64;
+            return BadRequest;
         }
 
         List<Server.RoundKeyDto>? asked;
@@ -326,14 +343,14 @@ internal static class Program
         {
             Note($"--findings-many could not read its keys file: {e.Message}");
 
-            return 64;
+            return BadRequest;
         }
 
         if (asked is null || asked.Count == 0)
         {
             Note("--findings-many was given no rounds to read");
 
-            return 64;
+            return BadRequest;
         }
 
         // The same ceiling the page's own window has. A caller asking for more than can be loaded is
@@ -342,7 +359,7 @@ internal static class Program
         {
             Note($"--findings-many takes at most {Store.RoundsQuery.MaxLimit} rounds; it was given {asked.Count}");
 
-            return 64;
+            return BadRequest;
         }
 
         try
