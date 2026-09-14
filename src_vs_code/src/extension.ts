@@ -353,7 +353,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side
     // setting, and only the context says which side this window is.
     vscode.commands.registerCommand('coai.editRoles', () => { openRoles(context); }),
-    vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(); }),
+    vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     vscode.commands.registerCommand('coai.help', showHelp),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them

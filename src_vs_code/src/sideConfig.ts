@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
+import { settingRefusal } from './settingRefused';
 import { sideConfigReader, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
 
@@ -43,6 +44,13 @@ export function readerFor(
  * `roles` — a setting that IS in `OVERLAID_SETTINGS` — straight to the global target, so a role
  * added on one side appeared on every side and ran in reviews it was never meant for, while the page
  * itself said "saved for this side of the machine". Two copies of a rule is one copy of the rule.</p>
+ *
+ * <p><b>A refusal PROPAGATES; it is no longer caught here.</b> Swallowing it left every caller
+ * believing the write had landed, and for a page driven by `settledWrites` that belief has a cost:
+ * it repaints, and a repaint draws the rows the setting still holds — which are exactly the rows
+ * without the words the person just typed. The roles page did that. Reporting is the CALLER's, which
+ * is also the only place that knows whether the sentence belongs in a notification or in a banner
+ * beside the box that still holds the text. {@link reportRefusal} is the notification half.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,
@@ -56,10 +64,38 @@ export async function saveSetting(
     return;
   }
 
-  try {
-    await config.update(key, value, vscode.ConfigurationTarget.Global);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    void vscode.window.showErrorMessage(`ConnectOtherAIs could not save "coai.${key}": ${detail}`);
+  await config.update(key, value, vscode.ConfigurationTarget.Global);
+}
+
+/** The label of the one action that cures a stale window, and the words VS Code knows it by. */
+const RELOAD = 'Reload Window';
+
+/**
+ * A refused write, said to the person — with the action that fixes it when there is one.
+ *
+ * <p>The sentence itself is decided in `settingRefused.ts`, which is pure and tested. What is here
+ * is the part only a host can do: show it, and — for the one refusal that HAS a one-click cure —
+ * offer the click. The same shape `reportStandDown` uses for the other way a window falls behind the
+ * build it is running.</p>
+ *
+ * <p><b>`instead` is for a caller that already has a better sentence.</b> The roles page argues, on
+ * the record, that an errno and a path belong in the log rather than in front of somebody who just
+ * renamed a role — and it is right about ordinary failures. It is not right about this one: a stale
+ * window is not a failure of theirs to interpret, it has a cure, and no caller's sentence can offer
+ * the button. So the recognised case always wins, and `instead` covers the rest.</p>
+ */
+export function reportRefusal(key: string, error: unknown, instead = ''): void {
+  const refusal = settingRefusal(key, error);
+  console.error(`[coai] coai.${key} was not saved`, error);
+  if (!refusal.reloadCures) {
+    void vscode.window.showErrorMessage(instead.length > 0 ? instead : refusal.text);
+
+    return;
   }
+
+  void vscode.window.showErrorMessage(refusal.text, RELOAD).then((choice) => {
+    if (choice === RELOAD) {
+      void vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }
+  });
 }
