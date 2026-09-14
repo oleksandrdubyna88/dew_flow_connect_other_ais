@@ -2569,13 +2569,22 @@ tab; the model, the provider and the prompt, because a reset is a new subject an
 the source and the workspace; and `turn`, which is never reset anywhere, because a stop names the
 turn it means and a late one must not be able to name a turn of the new conversation.
 
-**And the guarantee is checked against a real vendor.** `scripts/live-fresh.mjs` plants a number,
-recalls it, disposes the session and its directory the way `ended` does, opens a new one carrying
-nothing the way `reopened` does, and recalls again. The recall BEFORE the reset is the control and
-the reason the script is worth running: without it a model that never remembered would “forget” for
-reasons that have nothing to do with the reset, and the check would pass by testing nothing — so a
-run whose control fails reports NO VERDICT rather than a pass. Run on 2026-09-14: claude, codex and
-agy each remembered before and forgot after, across both adapter shapes.
+**And half the guarantee is checked against a real vendor** — the half nothing else can reach.
+`scripts/live-fresh.mjs` plants a number, recalls it, disposes the session and its directory the way
+`ended` does, opens a new one carrying nothing the way `reopened` does, and recalls again. Run on
+2026-09-14: claude, codex and agy each remembered before and forgot after, across both adapter
+shapes. **It proves the RECIPE — dispose, new directory, empty carry, and the vendor forgets — not
+that `freshStart` follows it**: that function is behind `vscode`, so a reset which failed to call
+`ended` or reused the directory would pass the script every time. The source-read guards above are
+the other half, and neither is worth much without the other.
+
+**A CONTROL ON BOTH SIDES, which the first draft had on one.** The recall BEFORE the reset proves the
+model could remember; without it a model that never did would “forget” for reasons that have nothing
+to do with the reset. Writing only that half is the same defect mirrored: after the reset a crash, a
+timeout, a rate limit or a refusal all produce an answer with no number in it, and reading that as
+forgetting is a pass earned by the vendor being broken. So the second session is asked something it
+cannot fail to know, and only then asked about the number. Either control failing reports NO VERDICT
+and exits non-zero — a run that could not measure is a failure to measure, never a pass.
 
 **And EVERY field is decided about, checked by the compiler rather than by hand.** Typing the slate as
 `Partial<Thread>` proves that every field of `Freshened` is a thread field of the right type — and it

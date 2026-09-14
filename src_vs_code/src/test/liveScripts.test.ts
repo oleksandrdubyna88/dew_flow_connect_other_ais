@@ -37,6 +37,9 @@ function chatLaunchFields(): readonly string[] {
   assert.notEqual(start, -1, 'ChatLaunch has been renamed or moved, and this test can no longer find it');
   const body = source.slice(start, source.indexOf('\n}', start));
 
+  // `readonly x:` and not `readonly x?:` — the REQUIRED fields only. An optional field is one a
+  // caller may leave out, and failing the scripts for leaving it out would be this test inventing a
+  // rule TypeScript does not have. (gemini, the round.)
   return [...body.matchAll(/^\s{2}readonly (\w+):/gmu)].map((one) => one[1] ?? '').sort();
 }
 
@@ -53,13 +56,28 @@ test('every live script hands launchSpecFor a ChatLaunch, with every field the i
       + 'was passed there for three days after the parameter became a ChatLaunch, and every run failed '
       + 'at process start with "Cannot read properties of undefined (reading \'length\')"',
     );
+    // SPREAD FROM THE DEFAULT rather than written out field by field, and that difference is what
+    // makes this class of rot impossible rather than merely detected: a field added to `ChatLaunch`
+    // arrives with its own default instead of going missing, and no test has to notice in time.
+    // (codex and the local reviewer, the round on this repair — their point was that a source-read
+    // assertion cannot prove a runtime value, and they were right, so the value stopped being
+    // hand-written.)
+    assert.match(
+      call[1] ?? '',
+      /\.\.\.NEW_CONVERSATION/u,
+      `${name} writes its launch object out by hand instead of spreading NEW_CONVERSATION, so the `
+      + 'next field added to ChatLaunch goes missing there and throws before any process starts',
+    );
+    assert.match(
+      text,
+      /const \{ NEW_CONVERSATION \} = await import\(/u,
+      `${name} spreads NEW_CONVERSATION without importing it`,
+    );
+    // The REQUIRED fields, and only those. An optional one added to `ChatLaunch` is valid for a
+    // caller to omit, so demanding it here would fail CI for code that is correct — which is why
+    // the reader below matches `readonly x:` and not `readonly x?:`.
     for (const field of fields) {
-      assert.match(
-        call[1] ?? '',
-        new RegExp(`\\b${field}\\b`, 'u'),
-        `${name} passes a launch object with no ${field}: the parameter default only applies to undefined, `
-        + 'so a partial object reaches the vendor argv builder and throws before any process starts',
-      );
+      assert.match(text, new RegExp(`\\b${field}\\b`, 'u'), `${name} never mentions ${field}, which ChatLaunch requires`);
     }
   }
 });
@@ -88,7 +106,26 @@ test('a live script never reports a pass for a run that asked nothing', () => {
 
   const fresh = scriptText('live-fresh.mjs');
   assert.match(fresh, /if \(all\.length === 0\)/u, 'live-fresh.mjs does not refuse an empty vendor list');
-  assert.match(fresh, /NO VERDICT/u, 'live-fresh.mjs reports a verdict even when its control turn failed');
+
+  // A CONTROL ON BOTH SIDES. The first draft had one only before the reset, which is the same defect
+  // it was written to prevent, mirrored: after the reset a crash, a timeout, a rate limit or a
+  // refusal all produce an answer with no planted number in it, and reading that as "it forgot" is a
+  // pass earned by the vendor being broken. (codex and gemini, the round on this script.)
+  assert.match(fresh, /const ALIVE = /u, 'nothing asks the session after the reset whether it is answering at all');
+  assert.match(fresh, /alive = await after\.session\.send\(ALIVE\)/u, 'the liveness question is written and never asked');
+  assert.match(fresh, /const answering = alive\.ok && alive\.answer\.includes\('4'\)/u,
+    'the liveness answer is not read, so a session that said nothing counts as alive');
+  assert.match(fresh, /if \(!answering\) \{/u,
+    'a session that could not answer a question it cannot fail to know still yields a verdict about the number');
+  // The RETURN, not the phrase: the docblock says NO VERDICT too, and counting prose would make
+  // this assertion pass on a comment.
+  assert.equal((fresh.match(/return 'no verdict';/gu) ?? []).length, 2,
+    'live-fresh.mjs has fewer than two no-verdict paths, so one of its two controls decides nothing');
+
+  // And both sessions are disposed whatever happens, or a control that throws leaves a CLI running
+  // and its directory on disk. (gemini, the round.)
+  assert.equal((fresh.match(/\} finally \{\s*\n\s*(?:\/\/[^\n]*\n\s*)*ended\(/gu) ?? []).length, 2,
+    'a session is disposed on the happy path only, so a turn that throws leaks a process and a directory');
   assert.match(
     fresh,
     /asked\.length > 0 && forgot\.length === asked\.length/u,
