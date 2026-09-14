@@ -353,8 +353,10 @@ test('a mounting repository is not told two different numbers', () => {
  * Pasting the new block without deleting the old one must not change the answer.
  *
  * <p>The refuted design summed every marker in the file, so two blocks in one CLAUDE.md read as v12
- * against our v8 and the panel told the person their newer copy was behind. Every reader here takes
- * the FIRST match on purpose; this is what stops that idea coming back.</p>
+ * against our v8 and the panel told the person their newer copy was behind. A half is compared at
+ * the LOWEST version the file carries for `older` and the HIGHEST for `ahead`, which cannot inflate
+ * the way a sum does — two copies of v1 are still v1, and this is what stops that idea coming
+ * back.</p>
  */
 test('a duplicated block does not change what the panel reports', () => {
   const once = claudeSnippet();
@@ -381,10 +383,10 @@ test('a paste carrying a half this build has never heard of is ahead, not curren
 /**
  * And a NEWER half in a second block is noticed, even though the first block is current.
  *
- * <p>The other half of the same finding. Every reader here takes the first match, which is what
- * stops a duplicated block inflating anything — but it also meant that appending a newer block
- * below a current one left the newer one invisible. The version of a half is now the HIGHEST one
- * the file carries, which cannot inflate the way a sum could: two copies of v1 are still v1.</p>
+ * <p>The other half of the same finding. A reader that took the first match stopped a duplicated
+ * block inflating anything — and left a newer block appended below a current one invisible. A half
+ * is judged at the HIGHEST version the file carries for `ahead`, and at the lowest for `older`, so
+ * neither block can hide the other and nothing accumulates: two copies of v1 are still v1.</p>
  */
 test('a newer half in a second block is not hidden by the first', () => {
   const current = claudeSnippet();
