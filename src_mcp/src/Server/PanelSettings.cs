@@ -39,15 +39,60 @@ public sealed record ProviderSettings(string Provider)
     public bool Code { get; init; } = true;
 
     /// <summary>
+    /// Whether this vendor reviews DOCUMENTS — and null when nobody has said.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Nullable, unlike its two neighbours, and that is the whole design.</b> It is the only
+    /// way to tell a settings file written before documents existed from a person who said no. A
+    /// non-nullable <c>true</c> would start sending documents to every vendor somebody had ticked for
+    /// code alone; a non-nullable <c>false</c> would switch off a local document round that works
+    /// today. The Team server settled the same question the same way for <c>JobKind</c>, and its
+    /// remarks are worth reading beside this one.</para>
+    /// <para>The extension writes an explicit value the moment anybody touches either stage box, so
+    /// the absent state is a migration reading rather than a state a person can sit in unawares.</para>
+    /// </remarks>
+    public bool? Document { get; init; }
+
+    /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
+    /// <remarks>
+    /// The same question <c>PanelService.Remote</c> asked privately, asked of the row instead: the
+    /// stage rule below needs it, and a second spelling of "is this a Team server" is how two answers
+    /// to one question start.
+    /// </remarks>
+    public bool IsRemote =>
+        string.Equals(Runtime, "remote", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether this vendor serves the stage being run.
     /// </summary>
     /// <remarks>
-    /// Measured over fourteen judged runs (`research/RESULTS_vendor_overlap_2026-09-06.md`): a local
-    /// model was 19 % useful on a plan and 3 % on code, while writing more findings than the two
-    /// hosted vendors together. So the useful setting was never "local on or off" — and until these
-    /// two flags existed it could not be expressed at all. `Enabled` remains the master switch.
+    /// <para>Measured over fourteen judged runs (`research/RESULTS_vendor_overlap_2026-09-06.md`): a
+    /// local model was 19 % useful on a plan and 3 % on code, while writing more findings than the
+    /// two hosted vendors together. So the useful setting was never "local on or off" — and until
+    /// these flags existed it could not be expressed at all. `Enabled` remains the master switch.</para>
+    /// <para><b>It took a bool until there were three stages.</b> "Plan switch or code switch" is a
+    /// question with two answers, and a document round's answer is neither — it rode the plan switch
+    /// because that was the only other thing to ride. The caller knows which stage it is running and
+    /// passes it.</para>
+    /// <para><b>And an ABSENT document switch answers differently for a Team server.</b> For a vendor
+    /// this machine runs itself, absent is the plan tick — the reading plan 4 gave it, nothing leaves
+    /// the laptop, and there is no consent to ask for. For a Team server, absent is NO: the tick
+    /// would otherwise be granting permission for a company document to cross the network,
+    /// retroactively, on every configuration written before documents existed. A tick that means
+    /// "this vendor is good at prose" cannot also mean "this file may go to the shared box".
+    /// (gemini, Blocking, plan 5's plan round — against the first draft of this very method.)</para>
     /// </remarks>
-    public bool Serves(bool isPlan) => Enabled && (isPlan ? Plan : Code);
+    public bool Serves(Stage stage) => Enabled && stage switch
+    {
+        Stage.PlanReview => Plan,
+        Stage.CodeReview => Code,
+        Stage.DocumentReview => Document ?? !IsRemote && Plan,
+        // Exhaustive on purpose, and throwing rather than guessing: a stage added later that lands
+        // here would otherwise take the code switch in silence. The same shape `PanelConfig.BucketFor`
+        // already has, for the same reason.
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(stage), stage, "no vendor switch decides this stage — add one rather than defaulting"),
+    };
 }
 
 /// <summary>
@@ -737,6 +782,9 @@ public sealed record PanelSettings
                         // keeps reviewing both stages rather than silently reviewing neither.
                         Plan = v.Plan != false,
                         Code = v.Code != false,
+                        // And this one is carried THROUGH, absence included — the one field here
+                        // whose null is a value rather than a gap. See `VendorDto.Document`.
+                        Document = v.Document,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the

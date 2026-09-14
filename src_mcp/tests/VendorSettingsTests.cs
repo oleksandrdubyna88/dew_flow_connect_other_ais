@@ -92,8 +92,8 @@ public sealed class VendorSettingsTests
             """[{"id":"codex","runtime":"codex","model":"gpt-5.6"}]""");
 
         vendors.Should().ContainSingle();
-        vendors[0].Serves(isPlan: true).Should().BeTrue();
-        vendors[0].Serves(isPlan: false).Should().BeTrue();
+        vendors[0].Serves(Stage.PlanReview).Should().BeTrue();
+        vendors[0].Serves(Stage.CodeReview).Should().BeTrue();
     }
 
     [Fact]
@@ -103,8 +103,8 @@ public sealed class VendorSettingsTests
         var vendors = PanelSettings.ParseVendors(
             """[{"id":"local","runtime":"local","model":"qwen","plan":true,"code":false}]""");
 
-        vendors[0].Serves(isPlan: true).Should().BeTrue();
-        vendors[0].Serves(isPlan: false).Should().BeFalse();
+        vendors[0].Serves(Stage.PlanReview).Should().BeTrue();
+        vendors[0].Serves(Stage.CodeReview).Should().BeFalse();
     }
 
     [Fact]
@@ -114,8 +114,8 @@ public sealed class VendorSettingsTests
         // which the gate obeyed.
         var off = new ProviderSettings("codex") { Enabled = false, Plan = true, Code = true };
 
-        off.Serves(isPlan: true).Should().BeFalse();
-        off.Serves(isPlan: false).Should().BeFalse();
+        off.Serves(Stage.PlanReview).Should().BeFalse();
+        off.Serves(Stage.CodeReview).Should().BeFalse();
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed class VendorSettingsTests
     {
         var neither = new ProviderSettings("codex") { Plan = false, Code = false };
 
-        neither.Serves(isPlan: true).Should().BeFalse();
-        neither.Serves(isPlan: false).Should().BeFalse();
+        neither.Serves(Stage.PlanReview).Should().BeFalse();
+        neither.Serves(Stage.CodeReview).Should().BeFalse();
     }
 }

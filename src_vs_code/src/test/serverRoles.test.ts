@@ -217,3 +217,53 @@ test('a role exactly at the id bound is still a role', () => {
 
   assert.strictEqual(serverRuns(serverRolesFrom(catalog({ roles: [longest] })), longest), true);
 });
+
+/**
+ * A role this PRODUCT added after a Team server was built is not a role that server runs.
+ *
+ * <p>`serverRuns` answered an un-answered catalog with `isBuiltIn`, which was a proxy for "one of
+ * the five this product ships" — true for exactly as long as the product shipped five. Plan 4 put
+ * two DOCUMENT roles in the same seed and the proxy silently started meaning seven, so this page
+ * told a person that a Team server deployed months ago would run `DocumentReview`. It will not: its
+ * `AcceptedRoles` was compiled before those roles existed, and the round comes back a 400 naming the
+ * ones it does run.</p>
+ *
+ * <p>`coai-mcp` fixed its own copy of this proxy in PR #235 and this half was missed — one server,
+ * two clients, two different answers, which is the failure `RemoteRoles`' own remarks describe. The
+ * list is a fact about the PAST: what shipped before `/api/catalog` ever named roles. It is frozen
+ * by definition and no role added later can join it.</p>
+ */
+test('a document role is NOT assumed to run on a server that has not named its roles', () => {
+  for (const kind of [catalog(), undefined]) {
+    assert.equal(
+      serverRuns(serverRolesFrom(kind), 'DocumentReview'),
+      false,
+      'that server was built before this product had document roles',
+    );
+  }
+});
+
+test('and the five that predate the catalog field still are', () => {
+  // The other half of the same rule: an old server runs these, and saying otherwise would empty
+  // every round against every Team server anybody has deployed.
+  for (const id of ['PlanCritique', 'Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
+    assert.equal(serverRuns(serverRolesFrom(catalog()), id), true, id);
+  }
+});
+
+test('a server that DID name the document roles runs them', () => {
+  const answered = serverRolesFrom(catalog({ roles: ['PlanCritique', 'DocumentReview'] }));
+
+  assert.equal(serverRuns(answered, 'DocumentReview'), true, 'it said so itself');
+});
+
+test('the sentence for a document role on an old server names the role', () => {
+  const said = roleOnServers(
+    [{ name: 'RemSoft Dev', catalog: catalog() }],
+    'DocumentReview',
+    'Document review',
+  );
+
+  assert.equal(said.length, 1);
+  assert.match(said[0]!, /Document review/);
+});

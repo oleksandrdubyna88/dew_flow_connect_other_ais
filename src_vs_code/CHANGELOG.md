@@ -18,6 +18,29 @@ lands and what its run cost. A vendor that writes to the usual place is read fro
 first — nothing changes for Gemini or a local model — and one that does not is no longer allowed to
 fail silently.
 
+**A document review can run on your Team server — once you say so.** Reviewer cards gained a third
+box, *reviews documents*, beside *reviews plans* and *reviews code*. Until now a document round rode
+the plan box, because that was the nearest thing to a switch there was.
+
+**On a Team server that box starts OFF, and it is the one that decides whether the document leaves
+this machine.** Ticking *reviews plans* meant "this vendor is good at prose"; it never meant "this
+file may go to the shared box", and a document you were handed is not a diff of a repository the
+company already has. So it is off until you turn it on, whatever the other two boxes say. A reviewer
+that runs on your own machine follows the plan box exactly as before, and touching either box writes
+down what the document one was silently meaning — so unticking *reviews plans* later never changes
+where your documents go behind your back.
+
+When a round does send one, it says so: the reply names the server it went to.
+
+**The roles page stopped promising document roles on a Team server that cannot run them.** It read a
+role as "one of the ones every server has" by asking whether this product ships it — true until the
+product shipped document roles, after which a box deployed months ago was listed as able to run them.
+It cannot: a Team server learns new roles only when it is redeployed, and the round would have come
+back refused. Your `coai-mcp` already knew this; the panel now agrees with it.
+
+**A prompt that is too large is refused with a sentence.** Past about 3 MB the server says what you
+sent and what the limit is, instead of the edge returning an error page that reached you as "the
+vendor produced nothing usable".
 ## Extension 0.41.0 — 2026-09-14
 
 **A stuck AI can now ask another vendor's model.** The gate has always been other models judging

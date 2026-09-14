@@ -1,5 +1,5 @@
 import type { Catalog } from './teamServerApi';
-import { isBuiltIn, isRoleId } from './roles';
+import { isRoleId } from './roles';
 
 /**
  * Which of a person's own roles a configured Team server will run — said BEFORE a round, not after.
@@ -61,13 +61,41 @@ export function serverRolesFrom(catalog: Catalog | undefined): ServerRoles {
 /** Whether this server will run a role by this id. */
 export function serverRuns(roles: ServerRoles, roleId: string): boolean {
   if (roles.kind !== 'answered') {
-    // Every server has always run the five, and nothing about a missing field or a failed fetch
-    // makes that less true. A role somebody ADDED is the one in question.
-    return isBuiltIn(roleId);
+    // Every deployed server runs THESE, and nothing about a missing field or a failed fetch makes
+    // that less true. A role somebody ADDED is one question; a role this PRODUCT added after that
+    // server was built is another, and both answer no.
+    return BEFORE_THE_CATALOG.has(roleId.toLowerCase());
   }
 
   return roles.allowAny || roles.names.some((name) => name.toLowerCase() === roleId.toLowerCase());
 }
+
+/**
+ * The roles EVERY deployed Team server runs, whatever it has said.
+ *
+ * <p><b>A literal list, and that is the point.</b> This was `isBuiltIn` — a proxy for "one of the
+ * five this product ships", true for exactly as long as the product shipped five. Plan 4 put two
+ * DOCUMENT roles in the same seed and the proxy silently started meaning seven, so this page told a
+ * person that a Team server deployed months ago would run `DocumentReview`. It will not: that box's
+ * `AcceptedRoles` was compiled before those roles existed, and the round comes back a 400 naming the
+ * ones it does run. The deploy is manual, so a tag does not put new roles on a box.</p>
+ *
+ * <p>It is not a predicate. It is a fact about the PAST — what this product shipped before
+ * `/api/catalog` ever named roles — so it is frozen by definition and no role added later can join
+ * it. A server that has not SAID its roles predates that field; therefore it runs exactly these.</p>
+ *
+ * <p>`coai-mcp` holds the same list as `RemoteRoles.BeforeTheCatalog`, where it decides whether a
+ * round is sent. This copy decides what a PERSON is told before they start one, and the two going
+ * out of step is how a panel comes to promise a round the gate will not run — which is exactly what
+ * happened here: PR #235 fixed that half and missed this one.</p>
+ */
+export const BEFORE_THE_CATALOG: ReadonlySet<string> = new Set([
+  'plancritique',
+  'conventions',
+  'architecture',
+  'securityreliability',
+  'uxdxperformance',
+]);
 
 /**
  * The sentence for one role and one server, or nothing when it will run.

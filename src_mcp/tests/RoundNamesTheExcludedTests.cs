@@ -89,7 +89,7 @@ public class RoundNamesTheExcludedTests
     [Fact]
     public void TheRoundKnowsWhoItLeftOut()
     {
-        var excluded = With(Local(), Remote()).ExcludedFrom(isPlanStage: true);
+        var excluded = With(Local(), Remote()).ExcludedFrom(Stage.PlanReview);
 
         excluded.Should().ContainSingle().Which.Should()
             .StartWith("remsoftdev-claude: ").And.Contain("not signed in to its Team server");
@@ -109,7 +109,7 @@ public class RoundNamesTheExcludedTests
     [Fact]
     public void TheReasonIsOursEvenWhenTheVendorsNoteIsNot()
     {
-        var reason = With(Local(), Remote()).ExcludedFrom(isPlanStage: true).Single();
+        var reason = With(Local(), Remote()).ExcludedFrom(Stage.PlanReview).Single();
 
         // The note for this state names the server's ADDRESS and tells the person where to sign in.
         // None of that belongs in a sentence a model is handed as round status.
@@ -127,9 +127,9 @@ public class RoundNamesTheExcludedTests
         var worktree = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(worktree);
 
-        var asked = service.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, servedByPlanSwitch: true, readsCheckout: false).Reviewers
+        var asked = service.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, stage: Stage.PlanReview, readsCheckout: false).Reviewers
             .Select(w => w.Invocation.Provider).Distinct().ToList();
-        var excluded = service.ExcludedFrom(isPlanStage: true).Select(e => e.Split(':')[0]).ToList();
+        var excluded = service.ExcludedFrom(Stage.PlanReview).Select(e => e.Split(':')[0]).ToList();
 
         asked.Should().NotBeEmpty();
         asked.Should().NotIntersectWith(excluded);
@@ -141,8 +141,8 @@ public class RoundNamesTheExcludedTests
         // The stage filter runs BEFORE the availability one, in both directions. A person who turned
         // a vendor off for plans has not lost a reviewer; saying they did on every plan round would
         // train them to ignore the sentence, which is the one thing it cannot afford.
-        With(Local(), Remote(plan: false)).ExcludedFrom(isPlanStage: true).Should().BeEmpty();
-        With(Local(), Remote(plan: false)).ExcludedFrom(isPlanStage: false)
+        With(Local(), Remote(plan: false)).ExcludedFrom(Stage.PlanReview).Should().BeEmpty();
+        With(Local(), Remote(plan: false)).ExcludedFrom(Stage.CodeReview)
             .Should().ContainSingle("it IS enabled for code, and there it cannot run");
     }
 
@@ -176,7 +176,7 @@ public class RoundNamesTheExcludedTests
     {
         var off = Remote() with { Enabled = false };
 
-        With(Local(), off).ExcludedFrom(isPlanStage: true).Should().BeEmpty();
+        With(Local(), off).ExcludedFrom(Stage.PlanReview).Should().BeEmpty();
     }
 
     /// <summary>

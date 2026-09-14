@@ -74,7 +74,7 @@ import {
   writeWslconfig,
   wslconfigWith,
 } from './wslNetwork';
-import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
+import { normaliseId, pinnedDocument, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
 
 /**
@@ -1248,8 +1248,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     switch (write.kind) {
       case 'vendor': {
+        // `pinnedDocument` FIRST, so the spread below can still override it: changing the document
+        // box writes that box, and changing the PLAN box also records what the document switch was
+        // silently meaning until now. Otherwise unticking `plan` on a local reviewer would take its
+        // document rounds away as an invisible side effect — and ticking it would hand them over.
+        // (Ux finding, plan 5's plan round.)
         const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
-          v.id === write.vendor ? { ...v, [write.key]: write.value } : v,
+          v.id === write.vendor
+            ? { ...v, ...pinnedDocument(v, write.key), [write.key]: write.value }
+            : v,
         );
         await this.save(config, 'vendors', vendors);
         return;

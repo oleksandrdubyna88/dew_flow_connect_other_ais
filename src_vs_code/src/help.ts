@@ -52,6 +52,12 @@ export const HELP = {
     + 'together - so "on for the plan, off for the code" is a real setting rather than a knob. Both '
     + 'boxes are ticked unless you untick one; the row checkbox above still turns the vendor off '
     + 'everywhere.',
+  vendorDocuments:
+    'Whether this reviewer is asked to read DOCUMENTS - the roles you marked as not programming '
+    + 'work. On a Team server this is the box that decides whether the document leaves this machine: '
+    + 'it is sent to your company server and reviewed there on the shared subscription, so it is off '
+    + 'until you turn it on, whatever the other two boxes say. On a reviewer that runs here it '
+    + 'follows the plan box until you touch either of them.',
   vendorEnabled:
     'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:

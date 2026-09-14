@@ -239,6 +239,24 @@ curl -sS https://coai.remsoft.dev/api/health
 journalctl -u coai-server -n 50 --no-pager
 ```
 
+### Which ROLES this box will run
+
+A deploy here is what puts new review roles on the machine — there is no other route, and a tag
+alone does not do it. `AcceptedRoles` is built from the catalog the binary was COMPILED with, so a
+box running an older release accepts only the roles that release shipped, and `coai-mcp` correctly
+leaves the rest out of a round rather than sending one it will refuse.
+
+So after deploying a release that adds a role, check that this box knows it. The document roles
+arrived in plan 4 and are the current example:
+
+```bash
+curl -sS -H "Authorization: Bearer $TOKEN" https://coai.remsoft.dev/api/catalog | jq .roles
+# ... "DocumentReview", "DocumentSummary" ...
+```
+
+Until those names appear, a document round runs on local reviewers only and every panel says so on
+its roles page — which is correct behaviour and not a fault to chase.
+
 ---
 
 ## One-time: the Entra app registration

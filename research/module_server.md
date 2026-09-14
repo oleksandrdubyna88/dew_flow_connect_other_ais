@@ -1594,6 +1594,40 @@ a round cannot reach it.
 branch's session, which is idle and has nothing to decide; both refusals say so rather than sending
 them to run another review.
 
+## A document reaches a Team server (2026-09-14)
+
+Plan 5, [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md). The server
+half of this needed no code at all and that is the finding it starts from: `AcceptedRoles.From` seeds
+itself from `RoleCatalog.Builtin.Roles`, which has carried the two document roles since plan 4, so
+the day the box is next deployed it starts accepting them — with nobody having written a line and
+nothing anywhere saying so. What plan 5 owns is the three things that ought to have arrived with that.
+
+**A vendor's switches became three, and `Serves` takes the STAGE.** `ProviderSettings.Serves(bool)`
+could say "plan switch or code switch" and had no way to say "document", so plan 4's document round
+rode the PLAN tick — a fair reading for a reviewer this machine launches, and not one at all once
+the same tick decides whether a company document crosses the network. `Serves(Stage)` is exhaustive
+and throws on a stage nobody wrote a switch for, which is where the next one would otherwise land in
+silence. `StageRun.ServedByPlanSwitch` and `BuildWork`'s parameter went with it; `ReadsCheckout`
+stayed its own flag, because a CODE round with `CodeWorkspace: none` reads no checkout either and
+plan 4 split those two apart for exactly that reason.
+
+**`Document` is nullable, and its absent value is not one answer.** For a vendor this machine runs,
+absent is the plan tick — plan 4's reading, and nothing leaves the laptop. For a Team server absent
+is NO. The first draft wrote `Document ?? Plan` everywhere and the plan round refused it as Blocking:
+that grants permission for a document to leave the machine retroactively, on every configuration
+written before documents existed, from a tick that meant "this vendor is good at prose". It also
+removes the silent activation above — a redeploy of the box alone can no longer start carrying
+documents. The panel writes an explicit value the moment anybody touches either stage box, so the
+absent state is a migration reading rather than somewhere a person sits unawares.
+
+**A document round says where the document went.** `WhereTheDocumentWent` appends one clause to the
+reviewer line of a DOCUMENT round whose work actually reached a Team server, naming the distinct
+servers. Built from the assembled work and never from the settings: a server can be configured,
+ticked, and still carry nothing — no credential, a role it does not run, a deal that fell elsewhere —
+and telling somebody their document reached a box it never reached is worse than silence, because it
+is the one claim there they cannot check. Silent on every other stage: a diff going to a Team server
+is what a Team server is.
+
 ## PanelService is being taken apart (2026-09-13)
 
 It reached 2,600 lines, and the code round that found it said so as an accepted debt rather than a

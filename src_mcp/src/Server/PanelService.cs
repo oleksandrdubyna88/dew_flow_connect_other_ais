@@ -267,9 +267,9 @@ public sealed partial class PanelService
     /// the vault holds none" and "not signed in to the Team server at …" have different cures, and
     /// the whole point of naming the exclusion is that somebody can act on it.</para>
     /// </remarks>
-    internal IReadOnlyList<string> ExcludedFrom(bool isPlanStage) =>
+    internal IReadOnlyList<string> ExcludedFrom(Stage stage) =>
         [.. _settings.Providers
-            .Where(p => p.Serves(isPlanStage))
+            .Where(p => p.Serves(stage))
             .Where(p => !CanRun(p))
             .Select(p => $"{p.Provider}: {ReasonFor(p)}")];
 
@@ -421,7 +421,7 @@ public sealed partial class PanelService
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
         return RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
-            NeedsWorktree: false, ServedByPlanSwitch: true, ReadsCheckout: false,
+            NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
             (session, workingDir, _) =>
             {
                 // The same sentence the code stage writes, carrying the one number this stage has:
@@ -447,7 +447,7 @@ public sealed partial class PanelService
                 return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork(
                         roles, workingDir, $"## The plan under review\n\n{planText}", round,
-                        servedByPlanSwitch: true, readsCheckout: false,
+                        stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses)));
@@ -497,7 +497,7 @@ public sealed partial class PanelService
         }
 
         return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound,
-            NeedsWorktree: true, ServedByPlanSwitch: false, ReadsCheckout: true,
+            NeedsWorktree: true, Stage: Stage.CodeReview, ReadsCheckout: true,
             async (session, workingDir, sha) =>
             {
                 var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
@@ -587,7 +587,7 @@ public sealed partial class PanelService
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
                 return WithSkippedByRule(
                     BuildWork(roles, workingDir, context, round,
-                        servedByPlanSwitch: false, readsCheckout: true,
+                        stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses),
                     notAsked);
@@ -815,7 +815,7 @@ public sealed partial class PanelService
             // to read documents rather than diffs ticked that one — and is handed no checkout,
             // because its job is the document it was given. Neither says it is the plan stage.
             new StageRun(RoundMachine.BeginDocumentRound,
-                NeedsWorktree: false, ServedByPlanSwitch: true, ReadsCheckout: false,
+                NeedsWorktree: false, Stage: Stage.DocumentReview, ReadsCheckout: false,
                 (running, workingDir, _) =>
                 {
                     // The same sentence the other two stages write, carrying this one's own numbers.
@@ -833,7 +833,7 @@ public sealed partial class PanelService
                     return Task.FromResult(WithNothingSkippedByRule(
                         BuildWork(
                             roles, workingDir, DocumentContext(purposeText, document), round,
-                            servedByPlanSwitch: true, readsCheckout: false,
+                            stage: Stage.DocumentReview, readsCheckout: false,
                             seed: StableSeed(running.State.SessionId, round))));
                 })
             {
@@ -1108,7 +1108,7 @@ public sealed partial class PanelService
         // can only be smaller — a vendor that serves the other stage, a repository with no rules —
         // so basing the budget on the configured shape is the generous direction, which is the one
         // to be wrong in.
-        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.ServedByPlanSwitch, stage.RolesPerVendor));
+        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.Stage, stage.RolesPerVendor));
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -1162,7 +1162,7 @@ public sealed partial class PanelService
             // server does with a role a person defined. The second is only discovered while the work
             // is built, which is why it travels back on it.
             var excluded = (IReadOnlyList<string>)
-                [.. ExcludedFrom(stage.ServedByPlanSwitch), .. roundWork.Excluded.Select(e => e.Sentence)];
+                [.. ExcludedFrom(stage.Stage), .. roundWork.Excluded.Select(e => e.Sentence)];
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             // The ROUND's own deadline, derived from its shape unless somebody set one. A reviewer
             // is bounded; a round was not, and the round is what a person watches — so a round could
@@ -1218,6 +1218,15 @@ public sealed partial class PanelService
             }
 
             var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
+            // And, on a document round whose work reached a Team server, where the document went.
+            // Appended to the reviewer line rather than given a field of its own: it is a fact about
+            // THIS round's reviewers, and it has to be read by an AI that was not told to look for a
+            // new field. Empty for every other round, so nothing else changes by a byte.
+            answer = answer with
+            {
+                Reviewers = answer.Reviewers
+                    + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider)),
+            };
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
@@ -1521,8 +1530,48 @@ public sealed partial class PanelService
     private static RoundWork WithNothingSkippedByRule(RoundWork built) => built;
 
     /// <summary>Whether a vendor's reviews are run by somebody else's server.</summary>
-    private static bool Remote(ProviderSettings provider) =>
-        string.Equals(provider.Runtime, "remote", StringComparison.OrdinalIgnoreCase);
+    private static bool Remote(ProviderSettings provider) => provider.IsRemote;
+
+    /// <summary>
+    /// The clause that says a document left this machine — or nothing, when it did not.
+    /// </summary>
+    /// <remarks>
+    /// <para>Plan 4 confined a document to the repository the session was opened for and called that
+    /// a security boundary rather than a tidiness one. Plan 5 lets it travel, to a box the company
+    /// runs, on a subscription the company shares, and only where somebody ticked for it — all of
+    /// which is fine, and none of which is visible in a round that reports three reviewers having
+    /// answered. So it is said, once, in the reply the person asking is already reading.</para>
+    /// <para><b>Built from the work that was ACTUALLY assembled, never from the settings.</b> The
+    /// settings are the easy list and the wrong one: a Team server can be configured, ticked, and
+    /// still carry nothing — no credential, a role that server does not run, a deal that fell
+    /// elsewhere — and telling somebody their document reached a box it never reached is worse than
+    /// silence, because it is the one claim here they cannot check.</para>
+    /// <para><b>Distinct servers, not one.</b> Two vendors can sit on two different Team servers, and
+    /// naming one of them is hiding the other. (gemini, plan 5's plan round.)</para>
+    /// <para>Only for a DOCUMENT round. A diff going to a Team server is what a Team server is; a
+    /// clause on every round is a clause nobody reads by the third one.</para>
+    /// </remarks>
+    /// <param name="carriers">The provider ids that were given work — one per reviewer, duplicates and all.</param>
+    internal string WhereTheDocumentWent(Stage stage, IEnumerable<string> carriers)
+    {
+        if (stage != Stage.DocumentReview)
+        {
+            return string.Empty;
+        }
+
+        var servers = carriers
+            .Select(id => _settings.Providers.FirstOrDefault(
+                p => string.Equals(p.Provider, id, StringComparison.OrdinalIgnoreCase)))
+            .Where(p => p is { IsRemote: true, BaseUrl.Length: > 0 })
+            .Select(p => TeamServerAuth.Normalise(p!.BaseUrl))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return servers.Count == 0
+            ? string.Empty
+            : $" The document was also sent to {string.Join(", ", servers)}, where it is reviewed on "
+                + "the team's shared subscription rather than on this machine.";
+    }
 
     /// <summary>
     /// The prompt this round of this role gets — from the session's CATALOG, not from the compiled
@@ -1606,7 +1655,7 @@ public sealed partial class PanelService
         // the class of silent mistake this parameter was introduced to end. A caller that forgets it
         // does not compile. TWO of them since plan 4 — see StageRun, which records why one flag for
         // two questions stopped being honest the moment there were three stages.
-        bool servedByPlanSwitch,
+        Stage stage,
         bool readsCheckout,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
@@ -1661,7 +1710,7 @@ public sealed partial class PanelService
         // (research/RESULTS_vendor_overlap_2026-09-06.md): a local model was 19 % useful on a plan
         // and 3 % on code while writing more findings than both hosted vendors together, so "on for
         // the plan, off for the code" is a setting somebody actually wants.
-        var eligible = _settings.Providers.Where(p => p.Serves(servedByPlanSwitch)).Where(CanRun).ToList();
+        var eligible = _settings.Providers.Where(p => p.Serves(stage)).Where(CanRun).ToList();
         if (eligible.Count == 0)
         {
             return new RoundWork([], []);
@@ -2058,8 +2107,8 @@ public sealed partial class PanelService
     /// loses its Conventions reviewers, and dealing sends each lens to one vendor — and an upper
     /// bound is the right direction for a deadline to be wrong in.
     /// </remarks>
-    private int ConfiguredReviewers(bool isPlanStage, int rolesPerVendor) =>
-        _settings.Providers.Count(p => p.Serves(isPlanStage)) * rolesPerVendor;
+    private int ConfiguredReviewers(Stage stage, int rolesPerVendor) =>
+        _settings.Providers.Count(p => p.Serves(stage)) * rolesPerVendor;
 
     private TimeSpan RoundDeadlineFor(int reviewers)
     {
@@ -2532,17 +2581,24 @@ internal sealed record ExcludedRole(string Provider, string Role, string Reason)
     public string Sentence => $"{Provider}: {Reason}";
 }
 
-/// <param name="ServedByPlanSwitch">
-/// Which of a vendor's two switches decides whether it takes part: its <c>Plan</c> one when true,
-/// its <c>Code</c> one when false.
+/// <param name="Stage">
+/// Which stage this run IS — the question a vendor's switches are asked, and the round's deadline
+/// arithmetic with it.
+/// <para>It was a bool named for the plan switch, which could say "plan or code" and had no way to
+/// say "document": plan 4's document round therefore rode the PLAN tick, and plan 5 found that tick
+/// deciding whether a company document leaves the machine. A bool cannot answer a three-way
+/// question, and the caller has always known which stage it was running.</para>
 /// </param>
 /// <param name="ReadsCheckout">
 /// Whether this round's reviewers are given the repository to explore.
+/// <para>Still its own flag rather than a reading of <paramref name="Stage"/>, because the two
+/// genuinely disagree: a CODE round with <c>CodeWorkspace: none</c> reads no checkout either. Plan 4
+/// split these apart for exactly that reason and nothing here re-merges them.</para>
 /// </param>
 internal sealed record StageRun(
     Func<SessionState, Transition> Begin,
     bool NeedsWorktree,
-    bool ServedByPlanSwitch,
+    Stage Stage,
     bool ReadsCheckout,
     Func<PersistedSession, string, string, Task<RoundWork>> MakeWork)
 {
