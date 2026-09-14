@@ -1,6 +1,6 @@
 # PLAN — a round leaves the page as a file, and the log says what the deciding cost
 
-> Status: **in progress, 2026-09-13 — story A1 shipped, A2 through C2 open.** Scope: the rounds-log page
+> Status: **in progress, 2026-09-14 — stories A1, A2 and B1 shipped; B2, C1 and C2 open.** Scope: the rounds-log page
 > (`src_vs_code/src/roundsLog*.ts`), one new one-shot mode and one widened DTO on the server
 > (`src_mcp/src/Store/RoundsQuery.cs`, `src_mcp/src/Program.cs`).
 >
@@ -195,7 +195,7 @@ them. It changed three of this plan's own boundaries, and each change is kept he
 |---|---|---|
 | **A1** | An ordinal is not a position: a resolve out of order lands every mark on the finding it was about | expensive-to-be-wrong |
 | **A2** | The Took column shows two times | ordinary |
-| **B1** | Every row has an Export button, and it writes the row's own columns to a path the person chose | expensive-to-be-wrong |
+| **B1** | Every row has an Export button, and it writes the row's own columns to a path the person chose — **SHIPPED 2026-09-14** | expensive-to-be-wrong |
 | **B2** | The file carries every finding with its mark, and a failed read is never written as a clean round | expensive-to-be-wrong |
 | **C1** | A checkbox on every row, and the selection exports as one file with progress you can cancel | ordinary |
 | **C2** | A bulk export is one spawn, and an older server is still many | expensive-to-be-wrong |

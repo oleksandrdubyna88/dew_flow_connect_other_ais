@@ -235,7 +235,11 @@ test('the page has a Kind column and a Kind filter, and the detail row spans eve
   // leaves an opened row's detail short by one and the table visibly ragged — so it is derived, and
   // this is the test that says so.
   const html = roundsLogHtml([reviewRow()], [], 'n0nce');
-  const headers = html.match(/<th data-sort="/g) ?? [];
+  // EVERY header, not only the sortable ones. Counting `<th data-sort="` was a proxy for "every
+  // column" that held exactly as long as every column sorted; the actions column does not, and the
+  // proxy would have quietly let the detail row fall one short of the table again — which is the
+  // one thing this test exists to prevent.
+  const headers = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>')).match(/<th\b/g) ?? [];
 
   assert.match(html, /<th data-sort="kind">Kind<\/th>/, 'the column is missing');
   assert.match(html, /<select data-filter="kind">/, 'the facet is missing');

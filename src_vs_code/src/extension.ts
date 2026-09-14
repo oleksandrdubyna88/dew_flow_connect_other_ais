@@ -39,6 +39,8 @@ import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
+import { exportRounds, oneAtATime } from './roundsExport';
+import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -71,6 +73,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // has no modal and no status-bar item — it appears in the sidebar where a person is already
   // looking, and nowhere else.
   const consultations = new ConsultationWatcher(dataDir());
+
+  // Exports run one at a time: two dialogs answered with the same path would otherwise race,
+  // and the file would hold whichever write finished last while both reported success.
+  const exportQueue = oneAtATime();
   // Declared before the panel so the hooks can reach it; assigned right after.
   let roundsLog: RoundsLogPanel;
   let panelRef: PanelProvider;
@@ -95,6 +101,22 @@ export function activate(context: vscode.ExtensionContext): void {
     // rounds nobody had opened — so this is the read that replaces them, for the one round clicked.
     // The round's identity arrives WITH the request rather than being looked up in state the host
     // happens to be holding, which is what three reviewers of the code round asked for.
+    // The file the person asked for. Everything that DECIDES anything is in `roundsExport`, which
+    // imports no `vscode` and is therefore reachable from a test; this supplies the three things
+    // that genuinely need the editor — the dialog, the write, and the two ways of saying what
+    // happened. The in-flight state is the notification itself, so there is nothing to leave stuck.
+    onExport: async (rows) => {
+      await exportQueue(() => exportRounds(rows as unknown as readonly LogRow[], {
+        pickPath: async (name) => (await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(name),
+          filters: { 'Comma-separated values': ['csv'] },
+          saveLabel: 'Export',
+        }))?.fsPath,
+        write: (path, text) => writeFileAtomically(path, text),
+        report: (message) => void vscode.window.showInformationMessage(message),
+        reportError: (message) => void vscode.window.showErrorMessage(message),
+      }));
+    },
     onFindings: async (key, round) => {
       try {
         const found = await panelRef.roundFindings(round.sessionId, round.stage, round.number);

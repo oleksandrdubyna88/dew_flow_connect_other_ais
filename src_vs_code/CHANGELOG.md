@@ -48,6 +48,26 @@ per keystroke in one of them — forty for a forty-character name, each one anno
 the extension. They also queue behind one another now, so a fast typist cannot have an earlier
 keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
 
+**Every round in the log has an Export button, and it writes a CSV where you choose.** The rounds
+log was a screen and only a screen: what a review found and what was decided about it could be read
+and taken nowhere. Now each row ends with **Export**, and the file carries that round's own columns —
+when it ran, on which branch and repository, its verdict, how many findings it gated on, how long
+the reviewers ran and how long the deciding took, the tokens, the three cost figures, and the
+per-reviewer lines.
+
+Two things the file is careful about. **An absent measurement stays absent**: a round whose tokens
+nobody recorded leaves an empty cell rather than a zero, because zero is a number somebody measured.
+And **nothing in it can run when you open it** — a branch or a title beginning `=`, `+`, `-` or `@`
+is written as text, including when it hides behind a space, which is a trick a spreadsheet falls for
+and a naive guard does not catch.
+
+The instant is written twice: as stored, in UTC, and as your exporting machine's clock with its
+offset stated. A file cannot know what zone it will be read in a year from now, so it says which one
+it was written in rather than pretending.
+
+Cancelling the save dialog does nothing and says nothing. A write that fails says what failed and
+never claims success. Two exports started at once queue rather than race for the same file.
+
 **When a reviewer fails, the log says why — even when the vendor writes it somewhere unusual.**
 Codex has been failing rounds with `exit 1 (the CLI said nothing on stderr)` and nothing anywhere to
 explain it. The sentence was true and useless: the gate asks codex for machine-readable output, and

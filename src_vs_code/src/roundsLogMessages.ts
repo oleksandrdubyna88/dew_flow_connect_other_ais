@@ -32,6 +32,15 @@ export interface LogPageMessage {
   readonly session?: unknown;
   readonly stage?: unknown;
   readonly number?: unknown;
+  /**
+   * The ROWS an export is about, sent by the page rather than looked up here.
+   *
+   * <p>The host's newest rows are the unfiltered set as of the last tick, and a row somebody
+   * selected may already have left it — so looking a selection up in host-held state answers
+   * wrongly for exactly the rows a person cared about. It is the same objection three reviewers
+   * made about the findings request, and the same answer: the request carries what it is about.</p>
+   */
+  readonly rounds?: unknown;
 }
 
 export type LogCommand =
@@ -46,7 +55,21 @@ export type LogCommand =
     readonly stage: string;
     readonly number: number;
   }
+  | { readonly kind: 'export'; readonly rows: readonly ExportedRow[] }
   | { readonly kind: 'ignore' };
+
+/**
+ * One row of an export request, believed only as far as its shape.
+ *
+ * <p>Deliberately NOT `LogRow`. The page is not trusted, and thirty fields validated one by one
+ * would be a story of its own; what must be true here is that the thing is an object with a key —
+ * everything downstream treats each value as untrusted anyway, because the one cell writer in
+ * `roundsCsv` escapes whatever it is handed and renders what it cannot use as empty.</p>
+ */
+export interface ExportedRow {
+  readonly key: string;
+  readonly [field: string]: unknown;
+}
 
 const IGNORE: LogCommand = { kind: 'ignore' };
 
@@ -72,6 +95,22 @@ function findingsOf(message: LogPageMessage, key: string): LogCommand {
   return sessionId.length > 0 && stage.length > 0 && number >= 0
     ? { kind: 'findings', key, sessionId, stage, number }
     : IGNORE;
+}
+
+/**
+ * An export request, believed only as far as it is usable.
+ *
+ * <p>A request naming no rows is IGNORED rather than answered: it would open a save dialog for an
+ * empty file. Anything in the list that is not an object with a key is dropped, and a list that is
+ * nothing but those is the same as an empty one.</p>
+ */
+function exportOf(message: LogPageMessage): LogCommand {
+  const rows = Array.isArray(message.rounds) ? message.rounds : [];
+  const usable = rows.filter((row): row is ExportedRow =>
+    typeof row === 'object' && row !== null && typeof (row as { key?: unknown }).key === 'string'
+    && (row as { key: string }).key.length > 0);
+
+  return usable.length === 0 ? IGNORE : { kind: 'export', rows: usable };
 }
 
 /**
@@ -105,6 +144,8 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return { kind: 'forget', provider: id };
     case 'findings':
       return findingsOf(message, id);
+    case 'export':
+      return exportOf(message);
     default:
       return IGNORE;
   }
