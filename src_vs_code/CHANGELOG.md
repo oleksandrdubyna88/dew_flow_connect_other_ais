@@ -1,6 +1,24 @@
 # Changelog
 
-## Extension 0.43.0 — 2026-09-14
+## Extension 0.43.1 — 2026-09-14
+
+**The ⋯ menu now names the version of what it will actually give you: *Copy the CLAUDE.md snippet
+(v6)*.** It said (v5) from the day that label was added, through three changes to what the clipboard
+carries — the document gate, the caller declaration and the consultant block all joined the paste in
+that time. The number was pinned to the gate rule's own marker, which is frozen at 5 by the shared
+conventions and cannot move, so the menu looked identical before and after every one of them. If your
+repository's block predates any of those, this is how you can finally tell.
+
+**The panel stops telling a repository that its snippet "is v5; v5 is current".** That sentence went
+to every repository in this family that MOUNTS the gate rule from the conventions submodule: the gate
+half is current, the other three were never pasted, and the note printed the gate's number as though
+it were the paste's. A pasted copy carries one marker per half and no number for the whole, so the
+note now names the halves — *missing or behind on: the document gate, the caller declaration and the
+consultant* — and only the version the menu hands out is given as a number.
+
+**A copy that is newer than your extension is still told to keep what it has**, and now says which
+part of it is newer rather than comparing two numbers that were never on the same scale.
+
 
 **Tick the rounds you want and export them as one file.** Every row has a checkbox, the box in the
 header selects every round the filters currently match — across pages, not just the twenty you can
