@@ -45,21 +45,94 @@ export interface SettingRefusal {
  */
 const NOT_REGISTERED = /is not a registered configuration/u;
 
+/**
+ * Whether the BUILD that is running declares a setting — the discriminator the reload advice needs.
+ *
+ * <p><b>Two different faults produce one sentence from VS Code.</b> "not a registered configuration"
+ * means the workbench will not store the key, and there are exactly two reasons it would not: the
+ * window has not caught up with an update that declares it, or this build genuinely does not declare
+ * it. Reloading cures the first and does nothing whatever for the second — and the second is not
+ * hypothetical here, it is how this product met this error the FIRST time, with three gate switches
+ * missing from `contributes.configuration`. Telling somebody to reload then would send them round a
+ * loop that cannot end. (Gate finding, codex, on this change's plan round.)</p>
+ *
+ * <p>Pure, over the manifest the host hands in (`context.extension.packageJSON`), so the shape-walking
+ * is a unit test rather than a claim. `contributes.configuration` is allowed to be a single object or
+ * an array of them, and a manifest that cannot be read at all answers `unknown` — which is neither
+ * diagnosis, and deliberately offers no cure rather than guessing one.</p>
+ */
+export type Declared = 'declared' | 'absent' | 'unknown';
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+/** `contributes.configuration` is allowed to be one section or an array of them. Both, here. */
+function sectionsOf(manifest: unknown): readonly Record<string, unknown>[] {
+  const configuration = asRecord(asRecord(manifest)?.['contributes'])?.['configuration'];
+  const many = Array.isArray(configuration) ? configuration : [configuration];
+
+  return many.flatMap((one) => {
+    const section = asRecord(one);
+
+    return section === undefined ? [] : [section];
+  });
+}
+
+export function declaresSetting(manifest: unknown, key: string): Declared {
+  const sections = sectionsOf(manifest);
+  if (sections.length === 0) {
+    // No manifest, or one with no configuration contribution at all. Both mean this function cannot
+    // tell the two faults apart, and saying so is better than picking the likelier one.
+    return 'unknown';
+  }
+
+  // `Object.hasOwn`, never `in` or a bare property read: a key named `toString` must not answer
+  // "declared" because every object has one.
+  return sections.some((section) => Object.hasOwn(asRecord(section['properties']) ?? {}, `coai.${key}`))
+    ? 'declared'
+    : 'absent';
+}
+
 /** The words a thrower used, whatever it was. The same shape `saveSetting` has always reported. */
 function saidBy(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function settingRefusal(key: string, error: unknown): SettingRefusal {
+/** The stale-window sentence — the only one here that promises a cure. */
+function staleWindow(key: string): SettingRefusal {
+  return {
+    text: `ConnectOtherAIs was updated while this window was open, so the window does not know `
+      + `"coai.${key}" yet and refuses to store it. Reload the window (Developer: Reload Window) `
+      + `and the change will save.`,
+    reloadCures: true,
+  };
+}
+
+/** The same refusal when this BUILD is the one at fault, where a reload would change nothing. */
+function notInThisBuild(key: string, said: string): SettingRefusal {
+  return {
+    text: `ConnectOtherAIs cannot store "coai.${key}": this build of the extension does not declare `
+      + `it, so reloading will not help — it is a fault in the extension rather than in your settings. `
+      + `VS Code said: ${said}`,
+    reloadCures: false,
+  };
+}
+
+export function settingRefusal(key: string, error: unknown, declared: Declared): SettingRefusal {
   const said = saidBy(error);
 
   if (NOT_REGISTERED.test(said)) {
-    return {
-      text: `ConnectOtherAIs was updated while this window was open, so the window does not know `
-        + `"coai.${key}" yet and refuses to store it. Reload the window (Developer: Reload Window) `
-        + `and the change will save.`,
-      reloadCures: true,
-    };
+    if (declared === 'declared') {
+      return staleWindow(key);
+    }
+    if (declared === 'absent') {
+      return notInThisBuild(key, said);
+    }
+    // 'unknown' falls through to the verbatim reason below: no invented cause, and no cure offered
+    // that this code cannot stand behind.
   }
 
   return { text: `ConnectOtherAIs could not save "coai.${key}": ${said}`, reloadCures: false };

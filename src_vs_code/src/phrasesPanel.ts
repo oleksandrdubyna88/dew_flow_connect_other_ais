@@ -3,9 +3,8 @@ import * as vscode from 'vscode';
 
 import { rowsAfter, rowsOf, viewOf } from './phrasesEdit';
 import { phraseEdit, phraseRepaints, phrasesHtml, type PhraseCommand } from './phrasesPage';
-import { settingRefusal } from './settingRefused';
 import { settledWrites } from './settledWrites';
-import { reportRefusal, saveSetting } from './sideConfig';
+import { refusalFor, reportRefusal, saveSetting } from './sideConfig';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 /**
@@ -27,7 +26,16 @@ const KEY = 'phrases';
 
 let panel: vscode.WebviewPanel | undefined;
 let context: vscode.ExtensionContext | undefined;
-/** Whether this opening has already offered the reload. See {@link saveFailed}. */
+/**
+ * Whether THIS panel instance has already offered the reload. See {@link saveFailed}.
+ *
+ * <p><b>Its lifetime is the panel, and that is a deliberate choice among three.</b> The tab is made
+ * with `retainContextWhenHidden`, so hiding it and coming back does NOT rebuild it — the flag
+ * survives, which is right: it is the same tab and the same person, and re-offering on every tab
+ * switch is the spam this flag exists to stop. It resets only where a NEW panel is built, below,
+ * which is what somebody trying again after a reload will do. Disposal leaves it alone because the
+ * reset on the next opening is what governs. (Gate finding, gemini, on the plan round.)</p>
+ */
 let reloadOffered = false;
 
 function config(): vscode.WorkspaceConfiguration {
@@ -104,12 +112,12 @@ function render(): void {
  * what to say now, and for that one refusal it names the cure.</p>
  */
 function saveFailed(error: unknown): void {
-  const refusal = settingRefusal(KEY, error);
+  const refusal = refusalFor(side(), KEY, error);
   if (panel === undefined) {
     // The tab has already gone: this is the flush on dispose, and the banner it would have written
     // to went with it. A notification is the only surface left, and silence here would mean a phrase
     // somebody typed and then closed the tab on vanished without a word. (Code round, codex.)
-    reportRefusal(KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
+    reportRefusal(side(), KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
 
     return;
   }
@@ -126,7 +134,7 @@ function saveFailed(error: unknown): void {
     // avoid. Nothing is lost by offering it once — the condition does not go away by itself, and the
     // banner is still saying so underneath.
     reloadOffered = true;
-    reportRefusal(KEY, error);
+    reportRefusal(side(), KEY, error);
 
     return;
   }
