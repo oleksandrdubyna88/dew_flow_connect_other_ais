@@ -114,6 +114,7 @@ per vendor rather than one this product takes for them.
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
+| The rounds log leaves as a file | [module_extension.md](module_extension.md) · [module_server.md](module_server.md) · [PLAN_a_round_leaves_as_a_file.md](PLAN_a_round_leaves_as_a_file.md) | **all six stories shipped, 2026-09-14.** An **Export** button on every round and tick boxes for a bulk one, writing a CSV with the table's own columns plus every finding and its accept/decline mark; the **Took** column showing how long the DECIDING took beside how long the reviewers ran; and a bulk export that is ONE process rather than one per round, through a new one-shot server mode `--findings-many`. Phase 0 fixed a latent defect it found while tracing: `RecordDecisions` bound the ordinal to the loop index, so an out-of-order or partial `resolve` wrote its marks onto the wrong findings — exactly the data the export publishes |
 | The consultant (`consult`, the ninth tool) | [module_server.md](module_server.md) · [module_extension.md](module_extension.md) · [module_core.md](module_core.md) · [PLAN_consultant.md](PLAN_consultant.md) | **all six stories shipped, 2026-09-12 to 2026-09-13.** Story 1: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Story 2: all four routes — codex, claude, antigravity and a local engine — each resolved from a configured vendor row, each measured live for two turns. Story 3: the *Consultant* section — a row per caller kind, the caps, the switch and the prompt override. Story 4: the third live region, the `consultations` table and the log page's fourth tab. Story 5: the five triggers in the pasted snippet (v6, from a rule this repository owns rather than the shared store) and a `consult` MCP prompt. Story 6: `consult_missed` — how often the gate hands back a finding the caller had already ACCEPTED, measured on every round and calling nothing, which is what phase 2's decision waits on. The one open tail is the operator's own measurement, [../todo/PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) |
 
 ## The gate has an opposite: the agent asking, rather than being judged (2026-09-12)
@@ -214,6 +215,21 @@ gate's plan round for the reason that decides most seams here: **its two writers
 days.** A format shared by two programs that ship separately is a contract nobody wrote down, and this
 repository has already paid for one of those (`remoteVendor`, dropped by every component written
 before it existed). Two files and one merge costs one extra read and lets either half move alone.
+
+**And the log stopped being a screen and only a screen.** A round — or a selection of them — leaves
+as a CSV carrying the table's own columns plus every finding with its accept/decline mark. The read
+behind it is a **one-shot server mode**, `--findings-many`, because a bulk export used to spawn
+`coai-mcp` once per round: five hundred selected rounds were five hundred processes.
+
+That mode is the same "two writers release on different days" rule as the file split above, applied
+to an EXIT CODE. It had to be its own `args[0]` rather than a flag on `--findings`, because an older
+binary does not refuse a flag it has never seen — it accepts `--findings`, finds no `--session`, and
+exits **69**, "no such round", which a client renders faithfully. A whole export against yesterday's
+server would have recorded five hundred rounds as never-recorded. An unknown `args[0]` exits **64**,
+the one code that can mean "this binary is too old". The corollary is enforced in the other
+direction: a binary that KNOWS the mode never exits 64 — a malformed request is **65**, an unreadable
+database **74** — so a request fault can never present as an old server and turn into a
+successful-looking export.
 
 The reviewers' other objection — that two extension hosts appending to one file tear each other's
 lines — was measured rather than believed (`npm run measure:append`): eight processes × 1000 records,
