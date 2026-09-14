@@ -4742,10 +4742,11 @@ routing rule.
 **The box is drawn from the RULE, never from the stored field.** A box drawn from a field that can be
 absent is unticked while the round runs anyway, or ticked while it does not.
 
-**Touching either stage box pins the absent value.** `pinnedDocument` returns what the document switch
+**Changing the PLAN box pins the absent value.** `pinnedDocument` returns what the document switch
 was silently meaning, and `panelProvider`'s vendor write applies it before the field being changed.
 Otherwise unticking *plan* on a local reviewer takes its document rounds away as an invisible side
-effect of a decision about plans — and ticking it hands them over. The panel is where a person
+effect of a decision about plans — and ticking it hands them over. The CODE box pins nothing: the
+absent value is never read from it, so writing one there would record a decision nobody made. The panel is where a person
 decides, so the moment they decide anything on that card, what was inferred becomes something they
 said.
 

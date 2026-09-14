@@ -1620,8 +1620,10 @@ leaves the laptop. For a Team server it is NO. The first draft wrote `Document ?
 that grants permission for a document to leave the machine retroactively, on every configuration
 written before documents existed, from a tick that meant "this vendor is good at prose". It also
 removes the silent activation above — a redeploy of the box alone can no longer start carrying
-documents. The panel writes an explicit value the moment anybody touches either stage box, so the
-absent state is a migration reading rather than somewhere a person sits unawares.
+documents. The panel writes an explicit value the moment anybody changes the PLAN box — the only
+other switch this state is read from — so the absent state is a migration reading rather than
+somewhere a person sits unawares while the thing it defers to moves under them. A change to the CODE
+box pins nothing, because it cannot alter what the absent value means.
 
 **A document round says where the document went.** `WhereTheDocumentWent` appends one clause to the
 reviewer line of a DOCUMENT round whose work actually reached a Team server, naming the distinct
