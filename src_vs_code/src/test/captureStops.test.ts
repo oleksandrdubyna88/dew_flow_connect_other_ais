@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,15 +50,17 @@ test('the child is KILLED, not merely stopped being waited for', async () => {
   const folder = await mkdtemp(join(tmpdir(), 'coai-capture-test-'));
   const alive = join(folder, 'alive');
   try {
-    let cancelled = false;
-    setTimeout(() => {
-      cancelled = true;
-    }, 150);
+    // Cancel only once the child has PROVED it is running, by writing its first line. A fixed
+    // 150 ms could expire before a slow worker had started node at all, and the read would then be
+    // cancelled before there was anything to kill — the assertion below would fail on a missing file
+    // rather than on a child that outlived its cancellation, which tests nothing.
+    // (CodeRabbit, on the pull request.)
+    const started = (): boolean => existsSync(alive);
 
     await capture(
       NODE,
-      ['-e', 'const fs = require("node:fs"); setInterval(() => fs.writeFileSync(process.argv[1], String(Date.now())), 50);', alive],
-      false, 60_000, () => cancelled);
+      ['-e', 'const fs = require("node:fs"); const write = () => fs.writeFileSync(process.argv[1], String(Date.now())); write(); setInterval(write, 50);', alive],
+      false, 60_000, started);
 
     // Generous margins: the assertion is "it stopped", and a slow machine must not turn that into
     // "it stopped within exactly one tick".

@@ -249,6 +249,13 @@ export function parseManyFindings(text: string): readonly ManyFound[] | undefine
       if (one.known === true && !Array.isArray(one.findings)) {
         return undefined;
       }
+      // And `known` itself must BE a boolean. `one.known === true` alone turns `"known": "yes"` into
+      // `false`, which the reader then records as `absent` — "the database has never heard of this
+      // round" — about a round the server was in fact telling us something else about. A shape
+      // nobody intended must not become a confident claim. (CodeRabbit, on the pull request.)
+      if (typeof one.known !== 'boolean') {
+        return undefined;
+      }
       rounds.push({
         sessionId: one.sessionId ?? '',
         stage: one.stage ?? '',

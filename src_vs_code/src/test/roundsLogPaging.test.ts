@@ -422,7 +422,7 @@ test('ticking a row selects it and does NOT open it', () => {
 
   page.click(hitNested({ '[data-pick]': 'k1', 'tr[data-key]': 'k1' }));
 
-  assert.match(page.at('rows').innerHTML, /data-pick="k1" checked/, 'the box is ticked');
+  assert.match(page.at('rows').innerHTML, /data-pick="k1"[^>]*checked/, 'the box is ticked');
   assert.equal(
     page.posted.some((m) => (m as { command?: string }).command === 'findings'), false,
     'and the row did not expand');
@@ -491,6 +491,18 @@ test('a selection SURVIVES a filter, and the button says how many are out of sig
   page.click(hitNested({ '[data-pick]': 'k2' }));
   page.deliver({ type: 'rows', rows: [row({ key: 'k1', branch: 'main' }), row({ key: 'k2', branch: 'feat/other' })] });
   assert.match(page.at('exportpicked').textContent, /Export 2 selected/);
+
+  // And now FILTER one of them out of view. Without this the test never exercised the rule it is
+  // named for — a selection that survives a narrowing filter — and would have passed just as well if
+  // filtering had cleared the selection outright. (CodeRabbit, on the pull request.)
+  const search = page.at('search');
+  search.value = 'feat/other';
+  search.heard['input']?.({ target: { value: 'feat/other' } });
+
+  assert.match(page.at('exportpicked').textContent, /Export 2 selected \(1 hidden\)/,
+    'a selection is a decision and a filter is a view: narrowing the view must not unpick anything, '
+    + 'but exporting rows somebody cannot see has to be said out loud');
+  assert.doesNotMatch(page.at('rows').innerHTML, /data-pick="k1"/, 'k1 really is off screen');
 });
 
 test('a selected round that LEAVES the loaded set is dropped from the selection', () => {

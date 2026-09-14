@@ -84,6 +84,8 @@ NOTHING could be read, no file is written and the save dialog does not open.
 pressing Export used to run the server five hundred times, four at a time; it now asks once and gets
 every round's findings back together. Nothing about the file changes — the same columns, the same
 findings, the same accept and decline marks — it just stops being the slowest thing in the panel.
+(The per-round reading described further down is what happens now only against a server too old to
+answer in one go.)
 
 If your `coai-mcp` is older than this, the export still works exactly as it did before, one round at
 a time and four at once: the extension asks for the new mode, an older server says it has never

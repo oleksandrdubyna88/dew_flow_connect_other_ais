@@ -129,13 +129,22 @@ export function activate(context: vscode.ExtensionContext): void {
           location: vscode.ProgressLocation.Notification,
           title: `Exporting ${rows.length} rounds…`,
           cancellable: true,
-        }, (progress, token) => runExport(rows, {
-          progress: (done, total) => progress.report({
-            message: `read ${done} of ${total}`,
-            increment: 100 / total,
-          }),
-          cancelled: () => token.isCancellationRequested,
-        }, panelRef))
+        }, (progress, token) => {
+          // `increment` is a DELTA, so it has to be the distance travelled since the last report —
+          // not one round's share. The batch read reports once, with every round done at once, and a
+          // flat `100 / total` moved the bar 0.2% for a selection of five hundred and left it there
+          // until the file was written. (CodeRabbit, on the pull request.)
+          let reported = 0;
+
+          return runExport(rows, {
+            progress: (done, total) => {
+              const step = ((done - reported) * 100) / total;
+              reported = done;
+              progress.report({ message: `read ${done} of ${total}`, increment: step });
+            },
+            cancelled: () => token.isCancellationRequested,
+          }, panelRef);
+        })
         : runExport(rows, {}, panelRef)));
     },
     onFindings: async (key, round) => {

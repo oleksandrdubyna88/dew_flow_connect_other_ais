@@ -296,8 +296,17 @@ test('a batch answer with no rounds array at all is unreadable, not empty', () =
   assert.deepEqual(parseManyFindings('{"rounds": []}'), []);
 });
 
-test('a batch answer fills in what it left out, and believes only a real `known`', () => {
-  const parsed = parseManyFindings(answer([{ sessionId: 's1', stage: 'CodeReview', number: 4, known: 'yes' }]));
+test('a batch answer fills in what it left out, and demands a REAL boolean for `known`', () => {
+  const parsed = parseManyFindings(answer([
+    { sessionId: 's1', stage: 'CodeReview', number: 4, known: false }]));
 
   assert.deepEqual(parsed, [{ sessionId: 's1', stage: 'CodeReview', number: 4, known: false, findings: [] }]);
+
+  // `known: "yes"` used to become `false`, which the reader records as `absent` — "the database has
+  // never heard of this round" — about a round the server was plainly saying something else about.
+  // A shape nobody intended must not turn into a confident claim. (CodeRabbit, on the pull request.)
+  assert.equal(parseManyFindings(answer([{ sessionId: 's1', stage: 'CodeReview', number: 4, known: 'yes' }])),
+    undefined, 'a non-boolean `known` is an unreadable answer, not an absent round');
+  assert.equal(parseManyFindings(answer([{ sessionId: 's1', stage: 'CodeReview', number: 4 }])),
+    undefined, 'and so is one that never says');
 });
