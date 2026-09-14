@@ -6,7 +6,7 @@ import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
 import { shortNumber, UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
-import { calledBy, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { calledBy, MAX_DECIDING_SECONDS, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
@@ -690,7 +690,7 @@ function decideSecondsOf(round: RoundRecord, resolvedUtc: string): number | null
   }
   const seconds = Math.round((resolved - completed) / 1000);
 
-  return seconds < 0 || seconds > MAX_PLAUSIBLE_SECONDS ? null : seconds;
+  return seconds < 0 || seconds > MAX_DECIDING_SECONDS ? null : seconds;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1282,7 +1282,7 @@ export function roundsLogHtml(
   <span id="pageinfo"></span>
 </div>
 <div id="recorded" class="hint"></div>
-<div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
+<div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-consultations" hidden><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>

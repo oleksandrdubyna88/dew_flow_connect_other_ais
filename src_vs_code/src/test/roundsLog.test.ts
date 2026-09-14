@@ -312,12 +312,55 @@ test('a decision stamped BEFORE the round finished is refused rather than shown 
   assert.equal(row.decideSeconds, null);
 });
 
-test('a deciding time longer than any afternoon is refused, like the round duration beside it', () => {
+test('a round decided the NEXT MORNING still reports its deciding time', () => {
+  // The round's own duration is capped at a day because a reviewer timeout is minutes, so a longer
+  // one is a broken clock. Deciding is not like that at all: a round run in the late afternoon and
+  // decided the next morning is eighteen hours, and over a weekend sixty — and those are exactly
+  // the rounds whose deciding cost is worth knowing. Borrowing the round's cap made the number
+  // vanish precisely then. (Plan round, gemini.)
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ resolvedUtc: '2026-09-06T09:00:00.000Z' })) as [LogRow];
+
+  // 2026-09-05T07:43:10Z to 2026-09-06T09:00:00Z — 25h 16m 50s, well past the round's own cap.
+  assert.equal(row.decideSeconds, 91_010);
+});
+
+test('a deciding time longer than a working month is refused as a broken clock', () => {
   const [row] = rowsFrom(
     [session([round()])], NOW, () => undefined, [],
     dbLog({ resolvedUtc: '2030-01-01T00:00:00.000Z' })) as [LogRow];
 
   assert.equal(row.decideSeconds, null);
+});
+
+test('a stamp the server sends as null is unknown, not zero', () => {
+  // `parseLog` reads a payload another program wrote. A field present and null is a different
+  // shape from a field absent, and both must land on the same answer. (Plan round, local.)
+  const base = dbLog();
+  const nulled = {
+    ...base,
+    rounds: base.rounds.map((one) => ({ ...one, resolvedUtc: null as unknown as string })),
+  };
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], nulled) as [LogRow];
+
+  assert.equal(row.decideSeconds, null);
+});
+
+test('a round only PARTLY decided still reports how far the deciding got, and still reads awaiting', () => {
+  // Defined rather than left to fall out: MAX over the decided findings is the last decision, and a
+  // round with findings still open keeps its `awaiting` status beside it. The number says how far
+  // the deciding got; the status column is what says whether it finished. Suppressing the number
+  // would throw away the only measurement a half-finished evaluation has. (Plan round, gemini.)
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({
+      accepted: -1, rejected: -1, foundCount: 2,
+      resolvedUtc: '2026-09-05T07:48:10.000Z',
+    })) as [LogRow];
+
+  assert.equal(row.decideSeconds, 300);
+  assert.equal(row.status, 'awaiting', 'the gate is still open, and the status is what says so');
 });
 
 test('an unparseable stamp is unknown rather than NaN', () => {
