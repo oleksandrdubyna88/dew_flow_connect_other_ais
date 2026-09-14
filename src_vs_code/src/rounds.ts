@@ -205,6 +205,58 @@ export const MAX_PLAUSIBLE_SECONDS = 24 * 60 * 60;
  */
 export const MAX_DECIDING_SECONDS = 30 * 24 * 60 * 60;
 
+/**
+ * An instant that NAMES ITS ZONE, or nothing at all.
+ *
+ * <p>`Date.parse` accepts `2026-09-06T09:00:00` — no `Z`, no offset — and reads it in whatever zone
+ * the reading machine is in. That is the precise failure the family's UTC rule was written after: a
+ * stored value bound to the reader's offset, arriving a day early on every row, silently. Here it
+ * would mean the same round showing a different deciding time in Kyiv and in Lisbon.</p>
+ *
+ * <p>So a stamp without a zone is UNKNOWN rather than guessed. Everything this reads is written by
+ * `DateTime.ToString("O")` or by JavaScript's own ISO output, both of which carry one; a value that
+ * does not is a hand-edited row or a foreign writer, and the honest answer to it is no measurement.
+ * (Code round, codex.)</p>
+ */
+export function instantOf(text: string): number | undefined {
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/.test(text)) {
+    return undefined;
+  }
+  const parsed = Date.parse(text);
+
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+/**
+ * How long the DECIDING took: the round finishing to its last recorded decision.
+ *
+ * <p>Here rather than in `roundsLog.ts` because it is not a rendering question. The CSV export in
+ * the stories after this one carries a `decide_seconds` column, and a second copy of this
+ * arithmetic — the empty-string refusal, the rounding, the bound — is how the file and the screen
+ * come to report different numbers for one round. One function, both callers. (Code round, codex.)</p>
+ *
+ * <p><b>The empty string is refused FIRST, by an explicit test.</b> Not left to a parse and a NaN
+ * check: `'' - number` is `0` in JavaScript, and the one thing this must never return for an unknown
+ * is a zero, which reads as "decided instantly" — a measurement nobody made. A round nobody has
+ * decided and a round from a server too old to send the stamp both arrive as `''` and are the same
+ * fact.</p>
+ */
+export function decideSecondsOf(completedUtc: string, resolvedUtc: string): number | null {
+  if (resolvedUtc.length === 0) {
+    return null;
+  }
+  const resolved = instantOf(resolvedUtc);
+  const completed = instantOf(completedUtc);
+  if (resolved === undefined || completed === undefined) {
+    return null;
+  }
+  const seconds = Math.round((resolved - completed) / 1000);
+
+  // A decision stamped before the round it belongs to means a clock moved, not a duration below
+  // zero; and a gap longer than a month is evidence of the same rather than of long deliberation.
+  return seconds < 0 || seconds > MAX_DECIDING_SECONDS ? null : seconds;
+}
+
 /** `PlanReview` -> `plan review`: both renderers speak the way a person would say it. */
 export function stageName(stage: string): string {
   return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;

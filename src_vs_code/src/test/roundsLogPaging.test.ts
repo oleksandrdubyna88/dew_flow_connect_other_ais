@@ -344,3 +344,13 @@ test('a deciding time of zero is a real measurement and is shown', () => {
 
   assert.match(page.at('rows').innerHTML, /class="deciding"[^>]*>[^<]*0 s/);
 });
+
+test('a round whose OWN duration is unknown shows a dash, never a floating middle dot', () => {
+  // An interrupted round has no duration of its own, and it can still have been decided. Without a
+  // stand-in the cell opened on " · 5m 0s". (Code round, gemini.)
+  const page = open([row({ seconds: null, decideSeconds: 300 })]);
+
+  const cell = page.at('rows').innerHTML;
+  assert.match(cell, /— <span class="deciding">/, 'the dash stands where the round duration would be');
+  assert.doesNotMatch(cell, />\s*<span class="deciding">/, 'and nothing renders a bare dot with nothing before it');
+});
