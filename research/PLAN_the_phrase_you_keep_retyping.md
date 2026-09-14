@@ -1,17 +1,53 @@
 # PLAN — the phrase you keep retyping, one click from the panel
 
-> Status: **plan only, nothing implemented yet.** Kind: **feature**, small.
-> Scope: one pure module (`phrases.ts`), a CRUD tab (`phrasesPage.ts` + `phrasesPanel.ts`), one new
-> sidebar section in `panelView.ts`, one new command, one new setting.
+> Status: **IMPLEMENTED, 2026-09-14.** All three stories shipped and merged as #250 and released as
+> extension 0.42.0: `phrases.ts` with `savedRows.ts`, the CRUD tab with its command, setting and
+> five-language article, and the Phrases section with the copy action.
 >
-> Gate: plan round run 2026-09-14, session `4cc5cc61`, all three reviewers answered —
-> `good_enough` at 9 gating against a threshold of 6, the plan stage's one round spent. Ten findings
-> accepted and folded in below, each marked where it landed; two rejected with reasons recorded in
-> the session.
+> Built as three stories, each through the gate twice — six rounds, 61 findings resolved, sessions
+> `4cc5cc61`, `5f5b0468` and `6822a7bb`. Every rejection carries its reason in its session.
 >
-> Related docs: [PLAN_presets_above_the_composer.md](../research/PLAN_presets_above_the_composer.md)
+> **Deviations from this document, in the order they cost something.**
+>
+> *The plan was rewritten once before a line was built.* The first version chased inserting the text
+> into the Claude Code composer and opened with a four-observation probe. The operator read the
+> findings and chose the keystroke instead, which removed the probe, the PowerShell, the Windows-only
+> gate and the clipboard borrow — and turned the largest half of the plan into the section headed
+> *What this plan deliberately does NOT do*. That section is the most valuable part of this file.
+>
+> *Two shared modules were extracted that the plan did not foresee.* `savedRows.ts` took the row
+> rules out of `chatPresets.ts` so both lists share one copy — and fixed two latent defects in the
+> sibling on the way: a positional id could collide with a hand-written one, and a body opening with
+> a blank line produced a button with no label. `settledWrites.ts` took the one-write-at-a-time and
+> settle-before-storing rules out of `rolesPanel.ts` after six plan reviewers raised
+> write-per-keystroke; the plan had cited the presets tab as its precedent, and the presets tab is
+> the one that writes per keystroke. Moving both made their rules unit-testable for the first time.
+>
+> *The tab edits the ROWS, not the `Phrase`s.* Not in the plan. `phrasesFrom` names a nameless row
+> from its first line, which is right on a button and wrong in an editor.
+>
+> *`phrases.test.ts` grew a sibling the plan did not name* — `phrasesEdit.test.ts` — because the
+> host's rules belong outside the host, and `phrasesPanel.test.ts` as planned could not exist: no
+> panel host in this repository is unit-tested, and `research/module_tests.md` records why.
+>
+> *The section is coloured.* The plan said it would ship uncoloured like *Team servers*; a guard test
+> requires every collapsible header to carry a tone, so it wears `--tone-plan`.
+>
+> **What the gate caught that the tests could not**, and the reason both are worth remembering:
+> a generated page script containing `/["\]/g` — an unterminated character class written by a
+> heredoc that ate a backslash — which the source-matching tests passed over while the whole panel
+> script was dead; and a settings row saved as `{ "text": "deploy it" }` that rendered but could not
+> be edited or removed, because the view invented an id the rules did not match. Three reviewers
+> found each, independently. The first is why `panelPhrasesScript.test.ts` EXECUTES the script.
+>
+> **Open tail, small and deliberate.** No end-to-end scenario drives the real extension host: there
+> is no harness for one here, which `research/module_tests.md` already records as a standing gap.
+> And `coai.phrases` follows a person between machines through Settings Sync, like the sibling preset
+> lists; a reviewer asked for `"scope": "machine"` and it was declined, with the reason recorded.
+>
+> Related docs: [PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md)
 > — the sibling list, its storage contract, the page/host arrangement and the deviation that decides
-> where a new tab must be reachable from; [module_extension.md](../research/module_extension.md).
+> where a new tab must be reachable from; [module_extension.md](module_extension.md).
 
 ## The goal, in the operator's words
 
@@ -232,7 +268,7 @@ when the whole ritual has run — not when the code works.
    a check that the test really fails without the fix.
 3. **`review_code` after EVERY story**, not once at the end: scope = that story's section of this
    plan plus the goal, `branch`/`baseRef` three dots by construction — the two-dot moving-base trap
-   is [PLAN_the_gate_diffs_from_a_moving_base.md](../research/PLAN_the_gate_diffs_from_a_moving_base.md).
+   is [PLAN_the_gate_diffs_from_a_moving_base.md](PLAN_the_gate_diffs_from_a_moving_base.md).
    Resolve every finding, fix what was accepted, update the docs and the tests, commit. A story that
    is not reviewed, documented, tested and committed is not finished.
 4. **Documentation.** `research/module_extension.md`; `research/architecture.md` only if a seam moved.
