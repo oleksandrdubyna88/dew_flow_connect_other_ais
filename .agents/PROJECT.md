@@ -13,12 +13,16 @@ apply here exactly as local rules would. Fresh clone: `git submodule update --in
 **ConnectOtherAIs** — a multi-model review gate. The main AI (Claude Code or Codex) writes the plan and the
 code; secondary vendor models (Codex, Gemini, DeepSeek via Codex's custom provider) review both, in
 rounds, until the count of blocking+major findings after de-duplication drops under a threshold — or
-a human is called. Two halves:
+a human is called. Three parts, each with its own release line (`mcp-v*`, `extension-v*`, `server-v*`):
 
-| Half | Name | Role |
+| Part | Name | Role |
 |---|---|---|
 | `src_mcp` | `coai-mcp` (client id `coai`) | Native-AOT stdio MCP server: round state machine, CLI fan-out, finding normalisation, verdicts |
-| `src_vs_code` | ConnectOtherAIs extension | settings UI, rounds view, human-escalation modal, "Install the MCP server…" button |
+| `src_vs_code` | ConnectOtherAIs extension | settings UI, rounds view + log, human-escalation modal, "Install the MCP server…" button |
+| `src_server` | `coai-server` (the **Team server**) | Optional, opt-in: an HTTP service a company deploys so reviewers run on one box behind Entra sign-in. Native-AOT binaries **and** a multi-arch image; its deploy is manual (`deploy/README.md`) |
+
+The Team server is optional — nothing needs it — but it is a shipped product, not a sample, so a wire
+field added on one side must be measured against the OLD other side before it ships.
 
 The full design is `research/PLAN_connect_other_ais.md` (master plan) and `research/PLAN_epic_0*.md` (the
 build order, each with its deviations recorded). **Session start:** read `research/architecture.md` first, then the epic you are working.

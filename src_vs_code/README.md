@@ -22,15 +22,24 @@ findings — a severity, a category, what breaks and the smallest fix. Your AI r
 every one of them, revises, and asks again. When the gating count drops to your threshold, it may
 implement.
 
-**The code gate.** When the branch is written, each vendor runs **three independent reviewers**:
+**The code gate.** When the branch is written, each vendor runs **four independent reviewers**:
 
 | Reviewer | Reads for |
 |---|---|
 | Architecture | boundaries, abstractions doing two jobs, consistency with the code around them |
 | Security & reliability | secrets, injection, swallowed errors, what a `kill -9` leaves behind |
 | UX-DX & code performance | redundant re-renders and queries, blocking calls, the ergonomics of a new API |
+| Conventions | only the rules this project wrote down — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/rules`. A convention the reviewer believes in but the project never wrote is not a finding |
+
+Each role has its own rounds, its own threshold and a tick box on its heading, so a role you do not
+want takes no part and costs nothing. You can add roles of your own beside these.
 
 Same loop: findings, decisions, fixes, another round.
+
+**The document gate.** `review_document` is the third way in: a DOCUMENT rather than a diff — a
+plan, a spec, a piece of prose — with no plan round before it and its own session per document. Two
+roles ship for it: *The document*, which reads for whether a reader could act on it, and a summary
+role that writes an account of the whole thing rather than findings. A summary gates nothing.
 
 **When the rounds run out**, your policy decides: ask a human, continue and say what is still open,
 or climb a ladder — reviewer effort, then reviewer model, then the arbiter.
@@ -63,10 +72,15 @@ The call blocks until you answer. After your timeout it comes back `no_answer_ye
 to ask you in the chat instead; the question stays open either way. **Nothing is decided by your
 silence.**
 
-Questions are shown **in your language** — English, Español, Deutsch, Русский, Українська. A question
-already written in it is left exactly as it was; anything else is translated by a small fast model
-first, and your answer is translated back for the AI that asked. If the translator cannot run, you
-get the original text with the reason — never an error in its place.
+The question reaches you as **one fixed English sentence and three buttons**, and your answer goes
+back exactly as you gave it. There used to be a translator here — the question was prose an AI had
+written, and your words were rendered into another language by a third model before the asker saw
+them. Three buttons removed the need for it, along with the `COAI_LANGUAGE` and `COAI_TRANSLATOR_*`
+settings behind it: free text you type on a button reaches the AI unmediated, which is worth more
+than the same words translated.
+
+The **Help** pages are a separate choice and still yours — English, Español, Deutsch, Русский,
+Українська, switched at the top of any help page and stored as `coai.helpLanguage`.
 
 ---
 
@@ -136,6 +150,55 @@ languages. This section is the overview; that article is the one kept in step wi
 
 ---
 
+## When your AI is the one who is stuck
+
+The chat is a person asking another vendor about a passage. **The consultant** is the same idea from
+the other end: `consult` is a tool your assistant calls itself, when it has been going in circles,
+to ask another vendor's model about the working tree **as it stands** — uncommitted edits included,
+which is the state no diff and no review round can see.
+
+It gates nothing and blocks nothing; it comes back as an answer, not a verdict. Its cost is bounded
+by caps you set in the panel — turns per consultation, calls per session, and an idle time after
+which one is closed — because the failure mode of a tool an AI can call on its own judgement is
+calling it forty times.
+
+---
+
+## A company box, if you have one
+
+A **Team server** reviews for everybody without anybody installing a CLI. Add it under *Team
+servers*, press **Sign in**, and its reviewers appear beside your local ones; your plan and your
+diffs are sent to that machine over HTTPS, behind your own sign-in, and what it is authenticated as
+is shown on the row.
+
+Documents are deliberately held back. A reviewer row on a Team server has a third box, **reviews
+documents**, and on a Team server it starts **off** — a diff belongs to a repository that machine
+already has, but a document you were handed may be somebody else's to release. The box is what
+decides whether it leaves your machine, and it says so rather than meaning it silently.
+
+---
+
+## The log, and taking it with you
+
+Finished rounds go to **Show review rounds** on the panel's `⋯` menu: a table of everything that has
+ever run, sorted, filtered and searchable, holding your chat conversations as well as your review
+rounds. The **Took** column now reports two figures — how long the reviewers ran, and how long the
+*deciding* took, from the round finishing to its last decision, which is the half that actually takes
+somebody's afternoon.
+
+**And it leaves as a file.** Every row ends with **Export**, which writes that round to CSV: its
+verdict, both times, the tokens, the three cost figures, a line per reviewer — and a line per
+finding, carrying what you decided about each one in the same words the page uses, with a declined
+finding's reason beside it. Tick several rows, or the box in the header to take every round the
+filters currently match across pages, and the toolbar exports them together, cancellably.
+
+Two things the file is careful about, because a log that lies is worse than no log: an absent
+measurement stays an **empty cell** rather than a zero, and a round whose findings could not be read
+is marked as such in a `findings_read` column rather than written as a round that found nothing.
+Nothing in it can execute when a spreadsheet opens it, either.
+
+---
+
 ## Getting started
 
 1. **Install the server.** The `⋯` menu in the panel → *Install the MCP server…*. It downloads the
@@ -160,18 +223,31 @@ Everything in the sidebar, most of it folded away because it is configured once:
   from the CLI's own cache, so the list is what this machine can actually reach today; Gemini's and
   Claude's are curated, and the panel says which is which rather than passing curation off as
   discovery. Any model can be typed in regardless.
-- **Language** — who you are asked in, and which model translates.
-- **The gate** — rounds per stage, the passing threshold, what happens when rounds run out.
-- **Limits** — reviewers at once, per vendor (rate limits are per vendor: without that cap one
-  throttled vendor holds every slot), timeouts, and how long a question waits for you.
-- **Vendor keys** — and, first, whether you need any. With signed-in CLIs, you do not.
-- **Recent rounds** — the verdicts, newest first.
+- **Chat other AIs** — ask a second model about a passage without leaving VS Code, and find that
+  conversation again afterwards.
 - **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
   on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
   them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than
   typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
   only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
   price than a mechanism that can fail silently on somebody else's machine.
+- **Consultant** — the same idea from the other end: `consult` lets a stuck AI ask another vendor's
+  model about your working tree as it stands, with its own caps on turns, calls per session and
+  idle time.
+- **Prompts per round** — which lens each role is asked through, and the full text of every prompt.
+- **The gate** — rounds and a passing threshold **per role**, each role with a tick box on its own
+  heading, and what happens when the rounds run out.
+- **Limits** — reviewers at once, per vendor (rate limits are per vendor: without that cap one
+  throttled vendor holds every slot), timeouts, and how long a question waits for you.
+- **Vendor keys** — and, first, whether you need any. With signed-in CLIs, you do not.
+- **Team servers** — a company box that reviews for you, with nothing installed here. Sign in, and
+  its reviewers appear beside your local ones; the *reviews documents* box on such a row starts off.
+- **This side** — a local window, or each WSL distro and remote host, can keep its own settings and
+  its own data directory.
+- **MCP server** — install or update it, and see where this window keeps its data.
+- **Active rounds** — what is running right now, whole: the stage, the branch, and every reviewer
+  the round launched. Finished rounds live in the log — **Show review rounds** on the ⋯ menu —
+  which sorts, filters, and now **exports to CSV**, one round or a selection of them.
 
 Every setting carries a **?** that explains what it does and why it exists.
 
@@ -182,10 +258,16 @@ Every setting carries a **?** that explains what it does and why it exists.
 - **VS Code 1.85+**
 - **An MCP client** — Claude Code, or anything that speaks MCP over stdio.
 - **At least one reviewer CLI**, signed in: [Codex](https://developers.openai.com/codex/cli),
-  [Gemini](https://github.com/google-gemini/gemini-cli), or
+  [Antigravity](https://antigravity.google) (which fronts Gemini, Claude and GPT-OSS), or
   [Claude Code](https://claude.com/claude-code). They authenticate themselves; no API key is needed
-  for these.
-- **git** — reviewers read a detached worktree, never your live checkout.
+  for these. A fresh install starts with Codex and Antigravity enabled. The standalone
+  [Gemini CLI](https://github.com/google-gemini/gemini-cli) is still selectable but Google **retired
+  Code Assist for individual accounts**, so it refuses before reaching a model — it is kept only for
+  a Workspace account that still has it, and the panel labels it retired rather than letting you
+  find out from a failed round.
+- **git** — a reviewer never touches your live checkout. By default it is given no checkout at all;
+  set *Full* and it reads a detached worktree pinned to the commit under review.
+- **Nothing at all, for a Team server reviewer** — that machine has the CLIs, you only sign in.
 - **An API key only for a vendor without a CLI** (DeepSeek, OpenRouter, any endpoint you add). Those
   live in one [CredsForDevs](https://marketplace.visualstudio.com/search?term=CredsForDevs) entry of
   kind `config`; the extension never stores a secret itself.
@@ -201,10 +283,15 @@ and the installer says so rather than downloading something that cannot run.
   already use — sessions, escalations, settings.
 - **It stores no secret.** The vault key you paste is a pass to one entry, revocable, and useless
   while VS Code is closed.
-- **It sends nothing anywhere itself.** Reviewers are local CLIs you have already installed and
-  signed in; what they send is between you and that vendor. The panel says so when you enable one.
-- **It cannot edit your code.** Every reviewer runs read-only, in a worktree pinned to one commit,
-  with the write tools explicitly denied.
+- **It sends nothing anywhere itself — until you add a Team server.** Reviewers are local CLIs you
+  have already installed and signed in; what they send is between you and that vendor, and the panel
+  says so when you enable one. A **Team server** is the one exception and it is opt-in: configure one
+  and the extension itself POSTs your plan or diff over HTTPS to that machine, behind your own
+  sign-in. Nothing reaches it until you add it.
+- **It cannot edit your code.** Every reviewer runs read-only with the write tools explicitly denied.
+  By default it is given no checkout at all — just the composed prompt, which measured better on
+  every hosted model at a fraction of the input tokens. Switch **What a code reviewer is given** to
+  *Full* and it also gets a worktree pinned to the commit under review.
 
 ---
 
@@ -213,6 +300,14 @@ and the installer says so rather than downloading something that cannot run.
 Your plan and your diff are sent to the vendors you enable, by their own CLIs, under your own
 accounts. Lock files, build output and binaries are excluded before anything is sent; an over-sized
 diff names what it left out rather than silently truncating.
+
+If you configure a **Team server**, that work is also sent over HTTPS to the machine you named, by
+this extension rather than by a CLI. A **document** review is the one case held back by a switch of
+its own: on a Team server the *reviews documents* box starts **off**, because a document you were
+handed is not a diff of a repository the server already has, and the box is what decides whether it
+leaves your machine at all.
+
+Your saved phrases and chat prompts are never sent to a review server or mirrored to a Team server.
 
 Nothing is sent to the authors of this extension. There is no telemetry.
 

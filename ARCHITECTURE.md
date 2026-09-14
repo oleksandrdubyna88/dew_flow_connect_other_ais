@@ -163,7 +163,7 @@ an orphan from a killed session is pruned by the next `open`.
 dotnet build dew_flow_connect_other_ais.slnx -c Debug
 ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe     # never `dotnet test` — MTP, no VSTest host
 cd src_vs_code && npm ci && npm test
-node .claude/rules/shared/tools/plan-lifecycle.mjs
+node .agents/conventions/tools/plan-lifecycle.mjs
 ```
 
 The process-level suite drives a scriptable **fake CLI**, so CI touches no vendor and needs no
