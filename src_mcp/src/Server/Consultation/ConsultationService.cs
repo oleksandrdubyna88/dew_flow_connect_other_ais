@@ -532,15 +532,6 @@ public sealed class ConsultationService(
             : DiffShaper.Shape(files, ConsultantPrompt.DiffBudget).Text;
     }
 
-    /// <summary>
-    /// What THIS turn consumed, for a vendor that reports the whole conversation's total every time.
-    /// </summary>
-    /// <remarks>
-    /// The running total lives on the RECORD, which is why the subtraction happens here and the
-    /// adapter only declares that it reports cumulatively. The arithmetic itself is
-    /// <see cref="ConsultationUsage"/>, in the core, so the test exercises the rule rather than a
-    /// copy of it.
-    /// </remarks>
     /// <summary>The record this turn leaves behind — closed when the budget is spent, open otherwise.</summary>
     /// <remarks>
     /// Pure, and its own method because the three <c>IsLast</c> decisions are ONE decision wearing
@@ -565,6 +556,15 @@ public sealed class ConsultationService(
         };
     }
 
+    /// <summary>
+    /// What THIS turn consumed, for a vendor that reports the whole conversation's total every time.
+    /// </summary>
+    /// <remarks>
+    /// The running total lives on the RECORD, which is why the subtraction happens here and the
+    /// adapter only declares that it reports cumulatively. The arithmetic itself is
+    /// <see cref="ConsultationUsage"/>, in the core, so the test exercises the rule rather than a
+    /// copy of it.
+    /// </remarks>
     private static Usage ThisTurnsShare(Consultant consultant, ConsultationRecord record, Usage reported)
     {
         if (!consultant.Runtime.UsageIsCumulative)

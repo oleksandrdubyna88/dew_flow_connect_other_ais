@@ -195,9 +195,11 @@ Both, because a shared data directory acquires files nobody planned for.
 `CallerIdentity.KindFrom` answers the kind from the VENDOR variables alone — `COAI_CALLER_SESSION` is
 an identity override with no vendor meaning and is deliberately not consulted. Shipped: Claude Code →
 codex, Codex → claude, Gemini → codex, other → codex; a different vendor by default, the same vendor
-allowed as an explicit choice for a stronger model. A malformed map is the shipped one plus a sentence
-in `Unrecognised`, never half a map. Story 1 ships `codex` as the only consulting runtime; every other
-row is refused BY NAME (`ConsultantResolution.CannotConsult`), never substituted.
+allowed as an explicit choice for a stronger model. A malformed map is never half a map — and since it cannot
+say which vendor was meant, consulting REFUSES until it is fixed rather than falling back to the
+shipped one. All four runtimes consult as of story 2 — codex, claude, antigravity and a local engine,
+each measured live for two turns (the table above). A configured row whose runtime cannot hold a
+conversation is refused BY NAME (`ConsultantResolution.CannotConsult`), never substituted.
 
 **The consultant's prompt** is `src_mcp/src/consultant/consult.md`, embedded as
 `CoaiMcp.prompts.consult.md` and served by `RolePrompts.For("consult")` — override-first, so it is

@@ -124,6 +124,47 @@ public sealed class ConsultationStoreTests : IDisposable
             .Should().Be(1, "the real record is still reconciled");
     }
 
+    /// <summary>
+    /// A turn is NOT orphaned while somebody still holds the repository's lock.
+    /// </summary>
+    /// <remarks>
+    /// The pid alone was the whole test, and a pid is not a fact every server can see: a second one
+    /// in another container or under another user reads the first's process as gone and writes a
+    /// terminal record over a consultation that is still running — which the live card and the log
+    /// then show as interrupted while the vendor is mid-answer. The lock is what both CAN see.
+    /// (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public async Task ASweepLeavesAnAskingRecordAlone_WhileItsRepositoryLockIsHeld()
+    {
+        var repo = Directory.CreateTempSubdirectory("coai-held-").FullName;
+        try
+        {
+            var record = Record(handle: "0198-bbbb") with { RepoPath = repo };
+            _store.Write(record);
+
+            // Somebody IS working in there — the lock the running consultation holds.
+            using (await RepositoryLock.TryTakeAsync(_data, repo, TimeSpan.Zero, TestContext.Current.CancellationToken))
+            {
+                _store.Sweep(_ => false, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7))
+                    .Should().Be(0, "a dead pid this server cannot vouch for is not a finished turn");
+                _store.Read(record.Id)!.Status.Should().Be(ConsultationStatuses.Asking);
+            }
+
+            // Released, and the same sweep now reconciles it.
+            _store.Sweep(_ => false, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7)).Should().Be(1);
+            _store.Read(record.Id)!.Status.Should().Be(ConsultationStatuses.Interrupted);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(repo, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
     [Fact]
     public void ASweepFlipsAnAskingRecordWhoseServerIsGone_ToInterruptedWhenItHoldsAHandle()
     {

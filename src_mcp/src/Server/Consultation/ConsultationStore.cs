@@ -188,7 +188,14 @@ public sealed partial class ConsultationStore(
             return Expire(record, nowUtc, retention);
         }
 
-        if (record.Status == ConsultationStatuses.Asking && !isAlive(record.RunnerPid))
+        // A dead pid AND nobody holding the repository's lock. The pid alone was not enough: a
+        // second server that cannot observe the first one's process — a different container, a
+        // different user — reads it as gone and writes a terminal record over a consultation that is
+        // still running, which the live card and the log then show as interrupted while the vendor is
+        // mid-answer. The lock is the fact both servers CAN see, and it is the same zero-wait check
+        // the idle branch below already makes. (CodeRabbit, on the pull request.)
+        if (record.Status == ConsultationStatuses.Asking && !isAlive(record.RunnerPid)
+            && NobodyIsWorkingIn(record.RepoPath))
         {
             Write(Orphaned(record, nowUtc));
 

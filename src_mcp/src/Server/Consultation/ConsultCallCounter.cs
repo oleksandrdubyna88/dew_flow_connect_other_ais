@@ -110,9 +110,16 @@ public sealed class ConsultCallCounter(string dataDir)
         var key = Path.GetFullPath(dataDir) + "\0" + caller;
         lock (Gate)
         {
+            // SEEDED from the file when this process has not counted for this caller yet. Starting
+            // at zero was a hole in the fail-closed contract: a write failure made every restart —
+            // and every second server on the same data directory — hand out a whole fresh cap of
+            // paid calls, while the note said the cap was "being enforced". The bytes are usually
+            // still READABLE when the failure is a lock or a read-only directory, which is the
+            // common case; when they are not, zero is genuinely all anybody knows.
+            // (CodeRabbit, on the pull request.)
             var spent = Memory.TryGetValue(key, out var known) && nowUtc - known.Start < Window
                 ? known
-                : new Spent(nowUtc, 0);
+                : Persisted(caller, nowUtc);
             if (spent.Count >= cap)
             {
                 return new CounterOutcome(false, spent.Count, string.Empty);
@@ -123,6 +130,25 @@ public sealed class ConsultCallCounter(string dataDir)
             Memory[key] = spent with { Count = spent.Count + 1 };
 
             return new CounterOutcome(true, spent.Count + 1, string.Empty);
+        }
+    }
+
+    /// <summary>What the file last recorded for this caller, or an empty window when it cannot be read.</summary>
+    /// <remarks>
+    /// Best effort and read-only: this runs precisely because the ordinary path failed, so it must
+    /// not throw a second time — but a counter that forgets what is already spent is not a counter.
+    /// </remarks>
+    private Spent Persisted(string caller, DateTime nowUtc)
+    {
+        try
+        {
+            var (start, count) = Parse(File.ReadAllText(FileFor(caller)), nowUtc);
+
+            return nowUtc - start < Window ? new Spent(start, count) : new Spent(nowUtc, 0);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SystemException)
+        {
+            return new Spent(nowUtc, 0);
         }
     }
 

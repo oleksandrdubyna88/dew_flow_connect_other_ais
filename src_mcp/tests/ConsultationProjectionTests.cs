@@ -220,11 +220,14 @@ public sealed class ConsultationProjectionTests : IDisposable
         {
             db.Open();
             using var make = db.CreateCommand();
-            // EVERY step but the last — exactly what the binary before this one left behind. Named
-            // as "all but the last" rather than "step 0", because the steps before this feature's
-            // are not this test's subject: it is about the consultations table being absent, and
-            // pinning an index made another lane's migration read as this test's failure.
-            var before = Schema.Steps[..^1];
+            // Every step BEFORE the one that creates `consultations`, found by asking which step
+            // that is rather than by counting. "All but the last" was the first answer and it rots
+            // the moment anybody appends a step: the slice would then include this one, the table
+            // would exist, and the test would pass while proving nothing. An index is the same trap
+            // one layer along. (CodeRabbit, on the pull request.)
+            var creates = Array.FindIndex(Schema.Steps, step => step.Contains("consultations", StringComparison.Ordinal));
+            creates.Should().BeGreaterThan(0, "the step that creates the table is what this test excludes");
+            var before = Schema.Steps[..creates];
             make.CommandText = string.Join(";\n", before)
                 + $"; PRAGMA user_version={before.Length}";
             make.ExecuteNonQuery();

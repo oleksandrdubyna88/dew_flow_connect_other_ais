@@ -100,7 +100,9 @@ public sealed class ConsultantPromptBoundsTests
 
         transcript.Should().Contain("problem 39", "the newest turn is always carried");
         transcript.Should().Contain("are not carried");
-        transcript.Length.Should().BeLessThan(21_000);
+        // The BUDGET, not a copy of it plus slack: `Transcript` clamps to exactly this, so the
+        // assertion can state the contract and survives the number moving. (CodeRabbit.)
+        transcript.Length.Should().BeLessThanOrEqualTo(ConsultantPrompt.DefaultCarryBudget);
     }
 
     [Fact]

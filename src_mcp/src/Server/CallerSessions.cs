@@ -84,13 +84,22 @@ public readonly record struct CallerIdentity(string Vendor = CallerIdentity.Unkn
     /// exports its own session variable to it — the same fact <see cref="From"/> rests on. (The plan
     /// round asked for per-request identity; there is no request-level caller on stdio.)</para>
     /// </remarks>
-    public static string KindFrom(Func<string, string?> read) =>
-        Set(read, "CLAUDE_CODE_SESSION_ID") ? Claude
-        : Set(read, "CODEX_SESSION_ID") ? Codex
-        : Set(read, "GEMINI_CLI_SESSION_ID") ? Gemini
-        : Other;
+    public static string KindFrom(Func<string, string?> read)
+    {
+        // The SAME table `From` reads, minus the override row. It used to repeat the three variable
+        // names, and nothing would have failed at compile time if the two lists drifted: a rename in
+        // `Variables` would leave this reading a variable nobody sets, and every caller of that
+        // vendor would quietly become `other` — a routing decision made by a typo. (CodeRabbit.)
+        foreach (var (variable, vendor) in Variables)
+        {
+            if (vendor != Stated && !string.IsNullOrWhiteSpace(read(variable)))
+            {
+                return vendor;
+            }
+        }
 
-    private static bool Set(Func<string, string?> read, string name) => !string.IsNullOrWhiteSpace(read(name));
+        return Other;
+    }
 }
 
 /// <summary>
