@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ExportPorts, exportRounds, oneAtATime, suggestedName } from '../roundsExport';
-import { ExportableRow } from '../roundsCsv';
+import { ExportableRow, ExportRound } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
 /**
@@ -37,6 +37,19 @@ function row(over: Partial<LogRow> = {}): ExportableRow {
   return { ...typed };
 }
 
+/**
+ * A round WITH its findings, as the exporter takes them.
+ *
+ * <p>The state travels with the list because an empty list means two different things — nothing was
+ * found, and nothing could be read — and the file must not render them the same way.</p>
+ */
+function round(
+  over: Partial<LogRow> = {},
+  found: { state: string; findings: readonly ExportableRow[] } = { state: 'loaded', findings: [] },
+): ExportRound {
+  return { row: row(over), found };
+}
+
 /** The host's three jobs, recorded rather than done. */
 function ports(over: Partial<ExportPorts> = {}): ExportPorts & {
   readonly written: { path: string; text: string }[];
@@ -60,7 +73,7 @@ function ports(over: Partial<ExportPorts> = {}): ExportPorts & {
 test('a written export says how many rounds and where, once', async () => {
   const port = ports();
 
-  const outcome = await exportRounds([row(), row({ key: 'k2' })], port);
+  const outcome = await exportRounds([round(), round({ key: 'k2' })], port);
 
   assert.equal(outcome, 'written');
   assert.equal(port.written.length, 1);
@@ -72,7 +85,7 @@ test('a written export says how many rounds and where, once', async () => {
 test('one round is called a round, not "1 rounds"', async () => {
   const port = ports();
 
-  await exportRounds([row()], port);
+  await exportRounds([round()], port);
 
   assert.match(port.said[0]!, /^1 round written/);
 });
@@ -82,7 +95,7 @@ test('a cancelled dialog writes nothing, says nothing, and is not an error', asy
   // and reporting success would be a lie about a file.
   const port = ports({ pickPath: async () => undefined });
 
-  const outcome = await exportRounds([row()], port);
+  const outcome = await exportRounds([round()], port);
 
   assert.equal(outcome, 'cancelled');
   assert.deepEqual(port.written, []);
@@ -95,7 +108,7 @@ test('a write that throws is reported as a failure and NEVER as a success', asyn
   // dialog and the write. The one outcome that must be impossible is being told it worked.
   const port = ports({ write: async () => { throw new Error('EACCES: permission denied'); } });
 
-  const outcome = await exportRounds([row()], port);
+  const outcome = await exportRounds([round()], port);
 
   assert.equal(outcome, 'failed');
   assert.deepEqual(port.said, [], 'no success message for a file that is not there');
@@ -106,7 +119,7 @@ test('a write that throws is reported as a failure and NEVER as a success', asyn
 test('a rejection that is not an Error still reaches the person in words', async () => {
   const port = ports({ write: async () => { throw 'the host went away'; } });
 
-  await exportRounds([row()], port);
+  await exportRounds([round()], port);
 
   assert.match(port.complained[0]!, /the host went away/);
 });
@@ -131,7 +144,7 @@ test('the suggested name carries the day and, for a bulk export, the count', () 
 test('what is written is the CSV of exactly those rounds', async () => {
   const port = ports();
 
-  await exportRounds([row({ subject: 'the one I picked' })], port);
+  await exportRounds([round({ subject: 'the one I picked' })], port);
 
   assert.match(port.written[0]!.text, /the one I picked/);
   assert.equal(port.written[0]!.text.startsWith('\uFEFF'), true);
@@ -143,7 +156,7 @@ test('a dialog that throws is a failure, not an escaped promise', () => {
   // told nothing at all. (Plan round, codex.)
   const port = ports({ pickPath: async () => { throw new Error('the window went away'); } });
 
-  return exportRounds([row()], port).then((outcome) => {
+  return exportRounds([round()], port).then((outcome) => {
     assert.equal(outcome, 'failed');
     assert.deepEqual(port.said, []);
     assert.match(port.complained[0]!, /could not be prepared/);
@@ -166,8 +179,8 @@ test('two exports of the same file do not race, and both still answer', async ()
   const queue = oneAtATime();
 
   const both = await Promise.all([
-    queue(() => exportRounds([row()], slow)),
-    queue(() => exportRounds([row(), row({ key: 'k2' })], slow)),
+    queue(() => exportRounds([round()], slow)),
+    queue(() => exportRounds([round(), round({ key: 'k2' })], slow)),
   ]);
 
   assert.deepEqual(both, ['written', 'written']);
@@ -182,8 +195,8 @@ test('a failed export does not break the queue for the next one', async () => {
   const broken = ports({ write: async () => { throw new Error('nope'); } });
   const fine = ports();
 
-  const first = await queue(() => exportRounds([row()], broken));
-  const second = await queue(() => exportRounds([row()], fine));
+  const first = await queue(() => exportRounds([round()], broken));
+  const second = await queue(() => exportRounds([round()], fine));
 
   assert.equal(first, 'failed');
   assert.equal(second, 'written', 'one failure must not poison every later export');
