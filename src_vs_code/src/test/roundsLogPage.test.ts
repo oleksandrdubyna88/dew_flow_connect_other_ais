@@ -56,13 +56,18 @@ test('an error in the page script is written onto the page, not swallowed', () =
 
 // ---------- every column sorts ----------
 
-test('every column in the header is a sort key', () => {
+test('every column that holds DATA is a sort key, and the one that holds buttons is not', () => {
+  // The rule this has always been about is that no data column is dead to a click. The actions
+  // column is the exception and must be one: sorting a table by a column of identical buttons is
+  // an ordering that means nothing, so it carries no `data-sort` for the handler to find.
   const html = roundsLogHtml(rowsFrom([session([round()])], NOW), [], 'n');
   const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
   const ths = head.match(/<th\b[^>]*>/g) ?? [];
 
   assert.ok(ths.length >= 15, `fifteen columns, got ${ths.length}`);
-  for (const th of ths) {
+  const sortable = ths.filter((th) => !th.includes('class="actions"'));
+  assert.equal(sortable.length, ths.length - 1, 'exactly one column is not a sort key');
+  for (const th of sortable) {
     assert.match(th, /data-sort="[a-zA-Z]+"/, `${th} must sort`);
   }
 });

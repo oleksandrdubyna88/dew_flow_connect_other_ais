@@ -316,3 +316,34 @@ test('the three things the page can ask for still arrive', () => {
     logCommandOf({ type: 'command', command: 'forgetUsage', id: 'codex' }),
     { kind: 'forget', provider: 'codex' });
 });
+
+// ---------- the export command ----------
+
+test('an export request decodes to the rows it names', () => {
+  const command = logCommandOf({
+    type: 'command', command: 'export', id: 'k1',
+    rounds: [{ key: 'k1', subject: 'one' }, { key: 'k2', subject: 'two' }],
+  });
+
+  assert.equal(command.kind, 'export');
+  assert.equal(command.kind === 'export' && command.rows.length, 2);
+});
+
+test('an export naming no usable row is ignored rather than answered', () => {
+  // Answering it would open a save dialog for an empty file. The page is not trusted, so a list of
+  // things that are not rows is the same as no list at all.
+  for (const rounds of [[], undefined, 'not a list', [null], [{}], [{ key: '' }], [42]]) {
+    assert.equal(
+      logCommandOf({ type: 'command', command: 'export', id: 'k1', rounds }).kind, 'ignore',
+      `rounds=${JSON.stringify(rounds)} must not reach the host`);
+  }
+});
+
+test('an export drops the entries it cannot read and keeps the ones it can', () => {
+  const command = logCommandOf({
+    type: 'command', command: 'export', id: 'k1',
+    rounds: [{ key: 'k1' }, null, { nokey: true }, { key: 'k2' }],
+  });
+
+  assert.equal(command.kind === 'export' && command.rows.length, 2);
+});

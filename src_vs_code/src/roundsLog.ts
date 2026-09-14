@@ -869,7 +869,14 @@ export function usageTabHtml(
   return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, usageScope, chat)}</div>`;
 }
 
-const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }> = [
+/**
+ * The table's columns.
+ *
+ * <p>`COLUMN_COUNT` is this list's length and is the expanded row's `colspan`, so a column added
+ * anywhere but here silently stops the detail row spanning the table. The actions column is
+ * therefore IN the list and marked unsortable, rather than appended to the header by hand.</p>
+ */
+const COLUMNS: ReadonlyArray<{ key: SortKey | 'actions'; label: string; numeric?: boolean; sortable?: boolean }> = [
   { key: 'startedUtc', label: 'When' },
   { key: 'kind', label: 'Kind' },
   { key: 'repoName', label: 'Repository' },
@@ -886,6 +893,7 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }>
   { key: 'tokensOut', label: 'Tokens out', numeric: true },
   { key: 'costTotalUsd', label: 'Cost', numeric: true },
   { key: 'answered', label: 'Reviewers' },
+  { key: 'actions', label: '', sortable: false },
 ];
 
 type Facet = 'kind' | 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
@@ -1103,7 +1111,11 @@ export function roundsLogHtml(
   consultationsHtmlText = '',
 ): string {
   const headers = COLUMNS
-    .map((c) => `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`)
+    .map((c) => (c.sortable === false
+      // No `data-sort`: the click handler finds a sortable header by that attribute, so a column
+      // without one cannot be clicked into an ordering that means nothing.
+      ? '<th class="actions"></th>'
+      : `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`))
     .join('');
   const filters = FACETS
     .map((f) => `<label>${f.label} <select data-filter="${f.key}"><option value="">any</option>${facetOptions(rows, f.key)}</select></label>`)
@@ -1168,6 +1180,9 @@ export function roundsLogHtml(
   /* The deciding time sits beside the reviewers' time and must not compete with it: the
      question people scan this column for is still how long the round took. */
   .deciding { opacity: .7; }
+  /* The actions column carries a button and no heading; it must not stretch to fit a title
+     it does not have, and must not be the column a long table widens into. */
+  th.actions, td.actions { width: 1%; white-space: nowrap; text-align: right; }
   .empty { opacity: .75; padding: 24px 0; }
   .failed { border: 1px solid var(--vscode-inputValidation-errorBorder, #c33); background: var(--vscode-inputValidation-errorBackground, transparent); padding: 8px 12px; margin: 0 0 12px; white-space: pre-wrap; }
   .tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -1467,6 +1482,8 @@ export function roundsLogHtml(
         + '<td class="num">' + num(r.tokensOut) + '</td>'
         + '<td class="num cost" title="' + esc(costTitle(r, money)) + '">' + cost3(r, money) + '</td>'
         + '<td class="who-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
+        + '<td class="actions"><button type="button" class="link" data-export="' + esc(r.key)
+        + '" title="Write this round to a CSV file">Export</button></td>'
         + '</tr>';
       if (state.expanded[r.key]) {
         html += '<tr class="detail"><td colspan="' + COLUMN_COUNT + '">' + detail(r) + '</td></tr>';
@@ -1526,6 +1543,13 @@ export function roundsLogHtml(
       render();
       return;
     }
+    // ABOVE the row branch, and it returns: a button inside a row would otherwise fall through and
+    // toggle the row open as well as exporting it.
+    var exporting = target.closest('[data-export]');
+    if (exporting) {
+      askExport([exporting.getAttribute('data-export')]);
+      return;
+    }
     var retry = target.closest('[data-retry]');
     if (retry) {
       ask(retry.getAttribute('data-retry'), true);
@@ -1538,6 +1562,21 @@ export function roundsLogHtml(
       render();
     }
   });
+
+  /**
+   * Ask the extension to write these rows out.
+   *
+   * The ROWS travel, not just their keys: the host's copy is the unfiltered set as of the last
+   * tick, and a row somebody selected may already have left it.
+   */
+  function askExport(keys) {
+    var chosen = [];
+    for (var i = 0; i < ROWS.length; i++) {
+      if (keys.indexOf(ROWS[i].key) >= 0) { chosen.push(ROWS[i]); }
+    }
+    if (chosen.length === 0) { return; }
+    vscode.postMessage({ type: 'command', command: 'export', id: chosen[0].key, rounds: chosen });
+  }
 
   // Asked ONCE. A row keeps what it was told, so closing and reopening costs nothing — except after
   // a failure, which is not cached, because a retry that answers from the failure is not a retry.

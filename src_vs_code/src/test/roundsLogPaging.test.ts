@@ -136,6 +136,24 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
   };
 }
 
+/**
+ * A click target NESTED inside a row, answering `closest` for every selector above it.
+ *
+ * <p>`hit` answers for one selector and null for everything else, which cannot express a button
+ * INSIDE a row — and a test using it can never observe a handler falling through to the row branch,
+ * because the fall-through has nothing to find. The export button's "does not also expand" test was
+ * green with its own `return` deleted until this existed.</p>
+ */
+function hitNested(attributes: Readonly<Record<string, string>>): unknown {
+  return {
+    closest: (asked: string) => {
+      const found = Object.keys(attributes).find((selector) => selector === asked);
+
+      return found === undefined ? null : { getAttribute: () => attributes[found] };
+    },
+  };
+}
+
 /** A click target that answers `closest` for exactly one selector, as a real element would. */
 function hit(selector: string, attribute: string): unknown {
   return { closest: (asked: string) => (asked === selector ? { getAttribute: () => attribute } : null) };
@@ -353,4 +371,43 @@ test('a round whose OWN duration is unknown shows a dash, never a floating middl
   const cell = page.at('rows').innerHTML;
   assert.match(cell, /— <span class="deciding">/, 'the dash stands where the round duration would be');
   assert.doesNotMatch(cell, />\s*<span class="deciding">/, 'and nothing renders a bare dot with nothing before it');
+});
+
+// ---------- a round leaves as a file ----------
+
+test('clicking Export posts one export request carrying the ROW, not just its key', () => {
+  // The host's copy of the rows is the unfiltered set as of the last tick, and a row somebody
+  // selected may already have left it. The request carries what it is about.
+  const page = open([row({ key: 'k1', subject: 'the one I picked' })]);
+
+  page.click(hit('[data-export]', 'k1'));
+
+  const sent = page.posted.filter((m) => (m as { command?: string }).command === 'export');
+  assert.equal(sent.length, 1);
+  const rounds = (sent[0] as { rounds: { key: string; subject: string }[] }).rounds;
+  assert.equal(rounds.length, 1);
+  assert.equal(rounds[0]!.key, 'k1');
+  assert.equal(rounds[0]!.subject, 'the one I picked', 'the whole row travels, not a key to look up');
+});
+
+test('clicking Export does NOT also expand the row', () => {
+  // The delegated handler ends with `tr[data-key]`, so a button inside a row falls through to it
+  // unless its own branch returns first. Exporting a round and opening it are different acts.
+  const page = open([row({ key: 'k1', foundCount: 1 })]);
+
+  // Nested, so the handler CAN fall through to the row branch if its own does not return. With a
+  // single-selector target the fall-through has nothing to find and the test proves nothing.
+  page.click(hitNested({ '[data-export]': 'k1', 'tr[data-key]': 'k1' }));
+
+  assert.equal(
+    page.posted.some((m) => (m as { command?: string }).command === 'findings'), false,
+    'an expanded row asks for its findings; this one must not have expanded');
+});
+
+test('an export for a key no row has sends nothing', () => {
+  const page = open([row({ key: 'k1' })]);
+
+  page.click(hit('[data-export]', 'gone'));
+
+  assert.deepEqual(page.posted.filter((m) => (m as { command?: string }).command === 'export'), []);
 });

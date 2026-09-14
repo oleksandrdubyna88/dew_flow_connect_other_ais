@@ -4,7 +4,7 @@ import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
 import { DbTotals, EMPTY_TOTALS } from './roundsDb';
 import { Push, PushLedger, Region } from './pushLedger';
-import { LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
+import { ExportedRow, LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
 export interface RoundsLogHooks {
@@ -22,6 +22,14 @@ export interface RoundsLogHooks {
    * on. It answers with the state as well as the findings, because an empty list and a failed read
    * are different things to say about a round.</p>
    */
+  /**
+   * The person asked for these rounds as a file.
+   *
+   * <p>The rows travel WITH the request rather than being looked up here, for the same reason the
+   * findings request carries its round's identity: `latest.rows` is the unfiltered set as of the
+   * last tick, and a row somebody selected may already have left it.</p>
+   */
+  readonly onExport: (rows: readonly ExportedRow[]) => Promise<void>;
   readonly onFindings: (
     key: string,
     round: { readonly sessionId: string; readonly stage: string; readonly number: number },
@@ -198,6 +206,9 @@ export class RoundsLogPanel {
     }
     if (command.kind === 'forget') {
       void this.hooks.onForget(command.provider);
+    }
+    if (command.kind === 'export') {
+      void this.hooks.onExport(command.rows);
     }
     if (command.kind === 'findings') {
       const { key, sessionId, stage, number } = command;
