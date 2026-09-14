@@ -190,6 +190,21 @@ export function elapsed(round: RoundRecord, nowMs: number): string {
 /** A day. The reviewer timeout is minutes; anything past this is a clock, not a review. */
 export const MAX_PLAUSIBLE_SECONDS = 24 * 60 * 60;
 
+/**
+ * A month, for the DECIDING — which is a person's calendar, not a timeout.
+ *
+ * <p>Deliberately not {@link MAX_PLAUSIBLE_SECONDS}. That one is a day because a reviewer timeout is
+ * minutes, so a round lasting longer is a broken clock rather than a long review. Deciding is not
+ * bounded by anything of the sort: a round run in the late afternoon and resolved the next morning
+ * is eighteen hours, and one left over a weekend is sixty — and those are precisely the rounds whose
+ * deciding cost is worth knowing. Borrowing the round's cap made the number vanish exactly then,
+ * which the plan round caught (gemini) before it shipped.</p>
+ *
+ * <p>There is still a bound, because the two instants come from two clocks and a year-long gap is
+ * evidence of that rather than of a long deliberation.</p>
+ */
+export const MAX_DECIDING_SECONDS = 30 * 24 * 60 * 60;
+
 /** `PlanReview` -> `plan review`: both renderers speak the way a person would say it. */
 export function stageName(stage: string): string {
   return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;

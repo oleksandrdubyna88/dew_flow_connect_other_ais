@@ -106,6 +106,13 @@ separately, and an older one simply says nothing rather than saying zero. Nought
 measurement — a caller that resolved within the second — and "nobody knows" is not, so the two never
 render the same way.
 
+**A round you come back to the next morning still reports what the deciding cost.** The round's own
+duration is capped at a day, because a reviewer timeout is minutes and anything longer is a broken
+clock. Deciding is not like that: an afternoon's round resolved the following morning is eighteen
+hours, and one left over a weekend is sixty — and those are exactly the rounds worth knowing the
+number for. The line under the table says what the two figures are, so nobody has to hover to find
+out there are two.
+
 ## Extension 0.41.0 — 2026-09-14
 
 **A stuck AI can now ask another vendor's model.** The gate has always been other models judging
