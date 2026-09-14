@@ -1,5 +1,4 @@
-import type { LogRow } from './roundsLog';
-import { csvOf } from './roundsCsv';
+import { csvOf, ExportableRow } from './roundsCsv';
 
 /**
  * Turning a selection of rounds into a file the person chose the place for.
@@ -29,14 +28,14 @@ export type ExportOutcome = 'written' | 'cancelled' | 'failed';
  * <p>The day, and how many rounds — so a folder of these sorts by date and says at a glance which is
  * the big one. The date is the LOCAL day, because it is a file name a person reads.</p>
  */
-export function suggestedName(rows: readonly LogRow[], today: Date = new Date()): string {
+export function suggestedName(howMany: number, today: Date = new Date()): string {
   const day = [
     today.getFullYear(),
     String(today.getMonth() + 1).padStart(2, '0'),
     String(today.getDate()).padStart(2, '0'),
   ].join('-');
 
-  return rows.length === 1 ? `coai-round-${day}.csv` : `coai-rounds-${day}-${rows.length}.csv`;
+  return howMany === 1 ? `coai-round-${day}.csv` : `coai-rounds-${day}-${howMany}.csv`;
 }
 
 /**
@@ -58,7 +57,7 @@ export function suggestedName(rows: readonly LogRow[], today: Date = new Date())
  * every path without having to infer which one it took.</p>
  */
 export async function exportRounds(
-  rows: readonly LogRow[],
+  rows: readonly ExportableRow[],
   ports: ExportPorts,
   today: Date = new Date(),
 ): Promise<ExportOutcome> {
@@ -75,7 +74,7 @@ export async function exportRounds(
   let path: string | undefined;
   let text: string;
   try {
-    path = await ports.pickPath(suggestedName(rows, today));
+    path = await ports.pickPath(suggestedName(rows.length, today));
     if (path === undefined) {
       return 'cancelled';
     }
