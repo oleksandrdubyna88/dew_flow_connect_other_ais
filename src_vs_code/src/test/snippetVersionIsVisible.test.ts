@@ -41,7 +41,7 @@ test('the menu item names the version it will give you', () => {
 });
 
 test('the message after the click compares what you took with what you have', () => {
-  const older = copiedMessage({ kind: 'older', behind: ['the consultant'], current: 5 });
+  const older = copiedMessage({ kind: 'older', behind: ['coai-consultant'], current: 5 });
 
   assert.ok(older.includes('the consultant'), older);
   assert.ok(older.includes('replace'), older);
@@ -53,7 +53,7 @@ test('the message after the click compares what you took with what you have', ()
 test('a repository that is AHEAD is told to keep what it has', () => {
   // The one case where copying is the wrong move: somebody updated the repository from a newer
   // build than this one. Pasting over it would be a downgrade nobody asked for.
-  const message = copiedMessage({ kind: 'ahead', newer: ['the review gate'], current: 5 });
+  const message = copiedMessage({ kind: 'ahead', newer: ['coai-snippet'], current: 5 });
 
   assert.ok(message.includes('NEWER'));
   assert.ok(message.includes('Keep what you have'));
@@ -68,9 +68,9 @@ test('a repository that is AHEAD is told to keep what it has', () => {
  */
 test('every message names the version that just went on the clipboard', () => {
   const all = [
-    copiedMessage({ kind: 'older', behind: ['the consultant'], current: ARTEFACT_VERSION }),
+    copiedMessage({ kind: 'older', behind: ['coai-consultant'], current: ARTEFACT_VERSION }),
     copiedMessage({ kind: 'current', current: ARTEFACT_VERSION }),
-    copiedMessage({ kind: 'ahead', newer: ['the consultant'], current: ARTEFACT_VERSION }),
+    copiedMessage({ kind: 'ahead', newer: ['coai-consultant'], current: ARTEFACT_VERSION }),
     copiedMessage({ kind: 'unversioned', current: ARTEFACT_VERSION }),
     copiedMessage({ kind: 'absent', current: ARTEFACT_VERSION }),
   ];

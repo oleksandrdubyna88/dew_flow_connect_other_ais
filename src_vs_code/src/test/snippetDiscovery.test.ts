@@ -36,7 +36,7 @@ test('neutral shared rules are discovered and older project/local copies take pr
   const older = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1');
   for (const name of ['CLAUDE.md', '.agents/PROJECT.md', '.agents/rules/common/review-gate.md', '.agents/rules/common/coai-review-gate.md', '.claude/rules/common/review-gate.md', '.claude/rules/common/coai-review-gate.md']) {
     await write(name, older);
-    assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION }, name);
+    assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION }, name);
     await fs.unlink(path.join(root, name));
   }
 });
@@ -55,5 +55,5 @@ test('all candidate reads start together but a slower older root copy still wins
   } finally {
     releaseRoot(claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1'));
   }
-  assert.deepEqual(await pending, { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION });
+  assert.deepEqual(await pending, { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION });
 });

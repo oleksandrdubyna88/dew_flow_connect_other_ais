@@ -4715,13 +4715,18 @@ click it. Asked by the operator in exactly those terms: "how does a person find 
 
 Two places say it now, and they answer different questions:
 
-- **The menu item** — `Copy the CLAUDE.md snippet (v5)` — is read BEFORE the click, and is what makes
+- **The menu item** — `Copy the CLAUDE.md snippet (v6)` — is read BEFORE the click, and is what makes
   a stale copy worth a second look. It is a static string in the manifest, so a test asserts it
-  carries `(v${SNIPPET_VERSION})`: the version cannot drift out of the menu without a red suite.
+  carries `(v${ARTEFACT_VERSION})`: the version cannot drift out of the menu without a red suite.
 - **The message after the click** is the only one that can compare. It names what went on the
-  clipboard and what this repository already had: *"…is on your clipboard. This repository has v4 —
-  replace the block between the markers."* A repository that is AHEAD is told to keep what it has,
-  which is the one case where copying is the wrong move.
+  clipboard and what this repository already had: *"…is on your clipboard. This repository's copy is
+  missing or behind on the consultant — replace the block between the markers."* A repository that is
+  AHEAD is told to keep what it has, which is the one case where copying is the wrong move.
+
+> **Both bullets were corrected on 2026-09-14** — they said `(v5)` and `SNIPPET_VERSION`, and the
+> message quoted a version number for the pasted copy. The number is the artefact's now and the
+> comparison names halves rather than inventing a number for a paste; see *The number in the ⋯ menu
+> is the ARTEFACT's, not the gate rule's* above.
 
 The finder that answers "what is in this workspace" moved out of `PanelProvider` into
 `snippetInWorkspace.ts`, because the copy command needed the same answer and two readers of the same

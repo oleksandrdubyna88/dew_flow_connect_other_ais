@@ -96,6 +96,42 @@ repository with a perfectly current paste to replace it.
   to report a current snippet as current and an older copy as older, and the file is at its twelve-item
   cap.
 
+## What the CODE round changed (verdict `proceed`, all 12 reviewers)
+
+The gate passed, and four of its findings were real enough to reopen the code:
+
+- **A half this build has never heard of was ignored.** A repository pasted from a NEWER extension
+  carries our four halves plus its own; comparing only the halves we know about answered `current`,
+  the panel said nothing, and a copy would have deleted a rule the person's newer build put there.
+  Unknown `coai-*` ids are reported as newer now, by their id, because a build that cannot name a rule
+  cannot tell anybody to paste over it. (Raised by one vendor in three roles.)
+- **A second block was invisible in one direction and blessed in the other.** The gate's reviewer
+  showed that taking the first match hides a newer block appended below a current one; my own
+  reviewer showed that taking the last match blesses a stale block sitting ABOVE a fresh paste — the
+  one the AI in that repository reads first. The two findings pull opposite ways, so a half is now
+  compared at its LOWEST version for *behind* and its HIGHEST for *newer*, and both are true of the
+  same file. Never a sum: two copies of v1 are still v1.
+- **`SnippetStatus` carried English prose.** `behind`/`newer` held display names, so a consumer had to
+  match on sentences and a copy edit was a contract change. They carry half ids; the two message
+  functions map ids to names, and an unknown id is named by its id.
+- **The precedence had nothing pinning it, and neither did first-match.** Swapping the two filters
+  left the whole suite green, because every `ahead` fixture was otherwise complete; and the
+  duplicate-block test compared two IDENTICAL copies, which first, last and max all satisfy. Both now
+  have fixtures that distinguish them.
+
+Two more, from the conventions review: the hash guard **retyped the four markers** it strips (it
+derives them now) and its instruction named two of the three raisable halves — `CONSULTANT_VERSION`
+was missing — so that sentence is built from `KNOWN_HALVES.filter(h => !h.frozen)`. `frozen` is the
+gate half's own field rather than prose in four docblocks. `claudeSnippet()` composes from the table
+as well, because the docblock claimed to be the only place that knew there were four while the
+composer named them again one screen below; and `documentVersionIn` / `consultantVersionIn`, which had
+no callers at all, are gone.
+
+**And a bug of my own, caught by the suite rather than by review:** writing *behind* as a `Math.min`
+over the versions present made an ABSENT half answer `Infinity`, so a paste carrying only the gate
+rule read as `current` — the exact case this change exists for. The named `isBehind` predicate says
+absent-counts-as-behind in one place, with the incident in its docblock.
+
 ## The open tail
 
 [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md)
@@ -111,7 +147,9 @@ This change took no decision about mount awareness in either direction.
 - **RED, the note:** *the note invents a version for a paste that carries no artefact number: "The
   CLAUDE.md snippet in this workspace is v5; v5 is current. Copy it again from the ⋯ menu and replace
   the old block…"*
-- **GREEN:** the whole extension suite, 2673 passed, 0 failed, 1 skipped (plus the 7 pre-compile
+- **RED, the two the code round found:** *actual: 'current', expected: 'ahead'* — twice: once for a
+  paste carrying a half this build has never heard of, once for a newer half in a second block.
+- **GREEN:** the whole extension suite, 2678 passed, 0 failed, 1 skipped (plus the 7 pre-compile
   tests), after rebasing onto `origin/main` at `4fe3cb02`.
 - **Teeth:** putting `(v5)` back in the manifest turns the label guard red naming v6; restoring it is
   green again.
