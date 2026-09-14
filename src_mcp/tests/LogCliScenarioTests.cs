@@ -202,6 +202,42 @@ public sealed class LogCliScenarioTests : IDisposable
         text.Should().BeEmpty("stdout is the interface, and there is no answer to put on it");
     }
 
+    /// <summary>
+    /// NO DATABASE is a read failure, on the single-round read as well as the batch one.
+    /// </summary>
+    /// <remarks>
+    /// <para>It used to answer <b>69</b> — "never recorded" — which is a claim about content nobody
+    /// could read: the file was not there, so nothing was asked of anything. The page rendered that
+    /// faithfully as a round whose findings were recorded nowhere.</para>
+    /// <para>The operator's ruling, 2026-09-14: <i>align on the bulk behaviour; masking a database
+    /// failure as "not recorded" is unacceptable even though it is the older behaviour.</i> So both
+    /// reads answer <b>74</b>, and <b>69</b> keeps the meaning it can actually support — this
+    /// database is open and has no such round.</para>
+    /// </remarks>
+    [Fact]
+    public void WithNoDatabaseAtAll_TheSingleRoundRead_IsAReadFailure_NotNeverRecorded()
+    {
+        // Deliberately no Record(): the data directory is empty, so there is no database to open.
+        var (code, text) = Run("--findings", "--session", "s1", "--stage", "CodeReview", "--number", "1");
+
+        code.Should().Be(74,
+            "EX_IOERR — the database, not the round. 69 would say its findings were never recorded, "
+            + "which is a statement about a file that is not there");
+        text.Should().BeEmpty("stdout is the interface, and there is no answer to put on it");
+    }
+
+    [Fact]
+    public void WithNoDatabaseAtAll_TheBatchRead_AgreesWithTheSingleRoundRead()
+    {
+        var keys = Path.Combine(_data, "keys.json");
+        File.WriteAllText(keys, "[{\"sessionId\":\"s1\",\"stage\":\"CodeReview\",\"number\":1}]");
+
+        var (code, text) = Run("--findings-many", "--keys-file", keys);
+
+        code.Should().Be(74, "the two reads must not disagree about the same missing file");
+        text.Should().BeEmpty();
+    }
+
     [Fact]
     public void AnUnknownMode_IsStillRefused_RatherThanGuessedAt()
     {

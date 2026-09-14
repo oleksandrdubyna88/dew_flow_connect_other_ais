@@ -747,11 +747,20 @@ needs the number to say whether a gate is still open, and the sentences only whe
 row. `--findings --session <id> --stage <stage> --number <n>` answers those.
 
 *Three exit codes, because there are three answers.* **0** and a list is what the round found — an
-empty list is then a clean round. **69** (EX_UNAVAILABLE) is a round the database has never heard
-of, whose findings were recorded nowhere. **74** (EX_IOERR) is the database itself being unreadable,
-which says nothing about the round at all and the page draws as a failed read with a retry. The code
-round caught the last two sharing one number, which would have told somebody a round was never
-recorded because a file was momentarily locked. `LogCliScenarioTests` runs the real binary for each.
+empty list is then a clean round. **69** (EX_UNAVAILABLE) is a round **an open database has no
+record of**. **74** (EX_IOERR) is the database itself being unreadable — including **not being
+there at all** — which says nothing about the round and the page draws as a failed read with a
+retry. The code round caught the last two sharing one number, which would have told somebody a round
+was never recorded because a file was momentarily locked. `LogCliScenarioTests` runs the real binary
+for each.
+
+*A missing database is 74 on BOTH reads, and that is a 2026-09-14 correction.* `FindingsOf` used to
+answer `Known: false` when the file was absent, which the mode turned into 69 — "its findings were
+never recorded" — a claim about content nobody could read, because nothing had been asked of
+anything. The batch read was written without that fallback, so the two disagreed about the same
+missing file. The operator ruled that they align on the honest answer: *masking a database failure as
+"not recorded" is unacceptable even though it is the older behaviour.* Neither query has an existence
+check now; `Open` throws and the mode reports EX_IOERR. 69 keeps the only meaning it can support.
 
 *A SELECTION is one process: `--findings-many --keys-file <path>`.* A bulk export used to spawn this
 binary once per round, four at a time; five hundred selected rounds were five hundred processes.

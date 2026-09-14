@@ -201,9 +201,17 @@ export function parseLog(text: string, paged = false): DbLog {
  */
 export function parseFindings(text: string): readonly DbFinding[] | undefined {
   try {
-    const raw = JSON.parse(text) as { findings?: Partial<DbFinding>[] };
+    const raw = JSON.parse(text) as { findings?: unknown[] };
+    if (!Array.isArray(raw?.findings)) {
+      return undefined;
+    }
+    // The WHOLE list, or nothing. Dropping a malformed entry would hand back a round with fewer
+    // findings than it had, which reads as a cleaner round — the same lie by a quieter route.
+    if (!raw.findings.every(isFinding)) {
+      return undefined;
+    }
 
-    return Array.isArray(raw?.findings) ? raw.findings.map(finding) : undefined;
+    return raw.findings.map(finding);
   } catch {
     return undefined;
   }
@@ -256,12 +264,18 @@ export function parseManyFindings(text: string): readonly ManyFound[] | undefine
       if (typeof one.known !== 'boolean') {
         return undefined;
       }
+      // Every finding must carry its identity here too, for the reason above: a fabricated row is
+      // worse in a bulk export than in one opened row, because nobody is looking at it.
+      const found: unknown[] = Array.isArray(one.findings) ? one.findings : [];
+      if (!found.every(isFinding)) {
+        return undefined;
+      }
       rounds.push({
         sessionId: one.sessionId ?? '',
         stage: one.stage ?? '',
         number: one.number ?? 0,
         known: one.known === true,
-        findings: (one.findings ?? []).map(finding),
+        findings: found.map(finding),
       });
     }
 
@@ -307,6 +321,28 @@ function round(raw: Partial<DbRound>): DbRound {
     foundCount: raw.foundCount ?? (raw.findings ?? []).length,
     resolvedUtc: raw.resolvedUtc ?? '',
   };
+}
+
+/**
+ * Whether this is a finding AT ALL, as opposed to an object that will acquire defaults.
+ *
+ * <p><b>`finding()` fills every field it is not given, which means it turns `{}` into a real-looking
+ * finding numbered 0 with no title and no resolution — and the CSV publishes that as an OPEN finding
+ * nobody raised.</b> The operator ruled on 2026-09-14 that the system must not synthesise an entity
+ * out of an empty object: no data is a validation failure, never a fabricated row.</p>
+ *
+ * <p>The test is the ORDINAL, because that is a finding's identity — the number a `resolve` decision
+ * is keyed by, and the one field that cannot be defaulted without inventing a claim. Everything else
+ * stays defaultable on purpose: demanding every field would make this build reject a record the
+ * server has legitimately widened, and the two halves ship separately.</p>
+ */
+function isFinding(raw: unknown): raw is Partial<DbFinding> {
+  if (typeof raw !== 'object' || raw === null) {
+    return false;
+  }
+  const ordinal = (raw as Record<string, unknown>)['ordinal'];
+
+  return typeof ordinal === 'number' && Number.isInteger(ordinal) && ordinal >= 0;
 }
 
 function finding(raw: Partial<DbFinding>): DbFinding {

@@ -112,6 +112,18 @@ reviews:
         patches must skip identical HTML; a webview's own state must never round-trip through the
         extension host and be re-applied (that produced a toggle feedback loop once). Colours come
         from --vscode-* variables, never bare hex. Every new behaviour has a test under src/test.
+    - path: "src_vs_code/src/test/**/*.ts"
+      instructions: |
+        A webview page is an executable artefact: a test of its BEHAVIOUR must run it and assert on
+        the result — the DOM after the script runs, what was posted to the host, what a control did —
+        never on a substring of the generated source. `bundledPage.test.ts` is the harness. Source
+        assertions are legitimate only where there is no program to run: a nonce, a CSP header, a
+        value appearing escaped. **A NEW behavioural assertion over page source text is refused**
+        (operator ruling, 2026-09-14); the backlog of old ones is
+        `todo/PLAN_the_page_tests_run_the_page.md` and is not a licence to add more.
+        And an executing test is not automatically a test with teeth: this plan's own first version
+        observed the wrong thing and stayed green when the branch it covered was deleted. Ask what
+        the assertion would SEE if the behaviour were removed.
     - path: "src_bench/**/*.cs"
       instructions: |
         The measurement bench. It records and does not judge; a number it prints must be a measurement,

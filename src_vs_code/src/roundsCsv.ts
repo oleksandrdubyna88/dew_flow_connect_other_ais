@@ -327,7 +327,24 @@ export function readStateOf(found: ExportRound['found'] | undefined): FoundState
     return 'absent';
   }
 
-  return found.state === 'loaded' && Array.isArray(found.findings) ? 'loaded' : 'failed';
+  if (found.state !== 'loaded' || !Array.isArray(found.findings)) {
+    return 'failed';
+  }
+
+  // And every finding in it must look like one. `csvOf` can be called with rows that never went
+  // through `parseFindings` — the host copies them off a webview message — so the guard has to be
+  // here as well as there, or a fabricated row re-enters by the other door. An `ordinal` is a
+  // finding's identity; anything without one is a shape nobody intended.
+  const named = found.findings.every((one) => {
+    if (typeof one !== 'object' || one === null) {
+      return false;
+    }
+    const ordinal = (one as Record<string, unknown>)['ordinal'];
+
+    return typeof ordinal === 'number' && Number.isInteger(ordinal) && ordinal >= 0;
+  });
+
+  return named ? 'loaded' : 'failed';
 }
 
 /** What the `findings_read` column says for each state. */

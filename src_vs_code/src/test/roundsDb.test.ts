@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DbLog, EMPTY_LOG, EMPTY_TOTALS, findingsByRound, parseLog, roundKeyOf } from '../roundsDb';
+import { DbLog, EMPTY_LOG, EMPTY_TOTALS, findingsByRound, parseFindings, parseLog, roundKeyOf } from '../roundsDb';
 import { blindSpotsHtml, LogRow, roundsLogHtml, rowsFrom } from '../roundsLog';
 import { RoundRecord, SessionFile } from '../rounds';
 
@@ -192,4 +192,41 @@ test('the page has the third tab, and it is not the one it opens on', () => {
   assert.match(html, /id="tab-spots"/);
   assert.match(html, /<section id="tab-spots" hidden>/, 'the rounds tab is what opens');
   assert.match(html.slice(html.indexOf('<script')), /message\.type === 'spots'/, 'and it is pushed live like the rest');
+});
+
+// ---------- a finding must arrive with an identity, or it is not a finding ----------
+
+test('an entry with no ordinal is an unreadable answer, not a finding with ordinal 0', () => {
+  // `finding()` fills every field it is not given, so `{}` used to become a real-looking finding
+  // numbered 0 with no title and no resolution — which the CSV then published as an OPEN finding
+  // nobody raised. The operator's ruling, 2026-09-14: the system must not synthesise an entity out
+  // of an empty object; no data means a validation error, never a fabricated row.
+  assert.equal(parseFindings(JSON.stringify({ findings: [{}] })), undefined);
+  assert.equal(parseFindings(JSON.stringify({ findings: [{ title: 'no ordinal' }] })), undefined);
+  assert.equal(parseFindings(JSON.stringify({ findings: [{ ordinal: 'first' }] })), undefined,
+    'an ordinal that is not a number is not an ordinal');
+  assert.equal(parseFindings(JSON.stringify({ findings: [{ ordinal: 1.5 }] })), undefined,
+    'nor is a fraction');
+  assert.equal(parseFindings(JSON.stringify({ findings: [{ ordinal: -1 }] })), undefined,
+    'nor a negative one');
+  assert.equal(parseFindings(JSON.stringify({ findings: [null] })), undefined,
+    'and a null is not an entry at all');
+});
+
+test('a finding that DOES carry its ordinal still gets its defaults filled', () => {
+  // The other half of the rule: validation is about identity, not about demanding every field of a
+  // record the server may have widened since this build shipped.
+  const parsed = parseFindings(JSON.stringify({ findings: [{ ordinal: 0, title: 'a real one' }] }));
+
+  assert.equal(parsed?.length, 1);
+  assert.equal(parsed?.[0]?.title, 'a real one');
+  assert.equal(parsed?.[0]?.severity, '', 'absent fields are still filled, as they always were');
+  assert.equal(parsed?.[0]?.isGating, false);
+});
+
+test('one malformed entry fails the WHOLE list, because a short list reads as a cleaner round', () => {
+  assert.equal(
+    parseFindings(JSON.stringify({ findings: [{ ordinal: 0, title: 'real' }, {}] })),
+    undefined,
+    'dropping the bad entry would publish a round with fewer findings than it had');
 });

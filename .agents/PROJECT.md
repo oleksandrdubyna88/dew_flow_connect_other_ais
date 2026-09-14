@@ -63,6 +63,17 @@ node .agents/conventions/tools/pin-check.mjs
   `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
   2026-09-07 and was right to. **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
   the rule is unchanged and absolute.
+- **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
+  handed to VS Code as text, so a substring assertion over that text cannot see a control wired to
+  the wrong branch — the string contains everything it was supposed to contain. This repository has
+  hit that twice: `roundsLog.ts`'s tick-box and Export branches each need an early `return` or the
+  control also opens the row it sits in, and no source assertion can see a missing `return`.
+  `bundledPage.test.ts` bundles the page, runs its script against a DOM shim and asserts on the
+  result. **A new behavioural assertion over page source text is refused** (operator ruling,
+  2026-09-14); the backlog of existing ones is `todo/PLAN_the_page_tests_run_the_page.md`.
+  Source assertions stay legitimate where there is no program to run — a nonce, a CSP header, a
+  value appearing escaped. And executing is not sufficient on its own: ask what the assertion would
+  SEE if the behaviour were deleted, because this rule's own first tests stayed green when it was.
 - **Reviewers are read-only, in a worktree pinned to a SHA** — one worktree per round, outside the
   repository, pruned on `open`, removed in `finally`.
 - **No secret ever reaches argv or a log line.** Vendor keys come from one CredsForDevs `config`

@@ -229,12 +229,14 @@ public static class RoundsQuery
     /// </remarks>
     public static LoggedRoundFindings FindingsOf(string dataDir, string sessionId, string stage, int number)
     {
+        // NO fallback for a missing file, exactly as the batch read has none. This used to answer
+        // `Known: false`, which the mode turns into exit 69 — "its findings were never recorded" —
+        // a claim about content nobody could read, because the file was not there and nothing was
+        // asked of anything. The operator ruled on 2026-09-14 that the two reads align on the
+        // honest answer and that masking a database failure as "not recorded" is unacceptable even
+        // as the older behaviour. `Open` throws; the mode answers 74; 69 keeps the only meaning it
+        // can support, which is an open database with no such round.
         var file = Path.Combine(dataDir, RoundsDb.FileName);
-        if (!File.Exists(file))
-        {
-            return new LoggedRoundFindings(false, []);
-        }
-
         using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
         db.Open();
 
