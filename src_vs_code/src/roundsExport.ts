@@ -17,7 +17,27 @@ export interface ExportPorts {
   readonly write: (path: string, text: string) => Promise<void>;
   readonly report: (message: string) => void;
   readonly reportError: (message: string) => void;
+  /**
+   * Ask before starting an unusually large one. `false` is the person saying no.
+   *
+   * <p>Optional because a single-row export has nothing to ask about. When it is absent a big
+   * selection simply proceeds, which is what the per-row button has always done.</p>
+   */
+  readonly confirmLarge?: (howMany: number) => Promise<boolean>;
+  /** How far the reads have got. Called once per completed batch, never for a single round. */
+  readonly progress?: (done: number, total: number) => void;
+  /** Whether the person has cancelled. Checked between batches, so cancelling is prompt. */
+  readonly cancelled?: () => boolean;
 }
+
+/**
+ * Above this many rounds, ask first.
+ *
+ * <p>Not a limit — a person may genuinely want a year of rounds — but a selection this size is
+ * minutes of child processes, and starting it because somebody ticked the header box without
+ * meaning to is a worse outcome than one extra question.</p>
+ */
+export const ASK_ABOVE = 500;
 
 /** What happened, for the caller that has to clear an in-flight state either way. */
 export type ExportOutcome = 'written' | 'cancelled' | 'failed';
@@ -152,16 +172,41 @@ export async function readAndExport(
   ports: ExportPorts,
   today: Date = new Date(),
 ): Promise<ExportOutcome> {
+  if (rows.length > ASK_ABOVE && ports.confirmLarge !== undefined && !await ports.confirmLarge(rows.length)) {
+    return 'cancelled';
+  }
+
+  let done = 0;
   const rounds = await inBatches(
     rows,
-    async (row) => ({ row, found: await read(row) }),
+    async (row) => {
+      const found = await read(row);
+      done += 1;
+      ports.progress?.(done, rows.length);
+
+      return { row, found };
+    },
     // A read that threw is a FAILED round, never an absent one: we know nothing about it, and
     // `absent` is a claim that the database has no record.
     (row, reason) => {
       console.error('ConnectOtherAIs: findings could not be read for export', reason);
 
+      done += 1;
+      ports.progress?.(done, rows.length);
+
       return { row, found: { state: 'failed' as const, findings: [] as ExportableRow[] } };
-    });
+    },
+    4,
+    // Checked BETWEEN batches, so a cancel takes effect within one batch rather than after every
+    // round has been read. The reads already in flight are allowed to finish; killing a child
+    // process mid-read would leave the database connection to be cleaned up by the OS.
+    ports.cancelled);
+
+  if (ports.cancelled?.() === true) {
+    // Nothing is written and nothing is reported: the person stopped it, and telling them they
+    // stopped it is noise. Same reasoning as a dismissed save dialog.
+    return 'cancelled';
+  }
 
   return exportRounds(rounds, ports, today);
 }
@@ -205,12 +250,18 @@ export async function inBatches<T, R>(
   each: (item: T) => Promise<R>,
   onFailure: (item: T, reason: unknown) => R,
   atOnce = 4,
+  stop?: () => boolean,
 ): Promise<R[]> {
   // A batch size that cannot advance the loop would hang for ever and look like a stuck export.
   // (Code round, codex.)
   const step = Number.isFinite(atOnce) && atOnce >= 1 ? Math.floor(atOnce) : 1;
   const done: R[] = [];
   for (let at = 0; at < items.length; at += step) {
+    if (stop?.() === true) {
+      // What has been read is returned rather than thrown away: the caller decides what a partial
+      // read means, and for an export it means nothing is written.
+      return done;
+    }
     const batch = items.slice(at, at + step);
     // ONE job's rejection must not abort the batch and leave its siblings running with nobody
     // awaiting them. `Promise.all` does exactly that, and this is a generic helper whose next

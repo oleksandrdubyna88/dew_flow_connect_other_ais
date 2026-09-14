@@ -876,7 +876,8 @@ export function usageTabHtml(
  * anywhere but here silently stops the detail row spanning the table. The actions column is
  * therefore IN the list and marked unsortable, rather than appended to the header by hand.</p>
  */
-const COLUMNS: ReadonlyArray<{ key: SortKey | 'actions'; label: string; numeric?: boolean; sortable?: boolean }> = [
+const COLUMNS: ReadonlyArray<{ key: SortKey | 'actions' | 'pick'; label: string; numeric?: boolean; sortable?: boolean }> = [
+  { key: 'pick', label: '', sortable: false },
   { key: 'startedUtc', label: 'When' },
   { key: 'kind', label: 'Kind' },
   { key: 'repoName', label: 'Repository' },
@@ -1114,7 +1115,11 @@ export function roundsLogHtml(
     .map((c) => (c.sortable === false
       // No `data-sort`: the click handler finds a sortable header by that attribute, so a column
       // without one cannot be clicked into an ordering that means nothing.
-      ? '<th class="actions"></th>'
+      ? (c.key === 'pick'
+        // The box in the HEADER selects every row the filters MATCH, not every row on the page:
+        // paging is a window on a list and a person ticking the top box means the list.
+        ? '<th class="pick"><input type="checkbox" id="pickall" title="Select every matching round"></th>'
+        : '<th class="actions"></th>')
       : `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`))
     .join('');
   const filters = FACETS
@@ -1183,6 +1188,9 @@ export function roundsLogHtml(
   /* The actions column carries a button and no heading; it must not stretch to fit a title
      it does not have, and must not be the column a long table widens into. */
   th.actions, td.actions { width: 1%; white-space: nowrap; text-align: right; }
+  /* The tick column is as narrow as a box and must not take the click target of the row with it. */
+  th.pick, td.pick { width: 1%; padding-right: 0; }
+  th.pick input, td.pick input { cursor: pointer; margin: 0; }
   .empty { opacity: .75; padding: 24px 0; }
   .failed { border: 1px solid var(--vscode-inputValidation-errorBorder, #c33); background: var(--vscode-inputValidation-errorBackground, transparent); padding: 8px 12px; margin: 0 0 12px; white-space: pre-wrap; }
   .tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -1254,6 +1262,7 @@ export function roundsLogHtml(
       <button type="button" id="alldates">All dates</button>
       ${filters}
       <button type="button" id="clear">Clear</button>
+      <button type="button" id="exportpicked" disabled>Export selected…</button>
       <span id="count"></span>
 </div>
 <div class="wrap">
@@ -1312,7 +1321,12 @@ export function roundsLogHtml(
   var cost3 = ${cost3.toString()};
   var costTitle = ${costTitle.toString()};
 
-  var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {}, page: 0 };
+  var state = {
+    sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {}, page: 0,
+    // Keyed by row key, the way expanded is. A SELECTION is a decision the person made, so a filter
+    // that hides a selected row does not unmake it — only the row leaving the loaded set does.
+    selected: {},
+  };
   var PAGE_SIZE = ${PAGE_SIZE};
   // Derived from the column list rather than typed as a literal: an opened row's detail spans the
   // whole table, and a hand-written colspan is a number that silently stops matching the day a
@@ -1466,6 +1480,8 @@ export function roundsLogHtml(
     for (var i = 0; i < shown.length; i++) {
       var r = shown[i];
       html += '<tr data-key="' + esc(r.key) + '">'
+        + '<td class="pick"><input type="checkbox" data-pick="' + esc(r.key) + '"'
+        + (state.selected[r.key] ? ' checked' : '') + '></td>'
         + '<td>' + when(r.startedUtc || r.completedUtc) + '</td>'
         + '<td>' + esc(r.kind) + '</td>'
         + '<td title="' + esc(r.repoPath) + '">' + esc(r.repoName) + '</td>'
@@ -1489,11 +1505,36 @@ export function roundsLogHtml(
         html += '<tr class="detail"><td colspan="' + COLUMN_COUNT + '">' + detail(r) + '</td></tr>';
       }
     }
+    // A selection survives a filter — it is a decision, not a view — but a key whose row has left
+    // the LOADED set entirely cannot be exported and is dropped here, in render, rather than only
+    // on the five-second tick: an export fired between ticks would otherwise carry keys the page
+    // has already forgotten.
+    var live = {};
+    for (var l = 0; l < ROWS.length; l++) { live[ROWS[l].key] = true; }
+    for (var gone in state.selected) {
+      if (!live[gone]) { delete state.selected[gone]; }
+    }
     document.getElementById('rows').innerHTML = html;
     document.getElementById('empty').hidden = ROWS.length > 0;
     document.getElementById('count').textContent = matched.length === ROWS.length
       ? ROWS.length + ' round' + (ROWS.length === 1 ? '' : 's')
       : matched.length + ' of ' + ROWS.length + ' rounds match';
+    // What the button SAYS is the count, and it says when part of the selection is out of sight:
+    // exporting more than you can see is fine, being unaware of it is not.
+    var picked = Object.keys(state.selected);
+    var shownKeys = {};
+    for (var s = 0; s < matched.length; s++) { shownKeys[matched[s].key] = true; }
+    var hidden = picked.filter(function (k) { return !shownKeys[k]; }).length;
+    var exportButton = document.getElementById('exportpicked');
+    exportButton.disabled = picked.length === 0;
+    exportButton.textContent = picked.length === 0
+      ? 'Export selected…'
+      : 'Export ' + picked.length + ' selected'
+        + (hidden > 0 ? ' (' + hidden + ' hidden)' : '') + '…';
+    var all = document.getElementById('pickall');
+    if (all) {
+      all.checked = matched.length > 0 && matched.every(function (r) { return state.selected[r.key]; });
+    }
     document.getElementById('prev').disabled = state.page === 0;
     document.getElementById('next').disabled = state.page >= pages - 1;
     // Says which rows these are, never a bare count that could be read as a count of everything.
@@ -1540,6 +1581,15 @@ export function roundsLogHtml(
       if (state.sortKey === key) { state.dir = state.dir === 'asc' ? 'desc' : 'asc'; }
       else { state.sortKey = key; state.dir = key === 'startedUtc' ? 'desc' : 'asc'; }
       firstPage();
+      render();
+      return;
+    }
+    // ABOVE the row branch, and it returns: ticking a box would otherwise fall through and open
+    // the row as well.
+    var picking = target.closest('[data-pick]');
+    if (picking) {
+      var picked = picking.getAttribute('data-pick');
+      if (state.selected[picked]) { delete state.selected[picked]; } else { state.selected[picked] = true; }
       render();
       return;
     }
@@ -1648,6 +1698,25 @@ export function roundsLogHtml(
     toInput.value = '';
     readDates();
   });
+  document.getElementById('exportpicked').addEventListener('click', function () {
+    askExport(Object.keys(state.selected));
+  });
+
+  var pickAll = document.getElementById('pickall');
+  if (pickAll) {
+    pickAll.addEventListener('click', function () {
+      // Every MATCHING round, across every page — a person ticking the top box means the list they
+      // have filtered to, not the twenty rows they can see. Untick clears only those same rows, so
+      // a selection made under another filter is not silently thrown away.
+      var matched = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
+      var everyOne = matched.length > 0 && matched.every(function (r) { return state.selected[r.key]; });
+      for (var m = 0; m < matched.length; m++) {
+        if (everyOne) { delete state.selected[matched[m].key]; } else { state.selected[matched[m].key] = true; }
+      }
+      render();
+    });
+  }
+
   document.getElementById('clear').addEventListener('click', function () {
     state.filters = {};
     state.search = '';

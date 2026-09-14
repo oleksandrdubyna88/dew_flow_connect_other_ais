@@ -411,3 +411,96 @@ test('an export for a key no row has sends nothing', () => {
 
   assert.deepEqual(page.posted.filter((m) => (m as { command?: string }).command === 'export'), []);
 });
+
+// ---------- a selection leaves as one file ----------
+
+test('ticking a row selects it and does NOT open it', () => {
+  const page = open([row({ key: 'k1', foundCount: 1 })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1', 'tr[data-key]': 'k1' }));
+
+  assert.match(page.at('rows').innerHTML, /data-pick="k1" checked/, 'the box is ticked');
+  assert.equal(
+    page.posted.some((m) => (m as { command?: string }).command === 'findings'), false,
+    'and the row did not expand');
+});
+
+test('the bulk button is disabled at nothing and names the count once something is picked', () => {
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' })]);
+
+  assert.equal(page.at('exportpicked').disabled, true, 'nothing selected, nothing to export');
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+
+  assert.equal(page.at('exportpicked').disabled, false);
+  assert.match(page.at('exportpicked').textContent, /Export 1 selected/);
+});
+
+test('ticking twice unticks', () => {
+  const page = open([row({ key: 'k1' })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+
+  assert.equal(page.at('exportpicked').disabled, true);
+});
+
+test('the bulk button exports every selected round in ONE request', () => {
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' }), row({ key: 'k3' })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+  page.click(hitNested({ '[data-pick]': 'k3' }));
+  page.at('exportpicked').heard['click']?.();
+
+  const sent = page.posted.filter((m) => (m as { command?: string }).command === 'export');
+  assert.equal(sent.length, 1, 'one request, not one per round');
+  const keys = (sent[0] as { rounds: { key: string }[] }).rounds.map((r) => r.key);
+  assert.deepEqual(keys.sort(), ['k1', 'k3']);
+});
+
+test('the header box selects every MATCHING round, across pages', () => {
+  // Paging is a window on a list, and a person ticking the top box means the list.
+  const page = open(many(250));
+
+  page.at('pickall').heard['click']?.();
+
+  assert.match(page.at('exportpicked').textContent, /Export 250 selected/);
+});
+
+test('the header box unticks the same rows it ticked', () => {
+  const page = open(many(30));
+
+  page.at('pickall').heard['click']?.();
+  page.at('pickall').heard['click']?.();
+
+  assert.equal(page.at('exportpicked').disabled, true);
+});
+
+test('a selection SURVIVES a filter, and the button says how many are out of sight', () => {
+  // A selection is a decision, and a filter is a view. Hiding a row does not unmake the decision —
+  // but exporting more than you can see without being told would be a surprise.
+  const page = open([
+    row({ key: 'k1', branch: 'main' }),
+    row({ key: 'k2', branch: 'feat/other' }),
+  ]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+  page.click(hitNested({ '[data-pick]': 'k2' }));
+  page.deliver({ type: 'rows', rows: [row({ key: 'k1', branch: 'main' }), row({ key: 'k2', branch: 'feat/other' })] });
+  assert.match(page.at('exportpicked').textContent, /Export 2 selected/);
+});
+
+test('a selected round that LEAVES the loaded set is dropped from the selection', () => {
+  // Not merely filtered out of view: gone from ROWS entirely. It cannot be exported, so a count
+  // including it would be a lie, and a request carrying it would name a round the page forgot.
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+  page.click(hitNested({ '[data-pick]': 'k2' }));
+  assert.match(page.at('exportpicked').textContent, /Export 2 selected/);
+
+  page.deliver({ type: 'rows', rows: [row({ key: 'k2' })] });
+
+  assert.match(page.at('exportpicked').textContent, /Export 1 selected/,
+    'the round that left is no longer counted');
+});

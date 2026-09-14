@@ -48,6 +48,20 @@ per keystroke in one of them — forty for a forty-character name, each one anno
 the extension. They also queue behind one another now, so a fast typist cannot have an earlier
 keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
 
+**Tick the rounds you want and export them as one file.** Every row has a checkbox, the box in the
+header selects every round the filters currently match — across pages, not just the twenty you can
+see — and the toolbar button says how many you have picked.
+
+A selection is a decision, so filtering does not unmake it: pick some rounds, narrow the filter, and
+they stay picked. The button says how many are out of sight (*Export 41 selected (3 hidden)…*) so
+exporting more than you can see is never a surprise. A round that scrolls out of the loaded window
+entirely does leave the selection, because it could not be exported anyway.
+
+A bulk export is a job rather than a button that goes quiet: it reports how many rounds it has read,
+and it can be cancelled — nothing is written if you stop it. Each round is read separately, four at a
+time, so a big selection cannot swamp the machine; and above five hundred rounds it asks first,
+because ticking the header box is easy to do by accident.
+
 **The exported file carries every finding, with what you decided about each one.** One line per
 finding, the round's own columns repeated on each, and the decision in the same words the page uses
 — *took*, *declined*, *open* — with a declined finding's reason beside it. A round that genuinely

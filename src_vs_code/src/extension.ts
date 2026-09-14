@@ -39,7 +39,7 @@ import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
-import { oneAtATime, readAndExport } from './roundsExport';
+import { ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
@@ -110,33 +110,28 @@ export function activate(context: vscode.ExtensionContext): void {
       // The whole job — the reads AND the write — runs inside the queue. It used to read first and
       // queue afterwards, so a hundred quick clicks started a hundred batches of four and stepped
       // straight around the cap that exists to protect the machine. (Code round, three reviewers.)
-      await exportQueue(() => readAndExport(rows, async (row) => {
-        const dbKey = row['dbKey'];
-        const key = typeof dbKey === 'object' && dbKey !== null
-          ? dbKey as { sessionId?: unknown; stage?: unknown; number?: unknown }
-          : undefined;
-        // A row we cannot build a database key from is FAILED, not `absent`. `absent` says the
-        // database has no record of this round, which is a claim — and we have not asked it
-        // anything. Failing closed is the rule this story is built on. (Code round, gemini.)
-        if (typeof key?.sessionId !== 'string' || typeof key.stage !== 'string'
-          || typeof key.number !== 'number') {
-          return { state: 'failed' as const, findings: [] };
-        }
-        const found = await panelRef.roundFindings(key.sessionId, key.stage, key.number);
-
-        // Spread rather than cast: `DbFinding` is a closed type and the CSV writer takes the open
-        // shape a bridge message has, so the copy is what makes the two agree honestly.
-        return { state: found.state, findings: found.findings.map((one) => ({ ...one })) };
-      }, {
-        pickPath: async (name) => (await vscode.window.showSaveDialog({
-          defaultUri: vscode.Uri.file(name),
-          filters: { 'Comma-separated values': ['csv'] },
-          saveLabel: 'Export',
-        }))?.fsPath,
-        write: (path, text) => writeFileAtomically(path, text),
-        report: (message) => void vscode.window.showInformationMessage(message),
-        reportError: (message) => void vscode.window.showErrorMessage(message),
-      }));
+      // ONE round needs no progress bar and no cancel button — the save dialog is the whole of the
+      // interaction. A SELECTION is a job: it spawns a process per round, takes seconds, and a
+      // person who started it by ticking the header box must be able to stop it.
+      const asJob = rows.length > 1;
+      // withProgress answers a Thenable, and the queue takes a Promise; awaiting it inside the
+      // callback is what makes the two agree without a cast.
+      await exportQueue(async () => (asJob
+        ? vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: `Exporting ${rows.length} rounds…`,
+          cancellable: true,
+        }, (progress, token) => runExport(rows, {
+          progress: (done, total) => progress.report({
+            message: `read ${done} of ${total}`,
+            increment: 100 / total,
+          }),
+          cancelled: () => token.isCancellationRequested,
+          confirmLarge: async (howMany) => await vscode.window.showWarningMessage(
+            `Export ${howMany} rounds? Each one is read separately, so this will take a while.`,
+            { modal: true }, 'Export') === 'Export',
+        }, panelRef))
+        : runExport(rows, {}, panelRef)));
     },
     onFindings: async (key, round) => {
       try {
@@ -887,6 +882,48 @@ async function logRows(panel: PanelProvider, database: DbLog | undefined): Promi
       await readSessions(), Date.now(), priceOf, await panel.usageLines(), database, panel.vendorIds()),
     chatRows(await panel.chatLines(), priceOf),
   );
+}
+
+/**
+ * One export, with whatever progress and cancellation the caller can offer.
+ *
+ * <p>Outside `activate` so the wiring stays a wiring: this is the half that needs the editor — the
+ * dialog, the atomic write, the two ways of speaking — and everything that decides anything is in
+ * `roundsExport`, which imports no `vscode` at all.</p>
+ */
+async function runExport(
+  rows: readonly ExportableRow[],
+  extra: Partial<ExportPorts>,
+  panel: PanelProvider,
+): Promise<ExportOutcome> {
+  return readAndExport(rows, async (row) => {
+    const dbKey = row['dbKey'];
+    const key = typeof dbKey === 'object' && dbKey !== null
+      ? dbKey as { sessionId?: unknown; stage?: unknown; number?: unknown }
+      : undefined;
+    // A row we cannot build a database key from is FAILED, not `absent`. `absent` says the database
+    // has no record of this round, which is a claim — and we have not asked it anything. Failing
+    // closed is the rule this story is built on. (Code round, gemini.)
+    if (typeof key?.sessionId !== 'string' || typeof key.stage !== 'string'
+      || typeof key.number !== 'number') {
+      return { state: 'failed' as const, findings: [] };
+    }
+    const found = await panel.roundFindings(key.sessionId, key.stage, key.number);
+
+    // Spread rather than cast: `DbFinding` is a closed type and the CSV writer takes the open shape
+    // a bridge message has, so the copy is what makes the two agree honestly.
+    return { state: found.state, findings: found.findings.map((one) => ({ ...one })) };
+  }, {
+    pickPath: async (name) => (await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(name),
+      filters: { 'Comma-separated values': ['csv'] },
+      saveLabel: 'Export',
+    }))?.fsPath,
+    write: (path, text) => writeFileAtomically(path, text),
+    report: (message) => void vscode.window.showInformationMessage(message),
+    reportError: (message) => void vscode.window.showErrorMessage(message),
+    ...extra,
+  });
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */
