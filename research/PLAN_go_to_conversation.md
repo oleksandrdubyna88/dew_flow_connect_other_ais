@@ -36,6 +36,14 @@
 >   excluded from coverage BY NAME, because no test here can execute a line of them, and the list is
 >   asserted to match that set exactly.
 >
+> - **The last Definition-of-Done item is no longer manual.** It said the isolation guarantee was to
+>   be checked by hand with a planted number on all three CLI adapters. `scripts/live-fresh.mjs` does
+>   it — plant, recall (the CONTROL), dispose the session and its directory, open a new one carrying
+>   nothing, recall again — and it was run: **claude, codex and agy each remembered 7431 before the
+>   reset and answered NONE after it**, `per-turn` and `persistent` shapes both. Writing it found that
+>   `scripts/live-chat.mjs`, the only other real-vendor check this repository has, had been broken
+>   since 2026-09-11 and failing at process start for every vendor.
+>
 > **The open tail, for a plan of its own.** An extension-host harness — `@vscode/test-electron`, which
 > `research/module_tests.md` records as this repository's largest single gap and which every one of
 > these thirteen stories worked around with source-read wiring tests. Behind it: the `chatCommand.ts`

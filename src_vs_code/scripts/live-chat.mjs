@@ -60,7 +60,12 @@ async function conversation(name, vendor, adapter) {
   if (!resolved) { console.log(name.padEnd(12) + 'NOT INSTALLED'); return false; }
   const session = new CliChatSession(
     (resume) => {
-      const spec = launchSpecFor(vendor, home, resume, resolved);
+      // A ChatLaunch, not a bare resume id. It became one when the model picker started deciding
+      // which model the CLI is told to use, and a string lands in that parameter as an object whose
+      // .model is undefined - which throws inside modelRefusal before any process starts. Every turn
+      // of this script then failed with "the model process could not be started", for three days,
+      // spending nothing and proving nothing. Guarded now by liveScripts.test.ts.
+      const spec = launchSpecFor(vendor, home, { resume, model: '' }, resolved);
 
       return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
     },
