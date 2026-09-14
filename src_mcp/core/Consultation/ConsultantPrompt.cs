@@ -117,7 +117,10 @@ public static class ConsultantPrompt
             // used to be spent — so a transcript that fit "exactly" rendered over the budget, on the
             // one route whose context window is smallest. (CodeRabbit, on the pull request.)
             var separator = kept.Count > 0 ? JoinLength : 0;
-            var note = i > 0 ? Omission(i).Length + JoinLength : 0;
+            // The turn about to be weighed counts itself when it would be DROPPED — which is the case
+            // whenever something newer is already kept, because only the newest is ever cut.
+            var omitted = i + (kept.Count > 0 ? 1 : 0);
+            var note = omitted > 0 ? Omission(omitted).Length + JoinLength : 0;
             if (spent + separator + block.Length + note > budget)
             {
                 StopHere(kept, block, i, budget - note);
@@ -160,15 +163,22 @@ public static class ConsultantPrompt
     /// </remarks>
     private static void StopHere(List<string> kept, string block, int earlier, int room)
     {
-        if (kept.Count == 0)
+        // Only the NEWEST turn is ever cut and kept; once something newer is held, the turn that does
+        // not fit is dropped outright — and a dropped turn is one of the turns the note accounts for.
+        var dropped = kept.Count > 0;
+        if (!dropped)
         {
             var forText = Math.Max(room - CutMarker.Length, 0);
             kept.Add(block[..Math.Min(block.Length, forText)] + CutMarker);
         }
 
-        if (earlier > 0)
+        // Saying `earlier` alone under-reported by one whenever the block was dropped — and at
+        // `earlier == 0` said nothing at all, so a whole turn left the carry with no mark on it.
+        // (CodeRabbit, on the pull request.)
+        var omitted = earlier + (dropped ? 1 : 0);
+        if (omitted > 0)
         {
-            kept.Insert(0, Omission(earlier));
+            kept.Insert(0, Omission(omitted));
         }
     }
 

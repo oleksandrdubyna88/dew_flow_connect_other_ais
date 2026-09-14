@@ -675,9 +675,9 @@ internal static class Program
         loop. `review_code` REFUSES until a plan round has reached `proceed`; skipped stages are
         impossible, not discouraged. `providers` says what is configured and what it authenticates
         as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
-        `consult` is for when YOU are stuck: another vendor's model reads this checkout read-only
-        with its uncommitted diff and answers advice, not orders — verify it, then report back on
-        the same consultationId.
+        `consult` is for when YOU are stuck: an independent model, chosen by the configured route and
+        usually another vendor's, reads this checkout read-only with its uncommitted diff and answers
+        advice, not orders — verify it, then report back on the same consultationId.
         """;
 
     /// <summary>

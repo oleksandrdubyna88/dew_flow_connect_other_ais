@@ -237,8 +237,8 @@ internal static class Tools
                 Name = "consult",
                 Title = "Ask another vendor's model when you are stuck, in this working tree",
                 Description = """
-                    A consultant — a different vendor's model, chosen by the person for YOUR kind of
-                    caller — reads this checkout READ-ONLY together with its uncommitted diff, which the
+                    A consultant — an independent model, chosen by the person for YOUR kind of caller
+                    and usually a different vendor's — reads this checkout READ-ONLY together with its uncommitted diff, which the
                     server collects itself, and answers your `problem` in prose. Call it when the same
                     test is red after two fix attempts, when two sources contradict each other, when a
                     design fork has no measurement behind it, or when the person says "consult". Stop

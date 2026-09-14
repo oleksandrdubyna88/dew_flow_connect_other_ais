@@ -271,7 +271,16 @@ function serverSession(extraEnv = {}) {
   child.stdout.on('data', (b) => {
     buffered += String(b);
     for (const line of buffered.split('\n').slice(0, -1)) {
-      const message = JSON.parse(line);
+      // A throw HERE runs inside a 'data' listener, outside every surrounding try — so it escapes
+      // as an uncaught exception: the dotnet child is never killed, the temporary directories stay,
+      // and the run prints a stack where its own `seam:` line belongs. A line that is not a frame is
+      // not this reader's business. (CodeRabbit, on the pull request.)
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
       const settle = waiting.get(message.id);
       if (settle !== undefined) {
         waiting.delete(message.id);

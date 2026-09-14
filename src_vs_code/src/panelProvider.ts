@@ -1262,7 +1262,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // key: the four rows are one map, so the key a control carries says which HALF of a row
         // changed — the vendor or its model — and is never a setting of its own. The caps beside
         // them are ordinary settings and take the plain path below.
-        const current = config.get<Record<string, unknown>>('consultants') ?? {};
+        // Read through the SIDE-AWARE reader, because `consultants` is one of the overlaid
+        // settings: reading the shared value and then saving the merge into the side overlay would
+        // drop whatever that side had already chosen. Written and read by the same rule.
+        // (CodeRabbit, on the pull request.)
+        const current = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
         await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value));
         return;
       }
@@ -2409,7 +2413,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       await vscode.workspace.fs.createDirectory(directory);
       const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
       await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
-      await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+      try {
+        await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+      } catch (error) {
+        // The temp name carries the pid, so a rename that keeps failing leaves one more file beside
+        // the one the SERVER reads out of this directory. The settings writer already cleans up on
+        // its own failure path for the same reason. (CodeRabbit, on the pull request.)
+        await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
+        throw error;
+      }
       // The situation is over. A failure after this is news rather than a repeat.
       this.promptWriteFailed = '';
     } catch (e) {

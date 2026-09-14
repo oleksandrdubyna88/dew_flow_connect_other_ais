@@ -5,9 +5,9 @@ namespace CoaiMcp.Server;
 /// <summary>Which vendor row consults for one caller kind, and on which model (empty = the row's own).</summary>
 public sealed record ConsultantChoice(string Vendor, string Model = "");
 
-/// <summary>The parsed `COAI_CONSULTANTS` setting: the map, and any sentence about what could not be read.</summary>
 /// <summary>
-/// The routing map, what was wrong with it, and whether it could be read AT ALL.
+/// The parsed <c>COAI_CONSULTANTS</c> setting: the map, what was wrong with it, and whether it could
+/// be read AT ALL.
 /// </summary>
 /// <remarks>
 /// <c>Unreadable</c> exists because the complaint was not enough. A <c>COAI_CONSULTANTS</c> that does
@@ -31,7 +31,10 @@ public sealed record ConsultantsSetting(
 /// explicit choice — Fable for a Sonnet session is worth it because the model is stronger — and the
 /// panel says so beside the row; the server cannot see the caller's MODEL, only its vendor.</para>
 /// <para>Malformed JSON is the shipped map plus a sentence in <c>Unrecognised</c>, never half a map:
-/// a consultant silently falling back to a vendor nobody chose is the failure this exists to avoid.</para>
+/// a consultant silently falling back to a vendor nobody chose is the failure this exists to avoid —
+/// which is why a setting that does not PARSE now refuses the call outright rather than leaving the
+/// shipped map quietly in force. (CodeRabbit, on the pull request, against a remark that still
+/// described the behaviour this change replaced.)</para>
 /// </remarks>
 public static class ConsultantRouting
 {

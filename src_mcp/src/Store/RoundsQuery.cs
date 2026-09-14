@@ -446,14 +446,6 @@ public static class RoundsQuery
             rows.GetInt32(at + 13) == 1);
 
     /// <summary>
-    /// What the caller accepts, grouped three ways.
-    /// </summary>
-    /// <remarks>
-    /// Accepted over TOTAL rather than accepted alone, because a category that produces fifty
-    /// findings and gets two accepted says something different from one that produces two and gets
-    /// both — and only the second is a blind spot worth acting on.
-    /// </remarks>
-    /// <summary>
     /// The consultations, newest first, bounded by the same limit the rounds are.
     /// </summary>
     /// <remarks>
@@ -514,6 +506,14 @@ public static class RoundsQuery
     private static bool Missing(SqliteException e) =>
         e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// What the caller accepts, grouped three ways.
+    /// </summary>
+    /// <remarks>
+    /// Accepted over TOTAL rather than accepted alone, because a category that produces fifty
+    /// findings and gets two accepted says something different from one that produces two and gets
+    /// both — and only the second is a blind spot worth acting on.
+    /// </remarks>
     private static List<BlindSpot> BlindSpots(SqliteConnection db)
     {
         var spots = new List<BlindSpot>();

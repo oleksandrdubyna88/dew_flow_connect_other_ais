@@ -1255,7 +1255,11 @@ export function roundsLogHtml(
   // read back out of the DOM: what a section CONTAINS is HTML from the database, and searching it
   // for the placeholder's own words is a check that a blind spot titled "Reading the log" would
   // defeat.
-  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '' })};
+  // Every section the timeout below watches has a key here, and the CONSULTATIONS one was missing:
+  // the consultations entry read undefined, the guard skipped it on every tick, and a tab that
+  // opened on the placeholder and never received a push sat on "Reading the log…" for ever — which
+  // is the exact state the timeout exists to end. (CodeRabbit, on the pull request.)
+  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '', consultations: consultationsHtmlText === '' })};
   var ROWS = ${jsonForScript(rows)};
   // Assigned, never declared: the extension ships BUNDLED and minified, and a minifier renames a
   // function that is not a top-level export — so the declaration this embedded read

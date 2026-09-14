@@ -22,18 +22,6 @@ public static class ConsultSchemaFile
         public bool Ready => Problem.Length == 0;
     }
 
-    /// <summary>
-    /// The schema's path, written if it is missing or stale — and what went wrong if it is not there.
-    /// </summary>
-    /// <remarks>
-    /// It does not throw: this runs while the service is being built, for a file only ONE of the four
-    /// routes needs, and a consultation on codex must not be prevented by a directory the local
-    /// engine would have used. But it does not stay SILENT either — the first version swallowed the
-    /// failure and returned a path to a file that was not there, so a read-only data directory
-    /// surfaced minutes later as a child process complaining about a missing schema, nowhere near the
-    /// permission that caused it. The caller logs this, and the local route refuses by name.
-    /// (codex and gemini, story 2's second code round.)
-    /// </remarks>
     /// <summary>Best-effort removal: a temp file we cannot delete must not replace the real error.</summary>
     private static void Delete(string temp)
     {
@@ -47,6 +35,18 @@ public static class ConsultSchemaFile
         }
     }
 
+    /// <summary>
+    /// The schema's path, written if it is missing or stale — and what went wrong if it is not there.
+    /// </summary>
+    /// <remarks>
+    /// It does not throw: this runs while the service is being built, for a file only ONE of the four
+    /// routes needs, and a consultation on codex must not be prevented by a directory the local
+    /// engine would have used. But it does not stay SILENT either — the first version swallowed the
+    /// failure and returned a path to a file that was not there, so a read-only data directory
+    /// surfaced minutes later as a child process complaining about a missing schema, nowhere near the
+    /// permission that caused it. The caller logs this, and the local route refuses by name.
+    /// (codex and gemini, story 2's second code round.)
+    /// </remarks>
     public static Provisioned Ensure(string directory)
     {
         var path = Path.Combine(directory, ConsultAnswerSchema.Name);

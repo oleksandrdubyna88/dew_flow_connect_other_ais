@@ -148,6 +148,32 @@ public sealed class ConsultantCarryBudgetTests
         carried.Should().Contain("CUT", "the newest turn is cut rather than dropped");
     }
 
+    /// <summary>
+    /// Every turn that leaves the carry is COUNTED — including the one that did not fit.
+    /// </summary>
+    /// <remarks>
+    /// Only the newest turn is ever cut and kept; once something newer is held, the turn that does
+    /// not fit is dropped outright. The note used to report only the turns BEHIND it, so it was one
+    /// short whenever that happened — and when the dropped turn was the oldest, the count was zero
+    /// and no note was written at all: a whole turn left the conversation with nothing said about it.
+    /// (CodeRabbit, on the pull request.)
+    /// </remarks>
+    [Fact]
+    public void ADroppedTurnIsCountedByTheNote_IncludingWhenItIsTheOldest()
+    {
+        // Two turns, a budget that fits the newest and nothing else: turn 1 is dropped, and it is the
+        // oldest, so `earlier` is zero and the old arithmetic said nothing.
+        var carried = ConsultantPrompt.Transcript([Turn(1, 400), Turn(2, 60)], 200);
+
+        carried.Should().Contain("q2", "the newest turn is what a follow-up needs");
+        carried.Should().Contain("1 turn(s) of this conversation are not carried");
+
+        // And with turns behind it as well, the dropped one is counted beside them.
+        var three = ConsultantPrompt.Transcript([Turn(1, 400), Turn(2, 400), Turn(3, 60)], 200);
+
+        three.Should().Contain("2 turn(s) of this conversation are not carried");
+    }
+
     [Fact]
     public void ASingleTurnThatFits_IsCarriedWhole_AndSaysNothingAboutEarlierOnes()
     {

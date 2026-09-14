@@ -44,7 +44,14 @@ const run = async (vendor) => {
       const line = buffer.slice(0, at).trim();
       buffer = buffer.slice(at + 1);
       if (!line) continue;
-      const m = JSON.parse(line);
+      // Guarded for the same reason as the seam harness: a throw inside this listener escapes
+      // every try around it, so `server.kill()` in the `finally` never runs. (CodeRabbit.)
+      let m;
+      try {
+        m = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (waiting.has(m.id)) { const pending = waiting.get(m.id); waiting.delete(m.id); pending.resolve(m); }
     }
   });
