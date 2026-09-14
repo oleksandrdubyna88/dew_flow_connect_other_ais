@@ -123,16 +123,18 @@ export interface GotoAsked {
    */
   readonly ambiguous: boolean;
   /**
-   * Whether the session directory could not be READ, as opposed to having answered with several.
+   * Whether MORE THAN ONE session actually answered to this tab's name.
    *
-   * <p>Both arrive as {@link GotoAsked.ambiguous}, because both mean "which session this tab belongs
-   * to is not known" and both should therefore ask rather than guess. They are told apart HERE and
-   * only here, for the name fallback below: "two sessions are called this" is a fact about the
-   * world, and a fallback may lean on it. "I could not look" is a fact about this attempt, and a
-   * temporarily unreadable folder must not become a conversation opened on the strength of a name.
-   * (codex, the round on this change.)</p>
+   * <p>A POSITIVE fact, and stated positively on purpose. It began as `unsure` — "the folder could
+   * not be read" — which meant the name fallback below was licensed by the ABSENCE of a known
+   * problem, so a future walker outcome that set `ambiguous` for some third reason would have
+   * enabled it silently. Now the fallback is licensed by the one thing that is evidence about
+   * ownership: two sessions really are called this, so a saved conversation of that name plausibly
+   * belongs to one of them. Any new reason to be ambiguous arrives as `false` and asks. (codex, the
+   * code round — "derive an explicit value at the walker boundary so every new ambiguity case must
+   * choose whether name evidence is valid".)</p>
    */
-  readonly unsure: boolean;
+  readonly severalSessions: boolean;
   /**
    * How many tabs open right now carry this tab's label — at least 1, since this tab is one of them.
    *
@@ -262,7 +264,7 @@ export function goto(asked: GotoAsked): Goto {
     // failure is the worst kind of wrong (codex) — and this window must hold exactly ONE tab of this
     // name, or the conversation found may be the other tab's (local, gemini and codex, one case
     // each). Where either fails the question goes back to the person, narrowed to the matches.
-    const evidence = !asked.unsure && asked.namesakes === 1;
+    const evidence = asked.severalSessions && asked.namesakes === 1;
     const only = evidence && named.length === 1 ? named[0] : undefined;
     if (only !== undefined) {
       return { kind: 'reopen', meta: only };
@@ -271,7 +273,10 @@ export function goto(asked: GotoAsked): Goto {
     return {
       kind: 'pick',
       among: named.length > 0 ? named : asked.inRoot,
-      why: { kind: 'ambiguous session' },
+      // AND IT SAYS WHICH AMBIGUITY. A walk that could not be done is not two sessions of one name,
+      // and telling somebody their sessions share a name when the truth is that the folder would not
+      // open sends them looking for a duplicate that is not there. (gemini, the code round.)
+      why: asked.severalSessions ? { kind: 'ambiguous session' } : { kind: 'unreadable', reason: 'this tab’s Claude sessions could not be read' },
       offer,
       bind: true,
     };
@@ -340,22 +345,6 @@ function eligible(kind: TabKind): boolean {
  * is the line this whole story rests on: every conversation written before C1 has no source, and
  * handing one of them to a tab that never owned it would be this feature's worst failure.</p>
  */
-/**
- * Is the tab in FRONT the one this name belongs to, beyond doubt?
- *
- * <p>Pure, and here rather than in the host, because it is the decision and because the bug it
- * replaces was invisible to every test this repository can run: the host compared `vscode.Tab`
- * objects, VS Code replaces those whenever a tab changes, and a Claude Code tab renames itself as
- * the assistant works. A source-read assertion cannot see a comparison that reads correctly and is
- * wrong at runtime — only a value test can, and only if the value is reachable. (codex asked for
- * exactly this test and could not have got it against the old shape.)</p>
- *
- * <p>The label alone is not enough either: two tabs can carry one name, and then it identifies
- * neither. `namesakes` is how many do.</p>
- */
-export const frontIs = (label: string, front: string, namesakes: number): boolean =>
-  label.length > 0 && front === label && namesakes === 1;
-
 /**
  * The conversations in this root that were opened from a tab of this NAME.
  *

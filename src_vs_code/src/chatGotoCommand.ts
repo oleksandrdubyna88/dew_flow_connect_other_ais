@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { Goto, GotoAsked, bindable, goto, rootOfTab } from './chatGoto';
 import {
-  activeTabIs,
   askedForGoto,
   chatWithOtherAi,
   restoreConversation,
@@ -118,7 +117,7 @@ async function arrive(
         title: narrowedTitle(answer.why, offer, answer.among.length),
         offer,
         startOnNew: false,
-        onNew: startingFor(panels, extensionUri, asked, key),
+        onNew: startingFor(panels, extensionUri),
         ...(answer.bind ? { bindTo: bindingTo(panels, asked, key) } : {}),
       });
 
@@ -131,7 +130,7 @@ async function arrive(
         title: `No conversation for “${offer}” yet`,
         offer,
         startOnNew: true,
-        onNew: startingFor(panels, extensionUri, asked, key),
+        onNew: startingFor(panels, extensionUri),
         bindTo: bindingTo(panels, asked, key),
       });
 
@@ -218,25 +217,25 @@ async function bind(
  * the tab they moved TO — created on a guess, which is the single thing this answer exists to
  * avoid. (gemini, the second code round: the offer could not be completed at all.)</p>
  */
-function startingFor(
-  panels: ChatPanels,
-  extensionUri: vscode.Uri,
-  asked: GotoAsked,
-  key: object | undefined,
-): () => void {
+function startingFor(panels: ChatPanels, extensionUri: vscode.Uri): () => void {
+  // THERE IS NO GUARD HERE ANY MORE, and that is the finding rather than an omission.
+  //
+  // It began as "do not start a conversation for the wrong tab" and went through two shapes, each
+  // refusing far more than it caught. By OBJECT: a `vscode.Tab` is replaced whenever a tab changes
+  // and a Claude Code tab renames itself as the assistant works, so it refused every press — which
+  // is how the operator met it. By LABEL: three reviewers found three more false refusals between
+  // them, and each is ordinary rather than exotic. Two tabs called `README.md` make the offer
+  // impossible for BOTH of them, for ever. An untitled buffer has no label, so it can never start
+  // one. And a Claude tab renamed while the picker is open refuses the press that follows, which is
+  // the original bug wearing the fix.
+  //
+  // What the guard was protecting against is a person moving to another tab while the picker is up
+  // and getting a conversation for the tab they moved TO. That is what the ordinary chord does from
+  // wherever it is pressed, the chat is titled after the tab it was actually started from, and
+  // nothing is bound or overwritten — so it is visible and undoable. Weighed against three certain
+  // refusals it is not worth having, and a guard that fails toward "no" is not safer than none when
+  // "no" is the thing the person cannot get past.
   return () => {
-    // BY NAME, never by the captured tab object. See `activeTabIs`: a `vscode.Tab` is replaced when
-    // the tab changes, a Claude Code tab renames itself as the assistant works, and comparing
-    // identity here refused every press — including the one where the right tab was in front all
-    // along. `tabStillOpen(key)` is gone from this check for the same reason; a tab whose name is
-    // in front is open by definition.
-    if (key === undefined || !activeTabIs(asked.tab.label)) {
-      void vscode.window.showWarningMessage(
-        `Open “${asked.tab.label}” again and press once more — a conversation is started for the tab in front.`,
-      );
-
-      return;
-    }
     void chatWithOtherAi(panels, extensionUri, [], false);
   };
 }
