@@ -188,7 +188,7 @@ function label(id: string): string {
 
 /** Any half's marker, from its id — never a second literal to keep in step. */
 function markerOf(id: string): RegExp {
-  return new RegExp(`<!-- ${id} v(\\d+) -->`);
+  return new RegExp(String.raw`<!-- ${id} v(\d+) -->`);
 }
 
 /**
@@ -317,7 +317,7 @@ function names(halves: readonly string[]): string {
 
   return said.length < 2
     ? said[0] ?? ''
-    : `${said.slice(0, -1).join(', ')} and ${said[said.length - 1]}`;
+    : `${said.slice(0, -1).join(', ')} and ${said.at(-1)}`;
 }
 
 /** One line for the panel, saying what to do about it — or nothing when there is nothing to say. */
