@@ -84,7 +84,9 @@ test('a stored value that is not a list of rows yields no rows rather than a thr
 });
 
 test('the page is shown the rows as stored, with a missing field read as empty', () => {
-  const view = viewOf([{ id: 'a', text: 'only a text' }, { name: 'only a name' }]);
+  // Through `rowsOf`, because that is where a row is given the id the page names it by — asking
+  // `viewOf` about raw settings is asking it a question it is no longer the one to answer.
+  const view = viewOf(rowsOf([{ id: 'a', text: 'only a text' }, { name: 'only a name' }]));
 
   assert.deepStrictEqual(view[0], { id: 'a', name: '', text: 'only a text' },
     'a row with no name was shown one it does not have');
@@ -97,4 +99,34 @@ test('the rows keep fields this build does not read', () => {
 
   assert.equal(rows[0]?.['mine'], 'keep me',
     'a field this build does not know was deleted — the trap remoteVendor fell into for three releases');
+});
+
+/**
+ * What the code round of 2026-09-14 found. Three reviewers, independently, on the same defect.
+ *
+ * <p>The schema lets a person write `{ "text": "deploy it" }` into `settings.json` — the reader was
+ * changed in story 1 so that such a row is KEPT rather than dropped. The tab then showed it with an
+ * invented id, and every edit and every Remove aimed at that id matched nothing and did nothing.
+ * Visible, and inert.</p>
+ */
+
+test('a row saved without an id can still be edited and removed', () => {
+  const rows = rowsOf([{ text: 'deploy it' }, { text: 'check that it works' }]);
+  const first = viewOf(rows)[0]?.id ?? '';
+
+  assert.ok(first.length > 0, 'a row with no id was given nothing for a button to name');
+  assert.equal(rowsAfter(rows, { kind: 'edit', id: first, field: 'name', value: 'Ship' }).kind, 'rows',
+    'editing a row that had no id in settings.json silently did nothing');
+  assert.equal(rowsAfter(rows, { kind: 'remove', id: first }).kind, 'rows',
+    'removing a row that had no id in settings.json silently did nothing');
+});
+
+test('the id a row is shown under is the id that gets stored', () => {
+  const rows = rowsOf([{ text: 'deploy it' }]);
+  const shown = viewOf(rows)[0]?.id ?? '';
+  const outcome = rowsAfter(rows, { kind: 'edit', id: shown, field: 'name', value: 'Ship' });
+  const stored = outcome.kind === 'rows' ? outcome.rows : [];
+
+  assert.equal(stored[0]?.['id'], shown,
+    'the row is written back under a different id than the one the page was told, so the next click misses again');
 });

@@ -22,7 +22,7 @@ interface Recorded {
 }
 
 /** A writer with hand-driven timers, recording what it did. */
-function harness(options: { readonly apply?: (command: string) => Promise<boolean> } = {}) {
+function harness(options: { readonly apply?: (command: string) => Promise<boolean>; readonly render?: () => Promise<void> } = {}) {
   const applied: string[] = [];
   const reported: unknown[] = [];
   let rendered = 0;
@@ -35,7 +35,7 @@ function harness(options: { readonly apply?: (command: string) => Promise<boolea
 
       return options.apply === undefined ? true : options.apply(command);
     },
-    render: () => { rendered += 1; },
+    render: () => { rendered += 1; return options.render?.(); },
     report: (error) => { reported.push(error); },
     // A command beginning `type:` is somebody typing in a field: `type:<field>=<value>`. The key is
     // the FIELD alone — keying it by the whole command would make every keystroke its own field, and
@@ -175,4 +175,28 @@ test('the page is redrawn only when the command asked for it', async () => {
   writes.queue('add');
   await writes.flush();
   assert.equal(recorded.rendered(), 1, 'adding a row did not redraw the list it changed');
+});
+
+test('a redraw that reads from disk finishes before the next write begins', async () => {
+  // rolesPanel's render is asynchronous — it reads prompt files. Extracting this module typed
+  // `render` as synchronous, so the chain stopped awaiting it and a later write could run while a
+  // redraw was still reading. (Code round 2026-09-14, gemini, Major.)
+  const order: string[] = [];
+  let finish = (): void => { /* replaced below */ };
+  const drawing = new Promise<void>((resolve) => { finish = resolve; });
+  const { writes } = harness({
+    apply: async (command) => { order.push(`apply ${command}`); return command === 'add'; },
+    render: async () => { order.push('render start'); await drawing; order.push('render end'); },
+  });
+
+  writes.queue('add');
+  await new Promise<void>((resolve) => { setImmediate(resolve); });
+  writes.queue('remove');
+  await new Promise<void>((resolve) => { setImmediate(resolve); });
+  assert.ok(!order.includes('apply remove'), 'a write began while the redraw before it was still reading');
+  finish();
+  await writes.flush();
+
+  assert.deepStrictEqual(order, ['apply add', 'render start', 'render end', 'apply remove'],
+    'the redraw and the write after it overlapped');
 });
