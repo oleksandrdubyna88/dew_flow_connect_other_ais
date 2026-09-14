@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.40.0 — 2026-09-13
 
 **The log says which AI asked for a round.** Open a row and, above the reviewers who answered, it
 now reads *asked by claude-code 7.3.1 · claude-opus-5*. When there was only ever Claude this was not
