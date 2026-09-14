@@ -113,6 +113,49 @@ refusal_hint() {
     esac
 }
 
+# ── the canary's CREDENTIAL, asked before anything is staged or swapped ────────────────────────
+#
+# The canary proves the release; this proves the thing the canary authenticates WITH, which is a
+# different question and is not about the release at all. Asked at the end it costs a swap, a restart
+# and a rollback; asked here it costs a second.
+#
+# It lives in THIS script rather than in the ssh wrapper because everything it needs is already
+# here — `$URL`, `require_https_origin` and `session_token` — and a second copy of the origin guard
+# in the wrapper would be a second place for a security check to drift. The wrapper calls
+# `--check-token` before it fetches anything.
+#
+# **Over the PUBLIC origin, not loopback.** A loopback check looked tidier — it isolates the
+# credential from DNS, TLS and nginx — and it is simply wrong on this deployment: with
+# `Coai__RequireForwardedHttps` set, everything but `/api/health` is refused `403 HTTPS required.`
+# over plain HTTP, whatever the token. A preflight built that way refuses every deploy and blames the
+# credential. Measured against the live box on 2026-09-14 before it could ship: loopback `/api/whoami`
+# answered 403 for a token that was not the reason.
+preflight_token() {
+    local cfg code
+    require_https_origin
+
+    cfg=$(mktemp)
+    chmod 600 "$cfg"
+    printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
+    trap 'rm -f "$cfg"' RETURN
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 -K "$cfg" "$URL/api/whoami" || echo 000)
+
+    case "$code" in
+        200) say "canary token: accepted by $URL" ;;
+        401) die "refused before touching the release: the canary's token is not accepted (HTTP 401).
+  It is a SESSION token and they expire — Coai__SessionTtlDays, 7 by default. Mint a fresh one and
+  write it to the file COAI_TOKEN_FILE names. Nothing is wrong with the release you asked for." ;;
+        403) die "refused before touching the release: $URL answered 403 for the canary's token.
+  Either its email is outside Coai__AllowedDomains, or the request did not arrive as HTTPS — the
+  server refuses everything but /api/health over plain HTTP. Either way it is the canary's call that
+  is wrong, not the release." ;;
+        000) die "refused before touching the release: $URL did not answer at all. Deploying over a
+  server that is already unreachable would replace it with no way to tell whether that helped." ;;
+        *)   die "refused before touching the release: $URL answered HTTP $code to /api/whoami, which
+  is neither an accepted token nor a refusal this script knows. Look at the unit's journal." ;;
+    esac
+}
+
 canary() {
     local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg submit http
     cfg=$(mktemp)
@@ -276,6 +319,12 @@ case "${1:-}" in
         nl -ba "$TRAIL" 2>/dev/null || say "  (no trail yet)"
         exit 0
         ;;
+    --check-token)
+        # No lock: it changes nothing, and a deploy that is about to take the lock should not be
+        # queued behind its own preflight.
+        preflight_token
+        exit 0
+        ;;
     --rollback)
         take_the_lock
         [[ -s "$TRAIL" ]] || die "no trail — nothing to roll back to"
@@ -290,10 +339,10 @@ case "${1:-}" in
         exit 0
         ;;
     "")
-        die "usage: $0 [--from <path>] <version> | --rollback | --list"
+        die "usage: $0 [--from <path>] <version> | --rollback | --list | --check-token"
         ;;
     --*)
-        die "unknown option '$1' — usage: $0 [--from <path>] <version> | --rollback | --list"
+        die "unknown option '$1' — usage: $0 [--from <path>] <version> | --rollback | --list | --check-token"
         ;;
     *)
         : # a version to release; handled below

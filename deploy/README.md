@@ -206,10 +206,18 @@ nothing about the version.
 
 Two changes came out of that, and between them the failure now costs a second instead of an hour:
 
-- **The wrapper asks first.** `preflight_token` calls `/api/whoami` on loopback — the same
-  `RequireCaller` gate the canary's submit goes through — **before** the artefact is fetched, staged
-  or swapped. An expired token now stops the deploy having touched nothing, with a message that
-  names the cause and says the release is innocent.
+- **The wrapper asks first.** It runs `systemd-release.sh --check-token` **before** the artefact is
+  fetched, staged or swapped; that calls `/api/whoami` — the same `RequireCaller` gate the canary's
+  submit goes through — and an expired token then stops the deploy having touched nothing, with a
+  message that names the cause and says the release is innocent.
+
+  It goes over the **public origin**, not loopback, and that is not a preference: with
+  `Coai__RequireForwardedHttps` set, this server refuses everything but `/api/health` over plain HTTP
+  with `403 HTTPS required.`, whatever the token. A loopback preflight would therefore refuse every
+  deploy and blame the credential — measured against the live box on 2026-09-14, which answered 403
+  to a loopback `/api/whoami` for a reason that had nothing to do with the token. The check lives in
+  the release script for the same reason: `$URL`, `require_https_origin` and the token reader are
+  already there, and a second copy of the origin guard is a second place for it to drift.
 - **The canary keeps the status.** It used to read only the body, and a `401` has none — so the one
   sentence it could print, *"the server refused the review"*, fitted a dead credential and a dead
   vendor equally. It now reads `HTTP 401: the canary's own token was not accepted …`.
