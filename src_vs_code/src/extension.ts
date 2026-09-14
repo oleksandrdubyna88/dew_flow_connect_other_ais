@@ -39,7 +39,7 @@ import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
-import { ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
+import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
@@ -114,6 +114,14 @@ export function activate(context: vscode.ExtensionContext): void {
       // interaction. A SELECTION is a job: it spawns a process per round, takes seconds, and a
       // person who started it by ticking the header box must be able to stop it.
       const asJob = rows.length > 1;
+      // ASKED BEFORE the progress notification exists. Raising a progress bar and then a modal the
+      // person may decline means tearing the bar down again, which inverts the order of a
+      // pre-condition and the job it guards. (Code round, gemini.)
+      if (rows.length > ASK_ABOVE && await vscode.window.showWarningMessage(
+        `Export ${rows.length} rounds? Each one is read separately, so this will take a while.`,
+        { modal: true }, 'Export') !== 'Export') {
+        return;
+      }
       // withProgress answers a Thenable, and the queue takes a Promise; awaiting it inside the
       // callback is what makes the two agree without a cast.
       await exportQueue(async () => (asJob
@@ -127,9 +135,6 @@ export function activate(context: vscode.ExtensionContext): void {
             increment: 100 / total,
           }),
           cancelled: () => token.isCancellationRequested,
-          confirmLarge: async (howMany) => await vscode.window.showWarningMessage(
-            `Export ${howMany} rounds? Each one is read separately, so this will take a while.`,
-            { modal: true }, 'Export') === 'Export',
         }, panelRef))
         : runExport(rows, {}, panelRef)));
     },
@@ -885,6 +890,22 @@ async function logRows(panel: PanelProvider, database: DbLog | undefined): Promi
 }
 
 /**
+ * The three fields the rounds database keys a round by, checked rather than asserted.
+ *
+ * <p>A type PREDICATE, not an `as`: the value came off a webview bridge, and a cast there tells the
+ * compiler to stop checking exactly where checking is the point. (Code round, codex.)</p>
+ */
+function isRoundKey(value: unknown): value is { sessionId: string; stage: string; number: number } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const maybe = value as Record<string, unknown>;
+
+  return typeof maybe['sessionId'] === 'string' && typeof maybe['stage'] === 'string'
+    && typeof maybe['number'] === 'number';
+}
+
+/**
  * One export, with whatever progress and cancellation the caller can offer.
  *
  * <p>Outside `activate` so the wiring stays a wiring: this is the half that needs the editor — the
@@ -897,15 +918,11 @@ async function runExport(
   panel: PanelProvider,
 ): Promise<ExportOutcome> {
   return readAndExport(rows, async (row) => {
-    const dbKey = row['dbKey'];
-    const key = typeof dbKey === 'object' && dbKey !== null
-      ? dbKey as { sessionId?: unknown; stage?: unknown; number?: unknown }
-      : undefined;
     // A row we cannot build a database key from is FAILED, not `absent`. `absent` says the database
     // has no record of this round, which is a claim — and we have not asked it anything. Failing
     // closed is the rule this story is built on. (Code round, gemini.)
-    if (typeof key?.sessionId !== 'string' || typeof key.stage !== 'string'
-      || typeof key.number !== 'number') {
+    const key = row['dbKey'];
+    if (!isRoundKey(key)) {
       return { state: 'failed' as const, findings: [] };
     }
     const found = await panel.roundFindings(key.sessionId, key.stage, key.number);

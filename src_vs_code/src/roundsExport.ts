@@ -24,7 +24,7 @@ export interface ExportPorts {
    * selection simply proceeds, which is what the per-row button has always done.</p>
    */
   readonly confirmLarge?: (howMany: number) => Promise<boolean>;
-  /** How far the reads have got. Called once per completed batch, never for a single round. */
+  /** How far the reads have got. Called once per round READ, so a caller can count in rounds. */
   readonly progress?: (done: number, total: number) => void;
   /** Whether the person has cancelled. Checked between batches, so cancelling is prompt. */
   readonly cancelled?: () => boolean;
@@ -38,6 +38,14 @@ export interface ExportPorts {
  * meaning to is a worse outcome than one extra question.</p>
  */
 export const ASK_ABOVE = 500;
+
+/**
+ * How many reads run at once.
+ *
+ * <p>Named rather than repeated: each read is a child process, and four is enough that their
+ * start-up overlaps without an export contending with the editor the person is using.</p>
+ */
+export const READS_AT_ONCE = 4;
 
 /** What happened, for the caller that has to clear an in-flight state either way. */
 export type ExportOutcome = 'written' | 'cancelled' | 'failed';
@@ -159,6 +167,17 @@ export async function exportRounds(
 export type ReadFindings = (row: ExportableRow) => Promise<ExportRound['found']>;
 
 /**
+ * Read EVERY selected round in one go, when the server can.
+ *
+ * <p>Story C2 makes a bulk export one spawn instead of one per round, and a coordinator that can
+ * only take a per-round reader would have to be rewritten to allow it. So the batch shape is the
+ * seam now: supply `readAll` and the per-round loop is not used at all; supply neither and nothing
+ * changes. It answers one `found` per row IN ORDER, and answering a different number of rows is a
+ * failure of the reader rather than something this has to guess about. (Code round, gemini.)</p>
+ */
+export type ReadAllFindings = (rows: readonly ExportableRow[]) => Promise<readonly ExportRound['found'][]>;
+
+/**
  * Read every round's findings, then write them.
  *
  * <p>The read phase lives HERE rather than at the wiring, and inside whatever queue the caller runs
@@ -171,9 +190,32 @@ export async function readAndExport(
   read: ReadFindings,
   ports: ExportPorts,
   today: Date = new Date(),
+  readAll?: ReadAllFindings,
 ): Promise<ExportOutcome> {
   if (rows.length > ASK_ABOVE && ports.confirmLarge !== undefined && !await ports.confirmLarge(rows.length)) {
     return 'cancelled';
+  }
+
+  if (readAll !== undefined) {
+    // ONE call for the whole selection. Its failures are its own to report, and a reader that
+    // answers a different number of rows than it was asked about is not answering about these
+    // rounds — every one of them is failed rather than paired up by position and hoped for.
+    let all: readonly ExportRound['found'][];
+    try {
+      all = await readAll(rows);
+    } catch (reason: unknown) {
+      console.error('ConnectOtherAIs: the batch read of findings failed', reason);
+      all = [];
+    }
+    const paired = rows.map((row, at) => ({
+      row,
+      found: all.length === rows.length
+        ? all[at]!
+        : { state: 'failed' as const, findings: [] as ExportableRow[] },
+    }));
+    ports.progress?.(rows.length, rows.length);
+
+    return ports.cancelled?.() === true ? 'cancelled' : exportRounds(paired, ports, today);
   }
 
   let done = 0;
@@ -196,7 +238,7 @@ export async function readAndExport(
 
       return { row, found: { state: 'failed' as const, findings: [] as ExportableRow[] } };
     },
-    4,
+    READS_AT_ONCE,
     // Checked BETWEEN batches, so a cancel takes effect within one batch rather than after every
     // round has been read. The reads already in flight are allowed to finish; killing a child
     // process mid-read would leave the database connection to be cleaned up by the OS.
@@ -265,7 +307,7 @@ export async function inBatches<T, R>(
   items: readonly T[],
   each: (item: T) => Promise<R>,
   onFailure: (item: T, reason: unknown) => R,
-  atOnce = 4,
+  atOnce = READS_AT_ONCE,
   stop?: () => boolean,
 ): Promise<Batched<R>> {
   // A batch size that cannot advance the loop would hang for ever and look like a stuck export.
@@ -294,7 +336,11 @@ export async function inBatches<T, R>(
     }
   }
 
-  return { done: true, results: done };
+  // Checked AFTER the loop as well as before each batch. A cancel arriving while the LAST batch was
+  // in flight let the loop end naturally and report done: true, and the export then opened the save
+  // dialog and wrote the file — and a run of four or fewer rounds is one batch, so for those the
+  // check never happened at all. Three reviewers found it. (Code round.)
+  return { done: stop?.() !== true, results: done };
 }
 
 /** "1 round" / "41 rounds" — a count nobody has to read twice. */
