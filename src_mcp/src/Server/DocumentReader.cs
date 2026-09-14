@@ -140,10 +140,27 @@ public static class DocumentReader
         // A name given to raw text is its own identity and is not a path; it can never contain a
         // separator, so anything that does is a path and anything that does not is tried as a name
         // first and falls back to a path.
-        var asPath = DocumentId.Of(repoPath, Canonical(repoPath, trimmed, followLink));
+        var asPath = DocumentId.Of(
+            CanonicalRoot(repoPath, followLink), Canonical(repoPath, trimmed, followLink));
 
         return asPath.Length > 0 ? asPath : trimmed;
     }
+
+    /// <summary>The repository root, resolved the same way the document inside it is.</summary>
+    /// <remarks>
+    /// <para><b>Containment compares two paths, and it was only ever resolving one of them.</b> The
+    /// document was walked link by link; the root it was compared against was whatever the caller
+    /// said. Where the two spellings agree — which is every Linux and Windows checkout anyone here
+    /// had tried — the bug is invisible. On macOS it is the default: a repository under
+    /// <c>/var/folders/…</c> resolves to <c>/private/var/folders/…</c> because <c>/var</c> is a
+    /// link, so every document inside a perfectly ordinary repository was refused as being outside
+    /// it, with a message naming two paths that differ by a prefix the person never typed.</para>
+    /// <para>It is resolved rather than trusted for the same reason the document is: a root reached
+    /// through a link and a root spelled directly are one directory, and a containment check that
+    /// says otherwise is wrong in the direction that refuses honest work.</para>
+    /// </remarks>
+    public static string CanonicalRoot(string repoPath, Func<string, string> followLink) =>
+        Canonical(repoPath, repoPath, followLink);
 
     /// <summary>
     /// A caller's path, made absolute against the REPOSITORY rather than the process.
@@ -192,7 +209,7 @@ public static class DocumentReader
         }
 
         var resolved = Canonical(repoPath, absolute, followLink);
-        var id = DocumentId.Of(repoPath, resolved);
+        var id = DocumentId.Of(CanonicalRoot(repoPath, followLink), resolved);
 
         return id.Length == 0
             ? new DocumentOutcome.Refused(Outside(path, resolved, repoPath))

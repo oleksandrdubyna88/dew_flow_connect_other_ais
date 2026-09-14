@@ -310,3 +310,83 @@ public sealed class ConsultCallCounterTests : IDisposable
         counter.TryTake(caller, 2, now).Allowed.Should().BeFalse("the cap holds even with no file to write it in");
     }
 }
+
+/// <summary>
+/// Whether two spellings name one checkout — the comparison <c>status</c> stands on.
+/// </summary>
+/// <remarks>
+/// The two sides reach this from different places: the RECORD holds what git answered, which is the
+/// real path, and the query holds whatever the session was opened with. Nothing keeps those two
+/// spellings equal, and on macOS they are routinely not.
+/// </remarks>
+public sealed class SameCheckoutTests
+{
+    /// <summary>The ordinary case: one spelling, no links, still the same checkout.</summary>
+    [Fact]
+    public void TheSamePathSpelledTheSameWay_IsTheSameCheckout()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "coai-one-checkout");
+
+        ConsultationService.SamePath(path, path + Path.DirectorySeparatorChar, p => p)
+            .Should().BeTrue("a trailing separator is not a different directory");
+    }
+
+    /// <summary>
+    /// A checkout git reports THROUGH its links is the one the caller asked about.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what failed on macOS, and it failed silently in the most expensive direction.
+    /// <c>status</c> exists so a compacted conversation can find the consultation it already opened;
+    /// the record held <c>/private/var/folders/…</c> because that is what git answers, the query
+    /// held <c>/var/folders/…</c> because that is what the session was opened with, and
+    /// <c>GetFullPath</c> — which normalises separators and <c>..</c> and nothing else — called them
+    /// different. So <c>status</c> reported nothing open about an open consultation, and the caller
+    /// did the reasonable thing with that answer: opened a second one, collected the tree again, and
+    /// asked a model that had already answered, from scratch, on the same budget.</para>
+    /// <para>The link is a seam rather than a real one, so this holds on every platform instead of
+    /// only on the one that has a <c>/private</c>.</para>
+    /// </remarks>
+    [Fact]
+    public void ACheckoutReachedThroughALink_IsTheSameCheckout()
+    {
+        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
+        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+
+        string Link(string p) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(p),
+                Path.TrimEndingDirectorySeparator(said),
+                StringComparison.OrdinalIgnoreCase)
+                ? real
+                : p;
+
+        ConsultationService.SamePath(real, said, Link)
+            .Should().BeTrue("git answers with the resolved path and the session was opened with the other one");
+    }
+
+    /// <summary>Two different checkouts stay different — the guard against fixing this too hard.</summary>
+    [Fact]
+    public void TwoDifferentCheckouts_AreNotTheSameOne()
+    {
+        var one = Path.Combine(Path.GetTempPath(), "coai-checkout-one");
+        var other = Path.Combine(Path.GetTempPath(), "coai-checkout-two");
+
+        ConsultationService.SamePath(one, other, p => p).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A path this machine cannot make sense of is not the one being asked about — it is not a crash.
+    /// </summary>
+    /// <remarks>
+    /// A record can come from a server that ran on another machine. That was already true of
+    /// <c>GetFullPath</c> and has to stay true now that a resolver runs over both sides.
+    /// </remarks>
+    [Fact]
+    public void APathThisMachineCannotResolve_IsNotAMatch_AndDoesNotThrow()
+    {
+        var here = Path.Combine(Path.GetTempPath(), "coai-checkout-here");
+
+        ConsultationService.SamePath(here, "\0not-a-path", p => p).Should().BeFalse();
+        ConsultationService.SamePath(here, string.Empty, p => p).Should().BeFalse();
+    }
+}

@@ -14,9 +14,21 @@ namespace CoaiMcp.Tests;
 public sealed class ConsultantsTests : IDisposable
 {
     private const string Repo = "D:/rsd/some-checkout";
-    private const string Answers = "D:/data/consultations/answers";
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-consultants-").FullName;
+
+    /// <summary>
+    /// Where the answer is told to land — a REAL directory, because the local engine creates it.
+    /// </summary>
+    /// <remarks>
+    /// It was a constant under a drive letter, and a drive letter is not a fact about the machine
+    /// the tests run on. Every runner that happens to have a <c>D:</c> created the tree there and
+    /// passed; win-arm64 has none, so <c>CreateDirectory</c> threw before the assertion was reached
+    /// and five tests failed on the release rather than on a pull request. The repository learned
+    /// this once already — <c>22bd5b2b</c>, "the adapter tests write to a real directory, not to
+    /// D:" — which is why this is a temp directory and not a better-chosen constant.
+    /// </remarks>
+    private string Answers => Path.Combine(_data, "answers");
 
     public void Dispose()
     {
@@ -27,7 +39,7 @@ public sealed class ConsultantsTests : IDisposable
         catch (IOException) { }
     }
 
-    private static ConsultantLaunch Launch(string handle = "", string model = "", string prompt = "help me") =>
+    private ConsultantLaunch Launch(string handle = "", string model = "", string prompt = "help me") =>
         new(Repo, prompt, handle, Answers, new ReviewerSettings("v") { Model = model });
 
     private static ProcessResult Said(string stdout, string stderr = "", int exit = 0) =>
