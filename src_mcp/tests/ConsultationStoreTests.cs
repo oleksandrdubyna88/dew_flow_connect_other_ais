@@ -364,6 +364,36 @@ public sealed class SameCheckoutTests
             .Should().BeTrue("git answers with the resolved path and the session was opened with the other one");
     }
 
+    /// <summary>
+    /// One checkout is ONE owner, whichever spelling of it the caller happens to hold.
+    /// </summary>
+    /// <remarks>
+    /// <para>When nothing in the environment names a session — a plain CLI, a runner — a consultation
+    /// is owned by its checkout. That identity was built twice from two different strings: the write
+    /// had already resolved the repository through git, the read used what the session was opened
+    /// with. Same directory, two owners, and <c>status</c> filtered out the consultation it was
+    /// asked about. It survived the first fix to <c>SamePath</c> untouched, because the path
+    /// comparison was never the only thing comparing paths.</para>
+    /// </remarks>
+    [Fact]
+    public void OneCheckoutIsOneOwner_WhicheverSpellingNamesIt()
+    {
+        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
+        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+
+        string Link(string p) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(p),
+                Path.TrimEndingDirectorySeparator(said),
+                StringComparison.OrdinalIgnoreCase)
+                ? real
+                : p;
+
+        ConsultationService.RepoIdentity(said, Link).Should().Be(
+            ConsultationService.RepoIdentity(real, Link),
+            "the session was opened with one spelling and git answered with the other");
+    }
+
     /// <summary>Two different checkouts stay different — the guard against fixing this too hard.</summary>
     [Fact]
     public void TwoDifferentCheckouts_AreNotTheSameOne()
@@ -372,6 +402,7 @@ public sealed class SameCheckoutTests
         var other = Path.Combine(Path.GetTempPath(), "coai-checkout-two");
 
         ConsultationService.SamePath(one, other, p => p).Should().BeFalse();
+        ConsultationService.RepoIdentity(one, p => p).Should().NotBe(ConsultationService.RepoIdentity(other, p => p));
     }
 
     /// <summary>
