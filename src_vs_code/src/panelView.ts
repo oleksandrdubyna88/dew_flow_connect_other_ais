@@ -8,6 +8,7 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
+import type { Phrase } from './phrases';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -194,6 +195,13 @@ export interface PanelState {
    */
   readonly chat?: ChatSettings | undefined;
   /**
+   * The phrases a person keeps, so the section can offer them as buttons.
+   *
+   * <p>Optional, like every list added after this type existed: sixteen test fixtures build a
+   * `PanelState` and none of them care about phrases.</p>
+   */
+  readonly phrases?: readonly Phrase[] | undefined;
+  /**
    * The `data-setting` name of the control that had focus when this paint could no longer be
    * withheld — so the page can put the caret back where the person left it.
    *
@@ -298,6 +306,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state)),
+    section('phrases', 'Phrases', open, phrasesBody(state.phrases ?? [])),
     // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
     // another vendor about a passage, here an AI asks one about the tree it is stuck in.
     section('consultant', 'Consultant', open,
@@ -482,6 +491,24 @@ ${body}
   let lastConsultations = document.getElementById('live-consultations')?.innerHTML ?? '';
   window.addEventListener('message', (event) => {
     const message = event.data;
+    // A phrase that reached the clipboard, said on the button that was pressed. It arrives AFTER the
+    // write resolved — the click itself never changes the label, because a button that says Copied
+    // on the press says it just as confidently when the write failed.
+    if (message?.type === 'copied') {
+      const id = String(message.id).replace(/["\]/g, '');
+      const pressed = document.querySelector('[data-command="copyPhrase"][data-id="' + id + '"]');
+      if (pressed !== null && pressed.dataset.said !== '1') {
+        const was = pressed.textContent;
+        pressed.dataset.said = '1';
+        pressed.textContent = 'Copied';
+        setTimeout(() => {
+          pressed.textContent = was;
+          delete pressed.dataset.said;
+        }, 1000);
+      }
+
+      return;
+    }
     if (message?.type !== 'live') {
       return;
     }
@@ -622,6 +649,47 @@ ${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).jo
  * open set is carried in {@link PanelState} because the panel repaints on every change — a
  * section that snapped shut while somebody was typing in it would be worse than no collapsing.</p>
  */
+/** How much of a phrase a tooltip carries. Enough to tell two of them apart. */
+const HOVER_LIMIT = 300;
+
+/**
+ * What hovering a phrase shows.
+ *
+ * <p>More than the first line, and that was a review finding rather than a flourish: two phrases
+ * sharing a name — or sharing an opening — are two buttons nobody can tell apart, and the line that
+ * distinguishes them is often the second one. Capped, because a tooltip is not a document.</p>
+ */
+function hoverFor(phrase: Phrase): string {
+  const whole = phrase.text.trim();
+
+  return whole.length <= HOVER_LIMIT ? whole : `${whole.slice(0, HOVER_LIMIT - 1)}…`;
+}
+
+/**
+ * The phrases a person keeps, one button each.
+ *
+ * <p><b>A button carries the ID, never the words.</b> The list keeps the text and the surface keeps
+ * the choice — the rule `chatPromptChoice` already follows — so a phrase exists in exactly one place
+ * and cannot drift between two.</p>
+ *
+ * <p>An empty list says what to do rather than drawing nothing: a section that renders blank reads
+ * as broken instead of as empty.</p>
+ */
+function phrasesBody(phrases: readonly Phrase[]): string {
+  const buttons = phrases
+    .map((phrase) => `<button type="button" class="run phrase" data-command="copyPhrase" data-id="${escapeHtml(phrase.id)}" title="${escapeHtml(hoverFor(phrase))}">${escapeHtml(phrase.name)}</button>`)
+    .join('');
+  const list = phrases.length === 0
+    ? '<div class="hint">No phrases yet. What you keep here becomes a button — press one and it is on the clipboard, ready to paste.</div>'
+    : `<div class="phrases">${buttons}</div>
+  <div class="hint">Press one and it is on the clipboard. Paste it where you were about to type it.</div>`;
+
+  return `<div class="field">
+  ${list}
+  <button type="button" class="run" data-command="editPhrases">Edit phrases…</button>
+</div>`;
+}
+
 function section(id: string, title: string, open: readonly string[], body: string): string {
   return `<details class="section sec-${id}" data-section="${id}"${open.includes(id) ? ' open' : ''}>
   <summary>${escapeHtml(title)}</summary>
@@ -2034,6 +2102,7 @@ const CSS = `
      not about the gate at all, and a new hue would say "another kind of setting" when what it is
      is another kind of WORK. */
   .sec-chat      > summary { color: var(--tone-uxdx); }
+  .sec-phrases   > summary { color: var(--tone-plan); }
   /* The consultant takes the chat's tone for the same reason the chat took the server's: the two
      are one idea from opposite ends — a person asking another vendor about a passage, an AI asking
      one about the tree it is stuck in — and sharing a hue says so without a word. */
@@ -2050,6 +2119,10 @@ const CSS = `
     transform: rotate(-45deg); transition: transform .12s ease;
   }
   .section[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
+  /* One row of buttons that wraps: a phrase list is a handful of short labels, and a column of them
+     would push everything below it off the fold for no gain. */
+  .phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .phrases .run { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -2307,6 +2380,11 @@ export const PANEL_COMMANDS = [
   'editChatPresets',
   // And the way into the roles tab, which the Prompts section points at the same way.
   'editRoles',
+  // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
+  // because it needs the id the button carries and nothing outside the panel ever asks for one.
+  'copyPhrase',
+  // And the way into the phrases tab, which the section points at the same way.
+  'editPhrases',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -2323,6 +2401,7 @@ export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
   editChatPresets: 'coai.editChatPresets',
   editRoles: 'coai.editRoles',
+  editPhrases: 'coai.editPhrases',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {
@@ -2369,5 +2448,9 @@ export function staticKey(state: PanelState): string {
     // when the person has finished typing rather than under their caret. (CodeRabbit, on the pull
     // request.)
     state.consultPrompt,
+    // The phrases, or the section is frozen for the life of the panel while the tab underneath it
+    // works perfectly — which is the bug the two entries above this one were each added for.
+    // Serialised whole, so renaming a phrase or rewriting its words repaints as surely as adding one.
+    state.phrases,
   ]);
 }

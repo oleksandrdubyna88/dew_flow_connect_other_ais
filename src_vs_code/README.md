@@ -166,6 +166,12 @@ Everything in the sidebar, most of it folded away because it is configured once:
   throttled vendor holds every slot), timeouts, and how long a question waits for you.
 - **Vendor keys** — and, first, whether you need any. With signed-in CLIs, you do not.
 - **Recent rounds** — the verdicts, newest first.
+- **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
+  on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
+  them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than
+  typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
+  only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
+  price than a mechanism that can fail silently on somebody else's machine.
 
 Every setting carries a **?** that explains what it does and why it exists.
 
