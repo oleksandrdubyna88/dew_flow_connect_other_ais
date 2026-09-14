@@ -121,7 +121,7 @@ press it; press it and the ordinary chat opens on that tab, from whatever you ha
 doing nothing. Where it cannot be sure — two Claude sessions with one name, or a conversation about
 this file filed under another folder — it shows those and lets you choose, with a title saying why and
 the tab's own name already in the search box. If exactly one saved conversation was opened from a tab
-of that name, it opens that one rather than asking.
+of that name, and only one tab open right now carries it, it opens that one rather than asking.
 
 **New chat** in the tab's header starts again in the same tab: the conversation you were in is
 archived — whole, under the same name, in **CoAI: switch conversations…** — and the tab is yours

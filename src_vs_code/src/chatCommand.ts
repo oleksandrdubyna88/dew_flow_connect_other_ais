@@ -74,7 +74,7 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
-import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
+import { GotoAsked, frontIs, sessionSourceOf, tabKindOf } from './chatGoto';
 import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
@@ -900,6 +900,13 @@ export async function askedForGoto(
     // A walk that could not be done counts as ambiguous too: not knowing which session a tab belongs
     // to is a reason to ASK, never a reason to offer to start a second conversation.
     ambiguous: kind === 'claude' && (walked.unsure || (walked.found.length > 0 && !pinnable(walked.found))),
+    // TOLD APART from the line above, and only for the name fallback: both mean "which session this
+    // tab belongs to is not known", but "two are called this" is a fact about the world and "I could
+    // not look" is a fact about this attempt.
+    unsure: walked.unsure,
+    // How many tabs are called what this one is called — this tab included, so never below 1. It is
+    // what lets a NAME be evidence: with two tabs of one name it identifies neither.
+    namesakes: all.filter((one) => one.label === (tab?.label ?? '')).length,
     candidates: index.bySource(source),
     inRoot: index.entries({ kind: 'workspace', workspace: here }),
     roots: whereToLook(),
@@ -997,7 +1004,9 @@ export function revealBound(panels: ChatPanels, where: object, onto: object | un
  * about. (Found by the operator, testing 0.40.0.)</p>
  */
 export function activeTabIs(label: string): boolean {
-  return label.length > 0 && snapshots().active?.label === label;
+  const { active, all } = snapshots();
+
+  return frontIs(label, active?.label ?? '', all.filter((one) => one.label === label).length);
 }
 
 /**

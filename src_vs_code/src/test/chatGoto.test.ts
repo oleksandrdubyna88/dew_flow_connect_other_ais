@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConversationMeta, sourceOfFile, sourceOfSession } from '../chatStore';
 import { IndexState } from '../chatStoreCache';
-import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto, rootOfTab } from '../chatGoto';
+import { Goto, GotoAsked, UNNAMED_TAB, bindable, frontIs, goto, rootOfTab } from '../chatGoto';
 
 /**
  * Which conversation belongs to the tab somebody is looking at — decided without a host.
@@ -39,6 +39,8 @@ const asked = (over: Partial<GotoAsked> = {}): GotoAsked => ({
   live: '',
   source: sourceOfFile(HERE),
   ambiguous: false,
+  unsure: false,
+  namesakes: 1,
   candidates: [],
   inRoot: [],
   roots: ROOTS,
@@ -76,6 +78,51 @@ test('the root a tab belongs to is one the host can ask for, and it is the root 
     source: sourceOfFile('file:///D:/rsd/two/other.ts'),
     candidates: [meta({ source: sourceOfFile('file:///D:/rsd/two/other.ts'), workspace: 'D:\\rsd\\one' })],
   }))), 'pick');
+});
+
+test('a unique name match is refused when TWO tabs carry that name', () => {
+  // Three reviewers refused the auto-open with one case between them: two tabs called the same
+  // thing, one conversation of that name, and pressing go-to on the tab that does not own it opens
+  // the one that does. They were right, and this is the fact that answers them — with two tabs of a
+  // name, the name identifies neither, so the question goes back to the person.
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const mine = meta({ id: 'astra', title: 'speak with Astra' });
+
+  assert.equal(
+    kindOf(goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [mine], namesakes: 2 }))),
+    'pick',
+    'a conversation was opened on the strength of a name two open tabs share',
+  );
+  // And it is still narrowed to the match rather than thrown back to everything.
+  const answer = goto(asked({ tab, ambiguous: true, source: { kind: 'none' }, inRoot: [mine, meta({ id: 'x', title: 'other' })], namesakes: 2 }));
+  assert.deepEqual(answer.kind === 'pick' ? answer.among : [], [mine]);
+});
+
+test('a walk that FAILED never becomes a conversation opened on a name', () => {
+  // `ambiguous` carries two different facts: two sessions answer to this name, and the folder could
+  // not be read. Both should ask rather than guess, and only the first is evidence a fallback may
+  // lean on — a temporarily unreadable directory says nothing about names either. (codex.)
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const mine = meta({ id: 'astra', title: 'speak with Astra' });
+
+  assert.equal(
+    kindOf(goto(asked({ tab, ambiguous: true, unsure: true, source: { kind: 'none' }, inRoot: [mine] }))),
+    'pick',
+    'a session directory that could not be read opened a conversation anyway',
+  );
+});
+
+test('the front tab is the one this name belongs to only when the name is its own', () => {
+  // The bug the operator found, as a VALUE: the host compared `vscode.Tab` objects, VS Code replaces
+  // those whenever a tab changes, and a Claude Code tab renames itself as the assistant works — so
+  // the comparison was against an object that no longer existed and the offer refused every press.
+  // A source-read assertion cannot see that; only this can. (codex asked for exactly this test.)
+  assert.equal(frontIs('main.ts', 'main.ts', 1), true, 'the tab in front is not recognised by its own name');
+  assert.equal(frontIs('main.ts', 'other.ts', 1), false, 'any tab in front satisfies the check');
+  // Two tabs of one name: the name identifies neither, so it must not stand in for identity.
+  assert.equal(frontIs('main.ts', 'main.ts', 2), false, 'a name two tabs share is treated as an identity');
+  // An unnamed tab matches no front tab, rather than every unnamed one.
+  assert.equal(frontIs('', '', 1), false, 'an unnamed tab matches an unnamed tab in front');
 });
 
 test('an ambiguous tab whose NAME matches exactly one conversation opens it', () => {
