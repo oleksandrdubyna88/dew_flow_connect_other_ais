@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  cell, csvOf, ExportableRow, ExportRound, FINDING_COLUMNS, findingCells, line, ROUND_COLUMNS, roundCells,
+  cell, csvOf, ExportableRow, ExportRound, FINDING_COLUMNS, findingCells, readStateOf, ROUND_COLUMNS,
+  roundCells,
 } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
@@ -50,7 +51,7 @@ function row(over: Partial<LogRow> = {}): ExportableRow {
  */
 function round(
   over: Partial<LogRow> = {},
-  found: { state: string; findings: readonly ExportableRow[] } = { state: 'loaded', findings: [] },
+  found: ExportRound['found'] = { state: 'loaded', findings: [] },
 ): ExportRound {
   return { row: row(over), found };
 }
@@ -58,9 +59,9 @@ function round(
 /** The file, when it was written at all — a refusal is a failure of the test that expected one. */
 function written(rounds: readonly ExportRound[]): string {
   const built = csvOf(rounds);
-  assert.equal(typeof built, 'string', `expected a file, got a refusal: ${JSON.stringify(built)}`);
+  assert.equal('text' in built, true, `expected a file, got a refusal: ${JSON.stringify(built)}`);
 
-  return built as string;
+  return (built as { text: string }).text;
 }
 
 /** The file's lines, without the byte-order mark and without the trailing blank. */
@@ -272,7 +273,14 @@ test('a whole round of nothing but nonsense still writes one line of the right w
   const cells = roundCells({ key: 'k1' });
 
   assert.equal(cells.length, ROUND_COLUMNS.length);
-  assert.equal(line(cells), ','.repeat(ROUND_COLUMNS.length - 1));
+  // Every cell blank except `findings_read`, which is a fact about the READ rather than about the
+  // round's own data and defaults to the state the caller passed.
+  for (const [at, name] of ROUND_COLUMNS.entries()) {
+    if (name !== 'findings_read') {
+      assert.equal(cell(cells[at]), '', `${name} should be blank for a row of nonsense`);
+    }
+  }
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('findings_read')]), 'loaded');
 });
 
 test('a formula hiding behind a ZERO-WIDTH space is neutralised', () => {
@@ -328,30 +336,43 @@ test('a round that genuinely found nothing still gets one line, with empty findi
     'every finding column is blank, and the line is still the full width');
 });
 
-test('a round the database never heard of says NOT RECORDED, which is not the same as open', () => {
+test('a round the database never heard of says NOT RECORDED in its own column, not in decision', () => {
+  // `decision` has a vocabulary — took / declined / open — and a value outside it makes a
+  // downstream count of decided findings register one that does not exist. The read state is a
+  // ROUND-level fact and has a column of its own. (Plan round, codex and gemini.)
   const text = lines(written([round({}, { state: 'absent', findings: [] })]));
 
-  assert.match(text[1]!, /not recorded/);
-  assert.doesNotMatch(text[1]!, /,open,/, 'nobody has decided is a different fact from nobody wrote it down');
+  assert.match(text[1]!, /,not recorded,/, 'findings_read says it');
+  assert.equal(text[1]!.endsWith(','.repeat(FINDING_COLUMNS.length)), true,
+    'and every finding column, decision included, is blank');
 });
 
-test('a round whose findings could NOT be read refuses the whole file', () => {
-  // The lie this codebase has already paid for once: an empty list rendered as a clean round. A
-  // failed read must not become blank cells, and it must not become a file at all.
+test('when NOTHING could be read there is no file at all', () => {
+  // A file of nothing but failures has no content worth a save dialog.
   const built = csvOf([round({ key: 'k1' }, { state: 'failed', findings: [] })]);
 
-  assert.notEqual(typeof built, 'string', 'no file is built at all when a read failed');
+  assert.equal('refused' in built, true, 'no file is built when every round failed');
   assert.deepEqual((built as { refused: string[] }).refused, ['k1']);
 });
 
-test('the refusal names the rounds that could not be read', () => {
+test('one unreadable round among readable ones is MARKED, not silently dropped and not a refusal', () => {
+  // Refusing everything was the first shape, and the plan round said so from two directions: before
+  // selection controls exist it leaves somebody unable to export any of a log containing one bad
+  // round. The file is written, the bad round is in it saying `failed`, and the caller is told.
   const built = csvOf([
     round({ key: 'good' }, { state: 'loaded', findings: [finding()] }),
     round({ key: 'bad' }, { state: 'failed', findings: [] }),
   ]);
 
-  assert.notEqual(typeof built, 'string', 'one unreadable round refuses the whole file');
-  assert.deepEqual((built as { refused: string[] }).refused, ['bad']);
+  assert.equal('text' in built, true, 'the readable rounds are still written');
+  const written_ = built as { text: string; unread: string[] };
+  assert.deepEqual(written_.unread, ['bad'], 'and the caller learns which could not be read');
+
+  const rows = lines(written_.text);
+  assert.equal(rows.length, 3, 'a header, the good round, and the bad one');
+  assert.match(rows[2]!, /,failed,/, 'the bad round says so in findings_read');
+  assert.equal(rows[2]!.endsWith(','.repeat(FINDING_COLUMNS.length)), true,
+    'and its finding columns are blank rather than invented');
 });
 
 test('the decision column says the word the PAGE says', () => {
@@ -390,4 +411,48 @@ test('a finding title that is a formula is neutralised like every other cell', (
   const title = cell(cells[FINDING_COLUMNS.indexOf('title')]);
   assert.equal(/^"?'/.test(title), true, `the apostrophe is there, wrapped or not: ${title}`);
   assert.equal(/^"?=/.test(title), false, 'and it cannot open as a formula');
+});
+
+// ---------- the state is believed only if it is one of the three ----------
+
+test('an unknown state is FAILED, never quietly loaded', () => {
+  // A version mismatch or a typo — `load` for `loaded` — must not become a round that looks clean.
+  // Fail closed. (Plan round, codex.)
+  for (const state of ['load', 'LOADED', '', 'ok', undefined, null]) {
+    assert.equal(
+      readStateOf({ state, findings: [] } as unknown as ExportRound['found']), 'failed',
+      `state ${JSON.stringify(state)} must fail closed`);
+  }
+});
+
+test('a LOADED state whose findings are not an array is failed too', () => {
+  // A shape nobody intended, rendered as a round that found nothing, is the same lie by another
+  // route. (Plan round, local.)
+  for (const findings of [undefined, null, 'two', 42, {}]) {
+    assert.equal(
+      readStateOf({ state: 'loaded', findings } as unknown as ExportRound['found']), 'failed',
+      `findings ${JSON.stringify(findings)} must fail closed`);
+  }
+});
+
+test('the three real states pass through as themselves', () => {
+  assert.equal(readStateOf({ state: 'loaded', findings: [] }), 'loaded');
+  assert.equal(readStateOf({ state: 'absent', findings: [] }), 'absent');
+  assert.equal(readStateOf({ state: 'failed', findings: [] }), 'failed');
+  assert.equal(readStateOf(undefined), 'failed', 'and nothing at all is failed');
+});
+
+test('a round carries the session it belonged to, which the table never shows', () => {
+  // Round numbers restart per session, so two rounds numbered 1 on one branch are otherwise
+  // indistinguishable in a file somebody keeps for a year. (Plan round, local.)
+  const cells = roundCells(row({ dbKey: { sessionId: 'ba0c73a1', stage: 'CodeReview', number: 1 } }));
+
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('session_id')]), 'ba0c73a1');
+});
+
+test('a row with no usable dbKey leaves the session blank rather than throwing', () => {
+  for (const dbKey of [undefined, null, 'nope', 42, {}]) {
+    const cells = roundCells({ ...row(), dbKey });
+    assert.equal(cell(cells[ROUND_COLUMNS.indexOf('session_id')]), '');
+  }
 });

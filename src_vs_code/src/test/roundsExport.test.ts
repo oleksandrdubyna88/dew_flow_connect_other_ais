@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ExportPorts, exportRounds, oneAtATime, suggestedName } from '../roundsExport';
+import { ExportPorts, exportRounds, inBatches, oneAtATime, suggestedName } from '../roundsExport';
 import { ExportableRow, ExportRound } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
@@ -45,7 +45,7 @@ function row(over: Partial<LogRow> = {}): ExportableRow {
  */
 function round(
   over: Partial<LogRow> = {},
-  found: { state: string; findings: readonly ExportableRow[] } = { state: 'loaded', findings: [] },
+  found: ExportRound['found'] = { state: 'loaded', findings: [] },
 ): ExportRound {
   return { row: row(over), found };
 }
@@ -220,4 +220,55 @@ test('a run that REJECTS does not break the queue, and the next one still waits'
   await assert.rejects(() => first, /boom/);
   assert.equal(await second, 'written');
   assert.deepEqual(order, ['first', 'second'], 'the second still ran, and ran after the first');
+});
+
+// ---------- the reads are a child process each, so they go a few at a time ----------
+
+test('reads run four at a time, never all at once', async () => {
+  // A few hundred child processes started together exhausts handles, so rounds that were perfectly
+  // readable time out and the export fails on trouble it caused itself. Three reviewers raised it.
+  let running = 0;
+  let mostAtOnce = 0;
+  const items = Array.from({ length: 20 }, (_, at) => at);
+
+  const done = await inBatches(items, async (item) => {
+    running += 1;
+    mostAtOnce = Math.max(mostAtOnce, running);
+    await new Promise((ready) => setTimeout(ready, 1));
+    running -= 1;
+
+    return item * 2;
+  });
+
+  assert.equal(mostAtOnce, 4, 'four in flight at the peak');
+  assert.deepEqual(done, items.map((at) => at * 2), 'and the order is preserved');
+});
+
+test('an empty list of work is no batches and no error', async () => {
+  assert.deepEqual(await inBatches([], async (x) => x), []);
+});
+
+test('an export that could read only SOME rounds still writes, and says which it could not', async () => {
+  const port = ports();
+
+  const outcome = await exportRounds([
+    round({ key: 'good' }, { state: 'loaded', findings: [] }),
+    round({ key: 'bad' }, { state: 'failed', findings: [] }),
+  ], port);
+
+  assert.equal(outcome, 'written');
+  assert.match(port.said[0]!, /could not be read/);
+  assert.match(port.said[0]!, /bad/, 'and names them, so nobody reads those rows as clean');
+});
+
+test('an export where NOTHING could be read writes no file and opens no dialog', async () => {
+  let asked = false;
+  const port = ports({ pickPath: async () => { asked = true; return 'D:/out/rounds.csv'; } });
+
+  const outcome = await exportRounds([round({ key: 'bad' }, { state: 'failed', findings: [] })], port);
+
+  assert.equal(outcome, 'failed');
+  assert.equal(asked, false, 'the person is not asked for a path to a file that cannot be written');
+  assert.deepEqual(port.written, []);
+  assert.match(port.complained[0]!, /could not be read/);
 });

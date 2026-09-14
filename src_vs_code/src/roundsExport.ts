@@ -81,7 +81,8 @@ export async function exportRounds(
 
     return 'failed';
   }
-  if (typeof built !== 'string') {
+  // Nothing could be read at all, so there is nothing worth a save dialog.
+  if ('refused' in built) {
     ports.reportError(
       `The findings of ${counted(built.refused.length)} could not be read, so nothing was written. `
       + `Open ${built.refused.length === 1 ? 'that round' : 'those rounds'} in the log and try again: `
@@ -101,7 +102,7 @@ export async function exportRounds(
     if (path === undefined) {
       return 'cancelled';
     }
-    text = built;
+    text = built.text;
   } catch (reason: unknown) {
     ports.reportError(`The rounds could not be prepared for export: ${messageOf(reason)}`);
 
@@ -116,7 +117,13 @@ export async function exportRounds(
     return 'failed';
   }
 
-  ports.report(`${counted(rounds.length)} written to ${path}.`);
+  // Said plainly rather than buried: some rounds are in the file with blank finding columns and
+  // `findings_read = failed`, and a person who is not told that would read them as clean.
+  ports.report(built.unread.length === 0
+    ? `${counted(rounds.length)} written to ${path}.`
+    : `${counted(rounds.length)} written to ${path} — but the findings of `
+      + `${counted(built.unread.length)} could not be read, and those rows are marked `
+      + `"failed" rather than empty: ${built.unread.join(', ')}.`);
 
   return 'written';
 }
@@ -141,6 +148,34 @@ export function oneAtATime(): (run: () => Promise<ExportOutcome>) => Promise<Exp
 
     return mine;
   };
+}
+
+/**
+ * Run a job per item, a few at a time.
+ *
+ * <p>The reads behind an export are one CHILD PROCESS each. `Promise.all` over a selection starts
+ * every one of them at once, and a few hundred exhausts file handles or process slots — so rounds
+ * that were perfectly readable time out, and the export then refuses or hangs on failures it caused
+ * itself. Three reviewers raised it on the plan round, each from a different direction.</p>
+ *
+ * <p>Four at a time: enough that the reads overlap their process start-up, few enough that a big
+ * selection cannot exhaust anything. Order is preserved, because a file whose lines shuffle between
+ * exports is a file nobody can diff.</p>
+ */
+export async function inBatches<T, R>(
+  items: readonly T[],
+  each: (item: T) => Promise<R>,
+  atOnce = 4,
+): Promise<R[]> {
+  const done: R[] = [];
+  for (let at = 0; at < items.length; at += atOnce) {
+    // Sequential BETWEEN batches on purpose: this awaits inside a loop, which is usually a smell and
+    // is the point here.
+    // eslint-disable-next-line no-await-in-loop
+    done.push(...await Promise.all(items.slice(at, at + atOnce).map(each)));
+  }
+
+  return done;
 }
 
 /** "1 round" / "41 rounds" — a count nobody has to read twice. */
