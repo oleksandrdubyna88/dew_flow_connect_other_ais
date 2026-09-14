@@ -15,6 +15,7 @@ import {
   pinnable,
   promptsFrom,
   sessionFileIn,
+  severalMatch,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
@@ -406,6 +407,22 @@ test('what may be PINNED is exactly what the button would answer', () => {
   assert.strictEqual(pinnable([one('a.jsonl'), ambiguous]), false, 'a namesake elsewhere was pinned over');
   assert.strictEqual(pinnable([one('a.jsonl'), one('b.jsonl')]), false, 'two roots both matched and one was pinned');
   assert.strictEqual(pinnable([nothing]), false, 'nothing was pinned as something');
+
+  // AND ITS OTHER HALF: not pinnable is TWO situations — nothing was found, and too much was — and
+  // only the second is evidence that a saved conversation of this name belongs to a session in front
+  // of somebody. `chatGoto`'s name fallback leans on that and on nothing else.
+  //
+  // COUNTED OVER THE ANSWERS, never over the array: `findSession` returns one outcome per FOLDER and
+  // a single folder can answer `several`, so a length test reads false in a one-root workspace
+  // however many sessions share the name — which is where nearly everybody is, and where the
+  // fallback was consequently dead. (CodeRabbit, on the pull request.)
+  assert.strictEqual(severalMatch([ambiguous]), true,
+    'ONE folder holding several sessions of this name reads as though the name were unique — the case that shipped');
+  assert.strictEqual(severalMatch([nothing, ambiguous]), true, 'several in the second folder went unnoticed');
+  assert.strictEqual(severalMatch([one('a.jsonl'), one('b.jsonl')]), true, 'two roots matching one name each is still two');
+  assert.strictEqual(severalMatch([nothing, one('mine.jsonl')]), false, 'a single match anywhere was read as several');
+  assert.strictEqual(severalMatch([nothing]), false, 'nothing found was read as too much found');
+  assert.strictEqual(severalMatch([]), false, 'a walk that answered nothing at all was read as several');
   assert.strictEqual(pinnable([]), false, 'a window with no folder open pinned a file');
 });
 
