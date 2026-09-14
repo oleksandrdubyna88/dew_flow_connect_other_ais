@@ -952,7 +952,11 @@ async function runExport(
 
       return isRoundKey(key) ? key : undefined;
     });
-    const found = await panel.roundFindingsMany(keys.filter((key) => key !== undefined));
+    // The token goes with it. `readAndExport` asks `cancelled` again when the read returns, but a
+    // selection is ONE process now, so a cancel that did not reach the child would do nothing at all
+    // until that process finished. (Plan round, three reviewers.)
+    const found = await panel.roundFindingsMany(
+      keys.filter((key) => key !== undefined), extra.cancelled);
     let at = 0;
 
     return keys.map((key) => {

@@ -449,9 +449,19 @@ Two smaller observations, recorded and **not** acted on without being asked:
 - [ ] Free text survives a round trip through a spreadsheet, and a formula-shaped field cannot execute.
 - [ ] The **Took** column shows the analysis time and the deciding time, and shows one number for a
       round nobody has decided.
+- [ ] A bulk export is **one process against a server that has the batch mode** — not "one process
+      always". The old-server path is deliberately N processes, and that is the exception rather
+      than a failure of the goal: C2's plan round called an unscoped "one process, whatever N is"
+      a criterion the fallback could never satisfy, and it was right.
 - [ ] An older installed server degrades to today's behaviour on both new reads — and the batch mode
       is its own `args[0]`, so the degradation is triggered by exit **64** and never mistaken for a
       round that recorded nothing (exit 69).
+- [ ] **Exit 64 is the ONLY code that falls back.** A server that knows the mode answers a request it
+      cannot read with **65 (EX_DATAERR)**, so a malformed keys file fails the export instead of
+      quietly becoming five hundred spawns that report success.
+- [ ] Cancelling a bulk export **kills the child**, rather than stopping listening to it. One process
+      for the whole selection otherwise turns C1's "stops within four rounds" into "stops when the
+      process feels like it".
 - [ ] A round whose findings could not be READ is never written as a round that found nothing; the
       export says what failed instead of claiming success.
 - [ ] A cancelled save writes nothing and reports nothing; a failed write reports the failure and

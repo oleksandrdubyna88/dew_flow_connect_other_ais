@@ -114,32 +114,44 @@ public sealed class ABatchFindingsReadTests : IDisposable
         Program.Classify(["--findings"]).Should().Be(Program.Startup.Findings, "and the single-round read is untouched");
     }
 
+    /// <summary>
+    /// A server that KNOWS the mode never exits 64, whatever is wrong with the request.
+    /// </summary>
+    /// <remarks>
+    /// <para>The plan round found this, twice and independently. 64 is the client's signal to fall
+    /// back to one spawn per round, because that is what an OLD binary answers to an argument it has
+    /// never heard of. If this binary also answered 64 to a keys file it could not read, the client
+    /// would read a bad request as an old server, quietly start five hundred processes and report a
+    /// successful export — hiding the corruption behind the very path the fallback exists for.</para>
+    /// <para>So a malformed request is <b>65, EX_DATAERR</b>: the input was wrong, and the client
+    /// must fail the export rather than retry it a different way.</para>
+    /// </remarks>
     [Fact]
-    public void WithoutAKeysFile_ItIsAUsageError_NotAnEmptyAnswer()
+    public void WithoutAKeysFile_ItIsADataError_NotTheSignalThatMeansOldBinary()
     {
-        Program.FindingsManyJson(["--findings-many"]).Should().Be(64);
+        Program.FindingsManyJson(["--findings-many"]).Should().Be(65);
     }
 
     [Fact]
-    public void AKeysFileThatCannotBeReadOrParsed_IsAUsageError()
+    public void AKeysFileThatCannotBeReadOrParsed_IsADataError()
     {
         Program.FindingsManyJson(["--findings-many", "--keys-file", Path.Combine(_dir, "not-there.json")])
-            .Should().Be(64, "a missing file is the caller's mistake, not a database fault");
+            .Should().Be(65, "a missing file is the caller's mistake, and not a reason to retry per round");
 
         Directory.CreateDirectory(_dir);
         var broken = Path.Combine(_dir, "broken.json");
         File.WriteAllText(broken, "[{\"session\":");
-        Program.FindingsManyJson(["--findings-many", "--keys-file", broken]).Should().Be(64);
+        Program.FindingsManyJson(["--findings-many", "--keys-file", broken]).Should().Be(65);
     }
 
     [Fact]
-    public void AnEmptyKeysFile_IsAUsageError_BecauseNobodyAskedAboutAnything()
+    public void AnEmptyKeysFile_IsADataError_BecauseNobodyAskedAboutAnything()
     {
         Directory.CreateDirectory(_dir);
         var empty = Path.Combine(_dir, "empty.json");
         File.WriteAllText(empty, "[]");
 
-        Program.FindingsManyJson(["--findings-many", "--keys-file", empty]).Should().Be(64);
+        Program.FindingsManyJson(["--findings-many", "--keys-file", empty]).Should().Be(65);
     }
 
     [Fact]
@@ -151,8 +163,60 @@ public sealed class ABatchFindingsReadTests : IDisposable
             .Select(at => $"{{\"session\":\"s\",\"stage\":\"CodeReview\",\"number\":{at}}}");
         File.WriteAllText(many, "[" + string.Join(",", keys) + "]");
 
-        Program.FindingsManyJson(["--findings-many", "--keys-file", many]).Should().Be(64,
+        Program.FindingsManyJson(["--findings-many", "--keys-file", many]).Should().Be(65,
             $"the window itself holds at most {RoundsQuery.MaxLimit} rounds, so a bigger ask is about rounds nobody is holding");
+    }
+
+    /// <summary>
+    /// The happy path THROUGH the one-shot mode, so the JSON contract is exercised end to end.
+    /// </summary>
+    /// <remarks>
+    /// The server is Native-AOT: a DTO missing from <c>ServerJsonContext</c> is a RUNTIME failure,
+    /// not a compile error, and every other test here calls <c>FindingsOfMany</c> directly and would
+    /// stay green while the mode itself threw on serialization. The plan round's local reviewer
+    /// named exactly that gap. This reads what the mode actually writes to stdout.
+    /// </remarks>
+    [Fact]
+    public void TheModeWritesTheAnswerAsJson_WhichIsWhatTheAotContextMustCarry()
+    {
+        Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
+        try
+        {
+            using (var db = RoundsDb.Open(_dir, _log)!)
+            {
+                db.RecordRound(Session("s1"), Round("CodeReview", 1), [Found("the retry never gives up")]);
+            }
+            var asked = Path.Combine(_dir, "asked.json");
+            File.WriteAllText(asked, "[{\"session\":\"s1\",\"stage\":\"CodeReview\",\"number\":1},{\"session\":\"s9\",\"stage\":\"PlanReview\",\"number\":3}]");
+
+            var written = new StringWriter();
+            var was = Console.Out;
+            Console.SetOut(written);
+            int code;
+            try
+            {
+                code = Program.FindingsManyJson(["--findings-many", "--keys-file", asked]);
+            }
+            finally
+            {
+                Console.SetOut(was);
+            }
+
+            code.Should().Be(0);
+            using var answer = System.Text.Json.JsonDocument.Parse(written.ToString());
+            var rounds = answer.RootElement.GetProperty("rounds");
+            rounds.GetArrayLength().Should().Be(2, "one entry per round asked, in the order asked");
+            rounds[0].GetProperty("sessionId").GetString().Should().Be("s1");
+            rounds[0].GetProperty("known").GetBoolean().Should().BeTrue();
+            rounds[0].GetProperty("findings").GetArrayLength().Should().Be(1);
+            rounds[0].GetProperty("findings")[0].GetProperty("title").GetString().Should().Be("the retry never gives up");
+            rounds[1].GetProperty("sessionId").GetString().Should().Be("s9");
+            rounds[1].GetProperty("known").GetBoolean().Should().BeFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COAI_DATA_DIR", null);
+        }
     }
 
     public void Dispose()

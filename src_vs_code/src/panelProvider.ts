@@ -45,7 +45,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
+import { Found, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -434,12 +434,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the two stay separate because they answer different questions: one row wants the answer now, a
    * selection wants five hundred answers without five hundred processes.</p>
    */
-  async roundFindingsMany(keys: readonly RoundKey[]): Promise<readonly Found[]> {
+  async roundFindingsMany(keys: readonly RoundKey[], stop?: () => boolean): Promise<readonly Found[]> {
     const server = serverPath(this.context.globalStorageUri);
+    if (server === undefined) {
+      return keys.map(() => ({ state: 'failed' as const, findings: [] }));
+    }
 
-    return server === undefined
-      ? keys.map(() => ({ state: 'failed' as const, findings: [] }))
-      : readManyFindings(server.fsPath, keys);
+    // `stop` reaches the CHILD, which is the whole point: one process answers for the whole
+    // selection, so a cancel that only stopped listening would leave it reading the database while
+    // the person who cancelled watched nothing happen. It is handed to the per-round fallback too.
+    return readManyFindings(
+      server.fsPath,
+      keys,
+      (args, capMs) => capture(server.fsPath, [...args], false, capMs, stop),
+      keysFileIn(this.context.globalStorageUri.fsPath));
   }
 
   /**

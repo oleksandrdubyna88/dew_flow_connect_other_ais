@@ -62,6 +62,9 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
   return capture(target, args, shell, CAP_MS).then(({ code, output }) => (code === 0 ? parseCliVersion(output) : ''));
 }
 
+/** How often a cancellable read asks whether it has been given up on. */
+const STOP_POLL_MS = 200;
+
 /**
  * Everything a binary printed, or nothing at all.
  *
@@ -79,6 +82,19 @@ export function capture(
   args: readonly string[],
   shell: boolean,
   capMs: number,
+  /**
+   * Asked repeatedly while the child runs: true means stop waiting and KILL it.
+   *
+   * <p>Added for the batch findings read, where one process answers for a whole selection. Without
+   * it a person who cancels an export waits for a child they have already given up on — the cap is
+   * a ceiling on a child that has stopped answering, not on one that is working exactly as asked.
+   * Three reviewers of that story named it, and it is a regression against the per-round path,
+   * which could stop between batches.</p>
+   *
+   * <p>Polled rather than driven by a signal because the callers hold a VS Code cancellation token,
+   * which is a question rather than an event source at this boundary.</p>
+   */
+  stop?: () => boolean,
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
     const child = launch(target, args, { shell });
@@ -91,8 +107,19 @@ export function capture(
       }
       answered = true;
       clearTimeout(timer);
+      clearInterval(watch);
       resolve({ code, output: text });
     };
+
+    // `undefined` rather than an interval that asks a question nobody wants answered: a probe with
+    // no way to be cancelled must not pay for a timer every 200 ms for its whole life.
+    const watch = stop === undefined ? undefined : setInterval(() => {
+      if (stop()) {
+        // The same teardown the cap performs, for the same reason: the tree has to go.
+        child.kill();
+        answer(-1, '');
+      }
+    }, STOP_POLL_MS);
 
     const timer = setTimeout(() => {
       // `child.kill()` reaches `cmd.exe` and NOT what the shim started under it, so a shell probe

@@ -230,20 +230,41 @@ function found(answered: readonly ManyFound[], key: RoundKey): Found {
   return mine.known ? { state: 'loaded', findings: mine.findings } : { state: 'absent', findings: [] };
 }
 
-/** The real keys file: written where the OS puts temporary things, and removed either way. */
-const keysFile: WithKeysFile = async (json, use) => {
-  const fs = await import('node:fs/promises');
-  const os = await import('node:os');
-  const path = await import('node:path');
-  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-keys-'));
-  const file = path.join(folder, 'rounds.json');
-  try {
-    await fs.writeFile(file, json, 'utf8');
+/**
+ * The real keys file, written in a folder the CALLER names.
+ *
+ * <p><b>One fixed name per process, deliberately.</b> It began as `mkdtemp`, which is a NEW directory
+ * every export — and the plan round was right that a host killed mid-export leaks it. In this
+ * product that is not a tidiness point: `%TEMP%` on a working machine here holds a hundred thousand
+ * entries, the server enumerates it, and the class of defect is already documented. One name per
+ * process id means a leak is ONE file that the next export of that process overwrites, rather than
+ * a pile that grows with every cancelled export. Nothing concurrent can collide on it: exports are
+ * serialised by `exportQueue`, and a second VS Code window is a second process id.</p>
+ *
+ * <p>The panel hands it the extension's own storage directory rather than the machine's temp root,
+ * so the file lands somewhere VS Code owns and cleans up with the extension.</p>
+ */
+export function keysFileIn(folder: string): WithKeysFile {
+  return async (json, use) => {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const file = path.join(folder, `export-keys-${process.pid}.json`);
+    try {
+      await fs.mkdir(folder, { recursive: true });
+      await fs.writeFile(file, json, 'utf8');
 
-    return await use(file);
-  } finally {
-    await fs.rm(folder, { recursive: true, force: true }).catch(() => undefined);
-  }
+      return await use(file);
+    } finally {
+      await fs.rm(file, { force: true }).catch(() => undefined);
+    }
+  };
+}
+
+/** Where the keys go when nobody said: the machine's temp root, still one file per process. */
+const keysFile: WithKeysFile = async (json, use) => {
+  const os = await import('node:os');
+
+  return keysFileIn(os.tmpdir())(json, use);
 };
 
 /** The real spawn. Injectable above it, so every branch of both readers is a unit test. */

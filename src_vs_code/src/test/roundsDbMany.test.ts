@@ -12,10 +12,19 @@ import { Found, manyCapMs, readManyFindings, RoundKey, Run, WithKeysFile } from 
  * code — 64, `unknown argument` — means "this server is older than the mode" and falls back.</p>
  */
 
+/**
+ * Three rounds that differ from each other in exactly ONE field at a time.
+ *
+ * <p>The plan round caught this: the first version of these keys differed in both stage AND number,
+ * so a client matching on session+number alone — or on session+stage alone — would still have told
+ * them apart, and the reordering test below would have passed while the key was incomplete. Now the
+ * first two share a session and a number and differ only in STAGE, and the second and third share a
+ * session and a stage and differ only in NUMBER. Nothing but the whole tuple separates them.</p>
+ */
 const KEYS: readonly RoundKey[] = [
   { sessionId: 's1', stage: 'PlanReview', number: 1 },
+  { sessionId: 's1', stage: 'CodeReview', number: 1 },
   { sessionId: 's1', stage: 'CodeReview', number: 2 },
-  { sessionId: 's2', stage: 'CodeReview', number: 1 },
 ];
 
 /** Records every spawn and every keys file, and answers whatever the test lined up. */
@@ -59,8 +68,8 @@ function answer(rounds: readonly unknown[]): string {
 
 const ALL_THREE = answer([
   { sessionId: 's1', stage: 'PlanReview', number: 1, known: true, findings: [{ ordinal: 0, title: 'one' }] },
-  { sessionId: 's1', stage: 'CodeReview', number: 2, known: true, findings: [] },
-  { sessionId: 's2', stage: 'CodeReview', number: 1, known: false, findings: [] },
+  { sessionId: 's1', stage: 'CodeReview', number: 1, known: true, findings: [] },
+  { sessionId: 's1', stage: 'CodeReview', number: 2, known: false, findings: [] },
 ]);
 
 function states(found: readonly Found[]): string[] {
@@ -76,8 +85,8 @@ test('a selection of any size is ONE spawn, and the keys travel in a file', asyn
   assert.deepEqual(seen[0], ['--findings-many', '--keys-file', '/tmp/keys.json']);
   assert.deepEqual(JSON.parse(wrote[0] ?? ''), [
     { session: 's1', stage: 'PlanReview', number: 1 },
+    { session: 's1', stage: 'CodeReview', number: 1 },
     { session: 's1', stage: 'CodeReview', number: 2 },
-    { session: 's2', stage: 'CodeReview', number: 1 },
   ]);
   assert.deepEqual(removed, ['/tmp/keys.json'], 'the keys file is taken away again');
   assert.deepEqual(states(found), ['loaded', 'loaded', 'absent']);
@@ -100,8 +109,8 @@ test('answers are matched BY KEY, so a reordered reply cannot attach findings to
   const { run, keysFile } = calls({
     code: 0,
     output: answer([
-      { sessionId: 's2', stage: 'CodeReview', number: 1, known: true, findings: [{ ordinal: 0, title: 'third' }] },
-      { sessionId: 's1', stage: 'CodeReview', number: 2, known: true, findings: [{ ordinal: 0, title: 'second' }] },
+      { sessionId: 's1', stage: 'CodeReview', number: 2, known: true, findings: [{ ordinal: 0, title: 'third' }] },
+      { sessionId: 's1', stage: 'CodeReview', number: 1, known: true, findings: [{ ordinal: 0, title: 'second' }] },
       { sessionId: 's1', stage: 'PlanReview', number: 1, known: true, findings: [{ ordinal: 0, title: 'first' }] },
     ]),
   });
@@ -116,7 +125,7 @@ test('a round the answer never mentions is FAILED, and never a round that found 
     code: 0,
     output: answer([
       { sessionId: 's1', stage: 'PlanReview', number: 1, known: true, findings: [] },
-      { sessionId: 's2', stage: 'CodeReview', number: 1, known: true, findings: [] },
+      { sessionId: 's1', stage: 'CodeReview', number: 2, known: true, findings: [] },
     ]),
   });
 
@@ -147,6 +156,17 @@ test('exit 69 does NOT fall back — it comes from a server that knows the mode'
   const found = await readManyFindings('coai.exe', KEYS, run, keysFile);
 
   assert.equal(seen.length, 1, 'a real failure must not become five hundred spawns failing the same way');
+  assert.deepEqual(states(found), ['failed', 'failed', 'failed']);
+});
+
+test('a request this server refused (65) is NOT read as an old server, and is not retried', async () => {
+  const { run, seen, keysFile } = calls({ code: 65, output: '' });
+
+  const found = await readManyFindings('coai.exe', KEYS, run, keysFile);
+
+  assert.equal(seen.length, 1,
+    'EX_DATAERR comes from a binary that knows the mode: falling back would hide a bad request '
+    + 'behind five hundred spawns and report a successful export');
   assert.deepEqual(states(found), ['failed', 'failed', 'failed']);
 });
 
