@@ -504,3 +504,25 @@ test('a selected round that LEAVES the loaded set is dropped from the selection'
   assert.match(page.at('exportpicked').textContent, /Export 1 selected/,
     'the round that left is no longer counted');
 });
+
+test('a selection reaching past the filter can be cleared in one gesture', () => {
+  // Unticking the header box clears only the rows it would tick, so somebody who picked a hundred,
+  // filtered to ten and unticked would be left with ninety they cannot see and no way to drop them.
+  // (Plan round, gemini.)
+  const page = open([row({ key: 'k1' }), row({ key: 'k2' })]);
+
+  page.click(hitNested({ '[data-pick]': 'k1' }));
+  page.click(hitNested({ '[data-pick]': 'k2' }));
+  assert.equal(page.at('clearpicked').hidden, false, 'the way out appears once there is something to clear');
+
+  page.at('clearpicked').heard['click']?.();
+
+  assert.equal(page.at('exportpicked').disabled, true, 'nothing is selected any more');
+  assert.equal(page.at('clearpicked').hidden, true, 'and the control goes away with the selection');
+});
+
+test('the clear control is hidden while nothing is selected', () => {
+  const page = open([row({ key: 'k1' })]);
+
+  assert.equal(page.at('clearpicked').hidden, true);
+});

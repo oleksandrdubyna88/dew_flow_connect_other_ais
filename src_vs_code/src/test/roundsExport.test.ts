@@ -233,7 +233,7 @@ test('reads run four at a time, never all at once', async () => {
   let mostAtOnce = 0;
   const items = Array.from({ length: 20 }, (_, at) => at);
 
-  const done = await inBatches(items, async (item) => {
+  const batched = await inBatches(items, async (item) => {
     running += 1;
     mostAtOnce = Math.max(mostAtOnce, running);
     await new Promise((ready) => setTimeout(ready, 1));
@@ -241,13 +241,14 @@ test('reads run four at a time, never all at once', async () => {
 
     return item * 2;
   }, () => -1);
+  const done = batched.results;
 
   assert.equal(mostAtOnce, 4, 'four in flight at the peak');
   assert.deepEqual(done, items.map((at) => at * 2), 'and the order is preserved');
 });
 
 test('an empty list of work is no batches and no error', async () => {
-  assert.deepEqual(await inBatches([], async (x) => x, () => 0), []);
+  assert.deepEqual((await inBatches([], async (x) => x, () => 0)).results, []);
 });
 
 test('an export that could read only SOME rounds still writes, and says which it could not', async () => {
@@ -279,7 +280,7 @@ test('one job rejecting does not abort its batch or the ones after it', async ()
   // `Promise.all` rejects at the first failure and leaves its siblings running with nobody awaiting
   // them. This is a generic helper and its next caller will not know that, so every item answers
   // for itself. (Code round, gemini, twice.)
-  const done = await inBatches(
+  const { results: done } = await inBatches(
     [1, 2, 3, 4, 5, 6],
     async (item) => {
       if (item % 2 === 0) {
@@ -298,7 +299,7 @@ test('one job rejecting does not abort its batch or the ones after it', async ()
 test('a batch size that could never advance the loop does not hang', async () => {
   // Zero or a negative would never move the index and the export would look permanently stuck.
   for (const atOnce of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
-    assert.deepEqual(await inBatches([1, 2], async (x) => x * 10, () => 0, atOnce), [10, 20],
+    assert.deepEqual((await inBatches([1, 2], async (x) => x * 10, () => 0, atOnce)).results, [10, 20],
       `atOnce=${atOnce} must still finish`);
   }
 });
@@ -416,4 +417,28 @@ test('a selection at or under the cap is not confirmed', async () => {
     port);
 
   assert.equal(asked, false);
+});
+
+test('a cancelled batch says so as a VALUE, so it cannot be read as a complete one', () => {
+  // The first shape returned the results read so far and left the caller to ask the token again.
+  // A caller that forgets writes a truncated file and reports success. (Plan round, two vendors.)
+  let stop = false;
+
+  return inBatches(
+    [1, 2, 3, 4, 5, 6, 7, 8],
+    async (item) => { stop = true; return item; },
+    () => 0,
+    2,
+    () => stop,
+  ).then((batched) => {
+    assert.equal(batched.done, false, 'the run did not finish, and says so');
+    assert.ok(batched.results.length < 8, 'and it carries only what it read');
+  });
+});
+
+test('a batch that finishes says done, whatever the stop callback answers afterwards', async () => {
+  const batched = await inBatches([1, 2], async (x) => x, () => 0, 2, () => false);
+
+  assert.equal(batched.done, true);
+  assert.deepEqual(batched.results, [1, 2]);
 });

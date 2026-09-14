@@ -202,13 +202,15 @@ export async function readAndExport(
     // process mid-read would leave the database connection to be cleaned up by the OS.
     ports.cancelled);
 
-  if (ports.cancelled?.() === true) {
+  if (!rounds.done) {
     // Nothing is written and nothing is reported: the person stopped it, and telling them they
-    // stopped it is noise. Same reasoning as a dismissed save dialog.
+    // stopped it is noise — the same answer a dismissed save dialog gets. The READS are discarded
+    // with it; a file of the rounds that happened to finish would look like a log of the selection
+    // and silently not be one.
     return 'cancelled';
   }
 
-  return exportRounds(rounds, ports, today);
+  return exportRounds(rounds.results, ports, today);
 }
 
 /**
@@ -245,22 +247,34 @@ export function oneAtATime(): (run: () => Promise<ExportOutcome>) => Promise<Exp
  * selection cannot exhaust anything. Order is preserved, because a file whose lines shuffle between
  * exports is a file nobody can diff.</p>
  */
+export interface Batched<R> {
+  /**
+   * Whether the work FINISHED, said as a value rather than left to be inferred.
+   *
+   * <p>The first shape returned the results read so far and left the caller to ask the cancellation
+   * token again. Two reviewers called that Blocking and they were right: a caller that forgets the
+   * second question writes a truncated file and reports success, which is the exact class of defect
+   * this plan exists to remove. A cancelled run cannot be mistaken for a complete one now, because
+   * the two are different values.</p>
+   */
+  readonly done: boolean;
+  readonly results: readonly R[];
+}
+
 export async function inBatches<T, R>(
   items: readonly T[],
   each: (item: T) => Promise<R>,
   onFailure: (item: T, reason: unknown) => R,
   atOnce = 4,
   stop?: () => boolean,
-): Promise<R[]> {
+): Promise<Batched<R>> {
   // A batch size that cannot advance the loop would hang for ever and look like a stuck export.
   // (Code round, codex.)
   const step = Number.isFinite(atOnce) && atOnce >= 1 ? Math.floor(atOnce) : 1;
   const done: R[] = [];
   for (let at = 0; at < items.length; at += step) {
     if (stop?.() === true) {
-      // What has been read is returned rather than thrown away: the caller decides what a partial
-      // read means, and for an export it means nothing is written.
-      return done;
+      return { done: false, results: done };
     }
     const batch = items.slice(at, at + step);
     // ONE job's rejection must not abort the batch and leave its siblings running with nobody
@@ -280,7 +294,7 @@ export async function inBatches<T, R>(
     }
   }
 
-  return done;
+  return { done: true, results: done };
 }
 
 /** "1 round" / "41 rounds" — a count nobody has to read twice. */
