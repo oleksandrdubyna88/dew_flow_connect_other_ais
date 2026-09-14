@@ -33,10 +33,10 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
             Serilog.Core.Logger.None);
 
     private static ProviderSettings Remote(string id, string server) =>
-        new(id) { Enabled = true, Runtime = "remote", RemoteVendor = "codex", BaseUrl = server, Document = true };
+        new(id) { Enabled = true, Runtime = "remote", RemoteVendor = "codex", BaseUrl = server, Documents = DocumentReviews.Yes };
 
     private static ProviderSettings Local(string id = "local") =>
-        new(id) { Enabled = true, Runtime = "local", Model = "qwen", Document = true };
+        new(id) { Enabled = true, Runtime = "local", Model = "qwen", Documents = DocumentReviews.Yes };
 
     [Fact]
     public void ADocumentRoundCarriedByATeamServer_NamesIt()
@@ -45,6 +45,25 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
             .WhereTheDocumentWent(Stage.DocumentReview, ["local", "team-codex"]);
 
         said.Should().Contain(One).And.Contain("shared subscription");
+    }
+
+    /// <summary>
+    /// It is a SECOND statement, and it starts on its own line.
+    /// </summary>
+    /// <remarks>
+    /// The clause is appended to the reviewer count, which is a sentence of its own; joined by a
+    /// space the two read as one run-on, and a client rendering that field compactly gets a server
+    /// URL glued to the last reviewer's name. (gemini, the code round.)
+    /// </remarks>
+    [Fact]
+    public void TheClauseBeginsOnItsOwnLine()
+    {
+        var said = Service(Remote("team-codex", One))
+            .WhereTheDocumentWent(Stage.DocumentReview, ["team-codex"]);
+
+        said.Should().StartWith(Environment.NewLine);
+        said.TrimStart('\r', '\n').Should()
+            .StartWith("The document", "one separator, not a separator and a space");
     }
 
     /// <summary>Two servers are two facts, and one of them being named is the other being hidden.</summary>

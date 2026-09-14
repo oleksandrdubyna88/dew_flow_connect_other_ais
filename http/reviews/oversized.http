@@ -1,0 +1,61 @@
+# The prompt bound, over real HTTP.
+#
+# The server refuses a prompt past `ReviewEndpoints.MaxPromptBytes` with a 400 and a sentence naming
+# both numbers. Its own file because the payload has to be BUILT — three megabytes written out in a
+# request file is not a request file anybody can read, and the number it is built from has to be one
+# number rather than a literal repeated per case.
+#
+# Above this bound sits a second one. `Kestrel.Limits.MaxRequestBodySize` refuses a whole body
+# without reading it, and nginx refuses a larger one still with an HTML page nothing here can turn
+# into a sentence. That ladder is asserted where its three numbers live — `APromptHasABoundHereTests`
+# reads the real `deploy/nginx/coai` — because neither of those two refusals is the application's and
+# neither produces a body this suite could check.
+
+# @name a_prompt_one_byte_past_the_bound_is_refused_with_both_numbers
+{{
+  // 3 MiB, the same arithmetic as ReviewEndpoints.MaxPromptBytes. One byte over is the case: at the
+  // bound exactly it is accepted, which is the request below.
+  exports.maxPromptBytes = 3 * 1024 * 1024;
+  exports.tooLong = 'x'.repeat(exports.maxPromptBytes + 1);
+}}
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "{{tooLong}}", "role": "Architecture" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it names the size that was sent and the limit that was met', () => {
+    // Both numbers, formatted with separators as every other refusal here is. A refusal that says
+    // only "too large" leaves somebody guessing how much to cut.
+    assert.match(response.parsedBody.error, /3,145,729/, 'the size actually sent');
+    assert.match(response.parsedBody.error, /3,145,728/, 'and the limit');
+  });
+  test('and it says what the limit is about, since it is not the model context', () => {
+    assert.match(response.parsedBody.error, /memory|in parts/i);
+  });
+}}
+
+###
+
+# @name a_prompt_AT_the_bound_is_accepted
+{{
+  exports.atTheBound = 'x'.repeat(3 * 1024 * 1024);
+}}
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "{{atTheBound}}", "role": "Architecture" }
+
+?? status == 202
+
+{{
+  const assert = require('node:assert');
+  test('the bound is the largest prompt that works, not the smallest that fails', () => {
+    assert.ok(response.parsedBody.id);
+  });
+}}

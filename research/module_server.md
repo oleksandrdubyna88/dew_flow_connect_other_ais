@@ -1596,7 +1596,7 @@ them to run another review.
 
 ## A document reaches a Team server (2026-09-14)
 
-Plan 5, [PLAN_team_server_reviews_documents.md](../todo/PLAN_team_server_reviews_documents.md). The server
+Plan 5, [PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md). The server
 half of this needed no code at all and that is the finding it starts from: `AcceptedRoles.From` seeds
 itself from `RoleCatalog.Builtin.Roles`, which has carried the two document roles since plan 4, so
 the day the box is next deployed it starts accepting them — with nobody having written a line and
@@ -1611,9 +1611,12 @@ silence. `StageRun.ServedByPlanSwitch` and `BuildWork`'s parameter went with it;
 stayed its own flag, because a CODE round with `CodeWorkspace: none` reads no checkout either and
 plan 4 split those two apart for exactly that reason.
 
-**`Document` is nullable, and its absent value is not one answer.** For a vendor this machine runs,
-absent is the plan tick — plan 4's reading, and nothing leaves the laptop. For a Team server absent
-is NO. The first draft wrote `Document ?? Plan` everywhere and the plan round refused it as Blocking:
+**`Documents` has three NAMED states, and the absent one is not one answer.** It began as a `bool?`
+and the code round refused that: coding-style forbids null in business logic, and this decides
+routing — a rule whose most interesting case had no name. `DocumentReviews.Unspecified | Yes | No`
+is the type, mapped from the nullable at the DTO boundary where a missing JSON field legitimately is
+one. For a vendor this machine runs, `Unspecified` is the plan tick — plan 4's reading, and nothing
+leaves the laptop. For a Team server it is NO. The first draft wrote `Document ?? Plan` everywhere and the plan round refused it as Blocking:
 that grants permission for a document to leave the machine retroactively, on every configuration
 written before documents existed, from a tick that meant "this vendor is good at prose". It also
 removes the silent activation above — a redeploy of the box alone can no longer start carrying
@@ -1626,7 +1629,9 @@ servers. Built from the assembled work and never from the settings: a server can
 ticked, and still carry nothing — no credential, a role it does not run, a deal that fell elsewhere —
 and telling somebody their document reached a box it never reached is worse than silence, because it
 is the one claim there they cannot check. Silent on every other stage: a diff going to a Team server
-is what a Team server is.
+is what a Team server is. It begins on its own LINE rather than after a space: the reviewer count is
+a sentence and this is a second one, and joined by a space a client rendering the field compactly
+gets a server URL glued to the last reviewer's name.
 
 ## PanelService is being taken apart (2026-09-13)
 

@@ -378,6 +378,22 @@ export function reviewsDocuments(vendor: Vendor): boolean {
 }
 
 /**
+ * What a vendor was told about documents, as a word rather than an absence.
+ *
+ * <p>`coai-mcp` names these three states `DocumentReviews.Unspecified | Yes | No` — a routing rule
+ * reading a null is what the C# doctrine forbids, and a decision about whether a file leaves the
+ * machine deserves a name for its most interesting case. Here the stored field stays
+ * `boolean | undefined` because that IS the wire format: `coai.vendors` is JSON a person edits, the
+ * settings block carries it verbatim, and inventing a third spelling for this side would be a second
+ * schema to keep level. This function is the name, for reading and for tests.</p>
+ */
+export type DocumentSetting = 'unspecified' | 'yes' | 'no';
+
+export function documentSetting(vendor: Vendor): DocumentSetting {
+  return vendor.document === undefined ? 'unspecified' : vendor.document ? 'yes' : 'no';
+}
+
+/**
  * The `document` value to write ALONGSIDE a change to another stage box.
  *
  * <p>Empty unless this vendor's document switch is still absent and the box being changed is the
