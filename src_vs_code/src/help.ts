@@ -57,7 +57,8 @@ export const HELP = {
     + 'work. On a Team server this is the box that decides whether the document leaves this machine: '
     + 'it is sent to your company server and reviewed there on the shared subscription, so it is off '
     + 'until you turn it on, whatever the other two boxes say. On a reviewer that runs here it '
-    + 'follows the plan box until you touch either of them.',
+    + 'follows the plan box until you change either of those two, at which point it keeps what it '
+    + 'had.',
   vendorEnabled:
     'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:

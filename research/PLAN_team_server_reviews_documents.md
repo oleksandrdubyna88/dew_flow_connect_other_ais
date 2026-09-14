@@ -1,7 +1,10 @@
 # PLAN — a document reaches a Team server (5 of 5)
 
-> Status: **IMPLEMENTED, 2026-09-14.** Shipped as one unit, the last plan of the user-definable
-> roles feature. Scope: `src_server` (a bound on the prompt it accepts), `src_mcp` (which vendor
+> Status: **IMPLEMENTED, 2026-09-14.** Built as one unit, the last plan of the user-definable
+> roles feature. *Implemented*, not deployed: the Team server's deploy is manual
+> (`workflow_dispatch`), so the box carries this the day somebody presses the button and not
+> before — which is the skew this plan is largely about, and a status line claiming otherwise
+> would be the first thing wrong with it. (CodeRabbit, on the pull request.) Scope: `src_server` (a bound on the prompt it accepts), `src_mcp` (which vendor
 > switch serves a document round, and a sentence saying where the document went), `src_vs_code`
 > (that switch on the vendor card), `http/` (the contract request for the new refusal), and the
 > tests and docs for all of it.

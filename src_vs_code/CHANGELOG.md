@@ -26,9 +26,9 @@ the plan box, because that was the nearest thing to a switch there was.
 this machine.** Ticking *reviews plans* meant "this vendor is good at prose"; it never meant "this
 file may go to the shared box", and a document you were handed is not a diff of a repository the
 company already has. So it is off until you turn it on, whatever the other two boxes say. A reviewer
-that runs on your own machine follows the plan box exactly as before, and touching either box writes
-down what the document one was silently meaning — so unticking *reviews plans* later never changes
-where your documents go behind your back.
+that runs on your own machine follows the plan box exactly as before — and the moment you change
+*reviews plans*, what the document box was silently meaning is written down, so unticking it later
+never changes where your documents go behind your back.
 
 When a round does send one, it says so: the reply names the server it went to.
 

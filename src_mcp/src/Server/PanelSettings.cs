@@ -51,8 +51,9 @@ public sealed record ProviderSettings(string Provider)
     /// local document round that works today. Absence arrives as a nullable at the DTO boundary,
     /// where a missing JSON field legitimately is one, and is given its name there. (codex, plan 5's
     /// code round.)</para>
-    /// <para>The extension writes an explicit value the moment anybody touches either stage box, so
-    /// <c>Unspecified</c> is a migration reading rather than a state a person can sit in unawares.</para>
+    /// <para>The extension writes an explicit value the moment anybody changes the PLAN box — the
+    /// only other switch this state is read from — so <c>Unspecified</c> is a migration reading rather
+    /// than a state a person can sit in unawares while the thing it defers to moves under them.</para>
     /// </remarks>
     public DocumentReviews Documents { get; init; } = DocumentReviews.Unspecified;
 

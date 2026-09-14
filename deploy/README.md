@@ -249,8 +249,14 @@ leaves the rest out of a round rather than sending one it will refuse.
 So after deploying a release that adds a role, check that this box knows it. The document roles
 arrived in plan 4 and are the current example:
 
+The token reaches `curl` through a `600` config file and never through `-H`, for the reason this
+README gives above: a value on the command line is in the process table for every account on the box.
+It is the same three lines `systemd-release.sh` uses for the canary.
+
 ```bash
-curl -sS -H "Authorization: Bearer $TOKEN" https://coai.remsoft.dev/api/catalog | jq .roles
+cfg=$(mktemp); chmod 600 "$cfg"; trap 'rm -f "$cfg"' EXIT
+printf 'header = "Authorization: Bearer %s"\n' "$(tr -d '\r\n' < "$COAI_TOKEN_FILE")" >"$cfg"
+curl -sS -K "$cfg" https://coai.remsoft.dev/api/catalog | jq .roles
 # ... "DocumentReview", "DocumentSummary" ...
 ```
 
