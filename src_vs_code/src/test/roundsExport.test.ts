@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ExportPorts, exportRounds, oneAtATime, suggestedName } from '../roundsExport';
+import { ExportableRow } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
 /**
@@ -11,8 +12,15 @@ import { LogRow } from '../roundsLog';
  * is told a file was written that is not there.</p>
  */
 
-function row(over: Partial<LogRow> = {}): LogRow {
-  return {
+/**
+ * A row as the page sends it.
+ *
+ * <p>Built as a `LogRow` first and handed out as an `ExportableRow`: the compiler still checks the
+ * real shape, so adding a field to `LogRow` is a red build here, while the value handed to the CSV
+ * writer has the same untyped shape a webview message actually has.</p>
+ */
+function row(over: Partial<LogRow> = {}): ExportableRow {
+  const typed: LogRow = {
     key: 'k1', kind: 'review',
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
@@ -25,6 +33,8 @@ function row(over: Partial<LogRow> = {}): LogRow {
     dbKey: { sessionId: 's1', stage: 'CodeReview', number: 1 },
     ...over,
   };
+
+  return { ...typed };
 }
 
 /** The host's three jobs, recorded rather than done. */
@@ -114,8 +124,8 @@ test('an empty selection opens no dialog at all', async () => {
 test('the suggested name carries the day and, for a bulk export, the count', () => {
   const day = new Date(2026, 8, 14);
 
-  assert.equal(suggestedName([row()], day), 'coai-round-2026-09-14.csv');
-  assert.equal(suggestedName([row(), row()], day), 'coai-rounds-2026-09-14-2.csv');
+  assert.equal(suggestedName(1, day), 'coai-round-2026-09-14.csv');
+  assert.equal(suggestedName(2, day), 'coai-rounds-2026-09-14-2.csv');
 });
 
 test('what is written is the CSV of exactly those rounds', async () => {
@@ -177,4 +187,24 @@ test('a failed export does not break the queue for the next one', async () => {
 
   assert.equal(first, 'failed');
   assert.equal(second, 'written', 'one failure must not poison every later export');
+});
+
+test('a run that REJECTS does not break the queue, and the next one still waits', async () => {
+  // Two reviewers read `queue = mine.catch(() => undefined)` as setting the queue to `undefined`.
+  // It does not: `.catch()` answers a PROMISE that resolves to undefined, so the chain survives.
+  // `exportRounds` never rejects — it reports and returns an outcome — so this exercises the case
+  // through the queue directly, which is the only way to reach it at all.
+  const queue = oneAtATime();
+  const order: string[] = [];
+
+  const first = queue(async () => { order.push('first'); throw new Error('boom'); });
+  const second = queue(async () => {
+    order.push('second');
+
+    return 'written' as const;
+  });
+
+  await assert.rejects(() => first, /boom/);
+  assert.equal(await second, 'written');
+  assert.deepEqual(order, ['first', 'second'], 'the second still ran, and ran after the first');
 });

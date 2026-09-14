@@ -106,7 +106,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // that genuinely need the editor — the dialog, the write, and the two ways of saying what
     // happened. The in-flight state is the notification itself, so there is nothing to leave stuck.
     onExport: async (rows) => {
-      await exportQueue(() => exportRounds(rows as unknown as readonly LogRow[], {
+      await exportQueue(() => exportRounds(rows, {
         pickPath: async (name) => (await vscode.window.showSaveDialog({
           defaultUri: vscode.Uri.file(name),
           filters: { 'Comma-separated values': ['csv'] },

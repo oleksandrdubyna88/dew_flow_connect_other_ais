@@ -1,4 +1,3 @@
-import type { LogRow } from './roundsLog';
 
 /**
  * A round, as a line of a file somebody keeps.
@@ -36,7 +35,7 @@ const BOM = '﻿';
  * on the plan round. A leading newline does the same thing — `"\n=HYPERLINK(…)"` — which is why the
  * skipped class covers the control characters as well as spaces.</p>
  */
-const FORMULA = /^[\s\u0000-\u001f\u00a0\ufeff]*[=+\-@]/;
+const FORMULA = /^[\s\u0000-\u001f\u00a0\u200b-\u200d\u2060\ufeff]*[=+\-@|%]/;
 
 /** A cell BEGINNING with a control character is quoted as text whatever follows it. */
 const LEADING_CONTROL = /^[\u0000-\u001f]/;
@@ -131,11 +130,39 @@ function exporterLocalTime(iso: string): string {
   return `${at.toLocaleString()} (UTC${minutes < 0 ? '-' : '+'}${pad(minutes / 60)}:${pad(minutes % 60)})`;
 }
 
+/**
+ * A round as it ARRIVES — over the webview bridge, believed only as far as its key.
+ *
+ * <p>Deliberately not `LogRow`. The host used to take the page's rows and cast them
+ * `as unknown as readonly LogRow[]`, which is the cast this repository forbids in fixtures, doing
+ * the same damage in production: it told the compiler to stop checking a value that came off a
+ * bridge. A field that turned out to be missing or the wrong shape then reached `.join` and threw,
+ * failing an export over one bad row. (Code round, gemini, three findings.)</p>
+ */
+export interface ExportableRow {
+  readonly [field: string]: unknown;
+}
+
+/** The reviewer lines, when that is what they are. */
+function joined(value: unknown): string {
+  return Array.isArray(value) ? value.filter((one) => typeof one === 'string').join('; ') : '';
+}
+
+/** A decision count, from a `decided` that may be anything at all. */
+function decidedCount(decided: unknown, which: 'accepted' | 'rejected'): number | null {
+  if (typeof decided !== 'object' || decided === null) {
+    return null;
+  }
+  const value = (decided as Record<string, unknown>)[which];
+
+  return typeof value === 'number' ? countOf(value) : null;
+}
+
 /** What one round contributes to a line, in `ROUND_COLUMNS` order. */
-export function roundCells(row: LogRow): readonly unknown[] {
+export function roundCells(row: ExportableRow): readonly unknown[] {
   return [
     row.startedUtc,
-    exporterLocalTime(row.startedUtc),
+    exporterLocalTime(typeof row.startedUtc === 'string' ? row.startedUtc : ''),
     row.kind,
     row.repoName,
     row.repoPath,
@@ -146,8 +173,8 @@ export function roundCells(row: LogRow): readonly unknown[] {
     row.status,
     // -1 is the server saying nobody has decided yet, which is not a count. It becomes an empty
     // cell for the same reason a null measurement does.
-    countOf(row.decided?.accepted),
-    countOf(row.decided?.rejected),
+    decidedCount(row.decided, 'accepted'),
+    decidedCount(row.decided, 'rejected'),
     row.verdict,
     row.gating,
     row.findings,
@@ -161,13 +188,14 @@ export function roundCells(row: LogRow): readonly unknown[] {
     // The two qualifiers the page shows as `~` and `+`. They are not decoration: the first says the
     // figure was worked out from a public price list rather than billed, and the second that one
     // reviewer's model had no listed price so the total is a FLOOR. A file carrying the number
-    // without them turns a hedged figure into a claim.
+    // without them turns a hedged figure into a claim. Written as `true`/`false` rather than 1/0,
+    // because a spreadsheet filters a word and sums a digit, and these are not quantities.
     row.costIsEstimate,
     row.costPartial,
     row.answered,
     // The per-reviewer lines, uncoloured — the half of the seam `reviewerRows` was split for, kept
     // in `rounds.ts` since the markdown export it was written for was deleted.
-    row.reviewers.join('; '),
+    joined(row.reviewers),
   ];
 }
 
@@ -183,6 +211,6 @@ function countOf(value: number | undefined): number | null {
  * The shape is deliberately the simplest thing that is honest at this point: a round per line, the
  * table's own columns, and nothing claimed about findings that this story does not carry.</p>
  */
-export function csvOf(rows: readonly LogRow[]): string {
+export function csvOf(rows: readonly ExportableRow[]): string {
   return BOM + [line(ROUND_COLUMNS), ...rows.map((row) => line(roundCells(row)))].join(LINE) + LINE;
 }

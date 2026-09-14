@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cell, csvOf, ROUND_COLUMNS, roundCells } from '../roundsCsv';
+import { cell, csvOf, ExportableRow, line, ROUND_COLUMNS, roundCells } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
 /**
@@ -13,8 +13,15 @@ import { LogRow } from '../roundsLog';
  * says nothing about the fourth somebody adds next week.</p>
  */
 
-function row(over: Partial<LogRow> = {}): LogRow {
-  return {
+/**
+ * A row as the page sends it.
+ *
+ * <p>Built as a `LogRow` first and handed out as an `ExportableRow`: the compiler still checks the
+ * real shape, so adding a field to `LogRow` is a red build here, while the value handed to the CSV
+ * writer has the same untyped shape a webview message actually has.</p>
+ */
+function row(over: Partial<LogRow> = {}): ExportableRow {
+  const typed: LogRow = {
     key: 'k1', kind: 'review',
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
@@ -29,6 +36,8 @@ function row(over: Partial<LogRow> = {}): LogRow {
     dbKey: { sessionId: 's1', stage: 'CodeReview', number: 1 },
     ...over,
   };
+
+  return { ...typed };
 }
 
 /** The file's lines, without the byte-order mark and without the trailing blank. */
@@ -198,4 +207,65 @@ test('a value that is not a primitive writes nothing, not "[object Object]"', ()
   assert.equal(cell({}), '');
   assert.equal(cell([1, 2]), '');
   assert.equal(cell(() => 1), '');
+});
+
+// ---------- a row off the bridge is believed only as far as its key ----------
+
+test('a row whose reviewers are not an array exports an empty cell, not a thrown export', () => {
+  // `ExportableRow` is what a webview message actually is. The host used to cast it to `LogRow`,
+  // and `row.reviewers.join` then threw on a torn row — failing the WHOLE export over one field.
+  // (Code round, gemini, three findings.)
+  for (const broken of [undefined, null, 'codex/Architecture', 42, {}]) {
+    const cells = roundCells({ ...row(), reviewers: broken });
+    assert.equal(cell(cells[ROUND_COLUMNS.indexOf('reviewers')]), '');
+  }
+});
+
+test('a row whose decided is not an object exports empty counts rather than throwing', () => {
+  for (const broken of [undefined, null, 'nine', 42, []]) {
+    const cells = roundCells({ ...row(), decided: broken });
+    assert.equal(cell(cells[ROUND_COLUMNS.indexOf('accepted')]), '');
+    assert.equal(cell(cells[ROUND_COLUMNS.indexOf('rejected')]), '');
+  }
+});
+
+test('a decided object carrying something that is not a number counts as nothing', () => {
+  const cells = roundCells({ ...row(), decided: { accepted: 'lots', rejected: null } });
+
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('accepted')]), '');
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('rejected')]), '');
+});
+
+test('a startedUtc that is not a string leaves both time columns empty rather than throwing', () => {
+  const cells = roundCells({ ...row(), startedUtc: { when: 'yesterday' } });
+
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('started_local_exporter')]), '');
+  assert.equal(cell(cells[ROUND_COLUMNS.indexOf('started_utc')]), '');
+});
+
+test('a whole round of nothing but nonsense still writes one line of the right width', () => {
+  // The honest failure mode: a torn row is a row of blanks, not a broken file and not an export
+  // that refuses because of one field.
+  const cells = roundCells({ key: 'k1' });
+
+  assert.equal(cells.length, ROUND_COLUMNS.length);
+  assert.equal(line(cells), ','.repeat(ROUND_COLUMNS.length - 1));
+});
+
+test('a formula hiding behind a ZERO-WIDTH space is neutralised', () => {
+  // A spreadsheet trims invisible characters before deciding what is a formula, and a zero-width
+  // space is not matched by the regexp class for whitespace. Raised as Blocking on the code round.
+  for (const invisible of ['​', '‌', '⁠', '﻿', ' ']) {
+    const written = cell(invisible + '=HYPERLINK("http://x")');
+    assert.equal(
+      written.startsWith("'") || written.startsWith('"\''), true,
+      `a cell beginning U+${invisible.codePointAt(0)!.toString(16)} then = must be written as text, got ${JSON.stringify(written)}`);
+  }
+});
+
+test('a cell beginning with a pipe or a percent is neutralised too', () => {
+  for (const lead of ['|', '%']) {
+    const written = cell(lead + 'danger');
+    assert.equal(written.startsWith("'"), true, `${lead} must be written as text, got ${written}`);
+  }
 });
