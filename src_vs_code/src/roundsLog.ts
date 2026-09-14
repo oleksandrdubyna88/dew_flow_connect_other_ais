@@ -1263,6 +1263,7 @@ export function roundsLogHtml(
       ${filters}
       <button type="button" id="clear">Clear</button>
       <button type="button" id="exportpicked" disabled>Export selected…</button>
+      <button type="button" class="secondary" id="clearpicked" hidden>Clear selection</button>
       <span id="count"></span>
 </div>
 <div class="wrap">
@@ -1531,6 +1532,13 @@ export function roundsLogHtml(
       ? 'Export selected…'
       : 'Export ' + picked.length + ' selected'
         + (hidden > 0 ? ' (' + hidden + ' hidden)' : '') + '…';
+    // A way OUT of a selection that reaches past the filter. Unticking the header box clears only
+    // the rows it would tick, so somebody who picked a hundred, filtered to ten and unticked would
+    // otherwise be left with ninety they cannot see and no single gesture to drop them. Shown only
+    // when there is something to clear. (Plan round, gemini.)
+    var clearPicked = document.getElementById('clearpicked');
+    clearPicked.hidden = picked.length === 0;
+    clearPicked.textContent = hidden > 0 ? 'Clear selection (' + picked.length + ')' : 'Clear selection';
     var all = document.getElementById('pickall');
     if (all) {
       all.checked = matched.length > 0 && matched.every(function (r) { return state.selected[r.key]; });
@@ -1700,6 +1708,11 @@ export function roundsLogHtml(
   });
   document.getElementById('exportpicked').addEventListener('click', function () {
     askExport(Object.keys(state.selected));
+  });
+
+  document.getElementById('clearpicked').addEventListener('click', function () {
+    state.selected = {};
+    render();
   });
 
   var pickAll = document.getElementById('pickall');

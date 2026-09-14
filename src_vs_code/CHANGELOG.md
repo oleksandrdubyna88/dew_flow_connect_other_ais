@@ -57,6 +57,11 @@ they stay picked. The button says how many are out of sight (*Export 41 selected
 exporting more than you can see is never a surprise. A round that scrolls out of the loaded window
 entirely does leave the selection, because it could not be exported anyway.
 
+**Clear selection** drops the lot in one gesture — worth having because unticking the header box
+clears only the rows it would tick, so a selection made under one filter can otherwise outlive the
+view you made it in. The selection lives for as long as the page does: reloading the window empties
+it, exactly as it empties your sort, your filters and your opened rows.
+
 A bulk export is a job rather than a button that goes quiet: it reports how many rounds it has read,
 and it can be cancelled — nothing is written if you stop it. Each round is read separately, four at a
 time, so a big selection cannot swamp the machine; and above five hundred rounds it asks first,
