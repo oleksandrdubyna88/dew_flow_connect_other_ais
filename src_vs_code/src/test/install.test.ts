@@ -1184,28 +1184,40 @@ test('the canary credential is checked BEFORE anything is fetched, staged or swa
   // a download, an unpack, a swap, a restart and a rollback on 2026-09-14, for a token that had
   // simply expired. Asked here, a no costs one second and touches nothing.
   const wrapper = deployScript('coai-deploy-cmd.sh');
+  const release = deployScript('systemd-release.sh');
 
-  // It asks the gate the canary will ask, rather than something merely adjacent to it.
-  assert.match(
-    wrapper,
-    /WHOAMI=http:\/\/127\.0\.0\.1:8090\/api\/whoami/,
-    'the same RequireCaller gate the review submit goes through',
-  );
-  const runs = wrapper.indexOf('\npreflight_token\n');
-  assert.ok(runs > 0, 'it is actually called, not merely defined');
+  // The wrapper ASKS; the release script owns the question, because `$URL`, the https-origin guard
+  // and the token reader already live there. A second copy of the origin guard in the wrapper would
+  // be a second place for a security check to drift.
+  const runs = wrapper.indexOf('"$RELEASE" --check-token');
+  assert.ok(runs > 0, 'the wrapper calls the check');
   assert.ok(
     runs < wrapper.indexOf('fetch "$BASE/$ASSET"'),
-    'and it runs BEFORE the artefact is fetched — the whole point of moving the question here',
+    'and it runs BEFORE the artefact is fetched — the whole point of moving the question forward',
   );
+
+  // It goes over the PUBLIC origin. Loopback was written first and is wrong on this deployment:
+  // with Coai__RequireForwardedHttps set, everything but /api/health is refused `403 HTTPS required.`
+  // over plain HTTP, whatever the token — so a loopback preflight refuses every deploy and blames
+  // the credential. Measured against the live box before it shipped.
+  assert.doesNotMatch(
+    wrapper,
+    /127\.0\.0\.1:8090\/api\/whoami/,
+    'the check is not a plain-HTTP loopback call, which this server refuses by design',
+  );
+  assert.match(release, /require_https_origin/, 'the release script guards the origin it sends to');
 
   // The 401 has to clear the release BY NAME. A refusal that only says "unauthorized" sends the
   // next reader back to the release, which is the hour this exists to save.
-  const preflight = /^preflight_token\(\)[\s\S]*?\n\}/m.exec(wrapper);
+  const preflight = /^preflight_token\(\)[\s\S]*?\n\}/m.exec(release);
   assert.ok(preflight, 'preflight_token exists');
   assert.match(preflight[0], /401\)[\s\S]*?SESSION token and they expire/, 'it names the cause');
-  assert.match(preflight[0], /401\)[\s\S]*?Nothing is wrong with/, 'and clears the release');
-  assert.match(preflight[0], /403\)[\s\S]*?AllowedDomains/, '403 is the domain, not the release');
-  assert.match(preflight[0], /000\)[\s\S]*?not reachable on loopback/, 'no answer is its own case');
+  assert.match(preflight[0], /401\)[\s\S]*?Nothing is wrong with the release/, 'and clears the release');
+  // 403 has TWO causes here and the message must own both, because guessing one of them is what
+  // sent an hour in the wrong direction: the domain, or a request that did not arrive as HTTPS.
+  assert.match(preflight[0], /403\)[\s\S]*?AllowedDomains/, '403 may be the domain');
+  assert.match(preflight[0], /403\)[\s\S]*?did not arrive as HTTPS/, 'or the scheme, and it says so');
+  assert.match(preflight[0], /000\)[\s\S]*?did not answer at all/, 'no answer is its own case');
 
   // The token reaches curl through a 0600 config file, never `-H`: the rule this repository already
   // keeps, and the one a new call site is most likely to break.
