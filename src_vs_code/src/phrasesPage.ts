@@ -46,7 +46,7 @@ export type PhraseCommand =
 const IGNORE: PhraseCommand = { kind: 'ignore' };
 
 /** The fields a phrase HAS. A name this does not know is not a field — `__proto__` included. */
-const FIELDS: readonly string[] = ['name', 'text'];
+const FIELDS = new Set(['name', 'text']);
 
 function idOf(value: unknown): string {
   return typeof value === 'string' && value.length > 0 ? value : '';
@@ -87,9 +87,11 @@ function edited(said: Record<string, unknown>): PhraseCommand {
   const id = idOf(said['id']);
   const field = said['field'];
   const value = said['value'];
-  // A field this list does not have is not an edit. The check is against a list of names rather than
-  // an `in` test on the object, so no key of Object.prototype can ever be one of them.
-  const known = typeof field === 'string' && FIELDS.includes(field);
+  // A field this list does not have is not an edit. The check is against a SET of names rather than
+  // an `in` test on the object, so no key of Object.prototype can ever be one of them — `Set.has`
+  // does not walk a prototype chain either, which is what keeps that guarantee through the change
+  // from an array Sonar asked for.
+  const known = typeof field === 'string' && FIELDS.has(field);
 
   return id.length === 0 || !known || typeof value !== 'string'
     ? IGNORE

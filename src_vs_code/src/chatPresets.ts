@@ -1,9 +1,9 @@
 import { Vendor } from './vendors';
 import { Runtime } from './models';
-import { NAME_LIMIT, freshId, nameFor, record, rowById, text, withId } from './savedRows';
+import { NAME_LIMIT, freshId, nameFor, record, text, withId } from './savedRows';
 
 /** The preset a button named — the shared row lookup, kept under this name for its callers. */
-export const presetById = rowById;
+export { rowById as presetById } from './savedRows';
 /**
  * The two lists a person builds: named prompts, and named models.
  *

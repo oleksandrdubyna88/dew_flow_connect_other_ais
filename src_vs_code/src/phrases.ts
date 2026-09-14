@@ -1,4 +1,4 @@
-import { NAME_LIMIT, freshId, hasWords, nameFor, rawText, record, rowById, text, withId } from './savedRows';
+import { NAME_LIMIT, freshId, hasWords, nameFor, rawText, record, text, withId } from './savedRows';
 
 /**
  * The phrases a person keeps, so they stop retyping the same sentence into the Claude Code box.
@@ -78,7 +78,7 @@ export function phrasesFrom(saved: unknown): readonly Phrase[] {
 }
 
 /** The phrase a button named, or nothing — a click naming an id that is gone chooses nothing. */
-export const phraseById = rowById;
+export { rowById as phraseById } from './savedRows';
 
 /**
  * A new row, in the shape `phrasesFrom` will KEEP — the `freshPromptRow` rule, for the same reason.
