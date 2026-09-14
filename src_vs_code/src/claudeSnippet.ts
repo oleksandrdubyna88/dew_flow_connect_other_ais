@@ -216,7 +216,11 @@ function versionsOf(text: string, id: string): readonly number[] {
 function isBehind(text: string, half: { readonly id: string; readonly version: number }): boolean {
   const versions = versionsOf(text, half.id);
 
-  return versions.length === 0 || Math.min(...versions) < half.version;
+  // `some`, not `Math.min(...versions)`: the file this reads is a whole CLAUDE.md with no size
+  // limit, and spreading an unbounded list into a call exceeds the argument limit and throws
+  // RangeError — which would take out the panel refresh rather than answer a question about a
+  // silly file. Same predicate, no expansion. (CodeRabbit, on the pull request.)
+  return versions.length === 0 || versions.some((version) => version < half.version);
 }
 
 /** One half's version, or nothing when that half is not in the text. */
@@ -285,7 +289,9 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
   // fixture that is newer in one half and missing another; swapping these two blocks had left the
   // whole suite green.)
   const newer = [
-    ...KNOWN_HALVES.filter((half) => Math.max(...versionsOf(pasted, half.id), 0) > half.version).map((half) => half.id),
+    ...KNOWN_HALVES
+      .filter((half) => versionsOf(pasted, half.id).some((version) => version > half.version))
+      .map((half) => half.id),
     // A half with no row here is a half this build cannot judge, so it is treated as newer rather
     // than ignored: only a later build could have put it there.
     ...halvesIn(pasted).map((half) => half.id).filter((id) => !HALF_IDS.includes(id)),
