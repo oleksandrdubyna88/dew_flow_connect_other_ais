@@ -119,7 +119,10 @@ function saveFailed(error: unknown): void {
     // The tab has already gone: this is the flush on dispose, and the banner it would have written
     // to went with it. A notification is the only surface left, and silence here would mean a phrase
     // somebody typed and then closed the tab on vanished without a word. (Code round, codex.)
-    reportRefusal(context, KEY, error, `${refusal.text} The phrase you were writing was not stored.`);
+    // Both slots, because the tab is gone either way and "not stored" is the fact that matters on
+    // both paths. Dropping it on the reload path is what the previous round's single override did.
+    const lost = `${refusal.text} The phrase you were writing was not stored.`;
+    reportRefusal(context, KEY, error, { ordinary: lost, recognised: lost });
 
     return;
   }
@@ -134,13 +137,10 @@ function saveFailed(error: unknown): void {
     // the banner cannot — that one click is available. Deliberately not the same three lines again:
     // two reviewers called the duplicate surfaces a collision, and they were right. `reportRefusal`
     // owns "at most once", per WINDOW, because that is what is stale.
-    reportRefusal(
-      context,
-      KEY,
-      error,
-      'ConnectOtherAIs cannot save settings in this window until it is reloaded — the Phrases tab '
-      + 'says why. Reloading closes that tab, so copy anything you have typed first.',
-    );
+    reportRefusal(context, KEY, error, {
+      recognised: 'ConnectOtherAIs cannot save settings in this window until it is reloaded — the '
+        + 'Phrases tab says why. Reloading closes that tab, so copy anything you have typed first.',
+    });
 
     return;
   }

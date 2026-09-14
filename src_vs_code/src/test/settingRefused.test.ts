@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { declaresSetting, settingRefusal } from '../settingRefused';
+import { declaresSetting, refusalNotice, settingRefusal } from '../settingRefused';
 
 /**
  * What a refused setting SAYS.
@@ -144,6 +144,56 @@ test('configuration may be an ARRAY of sections, which the manifest format allow
 
   assert.equal(declaresSetting(split, 'phrases'), 'declared');
   assert.equal(declaresSetting(split, 'nothingLikeThis'), 'absent');
+});
+
+/**
+ * WHAT IS SHOWN, and what carries the button — the two questions the last round's fix conflated.
+ *
+ * <p>Both defects below were mine, introduced repairing the round before: gating the whole
+ * notification on "already offered" rather than only the action, and letting a caller's generic
+ * sentence win over the recognised diagnosis it has no way to reproduce.</p>
+ */
+
+const STALE = settingRefusal('phrases', STALE_WINDOW, 'declared');
+const ORDINARY = settingRefusal('phrases', new Error('EPERM: denied'), 'declared');
+
+test('a second stale refusal is still SHOWN — only the button is offered once', () => {
+  // The gate was on the whole notification, so a second failed write said nothing at all. For the
+  // sidebar and the roles tab, which have no banner, that is total silence about a lost save — the
+  // exact failure this change exists to end, arriving through the fix for it.
+  const second = refusalNotice(STALE, {}, true);
+
+  assert.ok(second.text.length > 0, 'a repeat refusal is suppressed entirely instead of just its action');
+  assert.match(second.text, /is not a registered configuration/u, 'the repeat says nothing about why');
+  assert.equal(second.withAction, false, 'the button is offered more than once per window');
+
+  const first = refusalNotice(STALE, {}, false);
+  assert.equal(first.withAction, true, 'the first refusal never offers the cure');
+});
+
+test("a caller's own sentence covers ordinary failures, and never hides the recognised diagnosis", () => {
+  // The roles page is right that an errno and a path do not belong in front of somebody who renamed
+  // a role. It has no way to write the stale-window sentence itself, though — it does not know which
+  // failure this is — so its sentence must not win there.
+  const roles = { ordinary: 'ConnectOtherAIs could not save that change to your roles.' };
+
+  assert.equal(refusalNotice(ORDINARY, roles, false).text, roles.ordinary);
+  assert.equal(
+    refusalNotice(STALE, roles, false).text,
+    STALE.text,
+    'the generic sentence replaced the recognised one, so a roles user loses the reason, the warning '
+    + 'about unsaved text, and the fact that the change has to be made again',
+  );
+});
+
+test('a caller whose BANNER carries the reasoning may say something shorter instead', () => {
+  // The phrases tab: the full text is already on screen beside the box, so repeating it in a toast
+  // is a collision rather than emphasis. That is the one override allowed on the recognised path.
+  const short = { recognised: 'ConnectOtherAIs cannot save settings in this window until it is reloaded.' };
+
+  assert.equal(refusalNotice(STALE, short, false).text, short.recognised);
+  assert.equal(refusalNotice(STALE, short, false).withAction, true, 'the short line still carries the button');
+  assert.equal(refusalNotice(ORDINARY, short, false).text, ORDINARY.text, 'it leaked onto the ordinary path');
 });
 
 test('a key named like something every object has is not declared by accident', () => {

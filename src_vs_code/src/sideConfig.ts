@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
-import { declaresSetting, settingRefusal, type SettingRefusal } from './settingRefused';
+import { declaresSetting, refusalNotice, settingRefusal, type RefusalSentences, type SettingRefusal } from './settingRefused';
 import { sideConfigReader, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
 
@@ -126,35 +126,36 @@ let reloadOffered = false;
  * click, once. The same shape `reportStandDown` uses for the other way a window falls behind the
  * build it is running.</p>
  *
- * <p><b>`instead` is the caller's own sentence, and it is honoured on BOTH paths.</b> It began as an
- * ordinary-failures-only argument, from the roles page's position that an errno and a path belong in
- * the log rather than in front of somebody who just renamed a role. Two things in the code round
- * moved it: the phrases tab passes "The phrase you were writing was not stored." when its tab has
- * already gone, and dropping that on the reload path concealed the one fact that mattered; and a
- * caller whose BANNER is already carrying the full reasoning wants this notification to be short
- * rather than the same three lines again. So the caller's sentence wins where it is given, and the
- * ACTION is what the recognised case adds — which is the half no caller can offer for itself.</p>
+ * <p><b>What is SHOWN and what carries the BUTTON are two questions, and conflating them was a
+ * defect.</b> The first version gated the whole notification on `reloadOffered`, so a second refused
+ * write in a stale window said nothing at all — and the sidebar and the roles tab have no banner to
+ * fall back on, which makes that silence about a save that did not happen. The reason is said every
+ * time; only the action is once per window. `refusalNotice` decides both, and is tested.</p>
+ *
+ * <p><b>`sentences` is the caller's own wording, and it has two slots for a reason.</b> A single
+ * override that won everywhere let the roles page's "could not save that change to your roles"
+ * replace the stale-window diagnosis, hiding the reason, the warning about unsaved text and the need
+ * to redo the edit — a sentence that page cannot write for itself, because it does not know which
+ * failure this is. So `ordinary` carries its position about errnos, and `recognised` exists only for
+ * a caller whose BANNER is already showing the full reasoning and wants one short line here instead
+ * of the same three again.</p>
  */
 export function reportRefusal(
   context: vscode.ExtensionContext,
   key: string,
   error: unknown,
-  instead = '',
+  sentences: RefusalSentences = {},
 ): void {
-  const refusal = refusalFor(context, key, error);
-  const said = instead.length > 0 ? instead : refusal.text;
+  const notice = refusalNotice(refusalFor(context, key, error), sentences, reloadOffered);
   console.error(`[coai] coai.${key} was not saved`, error);
-  if (!refusal.reloadCures) {
-    void vscode.window.showErrorMessage(said);
+  if (!notice.withAction) {
+    void vscode.window.showErrorMessage(notice.text);
 
-    return;
-  }
-  if (reloadOffered) {
     return;
   }
 
   reloadOffered = true;
-  void vscode.window.showErrorMessage(said, RELOAD).then((choice) => {
+  void vscode.window.showErrorMessage(notice.text, RELOAD).then((choice) => {
     if (choice === RELOAD) {
       void vscode.commands.executeCommand('workbench.action.reloadWindow');
     }

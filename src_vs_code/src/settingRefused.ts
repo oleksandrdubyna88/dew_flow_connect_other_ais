@@ -131,6 +131,49 @@ function notInThisBuild(key: string, said: string): SettingRefusal {
   };
 }
 
+/**
+ * A caller's own wording, where it has better wording than the classifier does.
+ *
+ * <p>Two overrides rather than one, because the two paths are not the same question. The previous
+ * round had a single `instead` that won everywhere, and a reviewer found what that costs: the roles
+ * page's "could not save that change to your roles" then replaced the stale-window diagnosis — hiding
+ * the reason, the warning about unsaved text, and the fact that the edit has to be made again. A
+ * caller cannot write that sentence itself, because it does not know which failure this is.</p>
+ */
+export interface RefusalSentences {
+  /** For a failure with no recognised cause. The roles page's argument about errnos lives here. */
+  readonly ordinary?: string;
+  /** For the recognised one — only for a caller whose own BANNER is already carrying the reasoning. */
+  readonly recognised?: string;
+}
+
+export interface RefusalNotice {
+  readonly text: string;
+  /** Whether this notification carries the reload action. Once per window; the TEXT is always shown. */
+  readonly withAction: boolean;
+}
+
+/**
+ * What a notification should say, and whether it carries the button.
+ *
+ * <p><b>Separating those two is the whole point.</b> Gating them together is a defect this module
+ * introduced and a reviewer caught: with one flag over the entire notification, a second refused
+ * write in a stale window said nothing at all — and for the sidebar and the roles tab, which have no
+ * banner, that is silence about a save that did not happen. The ACTION is what must not repeat; the
+ * reason must be said every time.</p>
+ */
+export function refusalNotice(
+  refusal: SettingRefusal,
+  sentences: RefusalSentences,
+  alreadyOffered: boolean,
+): RefusalNotice {
+  if (!refusal.reloadCures) {
+    return { text: sentences.ordinary ?? refusal.text, withAction: false };
+  }
+
+  return { text: sentences.recognised ?? refusal.text, withAction: !alreadyOffered };
+}
+
 export function settingRefusal(key: string, error: unknown, declared: Declared): SettingRefusal {
   const said = saidBy(error);
 

@@ -4908,9 +4908,20 @@ code round.
 
 **The gate on the offer lives in `sideConfig.reportRefusal`, once per WINDOW.** It began inside this
 tab, which made "at most once" true for one of the three callers — two failed role edits in a stale
-window raised two notifications. A window is stale or it is not, whatever is being saved in it. The
-banner carries the reasoning and the notification carries only the button, because the same three
-lines on two surfaces is a collision rather than emphasis.
+window raised two notifications. A window is stale or it is not, whatever is being saved in it.
+
+**The gate is on the ACTION, never on the message** — and conflating those was a defect that lived
+for one round. With the whole notification gated, a second refused write said nothing at all, and the
+sidebar and the roles tab have no banner to fall back on: silence about a save that did not happen,
+which is what this change exists to end. `refusalNotice(refusal, sentences, alreadyOffered)` decides
+both questions, purely, and is tested.
+
+**`sentences` has two slots, for the same reason.** A single caller override that won everywhere let
+the roles page's *"could not save that change to your roles"* replace the stale-window diagnosis,
+hiding the reason, the warning about unsaved text and the need to redo the edit — a sentence that
+page cannot write for itself, because it does not know which failure this is. `ordinary` carries its
+position that an errno belongs in the log; `recognised` exists only for a caller whose BANNER already
+shows the reasoning and wants one short line in the notification instead of the same three again.
 
 **And the tab writes through `sideConfig.saveSetting` now** — the ONE write of a `coai.*` setting. It
 had its own bare `config.update`, which is how it came to have its own idea of what a failure means.

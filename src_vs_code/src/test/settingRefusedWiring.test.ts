@@ -101,7 +101,20 @@ test('the reload is offered at most once per WINDOW, and the gate is in the shar
   const door = source('sideConfig.ts');
 
   assert.match(door, /let reloadOffered = false/u, 'the once-per-window gate is not in the reporter');
-  assert.match(door, /if \(reloadOffered\) \{\s*return;/u, 'the gate is declared but never consulted');
+  assert.match(
+    door,
+    /refusalNotice\(refusalFor\(context, key, error\), sentences, reloadOffered\)/u,
+    'the gate is declared but never consulted',
+  );
+  assert.match(door, /reloadOffered = true;/u, 'nothing ever closes the gate, so the action repeats forever');
+  // And it gates the ACTION, never the message. An early `if (reloadOffered) return` stood here for
+  // one round and made a second refusal say nothing at all — which, for the two callers with no
+  // banner, is silence about a save that did not happen.
+  assert.doesNotMatch(
+    door,
+    /if \(reloadOffered\)/u,
+    'the whole notification is gated again, not just the button it carries',
+  );
   assert.doesNotMatch(
     source('phrasesPanel.ts'),
     /reloadOffered/u,
