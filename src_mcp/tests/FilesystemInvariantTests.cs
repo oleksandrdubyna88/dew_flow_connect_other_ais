@@ -418,9 +418,21 @@ public sealed class WorkingTreeDiffTests : IAsyncLifetime
         var nested = Directory.CreateDirectory(Path.Combine(_repo, "src", "deep")).FullName;
 
         var (top, refusal) = await _context.TopLevelAsync(nested, TestContext.Current.CancellationToken);
+        var (fromRoot, rootRefusal) = await _context.TopLevelAsync(_repo, TestContext.Current.CancellationToken);
 
         refusal.Should().BeEmpty();
-        Path.TrimEndingDirectorySeparator(top).Should().Be(Path.TrimEndingDirectorySeparator(Path.GetFullPath(_repo)));
+        rootRefusal.Should().BeEmpty();
+        top.Should().NotBeEmpty();
+
+        // Against git's OWN answer for the root, not against `Path.GetFullPath(_repo)`. What is
+        // being claimed is that a subdirectory resolves to the same checkout as the root — and
+        // `GetFullPath` cannot express that on a filesystem with links: macOS hands out temp
+        // directories under `/var/folders`, `/var` is a link to `/private/var`, git answers with
+        // the real path and `GetFullPath` does not follow links at all. The old expectation was
+        // therefore a claim about symlink-free paths, and it failed on the first Mac that ran it.
+        Path.TrimEndingDirectorySeparator(top).Should().Be(
+            Path.TrimEndingDirectorySeparator(fromRoot),
+            "a subdirectory and the root are the same checkout");
     }
 
     [Fact]

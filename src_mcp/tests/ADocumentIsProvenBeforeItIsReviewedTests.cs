@@ -294,6 +294,63 @@ public sealed class ADocumentIsProvenBeforeItIsReviewedTests : IDisposable
     }
 
     /// <summary>
+    /// A repository reached THROUGH a link holds its own documents — which is every macOS checkout
+    /// under a temp directory, and any checkout whose parent is a link.
+    /// </summary>
+    /// <remarks>
+    /// <para>Containment compares two paths and only one of them was being resolved. The document
+    /// was walked link by link; the root it was measured against was the caller's spelling, left
+    /// alone. Where both spellings agree the bug cannot be seen, and they agree on every Linux and
+    /// Windows checkout this was written on.</para>
+    /// <para>On macOS they disagree by default: <c>/var</c> is a link to <c>/private/var</c>, so a
+    /// repository handed out as <c>/var/folders/…</c> contains documents that resolve to
+    /// <c>/private/var/folders/…</c> — outside it, said the check, about a file plainly inside a
+    /// perfectly ordinary repository. Five end-to-end tests failed on the release for it, and the
+    /// refusal named two paths differing by a prefix the person never typed.</para>
+    /// <para>The seam stands in for that link, so the case is pinned on every platform rather than
+    /// only on the one that has a <c>/private</c>.</para>
+    /// </remarks>
+    [Fact]
+    public void ARepositoryReachedThroughALink_StillContainsItsOwnDocuments()
+    {
+        // TWO real directories rather than a link, because a Windows runner cannot create one
+        // without a privilege it does not have — and the point is what the RESOLVER returns, which
+        // a seam says exactly. `said` is the spelling the caller holds, `real` is what every
+        // component under it resolves to: the shape of `/var/folders/…` → `/private/var/folders/…`.
+        var real = Directory.CreateTempSubdirectory("coai-checkout-resolved-").FullName;
+        var said = Directory.CreateTempSubdirectory("coai-checkout-said-").FullName;
+
+        string Link(string p) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(p),
+                Path.TrimEndingDirectorySeparator(said),
+                DocumentId.Comparison)
+                ? real
+                : p;
+
+        try
+        {
+            foreach (var root in new[] { real, said })
+            {
+                Directory.CreateDirectory(Path.Combine(root, "docs"));
+                File.WriteAllText(Path.Combine(root, "docs", "spec.md"), Body);
+            }
+
+            var outcome = DocumentReader.Read(
+                said, new DocumentRequest(Path: Path.Combine(said, "docs", "spec.md")), Link);
+
+            Ready(outcome).Id.Should().Be(
+                "docs/spec.md",
+                "a link on the way to the repository does not move the document out of it");
+        }
+        finally
+        {
+            Directory.Delete(real, recursive: true);
+            Directory.Delete(said, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// A RELATIVE path is resolved against the repository, not against wherever this server started.
     /// </summary>
     /// <remarks>

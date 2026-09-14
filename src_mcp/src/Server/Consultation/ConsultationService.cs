@@ -642,14 +642,25 @@ public sealed class ConsultationService(
     /// not fail over somebody else's record, and a path this machine cannot resolve is not the one
     /// being asked about.
     /// </remarks>
-    private static bool SamePath(string one, string other)
+    /// <remarks>
+    /// <para><b>Links are followed, because the two sides come from different places.</b> The record
+    /// holds git's answer — <c>TopLevelAsync</c>, which reports the REAL path — and the query holds
+    /// whatever the session was opened with. On macOS those are routinely two spellings of one
+    /// directory: a checkout under <c>/var/folders/…</c> is <c>/private/var/folders/…</c> to git,
+    /// because <c>/var</c> is a link. <c>GetFullPath</c> normalises separators and <c>..</c> and
+    /// stops there, so <c>status</c> answered "nothing open" about a consultation that was open —
+    /// and the next call, not knowing better, opened a SECOND one: the tree collected again, a model
+    /// that had already answered asked from scratch, the caller's budget spent twice. That is the
+    /// exact loss this method exists to prevent, so it has to resolve what git resolved.</para>
+    /// </remarks>
+    internal static bool SamePath(string one, string other, Func<string, string> followLink)
     {
         try
         {
             return one.Length > 0 && other.Length > 0
                 && string.Equals(
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+                    Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(one, followLink)),
+                    Path.TrimEndingDirectorySeparator(DocumentReader.CanonicalRoot(other, followLink)),
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
         }
         catch (Exception e) when (e is ArgumentException or PathTooLongException or NotSupportedException)
@@ -657,6 +668,9 @@ public sealed class ConsultationService(
             return false;
         }
     }
+
+    private static bool SamePath(string one, string other) =>
+        SamePath(one, other, DocumentReader.FollowLink);
 
     private static IReadOnlyList<string>? SuspectedFiles(string json)
     {
