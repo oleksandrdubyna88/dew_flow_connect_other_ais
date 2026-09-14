@@ -54,16 +54,12 @@ export const SNIPPET_BODY_SHA = '45dc60e8bbfd0d31';
  * before and after — which is precisely the defect the label was added to fix, reported by the
  * operator twice, the second time as “if the snippet changed, the version should have gone up”.</p>
  *
- * <p><b>Why it is declared rather than derived.</b> The first attempt summed the four half markers, so
- * that no one would have to remember it. All three reviewers refused it: duplicate blocks in one
- * CLAUDE.md sum together (a person pasting without deleting the old copy would be told their v12 is
- * behind our v8), the sum collides for a paste that is newer in one half and missing another, and the
- * guard proposed for it compared the constant with the expression it was assigned from. So the number
- * is an ordinal, and what keeps it honest is a test rather than arithmetic: the SHA guard in
- * `snippetVersion.test.ts` goes red on any change to the artefact text — a new half included — naming
- * this constant, and `snippetVersionIsVisible.test.ts` goes red when the manifest title disagrees with
- * it. A command title in `package.json` is static JSON that the editor reads before any of our code
- * runs, so it cannot interpolate this; it is typed by hand and pinned by that test.</p>
+ * <p><b>Raising it is manual and cannot be forgotten.</b> A command title in `package.json` is static
+ * JSON the editor reads before any of our code runs, so it cannot interpolate this — it is typed by
+ * hand, and two tests fail naming the value to write: the hash guard in `snippetVersion.test.ts` on
+ * any change to the artefact text, and `snippetVersionIsVisible.test.ts` when the manifest disagrees.
+ * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
+ * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
 export const ARTEFACT_VERSION = 6;
 
@@ -159,26 +155,36 @@ export const CALLER_VERSION = 1;
 export const CONSULTANT_VERSION = 1;
 
 /**
- * The halves the artefact is made of, and the one place that knows there are four.
+ * The halves the artefact is made of: the one place that knows which they are, in what order, and
+ * which of them can be versioned at all.
  *
  * <p>There used to be four marker regexes and four near-identical readers, which is four places to
  * edit when a fifth half arrives and four chances to edit three of them. The marker is built from
- * the id, so a row is all a half needs — and the reader now HAS a list of halves, which is what
- * makes `halvesIn` able to notice a half nobody taught it about.</p>
+ * the id, the artefact is composed from `text`, and the reader now HAS a list of halves — which is
+ * what lets it notice a half nobody taught it about. Raised on the code round: the docblock claimed
+ * this was the only place that knew there were four while `claudeSnippet()` named them again one
+ * screen below.</p>
  *
- * <p>`name` is what a person reads in the panel when their copy is missing that half. It is prose,
- * not an identifier: the sentence it lands in is "missing or behind on: the document gate, the
- * consultant".</p>
+ * <p>`name` is what a person reads in the panel when their copy is missing that half; it is prose
+ * and never crosses a boundary — {@link SnippetStatus} carries ids. `frozen` is the gate half's
+ * standing fact rather than a sentence in four docblocks: its marker lives in a rule body the
+ * conventions repository hashes against a baseline, so it is the one version nobody may raise, and
+ * the guard that tells you which numbers to move reads this rather than a hand-typed list.</p>
  */
-const HALVES = [
-  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION },
-  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION },
-  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION },
-  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION },
+export const KNOWN_HALVES = [
+  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true },
+  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false },
+  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false },
+  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false },
 ] as const;
 
-/** The ids this build reads, so a test can compare them with what the artefact actually carries. */
-export const HALF_IDS: readonly string[] = HALVES.map((half) => half.id);
+/** The ids this build reads, in the order the artefact carries them. */
+export const HALF_IDS: readonly string[] = KNOWN_HALVES.map((half) => half.id);
+
+/** What a person should call a half — its own name, or the raw id when a newer build added it. */
+function label(id: string): string {
+  return KNOWN_HALVES.find((half) => half.id === id)?.name ?? id;
+}
 
 /** Any half's marker, from its id — never a second literal to keep in step. */
 function markerOf(id: string): RegExp {
@@ -186,12 +192,34 @@ function markerOf(id: string): RegExp {
 }
 
 /**
- * One half's version out of a text, or nothing when that half is not in it.
+ * EVERY version of one half in a text — because a file may hold more than one block.
  *
- * <p>The regex is deliberately NOT global and the FIRST match wins. A person who pastes the new
- * block without deleting the old one has two of every marker in one file, and a reader that
- * accumulated them would answer a number belonging to neither copy.</p>
+ * <p>A single number cannot answer for a `CLAUDE.md` with two blocks in it, and both directions
+ * were raised on the code round against a reader that took one: taking the FIRST match hides a
+ * newer block appended below a current one, and taking the LAST blesses a stale block sitting above
+ * a fresh paste — which is the one the AI in that repository reads first. So the comparison is made
+ * against the whole set: lowest for "behind", highest for "newer". Never a sum, which is the
+ * arithmetic the plan round refused: two copies of v1 are still v1.</p>
  */
+function versionsOf(text: string, id: string): readonly number[] {
+  return [...text.matchAll(new RegExp(markerOf(id), 'g'))].map((match) => Number.parseInt(match[1], 10));
+}
+
+/**
+ * Whether a half is ABSENT from a text, or older than ours in any copy the text holds.
+ *
+ * <p>Absent counts as behind, and that is the half of this the arithmetic gets wrong if it is
+ * written inline: a missing half has no versions at all, so a plain `Math.min` over an empty list
+ * answers `Infinity` and a paste carrying only the gate rule reads as CURRENT. That is exactly what
+ * it did for one run here, and the tests for the six mounting repositories are what caught it.</p>
+ */
+function isBehind(text: string, half: { readonly id: string; readonly version: number }): boolean {
+  const versions = versionsOf(text, half.id);
+
+  return versions.length === 0 || Math.min(...versions) < half.version;
+}
+
+/** One half's version, or nothing when that half is not in the text. */
 function versionOf(text: string, id: string): number | undefined {
   const found = markerOf(id).exec(text)?.[1];
 
@@ -199,15 +227,20 @@ function versionOf(text: string, id: string): number | undefined {
 }
 
 /**
- * Every `coai-…` half id present in a text, in the order they appear.
+ * Every `coai-…` half in a text, with its version, in the order they appear.
  *
- * <p>Exported for one guard: the ids in what `claudeSnippet()` hands out must be exactly
- * {@link HALF_IDS}. A fifth rule file added to the paste without a row in {@link HALVES} is then a
- * red test rather than a half nothing reads — which is how the consultant half came to raise no
- * version anywhere for a day.</p>
+ * <p>Exported for the guards: the ids in what `claudeSnippet()` hands out must be exactly
+ * {@link HALF_IDS}, in that order, and none of them may be numbered from zero. A fifth rule file
+ * added to the paste without a row in {@link KNOWN_HALVES} is then a red test rather than a half
+ * nothing reads — which is how the consultant half came to raise no version anywhere for a day.</p>
+ *
+ * <p>It is also what makes a half from a NEWER build visible: an id with no row here is not
+ * ignored, it is reported as newer, because a build that has never heard of a rule cannot tell
+ * somebody to paste over it.</p>
  */
-export function halvesIn(text: string): readonly string[] {
-  return [...text.matchAll(/<!-- (coai-[a-z-]+) v\d+ -->/g)].map((match) => match[1]);
+export function halvesIn(text: string): readonly { readonly id: string; readonly version: number }[] {
+  return [...text.matchAll(/<!-- (coai-[a-z-]+) v(\d+) -->/g)]
+    .map((match) => ({ id: match[1], version: Number.parseInt(match[2], 10) }));
 }
 
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
@@ -245,30 +278,46 @@ export function snippetStatus(pasted: string | undefined): SnippetStatus {
   }
 
   // Per HALF, because that is the only comparison a pasted copy supports: it carries one marker for
-  // each half it was given and nothing that numbers the paste as a whole. `newer` first — a copy
-  // from a later build is told to keep what it has even when it is also missing something, because
-  // pasting over it would be a downgrade nobody asked for.
-  const newer = HALVES.filter((half) => (versionOf(pasted, half.id) ?? 0) > half.version);
+  // each half it was given and nothing that numbers the paste as a whole. `newer` FIRST, and the
+  // ordering is the rule rather than an accident — a copy from a later build is told to keep what it
+  // has even when it is also missing something, because pasting over it would delete a rule this
+  // build has never heard of. (Nothing pinned that precedence until the code round asked for a
+  // fixture that is newer in one half and missing another; swapping these two blocks had left the
+  // whole suite green.)
+  const newer = [
+    ...KNOWN_HALVES.filter((half) => Math.max(...versionsOf(pasted, half.id), 0) > half.version).map((half) => half.id),
+    // A half with no row here is a half this build cannot judge, so it is treated as newer rather
+    // than ignored: only a later build could have put it there.
+    ...halvesIn(pasted).map((half) => half.id).filter((id) => !HALF_IDS.includes(id)),
+  ];
   if (newer.length > 0) {
-    return { kind: 'ahead', newer: newer.map((half) => half.name), current };
+    return { kind: 'ahead', newer: [...new Set(newer)], current };
   }
 
   // Everything else that is not exactly this build's set of halves is OLDER: a copy pasted before a
   // half existed carries no marker for it, and the AI obeying such a copy never uses what that half
   // describes — it is the same defect for every one of them, which is why absent and behind are one
   // answer here and are named separately in the sentence.
-  const behind = HALVES.filter((half) => (versionOf(pasted, half.id) ?? 0) < half.version);
+  const behind = KNOWN_HALVES.filter((half) => isBehind(pasted, half)).map((half) => half.id);
 
   return behind.length === 0
     ? { kind: 'current', current }
-    : { kind: 'older', behind: behind.map((half) => half.name), current };
+    : { kind: 'older', behind, current };
 }
 
-/** A readable list — "the document gate, the caller declaration and the consultant". */
+/**
+ * Half ids as a readable list — "the document gate, the caller declaration and the consultant".
+ *
+ * <p>The one place a status's ids become prose, which is why {@link SnippetStatus} may carry ids:
+ * a consumer can ask about `coai-consultant` without matching English, and this build can still
+ * name a half it has never heard of, because {@link label} falls back to the id.</p>
+ */
 function names(halves: readonly string[]): string {
-  return halves.length < 2
-    ? halves.join('')
-    : `${halves.slice(0, -1).join(', ')} and ${halves[halves.length - 1]}`;
+  const said = halves.map(label);
+
+  return said.length < 2
+    ? said[0] ?? ''
+    : `${said.slice(0, -1).join(', ')} and ${said[said.length - 1]}`;
 }
 
 /** One line for the panel, saying what to do about it — or nothing when there is nothing to say. */
@@ -327,20 +376,15 @@ export function copiedMessage(status: SnippetStatus): string {
   }
 }
 
-/** The document half's version out of a pasted file, or nothing when it has no such half. */
-export function documentVersionIn(text: string): number | undefined {
-  return versionOf(text, 'coai-document');
-}
+// `documentVersionIn` and `consultantVersionIn` were here, and had no callers at all once
+// `snippetStatus` read the halves from KNOWN_HALVES — four public wrappers survived the
+// consolidation of their four bodies, each re-spelling an id the table already holds. (Code round.)
 
 /** The caller half's version out of a pasted file, or nothing when it has no such half. */
 export function callerVersionIn(text: string): number | undefined {
   return versionOf(text, 'coai-caller');
 }
 
-/** The consultant half's version out of a pasted file, or nothing when it has no such half. */
-export function consultantVersionIn(text: string): number | undefined {
-  return versionOf(text, 'coai-consultant');
-}
 
 /**
  * All four rules, in the order an AI should read them: the gate, the document gate, the caller, the
@@ -355,5 +399,5 @@ export function consultantVersionIn(text: string): number | undefined {
  * repository rather than the shared conventions — see `CONSULTANT_VERSION`.</p>
  */
 export function claudeSnippet(): string {
-  return `${GATE_RULE}\n${DOCUMENT_RULE}\n${CALLER_RULE}\n${CONSULTANT_RULE}`;
+  return KNOWN_HALVES.map((half) => half.text).join('\n');
 }

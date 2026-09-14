@@ -8,9 +8,9 @@ import {
   callerVersionIn,
   claudeSnippet,
   CALLER_VERSION,
-  DOCUMENT_VERSION,
   HALF_IDS,
   halvesIn,
+  KNOWN_HALVES,
   SNIPPET_BODY_SHA,
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
@@ -45,7 +45,7 @@ test('an older paste is reported as older, naming the half that is behind', () =
 
   assert.deepEqual(
     snippetStatus(old),
-    { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION },
+    { kind: 'older', behind: ['coai-snippet'], current: ARTEFACT_VERSION },
   );
 });
 
@@ -73,7 +73,7 @@ test('a copy from the FUTURE is not called old', () => {
 
   assert.deepEqual(
     snippetStatus(ahead),
-    { kind: 'ahead', newer: ['the review gate'], current: ARTEFACT_VERSION },
+    { kind: 'ahead', newer: ['coai-snippet'], current: ARTEFACT_VERSION },
   );
 });
 
@@ -100,12 +100,14 @@ test('a copy from the FUTURE is not called old', () => {
  * static `package.json` title that has to be typed by hand alongside it.</p>
  */
 test('the snippet text and its version numbers move together', () => {
-  const body = claudeSnippet()
-    .replace(/<!-- coai-snippet v\d+ -->\n?/, '')
-    .replace(/<!-- coai-document v\d+ -->\n?/, '')
-    .replace(/<!-- coai-caller v\d+ -->\n?/, '')
-    .replace(/<!-- coai-consultant v\d+ -->\n?/, '');
+  // Derived, not retyped: four `.replace` literals in the file that also holds KNOWN_HALVES is the
+  // duplication this change removed from the production side, and a fifth half would have been
+  // hashed into the body while the list quietly said there were four. (Code round.)
+  const body = claudeSnippet().replace(/<!-- coai-[a-z-]+ v\d+ -->\n?/g, '');
   const sha = createHash('sha256').update(body).digest('hex').slice(0, 16);
+  const raisable = KNOWN_HALVES.filter((half) => !half.frozen)
+    .map((half) => `${half.id} to v${half.version + 1}`)
+    .join(', ');
 
   assert.equal(
     sha,
@@ -113,12 +115,12 @@ test('the snippet text and its version numbers move together', () => {
     `The snippet text changed. Set SNIPPET_BODY_SHA to '${sha}', raise ARTEFACT_VERSION to `
       + `${ARTEFACT_VERSION + 1} — and write "(v${ARTEFACT_VERSION + 1})" into the copyClaudeSnippet `
       + 'title in package.json, which is static JSON and cannot read it — and raise the marker of the '
-      + `half that changed — DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} for the document rule, `
-      + `CALLER_VERSION to ${CALLER_VERSION + 1} for the caller rule. All of them, together: a version that `
-      + 'does not move with the text tells every pasted copy it is current forever, which is the '
-      + 'defect this exists to catch. A change that adds a whole new rule file brings its own marker '
-      + `and raises neither. (SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen `
-      + 'against the migration baseline, so its marker cannot be raised.)',
+      + `half whose rule changed: ${raisable}. All of them, together: a version that does not move `
+      + 'with the text tells every pasted copy it is current forever, which is the defect this exists '
+      + 'to catch. A change that adds a whole new rule file brings its own marker and raises no '
+      + `other half. (SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen against the `
+      + 'migration baseline, so its marker cannot be raised — which is what `frozen` says in '
+      + 'KNOWN_HALVES, and why this sentence is built from that table rather than typed here.)',
   );
 });
 
@@ -132,7 +134,7 @@ test('a paste with no document half is reported as older', () => {
     snippetStatus(gateOnly),
     {
       kind: 'older',
-      behind: ['the document gate', 'the caller declaration', 'the consultant'],
+      behind: ['coai-document', 'coai-caller', 'coai-consultant'],
       current: ARTEFACT_VERSION,
     },
     'the AI obeying it will never call review_document, which is what "older" is for',
@@ -154,7 +156,7 @@ test('a paste with no caller half is reported as older', () => {
     snippetStatus(withoutCaller),
     {
       kind: 'older',
-      behind: ['the caller declaration', 'the consultant'],
+      behind: ['coai-caller', 'coai-consultant'],
       current: ARTEFACT_VERSION,
     },
   );
@@ -273,7 +275,7 @@ test('the same text pasted into a CLAUDE.md is still a stale paste, with the old
     snippetStatus(mounted),
     {
       kind: 'older',
-      behind: ['the document gate', 'the caller declaration', 'the consultant'],
+      behind: ['coai-document', 'coai-caller', 'coai-consultant'],
       current: ARTEFACT_VERSION,
     },
   );
@@ -300,7 +302,7 @@ test('the panel says nothing when the paste is current or absent', () => {
 });
 
 test('a stale paste is told what it is missing, and what the menu hands out', () => {
-  const note = snippetNote({ kind: 'older', behind: ['the consultant'], current: 4 });
+  const note = snippetNote({ kind: 'older', behind: ['coai-consultant'], current: 4 });
 
   assert.match(note, /the consultant/);
   assert.match(note, /v4/);
@@ -315,7 +317,7 @@ test('an unversioned paste is told it is behind without inventing a number', () 
 });
 
 test('a paste from the future says to update the extension, not to overwrite the repo', () => {
-  const note = snippetNote({ kind: 'ahead', newer: ['the consultant'], current: 4 });
+  const note = snippetNote({ kind: 'ahead', newer: ['coai-consultant'], current: 4 });
 
   assert.match(note, /update this one rather than pasting over it/);
 });
@@ -361,6 +363,68 @@ test('a duplicated block does not change what the panel reports', () => {
 });
 
 /**
+ * A paste from a build NEWER than this one is `ahead`, even when the newer part is a half this
+ * build has never heard of.
+ *
+ * <p>Found by the code round, by one vendor in three roles. A repository pasted from a future build
+ * carries our four halves plus its own new one; comparing only the halves we know about answered
+ * `current`, the panel said nothing, and the notification after a copy said the repository was
+ * already on it — while pasting would have deleted a rule the person's newer extension put there.
+ * The shipped status has no name for a half it does not know, so it reports the id.</p>
+ */
+test('a paste carrying a half this build has never heard of is ahead, not current', () => {
+  const fromTheFuture = `${claudeSnippet()}\n<!-- coai-escalation v1 -->\n`;
+
+  assert.equal(snippetStatus(fromTheFuture).kind, 'ahead');
+});
+
+/**
+ * And a NEWER half in a second block is noticed, even though the first block is current.
+ *
+ * <p>The other half of the same finding. Every reader here takes the first match, which is what
+ * stops a duplicated block inflating anything — but it also meant that appending a newer block
+ * below a current one left the newer one invisible. The version of a half is now the HIGHEST one
+ * the file carries, which cannot inflate the way a sum could: two copies of v1 are still v1.</p>
+ */
+test('a newer half in a second block is not hidden by the first', () => {
+  const current = claudeSnippet();
+  const newerBelow = `${current}\n\n${current.replace('coai-document v1', 'coai-document v2')}`;
+
+  assert.equal(snippetStatus(newerBelow).kind, 'ahead');
+});
+
+/**
+ * And a STALE block above a current one is still reported, which is the other direction.
+ *
+ * <p>The two findings pull opposite ways: one asks that a newer block below a current one be seen,
+ * the other that a stale block ABOVE a current one not be blessed — and the AI in that repository
+ * reads the stale one first. A half is therefore compared at its LOWEST version for "behind" and its
+ * HIGHEST for "newer", so both are true of the same file and neither reading has to lose.</p>
+ */
+test('a stale block above a current one is still reported as older', () => {
+  const current = claudeSnippet();
+  const staleAbove = `${current.replace('coai-snippet v5', 'coai-snippet v1')}\n\n${current}`;
+
+  assert.equal(snippetStatus(staleAbove).kind, 'older');
+});
+
+/**
+ * The precedence itself, which nothing pinned.
+ *
+ * <p>Found by review: swapping the two filters in `snippetStatus` left the whole suite green,
+ * because every `ahead` fixture was otherwise complete and every `older` fixture had nothing newer
+ * in it. A copy that is BOTH — newer in one half, missing another — is the case the ordering exists
+ * for, and telling that person to paste over what they have would lose the newer half.</p>
+ */
+test('a copy that is newer in one half and missing another is ahead, not older', () => {
+  const aheadAndIncomplete = claudeSnippet()
+    .replace('coai-document v1', 'coai-document v9')
+    .replace(/<!-- coai-consultant v\d+ -->\n?/, '');
+
+  assert.equal(snippetStatus(aheadAndIncomplete).kind, 'ahead');
+});
+
+/**
  * A fifth half must not be able to arrive unread.
  *
  * <p>This is the defect that produced this whole change, generalised: the consultant half was added
@@ -371,17 +435,20 @@ test('a duplicated block does not change what the panel reports', () => {
  * half it was not taught about, rather than passing because its pattern matches nothing.</p>
  */
 test("the artefact's halves are exactly the halves the reader knows", () => {
+  // IN ORDER, not as sets: the order of KNOWN_HALVES is the order the artefact is composed in and
+  // the order the panel lists what is missing, so a row moved in the table without the text moving
+  // with it is a drift worth a red test. (Raised on the code round as a silent-drift risk.)
   assert.deepEqual(
-    [...halvesIn(claudeSnippet())].sort(),
-    [...HALF_IDS].sort(),
-    'a half in the paste that HALVES does not list is a half nothing reads, versions, or reports',
+    halvesIn(claudeSnippet()).map((half) => half.id),
+    [...HALF_IDS],
+    'a half in the paste that KNOWN_HALVES does not list is a half nothing reads, versions, or reports',
   );
 
   const withAFifth = `${claudeSnippet()}\n<!-- coai-escalation v1 -->\n`;
 
   assert.notDeepEqual(
-    [...halvesIn(withAFifth)].sort(),
-    [...HALF_IDS].sort(),
+    halvesIn(withAFifth).map((half) => half.id),
+    [...HALF_IDS],
     'the scan must still notice a half the reader does not know — otherwise it passes forever',
   );
 });
@@ -394,10 +461,33 @@ test("the artefact's halves are exactly the halves the reader knows", () => {
  * marker says nothing, and the convention in this file is that a version starts at 1.</p>
  */
 test('no half of the artefact is numbered from zero', () => {
-  const versions = [...claudeSnippet().matchAll(/<!-- (coai-[a-z-]+) v(\d+) -->/g)];
+  // Through `halvesIn` rather than a fifth copy of the marker grammar: the scan belongs to the
+  // module that owns the markers, and a test re-spelling it is the duplication this change removed.
+  const halves = halvesIn(claudeSnippet());
 
-  assert.equal(versions.length, HALF_IDS.length, 'the fixture really does carry every half');
-  for (const [, id, version] of versions) {
-    assert.ok(Number.parseInt(version, 10) >= 1, `${id} is at v${version}; a half's version starts at 1`);
+  assert.equal(halves.length, HALF_IDS.length, 'the fixture really does carry every half');
+  for (const half of halves) {
+    assert.ok(half.version >= 1, `${half.id} is at v${half.version}; a half's version starts at 1`);
+  }
+});
+
+/**
+ * The table is the source of truth for the artefact, not a description of it.
+ *
+ * <p>`claudeSnippet()` composes from `KNOWN_HALVES` now, so this asserts the thing that could still
+ * drift: that every row's `text` really is the rule its id and version claim. A row pointing at the
+ * wrong constant would compose a paste whose markers disagree with its bodies, and every other test
+ * here would go on passing.</p>
+ */
+test('every row of the table carries the rule its own marker names', () => {
+  for (const half of KNOWN_HALVES) {
+    const found = halvesIn(half.text);
+
+    assert.deepEqual(
+      found.map((one) => one.id),
+      [half.id],
+      `${half.id}'s text must carry its own marker and no other`,
+    );
+    assert.equal(found[0].version, half.version, `${half.id}'s marker and its version disagree`);
   }
 });
