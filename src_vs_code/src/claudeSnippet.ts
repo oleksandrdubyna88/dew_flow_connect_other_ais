@@ -41,6 +41,33 @@ export const SNIPPET_VERSION = 5;
 export const SNIPPET_BODY_SHA = '45dc60e8bbfd0d31';
 
 /**
+ * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
+ *
+ * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two differ by one and must not be
+ * “tidied” into agreement.</b> That one is the marker inside `coai-review-gate.md` and is frozen at 5
+ * by the conventions migration baseline; this one numbers the paste as a whole — gate, document,
+ * caller and consultant together — and is free to move when any of them does.</p>
+ *
+ * <p><b>Why it exists.</b> The ⋯ menu said `(v5)` from the day the label was introduced, through three
+ * changes to what the clipboard carries: the document half, the caller half, and the consultant half.
+ * The label was pinned to the one number in this file that can never move, so it said the same thing
+ * before and after — which is precisely the defect the label was added to fix, reported by the
+ * operator twice, the second time as “if the snippet changed, the version should have gone up”.</p>
+ *
+ * <p><b>Why it is declared rather than derived.</b> The first attempt summed the four half markers, so
+ * that no one would have to remember it. All three reviewers refused it: duplicate blocks in one
+ * CLAUDE.md sum together (a person pasting without deleting the old copy would be told their v12 is
+ * behind our v8), the sum collides for a paste that is newer in one half and missing another, and the
+ * guard proposed for it compared the constant with the expression it was assigned from. So the number
+ * is an ordinal, and what keeps it honest is a test rather than arithmetic: the SHA guard in
+ * `snippetVersion.test.ts` goes red on any change to the artefact text — a new half included — naming
+ * this constant, and `snippetVersionIsVisible.test.ts` goes red when the manifest title disagrees with
+ * it. A command title in `package.json` is static JSON that the editor reads before any of our code
+ * runs, so it cannot interpolate this; it is typed by hand and pinned by that test.</p>
+ */
+export const ARTEFACT_VERSION = 6;
+
+/**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
  *
  * <p><b>The instruction files come first, and that ordering is the whole point.</b> A block pasted
@@ -69,15 +96,21 @@ export const SNIPPET_LOCATIONS: readonly string[] = [
 /** The sentence a copy is recognised by, wherever it sits. */
 export const SNIPPET_MARKER = 'Multi-model review gate (ConnectOtherAIs)';
 
-/** What a workspace's pasted copy is, relative to what this build hands out. */
+/**
+ * What a workspace's pasted copy is, relative to what this build hands out.
+ *
+ * <p><b>`current` is the ARTEFACT's version in every state, and a diverged paste is described by
+ * its HALVES rather than by a number of its own.</b> A pasted copy carries one marker per half and
+ * nothing that numbers the whole, so any single number attributed to it is invented. The panel used
+ * to print the gate half's frozen 5 as though it were the paste's version, which is how a
+ * repository that mounts the gate rule came to be told "is v5; v5 is current".</p>
+ */
 export type SnippetStatus =
   | { readonly kind: 'current'; readonly current: number }
-  | { readonly kind: 'older'; readonly found: number; readonly current: number }
-  | { readonly kind: 'ahead'; readonly found: number; readonly current: number }
+  | { readonly kind: 'older'; readonly behind: readonly string[]; readonly current: number }
+  | { readonly kind: 'ahead'; readonly newer: readonly string[]; readonly current: number }
   | { readonly kind: 'unversioned'; readonly current: number }
   | { readonly kind: 'absent'; readonly current: number };
-
-const MARKER = /<!-- coai-snippet v(\d+) -->/;
 
 /**
  * The DOCUMENT half's own marker.
@@ -95,8 +128,6 @@ const MARKER = /<!-- coai-snippet v(\d+) -->/;
  */
 export const DOCUMENT_VERSION = 1;
 
-const DOCUMENT_MARKER = /<!-- coai-document v(\d+) -->/;
-
 /**
  * The CALLER half's version — say which model you are when you open the gate.
  *
@@ -109,8 +140,6 @@ const DOCUMENT_MARKER = /<!-- coai-document v(\d+) -->/;
  * That is the same defect the first version marker was introduced for, two rule files over.</p>
  */
 export const CALLER_VERSION = 1;
-
-const CALLER_MARKER = /<!-- coai-caller v(\d+) -->/;
 
 /**
  * The CONSULTANT half's version — when to ask another vendor, and what to do with the answer.
@@ -129,7 +158,57 @@ const CALLER_MARKER = /<!-- coai-caller v(\d+) -->/;
  */
 export const CONSULTANT_VERSION = 1;
 
-const CONSULTANT_MARKER = /<!-- coai-consultant v(\d+) -->/;
+/**
+ * The halves the artefact is made of, and the one place that knows there are four.
+ *
+ * <p>There used to be four marker regexes and four near-identical readers, which is four places to
+ * edit when a fifth half arrives and four chances to edit three of them. The marker is built from
+ * the id, so a row is all a half needs — and the reader now HAS a list of halves, which is what
+ * makes `halvesIn` able to notice a half nobody taught it about.</p>
+ *
+ * <p>`name` is what a person reads in the panel when their copy is missing that half. It is prose,
+ * not an identifier: the sentence it lands in is "missing or behind on: the document gate, the
+ * consultant".</p>
+ */
+const HALVES = [
+  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION },
+  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION },
+  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION },
+  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION },
+] as const;
+
+/** The ids this build reads, so a test can compare them with what the artefact actually carries. */
+export const HALF_IDS: readonly string[] = HALVES.map((half) => half.id);
+
+/** Any half's marker, from its id — never a second literal to keep in step. */
+function markerOf(id: string): RegExp {
+  return new RegExp(`<!-- ${id} v(\\d+) -->`);
+}
+
+/**
+ * One half's version out of a text, or nothing when that half is not in it.
+ *
+ * <p>The regex is deliberately NOT global and the FIRST match wins. A person who pastes the new
+ * block without deleting the old one has two of every marker in one file, and a reader that
+ * accumulated them would answer a number belonging to neither copy.</p>
+ */
+function versionOf(text: string, id: string): number | undefined {
+  const found = markerOf(id).exec(text)?.[1];
+
+  return found === undefined ? undefined : Number.parseInt(found, 10);
+}
+
+/**
+ * Every `coai-…` half id present in a text, in the order they appear.
+ *
+ * <p>Exported for one guard: the ids in what `claudeSnippet()` hands out must be exactly
+ * {@link HALF_IDS}. A fifth rule file added to the paste without a row in {@link HALVES} is then a
+ * red test rather than a half nothing reads — which is how the consultant half came to raise no
+ * version anywhere for a day.</p>
+ */
+export function halvesIn(text: string): readonly string[] {
+  return [...text.matchAll(/<!-- (coai-[a-z-]+) v\d+ -->/g)].map((match) => match[1]);
+}
 
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
@@ -142,11 +221,9 @@ export async function readSnippetStatus(read: (name: string) => Promise<string>)
   return snippetStatus(texts[at]);
 }
 
-/** The version out of a file the snippet was pasted into, or nothing when it carries no marker. */
+/** The GATE half's version out of a file the snippet was pasted into, or nothing when it has none. */
 export function snippetVersionIn(text: string): number | undefined {
-  const found = MARKER.exec(text)?.[1];
-
-  return found === undefined ? undefined : Number.parseInt(found, 10);
+  return versionOf(text, 'coai-snippet');
 }
 
 /**
@@ -159,41 +236,55 @@ export function snippetVersionIn(text: string): number | undefined {
  * repository, on a machine that has not updated.</p>
  */
 export function snippetStatus(pasted: string | undefined): SnippetStatus {
-  const current = SNIPPET_VERSION;
+  const current = ARTEFACT_VERSION;
   if (pasted === undefined || !pasted.includes(SNIPPET_MARKER)) {
     return { kind: 'absent', current };
   }
-  const found = snippetVersionIn(pasted);
-  if (found === undefined) {
+  if (snippetVersionIn(pasted) === undefined) {
     return { kind: 'unversioned', current };
   }
-  if (found === current) {
-    // The gate half is current and one of the OTHER halves may not be there at all — which is what
-    // every copy pasted before plan 4 looks like, and every copy pasted before #174. Reported as
-    // OLDER, because that is the sentence that gets it replaced — and `found` stays the number
-    // actually in the file, so nobody is told they have a version that was never handed out.
-    return documentVersionIn(pasted) === DOCUMENT_VERSION
-           && callerVersionIn(pasted) === CALLER_VERSION
-           && consultantVersionIn(pasted) === CONSULTANT_VERSION
-      ? { kind: 'current', current }
-      : { kind: 'older', found, current };
+
+  // Per HALF, because that is the only comparison a pasted copy supports: it carries one marker for
+  // each half it was given and nothing that numbers the paste as a whole. `newer` first — a copy
+  // from a later build is told to keep what it has even when it is also missing something, because
+  // pasting over it would be a downgrade nobody asked for.
+  const newer = HALVES.filter((half) => (versionOf(pasted, half.id) ?? 0) > half.version);
+  if (newer.length > 0) {
+    return { kind: 'ahead', newer: newer.map((half) => half.name), current };
   }
-  return found < current ? { kind: 'older', found, current } : { kind: 'ahead', found, current };
+
+  // Everything else that is not exactly this build's set of halves is OLDER: a copy pasted before a
+  // half existed carries no marker for it, and the AI obeying such a copy never uses what that half
+  // describes — it is the same defect for every one of them, which is why absent and behind are one
+  // answer here and are named separately in the sentence.
+  const behind = HALVES.filter((half) => (versionOf(pasted, half.id) ?? 0) < half.version);
+
+  return behind.length === 0
+    ? { kind: 'current', current }
+    : { kind: 'older', behind: behind.map((half) => half.name), current };
+}
+
+/** A readable list — "the document gate, the caller declaration and the consultant". */
+function names(halves: readonly string[]): string {
+  return halves.length < 2
+    ? halves.join('')
+    : `${halves.slice(0, -1).join(', ')} and ${halves[halves.length - 1]}`;
 }
 
 /** One line for the panel, saying what to do about it — or nothing when there is nothing to say. */
 export function snippetNote(status: SnippetStatus): string {
   switch (status.kind) {
     case 'older':
-      return `The CLAUDE.md snippet in this workspace is v${status.found}; v${status.current} is current. `
-        + 'Copy it again from the ⋯ menu and replace the old block — what changed is what the AI '
-        + 'reading it is told to do.';
+      return `The CLAUDE.md snippet in this workspace is missing or behind on: ${names(status.behind)}. `
+        + `The ⋯ menu hands out v${status.current} — copy it again and replace the old block; what `
+        + 'changed is what the AI reading it is told to do.';
     case 'unversioned':
       return 'The CLAUDE.md snippet in this workspace predates versioning, so it is at least one '
         + 'revision behind. Copy it again from the ⋯ menu and replace the old block.';
     case 'ahead':
-      return `This workspace has snippet v${status.found} and this extension hands out v${status.current}. `
-        + 'Somebody updated the repository from a newer build — update this one rather than pasting over it.';
+      return `This workspace's snippet is newer than this build on: ${names(status.newer)}. `
+        + `This extension hands out v${status.current} — somebody updated the repository from a newer `
+        + 'build, so update this one rather than pasting over it.';
     case 'current':
       return '';
     case 'absent':
@@ -217,11 +308,13 @@ export function copiedMessage(status: SnippetStatus): string {
   const took = `The CLAUDE.md snippet (v${status.current}) is on your clipboard`;
   switch (status.kind) {
     case 'older':
-      return `${took}. This repository has v${status.found} — replace the block between the markers.`;
+      return `${took}. This repository's copy is missing or behind on ${names(status.behind)} — `
+        + 'replace the block between the markers.';
     case 'unversioned':
       return `${took}. This repository has a copy from before the version marker existed — replace it.`;
     case 'ahead':
-      return `${took}, and this repository already has v${status.found}, which is NEWER than this build. Keep what you have.`;
+      return `${took}, and this repository's copy is NEWER than this build on ${names(status.newer)}. `
+        + 'Keep what you have.';
     case 'current':
       return `${took}, and this repository is already on it — nothing to replace.`;
     case 'absent':
@@ -236,23 +329,17 @@ export function copiedMessage(status: SnippetStatus): string {
 
 /** The document half's version out of a pasted file, or nothing when it has no such half. */
 export function documentVersionIn(text: string): number | undefined {
-  const found = DOCUMENT_MARKER.exec(text)?.[1];
-
-  return found === undefined ? undefined : Number.parseInt(found, 10);
+  return versionOf(text, 'coai-document');
 }
 
 /** The caller half's version out of a pasted file, or nothing when it has no such half. */
 export function callerVersionIn(text: string): number | undefined {
-  const found = CALLER_MARKER.exec(text)?.[1];
-
-  return found === undefined ? undefined : Number.parseInt(found, 10);
+  return versionOf(text, 'coai-caller');
 }
 
 /** The consultant half's version out of a pasted file, or nothing when it has no such half. */
 export function consultantVersionIn(text: string): number | undefined {
-  const found = CONSULTANT_MARKER.exec(text)?.[1];
-
-  return found === undefined ? undefined : Number.parseInt(found, 10);
+  return versionOf(text, 'coai-consultant');
 }
 
 /**

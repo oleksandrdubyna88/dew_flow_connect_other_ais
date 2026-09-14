@@ -3,7 +3,13 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { claudeSnippet, readSnippetStatus, SNIPPET_LOCATIONS, SNIPPET_VERSION } from '../claudeSnippet';
+import {
+  ARTEFACT_VERSION,
+  claudeSnippet,
+  readSnippetStatus,
+  SNIPPET_LOCATIONS,
+  SNIPPET_VERSION,
+} from '../claudeSnippet';
 
 test('neutral shared rules are discovered and older project/local copies take priority', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-'));
@@ -30,7 +36,7 @@ test('neutral shared rules are discovered and older project/local copies take pr
   const older = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1');
   for (const name of ['CLAUDE.md', '.agents/PROJECT.md', '.agents/rules/common/review-gate.md', '.agents/rules/common/coai-review-gate.md', '.claude/rules/common/review-gate.md', '.claude/rules/common/coai-review-gate.md']) {
     await write(name, older);
-    assert.deepEqual(await readSnippetStatus(read), { kind: 'older', found: 1, current: SNIPPET_VERSION }, name);
+    assert.deepEqual(await readSnippetStatus(read), { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION }, name);
     await fs.unlink(path.join(root, name));
   }
 });
@@ -49,5 +55,5 @@ test('all candidate reads start together but a slower older root copy still wins
   } finally {
     releaseRoot(claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1'));
   }
-  assert.deepEqual(await pending, { kind: 'older', found: 1, current: SNIPPET_VERSION });
+  assert.deepEqual(await pending, { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION });
 });

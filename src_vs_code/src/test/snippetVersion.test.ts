@@ -4,10 +4,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import {
+  ARTEFACT_VERSION,
   callerVersionIn,
   claudeSnippet,
   CALLER_VERSION,
   DOCUMENT_VERSION,
+  HALF_IDS,
+  halvesIn,
   SNIPPET_BODY_SHA,
   SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
@@ -37,10 +40,13 @@ test('a pasted file is recognised wherever the snippet sits inside it', () => {
   assert.equal(snippetVersionIn(file), SNIPPET_VERSION);
 });
 
-test('an older paste is reported as older, with both numbers', () => {
+test('an older paste is reported as older, naming the half that is behind', () => {
   const old = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1');
 
-  assert.deepEqual(snippetStatus(old), { kind: 'older', found: 1, current: SNIPPET_VERSION });
+  assert.deepEqual(
+    snippetStatus(old),
+    { kind: 'older', behind: ['the review gate'], current: ARTEFACT_VERSION },
+  );
 });
 
 test('a copy pasted before versioning existed is not version zero', () => {
@@ -48,24 +54,27 @@ test('a copy pasted before versioning existed is not version zero', () => {
   // calling it 0 would invent a number nobody wrote.
   const before = '## Multi-model review gate (ConnectOtherAIs)\n\nThis repository is reviewed by…';
 
-  assert.deepEqual(snippetStatus(before), { kind: 'unversioned', current: SNIPPET_VERSION });
+  assert.deepEqual(snippetStatus(before), { kind: 'unversioned', current: ARTEFACT_VERSION });
 });
 
 test('no instruction file at all is absent, not stale', () => {
   // A repository that has deliberately not adopted the gate is not a problem to report.
-  assert.deepEqual(snippetStatus(undefined), { kind: 'absent', current: SNIPPET_VERSION });
-  assert.deepEqual(snippetStatus('# Just a readme\n'), { kind: 'absent', current: SNIPPET_VERSION });
+  assert.deepEqual(snippetStatus(undefined), { kind: 'absent', current: ARTEFACT_VERSION });
+  assert.deepEqual(snippetStatus('# Just a readme\n'), { kind: 'absent', current: ARTEFACT_VERSION });
 });
 
 test('the current version is current', () => {
-  assert.deepEqual(snippetStatus(claudeSnippet()), { kind: 'current', current: SNIPPET_VERSION });
+  assert.deepEqual(snippetStatus(claudeSnippet()), { kind: 'current', current: ARTEFACT_VERSION });
 });
 
 test('a copy from the FUTURE is not called old', () => {
   // An extension older than the pasted snippet — somebody updated the repo before this machine.
   const ahead = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, `coai-snippet v${SNIPPET_VERSION + 5}`);
 
-  assert.deepEqual(snippetStatus(ahead), { kind: 'ahead', found: SNIPPET_VERSION + 5, current: SNIPPET_VERSION });
+  assert.deepEqual(
+    snippetStatus(ahead),
+    { kind: 'ahead', newer: ['the review gate'], current: ARTEFACT_VERSION },
+  );
 });
 
 /**
@@ -76,13 +85,19 @@ test('a copy from the FUTURE is not called old', () => {
  * pinned to the text. Editing the snippet fails this test until both are changed together, which is
  * the only moment either is cheap.</p>
  *
- * <p><b>There are THREE numbers now, and `SNIPPET_VERSION` is not one that can move.</b> It is the
- * marker written inside `coai-review-gate.md`, one of the 24 rule bodies the conventions repository
- * hashes against its migration baseline — so that file cannot be edited and its number cannot be
- * raised. What records a change is the marker of the half that changed: `DOCUMENT_VERSION` when the
+ * <p><b>`SNIPPET_VERSION` is not one of the numbers that can move.</b> It is the marker written
+ * inside `coai-review-gate.md`, one of the 24 rule bodies the conventions repository hashes against
+ * its migration baseline — so that file cannot be edited and its number cannot be raised. What
+ * records a change to one RULE is the marker of the half that changed: `DOCUMENT_VERSION` when the
  * document rule moves, `CALLER_VERSION` when the caller rule does. A change that arrives as a WHOLE
  * NEW half brings its own marker with it, and raising one of the others as well would claim a rule
  * changed that did not — a paste missing the new half is already reported as older by its absence.</p>
+ *
+ * <p><b>`ARTEFACT_VERSION` moves for ALL of them, and that is what this test is now the forcing
+ * function for.</b> Every case above changes what the clipboard carries, and the number a person
+ * reads in the ⋯ menu has to change with it — that number stalled at (v5) across three of these
+ * because it was pinned to the one constant that is frozen. So this failure names it, and names the
+ * static `package.json` title that has to be typed by hand alongside it.</p>
  */
 test('the snippet text and its version numbers move together', () => {
   const body = claudeSnippet()
@@ -95,9 +110,11 @@ test('the snippet text and its version numbers move together', () => {
   assert.equal(
     sha,
     SNIPPET_BODY_SHA,
-    `The snippet text changed. Set SNIPPET_BODY_SHA to '${sha}', and raise the marker of the half `
-      + `that changed — DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} for the document rule, `
-      + `CALLER_VERSION to ${CALLER_VERSION + 1} for the caller rule. Both, together: a version that `
+    `The snippet text changed. Set SNIPPET_BODY_SHA to '${sha}', raise ARTEFACT_VERSION to `
+      + `${ARTEFACT_VERSION + 1} — and write "(v${ARTEFACT_VERSION + 1})" into the copyClaudeSnippet `
+      + 'title in package.json, which is static JSON and cannot read it — and raise the marker of the '
+      + `half that changed — DOCUMENT_VERSION to ${DOCUMENT_VERSION + 1} for the document rule, `
+      + `CALLER_VERSION to ${CALLER_VERSION + 1} for the caller rule. All of them, together: a version that `
       + 'does not move with the text tells every pasted copy it is current forever, which is the '
       + 'defect this exists to catch. A change that adds a whole new rule file brings its own marker '
       + `and raises neither. (SNIPPET_VERSION stays ${SNIPPET_VERSION}: the gate rule is frozen `
@@ -113,7 +130,11 @@ test('a paste with no document half is reported as older', () => {
 
   assert.deepEqual(
     snippetStatus(gateOnly),
-    { kind: 'older', found: SNIPPET_VERSION, current: SNIPPET_VERSION },
+    {
+      kind: 'older',
+      behind: ['the document gate', 'the caller declaration', 'the consultant'],
+      current: ARTEFACT_VERSION,
+    },
     'the AI obeying it will never call review_document, which is what "older" is for',
   );
 });
@@ -131,7 +152,11 @@ test('a paste with no caller half is reported as older', () => {
   assert.equal(callerVersionIn(withoutCaller), undefined, 'the fixture really is missing that half');
   assert.deepEqual(
     snippetStatus(withoutCaller),
-    { kind: 'older', found: SNIPPET_VERSION, current: SNIPPET_VERSION },
+    {
+      kind: 'older',
+      behind: ['the caller declaration', 'the consultant'],
+      current: ARTEFACT_VERSION,
+    },
   );
 });
 
@@ -246,7 +271,11 @@ test('the same text pasted into a CLAUDE.md is still a stale paste, with the old
 
   assert.deepEqual(
     snippetStatus(mounted),
-    { kind: 'older', found: snippetVersionIn(mounted), current: SNIPPET_VERSION },
+    {
+      kind: 'older',
+      behind: ['the document gate', 'the caller declaration', 'the consultant'],
+      current: ARTEFACT_VERSION,
+    },
   );
 });
 
@@ -266,16 +295,16 @@ test('the instruction files are searched BEFORE the mounted rule', () => {
 test('the panel says nothing when the paste is current or absent', () => {
   // Two silences with different reasons, and both are correct: a workspace that never adopted the
   // gate is entitled not to, and one that is current has nothing to be told.
-  assert.equal(snippetNote({ kind: 'current', current: SNIPPET_VERSION }), '');
-  assert.equal(snippetNote({ kind: 'absent', current: SNIPPET_VERSION }), '');
+  assert.equal(snippetNote({ kind: 'current', current: ARTEFACT_VERSION }), '');
+  assert.equal(snippetNote({ kind: 'absent', current: ARTEFACT_VERSION }), '');
 });
 
-test('a stale paste is told what to do, with both numbers', () => {
-  const note = snippetNote({ kind: 'older', found: 1, current: 4 });
+test('a stale paste is told what it is missing, and what the menu hands out', () => {
+  const note = snippetNote({ kind: 'older', behind: ['the consultant'], current: 4 });
 
-  assert.match(note, /v1/);
+  assert.match(note, /the consultant/);
   assert.match(note, /v4/);
-  assert.match(note, /Copy it again/);
+  assert.match(note, /copy it again/);
 });
 
 test('an unversioned paste is told it is behind without inventing a number', () => {
@@ -286,7 +315,89 @@ test('an unversioned paste is told it is behind without inventing a number', () 
 });
 
 test('a paste from the future says to update the extension, not to overwrite the repo', () => {
-  const note = snippetNote({ kind: 'ahead', found: 9, current: 4 });
+  const note = snippetNote({ kind: 'ahead', newer: ['the consultant'], current: 4 });
 
   assert.match(note, /update this one rather than pasting over it/);
+});
+
+/**
+ * The sentence six repositories in this family actually see.
+ *
+ * <p>They mount the gate rule from the conventions submodule and have never pasted anything, so the
+ * gate half is current and the other three are absent. Before this was fixed the panel printed "The
+ * CLAUDE.md snippet in this workspace is v5; v5 is current", which is not a sentence anybody can
+ * act on — the gate half's frozen marker was being used as the version of the whole paste. A paste
+ * carries no number for the artefact as a whole, so the honest answer names the halves.</p>
+ */
+test('a mounting repository is not told two different numbers', () => {
+  const gateOnly = claudeSnippet().split('<!-- coai-document')[0];
+
+  const note = snippetNote(snippetStatus(gateOnly));
+
+  assert.doesNotMatch(
+    note,
+    /v5\b/,
+    `the note invents a version for a paste that carries no artefact number: "${note}"`,
+  );
+  assert.match(note, /the document gate/, 'it names the halves that are missing');
+  assert.match(note, /the consultant/);
+  assert.ok(
+    note.includes(`v${ARTEFACT_VERSION}`),
+    `and the version the menu now hands out: "${note}"`,
+  );
+});
+
+/**
+ * Pasting the new block without deleting the old one must not change the answer.
+ *
+ * <p>The refuted design summed every marker in the file, so two blocks in one CLAUDE.md read as v12
+ * against our v8 and the panel told the person their newer copy was behind. Every reader here takes
+ * the FIRST match on purpose; this is what stops that idea coming back.</p>
+ */
+test('a duplicated block does not change what the panel reports', () => {
+  const once = claudeSnippet();
+
+  assert.deepEqual(snippetStatus(`${once}\n\n${once}`), snippetStatus(once));
+});
+
+/**
+ * A fifth half must not be able to arrive unread.
+ *
+ * <p>This is the defect that produced this whole change, generalised: the consultant half was added
+ * to the paste and nothing anywhere moved to say so — no number, no list, no test. The reader now
+ * holds its own list of halves, and this compares it with what the artefact actually carries.</p>
+ *
+ * <p>The second assertion is the companion a scanning test needs: it proves the scan still SEES a
+ * half it was not taught about, rather than passing because its pattern matches nothing.</p>
+ */
+test("the artefact's halves are exactly the halves the reader knows", () => {
+  assert.deepEqual(
+    [...halvesIn(claudeSnippet())].sort(),
+    [...HALF_IDS].sort(),
+    'a half in the paste that HALVES does not list is a half nothing reads, versions, or reports',
+  );
+
+  const withAFifth = `${claudeSnippet()}\n<!-- coai-escalation v1 -->\n`;
+
+  assert.notDeepEqual(
+    [...halvesIn(withAFifth)].sort(),
+    [...HALF_IDS].sort(),
+    'the scan must still notice a half the reader does not know — otherwise it passes forever',
+  );
+});
+
+/**
+ * And it must not arrive at v0, which would leave every number unmoved.
+ *
+ * <p>Raised on the plan round against the version arithmetic the design started with. The
+ * arithmetic is gone, but the observation survives it: a half numbered from zero is a half whose
+ * marker says nothing, and the convention in this file is that a version starts at 1.</p>
+ */
+test('no half of the artefact is numbered from zero', () => {
+  const versions = [...claudeSnippet().matchAll(/<!-- (coai-[a-z-]+) v(\d+) -->/g)];
+
+  assert.equal(versions.length, HALF_IDS.length, 'the fixture really does carry every half');
+  for (const [, id, version] of versions) {
+    assert.ok(Number.parseInt(version, 10) >= 1, `${id} is at v${version}; a half's version starts at 1`);
+  }
 });

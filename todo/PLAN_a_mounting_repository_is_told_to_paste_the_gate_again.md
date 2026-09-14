@@ -5,7 +5,27 @@
 >
 > Related docs: [module_extension.md](../research/module_extension.md),
 > [PLAN_consultant.md](../research/PLAN_consultant.md) (story 5 built and then gave up a fix for
-> this), [PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md).
+> this), [PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md),
+> [PLAN_the_menu_names_the_clipboards_version.md](../research/PLAN_the_menu_names_the_clipboards_version.md)
+> (shipped 2026-09-14 — the boundary is below).
+
+## The boundary with the menu-version change (2026-09-14)
+
+Half of the symptom below has already been fixed, and by a different plan, so this one is narrower
+than it was. The division:
+
+| Item | Who owns it |
+|---|---|
+| the NUMBER in the ⋯ menu, the note and the notification | [PLAN_the_menu_names_the_clipboards_version.md](../research/PLAN_the_menu_names_the_clipboards_version.md) — **done**: `ARTEFACT_VERSION`, v6 |
+| the self-contradicting *“is v5; v5 is current”* sentence | that plan — **done**: the note names the halves that are missing or behind instead of inventing a number for the paste |
+| **the ADVICE** — *“replace the old block”* said to a repository that has no block | **this plan**, still open |
+| **what goes on the CLIPBOARD for a mount** — today it carries the gate half the submodule already provides | **this plan**, still open |
+| recognising a mount at all (a `mounted` state, provenance, `isOurGateRule`) | **this plan**, still open |
+
+So the sentence a mounting repository sees is now accurate about WHAT it is missing and still wrong
+about what to DO. Nothing in the shipped change made this plan harder: it added no mount awareness and
+took no decision about one, and the per-half list the note now carries is the raw material a
+mount-aware sentence would use.
 
 ## The symptom
 

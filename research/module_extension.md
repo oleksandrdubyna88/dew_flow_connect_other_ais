@@ -1868,10 +1868,11 @@ seeded from the shared one; off, this side's is promoted to the shared one when 
 sides need nothing — their token then disagrees with the intent, and the rule re-mints it.
 
 
-### The pasted snippet has two halves, and only one of them is shared (2026-09-13)
+### The pasted snippet has FOUR halves, and only three of them are shared (2026-09-13, corrected 2026-09-14)
 
 `claudeSnippet()` used to BE the gate rule: one constant, generated from the conventions submodule at
-build time. It is now the gate rule plus this product's own consultant block, and the split is the
+build time. It is now four rule files joined in the order an AI should read them — the gate, the
+document gate, the caller declaration, and this product's own consultant block — and the split is the
 point. A rule about how work is done in every repository of the family is SHARED and lives in
 conventions, pinned; a rule about when to call one tool of one server is SPECIFIC and belongs to the
 project that owns it. The operator settled it in those words when the alternative on the table was a
@@ -1879,45 +1880,65 @@ new shared rule and a six-repository pin cascade — and the cascade is the reas
 on conventions `main` makes every consumer's pin stale at once.
 
 So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it beside `gateRule.ts`
-(prose stays prose — a backtick inside a template literal has broken this build three times), and
-the composed text carries ONE version marker, stamped here over the artifact a person actually
-pastes. The mounted rule keeps its own marker for the repositories that mount it; a paste is a
-different artefact and versions on its own, which is what `snippetStatus` reads back out of somebody's
-CLAUDE.md. `SNIPPET_VERSION` is 6 and the hash moved with it.
+(prose stays prose — a backtick inside a template literal has broken this build three times).
 
-What the block says is the five triggers a stuck AI can recognise from inside a task — the same test
-red after two fix attempts, two sources contradicting, an unmeasured design fork, the person saying
-it is still not fixed twice, and the person simply asking — plus the tool's contract and the two
-rules that make advice usable: it is MATERIAL to verify, and the next call reports the verification.
-**Never a diff**: the server collects the working tree itself, and a diff pasted into the problem
-statement is the same bytes twice, paid for twice.
+**Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` is
+one of the 24 rule bodies the conventions repository hashes against its migration baseline, so its
+`<!-- coai-snippet v5 -->` cannot be raised: the gate half is frozen at v5 and will be until that
+inventory retires. A change that arrives as a whole new half therefore brings a marker of its own —
+`coai-document`, `coai-caller`, `coai-consultant`, each at v1 — and `snippetStatus` compares a pasted
+copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
+which is what lets a copy made before a half existed be recognised at all.
 
-**And a MOUNT is not a paste.** `SNIPPET_LOCATIONS` includes the mounted canonical rule, so a family
-repository that mounts and never pasted used to read as current — and since v6 it reads as v5 against
-v6, which would have told it to "copy it again and replace the old block". Wrong twice: there is no
-block to replace, and pasting the whole snippet would duplicate a rule the submodule already
-provides. `snippetStatus` takes where it was found, answers a sixth state — `mounted` — and the note
-says to paste the consultant half only. Raised as Blocking on the plan round, by the reviewer that
-read the consequence through rather than the sentence.
+> **An earlier version of this section described a design that never shipped.** It said
+> `SNIPPET_VERSION` was 6, that the composed text carried ONE version marker, that `snippetStatus`
+> answered a sixth state `mounted`, and that the consultant marker was `<!-- coai-consultant v6 -->`.
+> That was story 5 of [PLAN_consultant.md](PLAN_consultant.md), which was given up on 2026-09-14 when
+> epic 3 was rebased onto a `main` that had answered the same question twice over with per-half
+> markers. The paragraphs are replaced rather than annotated, because a description of code that does
+> not run is a bug in the file.
 
-**And the mounted state has an EXIT.** The first version of it did not, which the code round caught
-twice: the note tells a mounting repository to paste the consultant block, and the reader matched only
-the gate's sentence — which that block does not contain — so the workspace stayed `mounted` for ever,
-told to paste what it had already pasted. The consultant half carries its own marker now
-(`<!-- coai-consultant v6 -->`, a different name so `snippetVersionIn` still finds exactly one of
-its own), the reader looks for it, and a mount plus a pasted block reads as current — or as `older`
-when the pasted block is from an earlier build. The clipboard agrees with the advice: in the mounted
-state the copy command puts the consultant half alone on it. And a file at a mount PATH is only
-granted mount status when its body matches the gate rule this build was compiled against, so a stale
-copy or a tampered file gets the ordinary paste answer rather than "your gate half is current".
+### The number in the ⋯ menu is the ARTEFACT's, not the gate rule's (2026-09-14)
 
-The successful state carries HOW it got there. With the gate mounted and the consultant block pasted
-the answer is `current` — everything this build hands out is present — but a copy still gives the
-consultant half alone, because putting both on the clipboard of a repository that mounts the gate
-would duplicate the rule its submodule provides. And a consultant block with no version marker reads
-as `unversioned` rather than version zero, which is the decision the gate half made when its own
-marker arrived: a paste that predates versioning is a real generation, and inventing a number for it
-is worse than saying so.
+The menu item said **“Copy the CLAUDE.md snippet (v5)”** from the day the label was added, through
+three changes to what the clipboard carries. The label was pinned to `SNIPPET_VERSION` — the one
+number in `claudeSnippet.ts` that is frozen by the conventions baseline — so it could not move, and a
+person reading the menu had no way to learn that the block in their repository was not what the click
+would now give them. That is the defect the label was introduced to fix, arriving through the one door
+left open, and the operator reported it twice.
+
+`ARTEFACT_VERSION` is the answer: an ordinal for the composed paste, 6 because the menu has been
+showing 5 for the whole artefact and the next one is 6. It numbers a different thing from
+`SNIPPET_VERSION`, which stays 5 and stays the gate rule's own marker. Three sentences read it — the
+menu title, the panel's stale-copy note, and the notification after the click — and two tests keep it
+honest: `snippetVersion.test.ts`'s hash guard fails on any change to the artefact text and names the
+number to raise, and `snippetVersionIsVisible.test.ts` fails when the `package.json` title disagrees
+with it. **The manifest bump is typed by hand on purpose.** A VS Code command title is static JSON the
+editor reads before any of our code runs, so it cannot interpolate a constant, and generating it in
+`prepare-gate.mjs` would put a second implementation of the version decision in the build script.
+
+**The first design derived the number instead, and was refused by all three reviewers.** It summed
+every half marker (5+1+1+1). Duplicate blocks in one `CLAUDE.md` — a person pasting the new block
+without deleting the old one — summed together, so the panel would have told them their v12 was behind
+our v8; the sum collided for a paste newer in one half and missing another; and the guard proposed for
+it compared the constant with the expression it was assigned from. The arithmetic is gone and what
+survives is the requirement: the event that changes the artefact turns a test red, naming what to
+write.
+
+**And the diverged states stopped printing a number for a paste at all.** A pasted copy carries one
+marker per half and nothing that numbers the whole, so any single number attributed to it is invented —
+which is how the six repositories that MOUNT the gate rule came to be told *“The CLAUDE.md snippet in
+this workspace is v5; v5 is current.”* `SnippetStatus` now carries the halves instead: `older` names
+what is missing or behind, `ahead` names what is newer, and `current` is `ARTEFACT_VERSION` in every
+state. The four marker regexes and four readers became one `HALVES` table with the marker built from
+the id, so the reader has a list of halves to compare the artefact against — and a test does exactly
+that, which is what makes a fifth half added without a row a red build rather than a half nothing reads.
+
+**What this does NOT fix**: a mounting repository is still told to *replace the old block* when there
+is no block, and the clipboard still carries the gate half its submodule already provides. That is
+[PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md),
+which stays open. The boundary: this change owns the NUMBER and the shape of the sentence; that plan
+owns the ADVICE and what goes on the clipboard for a mount.
 
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
