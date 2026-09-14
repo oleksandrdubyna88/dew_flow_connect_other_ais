@@ -2586,6 +2586,31 @@ forgetting is a pass earned by the vendor being broken. So the second session is
 cannot fail to know, and only then asked about the number. Either control failing reports NO VERDICT
 and exits non-zero — a run that could not measure is a failure to measure, never a pass.
 
+### The reset really forgets — measured (2026-09-14)
+
+| | |
+|---|---|
+| **Subject** | `35456934`, `src_vs_code` |
+| **Harness** | `src_vs_code/scripts/live-fresh.mjs` (`npm run test:fresh`) |
+| **Pinned** | planted number `7431`; node v24.18.0; win32; `startupMs` 60 000, `turnMs` 240 000; vendors asked serially, never in parallel |
+| **Variable** | whether the conversation was reset between the two recalls |
+
+**Predicted, before the run:** every vendor remembers before the reset and forgets after it — a
+disposed session takes its process with it, and a new one in a new directory with an empty carry has
+nothing to resume from. The `per-turn` shape is the one to watch, because it resumes by an id rather
+than by a pipe, and an id that survived the reset would be the way this leaks.
+
+**Observed:** 3 of 3 forgot.
+
+| Vendor | Shape | Planted | Before the reset | Alive after it | After the reset |
+|---|---|---|---|---|---|
+| `agy` | persistent | OK | `7431` | `4` | `NONE` |
+| `claude` | persistent | OK | `7431` | `4` | `NONE` |
+| `codex` | **per-turn** | OK | `7431` | `4` | `NONE` |
+
+The prediction held, including for the shape it named. What the run does NOT establish is anything
+about `freshStart`: see the paragraph above.
+
 **And EVERY field is decided about, checked by the compiler rather than by hand.** Typing the slate as
 `Partial<Thread>` proves that every field of `Freshened` is a thread field of the right type — and it
 caught a real mismatch the moment it was added — but it cannot prove the other direction. A
