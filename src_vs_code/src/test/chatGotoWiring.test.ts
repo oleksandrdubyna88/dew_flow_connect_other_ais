@@ -204,11 +204,15 @@ test('the offer is refused by NAME, never by a captured tab object', () => {
   // assertion that reads comments is one a comment can satisfy.
   assert.doesNotMatch(starting, /if \([^)]*(?:tabStillOpen|activeTabIs)\(key\)/u,
     'the refusal still compares a captured tab object, which goes stale the moment the tab is renamed');
-  // And the host side takes a label rather than a key, so the mistake cannot be made from here again.
-  assert.match(source('chatCommand.ts'), /export function activeTabIs\(label: string\): boolean \{[\s\S]{0,200}snapshots\(\)\.active\?\.label === label/u,
-    'activeTabIs compares something other than the label');
-  assert.match(source('chatCommand.ts'), /label\.length > 0 &&/u,
-    'an unnamed tab matches an unnamed front tab, so the offer would fire for whatever is there');
+  // And the host side asks the PURE predicate, which is what makes this bug class testable at all:
+  // the old shape read correctly and was wrong at runtime, and no source assertion could see that.
+  const host = source('chatCommand.ts');
+  assert.match(host, /export function activeTabIs\(label: string\): boolean \{/u, 'activeTabIs no longer takes a label');
+  assert.match(host, /return frontIs\(label, active\?\.label \?\? '', all\.filter\(\(one\) => one\.label === label\)\.length\);/u,
+    'the host decides this itself instead of asking the predicate the tests can reach');
+  // And it counts the tabs of that name, because a name two tabs share identifies neither.
+  assert.match(source('chatGoto.ts'), /export const frontIs = \(label: string, front: string, namesakes: number\): boolean =>/u,
+    'there is no pure predicate for "is the tab in front the one this name belongs to"');
 });
 
 test('a record that moved says so AND opens the list, rather than stopping', () => {

@@ -7,7 +7,8 @@ to more than one session used to open the whole list of this folder's conversati
 saying two sessions share that name — most of the rows having nothing to do with it. Now the tab's
 own name is already in the search box, so what you are almost certainly after is at the top, and one
 backspace still shows everything. And when exactly one saved conversation was opened from a tab of
-that name, it simply opens it.
+that name — and only one tab open right now carries that name — it simply opens it, because
+then the name is evidence rather than a coincidence.
 
 **And *New conversation for this tab* works.** It refused every press with *"open it again and press
 once more"* — including when that tab was in front the whole time. It was comparing the tab it was

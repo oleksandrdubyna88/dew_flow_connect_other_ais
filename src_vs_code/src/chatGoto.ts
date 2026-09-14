@@ -123,6 +123,28 @@ export interface GotoAsked {
    */
   readonly ambiguous: boolean;
   /**
+   * Whether the session directory could not be READ, as opposed to having answered with several.
+   *
+   * <p>Both arrive as {@link GotoAsked.ambiguous}, because both mean "which session this tab belongs
+   * to is not known" and both should therefore ask rather than guess. They are told apart HERE and
+   * only here, for the name fallback below: "two sessions are called this" is a fact about the
+   * world, and a fallback may lean on it. "I could not look" is a fact about this attempt, and a
+   * temporarily unreadable folder must not become a conversation opened on the strength of a name.
+   * (codex, the round on this change.)</p>
+   */
+  readonly unsure: boolean;
+  /**
+   * How many tabs open right now carry this tab's label — at least 1, since this tab is one of them.
+   *
+   * <p>It is what makes a NAME usable as evidence, and the whole reason the fallback below is
+   * allowed to exist. Three reviewers refused an auto-open on a unique title with the same case:
+   * two tabs called the same thing, one conversation of that name, and pressing *go to* on the tab
+   * that does not own it opens the one that does. They are right, and this is the fact that answers
+   * them — when this window has exactly ONE tab of that name, that case cannot arise, and when it
+   * has two the question goes back to the person.</p>
+   */
+  readonly namesakes: number;
+  /**
    * Every saved conversation whose SOURCE is this tab's, from every root — `ConversationIndex.bySource`.
    *
    * <p>Across all roots on purpose: a conversation about this very file filed under another project
@@ -234,7 +256,14 @@ export function goto(asked: GotoAsked): Goto {
     // Several matches narrow the question to them. None leaves the old behaviour, because a list of
     // everything is still better than nothing when the name says nothing either.
     const named = sameName(asked.inRoot, asked.tab.label);
-    const only = named.length === 1 ? named[0] : undefined;
+    // A unique match opens ONLY when the name is evidence rather than a coincidence. Two conditions,
+    // and each answers a finding: the walk must have ANSWERED — a directory that could not be read
+    // says nothing about names either, and a conversation opened on the strength of a temporary
+    // failure is the worst kind of wrong (codex) — and this window must hold exactly ONE tab of this
+    // name, or the conversation found may be the other tab's (local, gemini and codex, one case
+    // each). Where either fails the question goes back to the person, narrowed to the matches.
+    const evidence = !asked.unsure && asked.namesakes === 1;
+    const only = evidence && named.length === 1 ? named[0] : undefined;
     if (only !== undefined) {
       return { kind: 'reopen', meta: only };
     }
@@ -311,6 +340,22 @@ function eligible(kind: TabKind): boolean {
  * is the line this whole story rests on: every conversation written before C1 has no source, and
  * handing one of them to a tab that never owned it would be this feature's worst failure.</p>
  */
+/**
+ * Is the tab in FRONT the one this name belongs to, beyond doubt?
+ *
+ * <p>Pure, and here rather than in the host, because it is the decision and because the bug it
+ * replaces was invisible to every test this repository can run: the host compared `vscode.Tab`
+ * objects, VS Code replaces those whenever a tab changes, and a Claude Code tab renames itself as
+ * the assistant works. A source-read assertion cannot see a comparison that reads correctly and is
+ * wrong at runtime — only a value test can, and only if the value is reachable. (codex asked for
+ * exactly this test and could not have got it against the old shape.)</p>
+ *
+ * <p>The label alone is not enough either: two tabs can carry one name, and then it identifies
+ * neither. `namesakes` is how many do.</p>
+ */
+export const frontIs = (label: string, front: string, namesakes: number): boolean =>
+  label.length > 0 && front === label && namesakes === 1;
+
 /**
  * The conversations in this root that were opened from a tab of this NAME.
  *
