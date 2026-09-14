@@ -496,7 +496,10 @@ public static class ReviewerSummaryFactory
         // The stderr tail travels WITH the exit code. "exit 1" alone was what made the same codex
         // failure undiagnosable twice at a real gate: the executor had captured the reason and
         // this sentence — the only place a person reads — threw it away.
-        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail)}",
+        // stderr FIRST, and the stream the adapter recovered only when stderr is silent: a vendor
+        // writing an error line means it; a line lifted out of an event stream is the best guess
+        // available. Every vendor here but codex uses stderr, so this changes nothing for them.
+        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, e.StdOutTail)}",
         ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
         _ => "unknown",
@@ -522,8 +525,17 @@ public static class ReviewerSummaryFactory
     private static readonly string[] Announcements =
         ["error:", "error ", "exception", "fatal", "refused", "denied", "unauthorized", "quota", "not found", "missing"];
 
-    private static string Because(string stdErrTail)
+    /// <param name="saidElsewhere">
+    /// What the vendor's own adapter recovered from another stream, or empty — used only when
+    /// stderr is silent. See <c>IReviewerRuntime.WhyItFailed</c> for why that stream exists.
+    /// </param>
+    private static string Because(string stdErrTail, string saidElsewhere = "")
     {
+        if (stdErrTail.Trim().Length == 0 && saidElsewhere.Trim().Length > 0)
+        {
+            return $": {Quote(saidElsewhere.Trim())}";
+        }
+
         // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
         // Gemini retirement was mistaken for three different things because the sentence a reader
         // saw was `exit 1` and the sentence that mattered was eight lines inside a node stack.
@@ -544,7 +556,21 @@ public static class ReviewerSummaryFactory
         var meaningful = lines.Where(l => !IsScaffolding(l)).ToList();
         if (meaningful.Count == 0)
         {
-            return NothingButScaffolding(lines);
+            // Scaffolding is not a reason, and a vendor that named its own failure elsewhere has
+            // given us a better one.
+            return saidElsewhere.Trim().Length > 0
+                ? $": {Quote(saidElsewhere.Trim())}"
+                : NothingButScaffolding(lines);
+        }
+
+        // Stderr said something, but nothing that ANNOUNCES a failure — a node deprecation warning,
+        // a locale notice, a certificate grumble. The adapter's answer came out of the place this
+        // vendor puts errors, so it is the better evidence of the two, and quoting the warning
+        // instead would put the useless sentence back on the page with extra steps. The predicate
+        // is the one this method already ranks by, not a second opinion. (gemini, plan round.)
+        if (saidElsewhere.Trim().Length > 0 && !meaningful.Any(Announces))
+        {
+            return $": {Quote(saidElsewhere.Trim())}";
         }
 
         var line = meaningful.FirstOrDefault(Announces) ?? meaningful[0];
