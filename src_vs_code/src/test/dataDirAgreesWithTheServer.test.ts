@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
-import { coaiDataDir } from '../dataDir';
+import { readFileSync } from 'node:fs';
+import { coaiDataDir, dataSideName, whereData } from '../dataDir';
 
 /** The configured root as the server also resolves it — absolute, and native to this platform. */
 const ROOT = resolve('/srv/coai');
@@ -105,5 +106,111 @@ test('with nothing configured the default is untouched', () => {
     // and moving somebody's existing history is exactly what this feature promises not to do.
     assert.ok(!coaiDataDir().endsWith('/windows'), 'the default must not grow a side');
     assert.ok(coaiDataDir().endsWith('coai-mcp'));
+  });
+});
+
+// ---------- the shared vectors, which are the only thing that can catch a drift ----------
+
+/**
+ * The vectors both halves assert, read from the file that sits outside both of them.
+ *
+ * <p>Each side's own unit tests are self-consistent and therefore blind to a divergence — the
+ * failure is only visible from outside, as a token written where the shim does not look or a panel
+ * giving migration advice the server's startup log contradicts. Raised by codex and gemini
+ * independently on the plan round of this half.</p>
+ */
+interface Vector {
+  readonly why: string;
+  readonly dataDir: string;
+  readonly dataSide: string;
+  readonly dir: string;
+  readonly refused: boolean;
+  readonly rootHasDatabase: boolean;
+  readonly dirExists: boolean;
+  readonly notes: readonly string[];
+}
+
+const VECTORS: readonly Vector[] = JSON.parse(
+  readFileSync(resolve(__dirname, '../../..', 'shared/data-side-vectors.json'), 'utf8'),
+).vectors;
+
+/** `<root>` and `<default>` stand for paths the two languages spell for themselves. */
+function expected(vector: Vector): string {
+  return vector.dir === '<default>'
+    ? coaiDataDirWithNothingSet()
+    : vector.dir.replace('<root>', ROOT).replaceAll('/', vector.dir.includes('<root>') ? '/' : '/');
+}
+
+function coaiDataDirWithNothingSet(): string {
+  let answer = '';
+  withEnv({ COAI_DATA_DIR: undefined, COAI_DATA_SIDE: undefined }, () => {
+    answer = coaiDataDir();
+  });
+
+  return answer;
+}
+
+test('every shared vector resolves to the directory the server resolves', () => {
+  for (const vector of VECTORS) {
+    withEnv(
+      {
+        COAI_DATA_DIR: vector.dataDir === '' ? undefined : ROOT,
+        COAI_DATA_SIDE: vector.dataSide === '' ? undefined : vector.dataSide,
+      },
+      () => {
+        const where = whereData(() => true);
+        if (vector.refused) {
+          assert.notEqual(where.refusal, '', vector.why);
+          assert.equal(where.directory, '', `${vector.why}: a refused side has no directory to offer`);
+          return;
+        }
+        assert.equal(where.refusal, '', vector.why);
+        assert.equal(where.directory, expected(vector), vector.why);
+      },
+    );
+  }
+});
+
+test('every shared vector warns about exactly what the server warns about', () => {
+  for (const vector of VECTORS) {
+    if (vector.refused) {
+      continue;
+    }
+    withEnv(
+      {
+        COAI_DATA_DIR: vector.dataDir === '' ? undefined : ROOT,
+        COAI_DATA_SIDE: vector.dataSide === '' ? undefined : vector.dataSide,
+      },
+      () => {
+        const resolved = expected(vector);
+        const where = whereData((path) =>
+          path === `${ROOT}/coai.db` ? vector.rootHasDatabase : path !== resolved || vector.dirExists);
+
+        const kinds = where.notes.map((n) => (n.includes('coai.db') ? 'loose-database' : 'new-directory'));
+        assert.deepEqual(kinds, [...vector.notes], vector.why);
+      },
+    );
+  }
+});
+
+test('a refused side is a rendered sentence, not a thrown panel', () => {
+  // The server refuses to START on this, so the panel is the only place the reason can be read —
+  // and a panel that threw would hide it behind a blank section. codex raised the wiring; this is
+  // the half of it that lives in the pure function.
+  withEnv({ COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'wsl/node1' }, () => {
+    const where = whereData(() => true);
+
+    assert.match(where.refusal, /COAI_DATA_SIDE/);
+    assert.match(where.refusal, /refuses to start/);
+    assert.equal(where.directory, '');
+  });
+});
+
+test('the side name this window was given is readable on its own', () => {
+  withEnv({ COAI_DATA_SIDE: '  Windows  ' }, () => {
+    assert.equal(dataSideName(), 'windows', 'trimmed and lower-cased, as the server reads it');
+  });
+  withEnv({ COAI_DATA_SIDE: undefined }, () => {
+    assert.equal(dataSideName(), '');
   });
 });

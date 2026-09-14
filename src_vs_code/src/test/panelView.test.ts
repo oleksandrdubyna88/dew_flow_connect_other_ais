@@ -1304,3 +1304,87 @@ test('a STALE catalog is not an answer about roles', () => {
     'the cached answer said it runs Requirements; what is true is that nobody could ask');
   assert.ok(!prompts.includes('work runs Requirements'));
 });
+
+// ---------- where this window keeps its data (issue #115) ----------
+
+const WHERE = {
+  directory: '/srv/coai/windows',
+  side: 'windows',
+  refusal: '',
+  notes: [] as readonly string[],
+};
+
+test('the section says which directory THIS WINDOW reads, and names the side', () => {
+  const html = panelHtml(state({ storage: WHERE }), 'n');
+
+  assert.match(html, /Where this window keeps its data/);
+  assert.ok(html.includes('/srv/coai/windows'), 'the resolved directory, not the raw variable');
+  assert.ok(html.includes('<b>windows</b>'), 'and the side it resolved through');
+});
+
+test('with no side named it says so plainly, rather than showing an empty one', () => {
+  const html = panelHtml(state({ storage: { ...WHERE, directory: '/srv/coai', side: '' } }), 'n');
+
+  assert.match(html, /No side is named/);
+  assert.ok(!html.includes('<b></b>'), 'an empty bold side would read as a side that is set and blank');
+});
+
+test('the line to paste carries the directory this side resolved, and names the file it goes in', () => {
+  const html = panelHtml(state({ storage: WHERE }), 'n');
+
+  assert.ok(html.includes('COAI_DATA_DIR'), 'the variable that chooses the directory');
+  assert.ok(html.includes('/srv/coai&quot;'), 'the ROOT, not the side directory — the server appends the side');
+  assert.ok(html.includes('COAI_DATA_SIDE'), 'and the side beside it');
+  assert.match(html, /\.mcp\.json/, 'and where it goes');
+});
+
+test('with no side, the pasted block carries no side key at all', () => {
+  const html = panelHtml(state({ storage: { ...WHERE, directory: '/srv/coai', side: '' } }), 'n');
+
+  assert.ok(html.includes('COAI_DATA_DIR'));
+  assert.ok(!html.includes('COAI_DATA_SIDE&quot;'), 'a key that does nothing invites the question of what it is for');
+});
+
+test("the server's own notes are rendered where a person sees them", () => {
+  const notes = [
+    'There is a coai.db directly in /srv/coai, from the layout before this directory was shared.',
+    '/srv/coai/windows is not there yet, so this side starts with no history.',
+  ];
+  const html = panelHtml(state({ storage: { ...WHERE, notes } }), 'n');
+
+  for (const note of notes) {
+    assert.ok(html.includes(escapeHtml(note)), note);
+  }
+});
+
+/**
+ * The inventory, which two reviewers asked for by name on the plan round.
+ *
+ * <p>A panel that shows a path and says nothing else leaves a person to guess, and both wrong
+ * guesses are silent: copying `worktrees/` carries a checkout of somebody's repository onto a NAS
+ * for no benefit, and copying the token files hands one machine's sign-in to another — the one
+ * thing the per-side layout exists to prevent.</p>
+ */
+test('it names what to move and what to leave behind', () => {
+  const html = panelHtml(state({ storage: WHERE }), 'n');
+
+  for (const move of ['coai.db', 'sessions/', 'unparseable/', 'empty/']) {
+    assert.ok(html.includes(move), `it must name ${move} as something to move`);
+  }
+  assert.match(html, /Leave <code>worktrees\/<\/code> behind/);
+  assert.match(html, /Leave the token files behind/);
+  assert.match(html, /Stop the server first/, 'a database being copied while it is written is the failure here');
+});
+
+test('a refused side is a sentence on the page, not a section that vanished', () => {
+  const refusal = "COAI_DATA_SIDE='wsl/node1' is not a usable directory name, so the server refuses to start.";
+  const html = panelHtml(state({ storage: { directory: '', side: 'wsl/node1', refusal, notes: [] } }), 'n');
+
+  assert.ok(html.includes(escapeHtml(refusal)), 'the one sentence that explains why nothing works');
+  assert.ok(!html.includes('Leave <code>worktrees/</code>'), 'and no advice about a directory there is not');
+});
+
+test('a fixture that carries no storage renders no section at all', () => {
+  // The established convention for an optional field here: absent means a test that does not care.
+  assert.ok(!panelHtml(state(), 'n').includes('Where this window keeps its data'));
+});

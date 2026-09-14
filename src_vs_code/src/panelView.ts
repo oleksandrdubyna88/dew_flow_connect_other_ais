@@ -20,6 +20,8 @@ import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { CLIENT_TARGETS, clientTargetsLine, mcpServerBlock } from './mcpBlock';
+import { DataLocation } from './dataDir';
 import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
@@ -133,6 +135,14 @@ export interface PanelState {
   readonly usageWindow: Window;
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
+  /**
+   * Where THIS WINDOW keeps its data, and what to say about it — issue #115.
+   *
+   * <p>Optional for the reason {@link teamServers} is: absent means a fixture that does not care,
+   * and the section simply says nothing. The provider always supplies it, including when the side
+   * was refused — a refusal is a state this renders, not an exception that empties the panel.</p>
+   */
+  readonly storage?: DataLocation | undefined;
   /** The newest published Team-server version, or empty. Admins see it; nobody can act on it here. */
   readonly latestTeamServerVersion?: string | undefined;
   /**
@@ -1075,7 +1085,82 @@ function serverBody(state: PanelState): string {
   return `${installed}${stale}${probe}
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
-<button class="link" data-command="checkForUpdate">Check again</button>`;
+<button class="link" data-command="checkForUpdate">Check again</button>
+${storageBlock(state.storage)}`;
+}
+
+/**
+ * Where THIS WINDOW keeps its data, and how to make a server agree with it.
+ *
+ * <p><b>"This window" is the whole design, and it came out of the plan round.</b> The first draft
+ * said "the directory in use", which is a claim this surface cannot make: the extension host has its
+ * own environment, and the MCP server's comes from the client entry that spawns it. A
+ * <code>COAI_DATA_DIR</code> in somebody's <code>.mcp.json</code> reaches the server and never
+ * reaches this process, so a panel reporting its own environment as the server's would be confidently
+ * wrong exactly when a person came here to check.</p>
+ *
+ * <p>The product already knew this — the help page says, in five languages, that a rounds list
+ * reading <i>Nothing is running</i> while your assistant says it is reviewing means the server is
+ * writing somewhere this window does not share. Until now that was something you INFERRED from an
+ * empty list. This says which directory this window reads and hands over the line that makes a
+ * client's server read the same one, so the comparison is a glance rather than a deduction.</p>
+ *
+ * <p>Nothing here moves anything: copying is the half with every interesting failure in it — a
+ * partial copy, a file in use, a database being written while it is read — and it stays out rather
+ * than being done badly.</p>
+ */
+function storageBlock(storage: DataLocation | undefined): string {
+  if (storage === undefined) {
+    return '';
+  }
+  if (storage.refusal.length > 0) {
+    // RENDERED, not thrown. The server refuses to START on this, so the panel is the only place the
+    // reason can be read — and a section that threw would replace it with a blank. (codex, plan round.)
+    return `<h3>Where this window keeps its data</h3>
+<div class="stale">${escapeHtml(storage.refusal)}</div>`;
+  }
+
+  const side = storage.side.length === 0
+    ? '<div class="hint">No side is named, so this is the directory itself. Set <code>COAI_DATA_SIDE</code> only when two installations share one directory — a NAS reached from both Windows and WSL — and each needs its own database.</div>'
+    : `<div class="hint">Side <b>${escapeHtml(storage.side)}</b>, so this window keeps its own database, sessions and sign-ins apart from any other side sharing that directory.</div>`;
+
+  const notes = storage.notes
+    .map((note) => `<div class="stale">${escapeHtml(note)}</div>`)
+    .join('\n');
+
+  return `<h3>Where this window keeps its data</h3>
+<div class="status">${escapeHtml(storage.directory)}</div>
+${side}
+${notes}
+<div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart. To point a server here, put this in its entry:</div>
+<pre class="paste">${escapeHtml(mcpServerBlock('<the coai-mcp path from the ⋯ menu>', dataEnv(storage)))}</pre>
+<div class="hint">It goes in ${escapeHtml(clientTargetsLine(CLIENT_TARGETS))}</div>
+${movingHint(storage)}`;
+}
+
+/** The two variables as the client entry carries them — the side only when there is one. */
+function dataEnv(storage: DataLocation): Record<string, string> {
+  const directory = storage.side.length === 0
+    ? storage.directory
+    : storage.directory.slice(0, storage.directory.length - (storage.side.length + 1));
+
+  return storage.side.length === 0
+    ? { COAI_DATA_DIR: directory }
+    : { COAI_DATA_DIR: directory, COAI_DATA_SIDE: storage.side };
+}
+
+/**
+ * What to move when the directory changes, and — the half that matters — what NOT to.
+ *
+ * <p>Two reviewers asked for this by name on the plan round, because a panel that shows a path and
+ * says nothing else leaves a person to guess, and the two wrong guesses are both silent.
+ * <code>worktrees/</code> is scratch, pruned on every <code>open</code>: copying it moves nothing of
+ * value and can carry a checkout of somebody's repository onto a NAS. The token files belong to the
+ * side that signed in — copying those hands one machine's sign-in to another, which is the one thing
+ * the per-side layout exists to prevent.</p>
+ */
+function movingHint(storage: DataLocation): string {
+  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY <code>coai.db</code>, <code>sessions/</code>, <code>unparseable/</code> and <code>empty/</code> into ${escapeHtml(storage.directory)}, start it again, and check that the rounds list here still shows your history before deleting anything. Leave <code>worktrees/</code> behind: it is scratch, pruned on every <code>open</code>. Leave the token files behind too — a sign-in belongs to the side that made it.</div>`;
 }
 
 function questionsSection(questions: readonly Escalation[]): string {

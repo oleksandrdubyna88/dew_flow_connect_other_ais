@@ -26,7 +26,7 @@
 > **Not built, and named rather than dropped:** the panel field that shows the directory in use and
 > produces the line to paste. The resolution rule is the half that can be silently wrong, and it is
 > done; the panel is a sentence and a button, and it is
-> [PLAN_the_panel_shows_where_the_data_lives.md](../todo/PLAN_the_panel_shows_where_the_data_lives.md).
+> [PLAN_the_panel_shows_where_the_data_lives.md](PLAN_the_panel_shows_where_the_data_lives.md).
 >
 > Related docs: [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 >

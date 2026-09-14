@@ -2,6 +2,24 @@
 
 ## Extension 0.40.0 — 2026-09-13
 
+**The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
+name when you have set one, and — when it matters — that there is an old database sitting in the
+shared folder, or that this side's directory is not there yet and you are starting with no history.
+Until now the only way to find out whether `COAI_DATA_DIR` had taken effect was to go looking for
+files.
+
+**"This window" is the point, not a hedge.** The server your assistant talks to reads whatever its
+own MCP client entry gives it, and that can be a different directory from the one this window reads
+— which is exactly what is happening when the rounds list here is empty while your assistant says it
+is reviewing. That was a thing you had to deduce; now both halves are on screen, with the line to
+paste that makes a server read the same directory this window does, and the file it goes in.
+
+**And it says what to move, and what to leave.** Stop the server, copy `coai.db`, `sessions/`,
+`unparseable/` and `empty/`, start it again, check your history is still listed, and only then
+delete anything. Leave `worktrees/` behind — it is scratch, thrown away on every `open` — and leave
+the token files, because a sign-in belongs to the machine that made it. Nothing here moves anything
+for you: a database copied while it is being written is the kind of help nobody wants.
+
 **The log says which AI asked for a round.** Open a row and, above the reviewers who answered, it
 now reads *asked by claude-code 7.3.1 · claude-opus-5*. When there was only ever Claude this was not
 a question; with Codex and Gemini driving the same gate it is the first thing you want to know about

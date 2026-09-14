@@ -1,0 +1,141 @@
+{
+  "$comment": [
+    "Golden vectors for WHERE a side's data lives, and what a person is told about it.",
+    "",
+    "Both halves derive this independently — `PanelSettings.ResolveDataDir` / `StorageNotes` in C#",
+    "(src_mcp/src/Server/PanelSettings.cs) and `dataDir.ts` in the extension — because the extension",
+    "WRITES the Team-server token under this directory and the MCP shim READS it, and because the",
+    "panel now tells a person which directory this window resolved. A divergence is therefore two",
+    "different failures at once: a sign-in that silently is not there, and a panel giving migration",
+    "advice that contradicts the server's own startup log.",
+    "",
+    "Isolated unit tests on each side cannot catch that, because each side is self-consistent. Only a",
+    "shared fixture can, which is why this file sits outside both and is asserted by both suites.",
+    "Raised by codex and gemini independently on the plan round of the panel half (2026-09-14).",
+    "",
+    "`dir` is the resolved directory with `<root>` standing for the absolute form of `COAI_DATA_DIR`,",
+    "because the two languages spell an absolute path differently on one platform and identically on",
+    "the other. `refused` means the side was asked for and cannot be used: the server refuses to",
+    "start and the panel renders the refusal rather than guessing a path.",
+    "",
+    "`notes` names which of the two sentences applies, not their wording — the wording is each side's",
+    "own and is allowed to read naturally in its own surface. What must not differ is WHETHER a",
+    "person is warned.",
+    "  - `loose-database`: a coai.db sits directly in the shared root while this side resolves",
+    "    elsewhere. It is not being used; move it into a side directory to keep its history.",
+    "  - `new-directory`:  the resolved directory does not exist yet, so this side starts with no",
+    "    history. A typo in COAI_DATA_DIR looks exactly like this."
+  ],
+  "vectors": [
+    {
+      "why": "nothing configured — the default, which this change must not move",
+      "dataDir": "",
+      "dataSide": "",
+      "dir": "<default>",
+      "refused": false,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "a chosen directory and no side — used exactly as chosen, as it always was",
+      "dataDir": "<root>",
+      "dataSide": "",
+      "dir": "<root>",
+      "refused": false,
+      "rootHasDatabase": true,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "the operator's own case: two installations, one NAS, a side each",
+      "dataDir": "<root>",
+      "dataSide": "windows",
+      "dir": "<root>/windows",
+      "refused": false,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "a side name is lower-cased, so the two halves agree on case as well as on shape",
+      "dataDir": "<root>",
+      "dataSide": "Windows",
+      "dir": "<root>/windows",
+      "refused": false,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "the history left behind by the flat layout — reported, never adopted",
+      "dataDir": "<root>",
+      "dataSide": "wsl",
+      "dir": "<root>/wsl",
+      "refused": false,
+      "rootHasDatabase": true,
+      "dirExists": true,
+      "notes": ["loose-database"]
+    },
+    {
+      "why": "a mistyped NAS path is a creatable directory, and looks exactly like a fresh side",
+      "dataDir": "<root>",
+      "dataSide": "wsl",
+      "dir": "<root>/wsl",
+      "refused": false,
+      "rootHasDatabase": false,
+      "dirExists": false,
+      "notes": ["new-directory"]
+    },
+    {
+      "why": "both at once: old history in the root, and this side has never run",
+      "dataDir": "<root>",
+      "dataSide": "wsl",
+      "dir": "<root>/wsl",
+      "refused": false,
+      "rootHasDatabase": true,
+      "dirExists": false,
+      "notes": ["loose-database", "new-directory"]
+    },
+    {
+      "why": "a plausible thing to type, and the one that must never fall back to the shared root",
+      "dataDir": "<root>",
+      "dataSide": "wsl/node1",
+      "dir": "",
+      "refused": true,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "a colon is refused on Windows and accepted on Linux, so the grammar refuses it everywhere",
+      "dataDir": "<root>",
+      "dataSide": "a:b",
+      "dir": "",
+      "refused": true,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "dot and dot-dot are directory names no side may claim",
+      "dataDir": "<root>",
+      "dataSide": "..",
+      "dir": "",
+      "refused": true,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    },
+    {
+      "why": "a space is not in the grammar either — one rule, simple enough to write twice",
+      "dataDir": "<root>",
+      "dataSide": "my side",
+      "dir": "",
+      "refused": true,
+      "rootHasDatabase": false,
+      "dirExists": true,
+      "notes": []
+    }
+  ]
+}

@@ -1,7 +1,35 @@
 # PLAN — the panel says where the data lives, and how to move it
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/panelView.ts`
-> (`serverBody`) and its tests.
+> Status: **IMPLEMENTED, 2026-09-14.** Scope: `src_vs_code/src/panelView.ts` (`storageBlock`),
+> `dataDir.ts` (`whereData`), `panelProvider.ts`, `shared/data-side-vectors.json` and the two suites
+> that assert it. **Issue #115 is closed by this and its predecessor together.**
+>
+> **What shipped differently from the plan below, and why:**
+>
+> 1. **It says "where THIS WINDOW keeps its data", not "the directory in use".** Raised as Blocking
+>    by gemini on the plan round, and it reframed the feature. The extension host has its own
+>    environment; the MCP server's comes from the client entry that spawns it, so a `COAI_DATA_DIR`
+>    in a `.mcp.json` reaches the server and never reaches this process. A panel reporting its own
+>    environment as the server's would be confidently wrong exactly when somebody came to check.
+>    `helpContent.ts` already documented the divergence in five languages as something to deduce
+>    from an empty rounds list; this makes both halves visible instead.
+> 2. **That also answered requirement 2's open question.** "The line to paste for a CHOSEN
+>    directory" needed no picker: the directory offered is the one this window already resolved, and
+>    the line is what makes a client's server agree with it.
+> 3. **A refused side is rendered, never thrown.** `coaiDataDir()` throws on an unusable
+>    `COAI_DATA_SIDE` — right for every other caller, wrong here. `whereData` returns it as a state
+>    and the provider catches everything else, so the page cannot lose the sentence that explains
+>    itself. (codex, who also asked for the provider-to-view wiring to be covered.)
+> 4. **The pasted block reuses `mcpServerBlock`.** codex asked for platform-aware escaping; the
+>    install flow's own serializer already does it, and reusing it is what makes a UNC path and
+>    `C:\Users\…` survive being pasted.
+> 5. **The two halves now assert SHARED vectors.** `shared/data-side-vectors.json`, read by
+>    `dataDirAgreesWithTheServer.test.ts` and by `DataSideVectorTests` in C#. Each side's own tests
+>    are self-consistent and blind to a divergence; codex and gemini raised it independently.
+> 6. **The move/do-not-move inventory is asserted**, not left to prose — two reviewers asked for it
+>    by name, because both wrong guesses (`worktrees/`, the token files) are silent.
+>
+> **Nothing is outstanding.** Every item of the Definition of Done below is met.
 >
 > The tail of [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),
 > extracted when that plan shipped on 2026-09-13 rather than left inside a document filed as
@@ -51,8 +79,11 @@ Run: `cd src_vs_code && npm test`.
 
 ## Definition of Done
 
-- [ ] Every test above written RED first, with its failure message recorded.
-- [ ] `npm test` green, the count reported in the pull request.
-- [ ] The diff through the `coai` plan and code rounds, every finding resolved.
-- [ ] `research/module_extension.md` and `CHANGELOG.md` updated.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Every test above written RED first, with its failure message recorded. Two worth naming:
+      dropping the loose-database note fails the shared vector that expects it, and removing the
+      `worktrees/` warning fails the inventory assertion on the rendered page.
+- [x] `npm test` green, the count reported in the pull request.
+- [x] The diff through the `coai` plan and code rounds, every finding resolved — one plan round
+      (`good_enough`, 14 findings, 11 accepted) and the code round below it.
+- [x] `research/module_extension.md` and `CHANGELOG.md` updated.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date, and issue #115 closed.

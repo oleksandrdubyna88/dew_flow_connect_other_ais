@@ -1758,7 +1758,51 @@ READS it, so a divergence is a silent "not signed in". That constraint is what s
   shared root.
 
 `dataDirAgreesWithTheServer.test.ts` exists for exactly this seam: its subject is not the extension's
-behaviour but the agreement between the two.
+behaviour but the agreement between the two. **Since 2026-09-14 the cases live in
+`shared/data-side-vectors.json` and BOTH suites assert them** — `DataSideVectorTests` in C# reads the
+same file. Each side's own unit tests are self-consistent and therefore blind to a divergence; only
+a fixture outside both can see it. The same pattern as `team-server-url-vectors.json`, and asked for
+by codex and gemini independently on the plan round of the panel half.
+
+### The panel says where THIS WINDOW keeps its data (2026-09-14)
+
+The tail of issue #115, and the sentence is exactly that careful. `storageBlock` in `panelView.ts`
+renders the resolved directory, the side, the server's two notes, the line to paste, and what to
+move — from a `DataLocation` the provider computes with `whereData`.
+
+**What the plan round changed, and it reframed the whole feature.** The draft said the panel shows
+"the directory in use", which is a claim this surface cannot make: the extension host has its own
+environment, and the MCP server's comes from the client entry that spawns it. A `COAI_DATA_DIR` in
+somebody's `.mcp.json` reaches the server and never reaches this process — so a panel reporting its
+own environment as the server's would be confidently wrong precisely when a person came here to
+check. Raised as Blocking by gemini.
+
+The product already knew: `helpContent.ts` says, in five languages, that a rounds list reading
+*Nothing is running* while your assistant says it is reviewing means "the server it talks to is
+writing somewhere else — a `COAI_DATA_DIR` in its config that this window does not share". That was
+something you INFERRED from an empty list. The section now says which directory this window reads
+and hands over the line that makes a client's server read the same one, so the comparison is a
+glance. It also answers the "chosen directory" question the plan left open: there is no picker,
+because the directory being offered is the one this window already resolved.
+
+Three more things the round insisted on, each cheap and each load-bearing:
+
+- **A refused side is rendered, never thrown.** `coaiDataDir()` throws on an unusable
+  `COAI_DATA_SIDE` — correct for every other caller, wrong here, because that value is exactly when
+  somebody opens this section to find out what is wrong. `whereData` returns the refusal as a state,
+  and `whereThisWindowKeepsItsData` in the provider catches anything else the filesystem can throw,
+  so the page never loses the sentence that explains itself.
+- **The pasted block goes through `mcpServerBlock`**, the same `JSON.stringify` the install flow
+  uses, which is what makes a UNC path and `C:\Users\…` survive being pasted. Hand-built strings
+  hold invalid escapes and the client reports a malformed config instead of a bad path.
+- **It names what NOT to move.** `worktrees/` is scratch pruned on every `open`, and the token files
+  belong to the side that signed in — copying those hands one machine's sign-in to another, which is
+  the one thing the per-side layout exists to prevent. Both wrong guesses are silent, so the
+  inventory is asserted by a test rather than left to the prose.
+
+Nothing here moves anything. Copying stays out of scope: a partial copy, a file in use, a database
+being written while it is read — the instructions say to stop the server, copy, verify the rounds
+list, and only then delete.
 
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
 
