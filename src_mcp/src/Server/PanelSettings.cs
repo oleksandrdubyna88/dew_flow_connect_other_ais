@@ -86,7 +86,16 @@ public sealed record ProviderSettings(string Provider)
     /// "this vendor is good at prose" cannot also mean "this file may go to the shared box".
     /// (gemini, Blocking, plan 5's plan round — against the first draft of this very method.)</para>
     /// </remarks>
-    public bool Serves(Stage stage) => Enabled && stage switch
+    public bool Serves(Stage stage) => Enabled && Reviews(stage);
+
+    /// <summary>Which switch this stage reads, with <see cref="Enabled"/> already answered.</summary>
+    /// <remarks>
+    /// Split out of <see cref="Serves"/> for the complexity ceiling: the master switch and the
+    /// three-way choice are two decisions, and together they are one method over the limit. They also
+    /// read differently — <c>Enabled &amp;&amp; Reviews(stage)</c> says in one line that the box at the
+    /// top of the card outranks the three below it. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    private bool Reviews(Stage stage) => stage switch
     {
         Stage.PlanReview => Plan,
         Stage.CodeReview => Code,

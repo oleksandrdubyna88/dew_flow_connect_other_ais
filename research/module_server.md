@@ -1596,11 +1596,13 @@ them to run another review.
 
 ## A document reaches a Team server (2026-09-14)
 
-Plan 5, [PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md). The server
-half of this needed no code at all and that is the finding it starts from: `AcceptedRoles.From` seeds
-itself from `RoleCatalog.Builtin.Roles`, which has carried the two document roles since plan 4, so
-the day the box is next deployed it starts accepting them — with nobody having written a line and
-nothing anywhere saying so. What plan 5 owns is the three things that ought to have arrived with that.
+Plan 5, [PLAN_team_server_reviews_documents.md](PLAN_team_server_reviews_documents.md). The server's
+ACCEPTANCE of a document role needed no code at all, and that is the finding it starts from:
+`AcceptedRoles.From` seeds itself from `RoleCatalog.Builtin.Roles`, which has carried the two
+document roles since plan 4, so the day the box is next deployed it starts accepting them — with
+nobody having written a line and nothing anywhere saying so. What plan 5 owns is the three things
+that ought to have arrived with that, and one of them IS a server change: the prompt bound in
+`ReviewEndpoints` and the transport limit on Kestrel, which `module_team_server.md` describes.
 
 **A vendor's switches became three, and `Serves` takes the STAGE.** `ProviderSettings.Serves(bool)`
 could say "plan switch or code switch" and had no way to say "document", so plan 4's document round
