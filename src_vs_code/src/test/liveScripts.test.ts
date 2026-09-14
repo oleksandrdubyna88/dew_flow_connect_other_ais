@@ -20,9 +20,11 @@ import * as path from 'node:path';
  * model's process could not be started", spending nothing and proving nothing. Three days, and the
  * only thing that noticed was somebody running the script by hand.</p>
  *
- * <p>So this test reads what the scripts CALL and checks it against the interface they call it with.
- * It cannot run a vendor and does not try; what it can do is fail on the commit that changes the
- * shape, which is the moment the fix is cheap.</p>
+ * <p><b>What this test does NOT do is enumerate the fields of `ChatLaunch`.</b> The first version
+ * did, and two reviewers pointed out that it defeated the repair: the scripts spread
+ * `NEW_CONVERSATION` precisely so a field added to that interface arrives with its own default and
+ * NO script has to change — while a test pinning the field list would fail CI and demand exactly the
+ * edit the spread removed. The spread is the guarantee; asserting the spread is the whole job.</p>
  */
 
 const HERE = path.join(__dirname, '..', '..');
@@ -30,61 +32,54 @@ const SCRIPTS = ['live-chat.mjs', 'live-fresh.mjs'] as const;
 
 const scriptText = (name: string): string => fs.readFileSync(path.join(HERE, 'scripts', name), 'utf8');
 
-/** The field names of `ChatLaunch`, read from the interface rather than copied out of it. */
-function chatLaunchFields(): readonly string[] {
-  const source = fs.readFileSync(path.join(HERE, 'src', 'chatAdapter.ts'), 'utf8');
-  const start = source.indexOf('export interface ChatLaunch {');
-  assert.notEqual(start, -1, 'ChatLaunch has been renamed or moved, and this test can no longer find it');
-  const body = source.slice(start, source.indexOf('\n}', start));
-
-  // `readonly x:` and not `readonly x?:` — the REQUIRED fields only. An optional field is one a
-  // caller may leave out, and failing the scripts for leaving it out would be this test inventing a
-  // rule TypeScript does not have. (gemini, the round.)
-  return [...body.matchAll(/^\s{2}readonly (\w+):/gmu)].map((one) => one[1] ?? '').sort();
-}
-
-test('every live script hands launchSpecFor a ChatLaunch, with every field the interface has', () => {
-  const fields = chatLaunchFields();
-  assert.deepEqual(fields, ['model', 'resume'], 'ChatLaunch has changed shape — the scripts below must change with it');
-
+test('every live script builds its launch from the DEFAULT rather than by hand', () => {
   for (const name of SCRIPTS) {
     const text = scriptText(name);
-    const call = /launchSpecFor\(vendor, home, (\{[^}]*\}), resolved\)/u.exec(text);
+    const call = /launchSpecFor\(vendor, (?:home|before\.home), (\{[^}]*\}), resolved\)/u.exec(text);
     assert.ok(
       call !== null,
       `${name} does not call launchSpecFor with an object in the launch position. A bare resume id `
       + 'was passed there for three days after the parameter became a ChatLaunch, and every run failed '
       + 'at process start with "Cannot read properties of undefined (reading \'length\')"',
     );
-    // SPREAD FROM THE DEFAULT rather than written out field by field, and that difference is what
-    // makes this class of rot impossible rather than merely detected: a field added to `ChatLaunch`
-    // arrives with its own default instead of going missing, and no test has to notice in time.
-    // (codex and the local reviewer, the round on this repair — their point was that a source-read
-    // assertion cannot prove a runtime value, and they were right, so the value stopped being
-    // hand-written.)
+    // SPREAD, and that is what makes this class of rot impossible rather than merely detected: a
+    // field added to `ChatLaunch` arrives with its own default instead of going missing, and nothing
+    // — not this test, not the script — has to be edited in time. (codex and local, the plan round;
+    // gemini and codex again on the code round, for pinning the field list on top of it.)
     assert.match(
       call[1] ?? '',
       /\.\.\.NEW_CONVERSATION/u,
       `${name} writes its launch object out by hand instead of spreading NEW_CONVERSATION, so the `
       + 'next field added to ChatLaunch goes missing there and throws before any process starts',
     );
-    assert.match(
-      text,
-      /const \{ NEW_CONVERSATION \} = await import\(/u,
-      `${name} spreads NEW_CONVERSATION without importing it`,
-    );
-    // The REQUIRED fields, and only those. An optional one added to `ChatLaunch` is valid for a
-    // caller to omit, so demanding it here would fail CI for code that is correct — which is why
-    // the reader below matches `readonly x:` and not `readonly x?:`.
-    for (const field of fields) {
-      assert.match(text, new RegExp(`\\b${field}\\b`, 'u'), `${name} never mentions ${field}, which ChatLaunch requires`);
-    }
+    assert.match(text, /const \{ NEW_CONVERSATION \} = await import\(/u, `${name} spreads NEW_CONVERSATION without importing it`);
   }
+  // And a spread of `undefined` is silently `{}`, which is the original bug wearing a new shape. The
+  // script that does the spreading checks the import is really there. (local, the code round.)
+  assert.match(
+    scriptText('live-fresh.mjs'),
+    /NEW_CONVERSATION === undefined \|\| typeof NEW_CONVERSATION !== 'object'/u,
+    'nothing checks that NEW_CONVERSATION arrived, so a renamed export would spread to nothing',
+  );
+});
+
+test('the two scripts measure the SAME vendors, so a fourth adapter cannot be half-added', () => {
+  // Two hand-kept lists drift, and the drift is silent in the worst direction: `test:fresh` would
+  // exit 0 having quietly not measured the new adapter at all. (codex, the code round.)
+  const vendorsIn = (name: string): readonly string[] =>
+    [...scriptText(name).matchAll(/^\s*\['(\w+)', row\(/gmu)].map((one) => one[1] ?? '').sort();
+
+  const chat = vendorsIn('live-chat.mjs');
+  assert.ok(chat.length >= 3, 'live-chat.mjs no longer declares its vendors in a shape this test can read');
+  assert.deepEqual(
+    vendorsIn('live-fresh.mjs'),
+    chat,
+    'the two live scripts check different vendors: one of them would report success having never '
+    + 'asked the adapter the other one did',
+  );
 });
 
 test('both live scripts are reachable as npm scripts, or nobody will ever run them', () => {
-  // A script nobody can name is a script nobody runs, and this pair is the only thing in the
-  // repository that touches a real vendor.
   const manifest = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   };
@@ -95,12 +90,7 @@ test('both live scripts are reachable as npm scripts, or nobody will ever run th
   }
 });
 
-test('a live script never reports a pass for a run that asked nothing', () => {
-  // `live-chat.mjs` learned this from a typo that filtered its vendor list to nothing and then
-  // reported that everything had kept its context, with exit code 0. `live-fresh.mjs` has the same
-  // hazard twice over: a vendor that is not installed, and a control turn that failed — a model
-  // which never remembered the number would "forget" it across a reset for a reason that has
-  // nothing to do with the reset.
+test('a live script never reports a pass for a run that measured nothing', () => {
   const chat = scriptText('live-chat.mjs');
   assert.match(chat, /if \(all\.length === 0\)/u, 'live-chat.mjs no longer refuses an empty vendor list');
 
@@ -110,25 +100,49 @@ test('a live script never reports a pass for a run that asked nothing', () => {
   // A CONTROL ON BOTH SIDES. The first draft had one only before the reset, which is the same defect
   // it was written to prevent, mirrored: after the reset a crash, a timeout, a rate limit or a
   // refusal all produce an answer with no planted number in it, and reading that as "it forgot" is a
-  // pass earned by the vendor being broken. (codex and gemini, the round on this script.)
+  // pass earned by the vendor being broken.
   assert.match(fresh, /const ALIVE = /u, 'nothing asks the session after the reset whether it is answering at all');
-  assert.match(fresh, /alive = await after\.session\.send\(ALIVE\)/u, 'the liveness question is written and never asked');
-  assert.match(fresh, /const answering = alive\.ok && alive\.answer\.includes\('4'\)/u,
-    'the liveness answer is not read, so a session that said nothing counts as alive');
-  assert.match(fresh, /if \(!answering\) \{/u,
-    'a session that could not answer a question it cannot fail to know still yields a verdict about the number');
-  // The RETURN, not the phrase: the docblock says NO VERDICT too, and counting prose would make
-  // this assertion pass on a comment.
-  assert.equal((fresh.match(/return 'no verdict';/gu) ?? []).length, 2,
-    'live-fresh.mjs has fewer than two no-verdict paths, so one of its two controls decides nothing');
+  assert.match(fresh, /const answering = answered\(alive, '4'\)/u, 'the liveness answer is not read');
+  assert.match(fresh, /if \(!answering\) \{/u, 'a session that could not answer still yields a verdict about the number');
+  // A turn that FAILED is not a conversation that remembered — it was reported as "still knows it",
+  // naming the vendor as leaking context when the truth was a broken turn. (gemini, the code round.)
+  assert.match(fresh, /if \(!recalled\.ok\) \{/u, 'a recall that never completed is read as the model still knowing');
+  // The RETURN, not the phrase: the docblock says NO VERDICT too, and counting prose would make this
+  // assertion pass on a comment.
+  assert.equal((fresh.match(/return 'no verdict';/gu) ?? []).length, 3,
+    'live-fresh.mjs has fewer than three no-verdict paths — the two controls and the failed recall');
 
-  // And both sessions are disposed whatever happens, or a control that throws leaves a CLI running
-  // and its directory on disk. (gemini, the round.)
+  // Both sessions disposed whatever happens, or a control that throws leaks a process and a directory.
   assert.equal((fresh.match(/\} finally \{\s*\n\s*(?:\/\/[^\n]*\n\s*)*ended\(/gu) ?? []).length, 2,
-    'a session is disposed on the happy path only, so a turn that throws leaks a process and a directory');
-  assert.match(
-    fresh,
-    /asked\.length > 0 && forgot\.length === asked\.length/u,
-    'live-fresh.mjs can exit 0 for a run in which nothing was asked, or in which something still remembered',
-  );
+    'a session is disposed on the happy path only');
+  assert.match(fresh, /measured\.length > 0 && forgot\.length === measured\.length/u,
+    'live-fresh.mjs can exit 0 for a run in which nothing was measured, or in which something still remembered');
+});
+
+test('an answer is matched as an ANSWER, not as a substring of prose', () => {
+  // `includes('4')` is true of "retry in 4 minutes" and of a model called claude-sonnet-4-6;
+  // `includes('7431')` is true of any refusal that quotes the question back. A control that a
+  // rate-limit notice can satisfy is a control that awards a pass to a broken vendor. (codex and
+  // gemini, the code round, four findings between them.)
+  const fresh = scriptText('live-fresh.mjs');
+
+  assert.doesNotMatch(fresh, /\.answer\.includes\(/u, 'an answer is still matched by substring somewhere in this script');
+  assert.match(fresh, /const answered = \(turn, value\) =>/u, 'there is no one place that decides whether a turn answered with a value');
+  assert.match(fresh, /\(\?:\^\|\[\^0-9\]\)\$\{value\}\(\?:\[\^0-9\]\|\$\)/u,
+    'the answer test does not require the value to stand as a token of its own');
+});
+
+test('the command line is parsed, and a bad one costs nothing', () => {
+  // `argv[2]` alone read `--number 1234 claude` as "no vendor named" and ran all three, spending
+  // turns nobody asked for; and a malformed --number quietly measured the default, so the person
+  // would be told their number passed when a different one was tested.
+  const fresh = scriptText('live-fresh.mjs');
+
+  assert.match(fresh, /function asked\(argv\)/u, 'the command line is read positionally rather than parsed');
+  assert.match(fresh, /--number wants 1 to 9 digits/u, 'a malformed --number does not say so');
+  assert.match(fresh, /\(at < 0 \|\| index !== at \+ 1\)/u,
+    'with no --number present, argument zero is dropped as if it were the flag’s value — a vendor '
+    + 'name on its own then reads as "all" and spends every vendor’s turns');
+  assert.equal((fresh.match(/process\.exit\(2\)/gu) ?? []).length, 3,
+    'the three usage errors — no NEW_CONVERSATION, a bad --number, an unknown vendor — do not all exit 2');
 });
