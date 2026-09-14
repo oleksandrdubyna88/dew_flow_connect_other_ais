@@ -3,18 +3,21 @@ import { test } from 'node:test';
 import {
   CALLER_KINDS,
   CONSULTING_RUNTIMES,
+  ConsultantChoice,
   DEFAULT_CONSULT,
+  ResolvedConsultant,
   consultSettingsFrom,
   consultableVendors,
   isDefaultConsult,
+  resolveConsultant,
   sameCallers,
   sameVendorNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { consultantBody } from '../consultantView';
-import { consultantRecordUpdate, settingWrite } from '../settingsShape';
+import { consultantRecordUpdate, envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
-import { Vendor } from '../vendors';
+import { Vendor, vendorsFrom } from '../vendors';
 
 /**
  * The Consultant section: who answers each kind of caller, the caps, and the prompt box.
@@ -39,6 +42,16 @@ function vendor(id: string, runtime: Runtime = 'codex', enabled = true): Vendor 
   };
 }
 
+/** A legacy reference, as every `coai.consultants` written before 2026-09-14 holds one: an id, maybe a model, no runtime. */
+function legacy(vendor: string, model = ''): ConsultantChoice {
+  return { vendor, runtime: '', model, baseUrl: '', executablePath: '' };
+}
+
+/** A definition: the consultant's own runtime, model, endpoint and CLI path. */
+function definition(vendor: string, runtime: Runtime, model = '', baseUrl = '', executablePath = ''): ConsultantChoice {
+  return { vendor, runtime, model, baseUrl, executablePath };
+}
+
 /** A reader over a plain object, shaped like the one `settingsShape` hands the parsers. */
 const reader = (stored: Record<string, unknown>) => (section: string): unknown => stored[section];
 
@@ -48,7 +61,11 @@ const reader = (stored: Record<string, unknown>) => (section: string): unknown =
 test('nothing configured is the shipped map, and the shipped map is four different vendors', () => {
   const settings = consultSettingsFrom(reader({}));
 
-  assert.deepEqual(settings, DEFAULT_CONSULT);
+  assert.deepEqual(settings.stored, DEFAULT_CONSULT.stored);
+  assert.deepEqual(
+    [settings.turns, settings.callsPerSession, settings.idleMinutes, settings.enabled],
+    [DEFAULT_CONSULT.turns, DEFAULT_CONSULT.callsPerSession, DEFAULT_CONSULT.idleMinutes, DEFAULT_CONSULT.enabled],
+  );
   assert.ok(isDefaultConsult(settings));
   for (const { id } of CALLER_KINDS) {
     assert.notEqual(
@@ -56,15 +73,31 @@ test('nothing configured is the shipped map, and the shipped map is four differe
       id,
       `${id} is shipped asking itself, and a model cannot see its own blind spot`,
     );
+    // And each shipped pair RESOLVES with no reviewer row configured at all: a fresh install has no
+    // `claude` row, and `codex → claude` was dead for exactly that reason.
+    assert.notEqual(settings.byCaller[id]!.runtime, '', `${id}'s shipped consultant does not resolve on a pristine install`);
   }
+});
+
+test('the shipped pairs are legacy references — byte-for-byte the pairs the server ships', () => {
+  // A runtime on a shipped pair would make it a definition the C# has nothing to agree with, and the
+  // VALUES belong to the sibling plan (`PLAN_consultant_defaults_from_phase_0.md`), which this shape
+  // change leaves alone.
+  for (const { id } of CALLER_KINDS) {
+    assert.deepEqual(DEFAULT_CONSULT.byCaller[id], legacy(DEFAULT_CONSULT.byCaller[id]!.vendor), `${id}'s shipped pair is not a bare legacy pair`);
+  }
+  assert.deepEqual(DEFAULT_CONSULT.byCaller, DEFAULT_CONSULT.stored, 'nothing has been resolved, because nothing has been read');
 });
 
 test('one caller changed keeps the other three, because a record is not read whole', () => {
   const settings = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'antigravity', model: 'x' } } }));
 
-  assert.deepEqual(settings.byCaller['claude'], { vendor: 'antigravity', model: 'x' });
-  assert.deepEqual(settings.byCaller['codex'], DEFAULT_CONSULT.byCaller['codex']);
-  assert.deepEqual(settings.byCaller['gemini'], DEFAULT_CONSULT.byCaller['gemini']);
+  assert.deepEqual(settings.stored['claude'], legacy('antigravity', 'x'));
+  // Resolved against the shipped reviewer rows, which include an `antigravity` one; the entry's own
+  // model wins over the row's.
+  assert.deepEqual(settings.byCaller['claude'], definition('antigravity', 'antigravity', 'x'));
+  assert.deepEqual(settings.stored['codex'], DEFAULT_CONSULT.stored['codex']);
+  assert.deepEqual(settings.stored['gemini'], DEFAULT_CONSULT.stored['gemini']);
   assert.equal(isDefaultConsult(settings), false);
 });
 
@@ -73,12 +106,42 @@ test('a row a person wrote by hand is trimmed, and a blank vendor is no choice a
     consultants: { codex: { vendor: '  claude  ', model: '  opus  ' }, gemini: { vendor: '   ' } },
   }));
 
-  assert.deepEqual(settings.byCaller['codex'], { vendor: 'claude', model: 'opus' });
+  assert.deepEqual(settings.stored['codex'], legacy('claude', 'opus'));
   assert.deepEqual(
-    settings.byCaller['gemini'],
-    DEFAULT_CONSULT.byCaller['gemini'],
+    settings.stored['gemini'],
+    DEFAULT_CONSULT.stored['gemini'],
     'a vendor made of spaces would be looked up, refused, and read as "not configured"',
   );
+});
+
+test('the three new fields are read trimmed, and junk of any type reads as empty — never a throw', () => {
+  // `settings.json` is a file a person edits by hand: a number, a null or an array where a string
+  // belongs must not leave the panel on its previous paint with nothing saying why.
+  const settings = consultSettingsFrom(reader({
+    consultants: { other: { vendor: ' codex ', runtime: ' codex ', model: 42, baseUrl: null, executablePath: ['x'] } },
+  }));
+
+  assert.deepEqual(settings.stored['other'], definition('codex', 'codex'));
+});
+
+test('a definition is stored as one: every field comes back trimmed, and it resolves to itself', () => {
+  const settings = consultSettingsFrom(reader({
+    consultants: {
+      gemini: { vendor: 'deepseek', runtime: 'codex', model: ' deepseek-chat ', baseUrl: ' https://api.deepseek.com/v1 ', executablePath: ' /opt/codex ' },
+    },
+    vendors: [],
+  }));
+
+  const expected = definition('deepseek', 'codex', 'deepseek-chat', 'https://api.deepseek.com/v1', '/opt/codex');
+  assert.deepEqual(settings.stored['gemini'], expected);
+  assert.deepEqual(settings.byCaller['gemini'], expected, 'a definition borrows nothing — no row is consulted');
+});
+
+test('a runtime this build does not know reads as a legacy reference, and the id still resolves', () => {
+  const settings = consultSettingsFrom(reader({ consultants: { other: { vendor: 'claude', runtime: 'llama.cpp' } }, vendors: [] }));
+
+  assert.equal(settings.stored['other']!.runtime, '');
+  assert.equal(settings.byCaller['other']!.runtime, 'claude');
 });
 
 test('the caps take whole positive numbers and nothing else', () => {
@@ -106,8 +169,25 @@ test('only a stored false switches the tool off — everything else leaves it av
 });
 
 test('sameCallers compares the pairs, not the object', () => {
-  assert.ok(sameCallers(DEFAULT_CONSULT.byCaller, { ...DEFAULT_CONSULT.byCaller, unknownKind: { vendor: 'x', model: '' } }));
-  assert.equal(sameCallers(DEFAULT_CONSULT.byCaller, { ...DEFAULT_CONSULT.byCaller, codex: { vendor: 'codex', model: '' } }), false);
+  assert.ok(sameCallers(DEFAULT_CONSULT.byCaller, { ...DEFAULT_CONSULT.byCaller, unknownKind: legacy('x') }));
+  assert.equal(sameCallers(DEFAULT_CONSULT.byCaller, { ...DEFAULT_CONSULT.byCaller, codex: legacy('codex') }), false);
+});
+
+test('sameCallers compares all five fields — a definition is not the legacy pair it resolves from', () => {
+  const asDefinition = { ...DEFAULT_CONSULT.stored, claude: definition('codex', 'codex') };
+
+  assert.equal(sameCallers(DEFAULT_CONSULT.stored, asDefinition), false);
+  assert.equal(
+    sameCallers(asDefinition, { ...asDefinition, claude: definition('codex', 'codex', '', 'https://x/v1') }),
+    false,
+    'an endpoint of its own is a different consultant',
+  );
+  assert.equal(
+    sameCallers(asDefinition, { ...asDefinition, claude: definition('codex', 'codex', '', '', '/opt/codex') }),
+    false,
+    'so is a CLI path of its own',
+  );
+  assert.ok(sameCallers(asDefinition, { ...asDefinition }));
 });
 
 test('the same-vendor note is offered for thought rather than refused', () => {
@@ -131,6 +211,157 @@ test('a cap the server could not hold is not a cap', () => {
   // C#'s int.TryParse refuses — the panel would show one number while the server enforced another.
   assert.equal(consultSettingsFrom(reader({ consultTurns: 2_147_483_648 })).turns, DEFAULT_CONSULT.turns);
   assert.equal(consultSettingsFrom(reader({ consultCallsPerSession: 2_147_483_647 })).callsPerSession, 2_147_483_647);
+});
+
+// ---------------------------------------------------------------------------------------------
+// A legacy entry resolves into a definition when it is READ (PLAN_the_consultant_has_its_own_vendors, A1)
+
+/** A `coai.vendors` row as `settings.json` holds it — `vendorsFrom` fills in the rest. */
+const LUNA_ROW = { id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' };
+
+test('a legacy entry reads as a definition — after the read its runtime is present', () => {
+  // `codex → claude` is the shipped pair and a pristine install has no `claude` reviewer row, so on
+  // 2026-09-14 a Codex caller's consultant was dead in a panel nobody had touched. The id names a
+  // runtime this build can consult with; the read says so, and writes nothing.
+  const settings = consultSettingsFrom(reader({ consultants: { codex: { vendor: 'claude' } }, vendors: [] }));
+
+  assert.equal(settings.byCaller['codex']!.runtime, 'claude');
+});
+
+test('a legacy codex entry with an empty model materialises its reviewer row’s model', () => {
+  // An empty model on a legacy entry meant THE ROW'S model — `ConsultationService` falls back to
+  // `row.Model`. The new shape reads an empty model as the runtime's default, so the row's model is
+  // written into the definition: what a person was getting is what the entry now says.
+  const settings = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'codex' } }, vendors: [LUNA_ROW] }));
+
+  assert.equal(settings.byCaller['claude']!.model, 'gpt-5.6-luna');
+});
+
+test('a pristine map is still the default after it resolves against customised reviewer rows', () => {
+  // The trap: resolving a pristine map turns four legacy pairs into four definitions, and comparing
+  // those against the shipped pairs field by field says "different" — so an install where nobody
+  // configured a consultant would start writing `COAI_CONSULTANTS`. Nobody configured one, and the
+  // server does exactly this with no key at all, so the comparison reads the STORED side.
+  const settings = consultSettingsFrom(reader({ vendors: [LUNA_ROW] }));
+
+  assert.equal(settings.byCaller['claude']!.model, 'gpt-5.6-luna', 'the premise: resolution changed what the caller gets');
+  assert.ok(isDefaultConsult(settings), 'nobody configured a consultant, and the server would do exactly this with no key');
+  assert.ok(sameCallers(settings.stored, DEFAULT_CONSULT.stored));
+});
+
+// ---------------------------------------------------------------------------------------------
+// The one resolution rule, arm by arm
+
+/** A codex row a person tuned: its own model and its own CLI path. */
+const LUNA: Vendor = { ...vendor('codex'), model: 'gpt-5.6-luna', executablePath: '/opt/codex/bin/codex' };
+
+function whyUnavailable(resolved: ResolvedConsultant): string {
+  return resolved.kind === 'unavailable' ? resolved.why : '';
+}
+
+test('rule (a): a reviewer row with that id resolves — switched OFF as well as on', () => {
+  // Off is a fact about REVIEWS. It took the consultant down with it, and a caller was refused a
+  // consultation nobody had switched off.
+  const off: Vendor = { ...vendor('deepseek', 'codex', false), model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' };
+
+  assert.deepEqual(resolveConsultant(legacy('deepseek'), [off]), {
+    kind: 'definition', vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', executablePath: '',
+  });
+});
+
+test('rule (a): the entry’s own model wins over the row’s; the endpoint and CLI path come from the row', () => {
+  assert.deepEqual(resolveConsultant(legacy('codex', 'gpt-5.5'), [LUNA]), {
+    kind: 'definition', vendor: 'codex', runtime: 'codex', model: 'gpt-5.5', baseUrl: '', executablePath: '/opt/codex/bin/codex',
+  });
+});
+
+test('rule (a) matches the id the way the server always has — case-insensitively — and never rewrites it', () => {
+  // `ConsultationService` looks the row up with OrdinalIgnoreCase and `vendorsFrom` lower-cases ids,
+  // so a hand-written `Codex` consulted fine while the section drew it as "not configured any more".
+  const resolved = resolveConsultant(legacy('Codex'), [LUNA]);
+
+  assert.equal(resolved.kind, 'definition');
+  assert.equal(resolved.vendor, 'Codex', 'the id keys the vault entry and the ledger; a resolution that changed it would move a credential');
+});
+
+test('rule (a) is asked before rule (b): a row named after a runtime is the row, not the bare runtime', () => {
+  // The shipped `codex` row tuned to gpt-5.6-luna: the consultant gets that model and that CLI path,
+  // which is what the entry always meant — rule (b) would have thrown both away.
+  assert.deepEqual(resolveConsultant(legacy('codex'), [LUNA]), {
+    kind: 'definition', vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', baseUrl: '', executablePath: '/opt/codex/bin/codex',
+  });
+});
+
+test('rule (b): an id that names a consulting runtime is that runtime, with nothing borrowed', () => {
+  assert.deepEqual(resolveConsultant(legacy('claude', 'opus'), []), {
+    kind: 'definition', vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '',
+  });
+  // A runtime that cannot consult is not an id to resolve by: `gemini` is a runtime, and refused.
+  assert.equal(resolveConsultant(legacy('gemini'), []).kind, 'unavailable');
+});
+
+test('rule (c): an id matching nothing is UNAVAILABLE — raw, and with a reason a person can act on', () => {
+  const resolved = resolveConsultant(legacy('mistral', 'large'), [LUNA]);
+
+  assert.equal(resolved.kind, 'unavailable');
+  assert.deepEqual([resolved.vendor, resolved.model], ['mistral', 'large'], 'never rewritten, never defaulted');
+  assert.match(whyUnavailable(resolved), /'mistral'/, 'the reason must name the id, or it explains nothing');
+  assert.match(whyUnavailable(resolved), /codex, claude, antigravity, local/, 'and say what CAN consult');
+});
+
+test('a definition resolves to itself, whatever the rows say', () => {
+  const own = definition('codex', 'codex', 'gpt-5.5', '', '/usr/local/bin/codex');
+
+  assert.deepEqual(resolveConsultant(own, [LUNA]), { kind: 'definition', ...own });
+});
+
+test('materialising is not permitting: a row on a runtime that cannot consult still resolves to THAT runtime', () => {
+  // Whether `remote` may hold a consultation is CONSULTING_RUNTIMES' question, asked where one is
+  // offered or run. A definition that names its runtime is what lets that refusal name it too.
+  const team: Vendor = { ...vendor('remsoftdev-claude', 'remote'), baseUrl: 'https://coai.remsoft.dev' };
+
+  assert.deepEqual(resolveConsultant(legacy('remsoftdev-claude'), [team]), {
+    kind: 'definition', vendor: 'remsoftdev-claude', runtime: 'remote', model: '', baseUrl: 'https://coai.remsoft.dev', executablePath: '',
+  });
+});
+
+test('what the reader produced resolves to itself again — with the same rows, or none', () => {
+  // The section (story C5) will hold no rows, and B4 emits the resolved map: both lean on the
+  // reader's output being a fixed point. A definition is itself; an unavailable entry matched nothing
+  // with rows in hand, so it matches nothing without them either — and keeps its reason.
+  const rows = vendorsFrom([LUNA_ROW]);
+  const settings = consultSettingsFrom(reader({
+    consultants: { claude: { vendor: 'codex' }, other: { vendor: 'mistral', model: 'large' } },
+    vendors: [LUNA_ROW],
+  }));
+
+  for (const { id } of CALLER_KINDS) {
+    const once = settings.byCaller[id]!;
+    assert.deepEqual(resolveConsultant(once, rows), resolveConsultant(once, []), `${id} resolves differently without rows`);
+    assert.equal(resolveConsultant(once, rows).vendor, once.vendor);
+  }
+  assert.deepEqual(settings.byCaller['other'], legacy('mistral', 'large'), 'an unavailable entry is the stored one, untouched');
+  assert.match(whyUnavailable(resolveConsultant(settings.byCaller['other']!, [])), /'mistral'/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// What crosses the seam — unchanged by this story, and measured before B4 changes it
+
+test('COAI_CONSULTANTS carries the bytes it carried before resolution existed: the stored pair, never what it resolved to', () => {
+  const stored: Record<string, unknown> = {
+    consultants: { claude: { vendor: 'codex', model: '' }, codex: { vendor: 'claude', model: 'opus' } },
+    vendors: [LUNA_ROW],
+  };
+  const settings = settingsFrom(reader(stored));
+
+  // Today's bytes, verified against the code that produced them before this story touched it. A
+  // resolved entry would carry `gpt-5.6-luna` for the claude caller — a wire change B4 measures
+  // against an OLD server half first, and this story makes none.
+  assert.equal(
+    envBlock(settings, vendorsFrom(stored['vendors']))['COAI_CONSULTANTS'],
+    '{"claude":{"vendor":"codex","model":""},"codex":{"vendor":"claude","model":"opus"},"gemini":{"vendor":"codex","model":""},"other":{"vendor":"codex","model":""}}',
+  );
+  assert.equal(settings.consult.byCaller['claude']!.model, 'gpt-5.6-luna', 'the premise: the read resolved it');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -177,7 +408,7 @@ test('every caller kind gets a row of its own, keyed by the caller', () => {
 
 test('a saved vendor that no longer resolves is stranded in the list, not replaced', () => {
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'deepseek', model: '' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: legacy('deepseek') } },
     { vendors: rows },
   );
 
@@ -190,7 +421,7 @@ test('a saved model is kept whatever the vendor lists, and both ways of saying s
   // A vendor that IS configured: the reviewers' own model list keeps a value it does not know and
   // marks it as yours — the same function, so the two sections cannot label one model two ways.
   const configured = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'codex', model: 'gpt-4' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: legacy('codex', 'gpt-4') } },
     { vendors: rows, codexModels: [{ id: 'gpt-5.6-luna', label: 'gpt-5.6-luna' }] },
   );
   assert.match(configured, /<option value="gpt-4" selected>gpt-4 \(yours\)/);
@@ -198,7 +429,7 @@ test('a saved model is kept whatever the vendor lists, and both ways of saying s
   // A vendor that is NOT configured any more has no model list at all, so the saved model would
   // vanish from the row that is asking about it. It is kept, and named for what it is.
   const stranded = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'deepseek', model: 'r1' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: legacy('deepseek', 'r1') } },
     { vendors: rows },
   );
   assert.match(stranded, /r1 — not offered by this vendor/);
@@ -206,7 +437,7 @@ test('a saved model is kept whatever the vendor lists, and both ways of saying s
 
 test('with nothing consultable the sentence is said BESIDE the rows, never instead of them', () => {
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'codex', model: '' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: legacy('codex') } },
     { vendors: [vendor('gem', 'gemini')] },
   );
 
@@ -223,7 +454,7 @@ test('with nothing consultable the sentence is said BESIDE the rows, never inste
 
 test('a reviewer switched off says SO, rather than reading as one that was deleted', () => {
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: { vendor: 'off', model: '' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: legacy('off') } },
     { vendors: [...rows, vendor('off', 'claude', false)] },
   );
 
@@ -233,7 +464,7 @@ test('a reviewer switched off says SO, rather than reading as one that was delet
 
 test('a vendor id is escaped, because it is a name a person typed', () => {
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: { vendor: '<script>x</script>', model: '' } } },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: legacy('<script>x</script>') } },
     { vendors: rows },
   );
 

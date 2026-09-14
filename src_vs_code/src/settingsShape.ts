@@ -14,6 +14,7 @@ import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
+  ConsultantChoice,
   ConsultSettings,
   DEFAULT_CONSULT,
   consultSettingsFrom,
@@ -438,12 +439,23 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   // server's own fallback is what runs. That is what makes the two default sets one contract rather
   // than two numbers that happen to agree today; the gate's defaults diverged for a day once, and a
   // new install read one number off the screen while another one ran.
-  if (!sameCallers(settings.consult.byCaller, DEFAULT_CONSULT.byCaller)) {
+  //
+  // Decided on the STORED map, never the resolved one. `consultSettingsFrom` resolves a legacy entry
+  // on read, so a pristine map comes back as four definitions carrying the reviewer rows' values —
+  // compared with the shipped pairs those are "different", and every untouched install would write
+  // this key while the server, with no key, resolves the same absence to the same consultant.
+  if (!sameCallers(settings.consult.stored, DEFAULT_CONSULT.stored)) {
     // One JSON key rather than four scalars, for the reason `COAI_VENDORS` already carries: a
     // compound value needs a structured encoding, and four key spellings is four chances for the two
     // halves to disagree about one of them.
+    //
+    // TEMPORARY — story B4 of PLAN_the_consultant_has_its_own_vendors removes this projection. Each
+    // entry is projected explicitly back to the `{vendor, model}` pair the server reads today, from
+    // the STORED side, so the bytes are identical to what this line emitted before a legacy entry
+    // resolved on read: resolution can change a model (rule (a) materialises the row's), and nothing
+    // may cross this seam before B4 has measured a definition against an OLD server half.
     env['COAI_CONSULTANTS'] = JSON.stringify(Object.fromEntries(
-      CALLER_KINDS.map(({ id }) => [id, settings.consult.byCaller[id]])));
+      CALLER_KINDS.map(({ id }) => [id, legacyPair(settings.consult.stored[id])])));
   }
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
     env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
@@ -478,6 +490,16 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
     env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
   }
   return env;
+}
+
+/**
+ * TEMPORARY, removed by story B4 of PLAN_the_consultant_has_its_own_vendors: the `{vendor, model}`
+ * pair `COAI_CONSULTANTS` has always carried, in that key order, so the wire stays byte-identical to
+ * what it was before a legacy entry resolved on read. The three fields a definition adds do not
+ * cross here until the old server half has been measured receiving them.
+ */
+function legacyPair(choice: ConsultantChoice): { readonly vendor: string; readonly model: string } {
+  return { vendor: choice.vendor, model: choice.model };
 }
 
 function asString(value: unknown): string {

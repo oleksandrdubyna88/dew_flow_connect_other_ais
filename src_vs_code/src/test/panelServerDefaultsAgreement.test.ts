@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULTS, envBlock } from '../settingsShape';
+import { DEFAULTS, envBlock, settingsFrom } from '../settingsShape';
 import { CALLER_KINDS, CONSULTING_RUNTIMES, DEFAULT_CONSULT } from '../consultSettings';
+import { vendorsFrom } from '../vendors';
 import { CONSULT_PROMPT_PATH } from '../consultPrompt';
 import { RUNNING_STATUSES } from '../consultations';
 import { ROLES } from '../prompts';
@@ -190,4 +191,24 @@ test('a pristine panel writes no consult key either', () => {
     Object.keys(envBlock(DEFAULTS)).filter((k) => k.startsWith('COAI_CONSULT')),
     [],
     'a default panel wrote a consult key, so the two halves disagree about what the default is');
+});
+
+/**
+ * The same contract from the direction the reader meets it since a legacy entry resolves on read.
+ *
+ * <p>`DEFAULTS` is a value that never went through `consultSettingsFrom`; a real panel's settings did,
+ * and its four shipped pairs came back as four DEFINITIONS carrying whatever the reviewer rows hold.
+ * Compared field by field against the shipped pairs those are "different", and an install where
+ * nobody configured a consultant would start writing `COAI_CONSULTANTS` — while the server, with no
+ * key, resolves the same absence to the same consultant. The decision reads what is STORED.</p>
+ */
+test('a pristine consultant map writes no key after it resolves against customised reviewer rows', () => {
+  const stored: Record<string, unknown> = { vendors: [{ id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' }] };
+  const settings = settingsFrom((section) => stored[section]);
+
+  assert.strictEqual(settings.consult.byCaller['claude']!.model, 'gpt-5.6-luna', 'the premise: the read resolved the pair');
+  assert.deepStrictEqual(
+    Object.keys(envBlock(settings, vendorsFrom(stored['vendors']))).filter((k) => k.startsWith('COAI_CONSULT')),
+    [],
+    'a panel nobody configured wrote a consult key, so the two halves disagree about what the default is');
 });
