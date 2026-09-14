@@ -1,4 +1,4 @@
-import { csvOf, ExportRound } from './roundsCsv';
+import { csvOf, ExportableRow, ExportRound } from './roundsCsv';
 
 /**
  * Turning a selection of rounds into a file the person chose the place for.
@@ -129,6 +129,44 @@ export async function exportRounds(
 }
 
 /**
+ * How a round's findings are fetched. One call per round; the coordinator bounds the concurrency.
+ *
+ * <p>A PORT rather than a direct call, so the whole export — the reads included — is reachable from
+ * a test without an editor, and so C1 and C2 can supply a different reader without the orchestration
+ * moving. It answers a state and never throws: a rejection is a `failed` round, not an exception
+ * that takes the export with it.</p>
+ */
+export type ReadFindings = (row: ExportableRow) => Promise<ExportRound['found']>;
+
+/**
+ * Read every round's findings, then write them.
+ *
+ * <p>The read phase lives HERE rather than at the wiring, and inside whatever queue the caller runs
+ * this in. It used to sit in `extension.ts` before the queue, which meant a hundred quick clicks
+ * started a hundred batches of four rather than one batch at a time — the cap was real and was
+ * being stepped around. Three reviewers said so. (Code round.)</p>
+ */
+export async function readAndExport(
+  rows: readonly ExportableRow[],
+  read: ReadFindings,
+  ports: ExportPorts,
+  today: Date = new Date(),
+): Promise<ExportOutcome> {
+  const rounds = await inBatches(
+    rows,
+    async (row) => ({ row, found: await read(row) }),
+    // A read that threw is a FAILED round, never an absent one: we know nothing about it, and
+    // `absent` is a claim that the database has no record.
+    (row, reason) => {
+      console.error('ConnectOtherAIs: findings could not be read for export', reason);
+
+      return { row, found: { state: 'failed' as const, findings: [] as ExportableRow[] } };
+    });
+
+  return exportRounds(rounds, ports, today);
+}
+
+/**
  * One export at a time.
  *
  * <p>Two Export buttons clicked in quick succession open two dialogs, and a person who picks the
@@ -165,14 +203,30 @@ export function oneAtATime(): (run: () => Promise<ExportOutcome>) => Promise<Exp
 export async function inBatches<T, R>(
   items: readonly T[],
   each: (item: T) => Promise<R>,
+  onFailure: (item: T, reason: unknown) => R,
   atOnce = 4,
 ): Promise<R[]> {
+  // A batch size that cannot advance the loop would hang for ever and look like a stuck export.
+  // (Code round, codex.)
+  const step = Number.isFinite(atOnce) && atOnce >= 1 ? Math.floor(atOnce) : 1;
   const done: R[] = [];
-  for (let at = 0; at < items.length; at += atOnce) {
-    // Sequential BETWEEN batches on purpose: this awaits inside a loop, which is usually a smell and
-    // is the point here.
+  for (let at = 0; at < items.length; at += step) {
+    const batch = items.slice(at, at + step);
+    // ONE job's rejection must not abort the batch and leave its siblings running with nobody
+    // awaiting them. `Promise.all` does exactly that, and this is a generic helper whose next
+    // caller will not know. Each job answers for itself and `onFailure` turns a rejection into a
+    // result, so every item gets one. (Code round, gemini, twice.)
     // eslint-disable-next-line no-await-in-loop
-    done.push(...await Promise.all(items.slice(at, at + atOnce).map(each)));
+    const settled = await Promise.all(batch.map(async (item) => {
+      try {
+        return await each(item);
+      } catch (reason: unknown) {
+        return onFailure(item, reason);
+      }
+    }));
+    for (const one of settled) {
+      done.push(one);
+    }
   }
 
   return done;

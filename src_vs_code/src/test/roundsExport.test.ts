@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ExportPorts, exportRounds, inBatches, oneAtATime, suggestedName } from '../roundsExport';
+import {
+  ExportPorts, exportRounds, inBatches, oneAtATime, readAndExport, suggestedName,
+} from '../roundsExport';
 import { ExportableRow, ExportRound } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
 
@@ -238,14 +240,14 @@ test('reads run four at a time, never all at once', async () => {
     running -= 1;
 
     return item * 2;
-  });
+  }, () => -1);
 
   assert.equal(mostAtOnce, 4, 'four in flight at the peak');
   assert.deepEqual(done, items.map((at) => at * 2), 'and the order is preserved');
 });
 
 test('an empty list of work is no batches and no error', async () => {
-  assert.deepEqual(await inBatches([], async (x) => x), []);
+  assert.deepEqual(await inBatches([], async (x) => x, () => 0), []);
 });
 
 test('an export that could read only SOME rounds still writes, and says which it could not', async () => {
@@ -271,4 +273,69 @@ test('an export where NOTHING could be read writes no file and opens no dialog',
   assert.equal(asked, false, 'the person is not asked for a path to a file that cannot be written');
   assert.deepEqual(port.written, []);
   assert.match(port.complained[0]!, /could not be read/);
+});
+
+test('one job rejecting does not abort its batch or the ones after it', async () => {
+  // `Promise.all` rejects at the first failure and leaves its siblings running with nobody awaiting
+  // them. This is a generic helper and its next caller will not know that, so every item answers
+  // for itself. (Code round, gemini, twice.)
+  const done = await inBatches(
+    [1, 2, 3, 4, 5, 6],
+    async (item) => {
+      if (item % 2 === 0) {
+        throw new Error(`no ${item}`);
+      }
+
+      return `ok ${item}`;
+    },
+    (item) => `failed ${item}`,
+    2);
+
+  assert.deepEqual(done, ['ok 1', 'failed 2', 'ok 3', 'failed 4', 'ok 5', 'failed 6'],
+    'every item has a result, in order');
+});
+
+test('a batch size that could never advance the loop does not hang', async () => {
+  // Zero or a negative would never move the index and the export would look permanently stuck.
+  for (const atOnce of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(await inBatches([1, 2], async (x) => x * 10, () => 0, atOnce), [10, 20],
+      `atOnce=${atOnce} must still finish`);
+  }
+});
+
+test('readAndExport reads every row and writes them, all inside one call', async () => {
+  const port = ports();
+  const asked: string[] = [];
+
+  const outcome = await readAndExport(
+    [row({ key: 'a' }), row({ key: 'b' })],
+    async (one) => {
+      asked.push(String(one.key));
+
+      return { state: 'loaded' as const, findings: [] };
+    },
+    port);
+
+  assert.equal(outcome, 'written');
+  assert.deepEqual(asked, ['a', 'b']);
+  assert.equal(port.written.length, 1);
+});
+
+test('a reader that THROWS makes that round failed, not absent, and not an exception', async () => {
+  const port = ports();
+
+  const outcome = await readAndExport(
+    [row({ key: 'a' }), row({ key: 'b' })],
+    async (one) => {
+      if (one.key === 'b') {
+        throw new Error('the server went away');
+      }
+
+      return { state: 'loaded' as const, findings: [] };
+    },
+    port);
+
+  assert.equal(outcome, 'written', 'the readable round is still written');
+  assert.match(port.said[0]!, /could not be read/);
+  assert.equal(port.said[0]!.endsWith(': b.'), true, port.said[0]!);
 });

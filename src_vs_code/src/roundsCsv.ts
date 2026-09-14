@@ -253,24 +253,33 @@ export function decisionWord(resolution: unknown): string {
 }
 
 /** What one finding contributes to a line, in `FINDING_COLUMNS` order. */
-export function findingCells(finding: ExportableRow): readonly unknown[] {
+export function findingCells(finding: unknown): readonly unknown[] {
+  // A finding is a bridge value like everything else here. `null`, a string or a number would
+  // otherwise throw on the first property access and take the whole export down; and an object with
+  // no fields would emit `decision = open`, which reads as a real unresolved finding nobody raised.
+  // Both were named on the code round. A thing that is not a record is a row of blanks.
+  if (typeof finding !== 'object' || finding === null || Array.isArray(finding)) {
+    return FINDING_COLUMNS.map(() => null);
+  }
+  const it = finding as ExportableRow;
+
   return [
-    finding.ordinal,
-    finding.severity,
-    finding.category,
-    finding.file,
-    finding.line,
-    finding.title,
-    finding.why,
-    finding.fix,
-    finding.role,
-    finding.isGating,
+    it.ordinal,
+    it.severity,
+    it.category,
+    it.file,
+    it.line,
+    it.title,
+    it.why,
+    it.fix,
+    it.role,
+    it.isGating,
     // Comma-joined by the database, which is why it goes through the one cell writer like everything
     // else rather than being spliced into the line as though it were already several cells.
-    finding.providers,
-    decisionWord(finding.resolution),
-    finding.reason,
-    finding.reRaised,
+    it.providers,
+    decisionWord(it.resolution),
+    it.reason,
+    it.reRaised,
   ];
 }
 
@@ -360,7 +369,9 @@ export function csvOf(rounds: readonly ExportRound[]): CsvWritten | CsvRefusal {
   const header = line([...ROUND_COLUMNS, ...FINDING_COLUMNS]);
   const body = rounds.flatMap((round, at) => linesFor(round, states[at]!));
 
-  return { text: BOM + [header, ...body].join(LINE) + LINE, unread };
+  // `concat`, not a spread into an array literal: a big export is tens of thousands of lines and
+  // spreading that many elements as ARGUMENTS can exceed the call-stack limit. (Code round, gemini.)
+  return { text: BOM + [header].concat(body).join(LINE) + LINE, unread };
 }
 
 /** Which rounds could not be read at all, when that is every one of them. */
