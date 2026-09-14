@@ -220,8 +220,13 @@ public sealed class ConsultationProjectionTests : IDisposable
         {
             db.Open();
             using var make = db.CreateCommand();
-            // Step 0 only — exactly what an older binary left behind.
-            make.CommandText = Schema.Tables + "; PRAGMA user_version=1";
+            // EVERY step but the last — exactly what the binary before this one left behind. Named
+            // as "all but the last" rather than "step 0", because the steps before this feature's
+            // are not this test's subject: it is about the consultations table being absent, and
+            // pinning an index made another lane's migration read as this test's failure.
+            var before = Schema.Steps[..^1];
+            make.CommandText = string.Join(";\n", before)
+                + $"; PRAGMA user_version={before.Length}";
             make.ExecuteNonQuery();
         }
 

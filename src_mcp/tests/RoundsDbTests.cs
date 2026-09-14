@@ -425,7 +425,10 @@ public sealed class RoundsDbTests : IDisposable
         using var again = RoundsDb.Open(_dir, _log);
 
         again.Should().NotBeNull();
-        Query("PRAGMA user_version").Single().Values.Single().Should().Be("3");
+        // From the STEP LIST, not a literal: every schema step anybody adds moves this number, and a
+        // hard-coded one turns their migration into this test's failure.
+        Query("PRAGMA user_version").Single().Values.Single()
+            .Should().Be(Schema.Steps.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>The `rounds` and `sessions` tables exactly as the build before #174 wrote them.</summary>

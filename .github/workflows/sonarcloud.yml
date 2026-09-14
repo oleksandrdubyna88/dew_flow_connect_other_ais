@@ -69,7 +69,7 @@ jobs:
       #     for having added tests.
       #
       #
-      #   sonar.coverage.exclusions + the seventeen modules that IMPORT `vscode`
+      #   sonar.coverage.exclusions + the eighteen modules that IMPORT `vscode`
       #     A module that imports `vscode` cannot be loaded outside an extension host, and this
       #     repository has no harness that provides one — `research/module_tests.md` records that as
       #     its largest single gap. Node's runner therefore never executes a line of them, so they
@@ -105,7 +105,7 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**" \
-            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**,src_vs_code/src/chatCommand.ts,src_vs_code/src/chatGotoCommand.ts,src_vs_code/src/chatPanel.ts,src_vs_code/src/chatPresetsPanel.ts,src_vs_code/src/chatRestorePanel.ts,src_vs_code/src/conversationPickerCommand.ts,src_vs_code/src/escalationWatcher.ts,src_vs_code/src/extension.ts,src_vs_code/src/helpPanel.ts,src_vs_code/src/installer.ts,src_vs_code/src/panelProvider.ts,src_vs_code/src/rolesPanel.ts,src_vs_code/src/roundsLogPanel.ts,src_vs_code/src/sideConfig.ts,src_vs_code/src/snippetInWorkspace.ts,src_vs_code/src/textToneHost.ts,src_vs_code/src/uiScaleHost.ts"
+            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**,src_vs_code/src/chatCommand.ts,src_vs_code/src/chatGotoCommand.ts,src_vs_code/src/chatPanel.ts,src_vs_code/src/chatPresetsPanel.ts,src_vs_code/src/chatRestorePanel.ts,src_vs_code/src/consultationWatcher.ts,src_vs_code/src/conversationPickerCommand.ts,src_vs_code/src/escalationWatcher.ts,src_vs_code/src/extension.ts,src_vs_code/src/helpPanel.ts,src_vs_code/src/installer.ts,src_vs_code/src/panelProvider.ts,src_vs_code/src/rolesPanel.ts,src_vs_code/src/roundsLogPanel.ts,src_vs_code/src/sideConfig.ts,src_vs_code/src/snippetInWorkspace.ts,src_vs_code/src/textToneHost.ts,src_vs_code/src/uiScaleHost.ts"
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release --no-incremental
       - name: Test with coverage

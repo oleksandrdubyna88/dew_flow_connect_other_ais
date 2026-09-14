@@ -253,7 +253,10 @@ public sealed class CallerKindTests
         CallerIdentity.KindFrom(Env(("COAI_CALLER_SESSION", "x"))).Should().Be(CallerIdentity.Other);
         CallerIdentity.KindFrom(Env(("COAI_CALLER_SESSION", "x"), ("CLAUDE_CODE_SESSION_ID", "s")))
             .Should().Be(CallerIdentity.Claude);
+        // The ID half: `From` answers a whole `CallerIdentity` since the caller began declaring its
+        // model, and its VENDOR half reads "stated" for exactly this case — which is the same
+        // distinction this test is about, drawn one layer down.
         CallerIdentity.From(Env(("COAI_CALLER_SESSION", "x"), ("CLAUDE_CODE_SESSION_ID", "s")))
-            .Should().Be("x", "the override still wins for the IDENTITY");
+            .Id.Should().Be("x", "the override still wins for the IDENTITY");
     }
 }
