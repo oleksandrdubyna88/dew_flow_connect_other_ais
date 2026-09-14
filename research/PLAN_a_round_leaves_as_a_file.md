@@ -149,8 +149,10 @@ the write itself; only the *path* comes from the dialog.
    recorded them (`roundsLog.ts:58-91`). A CSV writing `0` fabricates a measurement; these cells stay
    empty.
 8. **UTC in storage, local only at the edge** (`.agents/conventions/common/utc-timestamps.md`). The
-   CSV carries `started_utc` as the ISO-8601 instant **and** a separate `started_local` column, so
-   neither a spreadsheet nor a re-import has to guess.
+   CSV carries `started_utc` as the ISO-8601 instant **and** a separate `started_local_exporter`
+   column, so neither a spreadsheet nor a re-import has to guess. The name says whose clock it is:
+   under Remote SSH, WSL or a dev container the extension host is a different machine from the one
+   the person is sitting at, so "local" alone would have been a claim about a reader nobody can see.
 9. **CSV injection — on EVERY string cell, not the prose ones.** RFC-4180 quoting throughout, and a
    leading `=`, `+`, `-`, `@`, tab or CR is prefixed with an apostrophe
    (`.agents/conventions/common/security.md`). The guard is applied by the ONE function that writes a
@@ -162,8 +164,14 @@ the write itself; only the *path* comes from the dialog.
     answers `loaded | absent | failed` precisely so an empty list never reads as "this round was
     clean" (`roundsDbRead.ts:86-95`). The export carries that state through: a placeholder row is
     written **only** for a round confirmed to have no findings, and a round whose findings could not
-    be read aborts the export with what failed named. An export that quietly writes blank finding
-    cells for a timed-out read is the defect this codebase already paid for once. (Plan round, codex.)
+    be read is written with `findings_read = failed` and blank finding cells, and its key comes back
+    in `unread` so the caller says so out loud. **The export is refused outright only when EVERY
+    selected round failed**, since there is then nothing worth a save dialog. That is narrower than
+    this constraint was first written — see "What shipped differently" — and it is the useful
+    behaviour: one unreadable round in five hundred must not cost the other four hundred and
+    ninety-nine. What the constraint actually forbids is the quiet version: blank finding cells with
+    NO state column saying why, which is the defect this codebase already paid for once.
+    (Plan round, codex.)
 10. **Adding a one-shot mode means amending `.agents/PROJECT.md:46-56`** — the paragraph that lists
     them is a non-negotiable, and a reviewer read it literally on 2026-09-07 and was right to.
 11. **No new `contributes.command` and no new `coai.*` setting.** `helpCoverage.test.ts:173-199`
@@ -293,8 +301,10 @@ lunch too. The tooltip therefore says *"from the round finishing to the last dec
    **The findings arrive with their STATE attached, not as a bare array** — the signature took a
    `Map<string, DbFinding[]>` and a missing key then meant two different things at once
    (constraint 14; plan round, codex). `csvOf` writes the placeholder row only for
-   `state === 'loaded'` with no findings, and **refuses to build a file at all** if any round is
-   `failed` — returning which ones, so the caller reports that instead of a success. `absent` is a
+   `state === 'loaded'` with no findings, and **refuses to build a file at all only when EVERY round
+   is `failed`** — returning which ones, so the caller reports that instead of a success. A mixed
+   selection is written: the failed rounds carry `findings_read = failed` with blank finding cells,
+   and their keys come back in `unread` for the caller to name in its success message. `absent` is a
    real answer and gets a placeholder row whose `decision` column reads `not recorded`.
 
    Every cell goes through **one** writer that applies the formula guard and RFC-4180 quoting, so no
@@ -407,7 +417,7 @@ Every phase ships its tests in the same task (`.agents/conventions/common/testin
 | the batch read | `src_mcp/tests/RoundsQueryTests.cs`, `src_vs_code/src/test/roundsDbRead.test.ts` | many keys in one call; an unknown key answers "not known" rather than "found nothing"; **exit 64 falls back, exit 69 does NOT** — the fallback fires only on the code an old binary actually returns for an unknown mode |
 | **a round with no finding rows** (phase 1) | `src_mcp/tests/RoundsQueryTests.cs` | `ResolvedUtc` is `''`, not null — the `COALESCE` case |
 | **`''` never becomes 0** (phase 1) | `src_vs_code/src/test/roundsLog.test.ts` | an empty `resolvedUtc` yields `decideSeconds === null`; so does a negative difference and an unparseable `completedUtc` |
-| **a failed read never becomes an empty round** | `src_vs_code/src/test/roundsCsv.test.ts` | `state: 'failed'` makes `csvOf` refuse and name the round; `state: 'absent'` writes a placeholder reading `not recorded`; `loaded` with no findings writes the ordinary placeholder |
+| **a failed read never becomes an empty round** | `src_vs_code/src/test/roundsCsv.test.ts` | `state: 'failed'` writes the round with `findings_read = failed` and returns its key in `unread`, and makes `csvOf` refuse outright only when every round failed; `state: 'absent'` writes a placeholder reading `not recorded`; `loaded` with no findings writes the ordinary placeholder |
 | **the formula guard covers every column** | `src_vs_code/src/test/roundsCsv.test.ts` | a repository named `=HYPERLINK(…)`, a branch named `@x`, a `file` starting `-`, a role and a vendor — each neutralised; a table-driven case over every string column so a new column cannot be forgotten |
 | **cancel and write failure** | `src_vs_code/src/test/` (host export test) | a cancelled dialog reports nothing and clears the in-flight state; a throwing write reports an error and reports NO success; both clear state in `finally` |
 | **selection survives a filter, dies with the row** | `src_vs_code/src/test/roundsLogPaging.test.ts` | a filtered-out selected row stays selected and the button says how many are hidden; a row that leaves `ROWS` entirely is dropped from the selection in `render()`, not only on a tick |
@@ -465,6 +475,13 @@ Recorded here because the deviations are the most useful part of a finished plan
 - **`RecordClosing` counts from the findings table**, not from the batch that triggered it — the
   A1 defect one level up, found in C2's second code round: a round decided in two sittings had its
   summary overwritten by the second one.
+- **A failed read does not abort the whole export.** Constraint 14 was first written as "a round
+  whose findings could not be read aborts the export"; what shipped refuses only when EVERY selected
+  round failed, and otherwise writes the failed ones with `findings_read = failed`, blank finding
+  cells and their keys in `unread` for the caller to name. One unreadable round in five hundred
+  costing the other four hundred and ninety-nine was never the intent — what the constraint exists to
+  forbid is blank cells with no state column saying why. (CodeRabbit, on the pull request, reading
+  the promoted document against the code.)
 - **The CSV gained an `asked_by` column** that this plan never specified. `calledBy` arrived on every
   row from another branch while this one was being built, and "the same data visible in the table"
   is what the operator asked for.
