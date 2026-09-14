@@ -98,6 +98,19 @@ an indented snippet pastes indented, and a newline you left at the end stays the
 phrase that starts with a blank line now uses the first line that actually has words on it, so
 the button can be read.
 
+**A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
+the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases never
+leave this machine: they are not sent to the review server and not mirrored to a Team server.
+
+**A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
+or held by another program, the tab says so in a line above the list instead of quietly redrawing
+itself without the words you just typed.
+
+**Typing in the roles tab and the phrases tab is stored once, when you stop.** It used to be a write
+per keystroke in one of them — forty for a forty-character name, each one announced to every part of
+the extension. They also queue behind one another now, so a fast typist cannot have an earlier
+keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
