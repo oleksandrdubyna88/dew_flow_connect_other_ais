@@ -420,4 +420,26 @@ public sealed class SameCheckoutTests
         ConsultationService.SamePath(here, "\0not-a-path", p => p).Should().BeFalse();
         ConsultationService.SamePath(here, string.Empty, p => p).Should().BeFalse();
     }
+
+    /// <summary>
+    /// A checkout this machine cannot resolve still names itself — and names itself the SAME way
+    /// from both sides, which is the only thing the identity has to guarantee.
+    /// </summary>
+    /// <remarks>
+    /// The point of the fallback is not that the name is good; it is that there is one. A record can
+    /// come from a server that ran on another machine, and a resolver that throws must not leave the
+    /// write and the read disagreeing — that disagreement is the whole defect this rule exists for.
+    /// </remarks>
+    [Fact]
+    public void ACheckoutThatCannotBeResolved_StillNamesItselfTheSameWayTwice()
+    {
+        const string unresolvable = "\0not-a-path";
+
+        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Be(
+            ConsultationService.RepoIdentity(unresolvable, p => p),
+            "the write and the read must agree even where neither can resolve");
+
+        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Contain(
+            "repo:", "an owner that cannot be resolved is still an owner");
+    }
 }
