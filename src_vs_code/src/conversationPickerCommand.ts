@@ -174,8 +174,20 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
   // it is being changed by this one, and blaming a window that does not exist is the worst sentence
   // this command could produce. (gemini, the code round.)
   let removing = false;
-  /** What the person has typed, and what the list on screen was built for. */
-  let query = '';
+  /**
+   * What the person has typed, and what the list on screen was built for.
+   *
+   * <p>A NARROWED picker starts with the tab's own name in it. *Go to* opens one because it could
+   * not answer on its own — two Claude sessions of one name, a store it could not read — and the
+   * list it opened was every conversation of the root, in date order, with the three that might
+   * actually be meant somewhere down it. The title said "more than one Claude session is called
+   * X" above forty rows that were not called X. Seeding the search is the difference between
+   * asking a question and answering most of it. (Found by the operator, testing 0.40.0.)</p>
+   *
+   * <p>It is a starting VALUE and not a filter: one press of backspace is the whole list back, which
+   * is why this is the right shape for a guess rather than a rule.</p>
+   */
+  let query = narrowed === undefined ? '' : narrowed.offer;
   let drawn = '';
   /** Whether the list on screen hit the hundred-row cap, and so may be missing a match. */
   let cut = false;
@@ -191,6 +203,10 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
   // picker that vanished because it told you something would be a picker that cannot say anything.
   pick.ignoreFocusOut = true;
   pick.placeholder = 'Type to find a conversation by its title, its model, or the last thing said in it';
+  // AND ON SCREEN, not only in the variable the rows are built from: the widget does its own
+  // filtering over what is typed, so a query the box does not show is a list narrowed for a reason
+  // nobody can see — and one nobody can clear.
+  pick.value = query;
 
   /**
    * THIS picker's registration, compared by identity when it hides.

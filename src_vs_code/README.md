@@ -119,7 +119,9 @@ again, bound to that tab, so every later press lands in the same place. If nothi
 tab, the list opens with *New conversation for it* under the cursor — and nothing is created until you
 press it; press it and the ordinary chat opens on that tab, from whatever you have selected there. From a terminal or anywhere a conversation cannot belong, it opens the full list rather than
 doing nothing. Where it cannot be sure — two Claude sessions with one name, or a conversation about
-this file filed under another folder — it shows those and lets you choose, with a title saying why.
+this file filed under another folder — it shows those and lets you choose, with a title saying why and
+the tab's own name already in the search box. If exactly one saved conversation was opened from a tab
+of that name, it opens that one rather than asking.
 
 **New chat** in the tab's header starts again in the same tab: the conversation you were in is
 archived — whole, under the same name, in **CoAI: switch conversations…** — and the tab is yours

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+**Go to conversation answers more of the question.** Pressing it on a Claude tab whose name belongs
+to more than one session used to open the whole list of this folder's conversations, under a title
+saying two sessions share that name — most of the rows having nothing to do with it. Now the tab's
+own name is already in the search box, so what you are almost certainly after is at the top, and one
+backspace still shows everything. And when exactly one saved conversation was opened from a tab of
+that name, it simply opens it.
+
+**And *New conversation for this tab* works.** It refused every press with *"open it again and press
+once more"* — including when that tab was in front the whole time. It was comparing the tab it was
+opened on against the tab in front by object identity, and VS Code replaces that object whenever a
+tab changes: a Claude Code tab renames itself as the assistant works, so the comparison was against
+something that no longer existed. It compares the name now.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
