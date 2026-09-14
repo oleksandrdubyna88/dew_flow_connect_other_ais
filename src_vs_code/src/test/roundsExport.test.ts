@@ -23,7 +23,7 @@ import { LogRow } from '../roundsLog';
  */
 function row(over: Partial<LogRow> = {}): ExportableRow {
   const typed: LogRow = {
-    key: 'k1', kind: 'review',
+    key: 'k1', kind: 'review', calledBy: 'claude-code 7.3.1 · claude-opus-5',
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
     subject: 'SCOPE', status: 'done', decided: null, verdict: 'proceed', gating: 1,

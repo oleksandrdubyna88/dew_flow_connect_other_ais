@@ -707,17 +707,18 @@ public sealed class ConsultMissedTests : IDisposable
 
     /// <summary>A round, its findings, and what the caller decided about each of them.</summary>
     /// <remarks>
-    /// The decisions are positional — `resolve` numbers findings by their order in the round — so
-    /// they are built from the findings here rather than by a caller repeating them.
+    /// The decisions carry the ORDINAL of the finding they are about — a decision is no longer
+    /// paired with a finding by its place in the list, which is the defect the ordinal fix removed —
+    /// so they are built from the findings here rather than by a caller repeating them.
     /// </remarks>
     private static void Recorded(RoundsDb db, SessionState session, RoundRecord round, Finding[] findings, string?[] reasons)
     {
         db.RecordRound(session, round, findings);
         db.RecordDecisions(
             session.SessionId, round.Stage, round.Number,
-            [.. findings.Select((finding, at) => reasons[at] is { } reason
-                ? new Decision.Rejected(finding, reason)
-                : (Decision)new Decision.Accepted(finding))]);
+            [.. findings.Select((_, at) => reasons[at] is { } reason
+                ? Decisions.Reject(findings, at, reason)
+                : Decisions.Accept(findings, at))]);
     }
 
     [Fact]
