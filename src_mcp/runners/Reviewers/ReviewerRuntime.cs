@@ -154,6 +154,29 @@ public interface IReviewerRuntime
     /// </summary>
     Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result) =>
         UsageParser.Parse(result.StdOut);
+
+    /// <summary>
+    /// Why this vendor failed, when it does not say so on stderr. Null when it has nothing to add.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The third piece of vendor knowledge on this interface, and it is here for the same
+    /// reason as the other two.</b> Where the ANSWER lands is the vendor's business
+    /// (<see cref="ReadAnswer"/>); how the run is BILLED is the vendor's business
+    /// (<see cref="ReadUsage"/>); and so is where it puts the sentence explaining a failure.</para>
+    /// <para><b>Measured 2026-09-14.</b> The operator watched codex fail round after round with
+    /// <c>exit 1 (the CLI said nothing on stderr)</c> and nothing anywhere to say why. It was true:
+    /// the gate passes <c>--json</c>, and with <c>--json</c> codex writes its whole event stream to
+    /// STDOUT and leaves stderr empty — including
+    /// <c>{"type":"error","message":"Selected model is at capacity."}</c>. The scheduler read
+    /// stderr, found nothing, and reported the nothing. The reason was three lines away.</para>
+    /// <para>Worse than a one-off, because that error is TRANSIENT: the same model answers normally
+    /// minutes later, so it read as codex randomly falling over rather than as a named, temporary,
+    /// actionable condition.</para>
+    /// <para>A default of null, so no existing adapter changes and a new one only implements this
+    /// if its CLI has somewhere else to put a reason. It runs on the failure path of a reviewer
+    /// that has already gone wrong: it must never throw, and it must never invent.</para>
+    /// </remarks>
+    string? WhyItFailed(ProcessResult result) => null;
 }
 
 /// <summary>The default read conventions the adapters share.</summary>
@@ -246,6 +269,67 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 
     private protected static Dictionary<string, string?> KeyEnv(string variable, ReviewerSettings settings) =>
         settings.ApiKey.Length > 0 ? new() { [variable] = settings.ApiKey } : [];
+
+    /// <summary>
+    /// The failure codex reports in its own event stream, on stdout, where `--json` puts it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two shapes, both seen in one reproduction: a bare
+    /// <c>{"type":"error","message":…}</c> and the <c>{"type":"turn.failed","error":{"message":…}}</c>
+    /// that follows it. The first is taken when present because it is the one the CLI prints first
+    /// and they carry the same sentence.</para>
+    /// <para>Only lines this vendor's own protocol defines count. stdout also carries a shim's
+    /// chatter, a banner and — when a process is killed mid-write — half a JSON object, and none of
+    /// those is a reason. Anything unparseable is silently not a reason rather than an exception on
+    /// a path that is already handling a failure.</para>
+    /// </remarks>
+    public string? WhyItFailed(ProcessResult result)
+    {
+        string? fromTurn = null;
+        foreach (var line in result.StdOut.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!line.StartsWith('{'))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var parsed = System.Text.Json.JsonDocument.Parse(line);
+                var root = parsed.RootElement;
+                if (root.ValueKind is not System.Text.Json.JsonValueKind.Object
+                    || !root.TryGetProperty("type", out var kind))
+                {
+                    continue;
+                }
+
+                if (kind.GetString() == "error" && Said(root) is { Length: > 0 } spoken)
+                {
+                    return spoken;
+                }
+
+                if (kind.GetString() == "turn.failed"
+                    && root.TryGetProperty("error", out var failure)
+                    && Said(failure) is { Length: > 0 } reported)
+                {
+                    fromTurn ??= reported;
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // A torn or foreign line is not a reason. Keep reading: the real one may follow.
+            }
+        }
+
+        return fromTurn;
+    }
+
+    /// <summary>The `message` of an object that carries one.</summary>
+    private static string? Said(System.Text.Json.JsonElement element) =>
+        element.TryGetProperty("message", out var message)
+        && message.ValueKind is System.Text.Json.JsonValueKind.String
+            ? message.GetString()
+            : null;
 }
 
 /// <summary>

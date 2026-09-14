@@ -400,6 +400,39 @@ fix made there was to the CHOICE of runtime, not to the name it then gave itself
 `ParseVendors` also drops a second row with an already-seen id, first wins — the extension refuses
 such a list, and a hand-edited settings file is how one reaches the server.
 
+## Where a vendor puts its REASON is vendor knowledge too (2026-09-14)
+
+`IReviewerRuntime` already says where a vendor's answer lands (`ReadAnswer`) and how its run is
+billed (`ReadUsage`), because both are the vendor's business and hard-coding either would make every
+new vendor an edit to `ReviewerExecutor`. `WhyItFailed(result)` is the third of the same kind, and it
+exists because the absence of it was costing real diagnosis.
+
+**What it looked like.** Round after round: `codex/PlanCritique — failed (exit 1 (the CLI said
+nothing on stderr))`. Every round, no reason, nowhere. Reproducing the gate's own invocation by hand
+answered it in one run:
+
+```
+{"type":"error","message":"Selected model is at capacity. Please try a different model."}
+{"type":"turn.failed","error":{"message":"Selected model is at capacity. Please try a different model."}}
+```
+
+**On stdout.** The gate passes `--json`, and with `--json` codex writes its entire event stream —
+including the error — to stdout and leaves stderr EMPTY. `BoundedScheduler.Because` reads stderr, so
+it was reporting the exact truth and discarding the only sentence that mattered. Every other vendor
+here writes its errors to stderr, which is why nothing had shown this before.
+
+**Why it earned a mechanism rather than a special case.** The capacity error is TRANSIENT — the same
+model answers normally minutes later — so it presented as codex randomly falling over rather than as
+a named, temporary, actionable condition. A transient failure whose reason is unreadable is the
+worst kind there is.
+
+The default is null, so no existing adapter changed. `CodexRuntime` implements it by reading the two
+shapes its protocol defines, and only those: stdout also carries banners, progress and — from a
+process killed mid-write — half a JSON object, none of which is a reason. `NonZeroExit` gained
+`StdOutTail` as a second field rather than folding it into `StdErrTail`, because the two are not
+equally trustworthy: **stderr wins whenever the vendor used it**, and the recovered stream is a
+fallback for when it did not.
+
 ## A local reviewer is told not to think (2026-09-02)
 
 `PanelSettings.LocalReasoningEffort` — `COAI_LOCAL_REASONING_EFFORT`, default `none` — rides

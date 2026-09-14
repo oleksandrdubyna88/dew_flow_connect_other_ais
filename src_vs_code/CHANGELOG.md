@@ -42,6 +42,22 @@ have made the offer impossible for both of them, and an untitled buffer has no n
 check is gone. Choosing the offer starts a conversation the same way the ordinary chord does, for
 the tab you are in, and the chat is titled after it so you can see which one you got.
 
+**When a reviewer fails, the log says why — even when the vendor writes it somewhere unusual.**
+Codex has been failing rounds with `exit 1 (the CLI said nothing on stderr)` and nothing anywhere to
+explain it. The sentence was true and useless: the gate asks codex for machine-readable output, and
+in that mode codex writes everything — including its errors — to the *other* stream, so the place we
+looked really was empty.
+
+The reason it was hiding there is worth knowing, because it is temporary and it is not your fault:
+*Selected model is at capacity. Please try a different model.* That comes and goes, which is exactly
+why it looked like Codex falling over at random rather than a named condition you can wait out or
+step around by picking another model.
+
+Each vendor now says where its own failures are written, the way each already says where its answer
+lands and what its run cost. A vendor that writes to the usual place is read from the usual place
+first — nothing changes for Gemini or a local model — and one that does not is no longer allowed to
+fail silently.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side

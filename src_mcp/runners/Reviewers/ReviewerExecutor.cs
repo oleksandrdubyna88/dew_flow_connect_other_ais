@@ -28,7 +28,19 @@ public abstract record ReviewerOutcome
         public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
     }
 
-    public sealed record NonZeroExit(int ExitCode, string StdErrTail) : ReviewerOutcome;
+    /// <param name="StdOutTail">
+    /// What the vendor said about its own failure somewhere OTHER than stderr, or empty.
+    /// </param>
+    /// <remarks>
+    /// A second field rather than folding it into <paramref name="StdErrTail"/>, because the two
+    /// are not equally trustworthy and the sentence must prefer the written one: stderr is a vendor
+    /// writing an error, while this is whatever its adapter could recover from a stream that also
+    /// carries banners, progress and half-written lines. See <c>IReviewerRuntime.WhyItFailed</c>.
+    /// </remarks>
+    public sealed record NonZeroExit(int ExitCode, string StdErrTail) : ReviewerOutcome
+    {
+        public string StdOutTail { get; init; } = string.Empty;
+    }
 
     public sealed record TimedOut : ReviewerOutcome;
 
@@ -642,7 +654,15 @@ public sealed class ReviewerExecutor(
 
         if (result.ExitCode != 0)
         {
-            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr)), null, Usage.None, string.Empty, result);
+            // The adapter is asked where ITS reasons live, the same way it is asked where its answer
+            // and its usage live. codex writes its failure into the `--json` event stream on stdout
+            // and leaves stderr empty, so without this the summary can only report the emptiness.
+            var outcome = new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr))
+            {
+                StdOutTail = invocation.Adapter?.WhyItFailed(result) ?? string.Empty,
+            };
+
+            return new ReviewerLaunch(outcome, null, Usage.None, string.Empty, result);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run
