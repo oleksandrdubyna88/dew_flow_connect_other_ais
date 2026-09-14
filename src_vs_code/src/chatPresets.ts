@@ -1,5 +1,9 @@
 import { Vendor } from './vendors';
 import { Runtime } from './models';
+import { NAME_LIMIT, freshId, nameFor, record, rowById, text, withId } from './savedRows';
+
+/** The preset a button named — the shared row lookup, kept under this name for its callers. */
+export const presetById = rowById;
 /**
  * The two lists a person builds: named prompts, and named models.
  *
@@ -21,8 +25,6 @@ import { Runtime } from './models';
  * exactly the kind of thing that would otherwise start travelling.</p>
  */
 
-/** How much of a name fits on a button in a row of buttons, before the row stops being a row. */
-const NAME_LIMIT = 60;
 
 export interface PromptPreset {
   readonly id: string;
@@ -91,32 +93,8 @@ export interface ModelPreset {
   readonly remoteVendor?: string | undefined;
 }
 
-/** A string from a file a person edits: trimmed, and empty for anything that is not one. */
-function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
 
-/** A record, or nothing — `settings.json` can hold a string, a number or a null in an array. */
-function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
 
-/**
- * An id for every preset, unique across the list.
- *
- * <p>A person editing `settings.json` by hand will not write one, and two presets sharing an id
- * makes a click ambiguous — the buttons name the preset they chose, and the host looks it up. So a
- * missing or repeated id is replaced by a positional one, which is stable for as long as the list
- * is not reordered and is regenerated the moment it is.</p>
- */
-function withId(candidate: string, index: number, taken: Set<string>): string {
-  const id = candidate.length > 0 && !taken.has(candidate) ? candidate : `preset-${index + 1}`;
-  taken.add(id);
-
-  return id;
-}
 
 /**
  * The prompt presets, and the migration of the single prompt that came before them.
@@ -141,7 +119,7 @@ export function chatPromptPresetsFrom(saved: unknown, legacy = ''): readonly Pro
 
     return name.length === 0 || body.length === 0
       ? []
-      : [{ id: withId(text(one['id']), index, taken), name, text: body, main: one['main'] === true }];
+      : [{ id: withId(text(one['id']), index, taken, 'preset'), name, text: body, main: one['main'] === true }];
   });
 
   if (presets.length === 0) {
@@ -155,17 +133,6 @@ export function chatPromptPresetsFrom(saved: unknown, legacy = ''): readonly Pro
   return onlyOneMain(presets);
 }
 
-/**
- * A name for the migrated prompt, since the setting it came from never had one.
- *
- * <p>Its own first words, so a person recognises it on a button as the thing they wrote — a generic
- * label would make their own prompt look like something this product put there.</p>
- */
-function nameFor(prompt: string): string {
-  const firstLine = prompt.split('\n')[0] ?? prompt;
-
-  return firstLine.length <= NAME_LIMIT ? firstLine : `${firstLine.slice(0, NAME_LIMIT - 1)}…`;
-}
 
 /** Exactly one main row, and the first claim wins — two would make the choice arbitrary. */
 function onlyOneMain<T extends { readonly main: boolean }>(presets: readonly T[]): readonly T[] {
@@ -215,7 +182,7 @@ export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
     const onServer = text(one['remoteVendor']);
 
     return [{
-      id: withId(text(one['id']), index, taken),
+      id: withId(text(one['id']), index, taken, 'preset'),
       name,
       main: one['main'] === true,
       runtime: runtime as Runtime,
@@ -301,34 +268,10 @@ export function reaskFrom(
   };
 }
 
-/** The preset a button named, or nothing — a click naming an id that is gone chooses nothing. */
-export function presetById<T extends { readonly id: string }>(
-  presets: readonly T[],
-  id: string,
-): T | undefined {
-  return id.length === 0 ? undefined : presets.find((preset) => preset.id === id);
-}
 
-/**
- * A new row for one of the two lists, in a shape that list's own reader will KEEP.
- *
- * <p><b>That is the whole point of it living here.</b> It used to sit in the panel host beside the
- * write, and it seeded a model row with `provider: ''` — the one field `chatModelPresetsFrom`
- * refuses, because a preset that names no row names nothing that can answer. So *Add a model* wrote
- * a row, the page re-read the list, the reader dropped it, and the screen showed what it showed
- * before. Every press left a dead row in `settings.json` that nothing could display, edit or remove.
- * Next to its reader, that cannot happen without a test going red.</p>
- *
- * @param providerId the row a model preset will answer through — required for the preset to exist at
- *   all, so the caller resolves one before offering to create it rather than writing an empty string
- *   and hoping.
- */
-function freshId(taken: readonly { readonly id: string }[]): string {
-  return `preset-${Date.now().toString(36)}-${taken.length + 1}`;
-}
 
 export function freshPromptRow(taken: readonly { readonly id: string }[]): SavedRow {
-  return { id: freshId(taken), name: 'New prompt', text: 'Explain', main: false };
+  return { id: freshId(taken, 'preset'), name: 'New prompt', text: 'Explain', main: false };
 }
 
 /**
@@ -344,7 +287,7 @@ export function freshModelRow(
   name = 'New model',
 ): SavedRow {
   return {
-    id: freshId(taken),
+    id: freshId(taken, 'preset'),
     name: name.trim().length > 0 ? name.trim() : 'New model',
     // NOT main. A row added to a list that already has one would otherwise take the tick from it by
     // arriving — and adding a model is not a decision about which one a capture opens on.

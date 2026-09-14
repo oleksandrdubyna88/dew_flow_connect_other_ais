@@ -2083,6 +2083,8 @@ flowchart LR
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
 | `claudeSnippet.ts` | the paste for a target repo's CLAUDE.md |
 | `rounds.ts` | parse the server's session files; render the view (status, elapsed, tokens, cost, the reviewers in flight); a torn file is skipped; a file from an older server with no status still renders |
+| `savedRows.ts` | the rules every list a PERSON composes shares, pure: `NAME_LIMIT`, `text`, `record`, `withId`, `nameFor`, `freshId`, `rowById` — private inside `chatPresets.ts` until a second list needed exactly them |
+| `phrases.ts` | config → validated `Phrase[]` from `coai.phrases`: the phrases a person keeps so they stop retyping the same sentence. A row needs a TEXT; a row with no name is kept and named from its own first line |
 | `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
@@ -4765,3 +4767,29 @@ answers. `BEFORE_THE_CATALOG` in `serverRoles.ts` is the same frozen list, and
 `beforeTheCatalogParity.test.ts` reads the C# source and fails when the two disagree: neither copy
 can be deleted, because they run in different processes and the extension cannot ask the gate, so the
 only thing left was to make them fail together.
+
+### A phrase is a row a person wrote, and the rules for one already existed (2026-09-14)
+
+`phrases.ts` reads `coai.phrases` — the sentences somebody types into the Claude Code composer often
+enough to stop wanting to type them. It is a boundary of exactly the kind `chatPresets.ts` already
+guards: an array in `settings.json` that a person edits by hand, where one mistyped row must never
+take the rest of the list with it and a missing id must never make two buttons ambiguous.
+
+**So the rules moved rather than being written twice.** `NAME_LIMIT`, `text`, `record`, `withId`,
+`nameFor`, `freshId` and the row lookup were private inside `chatPresets.ts`; they are now
+`savedRows.ts`, and both lists call them. `chatPresets.ts` behaves exactly as it did, which its own
+tests are what prove — the extraction was made and the whole suite run before a line of the new
+feature existed. The only thing that CHANGED in the move is that `withId` and `freshId` take the id
+prefix they used to hard-code, because `preset-3` is not a name a phrase should wear.
+
+**What the two lists do NOT share is what makes a row exist, and that is the whole of `phraseFrom`.**
+A prompt preset needs both a name and a text: there the name labels a button nobody could otherwise
+read, and the instruction is something a person can write again. A phrase is the opposite — the TEXT
+is the thing they were trying not to retype, and the name is only what fits on a button. And
+`{ "text": "deploy it" }` is precisely what a hand-edited `settings.json` looks like, because a name
+is not the obvious thing to type. Dropping that row would delete somebody's writing to punish a
+missing label, so the label is derived from the text's own first line instead, cut to `NAME_LIMIT`
+with an ellipsis that says it was cut. The text itself is never truncated.
+
+Raised by a plan reviewer (gemini, Major) against a first draft that had copied the sibling's
+"needs a name and a text" rule without asking whether it meant the same thing here. It did not.

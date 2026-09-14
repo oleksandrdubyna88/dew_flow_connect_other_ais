@@ -83,6 +83,16 @@ have made the offer impossible for both of them, and an untitled buffer has no n
 check is gone. Choosing the offer starts a conversation the same way the ordinary chord does, for
 the tab you are in, and the chat is titled after it so you can see which one you got.
 
+**Phrases you keep.** The sentences you type into the Claude Code box over and over can be saved and
+picked instead of retyped. This first part is the list itself: `coai.phrases` in your settings, read
+the way the chat presets are read — a row you mistyped is dropped on its own rather than taking every
+other phrase with it, and nothing you can put in that file makes the extension throw.
+
+**A phrase you typed by hand is never thrown away for having no name.** `{ "text": "deploy it" }` is
+what a settings file edited by hand actually looks like, so a row with words and no name keeps its
+words and is given a name from its own first line. The name is what fits on a button, and it is cut
+to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
