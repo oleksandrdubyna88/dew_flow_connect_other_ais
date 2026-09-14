@@ -109,3 +109,37 @@ test('a button names the phrase it chose, and an id that is gone chooses nothing
   assert.equal(phraseById(phrases, 'gone'), undefined, 'an id naming no row returned something');
   assert.equal(phraseById(phrases, ''), undefined, 'an empty id returned something');
 });
+
+/**
+ * What the code round of 2026-09-14 found. Three real defects, each a test before it was a fix.
+ *
+ * <p>Two of them were inherited rather than written: the id collision and the blank derived name are
+ * `chatPresets.ts`'s rules as they have always been, which is what moving them into `savedRows.ts`
+ * exposed. Fixing them there fixes both lists at once.</p>
+ */
+
+test('a phrase is copied verbatim — the whitespace a person put around it is theirs', () => {
+  const [phrase] = phrasesFrom([{ id: 'a', name: 'Indented', text: '  - item\n  - other\n' }]);
+
+  assert.equal(phrase?.text, '  - item\n  - other\n',
+    'the text was trimmed, so an indented snippet pastes unindented and a trailing newline is gone');
+});
+
+test('a positional id is never one an earlier row already claimed', () => {
+  // The row that has no id sits at index 1, so the positional name it would take is `phrase-2` —
+  // which the row before it wrote by hand. Before the fix both rows answered to `phrase-2` and the
+  // second phrase could not be copied at all: the lookup found the first one.
+  const phrases = phrasesFrom([
+    { id: 'phrase-2', text: 'the one somebody named' },
+    { text: 'the one with no id' },
+  ]);
+  const ids = phrases.map((phrase) => phrase.id);
+
+  assert.equal(new Set(ids).size, 2, `two rows share an id (${ids.join(', ')}), so one of them cannot be copied`);
+});
+
+test('a phrase that opens with a blank line is named from the first line that has words', () => {
+  const [phrase] = phrasesFrom([{ id: 'a', text: '\n\n   \nSELECT * FROM claims' }]);
+
+  assert.equal(phrase?.name, 'SELECT * FROM claims', 'the button carries a blank label, so nobody can see it');
+});

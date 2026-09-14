@@ -93,6 +93,11 @@ what a settings file edited by hand actually looks like, so a row with words and
 words and is given a name from its own first line. The name is what fits on a button, and it is cut
 to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
 
+**A phrase is kept exactly as you wrote it.** The spaces and newlines around it are part of it —
+an indented snippet pastes indented, and a newline you left at the end stays there. Naming a
+phrase that starts with a blank line now uses the first line that actually has words on it, so
+the button can be read.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
