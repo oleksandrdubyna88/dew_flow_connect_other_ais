@@ -92,6 +92,28 @@ test('one round is called a round, not "1 rounds"', async () => {
   assert.match(port.said[0]!, /^1 round written/);
 });
 
+test('cancelling while the SAVE DIALOG is open writes nothing', async () => {
+  // The dialog is where the waiting actually happens, and the token stays live for the whole job —
+  // so somebody who gives up while it is open has given up on the file. Before this the path came
+  // back, the write went ahead, and they were told a file had been written. (Code round, codex.)
+  let cancelled = false;
+  const port = ports({
+    pickPath: async () => {
+      cancelled = true;
+
+      return 'D:/out/rounds.csv';
+    },
+    cancelled: () => cancelled,
+  });
+
+  const outcome = await exportRounds([round()], port);
+
+  assert.equal(outcome, 'cancelled');
+  assert.deepEqual(port.written, [], 'a cancelled export writes nothing');
+  assert.deepEqual(port.said, [], 'and says nothing');
+  assert.deepEqual(port.complained, [], 'a cancellation is not an error');
+});
+
 test('a cancelled dialog writes nothing, says nothing, and is not an error', async () => {
   // The person changed their mind. Reporting a failure would be a lie about their own decision,
   // and reporting success would be a lie about a file.

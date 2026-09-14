@@ -461,7 +461,13 @@ Two smaller observations, recorded and **not** acted on without being asked:
       quietly becoming five hundred spawns that report success.
 - [ ] Cancelling a bulk export **kills the child**, rather than stopping listening to it. One process
       for the whole selection otherwise turns C1's "stops within four rounds" into "stops when the
-      process feels like it".
+      process feels like it" — and nothing is written if the cancel lands while the save dialog is open.
+- [ ] **The old-server fallback still reads four at a time.** Reading them one after another would make
+      the degraded path four times slower than the release it degrades to.
+- [ ] **Every answer carries the round it is about, all the way to the export.** The server echoes each
+      key back so that nobody pairs an answer to a question by position; the extension keeps it and
+      matches on the whole `(session, stage, number)` tuple rather than on an index.
+- [ ] **A missing rounds database is a failed read, not five hundred rounds that were never recorded.**
 - [ ] A round whose findings could not be READ is never written as a round that found nothing; the
       export says what failed instead of claiming success.
 - [ ] A cancelled save writes nothing and reports nothing; a failed write reports the failure and

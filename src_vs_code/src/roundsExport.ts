@@ -137,6 +137,14 @@ export async function exportRounds(
     return 'failed';
   }
 
+  // Cancelled while the save dialog was open. The token stays live for the whole job, so somebody
+  // who gives up during the dialog has given up on the file too — and "a cancelled export writes
+  // nothing and says nothing" is the promise this made in C1. Asked here rather than only before the
+  // dialog, because the dialog is where the waiting actually happens. (Code round, codex.)
+  if (ports.cancelled?.() === true) {
+    return 'cancelled';
+  }
+
   try {
     await ports.write(path, text);
   } catch (reason: unknown) {

@@ -239,13 +239,26 @@ export function parseManyFindings(text: string): readonly ManyFound[] | undefine
       return undefined;
     }
 
-    return raw.rounds.map((one) => ({
-      sessionId: one.sessionId ?? '',
-      stage: one.stage ?? '',
-      number: one.number ?? 0,
-      known: one.known === true,
-      findings: (one.findings ?? []).map(finding),
-    }));
+    const rounds: ManyFound[] = [];
+    for (const one of raw.rounds) {
+      // A KNOWN round must arrive with an array of findings. An entry that says the round exists and
+      // then omits `findings`, or sends something that is not an array, is a shape nobody intended —
+      // and normalising it to `[]` would publish that round as clean, which is the exact lie the
+      // three-state answer exists to prevent. Fail the whole answer instead, which every caller
+      // already turns into "every round failed". (Code round, codex.)
+      if (one.known === true && !Array.isArray(one.findings)) {
+        return undefined;
+      }
+      rounds.push({
+        sessionId: one.sessionId ?? '',
+        stage: one.stage ?? '',
+        number: one.number ?? 0,
+        known: one.known === true,
+        findings: (one.findings ?? []).map(finding),
+      });
+    }
+
+    return rounds;
   } catch {
     return undefined;
   }

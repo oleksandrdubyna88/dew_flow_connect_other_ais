@@ -180,6 +180,140 @@ test('the page script the bundle produces parses and runs', () => {
     'the status cell did not render what the gate closed at');
 });
 
+/* ------------------------------------------------------------------------------------------------
+ * The export controls, RUN rather than matched.
+ *
+ * The conventions rule is that an executable artefact is tested by EXECUTING it: a substring of a
+ * generated page cannot see that a button is wired to the wrong branch, because the string contains
+ * everything it is supposed to contain. The code round raised exactly that against the rounds-log
+ * page tests, and these are the two behaviours this plan added to it.
+ * --------------------------------------------------------------------------------------------- */
+
+/** A stub element that REMEMBERS its listeners, so the page's own wiring can be fired. */
+interface Stub {
+  innerHTML: string;
+  textContent: string;
+  hidden: boolean;
+  value: string;
+  className: string;
+  disabled: boolean;
+  indeterminate: boolean;
+  checked: boolean;
+  listeners: Record<string, Array<() => void>>;
+  addEventListener: (type: string, fn: () => void) => void;
+  getAttribute: () => null;
+  setAttribute: () => void;
+  querySelectorAll: () => never[];
+}
+
+function stub(): Stub {
+  const listeners: Record<string, Array<() => void>> = {};
+
+  return {
+    innerHTML: '', textContent: '', hidden: false, value: '', className: '',
+    disabled: false, indeterminate: false, checked: false, listeners,
+    addEventListener(type: string, fn: () => void) { (listeners[type] ??= []).push(fn); },
+    getAttribute: () => null,
+    setAttribute() { /* the page sets attributes it never reads back here */ },
+    querySelectorAll: () => [],
+  };
+}
+
+/** The page, actually running, with every element it asks for and every message it sends. */
+function runningPage(): {
+  seen: Record<string, Stub>;
+  sent: Array<Record<string, unknown>>;
+  click: (event: unknown) => void;
+} {
+  const { script } = bundledPage();
+  const body = script.slice(script.indexOf('>') + 1);
+  const seen: Record<string, Stub> = {};
+  const sent: Array<Record<string, unknown>> = [];
+  const clicks: Array<(event: unknown) => void> = [];
+  const document_ = {
+    getElementById: (id: string) => (seen[id] ??= stub()),
+    querySelectorAll: () => [],
+    addEventListener(type: string, fn: (event: unknown) => void) {
+      if (type === 'click') { clicks.push(fn); }
+    },
+  };
+  new Function('document', 'window', 'acquireVsCodeApi', body)(
+    document_,
+    { addEventListener() { /* the page listens on document for clicks */ } },
+    () => ({ postMessage: (message: Record<string, unknown>) => sent.push(message), setState() {} }));
+
+  return {
+    seen,
+    sent,
+    click: (event: unknown) => { for (const fn of clicks) { fn(event); } },
+  };
+}
+
+/**
+ * A click on something INSIDE a row — which is the whole point.
+ *
+ * <p>Both selectors match, exactly as they do in a browser: the control and the row it sits in. A
+ * branch that forgot to return would therefore also open the row, and that is observable here
+ * because opening a row asks the host for its findings.</p>
+ */
+function clickInRow(selector: string, attribute: string, key: string): unknown {
+  const answers: Record<string, { getAttribute: (name: string) => string | null; className: string }> = {
+    [selector]: { getAttribute: (name: string) => (name === attribute ? key : null), className: '' },
+    'tr[data-key]': { getAttribute: (name: string) => (name === 'data-key' ? key : null), className: '' },
+  };
+
+  return { target: { closest: (asked: string) => answers[asked] ?? null } };
+}
+
+/** The key of the first row the page actually rendered. */
+function firstRenderedKey(html: string): string {
+  const found = /data-export="([^"]+)"/.exec(html);
+  assert.notEqual(found, null, 'the page rendered no Export button at all');
+
+  return found?.[1] ?? '';
+}
+
+test('the shipped Export button sends that ROUND, and does not open the row as well', () => {
+  const page = runningPage();
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  page.click(clickInRow('[data-export]', 'data-export', key));
+
+  const exports = page.sent.filter((message) => message['command'] === 'export');
+  assert.equal(exports.length, 1, 'one press is one export');
+  const rounds = exports[0]?.['rounds'];
+  assert.ok(Array.isArray(rounds) && rounds.length === 1, 'it carries exactly the round pressed');
+  assert.equal((rounds[0] as { key?: string }).key, key);
+
+  // Falling through to the row branch OPENS the row, and an open row paints a detail row under
+  // itself. Verified by removing the branch's `return`: this assertion is what goes red.
+  assert.doesNotMatch(page.seen['rows']?.innerHTML ?? '', /class="detail"/,
+    'pressing Export also opened the row — the export branch fell through to it');
+});
+
+test('the shipped tick box selects the row, and does not open it', () => {
+  const page = runningPage();
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  page.click(clickInRow('[data-pick]', 'data-pick', key));
+
+  assert.doesNotMatch(page.seen['rows']?.innerHTML ?? '', /class="detail"/,
+    'ticking the box also opened the row — the pick branch fell through to it');
+  assert.match(page.seen['rows']?.innerHTML ?? '', /checked/,
+    'the box was ticked but the page repainted it unticked');
+
+  // And the selection is what the toolbar button then exports.
+  const button = page.seen['exportpicked'];
+  assert.equal(button?.disabled, false, 'the toolbar button stayed disabled with a row selected');
+  for (const fn of button?.listeners['click'] ?? []) { fn(); }
+
+  const exports = page.sent.filter((message) => message['command'] === 'export');
+  assert.equal(exports.length, 1);
+  const rounds = exports[0]?.['rounds'];
+  assert.ok(Array.isArray(rounds) && rounds.length === 1);
+  assert.equal((rounds[0] as { key?: string }).key, key);
+});
+
 test('a function embedded by its source calls nothing the minifier can rename', () => {
   // The rule this file exists for, stated as a CHECK rather than left to a runtime error. A function
   // embedded by `.toString()` lands in a scope where only its own name was re-declared, so any other

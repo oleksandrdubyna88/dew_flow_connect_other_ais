@@ -80,6 +80,16 @@ return. The finding columns are blank for the last two, and the message after th
 round it could not read, so nothing in the file reads as clean that nobody actually knows about. If
 NOTHING could be read, no file is written and the save dialog does not open.
 
+**Exporting a lot of rounds no longer starts a process per round.** Selecting five hundred and
+pressing Export used to run the server five hundred times, four at a time; it now asks once and gets
+every round's findings back together. Nothing about the file changes — the same columns, the same
+findings, the same accept and decline marks — it just stops being the slowest thing in the panel.
+
+If your `coai-mcp` is older than this, the export still works exactly as it did before, one round at
+a time and four at once: the extension asks for the new mode, an older server says it has never
+heard of it, and the old way is used. And **Cancel** now stops the read itself rather than only
+stopping the waiting, so giving up on a large export ends it instead of letting it finish quietly.
+
 **Every round in the log has an Export button, and it writes a CSV where you choose.** The rounds
 log was a screen and only a screen: what a review found and what was decided about it could be read
 and taken nowhere. Now each row ends with **Export**, and the file carries that round's own columns —

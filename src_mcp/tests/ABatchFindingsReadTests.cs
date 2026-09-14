@@ -219,6 +219,34 @@ public sealed class ABatchFindingsReadTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// No database at all is a FAILED read, not a list of rounds that were never recorded.
+    /// </summary>
+    /// <remarks>
+    /// The code round's finding, and it is about what the file then CLAIMS. A caller asking about
+    /// these rounds has just listed them out of this database; if the file has gone between the
+    /// listing and the export, "never recorded" is a statement about content nobody could read.
+    /// 74 (EX_IOERR) says the database, not the rounds — and the client marks every row failed.
+    /// </remarks>
+    [Fact]
+    public void NoDatabaseAtAll_IsAReadFailure_NotFiveHundredRoundsThatWereNeverRecorded()
+    {
+        Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
+        try
+        {
+            Directory.CreateDirectory(_dir);
+            var asked = Path.Combine(_dir, "asked.json");
+            File.WriteAllText(asked, "[{\"session\":\"s1\",\"stage\":\"CodeReview\",\"number\":1}]");
+
+            Program.FindingsManyJson(["--findings-many", "--keys-file", asked]).Should().Be(74,
+                "a database that is not there says nothing about the rounds that were asked about");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COAI_DATA_DIR", null);
+        }
+    }
+
     public void Dispose()
     {
         try

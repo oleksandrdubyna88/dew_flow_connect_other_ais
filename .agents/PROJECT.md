@@ -55,7 +55,11 @@ node .agents/conventions/tools/pin-check.mjs
   bulk export stopped being one spawn per round (2026-09-14). That last one is a MODE rather than a
   flag on `--findings` deliberately: a server too old for it must exit **64** so the extension can
   fall back, and a flag on an existing mode would have been accepted and answered **69** — "no such
-  round" — which an export would have written down as five hundred clean rounds. This paragraph used to name only `--help` and
+  round" — which an export would have written down as five hundred clean rounds. The other half of
+  that rule: **a binary that KNOWS a one-shot mode must never exit 64**, whatever is wrong with the
+  request. `--findings-many` answers a keys file it cannot read with **65 (EX_DATAERR)**, because a
+  request fault that presented as an old binary would send the client down the fallback and hide the
+  fault behind a successful-looking export. This paragraph used to name only `--help` and
   `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
   2026-09-07 and was right to. **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
   the rule is unchanged and absolute.

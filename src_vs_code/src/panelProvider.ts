@@ -45,7 +45,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -434,10 +434,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the two stay separate because they answer different questions: one row wants the answer now, a
    * selection wants five hundred answers without five hundred processes.</p>
    */
-  async roundFindingsMany(keys: readonly RoundKey[], stop?: () => boolean): Promise<readonly Found[]> {
+  async roundFindingsMany(keys: readonly RoundKey[], stop?: () => boolean): Promise<readonly FoundRound[]> {
     const server = serverPath(this.context.globalStorageUri);
     if (server === undefined) {
-      return keys.map(() => ({ state: 'failed' as const, findings: [] }));
+      return keys.map((key) => ({ key, found: { state: 'failed' as const, findings: [] } }));
     }
 
     // `stop` reaches the CHILD, which is the whole point: one process answers for the whole
@@ -446,8 +446,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return readManyFindings(
       server.fsPath,
       keys,
+      keysFileIn(this.context.globalStorageUri.fsPath),
       (args, capMs) => capture(server.fsPath, [...args], false, capMs, stop),
-      keysFileIn(this.context.globalStorageUri.fsPath));
+      readFindings,
+      stop);
   }
 
   /**
