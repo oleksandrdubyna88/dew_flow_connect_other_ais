@@ -36,6 +36,25 @@ test('a window that has not caught up with an update is told that, not that its 
     'the refusal does not name the one action that fixes it, so the person has to guess the command',
   );
   assert.equal(refusal.reloadCures, true, 'the caller is not told it can offer the reload');
+  assert.match(
+    refusal.text,
+    /is not a registered configuration/u,
+    "VS Code's own reason was discarded and replaced by a diagnosis, which is the habit this module exists to end",
+  );
+});
+
+test('the cure is offered without pretending it is free', () => {
+  // The banner promised "What you typed is still here" and the button under it reloaded the window,
+  // which destroys the webview holding exactly that. Three reviewers, two vendors, one round.
+  const refusal = settingRefusal('phrases', STALE_WINDOW, 'declared');
+
+  assert.doesNotMatch(
+    refusal.text,
+    /the change will save/u,
+    'it says reloading saves the change: reloading cures the REFUSAL, it does not replay the write',
+  );
+  assert.match(refusal.text, /copy anything you have typed/u, 'it does not warn that the tab closes with the window');
+  assert.match(refusal.text, /make the change again/u, 'it does not say the edit has to be redone afterwards');
 });
 
 test('the setting that would not save is named, so a person knows what they have lost', () => {

@@ -101,12 +101,22 @@ function saidBy(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The stale-window sentence — the only one here that promises a cure. */
-function staleWindow(key: string): SettingRefusal {
+/**
+ * The stale-window sentence — the only one here with a cure, and it says what the cure COSTS.
+ *
+ * <p><b>It used to end "and the change will save", which was false in the way that matters.</b>
+ * Reloading cures the REFUSAL; it does not replay the write. It also tears down the webview, so the
+ * words still sitting in the box — the ones the banner has just promised are safe — go with it. A
+ * one-click button under a sentence like that is an invitation to lose work, and three reviewers
+ * across two vendors said so independently in the code round. The cure is still offered, because it
+ * is the only one there is; what changed is that it no longer hides its price.</p>
+ */
+function staleWindow(key: string, said: string): SettingRefusal {
   return {
     text: `ConnectOtherAIs was updated while this window was open, so the window does not know `
-      + `"coai.${key}" yet and refuses to store it. Reload the window (Developer: Reload Window) `
-      + `and the change will save.`,
+      + `"coai.${key}" yet and refuses to store it. Reloading the window (Developer: Reload Window) `
+      + `is the cure — it also closes this tab, so copy anything you have typed and not saved, and `
+      + `make the change again afterwards. VS Code said: ${said}`,
     reloadCures: true,
   };
 }
@@ -126,7 +136,7 @@ export function settingRefusal(key: string, error: unknown, declared: Declared):
 
   if (NOT_REGISTERED.test(said)) {
     if (declared === 'declared') {
-      return staleWindow(key);
+      return staleWindow(key, said);
     }
     if (declared === 'absent') {
       return notInThisBuild(key, said);
