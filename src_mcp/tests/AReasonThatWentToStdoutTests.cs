@@ -50,7 +50,7 @@ public sealed class AReasonThatWentToStdoutTests
     {
         var outcome = new ReviewerOutcome.NonZeroExit(1, string.Empty)
         {
-            StdOutTail = new CodexRuntime().WhyItFailed(Ran(CapacityRun)) ?? string.Empty,
+            FailureReason = new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(CapacityRun)),
         };
 
         ReviewerSummaryFactory.Describe(outcome).Should().Contain("at capacity");
@@ -73,7 +73,7 @@ public sealed class AReasonThatWentToStdoutTests
         // written error line. The new reading is a FALLBACK, not a replacement.
         var outcome = new ReviewerOutcome.NonZeroExit(1, "error: the door is closed")
         {
-            StdOutTail = "something from the event stream",
+            FailureReason = "something from the event stream",
         };
 
         ReviewerSummaryFactory.Describe(outcome).Should().Contain("the door is closed");
@@ -84,7 +84,7 @@ public sealed class AReasonThatWentToStdoutTests
     [InlineData("""{"type":"turn.failed","error":{"message":"stream disconnected before completion"}}""", "stream disconnected before completion")]
     public void CodexReportsItsOwnFailureFromTheEventStream(string line, string expected)
     {
-        new CodexRuntime().WhyItFailed(Ran(line)).Should().Be(expected);
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(line)).Should().Be(expected);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class AReasonThatWentToStdoutTests
             {"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":2}}
             """;
 
-        new CodexRuntime().WhyItFailed(Ran(stream, exitCode: 0)).Should().BeNull();
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(stream, exitCode: 0)).Should().BeEmpty();
     }
 
     [Fact]
@@ -104,8 +104,8 @@ public sealed class AReasonThatWentToStdoutTests
     {
         // stdout is somebody else's output: a shim's progress chatter, a banner, a half-written
         // line from a killed process. Only a line this vendor's own protocol defines counts.
-        new CodexRuntime().WhyItFailed(Ran("Reading prompt from stdin...\nOpenAI Codex v0.153.4"))
-            .Should().BeNull();
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran("Reading prompt from stdin...\nOpenAI Codex v0.153.4"))
+            .Should().BeEmpty();
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public sealed class AReasonThatWentToStdoutTests
     {
         // A process killed mid-write leaves half a JSON object, and this runs on the failure path
         // of a reviewer that has already gone wrong — it must never add an exception to that.
-        var reading = () => new CodexRuntime().WhyItFailed(Ran("""{"type":"error","mess"""));
+        var reading = () => new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran("""{"type":"error","mess"""));
 
         reading.Should().NotThrow();
     }
@@ -130,8 +130,10 @@ public sealed class AReasonThatWentToStdoutTests
     public void AnAdapterThatKnowsNothingAboutItsOwnFailures_SaysNothing()
     {
         // Through the INTERFACE, because that is where the default lives — an adapter that has
-        // not been taught this does not gain a member, it inherits a silence.
-        ((IReviewerRuntime)new GeminiRuntime()).WhyItFailed(Ran(CapacityRun)).Should().BeNull();
+        // not been taught this does not gain a member, it inherits a silence — which is EMPTY rather
+        // than null, because the house rule keeps null out of business logic and there is no third
+        // state here for a null to express. (codex, code round.)
+        ((IReviewerRuntime)new GeminiRuntime()).WhyItFailed(Invocation(new GeminiRuntime()), Ran(CapacityRun)).Should().BeEmpty();
     }
 
     // ---------- the caller path, end to end (the finding two vendors raised) ----------
@@ -197,7 +199,7 @@ public sealed class AReasonThatWentToStdoutTests
             {"type":"turn.fail
             """;
 
-        new CodexRuntime().WhyItFailed(Ran(stream)).Should().Be("Selected model is at capacity. Please try a different model.");
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(stream)).Should().Be("Selected model is at capacity. Please try a different model.");
     }
 
     /// <summary>
@@ -215,9 +217,78 @@ public sealed class AReasonThatWentToStdoutTests
     {
         var outcome = new ReviewerOutcome.NonZeroExit(1, "(node:12) [DEP0040] DeprecationWarning: punycode is deprecated")
         {
-            StdOutTail = "Selected model is at capacity. Please try a different model.",
+            FailureReason = "Selected model is at capacity. Please try a different model.",
         };
 
         ReviewerSummaryFactory.Describe(outcome).Should().Contain("at capacity");
+    }
+
+    // ---------- a record of the wrong SHAPE is not a reason, and never an exception ----------
+
+    /// <summary>
+    /// A complete JSON line whose protocol fields are the wrong kind must not throw.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three reviewers across two vendors found this on the code round, and they were right
+    /// about the mechanism: <c>JsonElement.GetString()</c> and <c>TryGetProperty</c> throw
+    /// <c>InvalidOperationException</c> — NOT <c>JsonException</c> — when the element is the wrong
+    /// kind. The first build caught only <c>JsonException</c>, so a line of <c>{"type":123}</c> or a
+    /// <c>turn.failed</c> whose <c>error</c> is a string would have escaped the catch and taken down
+    /// the very code path that exists to explain a failure.</para>
+    /// <para>None of these is exotic: an upstream proxy, a CLI version bump, or a vendor that
+    /// decides `error` reads better as a sentence produces one.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("""{"type":123}""")]
+    [InlineData("""{"type":["error"]}""")]
+    [InlineData("""{"type":null}""")]
+    [InlineData("""{"type":"turn.failed","error":"request timed out"}""")]
+    [InlineData("""{"type":"turn.failed","error":42}""")]
+    [InlineData("""{"type":"error","message":42}""")]
+    [InlineData("""{"type":"error"}""")]
+    [InlineData("""["error","not an object at all"]""")]
+    public void ARecordOfTheWrongShape_IsNotAReasonAndDoesNotThrow(string line)
+    {
+        var reading = () => new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(line));
+
+        reading.Should().NotThrow();
+        reading().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A malformed record does not stop the scan — the real reason may be the next line.
+    /// </summary>
+    [Fact]
+    public void AMalformedRecordBeforeTheError_DoesNotHideIt()
+    {
+        var stream = """
+            {"type":123}
+            {"type":"turn.failed","error":"a string, not an object"}
+            {"type":"error","message":"Selected model is at capacity. Please try a different model."}
+            """;
+
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(stream))
+            .Should().Be("Selected model is at capacity. Please try a different model.");
+    }
+
+    /// <summary>
+    /// A reviewer's own findings can never be mistaken for its failure.
+    /// </summary>
+    /// <remarks>
+    /// The pre-filter looks for the protocol's own bytes, and inside an agent message every quote is
+    /// escaped — so a finding whose TEXT quotes an error event reads as <c>\"type\":\"error\"</c>
+    /// and does not match. gemini asked for this guarantee by name on the plan round: a reviewer's
+    /// output must never become its failure reason.
+    /// </remarks>
+    [Fact]
+    public void AFindingThatQuotesAnErrorEvent_IsNotAFailure()
+    {
+        var stream = """
+            {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"findings\":[{\"title\":\"handles {\\\"type\\\":\\\"error\\\"} badly\"}]}"}}
+            {"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":2}}
+            """;
+
+        new CodexRuntime().WhyItFailed(Invocation(new CodexRuntime()), Ran(stream, exitCode: 0))
+            .Should().BeEmpty();
     }
 }
