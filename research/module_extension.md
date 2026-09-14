@@ -2569,6 +2569,14 @@ tab; the model, the provider and the prompt, because a reset is a new subject an
 the source and the workspace; and `turn`, which is never reset anywhere, because a stop names the
 turn it means and a late one must not be able to name a turn of the new conversation.
 
+**And the guarantee is checked against a real vendor.** `scripts/live-fresh.mjs` plants a number,
+recalls it, disposes the session and its directory the way `ended` does, opens a new one carrying
+nothing the way `reopened` does, and recalls again. The recall BEFORE the reset is the control and
+the reason the script is worth running: without it a model that never remembered would “forget” for
+reasons that have nothing to do with the reset, and the check would pass by testing nothing — so a
+run whose control fails reports NO VERDICT rather than a pass. Run on 2026-09-14: claude, codex and
+agy each remembered before and forgot after, across both adapter shapes.
+
 **And EVERY field is decided about, checked by the compiler rather than by hand.** Typing the slate as
 `Partial<Thread>` proves that every field of `Freshened` is a thread field of the right type — and it
 caught a real mismatch the moment it was added — but it cannot prove the other direction. A
