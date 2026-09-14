@@ -321,7 +321,7 @@ public sealed class RoundsDb : IDisposable
             write.ExecuteNonQuery();
         }
 
-        RecordClosing(sessionId, stage, number, decisions);
+        RecordClosing(sessionId, stage, number);
         transaction.Commit();
     }
 
@@ -335,18 +335,31 @@ public sealed class RoundsDb : IDisposable
     /// raises again (see <c>re_raised</c>) is a disagreement the caller is defending. Counting them
     /// per round makes "what does this model habitually miss" a query rather than an afternoon.
     /// </remarks>
-    private void RecordClosing(string sessionId, string stage, int number, IReadOnlyList<DecisionAt> decisions)
+    /// <remarks>
+    /// <para><b>Counted from the findings TABLE, never from the call that triggered it.</b> It used
+    /// to count the decisions in the batch it was handed, which is right only when every finding is
+    /// decided in one go. A caller that accepts one finding now and rejects another later — which
+    /// <c>RecordDecisions</c> explicitly supports, and which has a test — had the round's summary
+    /// OVERWRITTEN by the second call: accepted fell back to nought while the findings table plainly
+    /// said otherwise. This is the same defect the ordinal fix removed, one level up: a number
+    /// derived from the shape of one call rather than from the thing it describes. (Code round,
+    /// gemini.)</para>
+    /// <para>The <c>-1</c> convention survives it: this runs only when a decision is recorded, so a
+    /// round nobody has resolved keeps the -1 that says "nobody has said yet" rather than counting
+    /// nought accepted.</para>
+    /// </remarks>
+    private void RecordClosing(string sessionId, string stage, int number)
     {
         using var write = _db.CreateCommand();
         write.CommandText = SQL_CLOSING;
-        Bind(write, "$accepted", decisions.Count(d => d.Decision is Decision.Accepted));
-        Bind(write, "$rejected", decisions.Count(d => d.Decision is Decision.Rejected));
         BindRound(write, sessionId, stage, number);
         write.ExecuteNonQuery();
     }
 
     private const string SQL_CLOSING = """
-        UPDATE rounds SET accepted = $accepted, rejected = $rejected
+        UPDATE rounds SET
+            accepted = (SELECT COUNT(*) FROM findings f WHERE f.round_id = rounds.id AND f.resolution = 'accept'),
+            rejected = (SELECT COUNT(*) FROM findings f WHERE f.round_id = rounds.id AND f.resolution = 'reject')
         WHERE session_id = $session AND stage = $stage AND number = $number
         """;
 

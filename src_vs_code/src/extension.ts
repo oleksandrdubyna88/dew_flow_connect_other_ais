@@ -969,12 +969,18 @@ async function runExport(
     // and nothing would look wrong. Three reviewers of the code round asked for this. (Code round.)
     const byKey = new Map(found.map((one) => [keyOf(one.key), one.found]));
 
-    return keys.map((key) => {
+    // Each answer travels back attached to the ROW it is about, so the coordinator never has to
+    // pair by position either — the same objection, one boundary further out. (Code round, codex.)
+    return all.map((row, at) => {
+      const key = keys[at];
       const one = key === undefined ? undefined : byKey.get(keyOf(key));
 
-      return one === undefined
-        ? { state: 'failed' as const, findings: [] }
-        : { state: one.state, findings: one.findings.map((finding) => ({ ...finding })) };
+      return {
+        row,
+        found: one === undefined
+          ? { state: 'failed' as const, findings: [] }
+          : { state: one.state, findings: one.findings.map((finding) => ({ ...finding })) },
+      };
     });
   });
 }

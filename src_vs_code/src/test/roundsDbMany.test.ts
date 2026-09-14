@@ -89,10 +89,10 @@ test('a selection of any size is ONE spawn, and the keys travel in a file', asyn
   assert.equal(seen.length, 1, 'three rounds must not be three processes');
   assert.deepEqual(seen[0], ['--findings-many', '--keys-file', '/tmp/keys.json']);
   assert.deepEqual(JSON.parse(wrote[0] ?? ''), [
-    { session: 's1', stage: 'PlanReview', number: 1 },
-    { session: 's1', stage: 'CodeReview', number: 1 },
-    { session: 's1', stage: 'CodeReview', number: 2 },
-  ]);
+    { sessionId: 's1', stage: 'PlanReview', number: 1 },
+    { sessionId: 's1', stage: 'CodeReview', number: 1 },
+    { sessionId: 's1', stage: 'CodeReview', number: 2 },
+  ], 'the keys file names the session exactly as every other side of this seam does');
   assert.deepEqual(removed, ['/tmp/keys.json'], 'the keys file is taken away again');
   assert.deepEqual(states(found), ['loaded', 'loaded', 'absent']);
   assert.deepEqual(keysOf(found), ['s1|PlanReview|1', 's1|CodeReview|1', 's1|CodeReview|2'],

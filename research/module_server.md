@@ -753,6 +753,35 @@ which says nothing about the round at all and the page draws as a failed read wi
 round caught the last two sharing one number, which would have told somebody a round was never
 recorded because a file was momentarily locked. `LogCliScenarioTests` runs the real binary for each.
 
+*A SELECTION is one process: `--findings-many --keys-file <path>`.* A bulk export used to spawn this
+binary once per round, four at a time; five hundred selected rounds were five hundred processes.
+The keys arrive in a file — `[{"sessionId": "…", "stage": "CodeReview", "number": 1}]` — because a
+thousand 36-character session ids do not fit in a Windows command line, and the answer carries one
+entry per round ASKED, in the order asked, each echoing its own key so no client ever pairs an answer
+to a question by position. `RoundsQuery.FindingsOfMany` opens the database once.
+
+*It is its own `args[0]`, and that is the entire compatibility argument.* A flag on `--findings`
+would NOT be refused by an older binary: `Classify` accepts `--findings`, `FindingsJson` finds no
+`--session`, and it exits **69** — which a client renders faithfully, so a bulk export against
+yesterday's server would have written every selected round down as recorded-nothing. An unknown
+`args[0]` exits **64**, the one code that can mean "this binary is too old", and the only one the
+extension answers by falling back to the per-round path.
+
+*And a binary that KNOWS the mode never exits 64.* A malformed request — no keys file, one that
+cannot be read or parsed, an empty list, more rounds than the page can hold, or a key missing its
+session, stage or number — is **65** (EX_DATAERR). Answering 64 to any of those would let a request
+fault present as an old server: the client would start five hundred processes and report a
+successful export, hiding the fault behind the very path the fallback exists for. A missing or
+unopenable database is **74**, not a list of rounds that were never recorded — the caller has just
+listed those rounds out of that file.
+
+*The round's closing counts are read from the findings TABLE.* `RecordClosing` used to count the
+batch of decisions that triggered it, which is right only when a round is decided in one call.
+`resolve` supports deciding some findings now and others later, and the second call overwrote the
+first one's total. The `UPDATE` counts `resolution = 'accept'` and `'reject'` over the round's own
+findings, so the summary is a fact about the round rather than about the last call. The `-1` that
+means "nobody has said yet" survives, because this runs only when a decision is recorded.
+
 *The old shape keeps its ONE grouped findings read.* `--log` without `--paged` still fetches a whole
 page's findings in a single `WHERE round_id IN (…)` query rather than one per row — the paged path
 asks for none of them, and a thousand round-trips where one read would do is what the code round

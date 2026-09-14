@@ -89,16 +89,55 @@ public sealed class ABatchFindingsReadTests : IDisposable
         answer.Rounds[1].SessionId.Should().Be("nobody");
     }
 
+    /// <summary>
+    /// No database is a read FAILURE, and the query says so by throwing rather than by answering.
+    /// </summary>
+    /// <remarks>
+    /// It used to answer "not known" for every round asked about, which is a statement about content
+    /// nobody could read — and the mode in front of it now says the opposite. Two answers to one
+    /// question is what the second code round objected to, so there is one: the open throws, and
+    /// every caller turns that into EX_IOERR. (Code round, gemini.)
+    /// </remarks>
     [Fact]
-    public void NoDatabaseAtAll_StillAnswersOnceForEveryRoundAsked()
+    public void NoDatabaseAtAll_IsARaisedFailure_NotAListOfRoundsNobodyRecorded()
     {
-        var answer = RoundsQuery.FindingsOfMany(_dir, [
+        var asking = () => RoundsQuery.FindingsOfMany(_dir, [
             new RoundKeyAsked("s1", "CodeReview", 1),
             new RoundKeyAsked("s2", "PlanReview", 1),
         ]);
 
-        answer.Rounds.Should().HaveCount(2, "a caller lining answers up against its rows must not be handed a short list");
-        answer.Rounds.Should().OnlyContain(one => !one.Known);
+        asking.Should().Throw<Exception>("a database that is not there cannot answer about any round");
+    }
+
+    [Fact]
+    public void AKeyMissingItsNumberOrItsSession_IsABadRequest_NotARoundThatWasNeverRecorded()
+    {
+        Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
+        try
+        {
+            using (var db = RoundsDb.Open(_dir, _log)!)
+            {
+                db.RecordRound(Session("s1"), Round("CodeReview", 1), [Found("a real one")]);
+            }
+            var asked = Path.Combine(_dir, "partial.json");
+
+            // No number: it used to deserialise to the default and come back `known: false`, so a
+            // malformed request became a false statement about somebody's round. (Code round, codex.)
+            File.WriteAllText(asked, "[{\"sessionId\":\"s1\",\"stage\":\"CodeReview\"}]");
+            Program.FindingsManyJson(["--findings-many", "--keys-file", asked]).Should().Be(65);
+
+            File.WriteAllText(asked, "[{\"stage\":\"CodeReview\",\"number\":1}]");
+            Program.FindingsManyJson(["--findings-many", "--keys-file", asked]).Should().Be(65,
+                "a key with no session names no round at all");
+
+            File.WriteAllText(asked, "[{\"sessionId\":\"s1\",\"number\":1}]");
+            Program.FindingsManyJson(["--findings-many", "--keys-file", asked]).Should().Be(65,
+                "and a round number means nothing without the stage it belongs to");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COAI_DATA_DIR", null);
+        }
     }
 
     [Fact]
@@ -140,7 +179,7 @@ public sealed class ABatchFindingsReadTests : IDisposable
 
         Directory.CreateDirectory(_dir);
         var broken = Path.Combine(_dir, "broken.json");
-        File.WriteAllText(broken, "[{\"session\":");
+        File.WriteAllText(broken, "[{\"sessionId\":");
         Program.FindingsManyJson(["--findings-many", "--keys-file", broken]).Should().Be(65);
     }
 
@@ -160,7 +199,7 @@ public sealed class ABatchFindingsReadTests : IDisposable
         Directory.CreateDirectory(_dir);
         var many = Path.Combine(_dir, "many.json");
         var keys = Enumerable.Range(0, RoundsQuery.MaxLimit + 1)
-            .Select(at => $"{{\"session\":\"s\",\"stage\":\"CodeReview\",\"number\":{at}}}");
+            .Select(at => $"{{\"sessionId\":\"s\",\"stage\":\"CodeReview\",\"number\":{at}}}");
         File.WriteAllText(many, "[" + string.Join(",", keys) + "]");
 
         Program.FindingsManyJson(["--findings-many", "--keys-file", many]).Should().Be(65,
@@ -187,7 +226,7 @@ public sealed class ABatchFindingsReadTests : IDisposable
                 db.RecordRound(Session("s1"), Round("CodeReview", 1), [Found("the retry never gives up")]);
             }
             var asked = Path.Combine(_dir, "asked.json");
-            File.WriteAllText(asked, "[{\"session\":\"s1\",\"stage\":\"CodeReview\",\"number\":1},{\"session\":\"s9\",\"stage\":\"PlanReview\",\"number\":3}]");
+            File.WriteAllText(asked, "[{\"sessionId\":\"s1\",\"stage\":\"CodeReview\",\"number\":1},{\"sessionId\":\"s9\",\"stage\":\"PlanReview\",\"number\":3}]");
 
             var written = new StringWriter();
             var was = Console.Out;
@@ -236,7 +275,7 @@ public sealed class ABatchFindingsReadTests : IDisposable
         {
             Directory.CreateDirectory(_dir);
             var asked = Path.Combine(_dir, "asked.json");
-            File.WriteAllText(asked, "[{\"session\":\"s1\",\"stage\":\"CodeReview\",\"number\":1}]");
+            File.WriteAllText(asked, "[{\"sessionId\":\"s1\",\"stage\":\"CodeReview\",\"number\":1}]");
 
             Program.FindingsManyJson(["--findings-many", "--keys-file", asked]).Should().Be(74,
                 "a database that is not there says nothing about the rounds that were asked about");

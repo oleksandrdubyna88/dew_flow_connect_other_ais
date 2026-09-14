@@ -4302,7 +4302,33 @@ a failed read. All four pairings are tested.
 
 *A read that cannot be believed is a failed read.* `parseFindings` answers nothing rather than an
 empty list when the text is not JSON or carries no findings array, because an empty list is a CLAIM —
-it says the round was clean — and a truncated pipe must not be allowed to make it.
+it says the round was clean — and a truncated pipe must not be allowed to make it. `parseManyFindings`
+applies the same rule per entry: a round that says `known: true` and then omits its findings array is
+a shape nobody intended, and it fails the WHOLE answer rather than being normalised to a clean round.
+
+*A bulk export is one spawn, and the fallback is still four at a time.* `readManyFindings` asks
+`--findings-many` with a keys file and gets every selected round back at once. Exit **64** — and only
+64 — means the server predates the mode, and it re-reads the selection through `readFindings`, four
+at a time via `inBatches`, which is what the release before this did; reading them one after another
+would have made the degraded path four times slower than the thing it degrades to. Exit 65, 69, 74 or
+anything else comes from a server that KNOWS the mode and is reporting something real, so every round
+is failed rather than retried a different way.
+
+*Every answer keeps its round.* `readManyFindings` returns `FoundRound` values — the key beside the
+answer — and `readAndExport` matches them to rows by the row itself rather than by index. The server
+echoes each key back precisely so nobody pairs by position; dropping it at a boundary puts the
+pairing back, correct until something streams, retries or de-duplicates, at which point one round's
+findings land on another round's row and the file looks perfectly normal.
+
+*Cancelling reaches the child.* `capture` takes an optional `stop` it polls and kills the process
+with, because one process for a whole selection would otherwise make Cancel do nothing until that
+process finished — a regression against the per-round path, which could stop between batches. The
+save dialog is inside the same window: a cancel arriving while it is open writes no file.
+
+*The keys file is the extension's own, and bounded.* One fixed name per process id under the
+extension's storage directory rather than a fresh temp directory per export: exports are serialised,
+a second window is a second process id, and a host killed mid-export leaks ONE file that the next
+export overwrites instead of a pile in `%TEMP%`.
 
 *An unread log is not an authority.* `DbLog.read` says whether the database was ASKED at all, and
 `rowsFrom` will not call a round *not kept* against a log nobody read. The page is painted BEFORE the

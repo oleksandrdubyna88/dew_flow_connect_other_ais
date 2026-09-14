@@ -61,8 +61,8 @@ test('the extension asks for the keys by the names the server deserialises', () 
   assert.notEqual(at, -1, 'RoundKeyDto is gone — the keys file contract moved');
   const declaration = source.slice(at, source.indexOf(');', at));
 
-  // `readManyFindings` writes {session, stage, number}; these are the properties that receive them.
-  for (const wanted of ['Session', 'Stage', 'Number']) {
+  // `readManyFindings` writes {sessionId, stage, number}; these are the properties receiving them.
+  for (const wanted of ['SessionId', 'Stage', 'Number']) {
     assert.ok(declaration.includes(`string ${wanted}`) || declaration.includes(`int ${wanted}`),
       `the keys file names '${wanted.toLowerCase()}', which RoundKeyDto no longer has: ${declaration}`);
   }

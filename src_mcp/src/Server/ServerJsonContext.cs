@@ -132,7 +132,14 @@ public sealed record ResolveAnswer(string Stage, bool AwaitingResolve, int Recor
 public sealed record ErrorAnswer(string Error);
 
 /// <summary>One round a batch findings read is asked about, as it arrives in the keys file.</summary>
-public sealed record RoundKeyDto(string Session = "", string Stage = "", int Number = -1);
+/// <remarks>
+/// <c>SessionId</c> rather than <c>Session</c>: the answer side (<c>LoggedRoundOfMany</c>), the query
+/// side (<c>RoundKeyAsked</c>) and the extension's own <c>RoundKey</c> all call it that, and one seam
+/// spelling its identifier two ways is a translation every future reader has to keep in their head.
+/// Nothing in the field speaks this format yet — the mode is new on this branch — so the rename costs
+/// no compatibility. (Code round, gemini.)
+/// </remarks>
+public sealed record RoundKeyDto(string SessionId = "", string Stage = "", int Number = -1);
 
 /// <summary>
 /// What `ask_human` returns: the person's decision, or why there is none yet.

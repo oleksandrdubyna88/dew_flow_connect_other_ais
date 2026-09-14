@@ -267,12 +267,16 @@ public static class RoundsQuery
 
     public static LoggedManyFindings FindingsOfMany(string dataDir, IReadOnlyList<RoundKeyAsked> asked)
     {
-        var file = Path.Combine(dataDir, RoundsDb.FileName);
-        if (!File.Exists(file) || asked.Count == 0)
+        // NO silent fallback for a missing file, and that is the point. This used to answer "not
+        // known" for every round when the database was not there — a statement about content nobody
+        // could read, and the opposite of what the mode in front of it now says. `Open` throws
+        // instead, the mode turns it into EX_IOERR, and there is one answer to "the database is
+        // gone" rather than two that disagree. (Code round, gemini.)
+        if (asked.Count == 0)
         {
-            return new LoggedManyFindings([.. asked.Select(one =>
-                new LoggedRoundOfMany(one.SessionId, one.Stage, one.Number, false, []))]);
+            return new LoggedManyFindings([]);
         }
+        var file = Path.Combine(dataDir, RoundsDb.FileName);
 
         using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
         db.Open();
