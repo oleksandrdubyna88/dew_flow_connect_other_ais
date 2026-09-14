@@ -1,6 +1,52 @@
 # Changelog
 
-## Unreleased
+## Extension 0.42.0 — 2026-09-14
+
+**The Phrases section.** A new fold in the panel, one button per phrase. Press one and that
+phrase is on the clipboard, ready to paste wherever you were about to type it — usually the Claude
+Code box. The button says *Copied* for a second, and the status bar names what it took.
+
+**It says Copied only when it really is.** The confirmation comes back from the extension after the
+clipboard accepted the text, not the moment you press. If the clipboard is held by another program
+you are told so instead — nothing ever claims a copy that did not happen, because the cost of that
+lie is pasting whatever was on the clipboard before.
+
+**Press two phrases quickly and the clipboard holds the second one.** The writes are done in the
+order you pressed, rather than racing each other — otherwise the one that happened to finish last
+would win, which is not always the one you asked for last.
+
+**Hovering a phrase shows enough of it to tell two apart**, not only its first line. And a phrase
+you add or rename in the tab appears in the panel straight away, without closing anything.
+
+**Phrases you keep.** The sentences you type into the Claude Code box over and over can be saved and
+picked instead of retyped. This first part is the list itself: `coai.phrases` in your settings, read
+the way the chat presets are read — a row you mistyped is dropped on its own rather than taking every
+other phrase with it, and nothing you can put in that file makes the extension throw.
+
+**A phrase you typed by hand is never thrown away for having no name.** `{ "text": "deploy it" }` is
+what a settings file edited by hand actually looks like, so a row with words and no name keeps its
+words and is given a name from its own first line. The name is what fits on a button, and it is cut
+to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
+
+**A phrase is kept exactly as you wrote it.** The spaces and newlines around it are part of it —
+an indented snippet pastes indented, and a newline you left at the end stays there. Naming a
+phrase that starts with a blank line now uses the first line that actually has words on it, so
+the button can be read.
+
+**A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
+the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases stay out
+of the review machinery: never sent to the review server, never mirrored to a Team server. They do
+follow you between your own machines if you use Settings Sync, the same way your saved chat prompts
+already do.
+
+**A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
+or held by another program, the tab says so in a line above the list instead of quietly redrawing
+itself without the words you just typed.
+
+**Typing in the roles tab and the phrases tab is stored once, when you stop.** It used to be a write
+per keystroke in one of them — forty for a forty-character name, each one announced to every part of
+the extension. They also queue behind one another now, so a fast typist cannot have an earlier
+keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
 
 **When a reviewer fails, the log says why — even when the vendor writes it somewhere unusual.**
 Codex has been failing rounds with `exit 1 (the CLI said nothing on stderr)` and nothing anywhere to
@@ -82,52 +128,6 @@ assistant works. Comparing names instead only moved the problem — two tabs cal
 have made the offer impossible for both of them, and an untitled buffer has no name to compare. The
 check is gone. Choosing the offer starts a conversation the same way the ordinary chord does, for
 the tab you are in, and the chat is titled after it so you can see which one you got.
-
-**The Phrases section.** A new fold in the panel, one button per phrase. Press one and that
-phrase is on the clipboard, ready to paste wherever you were about to type it — usually the Claude
-Code box. The button says *Copied* for a second, and the status bar names what it took.
-
-**It says Copied only when it really is.** The confirmation comes back from the extension after the
-clipboard accepted the text, not the moment you press. If the clipboard is held by another program
-you are told so instead — nothing ever claims a copy that did not happen, because the cost of that
-lie is pasting whatever was on the clipboard before.
-
-**Press two phrases quickly and the clipboard holds the second one.** The writes are done in the
-order you pressed, rather than racing each other — otherwise the one that happened to finish last
-would win, which is not always the one you asked for last.
-
-**Hovering a phrase shows enough of it to tell two apart**, not only its first line. And a phrase
-you add or rename in the tab appears in the panel straight away, without closing anything.
-
-**Phrases you keep.** The sentences you type into the Claude Code box over and over can be saved and
-picked instead of retyped. This first part is the list itself: `coai.phrases` in your settings, read
-the way the chat presets are read — a row you mistyped is dropped on its own rather than taking every
-other phrase with it, and nothing you can put in that file makes the extension throw.
-
-**A phrase you typed by hand is never thrown away for having no name.** `{ "text": "deploy it" }` is
-what a settings file edited by hand actually looks like, so a row with words and no name keeps its
-words and is given a name from its own first line. The name is what fits on a button, and it is cut
-to sixty characters with an ellipsis that says so; the phrase itself is never shortened.
-
-**A phrase is kept exactly as you wrote it.** The spaces and newlines around it are part of it —
-an indented snippet pastes indented, and a newline you left at the end stays there. Naming a
-phrase that starts with a blank line now uses the first line that actually has words on it, so
-the button can be read.
-
-**A tab to keep them in.** *ConnectOtherAIs: Edit phrases* — a name for the button, a big box for
-the phrase, add and remove, and everything saved a moment after you stop typing. Your phrases stay out
-of the review machinery: never sent to the review server, never mirrored to a Team server. They do
-follow you between your own machines if you use Settings Sync, the same way your saved chat prompts
-already do.
-
-**A save that cannot land tells you, and keeps what you wrote.** If your settings file is read-only
-or held by another program, the tab says so in a line above the list instead of quietly redrawing
-itself without the words you just typed.
-
-**Typing in the roles tab and the phrases tab is stored once, when you stop.** It used to be a write
-per keystroke in one of them — forty for a forty-character name, each one announced to every part of
-the extension. They also queue behind one another now, so a fast typist cannot have an earlier
-keystroke overwrite a later one, and closing the tab stores whatever was still waiting.
 
 ## Extension 0.40.0 — 2026-09-13
 
