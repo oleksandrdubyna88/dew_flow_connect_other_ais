@@ -114,7 +114,9 @@ import {
   rowBelongsTo,
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
-import { coaiDataDir } from './dataDir';
+import { existsSync } from 'node:fs';
+import { asText } from './asText';
+import { coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
@@ -645,6 +647,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usageWindow: this.usageWindow,
       latestServerVersion: published,
       latestTeamServerVersion: this.latestTeamServer,
+      storage: whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
@@ -2485,3 +2488,30 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
+
+/**
+ * Where this window keeps its data — and never an exception, whatever the environment says.
+ *
+ * <p>`coaiDataDir()` THROWS on an unusable `COAI_DATA_SIDE`, which is right for every other caller:
+ * the server refuses to start on it, and a token written to a guessed path would be worse than
+ * none. It is wrong for the panel. That value is exactly when a person opens this section to find
+ * out what is wrong, and an exception here would empty the whole panel and take the sentence that
+ * explains it with them.</p>
+ *
+ * <p>`whereData` already returns the refusal as a state rather than throwing. This wrapper exists
+ * for the other half of the same finding (codex, plan round): anything ELSE the environment or the
+ * filesystem can throw — a permission error on the existence check, a path the platform rejects —
+ * must also reach the page as a sentence instead of a blank section.</p>
+ */
+function whereThisWindowKeepsItsData(): DataLocation {
+  try {
+    return whereData((path) => existsSync(path));
+  } catch (error) {
+    return {
+      directory: '',
+      side: dataSideName(),
+      refusal: `This window could not work out where its data lives: ${asText(error)}`,
+      notes: [],
+    };
+  }
+}
