@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ConversationMeta, sourceOfFile, sourceOfSession } from '../chatStore';
 import { IndexState } from '../chatStoreCache';
-import { Goto, GotoAsked, UNNAMED_TAB, bindable, frontIs, goto, rootOfTab } from '../chatGoto';
+import { Goto, GotoAsked, UNNAMED_TAB, bindable, goto, rootOfTab } from '../chatGoto';
 
 /**
  * Which conversation belongs to the tab somebody is looking at — decided without a host.
@@ -39,7 +39,7 @@ const asked = (over: Partial<GotoAsked> = {}): GotoAsked => ({
   live: '',
   source: sourceOfFile(HERE),
   ambiguous: false,
-  unsure: false,
+  severalSessions: true,
   namesakes: 1,
   candidates: [],
   inRoot: [],
@@ -105,24 +105,16 @@ test('a walk that FAILED never becomes a conversation opened on a name', () => {
   const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
   const mine = meta({ id: 'astra', title: 'speak with Astra' });
 
+  const answer = goto(asked({ tab, ambiguous: true, severalSessions: false, source: { kind: 'none' }, inRoot: [mine] }));
+  assert.equal(kindOf(answer), 'pick', 'a session directory that could not be read opened a conversation anyway');
+  // AND IT SAYS WHICH AMBIGUITY IT MET. Telling somebody their sessions share a name, when the truth
+  // is that the folder would not open, sends them looking for a duplicate that is not there.
+  // (gemini, the code round.)
   assert.equal(
-    kindOf(goto(asked({ tab, ambiguous: true, unsure: true, source: { kind: 'none' }, inRoot: [mine] }))),
-    'pick',
-    'a session directory that could not be read opened a conversation anyway',
+    answer.kind === 'pick' ? answer.why.kind : '',
+    'unreadable',
+    'a walk that could not be done is reported as two sessions of one name',
   );
-});
-
-test('the front tab is the one this name belongs to only when the name is its own', () => {
-  // The bug the operator found, as a VALUE: the host compared `vscode.Tab` objects, VS Code replaces
-  // those whenever a tab changes, and a Claude Code tab renames itself as the assistant works — so
-  // the comparison was against an object that no longer existed and the offer refused every press.
-  // A source-read assertion cannot see that; only this can. (codex asked for exactly this test.)
-  assert.equal(frontIs('main.ts', 'main.ts', 1), true, 'the tab in front is not recognised by its own name');
-  assert.equal(frontIs('main.ts', 'other.ts', 1), false, 'any tab in front satisfies the check');
-  // Two tabs of one name: the name identifies neither, so it must not stand in for identity.
-  assert.equal(frontIs('main.ts', 'main.ts', 2), false, 'a name two tabs share is treated as an identity');
-  // An unnamed tab matches no front tab, rather than every unnamed one.
-  assert.equal(frontIs('', '', 1), false, 'an unnamed tab matches an unnamed tab in front');
 });
 
 test('an ambiguous tab whose NAME matches exactly one conversation opens it', () => {

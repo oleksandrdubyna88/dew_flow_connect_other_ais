@@ -161,10 +161,8 @@ test('the offer to start one can be CHOSEN, and is not shown where it cannot be'
   // And the completion is the ordinary door, on the tab the row names — refused when that tab is
   // no longer the one in front, because starting a conversation for the wrong tab is the guess this
   // whole answer exists to avoid.
-  assert.match(command, /onNew: startingFor\(panels, extensionUri, asked, key\)/u, 'the picker is given no way to start one');
+  assert.match(command, /onNew: startingFor\(panels, extensionUri\)/u, 'the picker is given no way to start one');
   const starting = between(command, 'function startingFor(', 'function bindingTo(');
-  assert.match(starting, /!activeTabIs\(asked\.tab\.label\)/u,
-    'a conversation can be started for whatever tab happens to be in front when the row is pressed');
   assert.match(starting, /chatWithOtherAi\(panels, extensionUri, \[\], false\)/u, 'the offer does not open a conversation');
 });
 
@@ -190,29 +188,24 @@ test('a conversation already live is REBOUND from the picker too, not only from 
   );
 });
 
-test('the offer is refused by NAME, never by a captured tab object', () => {
-  // The bug the operator found in 0.40.0: this compared a `vscode.Tab` captured when the chord was
-  // pressed against the one in front when the row was chosen, and VS Code hands out a NEW Tab object
-  // whenever a tab changes — a Claude Code tab renames itself as the assistant refines the session
-  // title, which is the behaviour `rekeysByLabel` already exists to work around. So identity was
-  // false for the tab still sitting in front, and the offer refused EVERY press.
+test('the offer starts a conversation without asking whether the right tab is in front', () => {
+  // THIS TEST REPLACES A GUARD, and the replacement is the finding. It began as "do not start a
+  // conversation for the wrong tab" and went through two shapes, each refusing far more than it
+  // caught: by tab OBJECT it refused every press, because VS Code replaces that object whenever a
+  // tab changes and a Claude Code tab renames itself as the assistant works; by LABEL three
+  // reviewers found three more, each ordinary — two tabs called `README.md` make the offer
+  // impossible for both, an untitled buffer has no label to match, and a tab renamed while the
+  // picker is open refuses the press that follows. A guard that fails toward "no" is not safer than
+  // none when "no" is the thing the person cannot get past.
   const command = source('chatGotoCommand.ts');
   const starting = between(command, 'function startingFor(', 'function bindingTo(');
 
-  assert.match(starting, /!activeTabIs\(asked\.tab\.label\)/u, 'the refusal is not decided by the tab’s name');
-  // THE CONDITION, not the prose around it: the comment above it names the call it replaced, and an
-  // assertion that reads comments is one a comment can satisfy.
-  assert.doesNotMatch(starting, /if \([^)]*(?:tabStillOpen|activeTabIs)\(key\)/u,
-    'the refusal still compares a captured tab object, which goes stale the moment the tab is renamed');
-  // And the host side asks the PURE predicate, which is what makes this bug class testable at all:
-  // the old shape read correctly and was wrong at runtime, and no source assertion could see that.
-  const host = source('chatCommand.ts');
-  assert.match(host, /export function activeTabIs\(label: string\): boolean \{/u, 'activeTabIs no longer takes a label');
-  assert.match(host, /return frontIs\(label, active\?\.label \?\? '', all\.filter\(\(one\) => one\.label === label\)\.length\);/u,
-    'the host decides this itself instead of asking the predicate the tests can reach');
-  // And it counts the tabs of that name, because a name two tabs share identifies neither.
-  assert.match(source('chatGoto.ts'), /export const frontIs = \(label: string, front: string, namesakes: number\): boolean =>/u,
-    'there is no pure predicate for "is the tab in front the one this name belongs to"');
+  assert.doesNotMatch(starting, /showWarningMessage/u, 'the offer can still refuse a press it cannot justify refusing');
+  assert.doesNotMatch(starting, /activeTabIs|tabStillOpen/u, 'the offer still asks which tab is in front');
+  assert.match(starting, /void chatWithOtherAi\(panels, extensionUri, \[\], false\);/u, 'the offer no longer opens a chat');
+  // And the reasoning is on the record where the next person will look for it, because "there is no
+  // check here" is the kind of thing that gets helpfully added back.
+  assert.match(starting, /THERE IS NO GUARD HERE ANY MORE/u, 'nothing says why this is deliberate');
 });
 
 test('a record that moved says so AND opens the list, rather than stopping', () => {

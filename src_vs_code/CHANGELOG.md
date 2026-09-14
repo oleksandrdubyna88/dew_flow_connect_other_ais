@@ -11,10 +11,13 @@ that name — and only one tab open right now carries that name — it simply op
 then the name is evidence rather than a coincidence.
 
 **And *New conversation for this tab* works.** It refused every press with *"open it again and press
-once more"* — including when that tab was in front the whole time. It was comparing the tab it was
-opened on against the tab in front by object identity, and VS Code replaces that object whenever a
-tab changes: a Claude Code tab renames itself as the assistant works, so the comparison was against
-something that no longer existed. It compares the name now.
+once more"* — including when that tab had been in front the whole time. It was checking that the tab
+it was opened on was still the one in front, and there is no reliable way to ask that: VS Code
+replaces a tab's identity whenever the tab changes, and a Claude Code tab renames itself as the
+assistant works. Comparing names instead only moved the problem — two tabs called `README.md` would
+have made the offer impossible for both of them, and an untitled buffer has no name to compare. The
+check is gone. Choosing the offer starts a conversation the same way the ordinary chord does, for
+the tab you are in, and the chat is titled after it so you can see which one you got.
 
 ## Extension 0.40.0 — 2026-09-13
 
