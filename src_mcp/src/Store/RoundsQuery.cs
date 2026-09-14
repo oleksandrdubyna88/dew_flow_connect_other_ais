@@ -255,6 +255,16 @@ public static class RoundsQuery
     /// never heard of answers <c>Known: false</c> rather than being left out, because a missing
     /// entry and a round with no findings would otherwise be the same thing.</para>
     /// </remarks>
+    /// <summary>Whether there is a rounds database at all in this data directory.</summary>
+    /// <remarks>
+    /// Asked BEFORE a batch read, because "there is no database" and "the database has no such
+    /// round" are different answers and only one of them is about the rounds. A caller asking about
+    /// specific rounds has just listed them from this database; if it is gone, the honest answer is
+    /// that the read failed, not that five hundred rounds were never recorded. (Code round, codex.)
+    /// </remarks>
+    public static bool DatabaseExists(string dataDir) =>
+        File.Exists(Path.Combine(dataDir, RoundsDb.FileName));
+
     public static LoggedManyFindings FindingsOfMany(string dataDir, IReadOnlyList<RoundKeyAsked> asked)
     {
         var file = Path.Combine(dataDir, RoundsDb.FileName);

@@ -1,4 +1,5 @@
 import { DbFinding, DbLog, EMPTY_LOG, ManyFound, parseFindings, parseLog, parseManyFindings } from './roundsDb';
+import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 
 /**
@@ -179,15 +180,16 @@ export type WithKeysFile = <T>(json: string, use: (path: string) => Promise<T>) 
 export async function readManyFindings(
   executable: string,
   keys: readonly RoundKey[],
+  withKeysFile: WithKeysFile,
   run: Run = spawn(executable),
-  withKeysFile: WithKeysFile = keysFile,
   readOne: typeof readFindings = readFindings,
-): Promise<readonly Found[]> {
+  stop?: () => boolean,
+): Promise<readonly FoundRound[]> {
   if (keys.length === 0) {
     return [];
   }
   if (executable.length === 0) {
-    return keys.map(() => FAILED);
+    return keys.map((key) => ({ key, found: FAILED }));
   }
   const asked = JSON.stringify(
     keys.map((key) => ({ session: key.sessionId, stage: key.stage, number: key.number })));
@@ -195,24 +197,53 @@ export async function readManyFindings(
     run(['--findings-many', '--keys-file', path], manyCapMs(keys.length)));
 
   if (code === EX_USAGE) {
-    // The server is older than this mode. One spawn per round is what it has always answered.
-    const one: Found[] = [];
-    for (const key of keys) {
-      one.push(await readOne(executable, key, run));
-    }
+    // The server is older than this mode, so one spawn per round is what it has always answered —
+    // and FOUR AT A TIME, which is what it has always answered too. Reading them strictly one after
+    // another would have made the old-server path four times slower than the release before it,
+    // which is the opposite of "an older server gets last release's behaviour". (Code round, codex.)
+    const batched = await inBatches<RoundKey, FoundRound>(
+      keys,
+      async (key) => ({ key, found: await readOne(executable, key, run) }),
+      (key, reason) => {
+        console.error('ConnectOtherAIs: a round could not be read on the fallback path', reason);
 
-    return one;
+        return { key, found: FAILED };
+      },
+      READS_AT_ONCE,
+      stop);
+
+    // A cancelled fallback answers about the rounds it never read, rather than leaving them out:
+    // every row must get an entry, and one nobody read is failed.
+    return batched.done
+      ? batched.results
+      : keys.map((key, at) => batched.results[at] ?? { key, found: FAILED });
   }
   if (code !== 0) {
-    return keys.map(() => FAILED);
+    return keys.map((key) => ({ key, found: FAILED }));
   }
   const answered = parseManyFindings(output);
 
-  return answered === undefined ? keys.map(() => FAILED) : keys.map((key) => found(answered, key));
+  return answered === undefined
+    ? keys.map((key) => ({ key, found: FAILED }))
+    : keys.map((key) => ({ key, found: found(answered, key) }));
 }
 
 /** Unreadable, and saying nothing about the round. One value, because it carries no state. */
 const FAILED: Found = { state: 'failed', findings: [] };
+
+/**
+ * One round's answer, still attached to the round it is about.
+ *
+ * <p>The key travels all the way to the export rather than being dropped here, and that is the whole
+ * of this type's reason to exist. Three reviewers of the code round made the same objection: the
+ * server echoes each key back precisely so nobody has to pair an answer to a question by position,
+ * and handing the caller a bare array put the pairing back — correct today because this function
+ * builds it in order, and one refactor away from writing round A's findings onto round B's row.</p>
+ */
+export interface FoundRound {
+  readonly key: RoundKey;
+  readonly found: Found;
+}
 
 /**
  * What the server said about ONE of the rounds asked about, found BY ITS KEY.
@@ -259,13 +290,6 @@ export function keysFileIn(folder: string): WithKeysFile {
     }
   };
 }
-
-/** Where the keys go when nobody said: the machine's temp root, still one file per process. */
-const keysFile: WithKeysFile = async (json, use) => {
-  const os = await import('node:os');
-
-  return keysFileIn(os.tmpdir())(json, use);
-};
 
 /** The real spawn. Injectable above it, so every branch of both readers is a unit test. */
 function spawn(executable: string): Run {

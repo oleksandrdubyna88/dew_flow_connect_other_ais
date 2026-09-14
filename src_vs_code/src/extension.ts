@@ -895,6 +895,11 @@ async function logRows(panel: PanelProvider, database: DbLog | undefined): Promi
  * <p>A type PREDICATE, not an `as`: the value came off a webview bridge, and a cast there tells the
  * compiler to stop checking exactly where checking is the point. (Code round, codex.)</p>
  */
+/** The three fields a round is keyed by, as one string — so a Map can hold the whole tuple. */
+function keyOf(key: { sessionId: string; stage: string; number: number }): string {
+  return `${key.sessionId}\u0000${key.stage}\u0000${key.number}`;
+}
+
 function isRoundKey(value: unknown): value is { sessionId: string; stage: string; number: number } {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -957,13 +962,15 @@ async function runExport(
     // until that process finished. (Plan round, three reviewers.)
     const found = await panel.roundFindingsMany(
       keys.filter((key) => key !== undefined), extra.cancelled);
-    let at = 0;
+
+    // Matched by the WHOLE key, never by position. The reader answers in the order asked, so an
+    // index would work today — and would go on working right up until something streamed, retried or
+    // de-duplicated, at which point one round's findings would be written onto another round's row
+    // and nothing would look wrong. Three reviewers of the code round asked for this. (Code round.)
+    const byKey = new Map(found.map((one) => [keyOf(one.key), one.found]));
 
     return keys.map((key) => {
-      if (key === undefined) {
-        return { state: 'failed' as const, findings: [] };
-      }
-      const one = found[at++];
+      const one = key === undefined ? undefined : byKey.get(keyOf(key));
 
       return one === undefined
         ? { state: 'failed' as const, findings: [] }

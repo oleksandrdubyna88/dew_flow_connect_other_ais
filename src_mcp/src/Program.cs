@@ -362,6 +362,17 @@ internal static class Program
             return BadRequest;
         }
 
+        // No database at all is a FAILED read, not a list of rounds that were never recorded. The
+        // caller is asking about rounds it has just listed out of this file; answering "never heard
+        // of them" would put `not recorded` beside every one of them in the export, which is a claim
+        // rather than the truth. (Code round, codex.)
+        if (!Store.RoundsQuery.DatabaseExists(settings.DataDir))
+        {
+            Note("--findings-many: there is no rounds database to read, so nothing is known about these rounds");
+
+            return 74; // EX_IOERR — the database, not the rounds
+        }
+
         try
         {
             var answer = Store.RoundsQuery.FindingsOfMany(
@@ -370,9 +381,13 @@ internal static class Program
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 answer, Server.ServerJsonContext.Default.LoggedManyFindings));
         }
-        catch (Exception e) when (Unreadable(e))
+        catch (Exception e) when (Unreadable(e) || e is IOException or UnauthorizedAccessException)
         {
-            Note(WhyUnreadable(e));
+            // The second half of that condition is the code round's: a database the process cannot
+            // open for a reason SQLite never sees — a permission, a vanished directory — used to
+            // leave this method by an unhandled exception, so the client read a crash code instead
+            // of one of the three this mode documents.
+            Note(Unreadable(e) ? WhyUnreadable(e) : e.Message);
 
             return 74; // EX_IOERR — the database, not the rounds
         }
