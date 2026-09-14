@@ -28,19 +28,20 @@ public abstract record ReviewerOutcome
         public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
     }
 
-    /// <param name="StdOutTail">
+    /// <param name="FailureReason">
     /// What the vendor said about its own failure somewhere OTHER than stderr, or empty.
     /// </param>
     /// <remarks>
-    /// A second field rather than folding it into <paramref name="StdErrTail"/>, because the two
-    /// are not equally trustworthy and the sentence must prefer the written one: stderr is a vendor
-    /// writing an error, while this is whatever its adapter could recover from a stream that also
-    /// carries banners, progress and half-written lines. See <c>IReviewerRuntime.WhyItFailed</c>.
+    /// <para>A second field rather than folding it into <paramref name="StdErrTail"/>, because the
+    /// two are not equally trustworthy and the sentence must prefer the one that announces: stderr
+    /// is a vendor writing an error, while this is whatever its adapter could recover. See
+    /// <c>IReviewerRuntime.WhyItFailed</c>.</para>
+    /// <para>Named for what it HOLDS rather than where it came from. It was <c>StdOutTail</c> for
+    /// one round, and that name was wrong twice: it is a parsed sentence rather than a tail of a
+    /// stream, and the next adapter to implement this may read a file it named rather than stdout
+    /// at all. Raised by gemini on the code round, twice from different angles.</para>
     /// </remarks>
-    public sealed record NonZeroExit(int ExitCode, string StdErrTail) : ReviewerOutcome
-    {
-        public string StdOutTail { get; init; } = string.Empty;
-    }
+    public sealed record NonZeroExit(int ExitCode, string StdErrTail, string FailureReason = "") : ReviewerOutcome;
 
     public sealed record TimedOut : ReviewerOutcome;
 
@@ -657,12 +658,14 @@ public sealed class ReviewerExecutor(
             // The adapter is asked where ITS reasons live, the same way it is asked where its answer
             // and its usage live. codex writes its failure into the `--json` event stream on stdout
             // and leaves stderr empty, so without this the summary can only report the emptiness.
-            var outcome = new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr))
-            {
-                StdOutTail = invocation.Adapter?.WhyItFailed(result) ?? string.Empty,
-            };
+            var reason = invocation.Adapter?.WhyItFailed(invocation, result) ?? string.Empty;
 
-            return new ReviewerLaunch(outcome, null, Usage.None, string.Empty, result);
+            return new ReviewerLaunch(
+                new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr), reason),
+                null,
+                Usage.None,
+                string.Empty,
+                result);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run

@@ -172,11 +172,15 @@ public interface IReviewerRuntime
     /// <para>Worse than a one-off, because that error is TRANSIENT: the same model answers normally
     /// minutes later, so it read as codex randomly falling over rather than as a named, temporary,
     /// actionable condition.</para>
-    /// <para>A default of null, so no existing adapter changes and a new one only implements this
-    /// if its CLI has somewhere else to put a reason. It runs on the failure path of a reviewer
-    /// that has already gone wrong: it must never throw, and it must never invent.</para>
+    /// <para>Empty, never null, for "nothing to add" — the house rule against null in business
+    /// logic, and there is no third state here worth a null to express. A default, so no existing
+    /// adapter changes and a new one implements this only if its CLI has somewhere else to put a
+    /// reason. It takes the invocation as well as the result, like its two siblings, so an adapter
+    /// that writes its errors to a file it named can find them.</para>
+    /// <para>It runs on the failure path of a reviewer that has already gone wrong: it must never
+    /// throw, and it must never invent.</para>
     /// </remarks>
-    string? WhyItFailed(ProcessResult result) => null;
+    string WhyItFailed(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
 }
 
 /// <summary>The default read conventions the adapters share.</summary>
@@ -283,53 +287,97 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     /// those is a reason. Anything unparseable is silently not a reason rather than an exception on
     /// a path that is already handling a failure.</para>
     /// </remarks>
-    public string? WhyItFailed(ProcessResult result)
+    public string WhyItFailed(ReviewerInvocation invocation, ProcessResult result)
     {
-        string? fromTurn = null;
-        foreach (var line in result.StdOut.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        var fromTurn = string.Empty;
+        foreach (var line in result.StdOut.AsSpan().EnumerateLines())
         {
-            if (!line.StartsWith('{'))
+            // A cheap scan before any allocation: stdout can be eight megabytes of `item.*` events
+            // and only a couple of lines can possibly be a reason. A finding's own text cannot match
+            // — inside an agent message the quotes are escaped (`\"type\"`), which is different
+            // bytes — so this filters without ever mistaking an answer for a failure.
+            if (!CouldBeAFailure(line))
             {
                 continue;
             }
 
-            try
+            fromTurn = ReasonIn(line.ToString(), fromTurn, out var conclusive);
+            if (conclusive)
             {
-                using var parsed = System.Text.Json.JsonDocument.Parse(line);
-                var root = parsed.RootElement;
-                if (root.ValueKind is not System.Text.Json.JsonValueKind.Object
-                    || !root.TryGetProperty("type", out var kind))
-                {
-                    continue;
-                }
-
-                if (kind.GetString() == "error" && Said(root) is { Length: > 0 } spoken)
-                {
-                    return spoken;
-                }
-
-                if (kind.GetString() == "turn.failed"
-                    && root.TryGetProperty("error", out var failure)
-                    && Said(failure) is { Length: > 0 } reported)
-                {
-                    fromTurn ??= reported;
-                }
-            }
-            catch (System.Text.Json.JsonException)
-            {
-                // A torn or foreign line is not a reason. Keep reading: the real one may follow.
+                return fromTurn;
             }
         }
 
         return fromTurn;
     }
 
-    /// <summary>The `message` of an object that carries one.</summary>
-    private static string? Said(System.Text.Json.JsonElement element) =>
-        element.TryGetProperty("message", out var message)
+    /// <summary>Whether a line is worth parsing at all — substring only, no allocation.</summary>
+    private static bool CouldBeAFailure(ReadOnlySpan<char> line) =>
+        line.Contains("\"type\":\"error\"", StringComparison.Ordinal)
+        || line.Contains("\"type\": \"error\"", StringComparison.Ordinal)
+        || line.Contains("\"type\":\"turn.failed\"", StringComparison.Ordinal)
+        || line.Contains("\"type\": \"turn.failed\"", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The reason one line carries, or what we already had.
+    /// </summary>
+    /// <param name="conclusive">
+    /// True for an `error` event, which is the one codex prints first and the one to stop on. A
+    /// `turn.failed` is kept but not returned yet: it repeats the same sentence, and reading on
+    /// costs nothing once the cheap filter has cut the stream to a couple of lines.
+    /// </param>
+    /// <remarks>
+    /// Every shape check is guarded. This runs on the failure path of a reviewer that has ALREADY
+    /// gone wrong, so a malformed record must never add an exception to it — and
+    /// <c>JsonElement.GetString()</c> and <c>TryGetProperty</c> both throw
+    /// <c>InvalidOperationException</c>, not <c>JsonException</c>, when the value is the wrong kind.
+    /// A complete line of <c>{"type":123}</c> or <c>{"type":"turn.failed","error":"timed out"}</c>
+    /// would have escaped the catch and taken the round's summary with it. Three reviewers across
+    /// two vendors found that.
+    /// </remarks>
+    private static string ReasonIn(string line, string soFar, out bool conclusive)
+    {
+        conclusive = false;
+        try
+        {
+            using var parsed = System.Text.Json.JsonDocument.Parse(line);
+            var root = parsed.RootElement;
+            if (root.ValueKind is not System.Text.Json.JsonValueKind.Object
+                || !root.TryGetProperty("type", out var kind)
+                || kind.ValueKind is not System.Text.Json.JsonValueKind.String)
+            {
+                return soFar;
+            }
+
+            if (kind.ValueEquals("error") && Said(root) is { Length: > 0 } spoken)
+            {
+                conclusive = true;
+                return spoken;
+            }
+
+            return kind.ValueEquals("turn.failed") && soFar.Length == 0 && Reported(root) is { Length: > 0 } told
+                ? told
+                : soFar;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // A torn or foreign line is not a reason. Keep reading: the real one may follow, and a
+            // process killed mid-write leaves exactly this.
+            return soFar;
+        }
+    }
+
+    /// <summary>The message of a `turn.failed`, whose `error` may be an object or anything else.</summary>
+    private static string Reported(System.Text.Json.JsonElement root) =>
+        root.TryGetProperty("error", out var failure) ? Said(failure) : string.Empty;
+
+    /// <summary>The `message` of an object that carries one — empty for anything else.</summary>
+    private static string Said(System.Text.Json.JsonElement element) =>
+        element.ValueKind is System.Text.Json.JsonValueKind.Object
+        && element.TryGetProperty("message", out var message)
         && message.ValueKind is System.Text.Json.JsonValueKind.String
-            ? message.GetString()
-            : null;
+            ? message.GetString() ?? string.Empty
+            : string.Empty;
 }
 
 /// <summary>

@@ -499,7 +499,7 @@ public static class ReviewerSummaryFactory
         // stderr FIRST, and the stream the adapter recovered only when stderr is silent: a vendor
         // writing an error line means it; a line lifted out of an event stream is the best guess
         // available. Every vendor here but codex uses stderr, so this changes nothing for them.
-        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, e.StdOutTail)}",
+        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, e.FailureReason)}",
         ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
         _ => "unknown",
@@ -526,16 +526,17 @@ public static class ReviewerSummaryFactory
         ["error:", "error ", "exception", "fatal", "refused", "denied", "unauthorized", "quota", "not found", "missing"];
 
     /// <param name="saidElsewhere">
-    /// What the vendor's own adapter recovered from another stream, or empty — used only when
-    /// stderr is silent. See <c>IReviewerRuntime.WhyItFailed</c> for why that stream exists.
+    /// What the vendor's own adapter recovered about its own failure, or empty.
     /// </param>
+    /// <remarks>
+    /// <b>The precedence, in one place:</b> a diagnosed cure, then a stderr line that ANNOUNCES a
+    /// failure, then what the adapter recovered, then whatever stderr did say, then the honest
+    /// nothing. Announcing beats recovered because a vendor writing `error:` on stderr means it;
+    /// recovered beats a non-announcing line because a deprecation warning is not why anything
+    /// failed. See <c>IReviewerRuntime.WhyItFailed</c> for why the fourth source exists at all.
+    /// </remarks>
     private static string Because(string stdErrTail, string saidElsewhere = "")
     {
-        if (stdErrTail.Trim().Length == 0 && saidElsewhere.Trim().Length > 0)
-        {
-            return $": {Quote(saidElsewhere.Trim())}";
-        }
-
         // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
         // Gemini retirement was mistaken for three different things because the sentence a reader
         // saw was `exit 1` and the sentence that mattered was eight lines inside a node stack.
@@ -550,31 +551,27 @@ public static class ReviewerSummaryFactory
             .ToList();
         if (lines.Count == 0)
         {
-            return " (the CLI said nothing on stderr)";
+            return saidElsewhere.Trim() is { Length: > 0 } only
+                ? $": {Quote(only)}"
+                : " (the CLI said nothing on stderr)";
         }
 
         var meaningful = lines.Where(l => !IsScaffolding(l)).ToList();
-        if (meaningful.Count == 0)
+        if (meaningful.FirstOrDefault(Announces) is { } announced)
         {
-            // Scaffolding is not a reason, and a vendor that named its own failure elsewhere has
-            // given us a better one.
-            return saidElsewhere.Trim().Length > 0
-                ? $": {Quote(saidElsewhere.Trim())}"
-                : NothingButScaffolding(lines);
+            return $": {Quote(announced)}";
         }
 
-        // Stderr said something, but nothing that ANNOUNCES a failure — a node deprecation warning,
-        // a locale notice, a certificate grumble. The adapter's answer came out of the place this
-        // vendor puts errors, so it is the better evidence of the two, and quoting the warning
-        // instead would put the useless sentence back on the page with extra steps. The predicate
-        // is the one this method already ranks by, not a second opinion. (gemini, plan round.)
-        if (saidElsewhere.Trim().Length > 0 && !meaningful.Any(Announces))
+        // Nothing on stderr ANNOUNCES a failure — it is scaffolding, or a node deprecation warning,
+        // a locale notice, a certificate grumble. A vendor that named its own failure where it puts
+        // failures has given us better evidence than that, and quoting the warning instead would
+        // put the useless sentence back on the page with extra steps. (gemini, plan round.)
+        if (saidElsewhere.Trim() is { Length: > 0 } elsewhere)
         {
-            return $": {Quote(saidElsewhere.Trim())}";
+            return $": {Quote(elsewhere)}";
         }
 
-        var line = meaningful.FirstOrDefault(Announces) ?? meaningful[0];
-        return $": {Quote(line)}";
+        return meaningful.Count == 0 ? NothingButScaffolding(lines) : $": {Quote(meaningful[0])}";
     }
 
     /// <summary>

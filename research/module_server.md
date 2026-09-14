@@ -426,12 +426,27 @@ model answers normally minutes later — so it presented as codex randomly falli
 a named, temporary, actionable condition. A transient failure whose reason is unreadable is the
 worst kind there is.
 
-The default is null, so no existing adapter changed. `CodexRuntime` implements it by reading the two
-shapes its protocol defines, and only those: stdout also carries banners, progress and — from a
-process killed mid-write — half a JSON object, none of which is a reason. `NonZeroExit` gained
-`StdOutTail` as a second field rather than folding it into `StdErrTail`, because the two are not
-equally trustworthy: **stderr wins whenever the vendor used it**, and the recovered stream is a
-fallback for when it did not.
+The default is `string.Empty`, so no existing adapter changed. `CodexRuntime` implements it by
+reading the two shapes its protocol defines, and only those: stdout also carries banners, progress
+and — from a process killed mid-write — half a JSON object, none of which is a reason.
+
+**The precedence, in one place** (`Because`): a diagnosed cure, then a stderr line that ANNOUNCES a
+failure, then what the adapter recovered, then whatever stderr did say, then the honest nothing.
+Announcing beats recovered because a vendor writing `error:` on stderr means it. Recovered beats a
+non-announcing line because a node deprecation warning is not why anything failed — the first draft
+said "stderr wins whenever the vendor used it", and gemini pointed out that a locale notice would
+then put the useless sentence back with extra steps.
+
+`NonZeroExit` carries it as `FailureReason` rather than folding it into `StdErrTail`, because the
+two are not equally trustworthy. It was called `StdOutTail` for one round, which was wrong twice
+over: it holds a parsed sentence rather than a tail of a stream, and the next adapter to implement
+this may read a file it named rather than stdout at all.
+
+**Every shape check is guarded, and that is not defensive padding.** `JsonElement.GetString()` and
+`TryGetProperty` throw `InvalidOperationException` — not `JsonException` — when the element is the
+wrong kind, so a complete line of `{"type":123}`, or a `turn.failed` whose `error` is a string,
+would have escaped a `JsonException` catch and taken down the code path that exists to explain a
+failure. Three reviewers across two vendors found it, and reverting the guard reproduces it.
 
 ## A local reviewer is told not to think (2026-09-02)
 
