@@ -140,13 +140,30 @@ const ALIVE = 'What is 2+2? Reply with the number alone.';
 const bare = (answer) => answer.trim().replace(/^[^0-9A-Za-z]+|[^0-9A-Za-z]+$/gu, '');
 
 /**
- * Does this answer carry that number AS ITS ANSWER, rather than somewhere in a sentence?
+ * Did the model ANSWER with this value — the whole reply, trimmed?
  *
- * <p>Substring matching is what makes a control hollow: `includes('4')` is true of "retry in 4
- * minutes" and of `claude-sonnet-4-6`. The token boundary is the difference between a model
- * answering and a model mentioning. (codex and gemini, the code round.)</p>
+ * <p>Used wherever a PASS needs proof, so it is exact and fails closed: a chatty reply is NO VERDICT
+ * rather than a control satisfied. Substring matching is what makes a control hollow — `includes('4')`
+ * is true of "retry in 4 minutes" — and so, it turns out, is a token match: a bare `4` stands as its
+ * own token in that sentence too. Only the whole answer will do.</p>
+ *
+ * <p><b>And no regular expression is built from it.</b> The first version of this composed one from
+ * the value, which comes from `--number` on the command line; the digits-only validation upstream
+ * made it harmless in fact, but a regex assembled from an argument is the shape of the defect rather
+ * than an instance of it, and it earned a high-severity `js/regex-injection` from CodeQL — the one
+ * finding on this change that three human reviewers all missed. String equality needs no pattern.</p>
  */
-const answered = (turn, value) => turn.ok && new RegExp(`(?:^|[^0-9])${value}(?:[^0-9]|$)`, 'u').test(bare(turn.answer));
+const answeredExactly = (turn, value) => turn.ok && bare(turn.answer) === value;
+
+/**
+ * Does this reply carry the value ANYWHERE in it?
+ *
+ * <p>The mirror of the above, and used only where a pass needs the value to be ABSENT. It errs
+ * toward finding it: a model that says "the number was 7431" has plainly not forgotten, and reading
+ * that as forgetting would be the false pass this whole script exists to avoid. Each of the two
+ * therefore fails toward "no pass", which is what makes them controls rather than decoration.</p>
+ */
+const mentions = (turn, value) => turn.ok && bare(turn.answer).includes(value);
 
 /** A session in a directory of its own, built the way the extension builds one. */
 function opened(vendor, adapter, resolved) {
@@ -219,7 +236,7 @@ async function resetInTheMiddle(name, vendor, adapter) {
     // ---- and this IS the reset: the session ends and its directory goes, the way `ended()` does.
     ended(before);
   }
-  const kept = answered(remembered, NUMBER);
+  const kept = answeredExactly(remembered, NUMBER);
   if (!kept) {
     // THE FIRST CONTROL FAILED. Stop here rather than spending two more turns on a measurement that
     // is already unusable. (gemini, the code round.)
@@ -239,7 +256,7 @@ async function resetInTheMiddle(name, vendor, adapter) {
   } finally {
     ended(after);
   }
-  const answering = answered(alive, '4');
+  const answering = answeredExactly(alive, '4');
 
   console.log(`  planted:      ${said(planted).slice(0, 60)}`);
   console.log(`  before reset: ${said(remembered).slice(0, 60)}   (planted ${NUMBER})`);
@@ -263,7 +280,7 @@ async function resetInTheMiddle(name, vendor, adapter) {
     return 'no verdict';
   }
 
-  return answered(recalled, NUMBER) ? 'still knows it' : 'forgot';
+  return mentions(recalled, NUMBER) ? 'still knows it' : 'forgot';
 }
 
 const all = VENDORS.filter(([name]) => cli.which === 'all' || cli.which === name);
