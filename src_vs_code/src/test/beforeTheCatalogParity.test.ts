@@ -26,6 +26,17 @@ import { BEFORE_THE_CATALOG } from '../serverRoles';
  * be a third place for it to be wrong.</p>
  */
 
+/**
+ * This asserts POSITIVELY about `coai-mcp`'s source and fails loudly when it moves — the opposite of
+ * the shape `NothingReadsAnotherProgramsSourceTests` forbids, which derives an expectation and then
+ * silently derives an empty one. A missing `BeforeTheCatalog` fails on the spot, a constant this
+ * cannot resolve fails by name, and the size assertion at the bottom holds whether the C# is
+ * readable or not.
+ *
+ * reads-another-program: the frozen five live in two languages and the guard's own advice does not
+ * reach them — `shared/builtin-roles.json` lists the SEVEN roles shipped today, while what must
+ * match here is what shipped BEFORE `/api/catalog` named roles at all.
+ */
 const csharp = (file: string): string =>
   fs.readFileSync(path.resolve(__dirname, '../../..', 'src_mcp', file), 'utf8');
 
