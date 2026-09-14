@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
 import { chatSettingsFrom, clearedByWriting } from './chatSettings';
+import { phrasesFrom } from './phrases';
+import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
@@ -664,6 +666,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // will never hold them would only invite somebody to add them to it one day and split the
       // one reader in two.
       chat: chatSettingsFrom((key: string) => config.get(key)),
+      // Straight from the configuration for the same reason, and read HERE rather than inside the
+      // section so that `staticKey` can see it change.
+      phrases: phrasesFrom(config.get('phrases')),
       // Only while something IS focused — and by the time a paint gets past the hold below, that
       // means the hold ran out under it. An ordinary paint carries nothing and steals nobody's
       // focus.
@@ -1514,6 +1519,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // command, so the Prompts section can point at the roles it draws.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editRoles);
         break;
+      case 'editPhrases':
+        // Once more for the phrases tab, which the Phrases section points at. A tab reachable only
+        // from the command palette is a tab the operator could not find — the deviation the presets
+        // tab shipped with, and which two tests now guard.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editPhrases);
+        break;
+      case 'copyPhrase':
+        await this.copyPhrase(id);
+        break;
       case 'addTeamServer':
         await this.addTeamServer();
         break;
@@ -1820,6 +1834,36 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * failure would otherwise surface as a broken reviewer days later. A server that is simply DOWN is
    * not a mistake, so saving is still offered after the warning.</p>
    */
+  /**
+   * One copier for the life of the panel, so the status bar keeps ONE line.
+   *
+   * <p>It holds the handle to the message it last put there and disposes it before writing the next;
+   * a copier made per press would leave five lines competing after five presses.</p>
+   */
+  private readonly copier = phraseCopier({
+    writeText: (text: string) => Promise.resolve(vscode.env.clipboard.writeText(text)),
+    say: (message: string, forMs: number) => vscode.window.setStatusBarMessage(message, forMs),
+  });
+
+  /**
+   * A phrase onto the clipboard, and the button told whether it landed.
+   *
+   * <p>The deciding is `phraseCopy.ts`, where a test can reach it; this is the half that needs a
+   * `vscode`. The page is told <b>afterwards</b>, and only when the write RESOLVED — a button that
+   * said *Copied* the moment it was pressed would say it just as confidently while the clipboard was
+   * held by something else, and the person would paste whatever was there before. (Plan round,
+   * gemini, Blocking.)</p>
+   */
+  private async copyPhrase(id: string | undefined): Promise<void> {
+    const phrases = phrasesFrom(vscode.workspace.getConfiguration('coai').get('phrases'));
+    const report = await this.copier.copy(phrases, id);
+    if (!report.copied || id === undefined) {
+      return;
+    }
+    // The disposal is expected and dropped, the way every other post from here treats it.
+    this.held.view?.webview.postMessage({ type: 'copied', id }).then(undefined, () => undefined);
+  }
+
   private async addTeamServer(): Promise<void> {
     const name = await vscode.window.showInputBox({
       title: 'Add a Team server',

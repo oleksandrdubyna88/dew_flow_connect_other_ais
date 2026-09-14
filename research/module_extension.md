@@ -4866,3 +4866,28 @@ where: `settledWrites` awaits a render that returns a promise, but `rolesPanel` 
 still reading prompt files. It passes `render` directly again, the option's type says
 `void | Promise<void>` so that is legal rather than incidental, and a test pins that a redraw
 finishes before the next write starts.
+
+### The Phrases section, and a button that only claims what happened (2026-09-14)
+
+The section a person actually uses: one button per phrase, `data-command="copyPhrase"` carrying the
+**id** and never the words — `chatPromptChoice`'s rule, so a phrase exists in one place and cannot
+drift between two. An empty list renders a sentence and the way into the tab rather than nothing,
+and *Edit phrases…* is there because `coai.editChatPresets` once shipped reachable only from the
+command palette and the operator could not find the feature at all.
+
+`state.phrases` is filled in `render()` straight from the configuration and is part of `staticKey`,
+which is what makes a phrase added in the tab appear in a panel that is already open: the write fires
+`onDidChangeConfiguration('coai')`, the provider re-renders, the key differs, the page is redrawn.
+Serialised whole, so a rename and a rewrite repaint as surely as an addition does.
+
+**The copy lives in `phraseCopy.ts`, with the clipboard and the status bar injected**, and that is
+what makes its failures testable: a plan reviewer pointed out that every test the story listed
+resolved phrase data and none of them touched the write, so an implementation could report success
+before the write landed and pass all of them. Three outcomes, three sentences — the phrase went to
+the clipboard, the id named no row, or the write was refused — and one live status-bar handle,
+disposed before the next is set, so five copies in five seconds leave one line rather than five.
+
+**The button says *Copied* only after the write RESOLVED.** The first draft flipped it in the page
+script on the click, which a reviewer called Blocking and was right to: a button that confirms on
+the press confirms just as confidently when the clipboard was held by something else, and the person
+then pastes whatever was there before. The host posts `copied` with the id afterwards, and only then.
