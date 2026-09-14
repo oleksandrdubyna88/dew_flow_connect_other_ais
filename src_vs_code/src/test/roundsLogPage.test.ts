@@ -56,7 +56,7 @@ test('an error in the page script is written onto the page, not swallowed', () =
 
 // ---------- every column sorts ----------
 
-test('every column that holds DATA is a sort key, and the one that holds buttons is not', () => {
+test('every column that holds DATA is a sort key, and the ones that hold controls are not', () => {
   // The rule this has always been about is that no data column is dead to a click. The actions
   // column is the exception and must be one: sorting a table by a column of identical buttons is
   // an ordering that means nothing, so it carries no `data-sort` for the handler to find.
@@ -65,8 +65,9 @@ test('every column that holds DATA is a sort key, and the one that holds buttons
   const ths = head.match(/<th\b[^>]*>/g) ?? [];
 
   assert.ok(ths.length >= 15, `fifteen columns, got ${ths.length}`);
-  const sortable = ths.filter((th) => !th.includes('class="actions"'));
-  assert.equal(sortable.length, ths.length - 1, 'exactly one column is not a sort key');
+  const controls = ths.filter((th) => th.includes('class="actions"') || th.includes('class="pick"'));
+  assert.equal(controls.length, 2, 'the tick column and the button column, and no others');
+  const sortable = ths.filter((th) => !controls.includes(th));
   for (const th of sortable) {
     assert.match(th, /data-sort="[a-zA-Z]+"/, `${th} must sort`);
   }

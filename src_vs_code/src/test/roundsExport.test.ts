@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ExportPorts, exportRounds, inBatches, oneAtATime, readAndExport, suggestedName,
+  ASK_ABOVE, ExportPorts, exportRounds, inBatches, oneAtATime, readAndExport, suggestedName,
 } from '../roundsExport';
 import { ExportableRow, ExportRound } from '../roundsCsv';
 import { LogRow } from '../roundsLog';
@@ -338,4 +338,82 @@ test('a reader that THROWS makes that round failed, not absent, and not an excep
   assert.equal(outcome, 'written', 'the readable round is still written');
   assert.match(port.said[0]!, /could not be read/);
   assert.equal(port.said[0]!.endsWith(': b.'), true, port.said[0]!);
+});
+
+// ---------- a selection is a job, so it reports and can be stopped ----------
+
+test('progress is reported once per round read, in order', async () => {
+  const seen: string[] = [];
+  const port = ports({ progress: (done, total) => seen.push(`${done}/${total}`) });
+
+  await readAndExport(
+    [row({ key: 'a' }), row({ key: 'b' }), row({ key: 'c' })],
+    async () => ({ state: 'loaded' as const, findings: [] }),
+    port);
+
+  assert.deepEqual(seen, ['1/3', '2/3', '3/3']);
+});
+
+test('a cancelled export writes nothing and says nothing', async () => {
+  // The person stopped it. Telling them they stopped it is noise, exactly as with a dismissed
+  // save dialog.
+  let asked = false;
+  const port = ports({
+    cancelled: () => true,
+    pickPath: async () => { asked = true; return 'D:/out/rounds.csv'; },
+  });
+
+  const outcome = await readAndExport([row()], async () => ({ state: 'loaded' as const, findings: [] }), port);
+
+  assert.equal(outcome, 'cancelled');
+  assert.equal(asked, false, 'no dialog for a job that was stopped');
+  assert.deepEqual(port.written, []);
+  assert.deepEqual(port.said, []);
+  assert.deepEqual(port.complained, []);
+});
+
+test('cancelling stops the reads rather than merely discarding them', async () => {
+  let read = 0;
+  let stop = false;
+  const port = ports({ cancelled: () => stop });
+
+  await readAndExport(
+    Array.from({ length: 40 }, (_, at) => row({ key: `k${at}` })),
+    async () => {
+      read += 1;
+      stop = true;
+
+      return { state: 'loaded' as const, findings: [] };
+    },
+    port);
+
+  assert.ok(read <= 8, `the reads stop within a batch or two, read ${read} of 40`);
+});
+
+test('an unusually large selection is confirmed before anything is read', async () => {
+  let read = 0;
+  const port = ports({
+    confirmLarge: async () => false,
+    progress: () => { read += 1; },
+  });
+
+  const outcome = await readAndExport(
+    Array.from({ length: ASK_ABOVE + 1 }, (_, at) => row({ key: `k${at}` })),
+    async () => ({ state: 'loaded' as const, findings: [] }),
+    port);
+
+  assert.equal(outcome, 'cancelled');
+  assert.equal(read, 0, 'saying no means nothing is read at all');
+});
+
+test('a selection at or under the cap is not confirmed', async () => {
+  let asked = false;
+  const port = ports({ confirmLarge: async () => { asked = true; return true; } });
+
+  await readAndExport(
+    Array.from({ length: 3 }, (_, at) => row({ key: `k${at}` })),
+    async () => ({ state: 'loaded' as const, findings: [] }),
+    port);
+
+  assert.equal(asked, false);
 });
