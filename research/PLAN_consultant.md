@@ -683,13 +683,32 @@ says whether the trigger should exist, is the guess this whole story was written
 
 ## Definition of Done
 
-- [ ] Every "must be true" above holds, each pinned by a RED-then-GREEN test named in the test plan.
-- [ ] Two live consultations per vendor on this repository's tree, recorded here with timings, tokens,
-      and the invariant's before/after.
-- [ ] Every refusal is a sentence naming its cure; no silent substitution of vendor or model; nothing
+- [x] Every "must be true" above holds, each pinned by a RED-then-GREEN test named in the test plan.
+      Five gate rounds across the six stories, and the teeth of each fix watched failing before it
+      went back — listed per story in the build order above.
+- [ ] **CARRIED, not done.** Two live consultations per vendor on this repository's tree, recorded
+      here with timings, tokens, and the invariant's before/after. The RUNS happened and earned their
+      keep — they are what found the `.git/index` false positive, the ignored-directory mtime, the
+      local route's null-id record and the `Build`-is-pure claim, all four recorded in the status
+      line. What is missing is the TABLE: the numbers were never written down, and the only
+      measurement table in this document is phase 0b's, which is the CLI mechanics taken before the
+      tool existed. Carried to
+      [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md),
+      whose own DoD names it, because that plan runs live consultations anyway and writing the
+      numbers down twice is how they come to disagree.
+- [x] Every refusal is a sentence naming its cure; no silent substitution of vendor or model; nothing
       in the person's tree is ever deleted or reverted by this feature.
-- [ ] The snippet paragraph is in the canonical rule, v6, and the pin cascade ran.
-- [ ] `research/module_*.md` and `architecture.md` describe the ninth tool, the consultation channel,
+- [x] ~~The snippet paragraph is in the canonical rule, v6, and the pin cascade ran.~~ **This line
+      asked for the opposite of what shipped, and the deviation is the point.** The paragraph is NOT
+      in the canonical rule and no cascade ran: the conventions repository had frozen its 24 migrated
+      rule bodies, and the operator's own answer was that conventions holds only SHARED rules while
+      specific material belongs to the project that owns it. So the consultant rule is this
+      repository's `src_vs_code/src/consultantRule.md`, carried as a fourth half of the pasted
+      artefact with its own `CONSULTANT_VERSION` and marker — the pattern main established for the
+      document and caller halves. `SNIPPET_VERSION` stays 5, which is the number inside the frozen
+      gate rule; a whole new rule file raises no existing version.
+- [x] `research/module_*.md` and `architecture.md` describe the ninth tool, the consultation channel,
       the invariant, the lock and the live-tree decision; diagrams render.
-- [ ] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded;
-      phase 0's Unstuck rate is recorded beside the defaults it decided.
+- [x] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded.
+      Phase 0's Unstuck rate is the OPERATOR's to record, from 2026-09-14, and it is the subject of
+      the extracted plan rather than a box this document can tick for itself.
