@@ -115,7 +115,7 @@ export function chatPromptPresetsFrom(saved: unknown, legacy = ''): readonly Pro
     }
     const name = text(one['name']).slice(0, NAME_LIMIT);
     // The TEXT is not truncated: a name has a width to respect and a prompt has meaning to keep.
-    const body = typeof one['text'] === 'string' ? one['text'].trim() : '';
+    const body = text(one['text']);
 
     return name.length === 0 || body.length === 0
       ? []

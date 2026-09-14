@@ -20,9 +20,24 @@
 /** How much of a name fits on a button in a row of buttons, before the row stops being a row. */
 export const NAME_LIMIT = 60;
 
+/** A string from a file a person edits, exactly as they wrote it — empty for anything that is not one. */
+export function rawText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 /** A string from a file a person edits: trimmed, and empty for anything that is not one. */
 export function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+  return rawText(value).trim();
+}
+
+/**
+ * Whether a value is a string with anything in it but whitespace — without copying it to find out.
+ *
+ * <p>A trim to test for emptiness allocates a second string the size of the first, and a saved row
+ * can hold a pasted transcript. The test is the same question asked without the copy.</p>
+ */
+export function hasWords(value: unknown): boolean {
+  return typeof value === 'string' && /\S/.test(value);
 }
 
 /** A record, or nothing — `settings.json` can hold a string, a number or a null in an array. */
@@ -39,12 +54,28 @@ export function record(value: unknown): Record<string, unknown> | undefined {
  * click ambiguous — a button names the row it chose and the host looks it up. So a missing or
  * repeated id is replaced by a positional one, which is stable for as long as the list is not
  * reordered and is regenerated the moment it is.</p>
+ *
+ * <p><b>And the positional name is checked against the ones already given out</b>, which it was not
+ * until the code round of 2026-09-14 said so. A row that writes `phrase-2` by hand and a later row
+ * with no id at index 1 both answered to `phrase-2`, and the second could not be copied at all: the
+ * lookup returned the first. A hand-written id that happens to look positional is not exotic —
+ * anybody who has seen this file's own repaired ids will type one.</p>
  */
 export function withId(candidate: string, index: number, taken: Set<string>, prefix: string): string {
-  const id = candidate.length > 0 && !taken.has(candidate) ? candidate : `${prefix}-${index + 1}`;
+  const id = candidate.length > 0 && !taken.has(candidate) ? candidate : freeId(prefix, index + 1, taken);
   taken.add(id);
 
   return id;
+}
+
+/** The first `prefix-n` from `n` upwards that nobody in this list is already using. */
+function freeId(prefix: string, from: number, taken: Set<string>): string {
+  let n = from;
+  while (taken.has(`${prefix}-${n}`)) {
+    n += 1;
+  }
+
+  return `${prefix}-${n}`;
 }
 
 /**
@@ -52,11 +83,43 @@ export function withId(candidate: string, index: number, taken: Set<string>, pre
  *
  * <p>So a person recognises it on a button as the thing THEY wrote — a generic label would make
  * their own writing look like something this product put there.</p>
+ *
+ * <p><b>The first line that has WORDS in it, not simply the first line.</b> A body that opens with a
+ * blank line — a pasted query, a snippet someone kept a gap above — named the button with the empty
+ * string, and an empty label is a button nobody can see. (Code round, 2026-09-14.)</p>
+ *
+ * <p>It reads one line at a time rather than splitting: only the first line is wanted, and splitting
+ * allocates every line of a body that may be a pasted transcript.</p>
  */
 export function nameFor(body: string): string {
-  const firstLine = body.split('\n')[0] ?? body;
+  const line = firstWords(body);
 
-  return firstLine.length <= NAME_LIMIT ? firstLine : `${firstLine.slice(0, NAME_LIMIT - 1)}…`;
+  return line.length <= NAME_LIMIT ? line : `${line.slice(0, NAME_LIMIT - 1)}…`;
+}
+
+/** Each line of a body, one at a time — the rest is never allocated if the first one answers. */
+function* eachLine(body: string): Generator<string> {
+  let from = 0;
+  while (from <= body.length) {
+    const nl = body.indexOf('\n', from);
+    yield body.slice(from, nl === -1 ? body.length : nl);
+    if (nl === -1) {
+      return;
+    }
+    from = nl + 1;
+  }
+}
+
+/** The first line with anything but whitespace on it, trimmed; empty when the body has none. */
+function firstWords(body: string): string {
+  for (const line of eachLine(body)) {
+    const said = line.trim();
+    if (said.length > 0) {
+      return said;
+    }
+  }
+
+  return '';
 }
 
 /** An id for a row being created now, which no existing row can already hold. */

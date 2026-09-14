@@ -4793,3 +4793,18 @@ with an ellipsis that says it was cut. The text itself is never truncated.
 
 Raised by a plan reviewer (gemini, Major) against a first draft that had copied the sibling's
 "needs a name and a text" rule without asking whether it meant the same thing here. It did not.
+
+**Its own code round then found three defects, two of them inherited.** A phrase was TRIMMED on the
+way out of the setting, which is right for a prompt and wrong for something whose whole job is to be
+pasted: an indented snippet came back unindented and a deliberate trailing newline was gone. It is
+verbatim now, and `hasWords` answers "is there anything but whitespace here" without allocating a
+copy of a body that may be a pasted transcript.
+
+The other two were `chatPresets.ts`'s rules as they had always been, which is exactly what moving
+them into `savedRows.ts` exposed. `withId` did not check its POSITIONAL fallback against the ids
+already given out, so a hand-written `phrase-2` on row 0 and an id-less row at index 1 both answered
+to `phrase-2` and the second could never be copied — the lookup returned the first. And `nameFor`
+took the first line rather than the first line with words in it, so a body opening with a blank line
+produced an empty label: a button nobody can see. Both are fixed in the shared module, so both lists
+gained the fix. `nameFor` also reads one line at a time instead of splitting the whole body, since
+only the first is ever wanted.
