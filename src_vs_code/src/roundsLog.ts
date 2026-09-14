@@ -1482,6 +1482,11 @@ export function roundsLogHtml(
       var r = shown[i];
       html += '<tr data-key="' + esc(r.key) + '">'
         + '<td class="pick"><input type="checkbox" data-pick="' + esc(r.key) + '"'
+        // The column header is blank and the round's identity is in other cells, so without this the
+        // box is announced as an unlabelled checkbox and a screen-reader user cannot tell which round
+        // they are selecting. (CodeRabbit, on the pull request.)
+        + ' aria-label="Select ' + esc(r.stage) + ' round ' + esc(String(r.number))
+        + (r.repoName ? ' of ' + esc(r.repoName) : '') + '"'
         + (state.selected[r.key] ? ' checked' : '') + '></td>'
         + '<td>' + when(r.startedUtc || r.completedUtc) + '</td>'
         + '<td>' + esc(r.kind) + '</td>'

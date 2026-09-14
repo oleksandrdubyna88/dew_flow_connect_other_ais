@@ -217,11 +217,13 @@ Engineering choices, not product ones; recorded here so a reviewer reads them as
    object. Not 30 fields: the ONE cell writer in `csvOf` already treats every value as untrusted
    (a string is coerced, a number must be finite or the cell is empty, anything else is empty), which
    is where constraint 9 puts the trust boundary anyway.
-3. **The keys-file contract** — a JSON array of `{ "session", "stage", "number" }` written to the
-   coai data directory and removed in a `finally`; answered with
-   `{ "rounds": [{ "session", "stage", "number", "known", "findings": [] }] }`, so a key the server
+3. **The keys-file contract** — a JSON array of `{ "sessionId", "stage", "number" }` written to the
+   extension's own storage directory and removed in a `finally`; answered with
+   `{ "rounds": [{ "sessionId", "stage", "number", "known", "findings": [] }] }`, so a key the server
    has never heard of comes back `known: false` rather than missing (constraint 14). More than
-   `MaxLimit` (1000) keys is exit 64 with a note.
+   `MaxLimit` (1000) keys is **exit 65** with a note — as is any other malformed request, because 64
+   is reserved for "this binary is too old" and is the only code the client falls back on. *(Both
+   corrections are deviations from the plan as written; see "What shipped differently".)*
 
 ## Build order
 
@@ -284,7 +286,7 @@ lunch too. The tooltip therefore says *"from the round finishing to the last dec
    from a unit test and cannot drag `node:` into the page bundle. One exported function
 
    ```ts
-   csvOf(rounds: readonly ExportRound[]): string
+   csvOf(rounds: readonly ExportRound[]): CsvWritten | CsvRefusal
    ExportRound = { readonly row: LogRow; readonly found: Found }   // Found = { state, findings }
    ```
 
@@ -297,10 +299,14 @@ lunch too. The tooltip therefore says *"from the round finishing to the last dec
 
    Every cell goes through **one** writer that applies the formula guard and RFC-4180 quoting, so no
    column can be forgotten (constraint 9).
-   - Round columns: `started_utc, started_local, kind, repository, repository_path, branch, stage,
-     round, subject, status, accepted, rejected, verdict, gating, findings_count, analysis_seconds,
-     decide_seconds, tokens_in, tokens_out, cost_in_usd, cost_out_usd, cost_total_usd,
-     cost_is_estimate, cost_partial, reviewers_answered, reviewers`.
+   - Round columns, in the order `roundsCsv.ts` emits them: `session_id, findings_read,
+     started_utc, started_local_exporter, kind, repository, repository_path, branch, stage,
+     round, subject, asked_by, status, accepted, rejected, verdict, gating, findings_count,
+     analysis_seconds, decide_seconds, tokens_in, tokens_out, cost_in_usd, cost_out_usd,
+     cost_total_usd, cost_is_estimate, cost_partial, reviewers_answered, reviewers`.
+     `findings_read` is the read state (`loaded` / `not recorded` / `failed`) and `asked_by` is which
+     AI asked for the round — neither was in the plan as written; both are recorded under "What
+     shipped differently".
    - Finding columns: `finding_ordinal, severity, category, file, line, title, why, fix, role,
      is_gating, vendors, decision, reason, re_raised`.
    - `decision` is the word the page shows — `took` / `declined` / `open` — from `resolution`

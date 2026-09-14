@@ -167,9 +167,12 @@ export type WithKeysFile = <T>(json: string, use: (path: string) => Promise<T>) 
  * The findings of MANY rounds, in ONE spawn.
  *
  * <p><b>This is the whole point of the story.</b> A bulk export of five hundred rounds used to start
- * five hundred processes, four at a time; it starts one now. What it costs is granularity: a cancel
- * arriving mid-read cannot stop a child that is already reading all of them, so it takes effect when
- * the spawn returns — which {@link manyCapMs} bounds.</p>
+ * five hundred processes, four at a time; it starts one now.</p>
+ *
+ * <p><b>And a cancel still reaches it.</b> `stop` is polled while the child runs and KILLS it, so
+ * giving up on an export ends the read rather than merely stopping the wait for it — the code round
+ * refused the trade this paragraph used to describe, and was right to. {@link manyCapMs} is the
+ * separate bound on a child that has stopped answering altogether.</p>
  *
  * <p><b>Exit 64 falls back; every other code does not.</b> 64 is `unknown argument`, which is the one
  * answer that means "this server predates the mode" — the extension and the server ship separately,
