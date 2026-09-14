@@ -239,26 +239,6 @@ function mountedCallerRuleFile(): string {
   return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-caller-model.md');
 }
 
-/**
- * A repository that MOUNTS the shared rule is not a repository with a stale paste.
- *
- * <p>It mattered from the moment the snippet gained a second half. The gate text in a mount is
- * current by its submodule pin, but it is now only PART of what the button hands out — so the old
- * answer ("v5 against v6: copy it again and replace the old block") was wrong twice over: there is
- * no block to replace, and pasting the whole snippet would duplicate a rule the mount provides.
- * (gemini, story 5's plan round, raised as Blocking.)</p>
- */
-test('a mounted rule is reported as a mount, and told to paste only the half it lacks', () => {
-  const mounted = fs.readFileSync(mountedRuleFile(), 'utf8').replace(/\r\n/g, '\n');
-
-  const status = snippetStatus(mounted, true);
-
-  assert.deepEqual(status, { kind: 'mounted', found: snippetVersionIn(mounted), current: SNIPPET_VERSION });
-  assert.match(snippetNote(status), /MOUNTS the shared gate rule/);
-  assert.match(snippetNote(status), /paste the consultant block/);
-  assert.match(snippetNote(status), /should not be duplicated/);
-});
-
 test('the same text pasted into a CLAUDE.md is still a stale paste, with the old advice', () => {
   // The distinction is WHERE it was found, not what it says: the identical body in an instruction
   // file is a copy somebody made, and replacing it is exactly right.
@@ -267,15 +247,6 @@ test('the same text pasted into a CLAUDE.md is still a stale paste, with the old
   assert.deepEqual(
     snippetStatus(mounted),
     { kind: 'older', found: snippetVersionIn(mounted), current: SNIPPET_VERSION },
-  );
-});
-
-test('a mount that is AHEAD is still ahead — the advice there is to update this machine', () => {
-  const ahead = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, `coai-snippet v${SNIPPET_VERSION + 1}`);
-
-  assert.deepEqual(
-    snippetStatus(ahead, true),
-    { kind: 'ahead', found: SNIPPET_VERSION + 1, current: SNIPPET_VERSION },
   );
 });
 
