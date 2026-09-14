@@ -33,6 +33,9 @@ RELEASES=https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/release
 RID=linux-x64
 TOKEN_FILE=/etc/coai-canary.token
 HEALTH=http://127.0.0.1:8090/api/health
+# The same origin, behind the same `RequireCaller` gate the canary's review submit uses — which is
+# what makes it an honest rehearsal of the one question worth asking before a swap.
+WHOAMI=http://127.0.0.1:8090/api/whoami
 # Every network call is bounded. An ssh session that hangs on a stalled fetch holds a CI job open
 # until the job's own timeout, and the log then says nothing about which call stalled.
 NET_TIMEOUT=300
@@ -124,6 +127,55 @@ refresh() {
 if [ "$PULL" = 1 ]; then refresh; else echo "checkout: not refreshed (nopull)"; fi
 
 [ -x "$RELEASE" ] || die "$RELEASE is not executable — the repository committed it without the bit"
+
+# ── the canary's credential, BEFORE anything is fetched or swapped ─────────────────────────────
+#
+# The canary runs behind the binary swap, which is right: it proves the release that is now serving
+# can complete a real review. But its credential has nothing to do with the release, and checking it
+# there means an expired token costs a download, an unpack, a swap, a restart, a rollback — and
+# reports a version that "did not take effect", which is true and says nothing about the version.
+#
+# Measured on 2026-09-14: server-v0.6.0 was rolled back by three canary refusals in 350 ms, against
+# a release whose entire auth path was byte-identical to the one serving. The token at $TOKEN_FILE
+# is an ordinary session token and `Coai:SessionTtlDays` had passed. An hour went into proving the
+# release was innocent.
+#
+# So the question is asked here, where a `no` costs one second and touches nothing. `/api/whoami` is
+# behind the same `RequireCaller` gate as the review endpoint, so it answers exactly the question the
+# canary will be asking, and it spends nothing on a vendor to do it.
+#
+# LOOPBACK, not the public URL: this asks about the CREDENTIAL, and sending it through the edge would
+# fold DNS, TLS and nginx into the answer — the canary already covers that path afterwards. It is
+# also one fewer place the token travels.
+preflight_token() {
+    [ -r "$TOKEN_FILE" ] \
+      || die "the canary needs a session token at $TOKEN_FILE and there is none this key can read.
+  Mint one and: install -m 600 /dev/null $TOKEN_FILE && printf '%s' '<token>' > $TOKEN_FILE" 92
+
+    cfg=$(mktemp)
+    chmod 600 "$cfg"
+    # The token reaches curl through a 0600 config file and never through -H, which would publish it
+    # to every `ps` on the box — the rule deploy/README.md states and this file already keeps.
+    printf 'header = "Authorization: Bearer %s"\n' "$(tr -d '\r\n' < "$TOKEN_FILE")" >"$cfg"
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 15 -K "$cfg" "$WHOAMI" || echo 000)
+    rm -f "$cfg"
+
+    case "$code" in
+        200) echo "canary token: accepted by the server that is serving now" ;;
+        401) die "refused before touching the release: the canary's token at $TOKEN_FILE is not accepted (HTTP 401).
+  It is a SESSION token and they expire — Coai__SessionTtlDays, 7 by default. Nothing is wrong with
+  server-v\${VERSION:-<version>}; mint a fresh token and write it to $TOKEN_FILE, then deploy again." 92 ;;
+        403) die "refused before touching the release: the canary's token authenticated, but its email is
+  outside Coai__AllowedDomains (HTTP 403). That is the credential, not the release." 92 ;;
+        000) die "refused before touching the release: $WHOAMI did not answer at all. The server that is
+  serving now is not reachable on loopback — deploying over it would replace a box that is already
+  down, and the canary could not tell you either way." 92 ;;
+        *)   die "refused before touching the release: $WHOAMI answered HTTP $code, which is neither an
+  accepted token nor a refusal this script knows. Look at the unit's journal before deploying." 92 ;;
+    esac
+}
+
+preflight_token
 
 # ── deploy: the PUBLISHED artefact, never one handed to us ─────────────────────────────────────
 #

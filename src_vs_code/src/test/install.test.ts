@@ -1177,3 +1177,42 @@ test('a non-JSON body does not take the deploy down before it can be reported', 
     'the id read tolerates a body that is not JSON, because that IS the interesting case',
   );
 });
+
+test('the canary credential is checked BEFORE anything is fetched, staged or swapped', () => {
+  // The canary runs behind the binary swap, which is right — it proves the release now serving can
+  // complete a real review. Its CREDENTIAL has nothing to do with the release, and asking there cost
+  // a download, an unpack, a swap, a restart and a rollback on 2026-09-14, for a token that had
+  // simply expired. Asked here, a no costs one second and touches nothing.
+  const wrapper = deployScript('coai-deploy-cmd.sh');
+
+  // It asks the gate the canary will ask, rather than something merely adjacent to it.
+  assert.match(
+    wrapper,
+    /WHOAMI=http:\/\/127\.0\.0\.1:8090\/api\/whoami/,
+    'the same RequireCaller gate the review submit goes through',
+  );
+  const runs = wrapper.indexOf('\npreflight_token\n');
+  assert.ok(runs > 0, 'it is actually called, not merely defined');
+  assert.ok(
+    runs < wrapper.indexOf('fetch "$BASE/$ASSET"'),
+    'and it runs BEFORE the artefact is fetched — the whole point of moving the question here',
+  );
+
+  // The 401 has to clear the release BY NAME. A refusal that only says "unauthorized" sends the
+  // next reader back to the release, which is the hour this exists to save.
+  const preflight = /^preflight_token\(\)[\s\S]*?\n\}/m.exec(wrapper);
+  assert.ok(preflight, 'preflight_token exists');
+  assert.match(preflight[0], /401\)[\s\S]*?SESSION token and they expire/, 'it names the cause');
+  assert.match(preflight[0], /401\)[\s\S]*?Nothing is wrong with/, 'and clears the release');
+  assert.match(preflight[0], /403\)[\s\S]*?AllowedDomains/, '403 is the domain, not the release');
+  assert.match(preflight[0], /000\)[\s\S]*?not reachable on loopback/, 'no answer is its own case');
+
+  // The token reaches curl through a 0600 config file, never `-H`: the rule this repository already
+  // keeps, and the one a new call site is most likely to break.
+  assert.match(preflight[0], /chmod 600 "\$cfg"/, 'the config file is owner-only');
+  assert.doesNotMatch(
+    preflight[0],
+    /-H ["']Authorization/,
+    'the token never reaches the process table',
+  );
+});
