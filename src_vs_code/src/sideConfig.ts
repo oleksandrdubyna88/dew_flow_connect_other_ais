@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
-import { settingRefusal } from './settingRefused';
+import { declaresSetting, settingRefusal, type SettingRefusal } from './settingRefused';
 import { sideConfigReader, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
 
@@ -51,6 +51,22 @@ export function readerFor(
  * without the words the person just typed. The roles page did that. Reporting is the CALLER's, which
  * is also the only place that knows whether the sentence belongs in a notification or in a banner
  * beside the box that still holds the text. {@link reportRefusal} is the notification half.</p>
+ *
+ * <p><b>That makes the rejection part of this function's contract, so here is every caller and what
+ * each does with it.</b> A gate reviewer asked for the enumeration rather than the intention, and was
+ * right to: an uncaught rejection out of a webview message handler is an unhandled rejection, which
+ * is silence again by another route.</p>
+ *
+ * <ul>
+ *   <li><b>`panelProvider.save`</b> — catches locally and reports. The panel has no banner, so the
+ *       surface is a notification, and it continues rather than throwing out of a click handler.</li>
+ *   <li><b>`rolesPanel.write`</b> — does NOT catch; it is called inside `settledWrites.apply`, whose
+ *       chain has a `.catch` that calls its `report`. The repaint is in a `.then` BEFORE that catch,
+ *       never a `finally`, so a rejected write skips the repaint — which is the whole repair.</li>
+ *   <li><b>`phrasesPanel.apply`</b> — the same, reporting into the page's banner instead.</li>
+ * </ul>
+ *
+ * <p>A fourth caller must pick one of those two shapes. There is no third.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,
@@ -71,6 +87,23 @@ export async function saveSetting(
 const RELOAD = 'Reload Window';
 
 /**
+ * Why a write was refused, judged against the manifest of the build that is actually running.
+ *
+ * <p>The ONE place that pairs the pure rule with the host fact it needs, so that no caller can reach
+ * the first without the second. `context.extension.packageJSON` is this build's own manifest — the
+ * question "does the extension running right now declare this key" is exactly what separates a window
+ * that has not caught up from a key this build never shipped, and only one of those is cured by
+ * reloading.</p>
+ */
+export function refusalFor(
+  context: vscode.ExtensionContext,
+  key: string,
+  error: unknown,
+): SettingRefusal {
+  return settingRefusal(key, error, declaresSetting(context.extension.packageJSON, key));
+}
+
+/**
  * A refused write, said to the person — with the action that fixes it when there is one.
  *
  * <p>The sentence itself is decided in `settingRefused.ts`, which is pure and tested. What is here
@@ -84,8 +117,13 @@ const RELOAD = 'Reload Window';
  * window is not a failure of theirs to interpret, it has a cure, and no caller's sentence can offer
  * the button. So the recognised case always wins, and `instead` covers the rest.</p>
  */
-export function reportRefusal(key: string, error: unknown, instead = ''): void {
-  const refusal = settingRefusal(key, error);
+export function reportRefusal(
+  context: vscode.ExtensionContext,
+  key: string,
+  error: unknown,
+  instead = '',
+): void {
+  const refusal = refusalFor(context, key, error);
   console.error(`[coai] coai.${key} was not saved`, error);
   if (!refusal.reloadCures) {
     void vscode.window.showErrorMessage(instead.length > 0 ? instead : refusal.text);

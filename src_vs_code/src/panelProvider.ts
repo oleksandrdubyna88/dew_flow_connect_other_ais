@@ -1461,7 +1461,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     try {
       await saveSetting(this.context, config, key, value);
     } catch (error: unknown) {
-      reportRefusal(key, error);
+      reportRefusal(this.context, key, error);
     }
   }
 

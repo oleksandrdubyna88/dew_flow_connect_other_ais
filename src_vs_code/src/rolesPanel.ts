@@ -223,7 +223,7 @@ const writes = settledWrites<RolesCommand>({
   // with an update cannot store a key it never registered — offers the reload instead of this page's
   // sentence, which would leave somebody with nothing to do about it. Every other failure keeps the
   // sentence: see the argument on `report` below about where an errno belongs.
-  report: (error) => { reportRefusal(KEY, error, 'ConnectOtherAIs could not save that change to your roles.'); },
+  report: (error) => { reportRefusal(side(), KEY, error, 'ConnectOtherAIs could not save that change to your roles.'); },
   fieldOf,
 });
 
