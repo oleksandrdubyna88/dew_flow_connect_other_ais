@@ -66,16 +66,22 @@ test('every live script builds its launch from the DEFAULT rather than by hand',
 test('the two scripts measure the SAME vendors, so a fourth adapter cannot be half-added', () => {
   // Two hand-kept lists drift, and the drift is silent in the worst direction: `test:fresh` would
   // exit 0 having quietly not measured the new adapter at all. (codex, the code round.)
+  // THE WHOLE DESCRIPTOR, not the label. Two scripts can both say `codex` while one of them builds a
+  // different row or hands it a different adapter, and a parity check on names alone would call that
+  // agreement — one script reporting a successful measurement for a configuration the other never
+  // ran. (codex, the second code round.)
   const vendorsIn = (name: string): readonly string[] =>
-    [...scriptText(name).matchAll(/^\s*\['(\w+)', row\(/gmu)].map((one) => one[1] ?? '').sort();
+    [...scriptText(name).matchAll(/^\s*\['\w+', row\([^)]*\), \w+Adapter\],$/gmu)]
+      .map((one) => one[0].trim())
+      .sort();
 
   const chat = vendorsIn('live-chat.mjs');
   assert.ok(chat.length >= 3, 'live-chat.mjs no longer declares its vendors in a shape this test can read');
   assert.deepEqual(
     vendorsIn('live-fresh.mjs'),
     chat,
-    'the two live scripts check different vendors: one of them would report success having never '
-    + 'asked the adapter the other one did',
+    'the two live scripts do not check the same vendors in the same way: one of them would report '
+    + 'success having never asked the adapter, or the row, the other one did',
   );
 });
 
