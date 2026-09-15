@@ -1980,21 +1980,36 @@ row with that id, **enabled or disabled**, lends its runtime, its model unless t
 endpoint and its CLI path — matched case-insensitively, because `ConsultationService` has always looked
 the row up with `OrdinalIgnoreCase` while `vendorsFrom` lower-cases ids; **(b)** else an id that is
 itself a consulting runtime is that runtime with nothing borrowed; **(c)** else the entry is
-UNAVAILABLE, preserved raw with a reason a person can act on. The vendor id is rewritten by no arm — it
-keys the vault entry and the ledger. It runs inside `consultSettingsFrom`, on every read, and writes
+UNAVAILABLE, preserved raw with a reason a person can act on. The vendor id is kept in (a) and
+canonicalised in (b), and the asymmetry is deliberate (A1's code round): in (a) the id names a ROW a
+person created — it keys their vault entry and the ledger, and a resolution that rewrote it would move
+a credential, so `Codex` stays `Codex`; in (b) the id names a RUNTIME, `codex` and `Codex` are the same
+one, and `vendorsFrom` lower-cases every row id — a `Claude` kept in its stored casing would have keyed
+a vault entry and a ledger line no reviewer row can ever share, so the matched runtime's own name is
+the id. Rule (c) rewrites nothing. It runs inside `consultSettingsFrom`, on every read, and writes
 nothing: a migration that waits for an edit never runs for the person who never edits the section,
 and the opening symptom — the shipped `codex → claude` dead with no `claude` reviewer row — was a panel
-nobody had touched. `ConsultSettings` therefore holds TWO maps. `byCaller`, resolved, is what the
-section draws and a consultation runs on; `stored`, unresolved, is what `isDefaultConsult`,
-`sameCallers` (all five fields) and `envBlock` compare against the shipped pairs — a pristine map
-resolved against customised reviewer rows differs from the shipped pairs in every field and is still
-exactly what the server runs with no key, so comparing the resolved side would have every untouched
-install writing `COAI_CONSULTANTS`. `panelServerDefaultsAgreement.test.ts` pins that from the reader's
-direction, because its older `envBlock(DEFAULTS)` assertion never passes through the reader and stayed
-green with the comparison on the wrong side. Until story B4 has measured a definition against an OLD
-server half, `envBlock` projects the STORED entry back to `{vendor, model}` through an explicitly
-temporary `legacyPair`, so the wire is byte-identical to before — a legacy `codex` entry whose row is
-on `gpt-5.6-luna` now READS as `gpt-5.6-luna` and still SENDS `""`.
+nobody had touched. `ConsultSettings` therefore holds TWO maps. `byCaller` holds the rule's ANSWERS —
+`ResolvedConsultant`, a definition or the `unavailable` result with its `why` — and is what the section
+draws and a consultation runs on; the first cut handed back the stored choice for an unavailable entry,
+which typed a resolved definition and an unresolved legacy entry identically and threw away the one
+sentence story C5 has to render (codex and gemini, independently, on the code round). `stored`,
+unresolved, is what `isDefaultConsult`, `sameCallers` and `envBlock` compare against the shipped pairs —
+a pristine map resolved against customised reviewer rows differs from the shipped pairs in every field
+and is still exactly what the server runs with no key, so comparing the resolved side would have every
+untouched install writing `COAI_CONSULTANTS`. `sameCallers` compares every field a choice has, and the
+field list is the keys of a `Record<keyof ConsultantChoice, true>` rather than a hand-written array: the
+array caught a field removed from the type and never one added, and a sixth consultant-owned field
+missing from it would have made two different choices compare equal and kept a changed setting off the
+wire. `DEFAULT_CONSULT.byCaller` is the shipped pairs resolved against no rows — by rule (b) a definition
+on the runtime each id names, borrowing nothing — which is also, pinned by a test, exactly what a fresh
+install reads, since the shipped `codex` reviewer row carries nothing a bare runtime would not.
+`panelServerDefaultsAgreement.test.ts` pins the default comparison from the reader's direction, because
+its older `envBlock(DEFAULTS)` assertion never passes through the reader and stayed green with the
+comparison on the wrong side. Until story B4 has measured a definition against an OLD server half,
+`envBlock` projects the STORED entry back to `{vendor, model}` through an explicitly temporary
+`legacyPair`, so the wire is byte-identical to before — a legacy `codex` entry whose row is on
+`gpt-5.6-luna` now READS as `gpt-5.6-luna` and still SENDS `""`.
 
 **A fourth `SettingWrite` kind arrived with it.** The four rows share two setting names and are told
 apart by `data-caller`, exactly as the round budgets are told apart by `data-role`; travelling in the

@@ -64,15 +64,18 @@ export interface ConsultantDefinition extends ConsultantChoice {
 
 export interface ConsultSettings {
   /**
-   * Caller kind → the consultant it gets, RESOLVED. Every kind in {@link CALLER_KINDS} is present.
+   * Caller kind → what its consultant RESOLVES to. Every kind in {@link CALLER_KINDS} is present.
    *
-   * <p>What the section draws and what a consultation will run on. After {@link consultSettingsFrom}
-   * an entry here carries `runtime: ''` only when it is UNAVAILABLE — a legacy reference that matched
-   * no reviewer row and names no consulting runtime — and then it is the stored entry itself,
-   * preserved. {@link DEFAULT_CONSULT} is the one value whose `byCaller` is unresolved: it is the
-   * shipped CONFIGURATION, a contract with the C#, and there are no rows to resolve it against.</p>
+   * <p>What the section draws and what a consultation will run on — the RESULT of
+   * {@link resolveConsultant}, never a look-alike choice. A definition carries its runtime; an
+   * UNAVAILABLE entry (a legacy reference that matched no reviewer row and names no consulting
+   * runtime) carries the stored vendor and model, raw, and the `why` a person can act on. The first
+   * cut of this map handed back the STORED choice for an unavailable entry, so a resolved definition
+   * and an unresolved legacy entry had one type and the reason was thrown away — `resolveAll` says
+   * what that cost. {@link DEFAULT_CONSULT}'s `byCaller` is the shipped pairs resolved against no
+   * rows; its docblock says what that means.</p>
    */
-  readonly byCaller: Readonly<Record<string, ConsultantChoice>>;
+  readonly byCaller: Readonly<Record<string, ResolvedConsultant>>;
   /**
    * Caller kind → the entry as STORED — trimmed, unresolved, the shipped pair where absent.
    *
@@ -96,6 +99,22 @@ export interface ConsultSettings {
   /** Whether the tool answers at all. Off is a named refusal, not a silent no-op. */
   readonly enabled: boolean;
 }
+
+/**
+ * The runtimes that can hold a consultation — the extension's copy of `ConsultantResolution.Consulting`.
+ *
+ * <p>A mirror, and a test asserts it against the C#. The alternative was asking the server, which
+ * cannot answer before it is installed — and this list decides what a picker OFFERS, which has to be
+ * drawable the first time the panel opens.</p>
+ *
+ * <p>Typed as runtimes rather than strings since {@link resolveConsultant} rule (b) resolves an id
+ * INTO one of them: a `find` over this list is then a `Runtime` with no cast standing in for a type.</p>
+ *
+ * <p>Declared ABOVE {@link DEFAULT_CONSULT}, and that is load-bearing: that constant resolves the
+ * shipped pairs through rule (b) while the module is loading, and a `const` read before its own line
+ * is a `ReferenceError`, not `undefined`.</p>
+ */
+export const CONSULTING_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'local'];
 
 /**
  * A different vendor for every caller, by default.
@@ -123,9 +142,20 @@ const SHIPPED_PAIRS: Readonly<Record<string, ConsultantChoice>> = {
   other: { vendor: 'codex', runtime: '', model: '', baseUrl: '', executablePath: '' },
 };
 
+/**
+ * The shipped configuration as a value: the four legacy pairs, and what they resolve to with no rows.
+ *
+ * <p>`byCaller` is not the pairs again. It holds {@link ResolvedConsultant}s, so it has to say what
+ * the shipped pairs MEAN — and with no reviewer row in hand every one of them means the same thing by
+ * rule (b): a definition on the runtime its id names, `codex` on the codex CLI and `claude` on the
+ * Claude CLI, borrowing no model, endpoint or path. That is truthful twice over. It is what
+ * `resolveAll` answers for these pairs against an empty list; and — pinned by a test — it is what a
+ * fresh install READS, because the shipped `codex` reviewer row carries no model, endpoint or path
+ * that a bare runtime would not. A tuned row changes a real read (rule (a) materialises its model),
+ * and this value never learns of it: it is the default, not the panel.</p>
+ */
 export const DEFAULT_CONSULT: ConsultSettings = {
-  // The same four pairs on both sides: nothing has been resolved, because nothing has been read.
-  byCaller: SHIPPED_PAIRS,
+  byCaller: resolveAll(SHIPPED_PAIRS, []),
   stored: SHIPPED_PAIRS,
   turns: 5,
   callsPerSession: 10,
@@ -194,8 +224,31 @@ export function isDefaultConsult(settings: ConsultSettings): boolean {
     && sameCallers(settings.stored, DEFAULT_CONSULT.stored);
 }
 
-/** Every field a choice has, so a comparison cannot forget one the type gained. */
-const CHOICE_FIELDS: readonly (keyof ConsultantChoice)[] = ['vendor', 'runtime', 'model', 'baseUrl', 'executablePath'];
+/**
+ * Every field a choice has, as a value the compiler holds level with the type in BOTH directions.
+ *
+ * <p>This used to be a hand-written `readonly (keyof ConsultantChoice)[]`, which catches a field
+ * REMOVED from the type — the name stops compiling — and never one ADDED: a sixth consultant-owned
+ * field, parsed by `entryFrom` and written by the panel but missing from the list, would have
+ * {@link sameCallers} call two choices that differ only in it equal, and `envBlock` would keep the
+ * changed setting off the wire with nothing saying so. A `Record<keyof ConsultantChoice, true>` must
+ * name every key or it does not compile, so the list below is the type's keys or nothing. (codex,
+ * A1's code round.)</p>
+ */
+const CHOICE_SHAPE: Readonly<Record<keyof ConsultantChoice, true>> = {
+  vendor: true, runtime: true, model: true, baseUrl: true, executablePath: true,
+};
+
+/**
+ * The keys of {@link CHOICE_SHAPE} as names. Typed by a predicate rather than a cast, because
+ * `Object.keys` is `string[]` by design — an object may hold more keys than its type admits — and a
+ * literal we wrote ourselves is the one case where that cannot happen.
+ */
+export const CHOICE_FIELDS: readonly (keyof ConsultantChoice)[] = Object.keys(CHOICE_SHAPE).filter(isChoiceField);
+
+function isChoiceField(name: string): name is keyof ConsultantChoice {
+  return name in CHOICE_SHAPE;
+}
 
 /**
  * Whether two caller maps hold the same choice for every caller kind — all five fields.
@@ -211,6 +264,15 @@ export function sameCallers(
   return CALLER_KINDS.every(({ id }) => sameChoice(one[id], other[id]));
 }
 
+/**
+ * One caller's choice against another, over every field in {@link CHOICE_FIELDS}.
+ *
+ * <p>Every field, because a definition that differs only in its endpoint or its CLI path is a
+ * different consultant. An ABSENT entry compares as all-empty rather than as "different": in
+ * `coai.consultants` a caller kind with no key and a caller kind whose vendor is blank both mean
+ * "no choice made" — `callers` reads either as the shipped pair — so a map that lacks a kind must
+ * equal one that holds that kind's empty choice, not differ from everything.</p>
+ */
 function sameChoice(one: ConsultantChoice | undefined, other: ConsultantChoice | undefined): boolean {
   return CHOICE_FIELDS.every((field) => (one?.[field] ?? '') === (other?.[field] ?? ''));
 }
@@ -246,8 +308,16 @@ export type ResolvedConsultant =
  * <p><b>Materialising is not permitting.</b> Rule (a) hands back whatever runtime the row is on,
  * `remote` included: whether that runtime may hold a consultation is {@link CONSULTING_RUNTIMES}'
  * question, asked where a consultation is offered or run — and a definition that names its runtime
- * is what lets that refusal name it too. The vendor id is rewritten by no arm: it keys the vault
- * entry and the ledger, and a resolution that changed it would move a person's credential.</p>
+ * is what lets that refusal name it too.</p>
+ *
+ * <p><b>The id is kept in (a) and canonicalised in (b), and the asymmetry is the point.</b> In (a)
+ * the id names a ROW a person created; it keys their vault entry and the usage ledger, and a
+ * resolution that rewrote it would move a credential — so `Codex` stays `Codex`. In (b) the id names
+ * a RUNTIME, and `codex` and `Codex` are the same one; meanwhile `vendorsFrom` lower-cases every row
+ * id, so a `Claude` kept in its stored casing would key a vault entry and a ledger line that no
+ * reviewer row can ever share, one letter away from every `claude` the rest of the panel can produce.
+ * The matched runtime's own name is the id. Rule (c) rewrites nothing: the entry is shown back to the
+ * person exactly as they stored it. (A1's code round.)</p>
  *
  * <p>Pure, and a fixed point: what it produces resolves to itself against the same rows, so the
  * reader's output can be resolved again — by a section holding no rows at all — and mean the same.</p>
@@ -278,9 +348,9 @@ function fromRow(choice: ConsultantChoice, row: Vendor): ResolvedConsultant {
   };
 }
 
-/** Rule (b): the runtime the id names, and nothing borrowed. */
+/** Rule (b): the runtime the id names — under that runtime's own name — and nothing borrowed. */
 function fromRuntime(choice: ConsultantChoice, runtime: Runtime): ResolvedConsultant {
-  return { kind: 'definition', vendor: choice.vendor, runtime, model: choice.model, baseUrl: '', executablePath: '' };
+  return { kind: 'definition', vendor: runtime, runtime, model: choice.model, baseUrl: '', executablePath: '' };
 }
 
 /** Rule (c): the entry exactly as it is, and what to do about it. */
@@ -348,45 +418,27 @@ export function consultableVendors(vendors: readonly Vendor[]): {
 }
 
 /**
- * The runtimes that can hold a consultation — the extension's copy of `ConsultantResolution.Consulting`.
+ * The stored map resolved against the reviewer rows — the RESULT for every caller kind, whole.
  *
- * <p>A mirror, and a test asserts it against the C#. The alternative was asking the server, which
- * cannot answer before it is installed — and this list decides what a picker OFFERS, which has to be
- * drawable the first time the panel opens.</p>
+ * <p>This is where an unavailable entry lives on. A definition is carried as itself; an entry the
+ * rule cannot place is carried as the `unavailable` result — vendor and model raw, and the `why` —
+ * rather than as the stored choice it came from. The first cut did the latter, and it cost the one
+ * sentence a person can act on: the section (story C5) renders that sentence, and with the reason
+ * discarded it would have had to re-run {@link resolveConsultant} against `stored` plus the rows to
+ * recover it — two roads to one decision, which is the defect this module's one-reader rule exists
+ * to prevent. So the map is typed by what the rule ANSWERED, and `kind` says which it was. (codex
+ * and gemini, independently, on A1's code round.)</p>
  *
- * <p>Typed as runtimes rather than strings since {@link resolveConsultant} rule (b) resolves an id
- * INTO one of them: a `find` over this list is then a `Runtime` with no cast standing in for a type.</p>
- */
-export const CONSULTING_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'local'];
-
-/**
- * The stored map resolved against the reviewer rows, as a map of choices again.
- *
- * <p>A definition is written out in full; an unavailable entry is the STORED one, untouched — so
- * after a read `runtime: ''` means exactly "unavailable", and resolving it again against the same
- * rows, or none, yields the same `unavailable` with the same reason.</p>
+ * <p>Also the value of {@link DEFAULT_CONSULT}'s `byCaller`, against no rows — which is why
+ * {@link CONSULTING_RUNTIMES} is declared above that constant in this file.</p>
  */
 function resolveAll(
   stored: Readonly<Record<string, ConsultantChoice>>,
   vendors: readonly Vendor[],
-): Record<string, ConsultantChoice> {
+): Record<string, ResolvedConsultant> {
   return Object.fromEntries(
-    CALLER_KINDS.map(({ id }): [string, ConsultantChoice] => [id, materialised(stored[id], vendors)]),
+    CALLER_KINDS.map(({ id }): [string, ResolvedConsultant] => [id, resolveConsultant(stored[id], vendors)]),
   );
-}
-
-function materialised(choice: ConsultantChoice, vendors: readonly Vendor[]): ConsultantChoice {
-  const resolved = resolveConsultant(choice, vendors);
-
-  return resolved.kind === 'definition'
-    ? {
-      vendor: resolved.vendor,
-      runtime: resolved.runtime,
-      model: resolved.model,
-      baseUrl: resolved.baseUrl,
-      executablePath: resolved.executablePath,
-    }
-    : choice;
 }
 
 /** The stored map, one entry per caller kind: what is written, trimmed — or the shipped pair. */

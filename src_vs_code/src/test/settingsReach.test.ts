@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CoaiSettings, DEFAULTS, envBlock } from '../settingsShape';
-import { ConsultantChoice } from '../consultSettings';
+import { ConsultantChoice, resolveConsultant } from '../consultSettings';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { selectedFor } from '../prompts';
@@ -45,7 +45,8 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   // `consult` is one setting holding five things — a caller map that differs, and four numbers.
   // The same map on both sides, as a value written as definitions and read back would carry it.
   consult: {
-    byCaller: CHANGED_CALLERS,
+    // As the reader would hand them back: a definition resolves to itself, against any rows or none.
+    byCaller: Object.fromEntries(Object.entries(CHANGED_CALLERS).map(([id, one]) => [id, resolveConsultant(one, [])])),
     stored: CHANGED_CALLERS,
     turns: 3,
     callsPerSession: 4,
