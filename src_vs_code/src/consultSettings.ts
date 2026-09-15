@@ -493,8 +493,22 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/**
+ * A stored runtime, recognised WITHOUT case and answered in the list's own spelling.
+ *
+ * <p>Both halves have to recognise a runtime the same way or they disagree about the same file. This
+ * read through a list of lower-case names exactly, so `"Codex"` was no runtime at all — the entry
+ * fell back to a legacy reference, resolved by its id, and the panel drew a consultant the SERVER
+ * then refused by name, because the server reads any non-empty runtime as a definition. Matching
+ * without case removes that; answering with the list's spelling means one name reaches the wire.
+ * (gemini and the local reviewer, independently, on B3's plan round.)</p>
+ *
+ * <p>A name this build has never heard of still reads as `''` — a legacy reference, resolved by id —
+ * and that residual difference from the server is deliberate: this is how an extension meets a
+ * runtime a NEWER one wrote, while the half that would LAUNCH it fails closed instead.</p>
+ */
 function runtimeOf(value: unknown): Runtime | '' {
-  const name = text(value);
+  const name = text(value).toLowerCase();
 
   return RUNTIMES.find((one) => one === name) ?? '';
 }

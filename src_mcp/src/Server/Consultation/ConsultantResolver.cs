@@ -120,10 +120,25 @@ public static class ConsultantResolver
             ? new ResolvedConsultant.Definition(AsProvider(defined))
             : Legacy(new ConsultantChoice(record.Vendor, record.Model), record.CallerKind, rows);
 
-    /// <summary>A definition is itself — once its runtime is one a consultant may run on. The check comes BEFORE the row exists.</summary>
+    /// <summary>
+    /// A definition is itself — once its runtime is one a consultant may run on. The check comes
+    /// BEFORE any row exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>Matched WITHOUT case, and the allowlist's own spelling is what the row then carries.
+    /// Both halves have to recognise a runtime the same way or they disagree about the same file: the
+    /// panel reads a stored runtime through a list of lower-case names, so a capital in
+    /// <c>"Codex"</c> made it resolve a consultant that this server then refused. Canonicalising here
+    /// also hands <c>RuntimeResolution.NameOf</c> and every adapter one spelling, whatever a person
+    /// typed. (gemini and the local reviewer, independently, on B3's plan round.)</para>
+    /// <para>A runtime this build has never heard of is still refused, and that residual difference is
+    /// deliberate: the panel reads an unknown NAME as an older entry and resolves it by id, which is
+    /// how an extension meets a runtime a NEWER one wrote, while this half fails closed — it is the
+    /// half that would launch it.</para>
+    /// </remarks>
     private static ResolvedConsultant Defined(ConsultantChoice choice, string callerKind) =>
-        ConsultantResolution.Consulting.Contains(choice.Runtime)
-            ? new ResolvedConsultant.Definition(AsProvider(choice))
+        ConsultantResolution.Consulting.FirstOrDefault(one => SameId(one, choice.Runtime)) is { } runtime
+            ? new ResolvedConsultant.Definition(AsProvider(choice with { Runtime = runtime }))
             : new ResolvedConsultant.Unavailable(ForeignRuntime(choice, callerKind));
 
     private static ResolvedConsultant Legacy(ConsultantChoice choice, string callerKind, IReadOnlyList<ProviderSettings> rows)

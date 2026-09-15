@@ -682,6 +682,16 @@ test('editing the model of an entry this build cannot place invents no runtime',
     'an unplaceable entry is shown back exactly as stored; guessing a runtime would send the tree somewhere nobody chose');
 });
 
+test('a stored runtime is recognised without case, so both halves read one file the same way', () => {
+  // The server treats any non-empty runtime as a definition and refuses one outside its allowlist.
+  // This side read the list exactly, so `Codex` was no runtime at all: the entry fell back to a
+  // legacy reference, resolved by its id, and the panel drew a consultant the server would refuse.
+  const read = consultSettingsFrom(reader({ consultants: { claude: { vendor: 'mine', runtime: 'Codex' } }, vendors: [] }));
+
+  assert.deepEqual(read.byCaller['claude'], resolvedDefinition('mine', 'codex'),
+    'recognised without case and answered in the list own spelling, so one name reaches the wire');
+});
+
 test('a new vendor leaves none of the old one\u0027s endpoint or CLI path behind', () => {
   const stored = {
     claude: {
