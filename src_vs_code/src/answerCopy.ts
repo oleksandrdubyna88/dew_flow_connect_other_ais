@@ -27,9 +27,15 @@ const GONE = 'That block is no longer part of this answer.';
  * to today, so the second cannot happen; it is guarded because a position outlives the text under it
  * and two reviewers said, correctly, that a caveat in a plan is not a guard.</p>
  *
- * <p>The signature is recomputed HERE, over the markdown this host holds, and compared with what the
- * page echoed. It is not a secret and not a defence against a forged message — a forged one can only
- * cause a refusal — it is a check that the button was drawn for the text now being read.</p>
+ * <p><b>What the signature covers, exactly: the WHOLE stored markdown of that message</b> — every
+ * byte of `messages[index].text` as it stands, not the selected block and not the block count.
+ * `signatureOf` is given the same string `renderAnswer` was given when it drew the control, and both
+ * sides call that one function. Signing the block alone would accept a control after a paragraph
+ * somewhere else in the answer changed, which is the promise this exists to keep rather than an edge
+ * of it. (codex, the plan round, asked for this to be stated rather than left to the implementation.)</p>
+ *
+ * <p>It is not a secret and not a defence against a forged message — a forged one can only cause a
+ * refusal — it is a check that the control was drawn for the text now being read.</p>
  */
 export function blockToCopy(markdown: string, block: number, signature: string): CopyDecision {
   if (signatureOf(markdown) !== signature) {

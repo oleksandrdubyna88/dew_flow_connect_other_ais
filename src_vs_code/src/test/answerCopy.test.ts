@@ -113,6 +113,29 @@ test('the control the page rendered for a block copies that block and no other',
   }
 });
 
+test('an answer the renderer stopped drawing into still resolves every control it DID draw', async () => {
+  // The host resolves by ordinal, so the two sides have to agree about a block that was never drawn.
+  // They cannot disagree — one walk assigns and records — and this is the seam-level proof of it on
+  // the shape that makes a re-lex wrong: nesting past the depth the renderer draws to, where the rest
+  // is emitted as escaped text and is not a block at all. (gemini, the plan round.)
+  const answer = [FENCE, 'the first one', FENCE, '', `${'> '.repeat(11)}too deep to draw`].join('\n');
+  const html = chatMessagesHtml([{ role: 'model', text: answer }]);
+  const drawn = controls(html);
+
+  // Every control the page drew resolves, and the LAST one resolves to something rather than to
+  // nothing — the shape a numbering that counted undrawn blocks would break first.
+  assert.ok(drawn.length > 1, 'the fixture drew too little to prove anything');
+  for (const control of drawn) {
+    const kit = ports();
+    // eslint-disable-next-line no-await-in-loop
+    await press(answer, control, kit.ports);
+    assert.equal(kit.wrote.length, 1, `the control for block ${control.block} resolved to nothing`);
+  }
+  const first = ports();
+  await press(answer, drawn[0]!, first.ports);
+  assert.deepEqual(first.wrote, ['the first one'], 'the first control copied the wrong text');
+});
+
 test('the control on a reply block says a reply prompt was copied', async () => {
   const answer = [`${FENCE}reply`, 'Send this onward.', FENCE].join('\n');
   const html = chatMessagesHtml([{ role: 'model', text: answer }]);
@@ -174,6 +197,81 @@ test('a clipboard that refuses the write says so, for a block and for a whole an
     assert.match(one, /could not be copied/, 'a refused copy did not say so');
     assert.doesNotMatch(one, /^Copied/, 'a refused copy printed the success sentence');
   }
+});
+
+test('a change ELSEWHERE in the answer refuses a control whose own block is untouched', async () => {
+  // The sharp form of the stale case: the block this control names is byte-identical, the block count
+  // is unchanged, and only a paragraph above it moved. The signature covers the WHOLE stored markdown
+  // precisely so that still refuses — a signature over the block alone would accept it. (codex.)
+  const before = ['Before.', '', FENCE, 'unchanged', FENCE].join('\n');
+  const html = chatMessagesHtml([{ role: 'model', text: before }]);
+  const control = controls(html)[0]!;
+  const after = ['Something else entirely.', '', FENCE, 'unchanged', FENCE].join('\n');
+
+  const kit = ports();
+  await textCopier(kit.ports).copy(() => blockToCopy(after, control.block, control.sig));
+
+  assert.deepEqual(kit.wrote, [], 'a control was obeyed although the answer around its block had changed');
+  assert.match(kit.said[0] ?? '', /no longer part of this answer/, 'the refusal said nothing useful');
+});
+
+test('a clipboard that never answers gives up rather than wedging every later press', async () => {
+  // A rejection is already handled; this is the one with no natural end — a permission prompt nobody
+  // answers, a host that forgets to resolve. Without a ceiling the chain behind it never runs and
+  // every later press does nothing, silently and for ever. (codex, the plan round.)
+  const answer = [FENCE, 'x', FENCE].join('\n');
+  const said: string[] = [];
+  const wrote: string[] = [];
+  let pressed = 0;
+  const wedged: CopyPorts = {
+    writeText: (text) => {
+      pressed += 1;
+
+      return pressed === 1
+        ? new Promise<void>(() => undefined)
+        : Promise.resolve(wrote.push(text)).then(() => undefined);
+    },
+    say: (message) => {
+      said.push(message);
+
+      return { dispose: () => undefined };
+    },
+  };
+  const copier = textCopier(wedged, 20);
+
+  const first = await copier.copy(() => blockToCopy(answer, 0, signatureOf(answer)));
+  const second = await copier.copy(() => blockToCopy(answer, 0, signatureOf(answer)));
+
+  assert.equal(first.copied, false, 'a write that never answered was reported as copied');
+  assert.match(said[0] ?? '', /could not be copied/, 'a wedged write said nothing to the person');
+  assert.equal(second.copied, true, 'the press after a wedged one never reached the clipboard');
+  assert.deepEqual(wrote, ['x'], 'the retry did not write');
+});
+
+test('a press after a refused one still reaches the clipboard', async () => {
+  // The queue is chained onto the previous press's FAILURE as well as its success; without that, a
+  // retry after a rejection would never run and both copy paths would be dead. (codex.)
+  const answer = [FENCE, 'x', FENCE].join('\n');
+  const wrote: string[] = [];
+  let attempts = 0;
+  const flaky: CopyPorts = {
+    writeText: (text) => {
+      attempts += 1;
+
+      return attempts === 1
+        ? Promise.reject(new Error('held by another program'))
+        : Promise.resolve(wrote.push(text)).then(() => undefined);
+    },
+    say: () => ({ dispose: () => undefined }),
+  };
+  const copier = textCopier(flaky);
+
+  const refused = await copier.copy(() => blockToCopy(answer, 0, signatureOf(answer)));
+  const retried = await copier.copy(() => blockToCopy(answer, 0, signatureOf(answer)));
+
+  assert.equal(refused.copied, false, 'a rejected write was reported as copied');
+  assert.equal(retried.copied, true, 'the retry after a rejection never reached the clipboard');
+  assert.deepEqual(wrote, ['x'], 'the retry wrote the wrong thing, or nothing');
 });
 
 test('two presses leave the clipboard holding the second one', async () => {

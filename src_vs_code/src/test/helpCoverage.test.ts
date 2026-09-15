@@ -38,6 +38,27 @@ test('every language’s chat article names the header button, not just the arti
   }
 });
 
+test('every language’s chat article names both copy controls and the reserved reply tag', () => {
+  // The same blind spot as the test above, on the change that introduced a SECOND copy control. Three
+  // English strings every language has to carry: the two labels, whose difference is the entire point
+  // of renaming one of them, and the fence tag, which is the only thing the extension recognises — a
+  // reader whose help omits it never learns how to make a model produce one, and the feature is
+  // invisible to them. (codex, the plan round.)
+  const article = HELP_ARTICLES.find((one) => one.id === 'chat-with-other-ai');
+  assert.ok(article !== undefined, 'the chat article has been renamed, and this test is now asserting nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const said = Object.values(bodyFor(article, language).body).join(' ');
+    for (const named of ['Copy answer', 'Copy block', 'Copy the reply prompt', '```reply']) {
+      assert.ok(
+        said.includes(named),
+        `the ${language} chat article never says “${named}”, so a reader of it cannot use the control `
+        + 'or cannot make a model produce the block it is for — stale rather than missing, which nothing else here can see',
+      );
+    }
+  }
+});
+
 interface Manifest {
   contributes: {
     commands: Array<{ command: string; title: string }>;

@@ -443,6 +443,13 @@ plan for this feature specified an end-to-end test that could not have been run,
 was found. The hook is now two delegations; `blockToCopy` and `answerToCopy` are pure and are what
 `answerCopy.test.ts` drives from the rendered markup all the way to a fake clipboard.
 
+**The signature covers the whole stored markdown of the message** — every byte of
+`messages[index].text`, never the selected block and never a count. A signature over the block alone
+would accept a control after a paragraph elsewhere in the answer changed, and the promise is that a
+control drawn for one answer is not obeyed against another. The write also has a ceiling: a clipboard
+that never SETTLES — a permission prompt nobody answers — would otherwise leave every later press
+queued behind it for ever, with nothing said.
+
 **Three refusals, one sentence between two of them.** An ordinal past the end and a signature that
 disagrees both say *That block is no longer part of this answer* — from the person's side they are
 one fact. A clipboard that rejects says so separately. All three go to the status bar through

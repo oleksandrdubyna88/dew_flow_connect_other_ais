@@ -217,6 +217,17 @@ test('a copy names a block by a position and the signature it was drawn with', (
     assert.deepStrictEqual(chatCommandOf({ ...whole, block }), { kind: 'ignore' },
       `block ${String(block)} was accepted`);
   }
+  // SAFE integers, not merely integers: 2^53 is an integer and is not safe, and a lookup with one is
+  // aliased rather than refused. The boundary itself on both sides. (codex, the plan round.)
+  assert.deepStrictEqual(chatCommandOf({ ...whole, block: Number.MAX_SAFE_INTEGER }),
+    { kind: 'copyBlock', index: 3, block: Number.MAX_SAFE_INTEGER, sig: '7-abc' },
+    'the largest safe position was refused');
+  for (const unsafe of [Number.MAX_SAFE_INTEGER + 1, Number.POSITIVE_INFINITY]) {
+    assert.deepStrictEqual(chatCommandOf({ ...whole, block: unsafe }), { kind: 'ignore' },
+      `an unsafe position ${String(unsafe)} was accepted`);
+    assert.deepStrictEqual(chatCommandOf({ ...whole, index: unsafe }), { kind: 'ignore' },
+      `an unsafe message index ${String(unsafe)} was accepted`);
+  }
   for (const sig of [undefined, '', 7, 'x'.repeat(65)]) {
     assert.deepStrictEqual(chatCommandOf({ ...whole, sig }), { kind: 'ignore' },
       `signature ${String(sig)} was accepted`);
