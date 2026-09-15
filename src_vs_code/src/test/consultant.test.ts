@@ -20,7 +20,14 @@ import {
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
-import { badEndpoint, consultantEndpointWrite, consultantRecordUpdate, endpointAnswer, endpointConflict, envBlock, settingWrite, settingsFrom } from '../settingsShape';
+import {
+  badEndpoint,
+  consultantEndpointWrite,
+  consultantRecordUpdate,
+  endpointAnswer,
+  endpointConflict,
+} from '../consultantWrite';
+import { envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
 import { VENDOR_PRESETS, Vendor, normaliseId, vendorsFrom } from '../vendors';
 
