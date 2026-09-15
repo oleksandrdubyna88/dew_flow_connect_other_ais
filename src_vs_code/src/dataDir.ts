@@ -378,8 +378,26 @@ export interface DataLocation {
  * <p>Here rather than in the renderer because it is a fact about the STORAGE, not about the page:
  * the day the server writes a new persistent directory, this is the list that has to grow, and a
  * sentence buried in a panel is not where anybody would look for it. (codex, code round.)</p>
+ *
+ * <p><b>It named four of these for a release, and the other twelve were lost in silence.</b> A copy
+ * that misses a file does not fail, so somebody following the panel's own instructions kept their
+ * rounds and lost their edited prompts, their whole spending history, the entire chat half of the
+ * product and the rounds still sitting in the database's write-ahead log. The list is now checked
+ * against `shared/data-inventory.json`, which a suite compares with every path either half composes
+ * under this directory — so the next persistent directory is a red test rather than a later
+ * audit.</p>
+ *
+ * <p>The two sidecars are not an implementation detail to be tidied away: the journal mode is WAL,
+ * so the transactions committed most recently live in `coai.db-wal` until a clean shutdown moves
+ * them, and a copy of the database alone loses exactly the newest rounds.</p>
  */
-export const DATA_TO_MOVE: readonly string[] = [DATABASE_FILE, 'sessions/', 'unparseable/', 'empty/'];
+export const DATA_TO_MOVE: readonly string[] = [
+  DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`,
+  'sessions/', 'unparseable/', 'empty/',
+  'prompts/', 'usage.jsonl',
+  'documents/', 'escalations/', 'consultations/', 'callers/',
+  'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
+];
 
 /**
  * What to leave behind, with the reason each one is a trap.
