@@ -516,7 +516,7 @@ function olderThanMarker(version: string): boolean {
 function listed(labels: readonly string[]): string {
   return labels.length <= 1
     ? labels.join('')
-    : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+    : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
 }
 
 /** The rows this feature may consult with, and the reason a row cannot. */
