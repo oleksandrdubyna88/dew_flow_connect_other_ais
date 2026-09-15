@@ -4,6 +4,8 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
+import { answerToCopy, blockToCopy } from './answerCopy';
+import { textCopier } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
 import { TurnSpend, spendLabel, spendSoFar } from './chatSpend';
 import {
@@ -2924,6 +2926,15 @@ function newConversation(
  * close, the day one of them changes.</p>
  */
 function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPanel>[2] {
+  // ONE copier for both controls on an answer, so the whole and the part cannot disagree about what
+  // happens when the clipboard refuses — and so two quick presses land in the order they were made.
+  // Everything it knows about `vscode` is these two functions; the decisions are in `answerCopy.ts`,
+  // where a test can reach them.
+  const answerCopier = textCopier({
+    writeText: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
+    say: (message, forMs) => vscode.window.setStatusBarMessage(message, forMs),
+  });
+
   return {
       onSend: (id, text) => {
         const found = panels.entryOf(id);
@@ -3189,11 +3200,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // The SOURCE, out of the thread the page was rendered from. A person copying an answer wants
         // the markdown they can paste into a plan or an issue, and that is the one thing selecting
         // the page cannot give them - a selection gives what the page shows.
-        const said = threads.get(id)?.messages[index];
-        if (said === undefined || said.role !== 'model') {
-          return;
-        }
-        void vscode.env.clipboard.writeText(said.text);
+        void answerCopier.copy(() => {
+          const said = threads.get(id)?.messages[index];
+
+          return said === undefined || said.role !== 'model'
+            ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+            : answerToCopy(said.text);
+        });
+      },
+      onCopyBlock: (id, index, block, sig) => {
+        // The SAME markdown the page was drawn from, walked by the SAME function that numbered the
+        // control. Nothing the page sent becomes text: it named a position and echoed a signature,
+        // and both are checked here against what this host holds.
+        void answerCopier.copy(() => {
+          const said = threads.get(id)?.messages[index];
+
+          return said === undefined || said.role !== 'model'
+            ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+            : blockToCopy(said.text, block, sig);
+        });
       },
   };
 }

@@ -201,6 +201,31 @@ test('a copy names an answer by an index that is really an index', () => {
   }
 });
 
+test('a copy names a block by a position and the signature it was drawn with', () => {
+  const whole = { type: 'command', command: 'copyBlock', index: 3, block: 2, sig: '7-abc' };
+  assert.deepStrictEqual(chatCommandOf(whole), { kind: 'copyBlock', index: 3, block: 2, sig: '7-abc' });
+  assert.deepStrictEqual(chatCommandOf({ ...whole, index: 0, block: 0 }),
+    { kind: 'copyBlock', index: 0, block: 0, sig: '7-abc' });
+
+  // ALL THREE or none. A half-read coordinate is not a smaller request, it is a different one, and
+  // `Number(undefined)` arriving as NaN is exactly how one would get through unnoticed.
+  for (const index of [-1, 1.5, '2', undefined, Number.NaN]) {
+    assert.deepStrictEqual(chatCommandOf({ ...whole, index }), { kind: 'ignore' },
+      `index ${String(index)} was accepted`);
+  }
+  for (const block of [-1, 1.5, '2', undefined, Number.NaN]) {
+    assert.deepStrictEqual(chatCommandOf({ ...whole, block }), { kind: 'ignore' },
+      `block ${String(block)} was accepted`);
+  }
+  for (const sig of [undefined, '', 7, 'x'.repeat(65)]) {
+    assert.deepStrictEqual(chatCommandOf({ ...whole, sig }), { kind: 'ignore' },
+      `signature ${String(sig)} was accepted`);
+  }
+  // At the cap, not past it — the boundary itself, since an off-by-one here refuses every press.
+  assert.deepStrictEqual(chatCommandOf({ ...whole, sig: 'x'.repeat(64) }),
+    { kind: 'copyBlock', index: 3, block: 2, sig: 'x'.repeat(64) }, 'a signature at the cap was refused');
+});
+
 
 test('a sibling folder that merely starts with the workspace root is not inside it', () => {
   // A string prefix is not containment. With a root of `/w/app`, the path `/w/app-secret/x` starts

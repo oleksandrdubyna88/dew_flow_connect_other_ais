@@ -428,6 +428,36 @@ Three details that had to be decided rather than discovered:
   cannot happen — but a position outlives the text under it, and a range check cannot see a rewrite
   that keeps the same number of blocks.
 
+**From the press to the clipboard.** The control posts a COORDINATE and a claim, never text:
+`{ command: 'copyBlock', index, block, sig }` through the one delegated listener on `#messages`,
+whose `closest(...)` selector gained `[data-block]`. `chatCommandOf` accepts it only whole — two safe
+non-negative integers and a non-empty signature under a 64-character cap — because a half-read
+coordinate is not a smaller request, it is a different one, and `Number(undefined)` is the `NaN` that
+would have got through. `ChatPanelHooks.onCopyBlock` carries it to the host, which resolves it
+against **its own stored markdown** through the same walk that drew the control. Nothing about the
+text crosses the boundary, so a page that lies can only be refused.
+
+**The decision lives in `answerCopy.ts`, not in the hook.** `conversationHooks` closes over `vscode`
+and nothing in this repository imports it, so a rule written there is a rule no test can reach — the
+plan for this feature specified an end-to-end test that could not have been run, and that is how it
+was found. The hook is now two delegations; `blockToCopy` and `answerToCopy` are pure and are what
+`answerCopy.test.ts` drives from the rendered markup all the way to a fake clipboard.
+
+**Three refusals, one sentence between two of them.** An ordinal past the end and a signature that
+disagrees both say *That block is no longer part of this answer* — from the person's side they are
+one fact. A clipboard that rejects says so separately. All three go to the status bar through
+`copyText.ts`, which is `phraseCopy.ts`'s own machinery **extracted** when this second caller arrived
+rather than copied: it already solved two things a fresh implementation would not have known to —
+writes are chained so two quick presses land in the order they were made, and one status line is
+disposed before the next is set. The whole-answer control went through it too, which fixed a silent
+failure it had carried since it shipped: it wrote with a bare `void` and no catch, so a refused
+clipboard told nobody.
+
+**And the words changed.** The message-level control now reads **Copy answer** rather than *Copy*.
+An answer ending in a block would otherwise show two adjacent buttons with the same word and
+different scopes — which is the confusion this feature began as, since the operator read the row
+under an answer as belonging to the block above it.
+
 `button` is now the twenty-sixth tag the renderer may emit, and the only one that is ours rather than
 the model's. Model text cannot become one — a raw html token is escaped and shown — and the shape of
 every emitted button is pinned by its own test, with a companion asserting that scan still finds one.

@@ -776,6 +776,27 @@ test('the shipped Carry-nothing-above button asks the host for the position it n
   );
 });
 
+test('the shipped block control asks the host for the block it names', () => {
+  // The third control to be reached through the ONE delegated listener on the transcript, and the
+  // selector at its top is where a new one is forgotten. `clickIn` resolves `closest` against the
+  // REAL selector precisely so that omission goes red here rather than shipping as a dead button.
+  const { posted, clickIn } = runPage();
+
+  clickIn('messages', { block: '2', at: '3', sig: '7-abc' });
+
+  const asked = posted.filter((message) => message['command'] === 'copyBlock');
+  assert.strictEqual(asked.length, 1, 'the shipped control did not ask the host for a block');
+  assert.strictEqual(asked[0]?.['block'], 2, 'the shipped control named a different block than it carries');
+  assert.strictEqual(asked[0]?.['index'], 3, 'the shipped control named a different message than it carries');
+  // The signature travels as the STRING the renderer wrote. Coerced to a number it would be NaN for
+  // every signature that is not all digits, and the host would refuse every press.
+  assert.strictEqual(asked[0]?.['sig'], '7-abc', 'the signature did not survive the press');
+
+  // And it carries no text: the host reads the block out of its own markdown, so a press is a
+  // coordinate and a claim, never a payload.
+  assert.strictEqual(asked[0]?.['text'], undefined, 'the shipped control sent text the host did not ask for');
+});
+
 test('the shipped Clear button empties the composer, and repaints it', () => {
   // The box draws its own text TRANSPARENT and a layer behind it does the drawing, so emptying the
   // value without repainting leaves the old words on screen over an empty box. A screenshot of a

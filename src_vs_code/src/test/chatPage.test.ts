@@ -1285,8 +1285,32 @@ test('every answer carries a way to copy the markdown it arrived as', () => {
   assert.match(html, /<button type="button" class="copy" data-copy="1"/, 'an answer cannot be copied');
   // TWICE on the one answer — above it and below it — because an answer can be a page and a half,
   // and the top of it is not where you are when you finish reading. Never on the person's message.
-  assert.strictEqual((html.match(/class="copy"/g) ?? []).length, 2, 'an answer lost one of its copy controls');
+  // Counted by the DATA ATTRIBUTE rather than by `class="copy"`: a block's own control carries
+  // `class="copy blockCopy"`, so the class count stayed right only while this fixture happened to
+  // contain no fenced block, and the next person to add one would have met a baffling failure.
+  assert.strictEqual((html.match(/data-copy="/g) ?? []).length, 2, 'an answer lost one of its copy controls');
   assert.strictEqual((html.match(/data-copy="0"/g) ?? []).length, 0, 'the person\'s own message got a copy control');
+});
+
+test('the controls on an answer say which scope each of them copies', () => {
+  // An answer ending in a block puts that block's control immediately above the message's own row.
+  // Two adjacent buttons both reading "Copy" is the confusion this feature began as — the operator
+  // read the row under an answer as belonging to the block above it. (gemini, the plan round.)
+  const answer = ['Here it is.', '', '```text', 'send this', '```'].join('\n');
+  const html = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: answer }]);
+  const labels = [...html.matchAll(/class="copy[^"]*"[^>]*>([^<]+)</g)].map((match) => match[1]);
+
+  assert.deepStrictEqual(labels, ['Copy answer', 'Copy block', 'Copy answer'],
+    'two controls with different scopes are not saying which is which');
+  assert.strictEqual(new Set(labels).size, 2, 'the labels do not distinguish the two scopes');
+});
+
+test('a block tagged reply names itself on the control under it', () => {
+  const answer = ['```reply', 'send this onward', '```'].join('\n');
+  const html = chatMessagesHtml([{ role: 'model', text: answer }]);
+
+  assert.match(html, /class="copy blockCopy"[^>]*>Copy the reply prompt</,
+    'the reserved tag did not reach the button that is its whole point');
 });
 
 test('the prose is the editor\'s foreground and has room to breathe', () => {
