@@ -240,3 +240,51 @@ Two facts about the grammars, both learned by running them:
   **not** include `export`, which belongs to the statement wrapping it. Left as the grammar has it:
   a vector is built per language and compared against its own, and `export` is not control flow, a
   synchronisation primitive, an await point or a runtime type.
+
+### The skeleton, and what a skeleton may contain (2026-09-15)
+
+`Normalising/RuntimeVocabulary.cs` is the anonymity guarantee, and it is a **whitelist**. "Remove
+everything that looks like a domain name" cannot be checked — that set is unbounded. "Keep nothing but
+these words" can: every word in a skeleton is a generated placeholder, a language keyword, or a member
+of this list, and anything else is a leak by definition. `Normalising/Skeleton.Leaks` is that check,
+pure and in the core so the collector and the ingest server run the same code rather than two
+descriptions of one rule.
+
+**The rule for what belongs in the vocabulary: it must ship with the language.** `ConcurrentDictionary`
+and `Promise` are facts about a runtime and carry the failure physics — a check-then-act race is
+`ContainsKey` followed by `Add`, and losing those two words loses the bug. `InvoiceService` is a fact
+about us. The list errs SMALL: a runtime name that is missing gets renamed, which costs signal and
+leaks nothing; a domain name wrongly added leaks everything.
+
+**The vocabulary protects a REFERENCE, never a DECLARATION.** `GetOrAdd` is a runtime name when
+something calls it on a concurrent dictionary and it is ours when it is the method being declared —
+you cannot declare a name the runtime owns. Without that distinction a method this repository happens
+to call `GetOrAdd`, `Add` or `Count` keeps its own name in the skeleton, which is a leak dressed as a
+runtime word.
+
+Two checks guard the same promise, and they fail differently. The collector holds the original and can
+assert the **blacklist** — no word of ours survived. The ingest server has never seen an original and
+can only assert the **whitelist**. The whitelist is weaker on paper and stronger in shape: it cannot be
+defeated by a name nobody thought to forbid.
+
+#### What the property test found
+
+`ZeroKnowledgeTests` runs both checks over this repository's own source — code nobody wrote with a
+normaliser in mind. It caught four real defects that fixtures had not:
+
+- **Declaration detection by substring.** A bare method — which is exactly what the collector extracts
+  — parses as `global_statement → local_function_statement`, a kind containing neither "declaration"
+  nor "definition". Its name went unrenamed.
+- **Char offsets, not bytes.** The binding reports positions in UTF-16 code units, not tree-sitter's
+  own UTF-8 bytes. Splicing bytes produced skeletons full of word fragments (`ng`, `ld`, `he`) — and
+  only on files containing an em dash, which is most of this repository's comments.
+- **A constructor does not parse alone.** Parsed standalone it yields a malformed tree whose parameters
+  carry no `name` field. The normaliser now reparses inside a wrapper type when the grammar reports an
+  error, and removes the wrapper afterwards.
+- **`implicit_parameter`.** A C# lambda written `f => f.Name` gives its parameter that node kind, which
+  contains no "identifier" — so it was skipped while the `f` in the body was renamed, and the skeleton
+  read `method_2(f => var_3.method_3)`.
+
+Each is now its own test. The class also carries a positive control — that the finder finds methods at
+all — because a property test iterating an empty list reports success, which is the failure mode such a
+test is least able to notice about itself.
