@@ -1163,7 +1163,12 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // Whether the failure on screen still has its question behind it. False while a turn runs, for
     // the reason the re-ask above is empty then: the composer is locked, and sending again something
     // that is still being answered is a second turn down a pipe that carries one.
-    canRetry: running || thread === undefined ? false : retryFrom(thread.messages) !== undefined,
+    //
+    // AND only when something actually failed. The builder already draws nothing without a failure,
+    // so this changes no pixel — but it keeps the invariant in one place instead of leaving it to
+    // emerge from two, which is what a later reader of the flag would trip over. (gemini, the plan
+    // round.)
+    canRetry: running || failure.length === 0 ? false : retryFrom(thread.messages) !== undefined,
     attached: thread?.attached ?? '',
     spend: spendLabel(spendSoFar(thread?.spend ?? [])),
   });
@@ -1809,6 +1814,13 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
  * an answer nobody wanted. A retry has no answer to drop: the turn produced none, which is why there
  * is a failure line to press the button in.</p>
  *
+ * <p><b>`at` is the transcript length the button was drawn for, and a press that does not match it is
+ * refused.</b> This message can land after the state it was made in has moved — a question fails, the
+ * person types another and sends it, and in the width of a frame before the push that clears the
+ * failure they press the button still sitting under it. Taking "the trailing question" as it stands
+ * then would retry a question nobody pressed for, which is the same hazard the stop command carries a
+ * turn number to avoid. (codex, the plan round.)</p>
+ *
  * <p><b>The question leaves the transcript first, and that is the whole trap.</b> `oneTurn` appends
  * the question before it sends, and its failing branch leaves it there — so re-asking without
  * removing it would print the same question twice, with the second copy carried into the next
@@ -1821,9 +1833,16 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
  * that decides what a failed turn carries, and two places deciding one thing is one place
  * disagreeing.</p>
  */
-async function oneRetry(entry: ChatEntry, thread: Thread): Promise<void> {
-  const again = retryFrom(thread.messages);
+async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Promise<void> {
+  const again = thread.messages.length === at ? retryFrom(thread.messages) : undefined;
   if (again === undefined) {
+    // REDRAWN, not merely declined. The page disabled the control the moment it was pressed, so a
+    // decline that pushed nothing would leave a dead button on screen for as long as the tab is
+    // open — the person having pressed the one thing offered to them and got a greyed-out control
+    // and silence. Pushing the state rebuilds the region from what is actually true now, which is
+    // either a live button or no button. (gemini, the plan round.)
+    show(entry, false, '');
+
     return;
   }
   thread.messages = thread.messages.slice(0, -1);
@@ -3092,11 +3111,11 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           void oneReask(entry, thread);
         }
       },
-      onRetry: (id) => {
+      onRetry: (id, at) => {
         const thread = threads.get(id);
         const entry = panels.entryOf(id);
         if (thread !== undefined && entry !== undefined) {
-          void oneRetry(entry, thread);
+          void oneRetry(entry, thread, at);
         }
       },
       onRestart: (id) => {

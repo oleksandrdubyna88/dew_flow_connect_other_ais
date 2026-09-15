@@ -90,8 +90,14 @@ export interface ChatPanelHooks {
   readonly onStop: (id: object, turn: number) => void;
   /** VS Code closed the tab — the registry must forget it and end its session. */
   readonly onClosed: (id: object) => void;
-  /** Send the question that failed again, unchanged, to the same model. */
-  readonly onRetry: (id: object) => void;
+  /**
+   * Send the question that failed again, unchanged, to the same model.
+   *
+   * <p>`at` is how long the transcript was when the button was drawn. The host refuses the press
+   * unless it still is — this message can land after the state it was made in has moved, exactly as
+   * a stop can, and then "the trailing question" is a different question.</p>
+   */
+  readonly onRetry: (id: object, at: number) => void;
   /** Start again with the same passage. */
   readonly onRestart: (id: object) => void;
   /** Ask the model that is chosen NOW the question the last answer was given to. */
@@ -358,7 +364,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'retry':
-      hooks.onRetry(id);
+      hooks.onRetry(id, command.at);
 
       return;
     case 'restart':
@@ -425,7 +431,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     cappedHtml: chatCappedHtml(state.capped),
     // THE SAME BUILDER the first render uses. This expression lived here and in `regionsOf`, and a
     // retry button added to one of them would have shipped on one of the two paths.
-    failureHtml: chatFailureHtml(state.failure, state.canRetry),
+    failureHtml: chatFailureHtml(state.failure, state.canRetry, state.messages.length),
     pickerHtml: chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId),
     // The ROWS as well as the picker. They were drawn once, when the page was built, so pressing a
     // prompt changed the words in the box and left every button looking exactly as it had — and a row

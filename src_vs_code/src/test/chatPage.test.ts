@@ -2553,8 +2553,8 @@ test('an error is shown where a person waiting for an answer is already looking'
 });
 
 test('a failure offers the one thing worth pressing, and only when there is something behind it', () => {
-  const offered = chatFailureHtml('the model returned an empty answer', true);
-  const bare = chatFailureHtml('the model returned an empty answer', false);
+  const offered = chatFailureHtml('the model returned an empty answer', true, 3);
+  const bare = chatFailureHtml('the model returned an empty answer', false, 3);
 
   assert.match(offered, /data-retry/, 'a failure with its question still behind it offers nothing to press');
   assert.match(offered, /Try again/, 'the control does not say what pressing it does');
@@ -2566,27 +2566,43 @@ test('a failure offers the one thing worth pressing, and only when there is some
   assert.doesNotMatch(bare, /data-retry/, 'a failure with nothing behind it offered a button anyway');
   assert.match(bare, /the model returned an empty answer/, 'a failure without a retry stopped being readable');
 
-  assert.strictEqual(chatFailureHtml('', true), '', 'an empty failure drew a box around nothing');
+  assert.match(offered, /data-retry="3"/, 'the control does not carry the state it was drawn for');
+  assert.strictEqual(chatFailureHtml('', true, 3), '', 'an empty failure drew a box around nothing');
 });
 
 /** A retry control as the page sees one: a click on the region, with the control as its target. */
-function pressRetry(page: RunningPage, control: { disabled: boolean }): void {
+function pressRetry(page: RunningPage, control: { dataset: { retry: string }; disabled: boolean }): void {
   page.fire('failure', 'click', { target: { closest: () => control } });
 }
 
 test('pressing Try again sends one retry, and cannot send a second', () => {
   const page = runChatPage({ failure: 'the model returned an empty answer', canRetry: true });
-  const control = { disabled: false };
+  const control = { dataset: { retry: '2' }, disabled: false };
 
   pressRetry(page, control);
   pressRetry(page, control);
 
   assert.deepStrictEqual(
     page.posted.filter((message) => message['command'] === 'retry'),
-    [{ type: 'command', command: 'retry' }],
+    [{ type: 'command', command: 'retry', at: 2 }],
     'a second press sent a second retry — two turns down a pipe that carries one',
   );
   assert.strictEqual(control.disabled, true, 'the control stayed pressable after being pressed');
+});
+
+test('the retry names the state it was drawn for, not one the page remembers', () => {
+  // Nothing in the script remembers a transcript length across a push: the number is in the markup,
+  // so a control on screen can only ever name the state it was rendered for. That is what lets the
+  // host refuse a press made against a conversation that has since moved.
+  const page = runChatPage({ failure: 'the model returned an empty answer', canRetry: true });
+
+  pressRetry(page, { dataset: { retry: '9' }, disabled: false });
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'retry'),
+    [{ type: 'command', command: 'retry', at: 9 }],
+    'the press carried a number the page invented rather than the one it was drawn with',
+  );
 });
 
 test('the retry control is still live after its region has been rewritten under it', () => {
@@ -2605,11 +2621,11 @@ test('the retry control is still live after its region has been rewritten under 
       + '<button type="button" class="retry" data-retry>Try again</button></div>',
   });
 
-  pressRetry(page, { disabled: false });
+  pressRetry(page, { dataset: { retry: '4' }, disabled: false });
 
   assert.deepStrictEqual(
     page.posted.filter((message) => message['command'] === 'retry'),
-    [{ type: 'command', command: 'retry' }],
+    [{ type: 'command', command: 'retry', at: 4 }],
     'the control went dead when its region was rewritten',
   );
 });

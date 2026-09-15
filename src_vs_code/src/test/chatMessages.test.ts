@@ -78,10 +78,22 @@ test('the two capped actions are read', () => {
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useLocal' }), { kind: 'useLocal' });
 });
 
-test('a retry is read, because a command this file does not know is silently nothing', () => {
+test('a retry is read, and refused unless it says which state it was pressed in', () => {
   // The whole reason this module is unit-tested: an unrecognised command is `ignore` by design, so a
   // button wired everywhere EXCEPT here ships green and does nothing when somebody presses it.
-  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'retry' }), { kind: 'retry' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'retry', at: 2 }), { kind: 'retry', at: 2 });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'retry', at: 0 }), { kind: 'retry', at: 0 });
+
+  // A press that cannot say which transcript it was made against is the wildcard the stop command
+  // refuses for the same reason: the host would have to interpret it against whatever is trailing
+  // now, which by then can be somebody's next question.
+  for (const at of [undefined, -1, 1.5, Number.NaN, '2']) {
+    assert.deepStrictEqual(
+      chatCommandOf({ type: 'command', command: 'retry', at }),
+      { kind: 'ignore' },
+      `a retry naming ${String(at)} was taken as a real one`,
+    );
+  }
 });
 
 test('a page that trapped an error tells the host what it was', () => {

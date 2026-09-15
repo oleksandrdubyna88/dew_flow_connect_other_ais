@@ -197,6 +197,32 @@ test('a stopped turn is written into the transcript before the conversation is c
   );
 });
 
+test('a retry leaves the carry exactly as the failure left it', () => {
+  // The failing branch of `oneTurn` deliberately does NOT clear `thread.carry` — its comment says so
+  // in as many words: "the retry — the same question, one keypress later". `oneRetry` is that
+  // keypress, so recomputing the carry there would make it the SECOND place deciding what a failed
+  // turn carries, and two places deciding one thing is one place disagreeing. (codex, the plan
+  // round: the promise had no targeted verification.)
+  //
+  // Structural, because nothing observable at this level tells "left alone" apart from "recomputed
+  // to the same value" — and pinned at BOTH ends so it cannot survive its own break: the function
+  // must still be found, and it must still derive its question from the transcript.
+  const text = read(join('src', 'chatCommand.ts'));
+  const retry = /async function oneRetry\([\s\S]*?\n\}/u.exec(text);
+
+  assert.ok(retry, 'oneRetry was renamed or removed, and this guard stopped guarding anything');
+  assert.match(
+    retry[0],
+    /retryFrom\(thread\.messages\)/u,
+    'the retry stopped deriving its question from the transcript, so this guard reads the wrong thing',
+  );
+  assert.doesNotMatch(
+    retry[0],
+    /thread\.carry\s*=/u,
+    'a retry recomputed the carry that the failure preserved for it',
+  );
+});
+
 /**
  * The third thing no unit test can see: a read that goes AROUND the one accessor.
  *

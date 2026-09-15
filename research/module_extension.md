@@ -1559,7 +1559,22 @@ the host: the gap between the post and the state coming back is exactly the widt
 sends and its failing branch leaves it there, so re-asking without removing it would print the same
 question twice and carry the duplicate into the next request. `thread.carry` is NOT recomputed: the
 failing branch preserves it deliberately, commented *the retry — the same question, one keypress
-later*, and `oneRetry` is that keypress.
+later*, and `oneRetry` is that keypress. A structural guard in `chatWiring.test.ts` holds that,
+because nothing observable tells *left alone* apart from *recomputed to the same value*.
+
+**The press carries the transcript length it was drawn for, and a press that does not match is
+refused.** The same shape the stop control uses for its turn number, and for the same reason: the
+message can land after the state it was made in has moved. A question fails, the person types another
+and sends it, and in the width of a frame before the push that clears the region they press the button
+still sitting under it — without the number the host would take *the trailing question* as it stands
+then and retry somebody's next question instead. `chatCommandOf` refuses a retry that names no whole,
+non-negative number, so there is no wildcard to fall back on.
+
+**A refused retry still redraws the region.** The page disables the control the moment it is pressed,
+so a decline that pushed nothing would leave a dead button on screen for the life of the tab — the
+person having pressed the one thing offered them and got a greyed-out control and silence. `oneRetry`
+pushes the state on the way out, which rebuilds the region from what is true now: either a live button
+or none.
 
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
