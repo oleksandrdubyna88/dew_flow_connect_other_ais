@@ -153,6 +153,20 @@ test('a status nobody taught the panel gets a space, not a guess', () => {
   assert.ok(!/[✓⟳…✗]/u.test(mark), `a glyph was invented for a word the panel has not seen: ${mark}`);
 });
 
+test('a status that happens to name a property of every object gets no mark', () => {
+  // `ReviewerState.status` is a free string the SERVER writes, and a plain object's lookup answers
+  // for names it inherited: MARKS['toString'] is a FUNCTION, not undefined. Without an own-key
+  // check the panel emits `mark-toString` and the function's source text into the row. Nothing
+  // sends these words today — which is exactly why it would have been found in a session file
+  // somebody had hand-edited rather than here. (codex, the code round.)
+  for (const inherited of ['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__']) {
+    const mark = statusMark(inherited);
+
+    assert.ok(!/mark-\w/.test(mark), `${inherited} was treated as a known status: ${mark}`);
+    assert.equal(mark, statusMark('thinking'), `${inherited} does not render as the ordinary unknown status`);
+  }
+});
+
 test('a mark is never asked to render a value that is not a status', () => {
   // A hand-edited or foreign session file reaches the renderer as-is; this panel has been blanked
   // once already by a status that was not a string.
@@ -189,7 +203,9 @@ test('each mark wears the colour its status means, from a theme variable', () =>
   }
 
   // Without a width the empty mark holds no column, and without a margin the glyph touches the word.
-  assert.match(css, /\.reviewer \.said \.mark \{[^}]*width: 1\.1em/, 'an unmarked row starts further left than a marked one');
+  // MIN-width rather than width: a glyph wider than 1.1em in somebody's font would be CLIPPED by a
+  // fixed one, and a clipped status mark is worse than a row that shifts. (uxdx, the code round.)
+  assert.match(css, /\.reviewer \.said \.mark \{[^}]*min-width: 1\.1em/, 'an unmarked row starts further left than a marked one');
   assert.match(css, /\.reviewer \.said \.mark \{[^}]*margin-right/, 'the glyph is flush against the first letter of the word');
 });
 

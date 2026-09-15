@@ -2100,11 +2100,20 @@ export function roundKey(round: RoundRecord & { branch: string }): string {
  * so none of them is a new font risk on a machine this has not been tried on.</p>
  */
 export function statusMark(status: string): string {
-  const glyph = MARKS[status];
+  // `Object.hasOwn`, not a truthiness check on the lookup: a plain object answers for every name it
+  // INHERITED, so `STATUS_MARKS['toString']` is a function rather than undefined, and the row came
+  // out carrying `mark-toString` and the words `function toString() { [native code] }`. The status
+  // is a free string the server writes; nothing sends that word today, which is precisely why it
+  // would have been found in somebody's hand-edited session file instead of here. (codex, the code
+  // round.)
+  if (!Object.hasOwn(STATUS_MARKS, status)) {
+    // Deliberately a quiet fallback rather than the fail-fast that coding-style.md asks of an
+    // unknown name. The vocabulary is the SERVER's — a newer one may write a word this build has
+    // never heard of — so refusing it would blank a panel over a reviewer that is working fine.
+    return '<span class="mark" aria-hidden="true"></span>';
+  }
 
-  return glyph === undefined
-    ? '<span class="mark" aria-hidden="true"></span>'
-    : `<span class="mark mark-${status}" aria-hidden="true">${glyph}</span>`;
+  return `<span class="mark mark-${status}" aria-hidden="true">${STATUS_MARKS[status]}</span>`;
 }
 
 /**
@@ -2113,7 +2122,7 @@ export function statusMark(status: string): string {
  * <p>Colour is never the only signal — the word is written beside the glyph in every case, which is
  * the same rule the role tones are held to.</p>
  */
-const MARKS: Readonly<Record<string, string>> = {
+const STATUS_MARKS: Readonly<Record<string, string>> = {
   done: '✓',
   running: '⟳',
   queued: '…',
@@ -2413,7 +2422,7 @@ const CSS = `
      there is no glyph — an unrecognised status gets an empty mark rather than nothing, so its words
      still start where every other row's words start. The margin is what keeps the glyph off the
      first letter; without it the line reads as one run. */
-  .reviewer .said .mark { display: inline-block; width: 1.1em; margin-right: 2px; }
+  .reviewer .said .mark { display: inline-block; min-width: 1.1em; vertical-align: baseline; margin-right: 2px; }
   .reviewer .said .mark-done { color: var(--vscode-charts-green); }
   /* Blue, not green, and not by accident: done is green because the operator named it, and two
      meanings on one colour in one column is the thing this change is against. Blue is also what the
