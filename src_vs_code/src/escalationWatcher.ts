@@ -24,18 +24,6 @@ export function alsoWatchDataDirectories(): readonly string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
-/**
- * A directory string as a `Uri`, however it was written.
- *
- * <p>`watchedDirs` round-trips this window's own directory through `toString()`, so what comes back
- * for it is already a URI and must be parsed rather than treated as a path — while what a person
- * typed into the setting is a filesystem path and must be treated as one. Getting that backwards
- * makes the window's own questions disappear, which is the one thing this class may never do.</p>
- */
-function asUri(dir: string, own: vscode.Uri): vscode.Uri {
-  return dir === own.toString() ? own : vscode.Uri.file(dir);
-}
-
 /** A thrown thing, as a sentence — the same shape `cliChatLaunch.ts` uses. */
 function asText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -114,8 +102,11 @@ export class EscalationWatcher {
     for (const watcher of this.watchers.splice(0)) {
       watcher.dispose();
     }
-    this.asked = watchedDirs(this.dataDir.toString(), alsoWatchDataDirectories(), process.platform);
-    this.watchedRoots = usableDirs(this.asked).map((dir) => asUri(dir, this.dataDir));
+    // FILESYSTEM PATHS on both sides. The own directory used to go in as a URI string while the
+    // setting's values are paths, so `dirKey` compared `file:///c%3A/...` with `C:\...` and the
+    // own directory named again in the setting was watched twice. (gemini and codex, the code round.)
+    this.asked = watchedDirs(this.dataDir.fsPath, alsoWatchDataDirectories(), process.platform);
+    this.watchedRoots = usableDirs(this.asked).map((dir) => vscode.Uri.file(dir));
 
     for (const root of this.watchedRoots) {
       // Each in its own try: a path that cannot be watched — a distribution that is not running, a
@@ -135,14 +126,16 @@ export class EscalationWatcher {
         // Watched by the poll alone from here. Nothing is lost but the immediacy.
       }
     }
-    this.disposables.push(new vscode.Disposable(() => {
-      for (const watcher of this.watchers.splice(0)) {
-        watcher.dispose();
-      }
-    }));
+    // NOT a disposable pushed per rebuild: `rebuild` runs on every change to the setting, and each
+    // run would add another teardown to a list nothing empties — a leak that grows with how often
+    // somebody edits their settings. `dispose()` drains `this.watchers` directly instead. (gemini,
+    // the code round, Blocking.)
   }
 
   dispose(): void {
+    for (const watcher of this.watchers.splice(0)) {
+      watcher.dispose();
+    }
     for (const d of this.disposables) {
       d.dispose();
     }
@@ -228,14 +221,36 @@ export class EscalationWatcher {
     // those two paths are is `answerPaths`, which is pure and tested — the directory comes from the
     // question, and the temp is beside the target because a rename across filesystems throws EXDEV.
     // Both were comments here until the plan round pointed out that a comment is not a guarantee.
-    const paths = answerPaths(escalation.id, this.dataDir.toString(), escalation.from);
-    const dir = vscode.Uri.parse(paths.dir);
-    const target = vscode.Uri.parse(paths.target);
-    const temp = vscode.Uri.parse(paths.temp);
+    const paths = answerPaths(escalation.id, this.dataDir.fsPath, escalation.from);
+    if (paths === undefined) {
+      // An id that is not a name cannot become a path. It arrived in a file this window did not
+      // write, and answering it would mean writing wherever that file asked us to.
+      void vscode.window.showErrorMessage(
+        `That question's id is not a name this window can write a file for: ${escalation.id}`,
+      );
+
+      return;
+    }
+    const dir = vscode.Uri.file(paths.dir);
+    const target = vscode.Uri.file(paths.target);
+    const temp = vscode.Uri.file(paths.temp);
     const bytes = new TextEncoder().encode(
       answerJson(escalation.id, text.trim(), new Date().toISOString(), decision),
     );
     try {
+      // FIRST WRITER WINS. Two windows can be told to watch each other, and then both show the same
+      // modal; the second one to be answered would otherwise overwrite a decision already given and
+      // acted on. Checked here, immediately before the write, rather than at discovery — the gap
+      // between the two is exactly where the other window answers. (codex and local, the plan round.)
+      const already = await this.answered(target);
+      if (already) {
+        void vscode.window.showInformationMessage(
+          'That question has already been answered — in another window, or by somebody else on this one.',
+        );
+        await this.refresh();
+
+        return;
+      }
       await vscode.workspace.fs.writeFile(temp, bytes);
       await vscode.workspace.fs.rename(temp, target, { overwrite: true });
     } catch (reason) {
@@ -262,12 +277,25 @@ export class EscalationWatcher {
    * </p>
    */
   private async readOpen(): Promise<Escalation[]> {
-    const found: Escalation[] = [];
-    for (const root of this.watchedRoots) {
-      found.push(...await this.readOpenIn(root));
-    }
+    // IN PARALLEL, and settled rather than awaited in turn. A disconnected share does not fail fast:
+    // it hangs until the operating system gives up, and read one after another that hang is this
+    // window's OWN questions waiting behind somebody else's unplugged NAS — on a five-second poll,
+    // for ever. Each directory's failures were already its own; this makes its latency its own too.
+    // (codex, the code round.)
+    const each = await Promise.allSettled(this.watchedRoots.map((root) => this.readOpenIn(root)));
 
-    return found;
+    return each.flatMap((one) => (one.status === 'fulfilled' ? one.value : []));
+  }
+
+  /** Whether an answer is already sitting there. A read that throws is "no answer", not a crash. */
+  private async answered(target: vscode.Uri): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(target);
+
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** The questions in ONE directory, tagged with where they came from. */
@@ -288,7 +316,7 @@ export class EscalationWatcher {
         const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
         // TAGGED with the directory it came from, so its answer goes back beside it rather than into
         // this window's own store, where the server that asked polls nowhere.
-        const escalation = parseEscalation(new TextDecoder().decode(bytes), root.toString());
+        const escalation = parseEscalation(new TextDecoder().decode(bytes), root.fsPath);
         if (escalation !== undefined) {
           found.push(escalation);
         }

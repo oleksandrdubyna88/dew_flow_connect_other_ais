@@ -1,6 +1,11 @@
 # PLAN — a question asked on one side is seen on the other
 
-> Status: **plan only, nothing implemented yet, 2026-09-15.** Scope: the escalation surface —
+> Status: **built, 2026-09-15, awaiting the one verification only the reporter's machine can give.**
+> The code, the setting, the panel, the help in five languages and the tests have all shipped on this
+> branch; what is NOT done is the last line of the Definition of Done — naming the WSL store in the
+> setting, asking a question from a WSL session and answering it from the Windows window. A test
+> proves the code; only that proves the bug is gone, and until it is run this plan stays in `todo/`.
+> Scope: the escalation surface —
 > `src_vs_code/src/escalationWatcher.ts`, `escalations.ts`, `dataDir.ts`, the panel's data section,
 > the manifest and the help.
 >

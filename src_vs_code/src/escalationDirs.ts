@@ -79,7 +79,9 @@ export function watchedDirs(own: string, extras: readonly string[], platform: No
     }
     // REFUSED, not normalised away: a path that cannot work on this host is a thing to correct, and
     // the person only learns it from the panel if it survives to be rendered there.
-    if (platform === 'win32' && asked.startsWith('/')) {
+    // `//server/share` is a UNC path written with forward slashes and is perfectly reachable from
+    // Windows; only a SINGLE leading slash is the POSIX shape that resolves to C:\… here.
+    if (platform === 'win32' && asked.startsWith('/') && !asked.startsWith('//')) {
       out.push({ asked, path: '', refusal: POSIX_ON_WINDOWS });
       continue;
     }
@@ -127,7 +129,16 @@ export interface AnswerPaths {
  * <p>Paths are joined with a forward slash: every caller here is a `Uri`, where that is the
  * separator, and both Windows and POSIX accept it.</p>
  */
-export function answerPaths(id: string, own: string, from?: string): AnswerPaths {
+export function answerPaths(id: string, own: string, from?: string): AnswerPaths | undefined {
+  // THE ID IS NOT OURS. It is read out of a JSON file written by another process, and it is about to
+  // become part of a path this extension writes to — so `../../.ssh/authorized_keys` would be a
+  // question file asking to be answered somewhere else entirely. Ids this server mints are hex; the
+  // grammar below is that, widened only as far as a name can safely go. Refused rather than
+  // sanitised: a question whose id is not a name is not a question this window can answer, and
+  // quietly rewriting somebody's id would answer a different question. (codex, the code round.)
+  if (!/^[A-Za-z0-9._-]+$/.test(id) || id === '.' || id === '..') {
+    return undefined;
+  }
   const root = from === undefined || from.trim().length === 0 ? own : from;
   const dir = `${root.replace(/\/+$/, '')}/escalations`;
 

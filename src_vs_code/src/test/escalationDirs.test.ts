@@ -71,14 +71,14 @@ test('an answer is written beside the question it answers, not in this window’
   // answering, because nothing on either side says anything is wrong.
   const elsewhere = answerPaths('q1', 'file:///c:/Own', 'file:///c:/Wsl');
 
-  assert.strictEqual(elsewhere.dir, 'file:///c:/Wsl/escalations');
-  assert.strictEqual(elsewhere.target, 'file:///c:/Wsl/escalations/q1.answer.json');
+  assert.strictEqual(elsewhere?.dir, 'file:///c:/Wsl/escalations');
+  assert.strictEqual(elsewhere?.target, 'file:///c:/Wsl/escalations/q1.answer.json');
 
   // A question with no `from` is one of this window's own — every question there was before the
   // setting existed, and the behaviour that must not change.
   const own = answerPaths('q1', 'file:///c:/Own');
-  assert.strictEqual(own.target, 'file:///c:/Own/escalations/q1.answer.json');
-  assert.strictEqual(answerPaths('q1', 'file:///c:/Own', '   ').target, own.target, 'a blank from moved the answer');
+  assert.strictEqual(own?.target, 'file:///c:/Own/escalations/q1.answer.json');
+  assert.strictEqual(answerPaths('q1', 'file:///c:/Own', '   ')?.target, own?.target, 'a blank from moved the answer');
 });
 
 test('the temporary file is in the same directory as the answer — the EXDEV rule', () => {
@@ -87,6 +87,7 @@ test('the temporary file is in the same directory as the answer — the EXDEV ru
   // answer never lands. Asserted rather than commented. (gemini, the plan round, Blocking.)
   for (const from of [undefined, 'file:///c:/Wsl', '\\\\wsl.localhost\\Ubuntu\\home\\jinx']) {
     const paths = answerPaths('q1', 'file:///c:/Own', from);
+    assert.ok(paths, 'a plain id was refused');
     const dirOf = (path: string): string => path.slice(0, path.lastIndexOf('/'));
 
     assert.strictEqual(
@@ -96,6 +97,33 @@ test('the temporary file is in the same directory as the answer — the EXDEV ru
     );
     assert.strictEqual(paths.temp, `${paths.target}.tmp`, 'the temp is not the answer plus a suffix');
   }
+});
+
+test('an id that is not a name gets no answer path at all', () => {
+  // THE ID IS NOT OURS: it is read out of a JSON file another process wrote, and it is about to
+  // become part of a path this extension writes to. A question asking to be answered into
+  // `../../.ssh/` is one this window declines. Refused rather than sanitised — rewriting somebody's
+  // id would answer a different question. (codex, the code round.)
+  for (const id of ['../escape', '..', '.', 'a/b', 'a\\b', '', 'c:\\x', 'q 1']) {
+    assert.strictEqual(
+      answerPaths(id, 'C:\\Own'),
+      undefined,
+      `an id of ${JSON.stringify(id)} was turned into a path`,
+    );
+  }
+
+  // And the ids the server actually mints still work — a guard that refused everything would be a
+  // feature that never answers anything.
+  assert.ok(answerPaths('e1f7ed251598', 'C:\\Own'), 'a real question id was refused');
+  assert.ok(answerPaths('a-b_c.1', 'C:\\Own'), 'a name-shaped id was refused');
+});
+
+test('a UNC path written with forward slashes is not mistaken for a POSIX one', () => {
+  // `//server/share` is reachable from Windows; only a SINGLE leading slash is the shape that
+  // resolves to C:\… here and quietly watches nothing.
+  const dirs = watchedDirs('C:\\Own', ['//wsl.localhost/Ubuntu/home/jinx/.local/share/coai-mcp'], 'win32');
+
+  assert.strictEqual(dirs[1]?.refusal, '', 'a forward-slash UNC path was refused as if it were POSIX');
 });
 
 test('case is folded only where the platform folds it', () => {
