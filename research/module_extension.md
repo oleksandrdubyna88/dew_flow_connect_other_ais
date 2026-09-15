@@ -8,6 +8,48 @@
 > this file's own preference, and the reason is written there rather than left as a version bump
 > somebody finds later.
 
+### The catalogue is offered whole, and says "Claude Code" (2026-09-15)
+
+**Add a reviewer** hid its Claude entry two ways at once, and either alone reads as *the catalogue
+has no Claude Code* — which is how it was reported (issue #294).
+
+**The words were not in it.** The label was `Claude (a second one)` and `showQuickPick` was given
+only `{ title, placeHolder }`, so VS Code filtered on the **label** alone: typing *Claude Code*
+emptied the list. The product calls it Claude Code everywhere else — `consultSettings.ts`'s
+`CALLER_KINDS` is `{ id: 'claude', label: 'Claude Code' }` — so a person who read that in the
+Consultant section was searching for words this pick could not match. The label is now
+`Claude Code (a second one)`; the parenthetical and the hint stay, because the reviewer IS a second,
+separate `claude -p` process and not the session driving the gate, and that is the one thing the
+entry has to say. The options object now carries `matchOnDetail` **and** `matchOnDescription`.
+
+**A preset already configured was dropped, silently.** `addVendor` filtered
+`VENDOR_PRESETS` by whether its id was already in `coai.vendors`, so an installation with a `claude`
+reviewer could not add a second one at all — one on haiku for cheap passes and one on opus for the
+hard rounds is a thing people want — and nothing said why the entry had gone. That is the same
+one-way door `VENDOR_PRESETS`' own docblock records for gemini: *a default that cannot be restored
+is a one-way door, and the operator walked through it.*
+
+The catalogue is now offered **whole**. Three pure functions in `vendors.ts` decide it, which is the
+point rather than a detail — the decision used to live in the `vscode`-bound host, where it could
+only be tested by reading the file as text:
+
+- `freeVendorId(base, taken)` — the preset's own id, or the next free `<id>-N`. **A blank base comes
+  back blank**, which is what keeps the blank preset falling into `askCustomEndpoint` instead of
+  being written under an id nobody chose.
+- `presetsOffered(presets, taken)` — every entry, each with the id it would take and whether it is a
+  second row.
+- `reviewerPickItems(offered)` — the rows, with the hint as `detail` and, for a second row only, a
+  `description` naming the id it will get.
+
+`addVendor` then builds the vendor as `{ ...picked.offered.preset, id: picked.offered.id }`. The
+Team-server branch and `saveVendor`'s duplicate refusal are untouched; the refusal is simply
+unreachable from this path now, and stays as the guard for every other one.
+
+**What the plan round caught, recorded because the shape is easy to repeat**: the first draft wrote
+`{ ...preset, id: offered.id }` where `offered` was the ARRAY. `offered.id` is `undefined`, which
+would have written a row with no id *and* skipped `askCustomEndpoint` for the blank preset — one
+line, two defects, neither visible in a passing pure test.
+
 ### What the code round did to the chat tab (2026-09-08)
 
 Twelve reviewers read epic 2 and found two real defects in it, both of the same family: something

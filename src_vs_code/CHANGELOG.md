@@ -1,5 +1,22 @@
 # Changelog
 
+## Extension 0.47.0 — 2026-09-15
+
+**Add a reviewer offers the whole catalogue, and the Claude entry is called Claude Code.** Two
+separate things used to hide it, and either one on its own reads as *this product has no Claude
+Code*.
+
+The entry was labelled `Claude (a second one)`, and the pick searched **names only** — so typing
+*Claude Code*, which is what the Consultant section calls it, emptied the list. It is now
+**Claude Code (a second one)**, and the filter box searches the description under each entry as
+well, so the words in the hint find it too.
+
+And a vendor you already had was dropped from the list without a word, which meant you could never
+add a **second** row of one — no `claude` on haiku for the cheap passes beside a `claude` on opus
+for the hard rounds. The catalogue is now offered whole: pick something you already have and it
+adds `claude-2`, with the entry saying up front what the new row will be called. Removing a
+reviewer is unchanged, and still refuses to remove your last one.
+
 ## Extension 0.46.0 — 2026-09-15
 
 **A question asked by a session in WSL now reaches the window you are sitting at.** When the gate needs

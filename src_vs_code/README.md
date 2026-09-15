@@ -222,7 +222,11 @@ Everything in the sidebar, most of it folded away because it is configured once:
 - **Reviewers** — add a vendor, remove one, switch one off, choose its model. Codex's models come
   from the CLI's own cache, so the list is what this machine can actually reach today; Gemini's and
   Claude's are curated, and the panel says which is which rather than passing curation off as
-  discovery. Any model can be typed in regardless.
+  discovery. Any model can be typed in regardless. **Add a reviewer** offers the whole catalogue
+  whether or not you already have one of each: pick a vendor you already have and it adds a second
+  row — `claude-2` beside `claude`, which is how you run one on haiku for the cheap passes and one
+  on opus for the hard rounds — and the entry tells you the name the new row will take. The filter
+  box searches what each entry SAYS, not only its name.
 - **Chat other AIs** — ask a second model about a passage without leaving VS Code, and find that
   conversation again afterwards.
 - **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
