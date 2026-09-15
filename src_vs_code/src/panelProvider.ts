@@ -124,6 +124,8 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { asText } from './asText';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
+import { alsoWatchDataDirectories } from './escalationWatcher';
+import { watchedDirs } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
@@ -2698,7 +2700,14 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
       }
     }
 
-    return whereData((path) => present.has(path));
+    // WITH the other installations' directories. `whereData` is pure and cannot read a setting, and
+    // the panel is the one surface where a mistyped path can be seen at all — a directory that cannot
+    // be read contributes no questions and throws nothing, which is the silence this feature exists
+    // to end, and would be the silence again one level up.
+    return {
+      ...whereData((path) => present.has(path)),
+      alsoWatched: watchedDirs(coaiDataDir(), alsoWatchDataDirectories(), process.platform),
+    };
   } catch (error) {
     return {
       directory: '',
@@ -2706,6 +2715,7 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
       ignoredSide: '',
       refusal: `This window could not work out where its data lives: ${asText(error)}`,
       notes: [],
+      alsoWatched: [],
       env: {},
       // Nothing resolved, so no layer answered. Naming one here would be this surface guessing about
       // the very question it has just failed to answer.

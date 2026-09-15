@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+**A question asked by a session in WSL now reaches the window you are sitting at.** When the gate needs
+a person, the server writes the question into the data folder of whichever installation is running that
+round — so a Claude Code session inside WSL wrote it where a Windows window was not looking, and the
+round blocked on a modal that never appeared while everything else behaved perfectly.
+
+Name the other folders in **`coai.alsoWatchDataDirectories`**. Questions from another installation then
+appear beside your own, and your answer is written back next to the question, where the server that
+asked is looking. Only the questions are shared — no database is opened across the boundary, and each
+installation keeps its own history exactly as before. From a Windows window a WSL folder has to be
+named the way Windows reaches it, `\\wsl.localhost\<distro>\home\<user>\.local\share\coai-mcp`; a path
+starting with `/` is refused and tells you so, rather than quietly watching a folder nobody chose.
+
+**Where this window keeps its data** lists the folders it is watching and says which it could not read,
+so a mistyped path is something you see rather than something you wait for.
+
 ## Extension 0.45.1 — 2026-09-15
 
 **Moving your data now takes the logs with it, and `rounds.md`.** Both were filed as things written

@@ -68,6 +68,7 @@ test('choosing a different data directory repaints the section that says so', ()
     ignoredSide: '',
     refusal: '',
     notes: [],
+    alsoWatched: [],
     env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },
     source: 'this side' as const,
   };

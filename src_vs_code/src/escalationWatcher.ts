@@ -7,7 +7,7 @@ import {
   shouldPrompt,
   statusBarText,
 } from './escalations';
-import { WatchedDir, usableDirs, watchedDirs } from './escalationDirs';
+import { WatchedDir, answerPaths, usableDirs, watchedDirs } from './escalationDirs';
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -18,7 +18,7 @@ export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
  * <p>Trimmed and emptied here and normalised in `escalationDirs.ts`, which is where the rules a test
  * can reach live. A value that is not a list of strings is no list at all rather than a guess.</p>
  */
-function alsoWatchDataDirectories(): readonly string[] {
+export function alsoWatchDataDirectories(): readonly string[] {
   const value: unknown = vscode.workspace.getConfiguration().get(ALSO_WATCH_SETTING);
 
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
@@ -224,18 +224,14 @@ export class EscalationWatcher {
     // installation — a Claude Code session inside WSL writing into the WSL store — and the server
     // that asked polls the directory it wrote in and nowhere else. An answer written here would
     // leave that round blocked for ever, having been answered.
-    const root = escalation.from === undefined || escalation.from.length === 0
-      ? this.dataDir
-      : vscode.Uri.parse(escalation.from);
-    // Atomic: the server polls this directory, and half a file must never resolve a question.
-    //
-    // The TEMP file is created in the SAME directory as the target, and that is not tidiness: a
-    // rename across two filesystems throws EXDEV, so a temp written here and renamed into a WSL or
-    // NAS directory would fail every single time and the answer would never land. (gemini, the plan
-    // round, Blocking.)
-    const dir = vscode.Uri.joinPath(root, 'escalations');
-    const target = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json`);
-    const temp = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json.tmp`);
+    // Atomic: the server polls this directory, and half a file must never resolve a question. WHERE
+    // those two paths are is `answerPaths`, which is pure and tested — the directory comes from the
+    // question, and the temp is beside the target because a rename across filesystems throws EXDEV.
+    // Both were comments here until the plan round pointed out that a comment is not a guarantee.
+    const paths = answerPaths(escalation.id, this.dataDir.toString(), escalation.from);
+    const dir = vscode.Uri.parse(paths.dir);
+    const target = vscode.Uri.parse(paths.target);
+    const temp = vscode.Uri.parse(paths.temp);
     const bytes = new TextEncoder().encode(
       answerJson(escalation.id, text.trim(), new Date().toISOString(), decision),
     );

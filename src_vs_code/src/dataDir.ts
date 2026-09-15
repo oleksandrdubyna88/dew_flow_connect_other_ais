@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import { WatchedDir } from './escalationDirs';
 
 /**
  * The server's own name for it (`RoundsDb.FileName`), and the file a person would move.
@@ -320,6 +321,7 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
       refusal: `COAI_DATA_SIDE='${chosen.side}' is not a usable directory name, so the server refuses to `
         + `start. A side may contain ${SIDE_GRAMMAR}.`,
       notes: [],
+      alsoWatched: [],
       env: {},
       source: chosen.source,
     };
@@ -339,6 +341,7 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
       ignoredSide: chosen.ignoredSide,
       refusal: '',
       notes: [],
+      alsoWatched: [],
       env: {},
       source: chosen.source,
     };
@@ -366,6 +369,8 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
     ignoredSide: '',
     refusal: '',
     notes,
+    // Filled by the PANEL, which is the half that can read the setting; this function is pure.
+    alsoWatched: [],
     // Built from the LAYER that named them — never taken back out of the rendered path. Five
     // reviewers reached the same conclusion by different routes: slicing a side name off the end of
     // a resolved directory is arithmetic that is wrong the moment a side maps to anything but
@@ -393,6 +398,16 @@ export interface DataLocation {
   readonly refusal: string;
   /** What a person should be told — a loose database, a directory that is not there yet. */
   readonly notes: readonly string[];
+  /**
+   * Every directory whose questions this window answers — its own first, then what was named.
+   *
+   * <p>On this surface because the failure it guards against is SILENCE: a named directory that
+   * cannot be read contributes no questions and throws nothing, which is indistinguishable from an
+   * installation that has asked nothing. That is the symptom `coai.alsoWatchDataDirectories` exists
+   * to end, and it would be the symptom again, one level up, if a mistyped path were nowhere on
+   * screen.</p>
+   */
+  readonly alsoWatched: readonly WatchedDir[];
   /**
    * What a client entry needs so its server reads the same directory this window does.
    *
