@@ -80,6 +80,47 @@ is the configuration the reporter actually has and the sibling-side version coul
 The cost is honest and stated: a manifest setting, and therefore a described setting in the help, in
 all five languages (`helpCoverage.test.ts`, `HELP_LANGUAGES`).
 
+### What the plan round added
+
+Eleven gating findings, and they turned a four-step plan into the list below. The two that would
+otherwise have shipped broken:
+
+**The temporary file must be created INSIDE the target directory.** The answer write is atomic —
+temp, then rename — and `rename` across two filesystems throws `EXDEV: cross-device link not
+permitted`. A temp written into this window's own directory and renamed into a WSL or NAS one fails
+every time, the answer never lands, and the round that asked blocks for ever. Today's code happens to
+be right (`escalationWatcher.ts:140-141` both join `dir`); the plan said only "answer into `from`",
+which an implementer could satisfy while moving the temp. It is now a constraint with a test.
+
+**A POSIX path pasted into a Windows window is silently nothing.** The reporter's WSL store is
+`/home/<user>/.local/share/coai-mcp`, and that is exactly the string they will paste. Resolved by a
+Windows extension host it becomes `C:\home\...`, which does not exist — and "an absent directory
+contributes nothing and throws nothing" then reproduces the original symptom with no feedback at all.
+**The extension does not guess a distribution.** A path beginning with `/` on `win32` is refused with
+a sentence naming the shape that works (`\\wsl.localhost\<distro>\home\...`), shown in the panel
+beside the directory. Guessing would mean inventing a distro name and watching a path nobody chose.
+
+**One bad directory must not take the others down.** Watch, poll and read failures are caught PER
+DIRECTORY; a directory that fails is disabled with its reason and every other one — this window's own
+above all — keeps working. An unhandled watcher error on a disconnected NAS taking out the local
+questions is the failure this plan would otherwise have introduced.
+
+**Answering can fail after the question was found.** A mount can go read-only or disappear between
+the modal opening and the answer being typed. The write is caught, the escalation is KEPT rather than
+marked answered, and the reason is shown — so a person can retry rather than watch a round block on
+an answer that never landed.
+
+**Two windows can be offered the same question.** If both installations watch each other, both modals
+appear. The answer is re-checked immediately before the write and the prompt is dismissed if one is
+already there: first writer wins, and the second is told rather than overwriting.
+
+**The list is canonicalised, not string-matched.** `C:\Data`, `c:\data\` and this window's own
+directory are one place; case, trailing separators and the own-directory case are normalised out
+before anything is watched twice.
+
+**The watcher follows the setting.** `onDidChangeConfiguration` tears the list down and rebuilds it,
+or the setting appears not to work until the window is reloaded.
+
 ### The three pieces
 
 **A question remembers where it came from.** `Escalation` gains `from`, the directory it was read out
@@ -121,8 +162,17 @@ message must name the real symptom.
 | 4 | `escalationWatcher` tests | answering it writes `<id>.answer.json` into THAT directory, not into this window's |
 | 5 | `escalationWatcher` tests | a question already answered beside itself is not offered again |
 | 6 | `escalationWatcher` tests | an extra directory that does not exist contributes nothing and throws nothing |
-| 7 | `escalationWatcher` tests | the same directory named twice is watched once |
+| 7 | `escalationWatcher` tests | the same directory named twice — and named as `C:\Data` and `c:\data\` — is watched once, and this window's own directory named as an extra is not watched twice |
 | 8 | `helpCoverage.test.ts` | passes — the new setting is described |
+| 9 | `dataDir.test.ts` | a path beginning with `/` on `win32` is refused with a sentence naming the `\\wsl.localhost\<distro>\…` shape, and no distribution is guessed |
+| 10 | `escalationWatcher` tests | the answer's TEMP file is written inside the target directory — the `EXDEV` regression, asserted on the path rather than on a mock |
+| 11 | `escalationWatcher` tests | a directory whose read throws keeps every other directory working, this window's own included, and is reported with its reason |
+| 12 | `escalationWatcher` tests | a write that fails KEEPS the escalation open and surfaces the reason rather than dropping it |
+| 13 | `escalationWatcher` tests | a question answered elsewhere between the modal opening and the write is not overwritten |
+| 14 | `escalationWatcher` tests | changing the setting re-reads the list without a window reload |
+| 15 | `escalationWatcher` tests | **with the setting unset**: a question in this window's own directory is found, answered and not offered twice — the byte-for-byte promise, asserted rather than assumed |
+| 16 | panel tests | valid, missing and unreadable extra directories are each rendered with their real status |
+| 17 | help tests | the new setting's description is present in all five languages and differs from the English in each — `bodyFor` cannot see a stale translation |
 
 ## Constraints
 
