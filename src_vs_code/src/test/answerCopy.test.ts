@@ -300,6 +300,87 @@ test('a write we stopped waiting for cannot undo the one that came after it', as
     'a write that landed late was left holding the clipboard over the newer one');
 });
 
+test('a corrective write is tracked too, and cannot put back what is already stale', async () => {
+  // The first fix, one level down. `reinstate` puts the newer text back after an abandoned write
+  // lands — but that corrective write is itself a write, and a press can land while IT is in flight.
+  // Then the correction settles last and restores text that is stale by two. (CodeRabbit, #273.)
+  const answer = [FENCE, 'first', FENCE, '', FENCE, 'second', FENCE, '', FENCE, 'third', FENCE].join('\n');
+  const sig = signatureOf(answer);
+  const started: string[] = [];
+  /** What the clipboard ended up holding, in the order it actually LANDED. */
+  const landed: string[] = [];
+  let releaseStalled: (() => void) | undefined;
+  let releaseCorrection: (() => void) | undefined;
+
+  const ports_: CopyPorts = {
+    writeText: (text) => {
+      started.push(text);
+      const call = started.length;
+      const land = (): void => { landed.push(text); };
+      if (call === 1) {
+        return new Promise<void>((resolve) => { releaseStalled = () => { land(); resolve(); }; });
+      }
+      if (call === 3) {
+        // The CORRECTIVE write, held open so a newer press can land underneath it.
+        return new Promise<void>((resolve) => { releaseCorrection = () => { land(); resolve(); }; });
+      }
+      land();
+
+      return Promise.resolve();
+    },
+    say: () => ({ dispose: () => undefined }),
+  };
+  const copier = textCopier(ports_, 20);
+
+  await copier.copy(() => blockToCopy(answer, 0, sig));   // stalls past the ceiling, abandoned
+  await copier.copy(() => blockToCopy(answer, 1, sig));   // 'second' lands
+  releaseStalled?.();                                      // the abandoned write lands -> correction starts
+  await new Promise((resolve) => { setTimeout(resolve, 10); });
+  await copier.copy(() => blockToCopy(answer, 2, sig));   // 'third' lands, while the correction is open
+  releaseCorrection?.();
+  await new Promise((resolve) => { setTimeout(resolve, 30); });
+
+  assert.equal(landed.at(-1), 'third',
+    'a corrective write landed last and put back text the person had already copied past');
+});
+
+test('a correction from one copier cannot land on top of what another copier just copied', async () => {
+  // TWO copiers, ONE clipboard — which is the real arrangement: the chat has its own and the panel's
+  // phrase list has another, and neither can see the other's presses. A correction belonging to the
+  // chat could therefore put an answer back over a phrase the person had just copied. What makes it
+  // answerable is that "the newest text anybody asked for" is one fact, not one per copier.
+  // (codex, the plan round.)
+  const answer = [FENCE, 'the answer', FENCE].join('\n');
+  /** The one clipboard both copiers write to, in the order writes actually LAND. */
+  const landed: string[] = [];
+  let releaseStalled: (() => void) | undefined;
+  let stalled = false;
+  const clipboard = (text: string): Promise<void> => {
+    if (!stalled) {
+      stalled = true;
+
+      return new Promise<void>((resolve) => {
+        releaseStalled = () => { landed.push(text); resolve(); };
+      });
+    }
+    landed.push(text);
+
+    return Promise.resolve();
+  };
+  const ports_ = (): CopyPorts => ({ writeText: clipboard, say: () => ({ dispose: () => undefined }) });
+
+  const chat = textCopier(ports_(), 20);
+  const panel = textCopier(ports_(), 20);
+
+  await chat.copy(() => blockToCopy(answer, 0, signatureOf(answer)));       // stalls, abandoned
+  await panel.copy(() => ({ kind: 'copy', text: 'a phrase', done: 'ok', failed: 'no' }));
+  releaseStalled?.();                                                       // the stalled write lands late
+  await new Promise((resolve) => { setTimeout(resolve, 30); });
+
+  assert.equal(landed.at(-1), 'a phrase',
+    'a correction from the chat put its answer back over the phrase the person had just copied');
+});
+
 test('a press after a refused one still reaches the clipboard', async () => {
   // The queue is chained onto the previous press's FAILURE as well as its success; without that, a
   // retry after a rejection would never run and both copy paths would be dead. (codex.)
