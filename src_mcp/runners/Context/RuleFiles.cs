@@ -26,6 +26,21 @@ public sealed record RuleBundle(IReadOnlyList<RuleFile> Files, IReadOnlyList<str
     /// </remarks>
     public IReadOnlyList<string> MissingMounts { get; init; } = [];
 
+    /// <summary>
+    /// The mount-relative names the mount CARRIES — <c>common/security.md</c>, not
+    /// <c>.agents/conventions/common/security.md</c> — whatever the order then did with them.
+    /// </summary>
+    /// <remarks>
+    /// So a caller can count how many of a stage tier the target actually carried. This gate reviews
+    /// OTHER repositories: one pinned to an older conventions revision carries only some of what a
+    /// tier names, and <see cref="RuleOrder.Staged"/> skips what it cannot find in silence — right for
+    /// one entry, dangerous for a stage, because a round that matched none of its rules otherwise
+    /// reads exactly like a round that matched all of them. Computed here because this is where the
+    /// mounts are known; deriving it from a path suffix outside would be the same mistake a code round
+    /// already caught in the tier matching itself.
+    /// </remarks>
+    public IReadOnlyList<string> FromMount { get; init; } = [];
+
     public bool HasRules => Files.Count > 0 || MissingMounts.Count > 0;
 
     /// <summary>
@@ -202,7 +217,15 @@ public static class RuleFiles
             used += text.Length;
         }
 
-        return new RuleBundle(kept, omitted, used) { MissingMounts = EmptyRuleMounts(repoPath, mounts, folders) };
+        return new RuleBundle(kept, omitted, used)
+        {
+            MissingMounts = EmptyRuleMounts(repoPath, mounts, folders),
+            FromMount = [.. folders
+                .Where(p => UnderAnyMount(p, mounts))
+                .Select(p => Candidate(p, mounts).WithinMount)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.Ordinal)],
+        };
     }
 
     /// <summary>

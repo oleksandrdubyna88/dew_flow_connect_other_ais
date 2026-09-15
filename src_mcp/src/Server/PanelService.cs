@@ -425,13 +425,25 @@ public sealed partial class PanelService
             NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
             (session, workingDir, _) =>
             {
-                // The same sentence the code stage writes, carrying the one number this stage has:
-                // a plan round has no diff and no rules. Said in the same shape on purpose — a
-                // person reading a round that answered nothing looks in one place, whichever stage
-                // it was. Raised on the code round, where this line existed only for code rounds.
+                // The rules a PLAN is judged against, from `repoPath` and never from `workingDir` —
+                // this stage runs `NeedsWorktree: false`, so its working directory is an empty
+                // scratch folder on purpose, and collecting from it would gather nothing while
+                // looking like it worked. `Collect` reads the WORKING TREE, which is the honest
+                // input at plan time: the plan under review describes work about to happen in it.
+                var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Plan));
+
+                // The same sentence the code stage writes, carrying this stage's own numbers. The
+                // tier COVERAGE is here because this gate reviews other repositories: a target on an
+                // older conventions pin may carry only some of the tier, and a round that matched
+                // none of it must not read like a round that matched all of it.
                 _log.Information(
-                    "context for review: plan {PlanBytes} bytes; no diff and no rules at this stage",
-                    System.Text.Encoding.UTF8.GetByteCount(planText));
+                    "context for review: plan {PlanBytes} bytes; rules {RulesBytes} bytes, "
+                    + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
+                    System.Text.Encoding.UTF8.GetByteCount(planText),
+                    rules.Bytes,
+                    TierMatched(rules, StageRules.Plan),
+                    StageRules.Plan.Length,
+                    rules.Omitted.Count);
 
                 // A plan round skips no role for a RULE's sake: it has one, and there is nothing for
                 // a rule file to decide about it. What BuildWork itself could not ask — a role
@@ -447,7 +459,7 @@ public sealed partial class PanelService
 
                 return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork(
-                        roles, workingDir, $"## The plan under review\n\n{planText}", round,
+                        roles, workingDir, RulesSection(rules) + $"## The plan under review\n\n{planText}", round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
@@ -825,21 +837,31 @@ public sealed partial class PanelService
                 NeedsWorktree: false, Stage: Stage.DocumentReview, ReadsCheckout: false,
                 (running, workingDir, _) =>
                 {
+                    // From `repoPath`, not `workingDir` — this stage is handed no checkout on
+                    // purpose, so its working directory is empty and collecting there would gather
+                    // nothing while looking like it worked.
+                    var rules = RuleFiles.Collect(repoPath, RuleOrder.Staged(StageRules.Document));
+
                     // The same sentence the other two stages write, carrying this one's own numbers.
                     _log.Information(
                         "context for review: document {Name} ({DocumentBytes} bytes, snapshot {Artifact}), "
-                        + "purpose {PurposeBytes} bytes; no diff and no rules at this stage",
+                        + "purpose {PurposeBytes} bytes; rules {RulesBytes} bytes, "
+                        + "{Matched} of {Tier} tier rule(s), {Omitted} omitted",
                         document.Name,
                         System.Text.Encoding.UTF8.GetByteCount(document.Text),
                         document.ArtifactId,
-                        System.Text.Encoding.UTF8.GetByteCount(purposeText));
+                        System.Text.Encoding.UTF8.GetByteCount(purposeText),
+                        rules.Bytes,
+                        TierMatched(rules, StageRules.Document),
+                        StageRules.Document.Length,
+                        rules.Omitted.Count);
 
                     var round = running.State.RoundsRunThisStage + 1;
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
 
                     return Task.FromResult(WithNothingSkippedByRule(
                         BuildWork(
-                            roles, workingDir, DocumentContext(purposeText, document), round,
+                            roles, workingDir, DocumentContext(purposeText, document, rules), round,
                             stage: Stage.DocumentReview, readsCheckout: false,
                             seed: StableSeed(running.State.SessionId, round))));
                 })
@@ -863,8 +885,14 @@ public sealed partial class PanelService
     /// own idea of what the document is for — which is exactly the judgement the purpose exists to
     /// replace.
     /// </remarks>
-    private static string DocumentContext(string purposeText, DocumentOutcome.Ready document) =>
+    /// <remarks>
+    /// The rules sit between the purpose and the document, where the code stage puts them: what a
+    /// thing is judged against comes before the thing under review, so one reader learns one shape
+    /// whichever stage they are looking at.
+    /// </remarks>
+    private static string DocumentContext(string purposeText, DocumentOutcome.Ready document, RuleBundle rules) =>
         $"## What this document is for\n\n{purposeText}\n\n"
+        + RulesSection(rules)
         + $"## The document under review — {document.Name}\n\n{document.Text}";
 
     /// <summary>
@@ -1644,6 +1672,18 @@ public sealed partial class PanelService
     /// Said out loud either way. A conventions reviewer handed nothing would judge against its own
     /// taste and report the result as compliance, which is the one answer this pass must not give.
     /// </remarks>
+    /// <summary>
+    /// How many of a stage tier's rules the target repository actually carries.
+    /// </summary>
+    /// <remarks>
+    /// A diagnostic, and a necessary one: this gate reviews OTHER repositories, and one pinned to an
+    /// older conventions revision carries only part of what a tier names. <see cref="RuleOrder.Staged"/>
+    /// skips what it cannot find in silence, so without this number a round judged against none of its
+    /// rules is indistinguishable in the log from a round judged against all of them.
+    /// </remarks>
+    private static int TierMatched(RuleBundle rules, IReadOnlyList<string> tier) =>
+        tier.Count(entry => rules.FromMount.Contains(entry, StringComparer.OrdinalIgnoreCase));
+
     private static string RulesSection(RuleBundle rules) =>
         rules.HasRules
             ? $"## The rules this project has written down\n\n{rules.Render()}\n"

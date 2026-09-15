@@ -442,4 +442,58 @@ public sealed class PanelServiceTests : IAsyncLifetime
             Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
         }
     }
+
+    /// <summary>
+    /// A family mount with one rule of the plan tier in it, and one rule that is not.
+    /// </summary>
+    private void WriteFamilyRules()
+    {
+        File.WriteAllText(Path.Combine(_repo, ".gitmodules"),
+            "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        var common = Directory.CreateDirectory(Path.Combine(_repo, ".agents", "conventions", "common")).FullName;
+        File.WriteAllText(Path.Combine(common, "reuse-first.md"), "Look before you build.");
+        File.WriteAllText(Path.Combine(common, "logging-serilog.md"), "Serilog, coloured, one file per run.");
+    }
+
+    /// <summary>The prompt a reviewer was actually handed, from the fake CLI's own recording.</summary>
+    /// <remarks>
+    /// NUL-joined argv with the stdin text last — asserted on the RECORDED launch rather than on the
+    /// context a test passed to <c>BuildWork</c>, because the question here is whether the STAGE
+    /// builds the rules into its context, and a test that hands the context in cannot answer it.
+    /// </remarks>
+    private static string RecordedPrompt(string record) =>
+        Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split('\0')[^1]).First();
+
+    /// <summary>
+    /// The plan gate is judged against the rules this project wrote down.
+    /// </summary>
+    /// <remarks>
+    /// Until this shipped the stage said so in its own log line — "no diff and no rules at this
+    /// stage" — so a plan reviewer held this repository's plan to its own taste, and a conventions
+    /// finding has nothing to quote.
+    /// </remarks>
+    [Fact]
+    public async Task APlanRound_IsGivenTheRulesItIsJudgedAgainst()
+    {
+        WriteFamilyRules();
+        var record = Directory.CreateTempSubdirectory("coai-plan-rules-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var prompt = RecordedPrompt(record);
+            prompt.Should().Contain("The rules this project has written down");
+            prompt.Should().Contain("Look before you build", "a rule of the plan tier");
+            prompt.Should().NotContain("one file per run",
+                "a logging recipe is not what a PLAN is judged against");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
 }
