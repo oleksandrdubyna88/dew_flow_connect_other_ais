@@ -180,8 +180,21 @@ export function answerBlocks(markdown: string): readonly AnswerBlock[]; // the h
 ```
 
 `reply` is recognised by lowercasing the language already computed at `renderAnswer.ts:182`; it
-changes the button's words to **Copy the reply prompt** and nothing else — the `<pre>` output stays
-byte-identical to a plain fence.
+changes the button's words to **Copy the reply prompt** and nothing else.
+
+> **"Nothing else" is compared against a TAGGED fence, not a plain one.** The plan first said the
+> `<pre>` output stays byte-identical to a plain fence, and that is false — measured on marked
+> 18.0.12: an untagged fence emits `<pre><code>`, while any tagged one emits
+> `<pre><code class="language-…">`. So `reply` and `text` must come out identical **but for the class
+> name**, and a companion assertion says so. Written down because the obvious way to make the
+> original claim true is to strip the class, which would change `<pre>` output for every tagged fence
+> in the product.
+
+**`at` is optional, not defaulted to `0`.** A row is drawn only when the renderer is told which
+message it is drawing. With a `0` default, the renderer alone would put live rows reading
+`data-at="0"` under every fence on the page before anything could act on them — a visible control
+that does nothing, which is the half-wired seam this build order exists to avoid. `renderAnswer(md)`
+with one argument therefore stays byte-identical to today.
 
 ### Three labels, because two of them used to be the same word
 
@@ -235,18 +248,47 @@ happens" the only possible reading. It costs one property on `ChatPanelHooks`.
 
 | Step | Where |
 |---|---|
-| parse + validate (both integers, safe, ≥ 0, else `ignore`) | `chatMessages.ts`, beside `copyAnswer` at `:335-341` |
+| parse + validate (both integers, safe, ≥ 0; `sig` a string under a length cap; else `ignore`) | `chatMessages.ts`, beside `copyAnswer` at `:335-341` |
 | hook | `ChatPanelHooks.onCopyBlock`, `chatPanel.ts` after `:111` |
 | dispatch | `chatPanel.ts` `handle`, after `:341` |
-| host | `chatCommand.ts` after `:3083` — `answerBlocks(said.text)[block]` → `clipboard.writeText` |
+| **the decision** | **a new `vscode`-free module with injected ports** — see below |
+| the wiring | `chatCommand.ts` `conversationHooks` (`:2819`): two one-line delegations |
+
+### The host decision cannot live in `chatCommand.ts`, and that is measured
+
+The plan first put the handler "in `chatCommand.ts` after `:3083`" and put the end-to-end seam test
+there too. That is not buildable: `onCopyAnswer` sits inside `conversationHooks(panels)`, a
+non-exported function closing over `import * as vscode`, and **no test in this repository imports
+`chatCommand.ts` or `chatPanel.ts`** — there is no `vscode` stub, and the existing wiring tests read
+those files as TEXT. The seam test as first written could not have been run at all.
+
+So the decision moves into its own module, `vscode`-free, with the clipboard write and the message
+injected — which is not an invention: **`phraseCopy.ts` is exactly this pattern**, and its own header
+records why, in those words: *"the interesting paths here are the ones that FAIL, and a rule living
+inside the panel host is a rule no test can reach."* `conversationHooks` then holds two one-line
+delegations, and the pure module IS the "real host handler" the seam test dispatches through.
+
+**And the shared half is extracted rather than copied.** `phraseCopier` already solves two problems
+this path has and the plan had not noticed: two presses start two asynchronous writes and *whichever
+resolves last is what the clipboard keeps*, so the writes are chained; and repeated confirmations
+would otherwise stack on the status bar, so one live line is disposed before the next is set.
+Re-implementing either beside it would be a second copier that drifts. The ports, the chaining and
+the one-line rule move into a small shared unit that `phraseCopier` composes and the block path
+composes — `phraseCopier`'s public shape is unchanged, so its own tests are untouched.
+
+**One consequence, stated because it is a change of mechanism from what the plan said above:**
+failures on this path are said the way `phraseCopy` says them — a transient **status-bar line** —
+rather than through `showWarningMessage`. Two mechanisms for one kind of failure is the thing to
+avoid, and the existing one has the precedent and the gentler interruption for a copy that did not
+land.
 
 The host re-derives the blocks from **its own stored markdown**, the same string the page was drawn
 from. Nothing about the text crosses the wire, so a retained or tampered webview cannot dictate what
 is copied — `renderAnswer.ts:23` already says the page is a surface and the host is the boundary.
 
-**Every failure on this path is said out loud, and the mechanism is named.** All three go through
-`vscode.window.showWarningMessage`, which is what `onPageError` already uses (`chatCommand.ts`), so
-there is no new notification channel:
+**Every failure on this path is said out loud, and the mechanism is named.** All three go to the
+**status bar**, through the injected `say` port — the mechanism `phraseCopy.ts` already uses for a
+copy that did not land, so this adds no second channel for one kind of failure:
 
 | What went wrong | What the person sees |
 |---|---|
@@ -272,35 +314,42 @@ the exact shape above, asserted by attribute, so a button with any other attribu
 
 Each step compiles and is testable on its own.
 
-Three epics, two stories each. Every story ends the way the gate's standing orders require: its own
-`review_code` round, every finding resolved, the tests and the documentation updated, and a commit.
+**Two epics, one story each**, decided on Fable per the gate's standing order. Every story ends the
+way those orders require: its own `review_code` round, every finding resolved, the tests and the
+documentation updated, and a commit.
+
+The order's own heuristic asked for 2–4 epics of 2–4 stories, and it says to say so when that is
+wrong for a plan. It is wrong here, for one structural reason: **every cut inside the chain leaves a
+visible control that does nothing.** `ChatPanelHooks.onCopyBlock` is a required interface member, so
+a story adding the hook without the handler cannot typecheck without a stub; a story adding the page
+branch without the parser leaves a button posting a message the host drops. The only seam with no
+inert half in it is between the renderer and everything that acts on it — which is exactly one
+boundary, and therefore two stories.
 
 **Epic 1 — the enumerator, and what it draws** (`renderAnswer.ts` alone)
 
-1. **1.1 — `walk`, `AnswerBlock`, `answerBlocks`, the rows and the three labels.** `at` defaults to
-   `0`, so no caller changes and nothing else compiles differently. Tests: the first block is `0`, a
-   fence and a quote each get a row, a nested fence gets one, a fence past `MAX_DEPTH` gets none and
-   consumes no ordinal, `reply` changes only the words, and `button` joins the allowlist with the
-   exact-shape assertion behind it.
-2. **1.2 — the signature.** One function, `data-sig` on every row, and the tests that a rewrite of
-   the same block count produces a different signature.
+**Story 1.1 — one walk, two exports, the rows, the signature.** True when done: `renderAnswer(md, at)`
+draws a copy row under every fence and blockquote it actually emits, numbered `blocks.length - 1`
+after the append by the same walk `answerBlocks(md)` returns; every row carries
+`data-block`/`data-at`/`data-sig` in the exact shape; a `reply` fence's row reads *Copy the reply
+prompt* and every other *Copy block*; **`renderAnswer(md)` with one argument is byte-identical to
+today's output**, so nothing is visible on the page yet and no control is inert; the catch path
+returns the escaped paragraph and an empty list; `button` joins the allowlist behind the exact-shape
+assertion and its known-instance companion. Docs: the tag list in the module header
+(`renderAnswer.ts:29-31`) and a dated section in `research/module_extension.md`.
 
-**Epic 2 — the wire** (page → host)
+**Epic 2 — the control, from the page to the clipboard**
 
-3. **2.1 — the page.** `chatPage.ts:357` passes the message index; the `.blockRow` CSS rule; the
-   `closest(...)` selector at `:1478` and the fourth branch. Proven through `bundledPage.test.ts`,
-   watched red by removing `[data-block]` from the selector.
-4. **2.2 — the parser, the hook, the dispatch.** `chatMessages.ts` validates the triple;
-   `chatPanel.ts` gains `onCopyBlock` and its `case`. Pure, and red by deleting the `case`.
-
-**Epic 3 — the host, the sweep and the words**
-
-5. **3.1 — the host handler and every way it can fail.** `onCopyBlock` in `chatCommand.ts`: resolve,
-   check the signature, write, and warn on each of the three failures. The end-to-end seam test lives
-   here. **In the same story: the sweep** — `onCopyAnswer`'s silent `void` gains the same catch, and
-   the message-level control is renamed **Copy answer**.
-6. **3.2 — the words that are read.** The help in all five languages, `research/module_extension.md`,
-   and the `todo/README.md` row this plan already carries.
+**Story 2.1 — the page names the block, the host copies it, every failure is said, and the words are
+updated.** True when done: pressing a block's row on the *shipped bundle* posts `copyBlock` with the
+triple; `chatCommandOf` accepts only a well-formed one and answers `ignore` to everything else; the
+pure handler resolves the block from the host's own stored markdown, refuses on an out-of-range
+ordinal or a signature mismatch, and says so when the write rejects; `onCopyAnswer` goes through the
+same shared copier, so the whole-answer path stops failing silently; the message-level control reads
+*Copy answer*; `chatPage.test.ts:1287` counts `data-copy=` rather than `class="copy"`; the help in
+all five languages says what the `reply` tag is; `research/module_extension.md` records the wire and
+the three refusals. The end-to-end seam test lives here, because this is the first commit at which it
+can exist.
 
 ## Test plan
 
@@ -324,10 +373,23 @@ enumerator and nothing else: the hook could fail to forward, the dispatch could 
 write could never happen, and the suite would stay green while nothing was ever copied. Raised on the
 plan round by two vendors independently, which is what moved it from a unit test to this one.
 
-Watched RED first, three times: (a) emit `ordinal + 1` in the row — the `push`-returns-length trap,
-which must fail naming the wrong TEXT rather than a length; (b) make `answerBlocks` skip blockquotes;
-(c) delete the `case 'copyBlock'` from the dispatch in `chatPanel.ts` — the one that only this
-end-to-end shape can see.
+Watched RED first, twice: (a) emit `ordinal + 1` in the row — the `push`-returns-length trap, which
+must fail naming the wrong TEXT rather than a length; (b) make `answerBlocks` skip blockquotes.
+
+> **What this test cannot reach, said rather than pretended.** A third red case — deleting
+> `case 'copyBlock'` from `chatPanel.ts`'s dispatch — is not runnable: `handle` is unexported and no
+> test in this repository imports `chatPanel.ts`. What guards that wiring is the type system
+> (`onCopyBlock` is a required member of `ChatPanelHooks`, so an unimplemented one fails the
+> typecheck) plus a source-text assertion in the style the existing wiring tests already use. That is
+> a wiring check and not a behavioural one, which is why `PROJECT.md`'s refusal of new behavioural
+> source assertions does not cover it — and saying which of the two it is, is the point.
+
+**The ordinal of a quote that CONTAINS a fence is assigned on the way IN.** The quote's own row is
+emitted after `</blockquote>` — therefore after the inner fence's row — so the visual order of the
+rows and the order of the numbers are not the same, and the seam test's literal expectations depend
+on which it is. Measured on marked 18.0.12: such a quote's `text` is `"quoted\n```js\ninner()\n```"`,
+fence lines included, so the two controls overlap on purpose — the outer copies the quote whole, the
+inner copies just the code. The fixture pins both, and the help says it in one sentence.
 
 > **The first block is `0`.** Asserted on its own, because the whole `push`-returns-length defect
 > shows up as every button being one out, and a test that only compares texts pairwise can be fooled
@@ -340,7 +402,12 @@ The rest, each named by its guarantee, RED-first where marked:
   removing the tag check; a companion assertion pins the `<pre>` output byte-identical to a plain
   fence.
 - **RED** `a fence deeper than the renderer will draw gets no control, and does not shift the
-  ordinals after it`.
+  ordinals after it`. The fixture must genuinely cross depth 8 — a quote AT depth 8 is still drawn
+  and still gets a row, and a fixture that stops short passes without exercising the cut-off, which
+  is the hollow shape this repository has already been bitten by.
+- `model text cannot become a button, and the scan that says so still finds one` — the exact-shape
+  assertion gets its companion: a known good `<button>` the scan is proven to match, so it cannot
+  quietly start matching nothing after a reformat.
 - **RED** `the shipped page asks the host for the block it names` — in `bundledPage.test.ts` via
   `clickIn('messages', { block: '2', at: '3' })`, made red by removing `[data-block]` from the
   selector. It lives there and not beside `chatPage.test.ts:1325`, whose `closest` ignores the
@@ -425,6 +492,22 @@ module in one process, since `renderAnswer` runs in the extension host and the w
 markdown; that a "copy the block plus its context" control was needed — that is the whole-answer Copy
 that already exists twice; and that a fallback detector should find an untagged reply prompt — the
 measurement in this plan is the argument against exactly that.
+
+## What the split round changed
+
+The epic/story split was decided on Fable, per the gate's standing order, and it did not merely cut
+the plan up — it found four things wrong with it, each verified against the code before being taken:
+
+1. **The seam test as written could not run.** No test here imports `chatCommand.ts` or
+   `chatPanel.ts`, and there is no `vscode` stub. The decision moves to a ports module on the
+   `phraseCopy.ts` pattern, and the shared copier is extracted rather than copied.
+2. **`at = 0` would have shipped inert controls** at the end of story 1.1. `at` is optional instead.
+3. **"byte-identical to a plain fence" is false** — verified on marked 18.0.12: a tagged fence emits
+   `class="language-…"` and an untagged one does not, so the comparison is against `text`.
+4. **A quote containing a fence yields two overlapping controls**, and its `text` includes the fence
+   lines — so the ordinal's assignment order had to be decided rather than discovered by a test.
+
+Six stories became two, because every other cut leaves a control that does nothing.
 
 ## Definition of Done
 
