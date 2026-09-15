@@ -293,22 +293,42 @@ test('a turn that comes back with no words is a failure, not a model with nothin
   }
 });
 
-test('the empty-turn guard did not eat the answers that have words in them', () => {
+test('the empty-turn guard did not eat the answers that have words in them, or their whitespace rule', () => {
   // The guard is one `length > 0` away from swallowing every turn, and a seam that answers nothing
   // is indistinguishable from a vendor that is down. Both halves are asserted, or neither is.
-  const spoke: readonly { readonly name: string; readonly adapter: ChatAdapter; readonly line: string }[] = [
-    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS","response":"  it means this  "}}' },
-    { name: 'claude', adapter: claudeAdapter, line: '{"type":"result","subtype":"success","result":" the answer "}' },
-    { name: 'codex', adapter: codexAdapter, line: '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"BANANA"}}' },
+  //
+  // The EXACT text, not merely a positive length: the guard trims before it measures, so a version
+  // that stopped trimming would still see a non-empty string here and this test would stay green
+  // while padded answers reached the transcript. Every line below is deliberately padded.
+  // (codex and local, the code round, independently.)
+  const spoke: readonly { readonly name: string; readonly adapter: ChatAdapter; readonly line: string; readonly said: string }[] = [
+    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS","response":"  it means this  "}}', said: 'it means this' },
+    { name: 'claude', adapter: claudeAdapter, line: '{"type":"result","subtype":"success","result":" the answer "}', said: 'the answer' },
+    { name: 'codex', adapter: codexAdapter, line: '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"  BANANA\\n"}}', said: 'BANANA' },
   ];
 
-  for (const { name, adapter, line } of spoke) {
+  for (const { name, adapter, line, said } of spoke) {
     const event = adapter.classify(line);
 
     assert.strictEqual(event.kind, 'answer', `${name} lost a real answer to the empty-turn guard`);
-    assert.ok(
-      (event as { text: string }).text.length > 0,
-      `${name} answered with text the guard should have kept`,
-    );
+    assert.strictEqual((event as { text: string }).text, said, `${name} stopped trimming what it answers`);
   }
+});
+
+test('a turn that answered nothing still reports what it cost', () => {
+  // The expensive half of the same defect. A thinking-tier model can spend its whole budget
+  // reasoning and return an empty body, which is the turn a person hunting for waste is looking
+  // for - and the first version of this guard dropped its numbers on the way to calling it a
+  // failure, so the vendor billed it and the ledger recorded it as free. (gemini, the code round.)
+  const spent = agyAdapter.classify(JSON.stringify({
+    event: 'result',
+    result: { status: 'SUCCESS', usage: { input_tokens: 900, output_tokens: 120 } },
+  }));
+
+  assert.strictEqual(spent.kind, 'failure', 'an empty turn with usage on it is still an empty turn');
+  assert.deepStrictEqual(
+    (spent as { usage?: unknown }).usage,
+    { tokensIn: 900, tokensOut: 120, costUsd: null },
+    'the turn was billed by the vendor and reported as free',
+  );
 });

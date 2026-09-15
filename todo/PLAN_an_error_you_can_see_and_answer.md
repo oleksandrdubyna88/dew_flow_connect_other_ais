@@ -1,6 +1,7 @@
 # PLAN — an error you can see, and answer
 
-> Status: **plan only, nothing implemented yet.** Scope: the chat tab's failure surface —
+> Status: **partially implemented, 2026-09-15.** Story A (an empty turn is a failure) has shipped;
+> stories C and D are open. Scope: the chat tab's failure surface —
 > `src_vs_code/src/chatPage.ts`, `chatPanel.ts`, `chatMessages.ts`, `chatCommand.ts`, `agyAdapter.ts`,
 > `claudeAdapter.ts`, `codexAdapter.ts`.
 >
