@@ -162,7 +162,8 @@ No growth surface.
 
 ## Build order
 
-1. **RED** — the tests below, watched failing.
+1. **RED** — the tests below. *(What actually happened: they were written alongside the code and
+   went green first time; the RED was then obtained by reverting, twice, as deviation 4 records.)*
 2. `callerColour` and the `colour` field in `consultantView.ts`.
 3. The frame in `row()`, the palette at the call site, the CSS rule.
 4. **GREEN** — the same tests, then the whole suite.
@@ -197,7 +198,9 @@ rather than the markup (`consultantView.ts:6-12`) — which is exactly what a co
 ## Definition of Done
 
 - [x] The RED was observed by reverting the stripe and the wiring separately — "claude’s row carries no edge colour of its own", "codex is a different colour in Consultant than on its reviewer card". See deviation 4: this was done after the fact, not before.
-- [x] Four framed rows; `claude`/`codex`/`gemini` in their own colours, `other` neutral.
+- [x] Four framed rows; `claude`/`codex`/`gemini` in their own colours, `other` neutral — asserted
+      as declarations and inline values. **That the frame is VISIBLE is not proven**: there is no
+      layout engine in this suite. See *Checked, and not done*.
 - [x] The palette is built from the configured reviewer ids, and the cross-view equality is asserted over the RENDERED page, not only over the function.
 - [x] No control, hook or hint changed — hooks pinned per row, hints compared whole against an unframed render.
 - [x] Whole suite green: 2953 tests, 2952 pass, 1 skipped, 0 fail.
