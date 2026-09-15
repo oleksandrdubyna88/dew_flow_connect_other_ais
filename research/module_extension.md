@@ -2285,6 +2285,47 @@ picker offers — because that rule has one precondition nothing was checking: t
 must be the same value. The gate's own defaults diverged for a day once, and a new install read one
 number off the screen while another one ran.
 
+**The section picks from the CATALOGUE, and reads no reviewer row at all (2026-09-15, story C5).**
+`consultableVendors()` takes no arguments now. It offers `VENDOR_PRESETS` filtered by
+`CONSULTING_RUNTIMES`, under each preset's own label and hint — the same filter-and-map the chat's step 1
+performs over the same constant (`askWhichVendor`), so a vendor added to the product appears in both
+pickers without anybody remembering to. That is the operator's ruling of 2026-09-14 made true in the one
+place a person reads: one catalogue of what can be picked, three independent sets of settings. A Team
+server cannot be offered BY CONSTRUCTION — `remote` rows are not in `VENDOR_PRESETS` and the chat appends
+its servers separately — rather than by a filter somebody could forget. The retired `gemini` preset is
+NAMED underneath with its reason, because a vendor visible one section above and silently missing here is
+a person hunting for something in front of them. The blank-id preset is left out until story C6 gives it
+the flow that mints an id: an id keys the vault entry, and offering an entry that stores `''` would be one
+a person can see and cannot choose.
+
+**Each row carries the consultant's OWN endpoint and CLI path**, on the runtimes that have them — a base
+URL on `codex` and `local`, a CLI path on everything but `local` — each keyed by `data-caller`, which is
+what the write path routes on. The empty model option stopped saying *the row's own model* and says *the
+runtime's own default*, because there is no row to borrow from any more, and the words followed the fact.
+
+**`consultantRowView` is where the section's decisions live**, and the markup renders one. `.agents/PROJECT.md`
+refuses a new behavioural assertion over page source text, and the honest answer to that is not a cleverer
+regular expression but a decision that was never markup: the three row states (`offered`, `stranded`,
+`unavailable`), the options and which is selected, the model list, which fields the runtime has, and the
+hints are a value the tests assert directly. What genuinely needs the page — that a control writes for the
+caller whose row holds it, and that a repaint puts the caret back in that row rather than the first row
+sharing its name — is `consultantSectionScript.test.ts`, which RUNS the page's own script over the page's
+own markup. Dropping `data-caller` from the two new inputs turns three of its four tests red.
+
+**Two things the section now says rather than hides.** A `codex` consultant carrying a base URL — DeepSeek,
+OpenRouter, any custom endpoint — is refused BY THE SERVER (`ConsultantResolution` matches
+`"codex" when vendor.BaseUrl.Length == 0`, pinned by `ConsultantsTests`), so the row carries a hint saying
+it can be stored and cannot run in this build; teaching that runtime custom endpoints is a separate,
+measured change that file defers. And a sentence under the rows says these are the consultant's own
+settings — that a vendor shares its NAME, and so its vault key, with the reviewer row of that name, and
+nothing else.
+
+**Choosing a vendor stores the CATALOGUE entry.** `consultantRecordUpdate` consults the catalogue before
+resolving a bare id: picking `DeepSeek` stores its runtime and its endpoint, where before it stored a name
+that resolved to the unavailable state — an entry the section offered and could not keep. It also ends the
+last borrowing: picking an id that a reviewer row happens to share no longer lifts that row's model. A
+person who wants it picks it in the box beside the vendor, where they can see it.
+
 **A legacy entry resolves into a definition when it is READ (2026-09-14, story A1 of
 [PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)).**
 `ConsultantChoice` carries `runtime`, `baseUrl` and `executablePath` beside `vendor` and `model`, and
@@ -2543,7 +2584,7 @@ flowchart LR
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
 | `consultSettings.ts` | pure: the five consult settings, the shipped caller map (a mirror of `ConsultantRouting.Shipped`, legacy-shaped), `resolveConsultant` — the one rule that turns a legacy entry into a definition on read, or names it unavailable — and which vendor rows may consult and why one may not |
-| `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box |
+| `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box. Its decisions are `consultantRowView`, a VALUE: which options the picker offers, which is selected, whether the entry is `offered`/`stranded`/`unavailable`, which of the consultant's own fields the runtime even has, and what to say beside the row. The markup only renders one, so the section is tested without parsing HTML |
 | `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
 | `consultations.ts` | pure: one consultation record, and the card the sidebar draws while it runs |
 | `consultationWatcher.ts` | the impure half: the glob + 5 s poll over `consultations/*.json`, silent unless something a person would SEE changed |

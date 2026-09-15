@@ -12,7 +12,7 @@
 
 import { compareVersions } from './coaiInstall';
 import { Runtime, RUNTIMES } from './models';
-import { Vendor, vendorsFrom } from './vendors';
+import { VENDOR_PRESETS, Vendor, vendorsFrom } from './vendors';
 
 /**
  * The callers a consultant can be configured for — the kinds `CallerIdentity.KindFrom` answers.
@@ -401,8 +401,15 @@ const CALLER_RUNTIMES: Readonly<Record<string, readonly string[]>> = {
  * <p>Allowed, never refused: the server cannot see the caller's MODEL, only its vendor, so
  * "Fable answering a Sonnet session" and "Sonnet answering itself" look identical from here. The
  * person can tell them apart, so the panel says what to think about rather than deciding for them.</p>
+ *
+ * <p>The runtime is the RESOLVED one — what {@link resolveConsultant} answered for the entry — and
+ * the parameter says so in its type since story C5. It used to be a bare `string`, and the section
+ * handed it a reviewer ROW's runtime: the note was then a fact about somebody's reviewer rather than
+ * about the consultant this caller will actually reach. `Runtime | ''` is exactly what a resolved
+ * entry carries — `''` for one the rule could not place, which is nobody's vendor and so never the
+ * caller's own.</p>
  */
-export function sameVendorNote(callerKind: string, runtime: string): string {
+export function sameVendorNote(callerKind: string, runtime: Runtime | ''): string {
   return (CALLER_RUNTIMES[callerKind] ?? []).includes(runtime)
     ? 'the same vendor as the caller — worth it only with a stronger model, since a model cannot see its own blind spot'
     : '';
@@ -519,26 +526,70 @@ function listed(labels: readonly string[]): string {
     : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
 }
 
-/** The rows this feature may consult with, and the reason a row cannot. */
-export function consultableVendors(vendors: readonly Vendor[]): {
-  readonly offered: readonly Vendor[];
-  readonly refused: readonly { readonly vendor: Vendor; readonly why: string }[];
-} {
-  const offered: Vendor[] = [];
-  const refused: { vendor: Vendor; why: string }[] = [];
-  for (const vendor of vendors) {
-    if (!vendor.enabled) {
-      refused.push({ vendor, why: 'switched off' });
-    } else if (CONSULTING_RUNTIMES.includes(vendor.runtime)) {
-      offered.push(vendor);
-    } else {
-      // NAMED, never filtered away: a row that silently vanishes from a picker is a person hunting
-      // for a vendor they can see configured. `chatModelsFrom` made the same call.
-      refused.push({ vendor, why: `runs on '${vendor.runtime}', which cannot hold a consultation` });
-    }
-  }
+/**
+ * One entry of the catalogue a consultant may be picked from — the preset's own identity and settings.
+ *
+ * <p>Structural, and satisfied by a {@link VENDOR_PRESETS} entry without a cast: the catalogue is the
+ * one declaration and this is the part of it a consultant needs. `enabled`, the stage ticks and the
+ * prices are a REVIEWER's fields and have no meaning here, so they are not in the type the section and
+ * the write path see.</p>
+ */
+export interface ConsultantPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly hint: string;
+  readonly runtime: Runtime;
+  /** The preset's own model. Empty = the runtime's own default. */
+  readonly model: string;
+  readonly baseUrl: string;
+  readonly executablePath: string;
+}
 
-  return { offered, refused };
+/**
+ * The CATALOGUE a consultant is picked from, and the reason an entry cannot be offered.
+ *
+ * <p><b>It takes no reviewer rows, since story C5 of `PLAN_the_consultant_has_its_own_vendors`.</b>
+ * It used to filter the rows a person had configured in *Reviewers*, which is the whole defect the
+ * operator ruled on (2026-09-14): <i>one catalogue of what can be picked, three independent sets of
+ * settings</i>. A consultant that borrowed a reviewer row died when that row was removed, refused
+ * when it was switched off, and was labelled in internal ids two sections below a picker offering
+ * `Codex (OpenAI)` and `DeepSeek`. This is the same filter-and-map the chat's step 1 performs over
+ * the same constant (`askWhichVendor` in `chatPresetsPanel.ts`) — one source, so a vendor added to
+ * the product appears in both pickers without anybody remembering to.</p>
+ *
+ * <p><b>A Team server cannot appear, by construction</b>: `remote` rows are not in `VENDOR_PRESETS`
+ * at all, and the chat appends its servers separately. That is the ruling's third clause — Team
+ * servers stay forbidden for the consultant — held by the shape rather than by a filter somebody
+ * could forget.</p>
+ *
+ * <p><b>What it refuses, it NAMES.</b> The retired `gemini` preset is the case: Google closed Code
+ * Assist for individual accounts, the runtime is not in {@link CONSULTING_RUNTIMES}, and a preset
+ * that vanished silently would be a person hunting for a vendor they can see offered one section
+ * above. `chatModelsFrom` made the same call.</p>
+ *
+ * <p><b>The blank-id preset is left out entirely, and that is a scheduled gap.</b> "Another
+ * OpenAI-compatible endpoint" has no id, and an id is what keys the vault entry and the usage ledger:
+ * offering it here would post `''` as a setting value, which the write path refuses — an entry that
+ * appears in the list and cannot be chosen. Story C6 adds it with the flow that asks for a name and a
+ * base URL and MINTS the id, the way *Add a reviewer* does. It is not listed as refused because it is
+ * not a vendor a person configured and cannot act on: it is a door this story has not built yet.</p>
+ */
+export function consultableVendors(): {
+  readonly offered: readonly ConsultantPreset[];
+  readonly refused: readonly { readonly id: string; readonly label: string; readonly why: string }[];
+} {
+  const named = VENDOR_PRESETS.filter((preset) => preset.id.length > 0);
+
+  return {
+    offered: named.filter((preset) => CONSULTING_RUNTIMES.includes(preset.runtime)),
+    refused: named
+      .filter((preset) => !CONSULTING_RUNTIMES.includes(preset.runtime))
+      .map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        why: `it runs on '${preset.runtime}', which cannot hold a consultation`,
+      })),
+  };
 }
 
 /**
