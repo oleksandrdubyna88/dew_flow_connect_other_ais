@@ -447,7 +447,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Under the hood: the audit trail',
       whatItIs:
-        'One log file per server run, beside the installed binary, under `logs/<day>/`. It holds the roster of every round, each reviewer\'s start and answer with its tokens and cost, every failure as a warning with its reason, and every finding with its origin.',
+        'One log file per server run, under `logs/<day>/` inside the same folder the server keeps everything else in — see *Where your data lives*. It holds the roster of every round, each reviewer\'s start and answer with its tokens and cost, every failure as a warning with its reason, and every finding with its origin.',
       why:
         'The round summary is deliberately one sentence, and one sentence cannot answer "why did this reviewer fail". That question was asked twice at a real gate and could not be answered either time.',
       setup:
@@ -456,6 +456,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'At debug level each reviewer\'s exact command line is recorded, which is the difference between knowing a vendor was asked and being able to paste the command into a terminal and watch it fail the same way.',
       whatCanGoWrong:
         'The log is the only place some things are written down. It is not rotated or trimmed; a year of heavy use is a folder of small files, not a problem, but it is yours to clear.',
+    },
+  },
+  {
+    id: 'where-your-data-lives',
+    en: {
+      title: 'Where your data lives, and how to keep it',
+      whatItIs:
+        'One folder holds everything this product remembers: the rounds database, the sessions, your chats and their pictures, the prompts you edited, the spending ledger and the audit records. By default it is `%LOCALAPPDATA%\\coai-mcp` on Windows and `~/.local/share/coai-mcp` elsewhere. The *MCP server* section of the panel names the folder this window is reading.',
+      why:
+        'A default folder lives on the system drive, and a system drive is the thing you reformat. Point the folder at a network drive or a NAS instead and your history outlives the operating system on top of it: reinstall, install the MCP server again, choose the same folder, and every round you have ever run is still there. The same folder can also be shared by a Windows window and a WSL one on the same machine.',
+      setup:
+        'Installing the MCP server asks, the first time on each side of a machine: keep the default folder, or choose one. Choosing a folder that already holds a database ADOPTS it — that is the point, and it is how a reinstalled machine picks its own history back up. You can also set where your data lives yourself in Settings, as `coai.dataDirectory`, and a name for this installation inside it as `coai.dataSide`. Both are kept per side of the machine, because the same NAS is `Z:\\coai` in a Windows window and `/mnt/z/coai` in a WSL one.',
+      usage:
+        'A server only learns the folder from the client entry that starts it, so the block *Install the MCP server…* copies to your clipboard carries it for you: paste it once, restart your assistant, and both halves are reading the same place.\n\nGive a side a name when two installations share one folder, and each keeps its own database, sessions and sign-ins inside it. Leave it empty when only this installation uses that folder.',
+      whatCanGoWrong:
+        'The panel and the server can end up reading different folders — that is what an empty rounds list means while your assistant says it is reviewing. The section names the folder THIS WINDOW reads and hands over the two lines that make a server agree with it.\n\nA side name may contain lower-case letters, digits, dot, dash and underscore. Anything else is refused rather than quietly ignored, and the server will not start on it: falling back to the shared folder would put every installation on one database, which is the opposite of what a side is for.\n\nMoving a folder that already has things in it is a copy you make while nothing is running, and it is more than the database — the sessions, the chats and their ledgers, the prompts you edited, the spending ledger and the audit records all move with it. Leave the scratch worktrees and the sign-in tokens behind: a token belongs to the side that made it.',
     },
   },
 ];

@@ -41,6 +41,41 @@ export interface LaunchOptions {
   readonly shell?: boolean;
   /** The child's working directory. Defaults per `workingDirectory` — a shell never gets the cwd. */
   readonly cwd?: string;
+  /**
+   * Variables ADDED to what the child would have inherited — never a replacement for it.
+   *
+   * <p><b>Why it exists (issue #115).</b> The server resolves its data directory from its OWN
+   * environment, and a directory a person chose is persisted in a SETTING, because a VS Code window
+   * has no `COAI_DATA_DIR` to read. Every read of the rounds database is a spawn of that binary, so
+   * without this the panel asks the default directory about a history that lives on a NAS and reports
+   * "no rounds yet" — the two halves disagreeing by construction, which is the state the storage
+   * section exists to diagnose.</p>
+   *
+   * <p><b>Added, not replacing</b>, and the distinction is load-bearing: node hands a child exactly
+   * the map it is given, so `{ COAI_DATA_DIR }` alone is a child with no `PATH`, no `SystemRoot` and
+   * no `APPDATA`. On Windows that is not a wrong answer, it is a process that never starts.</p>
+   */
+  readonly env?: Readonly<Record<string, string>>;
+}
+
+/**
+ * What a child's environment actually is: this process's, with the caller's additions on top.
+ *
+ * <p>Its own exported function so the rule is TESTED rather than trusted — the same reason
+ * {@link workingDirectory} is one.</p>
+ *
+ * <p>Absent and empty answer alike: `undefined`, so `spawn` is handed no `env` key at all and takes
+ * its own inherited-environment path. Passing `{}` would be an EMPTY environment, which is the
+ * failure the field's own remark describes; passing `{ ...process.env }` would be a copy nobody
+ * asked for, made on every version probe and every repaint.</p>
+ */
+export function childEnvironment(
+  additions: Readonly<Record<string, string>> | undefined,
+  inherited: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv | undefined {
+  return additions === undefined || Object.keys(additions).length === 0
+    ? undefined
+    : { ...inherited, ...additions };
 }
 
 export interface ProcessHandle {
@@ -106,6 +141,7 @@ export function workingDirectory(shell: boolean, cwd: string | undefined): strin
 export function launch(target: string, args: readonly string[], options: LaunchOptions = {}): ProcessHandle {
   const shell = options.shell === true;
   const cwd = workingDirectory(shell, options.cwd);
+  const env = childEnvironment(options.env);
 
   let child: ReturnType<typeof spawn> | undefined;
   let failure = '';
@@ -114,6 +150,7 @@ export function launch(target: string, args: readonly string[], options: LaunchO
       shell,
       windowsHide: true,
       ...(cwd === undefined ? {} : { cwd }),
+      ...(env === undefined ? {} : { env }),
     });
   } catch (reason) {
     failure = reason instanceof Error ? reason.message : String(reason);

@@ -280,3 +280,66 @@ test('a value emitted before anybody subscribes is still delivered, in order', a
 
   assert.deepEqual(seen, ['first', 'second', 'third']);
 });
+
+// ---------- the environment a child is given (issue #115) ----------
+//
+// The data directory a person chooses is persisted in a SETTING, not in this window's environment,
+// and the rounds list is drawn by spawning the server binary — which resolves its own directory from
+// its own environment. Without this seam the child reads %LOCALAPPDATA% while the server the MCP
+// client started writes to the NAS, and the panel says "no rounds yet" about a history that is
+// there. The variables are ADDED to what the child would have inherited: replacing the environment
+// drops PATH and SystemRoot, and on Windows the child then does not start at all.
+
+test('a child is given the variables it was launched with', async () => {
+  const child = launch(NODE, ['-e', 'process.stdout.write(process.env.COAI_DATA_DIR ?? "unset")'], {
+    // A UNC path, because that is what a NAS is on the side this feature was asked for.
+    env: { COAI_DATA_DIR: String.raw`\\nas\coai` },
+  });
+  let said = '';
+  child.onStdout((chunk) => { said += chunk; });
+
+  await ended(child, 'the child asked for its data directory');
+
+  assert.equal(said, String.raw`\\nas\coai`);
+});
+
+test('and keeps everything else it would have inherited', async () => {
+  // The whole environment, not the two keys: a replaced environment is a child that cannot find its
+  // own runtime, and the failure is a spawn error rather than a wrong answer.
+  //
+  // Set BEFORE the launch. A child's environment is taken when it is SPAWNED, not when it runs —
+  // setting it after `launch` returned made this test fail for a reason that had nothing to do with
+  // the seam it covers.
+  process.env['COAI_LAUNCHER_PROBE'] = 'still here';
+  const child = launch(NODE, [
+    '-e',
+    'process.stdout.write(JSON.stringify({ side: process.env.COAI_DATA_SIDE ?? "", inherited: process.env.COAI_LAUNCHER_PROBE ?? "" }))',
+  ], { env: { COAI_DATA_SIDE: 'windows' } });
+  let said = '';
+  child.onStdout((chunk) => { said += chunk; });
+
+  try {
+    await ended(child, 'the child asked what it inherited');
+  } finally {
+    delete process.env['COAI_LAUNCHER_PROBE'];
+  }
+
+  assert.deepEqual(JSON.parse(said), { side: 'windows', inherited: 'still here' });
+});
+
+test('a launch given no variables changes nothing about the child', async () => {
+  // The default path every other caller takes. `env` absent must not mean `env: {}` handed to spawn,
+  // which is an EMPTY environment rather than an inherited one.
+  process.env['COAI_LAUNCHER_PROBE'] = 'inherited by default';
+  const child = launch(NODE, ['-e', 'process.stdout.write(process.env.COAI_LAUNCHER_PROBE ?? "lost")']);
+  let said = '';
+  child.onStdout((chunk) => { said += chunk; });
+
+  try {
+    await ended(child, 'a child launched with no options');
+  } finally {
+    delete process.env['COAI_LAUNCHER_PROBE'];
+  }
+
+  assert.equal(said, 'inherited by default');
+});

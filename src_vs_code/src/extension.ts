@@ -48,7 +48,7 @@ import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor } from './sideConfig';
+import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -62,6 +62,11 @@ import { vendorsFrom } from './vendors';
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
+  // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
+  // this has run it answers the DEFAULT directory. A window that read the choice late would watch
+  // the wrong directory for escalations and write a Team-server token where nothing reads it.
+  storageReadsThisSide(context);
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be
@@ -342,6 +347,9 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
+        // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
+        // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
+        storageReadsThisSide(context);
         mirrorSettings(settingsSync);
         void panel.render();
       }
