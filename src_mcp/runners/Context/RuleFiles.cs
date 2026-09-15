@@ -227,11 +227,25 @@ public static class RuleFiles
             yield return path;
         }
 
-        foreach (var path in order.Mount([.. folders.Where(p => UnderAnyMount(p, mounts))]))
+        foreach (var path in order.Mount([.. folders.Where(p => UnderAnyMount(p, mounts)).Select(p => Candidate(p, mounts))]))
         {
             yield return path;
         }
     }
+
+    /// <summary>
+    /// A mount's rule file, carrying the name a stage tier addresses it by.
+    /// </summary>
+    /// <remarks>
+    /// The mount prefix is stripped HERE, where the mounts are known, so an order never has to guess
+    /// where a mount root ends — which is the only way a tier entry can name one file rather than
+    /// every path that happens to end the same way.
+    /// </remarks>
+    private static RuleCandidate Candidate(string relative, IReadOnlyList<SubmoduleMount> mounts) =>
+        new(relative, mounts
+            .Where(m => relative.StartsWith(m.Path + "/", StringComparison.OrdinalIgnoreCase))
+            .Select(m => relative[(m.Path.Length + 1)..])
+            .FirstOrDefault(relative));
 
     /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
     private static IReadOnlyList<string> FolderFiles(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
