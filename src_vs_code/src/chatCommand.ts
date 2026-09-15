@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
 import { answerToCopy, blockToCopy } from './answerCopy';
-import { textCopier } from './copyText';
+import { textCopier, type CopyDecision } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
 import { TurnSpend, spendLabel, spendSoFar } from './chatSpend';
 import {
@@ -3200,13 +3200,15 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // The SOURCE, out of the thread the page was rendered from. A person copying an answer wants
         // the markdown they can paste into a plan or an issue, and that is the one thing selecting
         // the page cannot give them - a selection gives what the page shows.
-        void answerCopier.copy(() => {
-          const said = threads.get(id)?.messages[index];
-
-          return said === undefined || said.role !== 'model'
-            ? { kind: 'refused', said: 'That answer is not on this page any more.' }
-            : answerToCopy(said.text);
-        });
+        // RESOLVED at press time, not when its turn in the queue comes. A block control carries a
+        // signature and is refused if the answer changed under it; this one carries nothing, so a
+        // press queued behind a slow write could otherwise copy whatever had replaced the message at
+        // that index by the time it ran. (codex, the code round.)
+        const said = threads.get(id)?.messages[index];
+        const decision: CopyDecision = said === undefined || said.role !== 'model'
+          ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+          : answerToCopy(said.text);
+        void answerCopier.copy(() => decision);
       },
       onCopyBlock: (id, index, block, sig) => {
         // The SAME markdown the page was drawn from, walked by the SAME function that numbered the

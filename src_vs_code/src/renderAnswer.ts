@@ -59,8 +59,17 @@ const MAX_DEPTH = 8;
  */
 const REPLY_TAG = 'reply';
 
-const COPY_BLOCK = 'Copy block';
-const COPY_REPLY = 'Copy the reply prompt';
+/**
+ * The words on a block's control, and the tag that chooses between them.
+ *
+ * <p>Exported so that anything which has to KNOW them derives them from here rather than repeating
+ * them — the help-coverage check asks every language's article to name these, and a list retyped
+ * there would not notice the next control. (codex, the code round.)</p>
+ */
+export const COPY_BLOCK = 'Copy block';
+export const COPY_REPLY = 'Copy the reply prompt';
+/** What the help must teach, because a reader who does not know the tag cannot produce the block. */
+export const BLOCK_CONTROL_TERMS = [COPY_BLOCK, COPY_REPLY, `\`\`\`${REPLY_TAG}`] as const;
 
 /**
  * One block of an answer that a person can take on its own.

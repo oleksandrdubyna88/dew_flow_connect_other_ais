@@ -419,6 +419,16 @@ export function foldLabel(text: string): string {
 }
 
 /** The messages region on its own, so the host can push it without re-rendering the page. */
+/**
+ * The words on the control that copies a WHOLE answer.
+ *
+ * <p>Exported beside the renderer's own two so the help-coverage check can derive the list it asks
+ * every language to carry, rather than repeating it. Its scope is in its name for a reason: a block's
+ * control sits immediately above this one whenever an answer ends in a block, and both said "Copy"
+ * until they were told apart.</p>
+ */
+export const COPY_ANSWER = 'Copy answer';
+
 export function chatMessagesHtml(
   messages: readonly ChatMessage[],
   marks: TurnMarks = NO_MARKS,
@@ -471,7 +481,7 @@ export function chatMessagesHtml(
         // scopes is the confusion this whole feature began as: the operator read the row below an
         // answer as belonging to the block above it, which is exactly what its name invited.
         // (gemini, the plan round.)
-        : `<button type="button" class="copy" data-copy="${index}" title="Copy the whole answer as Markdown">Copy answer</button>`;
+        : `<button type="button" class="copy" data-copy="${index}" title="Copy the whole answer as Markdown">${COPY_ANSWER}</button>`;
       // CARRY NOTHING ABOVE. On the last answer only, and it names what it does rather than what it
       // breaks: nothing is deleted and the conversation stays whole on screen — what changes is where
       // a HANDOVER starts, to another model or to a Team server that is told everything every turn.

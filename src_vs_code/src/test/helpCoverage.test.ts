@@ -3,6 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
+import { COPY_ANSWER } from '../chatPage';
+import { BLOCK_CONTROL_TERMS } from '../renderAnswer';
 
 /**
  * Every command in the manifest, and every setting, is described somewhere in the help.
@@ -49,7 +51,9 @@ test('every language’s chat article names both copy controls and the reserved 
 
   for (const language of HELP_LANGUAGES) {
     const said = Object.values(bodyFor(article, language).body).join(' ');
-    for (const named of ['Copy answer', 'Copy block', 'Copy the reply prompt', '```reply']) {
+    // DERIVED from the renderer, not retyped: a list a test repeats will not notice the next control
+    // added beside it, and would stay green while a language stopped covering the page.
+    for (const named of [COPY_ANSWER, ...BLOCK_CONTROL_TERMS]) {
       assert.ok(
         said.includes(named),
         `the ${language} chat article never says “${named}”, so a reader of it cannot use the control `

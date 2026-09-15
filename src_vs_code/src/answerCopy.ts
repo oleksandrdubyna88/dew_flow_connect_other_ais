@@ -53,6 +53,9 @@ export function blockToCopy(markdown: string, block: number, signature: string):
     done: one.reply
       ? 'Copied the reply prompt — paste it with Ctrl+V.'
       : 'Copied the block — paste it with Ctrl+V.',
+    failed: one.reply
+      ? 'The reply prompt could not be copied — the clipboard is held by another program.'
+      : 'The block could not be copied — the clipboard is held by another program.',
   };
 }
 
@@ -69,5 +72,10 @@ export function answerToCopy(markdown: string): CopyDecision {
     return { kind: 'refused', said: 'There is nothing in this answer to copy.' };
   }
 
-  return { kind: 'copy', text: markdown, done: 'Copied the answer — paste it with Ctrl+V.' };
+  return {
+    kind: 'copy',
+    text: markdown,
+    done: 'Copied the answer — paste it with Ctrl+V.',
+    failed: 'The answer could not be copied — the clipboard is held by another program.',
+  };
 }

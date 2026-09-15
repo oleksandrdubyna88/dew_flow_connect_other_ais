@@ -40,7 +40,20 @@ export interface CopyReport {
  * which, for a copy, means pasting whatever was on the clipboard before.</p>
  */
 export type CopyDecision =
-  | { readonly kind: 'copy'; readonly text: string; readonly done: string }
+  | {
+    readonly kind: 'copy';
+    readonly text: string;
+    readonly done: string;
+    /**
+     * What to say if the WRITE fails — the caller's own words, not this module's.
+     *
+     * <p>Required rather than defaulted, because extracting this module silently replaced one
+     * caller's sentence with a generic one: a phrase that could not be copied stopped saying it was
+     * a phrase. A shared mechanism may own the machinery and must not own the wording. (codex, the
+     * code round.)</p>
+     */
+    readonly failed: string;
+  }
   | { readonly kind: 'refused'; readonly said: string };
 
 /** How long a confirmation stays on the status bar. Long enough to notice, short enough to ignore. */
@@ -78,34 +91,81 @@ export interface TextCopier {
  * <p>The decision is taken as a FUNCTION, evaluated when its turn comes rather than when the press
  * arrived: what a caller resolves may depend on state a press ahead of it in the queue changed.</p>
  */
+/**
+ * The writing half: one bounded write at a time, and nothing stale left holding the clipboard.
+ *
+ * <p>Its own unit because it owns state the queue does not care about — which attempt is newest —
+ * and because the copier around it was over this repository's length limit with it inlined.</p>
+ */
+function boundedWriter(ports: CopyPorts, ceilingMs: number): (text: string) => Promise<void> {
+  /** The newest text anybody asked for, and when. What a late write must not be allowed to undo. */
+  let wanted: { readonly at: number; readonly text: string } | undefined;
+  let issued = 0;
+
+  /**
+   * A write we stopped waiting for is still RUNNING, and can still land.
+   *
+   * <p>Giving up on the wait releases the queue, which is the point; it does not cancel anything,
+   * because a clipboard write cannot be cancelled. So if the abandoned one eventually lands and
+   * something newer has been asked for since, the newer text is put back. Without this, a write that
+   * hung past the ceiling and then succeeded would quietly replace what the person copied after it.
+   * (codex and gemini, the code round, independently and from different roles.)</p>
+   */
+  function reinstate(write: Promise<void>, mine: number): void {
+    void write.then(
+      () => {
+        const now = wanted;
+        if (now !== undefined && now.at !== mine) {
+          void Promise.resolve(ports.writeText(now.text)).catch(() => undefined);
+        }
+      },
+      () => undefined,
+    );
+  }
+
+  /** The write, or the ceiling — whichever comes first. The timer never outlives the attempt. */
+  return async function written(text: string): Promise<void> {
+    issued += 1;
+    const mine = issued;
+    wanted = { at: mine, text };
+    const write = ports.writeText(text);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([write, new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('the clipboard did not answer')), ceilingMs);
+      })]);
+    } catch (failure) {
+      reinstate(write, mine);
+      throw failure;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/** What the caller decided, or a refusal if deciding itself threw. */
+function decided(decide: () => CopyDecision): CopyDecision {
+  try {
+    return decide();
+  } catch {
+    // Taken OUTSIDE the write's own guard before, so a caller whose lookup threw rejected the
+    // queue's promise and told the person nothing. (gemini, the code round.)
+    return { kind: 'refused', said: 'It could not be copied — working out what to copy failed.' };
+  }
+}
+
 export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): TextCopier {
   let live: Said | undefined;
   let working: Promise<unknown> = Promise.resolve();
+  const written = boundedWriter(ports, ceilingMs);
 
   function tell(said: string): void {
     live?.dispose();
     live = ports.say(said, SAID_FOR_MS);
   }
 
-  /** The write, or the ceiling — whichever comes first. A timer left running would outlive the turn. */
-  async function written(text: string): Promise<void> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        ports.writeText(text),
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error('the clipboard did not answer')), ceilingMs);
-        }),
-      ]);
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-    }
-  }
-
   async function once(decide: () => CopyDecision): Promise<CopyReport> {
-    const decision = decide();
+    const decision = decided(decide);
     if (decision.kind === 'refused') {
       tell(decision.said);
 
@@ -114,12 +174,11 @@ export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): Text
     try {
       await written(decision.text);
     } catch {
-      // The write is the only thing that can fail here, and a person who is told nothing pastes
-      // whatever was on the clipboard before — which is the failure this sentence exists to stop.
-      const refused = 'It could not be copied — the clipboard is held by another program.';
-      tell(refused);
+      // A person who is told nothing pastes whatever was on the clipboard before — which is the
+      // failure this sentence exists to stop. The words are the CALLER's.
+      tell(decision.failed);
 
-      return { copied: false, said: refused };
+      return { copied: false, said: decision.failed };
     }
     tell(decision.done);
 
