@@ -2,8 +2,40 @@ using System.Text.Json;
 
 namespace CoaiMcp.Server;
 
-/// <summary>Which vendor row consults for one caller kind, and on which model (empty = the row's own).</summary>
-public sealed record ConsultantChoice(string Vendor, string Model = "");
+/// <summary>
+/// What consults for one caller kind: a DEFINITION — vendor, runtime, model, endpoint and CLI path,
+/// the consultant's own — or, with an empty <paramref name="Runtime"/>, a LEGACY reference to a
+/// reviewer row by id.
+/// </summary>
+/// <param name="Vendor">The id: what names the vault entry, the usage ledger and every refusal.</param>
+/// <param name="Model">Empty = the runtime's own default; for a legacy reference, the row's model.</param>
+/// <param name="Runtime">Which CLI answers. Empty = a legacy reference, resolved by <see cref="ConsultantResolver"/>.</param>
+/// <param name="BaseUrl">For a vendor riding the codex CLI. Empty = the CLI's own endpoint.</param>
+/// <param name="ExecutablePath">Where the CLI is. Empty = look it up on PATH.</param>
+/// <remarks>
+/// <para>Until 2026-09-15 this was <c>(Vendor, Model)</c>, and <c>Vendor</c> named a REVIEWER row: the
+/// consultant borrowed that row's runtime, endpoint and CLI path, and an empty model meant the row's
+/// own. So a reviewer removed took the consultant with it, a reviewer switched off refused a
+/// consultation nobody had switched off, and the shipped <c>codex → claude</c> was dead on every
+/// machine without a <c>claude</c> reviewer row — the opening symptom of
+/// <c>PLAN_the_consultant_has_its_own_vendors</c>. The panel's <c>ConsultantChoice</c> in
+/// <c>consultSettings.ts</c> made this move first (story A1); this is its twin, field for field.</para>
+/// <para>The three new fields default to EMPTY, and the shipped pairs below say nothing about them —
+/// deliberately. <c>new("codex")</c> is a legacy reference, and a legacy reference resolves through the
+/// reviewer rows on both halves by one rule (<see cref="ConsultantResolver"/>); that is what lets a
+/// settings file written before this change keep working with no rewrite, and what keeps
+/// <see cref="ConsultantRouting.Shipped"/> byte-for-byte a sibling plan's to move.</para>
+/// </remarks>
+public sealed record ConsultantChoice(
+    string Vendor,
+    string Model = "",
+    string Runtime = "",
+    string BaseUrl = "",
+    string ExecutablePath = "")
+{
+    /// <summary>Whether this entry says which CLI answers — a definition — rather than naming a reviewer row.</summary>
+    public bool IsDefinition => Runtime.Length > 0;
+}
 
 /// <summary>
 /// The parsed <c>COAI_CONSULTANTS</c> setting: the map, what was wrong with it, and whether it could
@@ -84,10 +116,20 @@ public static class ConsultantRouting
         {
             if (row?.Vendor is { } vendor && vendor.Trim().Length > 0)
             {
-                merged[kind.Trim().ToLowerInvariant()] = new ConsultantChoice(vendor.Trim(), row.Model?.Trim() ?? string.Empty);
+                // Trimmed here, ONCE, and never null past this line: the DTO's nullables are the
+                // wire's shape, not the server's. A settings file from before the three new fields
+                // existed carries none of them, and reads as a legacy reference — empty runtime.
+                merged[kind.Trim().ToLowerInvariant()] = new ConsultantChoice(
+                    vendor.Trim(),
+                    Trimmed(row.Model),
+                    Trimmed(row.Runtime),
+                    Trimmed(row.BaseUrl),
+                    Trimmed(row.ExecutablePath));
             }
         }
 
         return merged;
     }
+
+    private static string Trimmed(string? value) => value?.Trim() ?? string.Empty;
 }

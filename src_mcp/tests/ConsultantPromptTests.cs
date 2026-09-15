@@ -249,6 +249,186 @@ public sealed class ConsultantRoutingTests
         ConsultantRouting.Parse(null).Map.Should().BeEquivalentTo(ConsultantRouting.Shipped);
         ConsultantRouting.Parse("   ").Map.Should().BeEquivalentTo(ConsultantRouting.Shipped);
     }
+
+    /// <summary>A definition arrives whole, every field trimmed — what the panel writes since story A2.</summary>
+    [Fact]
+    public void ADefinitionParses_TrimmedAndWhole()
+    {
+        var parsed = ConsultantRouting.Parse(
+            """{"claude":{"vendor":" my-gpt ","runtime":" codex ","model":" gpt-5.6 ","baseUrl":" https://api.example.test/v1 ","executablePath":" C:/tools/codex.cmd "}}""");
+
+        ConsultantRouting.For(parsed.Map, CallerIdentity.Claude)
+            .Should().Be(new ConsultantChoice("my-gpt", "gpt-5.6", "codex", "https://api.example.test/v1", "C:/tools/codex.cmd"));
+        ConsultantRouting.For(parsed.Map, CallerIdentity.Claude).IsDefinition.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A row that names no runtime is a LEGACY reference, and the three fields it omits read as
+    /// empty — never null, whatever the wire left out.
+    /// </summary>
+    /// <remarks>
+    /// A settings file written before the definition existed carries <c>{vendor, model}</c> and must
+    /// keep working with no rewrite; the DTO's nullables become empty strings in <c>Merge</c>, once.
+    /// </remarks>
+    [Fact]
+    public void ARowThatNamesNoRuntime_IsALegacyReference_WithNothingNull()
+    {
+        var choice = ConsultantRouting.For(ConsultantRouting.Parse("""{"claude":{"vendor":"my-gpt","model":"gpt-5.6"}}""").Map, CallerIdentity.Claude);
+
+        choice.Should().Be(new ConsultantChoice("my-gpt", "gpt-5.6"));
+        choice.IsDefinition.Should().BeFalse();
+        choice.Runtime.Should().BeEmpty();
+        choice.BaseUrl.Should().BeEmpty();
+        choice.ExecutablePath.Should().BeEmpty();
+    }
+
+    /// <summary>A field this build does not know is skipped — a newer panel may write more than this server reads.</summary>
+    [Fact]
+    public void AFieldThisBuildDoesNotKnow_IsIgnored_NotAComplaint()
+    {
+        var parsed = ConsultantRouting.Parse("""{"claude":{"vendor":"my-gpt","runtime":"codex","colour":"blue"}}""");
+
+        parsed.Unreadable.Should().BeFalse();
+        parsed.Complaints.Should().BeEmpty();
+        ConsultantRouting.For(parsed.Map, CallerIdentity.Claude).Runtime.Should().Be("codex");
+    }
+}
+
+/// <summary>
+/// The one resolution rule, server half — every arm as a value, with no CLI launched. The panel's
+/// <c>consultant.test.ts</c> states the same arms for <c>resolveConsultant</c>.
+/// </summary>
+public sealed class ConsultantResolverTests
+{
+    private static readonly IReadOnlyList<ProviderSettings> NoRows = [];
+
+    private static ProviderSettings Row(ResolvedConsultant resolved) =>
+        resolved.Should().BeOfType<ResolvedConsultant.Definition>().Subject.Vendor;
+
+    private static string Why(ResolvedConsultant resolved) =>
+        resolved.Should().BeOfType<ResolvedConsultant.Unavailable>().Subject.Why;
+
+    /// <summary>A definition is itself — a reviewer row under the SAME id, tuned differently, leaks nothing into it.</summary>
+    [Fact]
+    public void ADefinitionIsItself_AndReadsNoReviewerRow()
+    {
+        var rows = new ProviderSettings[]
+        {
+            new("codex") { Model = "the-reviewers-model", BaseUrl = "https://the-reviewers-endpoint", ExecutablePath = "C:/reviewers/codex", Enabled = false },
+        };
+
+        var row = Row(ConsultantResolver.Resolve(new ConsultantChoice("codex", Runtime: "codex", ExecutablePath: "C:/consultant/codex"), CallerIdentity.Claude, rows));
+
+        row.Should().Be(new ProviderSettings("codex") { Runtime = "codex", Model = "", BaseUrl = "", ExecutablePath = "C:/consultant/codex", Enabled = true });
+    }
+
+    /// <summary>
+    /// A definition on a runtime outside the allowlist is refused naming the caller kind, the vendor,
+    /// the runtime and the list — the match is exact, so a spelling nobody can launch is refused too.
+    /// </summary>
+    [Theory]
+    [InlineData("remote")]
+    [InlineData("gemini")]
+    [InlineData("Codex")]
+    public void ADefinitionOnARuntimeOutsideTheAllowlist_IsRefusedNamingEverything(string runtime)
+    {
+        var why = Why(ConsultantResolver.Resolve(
+            new ConsultantChoice("team-codex", Runtime: runtime, BaseUrl: "https://coai.example.test"), CallerIdentity.Gemini, NoRows));
+
+        why.Should().Contain("'gemini' caller").And.Contain("'team-codex'").And.Contain($"'{runtime}'")
+            .And.Contain("codex, claude, antigravity, local").And.Contain("Consultant section");
+    }
+
+    /// <summary>Rule (a): the row is matched case-insensitively, borrowed from whether or not it reviews, and the entry's own id is kept.</summary>
+    [Fact]
+    public void ALegacyReferenceMatchesAReviewerRowCaseInsensitively_EnabledOrNot()
+    {
+        var rows = new ProviderSettings[] { new("codex") { Runtime = "codex", Model = "gpt-5.6-luna", ExecutablePath = "C:/tools/codex", Enabled = false } };
+
+        var row = Row(ConsultantResolver.Resolve(new ConsultantChoice("Codex"), CallerIdentity.Claude, rows));
+
+        row.Provider.Should().Be("Codex", "rule (a) keeps the id as stored — it keys the vault entry and the ledger");
+        row.Runtime.Should().Be("codex");
+        row.Model.Should().Be("gpt-5.6-luna", "the row's model where the entry names none");
+        row.ExecutablePath.Should().Be("C:/tools/codex");
+        row.Enabled.Should().BeTrue("switched off is a fact about reviews, not about consulting");
+    }
+
+    [Fact]
+    public void ALegacyReferenceNamesItsOwnModelOverTheRows()
+    {
+        var rows = new ProviderSettings[] { new("codex") { Model = "gpt-5.6-luna" } };
+
+        Row(ConsultantResolver.Resolve(new ConsultantChoice("codex", "gpt-5.6-pro"), CallerIdentity.Claude, rows)).Model.Should().Be("gpt-5.6-pro");
+    }
+
+    /// <summary>Rule (b): the id IS the runtime, under the runtime's own name, with nothing borrowed — what makes the shipped `codex → claude` run with no `claude` row.</summary>
+    [Fact]
+    public void ALegacyReferenceToAConsultingRuntime_IsThatRuntimeUnderItsOwnName()
+    {
+        var row = Row(ConsultantResolver.Resolve(new ConsultantChoice("Claude"), CallerIdentity.Codex, NoRows));
+
+        row.Should().Be(new ProviderSettings("claude") { Runtime = "claude", Enabled = true });
+    }
+
+    /// <summary>Rule (c): refused BY NAME, with the allowlist and the section — and no longer told to pick a "vendor row".</summary>
+    [Fact]
+    public void ALegacyReferenceThatMatchesNothing_IsRefusedByName_PointingAtTheSection()
+    {
+        var why = Why(ConsultantResolver.Resolve(new ConsultantChoice("deepseek"), CallerIdentity.Other, NoRows));
+
+        why.Should().Contain("'other' caller").And.Contain("'deepseek'").And.Contain("codex, claude, antigravity, local")
+            .And.Contain("Consultant section").And.Contain("add a reviewer under that name");
+        why.Should().NotContain("vendor row", "the cure is no longer to pick a reviewer row");
+    }
+
+    // ---------- resumed ----------
+
+    private static ConsultationRecord Opened(string vendor, string model, string runtime) => new(
+        "0198aaaa-bbbb", "caller", CallerIdentity.Claude, "no-session", "D:/repo", "main", "abc",
+        vendor, model, runtime, ConsultationMemories.VendorRemembers, 5, "2026-09-15T00:00:00Z");
+
+    /// <summary>The record's vendor, model and runtime are frozen; the CLI path follows today's definition of that id, under ANY caller kind.</summary>
+    [Fact]
+    public void AResumedConsultation_KeepsItsThreeFrozenFacts_AndTakesTheEndpointFromTodaysDefinition()
+    {
+        var consultants = new Dictionary<string, ConsultantChoice>
+        {
+            // This caller's consultant moved elsewhere; another caller's still describes codex.
+            [CallerIdentity.Claude] = new("claude", Runtime: "claude"),
+            [CallerIdentity.Codex] = new("codex", "gpt-5.6-pro", "codex", "", "C:/tools/codex-today"),
+        };
+
+        var row = Row(ConsultantResolver.Resumed(Opened("codex", "gpt-5.6-luna", "codex"), consultants, NoRows));
+
+        row.Should().Be(new ProviderSettings("codex") { Runtime = "codex", Model = "gpt-5.6-luna", ExecutablePath = "C:/tools/codex-today", Enabled = true });
+    }
+
+    [Fact]
+    public void AResumedConsultation_FallsBackToTheReviewerRows_ThenRefusesNamingTheRecord()
+    {
+        var rows = new ProviderSettings[] { new("codex") { ExecutablePath = "C:/tools/codex-row", Enabled = false } };
+
+        Row(ConsultantResolver.Resumed(Opened("codex", "", "codex"), ConsultantRouting.Shipped, rows)).ExecutablePath.Should().Be("C:/tools/codex-row");
+
+        var why = Why(ConsultantResolver.Resumed(Opened("deepseek", "", "codex"), ConsultantRouting.Shipped, NoRows));
+
+        why.Should().Contain("0198aaaa-bbbb").And.Contain("'deepseek'").And.Contain("no longer configured").And.Contain("start a new consultation");
+    }
+
+    /// <summary>A CLI path belongs to a CLI: an id redefined onto another runtime is refused, never lent to the record's adapter.</summary>
+    [Fact]
+    public void AResumedConsultation_IsRefused_WhenItsVendorNowRunsOnAnotherCli()
+    {
+        var consultants = new Dictionary<string, ConsultantChoice>
+        {
+            [CallerIdentity.Codex] = new("codex", Runtime: "claude", ExecutablePath: "/usr/bin/claude"),
+        };
+
+        var why = Why(ConsultantResolver.Resumed(Opened("codex", "", "codex"), consultants, NoRows));
+
+        why.Should().Contain("running on 'codex'").And.Contain("run on 'claude'").And.Contain("start a new consultation");
+    }
 }
 
 /// <summary>Which VENDOR is calling — a second question beside the caller's identity.</summary>

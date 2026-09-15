@@ -222,7 +222,7 @@ schema, written into the consultations directory, coming back from `All()` as a 
 `<dataDir>/schemas/`, and the store now reads only files whose name is a well-formed consultation id.
 Both, because a shared data directory acquires files nobody planned for.
 
-**Which consultant a caller gets** is `COAI_CONSULTANTS`, a map from caller kind to vendor+model.
+**Which consultant a caller gets** is `COAI_CONSULTANTS`, a map from caller kind to an entry.
 `CallerIdentity.KindFrom` answers the kind from the VENDOR variables alone — `COAI_CALLER_SESSION` is
 an identity override with no vendor meaning and is deliberately not consulted. Shipped: Claude Code →
 codex, Codex → claude, Gemini → codex, other → codex; a different vendor by default, the same vendor
@@ -231,6 +231,43 @@ say which vendor was meant, consulting REFUSES until it is fixed rather than fal
 shipped one. All four runtimes consult as of story 2 — codex, claude, antigravity and a local engine,
 each measured live for two turns (the table above). A configured row whose runtime cannot hold a
 conversation is refused BY NAME (`ConsultantResolution.CannotConsult`), never substituted.
+
+**The consultant has its own vendors** (2026-09-15, story B3 of
+[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)). An
+entry is either a DEFINITION — `{vendor, runtime, model, baseUrl, executablePath}`, the consultant's own
+— or a LEGACY reference, `{vendor, model}` with no runtime: everything written before this date and the
+shipped pairs, which stay byte-for-byte legacy-shaped so a sibling plan owns their values. The wire DTO's
+three new fields are nullable (a field the client omitted is null whatever its initializer says) and
+`ConsultantRouting.Merge` is the one place each becomes an empty string. `ConsultantResolver` is the rule,
+mirrored from the panel's `resolveConsultant`, and `ConsultationService` reads `settings.Providers` **on
+the legacy path only**:
+
+- **A definition is itself.** A `ProviderSettings` is built from the entry alone — but FIRST its runtime
+  is checked against `ConsultantResolution.Consulting`, and one outside it (`remote` above all) is refused
+  BY NAME — caller kind, vendor, runtime and the allowlist — before any provider row exists. This is the
+  security half: excluding Team servers from the panel's picker excludes nothing from the wire, and a
+  hand-edited or stale settings file must not route a working tree at a Team server. The match is exact,
+  so `Codex` is refused naming `Codex` rather than re-read as legacy; the panel's reader does re-read an
+  unknown runtime as legacy (`entryFrom`), and the two disagree only on a spelling no panel writes.
+- **A legacy reference resolves (a) → (b) → (c)**, identically to the TypeScript: (a) a reviewer row with
+  that id, matched case-insensitively, **enabled or disabled** — its runtime, endpoint and CLI path, and
+  its model where the entry names none; the "switched off" refusal is gone, because a reviewer switched
+  off is a fact about reviews and it was taking the consultant down with it (the plan's opening symptom);
+  (b) else an id that is itself a consulting runtime → that runtime under its own name, borrowing nothing
+  — the shipped `codex → claude` reaches a Claude CLI with no `claude` reviewer row and no write; (c) else
+  refused by name, pointing at the Consultant section and at adding a reviewer under that name — the
+  sentence no longer says "vendor row". The id is kept as stored in (a) (it keys the vault entry and the
+  ledger) and canonicalised in (b), the same asymmetry the TypeScript states.
+- **A resumed consultation stays on `record.Vendor`, `record.Model` and `record.Runtime`**, frozen. The
+  record does not hold `BaseUrl` or `ExecutablePath` (widening it is out of the plan's scope): they come
+  from a current definition with that vendor id under ANY caller kind, else the legacy path through the
+  rows, else the resuming refusal (`no longer configured … start a new consultation`). Borrowed only while
+  today's description still runs the record's runtime — an id redefined onto another CLI is refused naming
+  both runtimes rather than launched on the wrong binary (the vendor-routing rule). The model is no longer
+  re-read from the current row on a follow-up; the record's is the one that runs.
+- `RuntimeResolution.NameOf` still decides what `record.Runtime` is written as, so a `claude` definition
+  carrying a base URL is recorded as `codex` and refused by `CannotConsult` exactly as before; the
+  `codex`-with-base-URL refusal in `ConsultantResolution` is unchanged and deliberate.
 
 **The consultant's prompt** is `src_mcp/src/consultant/consult.md`, embedded as
 `CoaiMcp.prompts.consult.md` and served by `RolePrompts.For("consult")` — override-first, so it is
