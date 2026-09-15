@@ -51,7 +51,7 @@ public sealed class RuleFilesTests : IDisposable
         Write(".agents/conventions/.agents/PROJECT.md", "Conventions source obligations");
         Write(".agents/conventions/ENTRY.md", "Source loading procedure");
 
-        var bundle = RuleFiles.Collect(_repo, seed: 1);
+        var bundle = RuleFiles.Collect(_repo, RuleOrder.Drawn(1));
 
         bundle.Files.Select(file => file.Path).Should().BeEquivalentTo([
             ".agents/PROJECT.md", ".agents/rules/nested/local.md",
@@ -343,8 +343,8 @@ public sealed class RuleFilesTests : IDisposable
             Write($".claude/rules/shared/common/rule-{n:00}.md", Filler($"rule {n}", 10_000));
         }
 
-        var first = RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: 1);
-        var second = RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: 2);
+        var first = RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(1));
+        var second = RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(2));
 
         first.Files.Select(f => f.Path).Should().NotBeEquivalentTo(
             second.Files.Select(f => f.Path), "two rounds that show the same rules leave the rest unread for ever");
@@ -363,7 +363,7 @@ public sealed class RuleFilesTests : IDisposable
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var round = 0; round < 60; round++)
         {
-            foreach (var file in RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: round).Files)
+            foreach (var file in RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(round)).Files)
             {
                 seen.Add(file.Path);
             }
@@ -390,7 +390,7 @@ public sealed class RuleFilesTests : IDisposable
 
         for (var round = 0; round < 6; round++)
         {
-            var paths = RuleFiles.Collect(_repo, budgetBytes: 25_000, seed: round).Files.Select(f => f.Path);
+            var paths = RuleFiles.Collect(_repo, 25_000, RuleOrder.Drawn(round)).Files.Select(f => f.Path);
 
             paths.Should().Contain("CLAUDE.md").And.Contain(".claude/rules/common/ours.md");
         }
