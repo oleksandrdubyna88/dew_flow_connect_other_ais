@@ -567,18 +567,22 @@ export interface ConsultantPreset {
  * that vanished silently would be a person hunting for a vendor they can see offered one section
  * above. `chatModelsFrom` made the same call.</p>
  *
- * <p><b>The blank-id preset is left out entirely, and that is a scheduled gap.</b> "Another
- * OpenAI-compatible endpoint" has no id, and an id is what keys the vault entry and the usage ledger:
- * offering it here would post `''` as a setting value, which the write path refuses — an entry that
- * appears in the list and cannot be chosen. Story C6 adds it with the flow that asks for a name and a
- * base URL and MINTS the id, the way *Add a reviewer* does. It is not listed as refused because it is
- * not a vendor a person configured and cannot act on: it is a door this story has not built yet.</p>
+ * <p><b>The blank-id preset comes back SEPARATELY, as `custom` (story C6).</b> "Another
+ * OpenAI-compatible endpoint" has no id, and an id is what keys the vault entry and the usage ledger,
+ * so it cannot be an option whose value is stored — picking it would put `''` on disk before anybody
+ * was asked for a name. It is not in `offered` for that reason and it is not `refused` either, because
+ * it is not a vendor somebody configured and cannot use. It is a REQUEST, carried by
+ * {@link CUSTOM_ENDPOINT} and answered by the host, which asks for the name and the URL exactly as
+ * *Add a reviewer* does.</p>
  */
 export function consultableVendors(): {
   readonly offered: readonly ConsultantPreset[];
   readonly refused: readonly { readonly id: string; readonly label: string; readonly why: string }[];
+  /** The catalogue's own words for "one of your own" — absent only if the catalogue drops the entry. */
+  readonly custom: { readonly label: string; readonly hint: string } | undefined;
 } {
   const named = VENDOR_PRESETS.filter((preset) => preset.id.length > 0);
+  const blank = VENDOR_PRESETS.find((preset) => preset.id.length === 0);
 
   return {
     offered: named.filter((preset) => CONSULTING_RUNTIMES.includes(preset.runtime)),
@@ -589,8 +593,23 @@ export function consultableVendors(): {
         label: preset.label,
         why: `it runs on '${preset.runtime}', which cannot hold a consultation`,
       })),
+    custom: blank === undefined || !CONSULTING_RUNTIMES.includes(blank.runtime)
+      ? undefined
+      : { label: blank.label, hint: blank.hint },
   };
 }
+
+/**
+ * The value that is not a vendor: a request for one, posted as a COMMAND rather than stored.
+ *
+ * <p>A `<select>` can only carry values, and the one thing that must never reach disk is an entry
+ * with no id — `{ vendor: '' }` keys no vault entry and no ledger line, and a person would see it in
+ * their settings file and be unable to choose it in the panel. So this option's value is a sentinel
+ * the page's script recognises: it posts `customConsultant` with the caller and writes nothing, and
+ * the host comes back having asked for a name and a base URL. `__other__` in the model picker is the
+ * same shape, and the underscores are what keep it out of the id space `normaliseId` produces.</p>
+ */
+export const CUSTOM_ENDPOINT = '__endpoint__';
 
 /**
  * The stored map resolved against the reviewer rows — the RESULT for every caller kind, whole.

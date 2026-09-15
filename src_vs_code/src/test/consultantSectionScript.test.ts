@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { CUSTOM_ENDPOINT } from '../consultSettings';
 import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
@@ -194,6 +195,27 @@ test('the consultant’s OWN CLI path is written for the caller whose row holds 
     type: 'setting', key: 'consultExecutablePath', value: 'D:/tools/claude.cmd',
     vendor: undefined, role: undefined, caller: 'codex',
   }, 'a consultant that looks up its CLI on PATH cannot be pointed at one until this box exists');
+});
+
+test('choosing the custom endpoint asks the HOST, for THAT caller, and writes no setting at all', () => {
+  // An id keys the vault entry and the usage ledger, so the one thing that must not happen is the
+  // sentinel reaching disk: `{ vendor: '' }` is an entry a person can see in their settings file and
+  // cannot choose in the panel. The picker is a `<select>`, so the only way to ask for something
+  // that is not a value is to post a COMMAND — the shape `__other__` already uses for a model.
+  const page = run();
+  const picker = control(page, 'consultVendor', 'codex');
+  const before = picker.value;
+
+  picker.value = CUSTOM_ENDPOINT;
+  picker.fire('change');
+
+  assert.deepEqual(page.posted.filter((one) => one['type'] === 'setting'), [],
+    'the sentinel must never be stored — it is a request for a name, not a vendor');
+  assert.deepEqual(page.posted.filter((one) => one['type'] === 'command'),
+    [{ type: 'command', command: 'customConsultant', id: 'codex' }],
+    'four rows share this control, so a command with no caller configures whichever the document holds first');
+  assert.equal(picker.value, before,
+    'and the select goes back: nothing is written, so no repaint comes, and it would sit on an option that is not a vendor');
 });
 
 test('a repaint puts the caret back in the row that was being edited, not the first row sharing its name', () => {

@@ -15,6 +15,7 @@
 import {
   CALLER_KINDS,
   CONSULTING_RUNTIMES,
+  CUSTOM_ENDPOINT,
   ConsultSettings,
   ConsultantPreset,
   consultableVendors,
@@ -222,7 +223,25 @@ function unplaceable(
 
 /** The catalogue as a person reads it — the labels *Add a reviewer* offers, not internal ids. */
 function offeredOptions(catalogue: readonly ConsultantPreset[]): readonly VendorOption[] {
-  return catalogue.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint }));
+  return [
+    ...catalogue.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint })),
+    ...customOption(),
+  ];
+}
+
+/**
+ * The way to an endpoint of your own — last, because it is a door rather than a vendor.
+ *
+ * <p>The catalogue's blank preset, under the catalogue's own words. Its value is
+ * {@link CUSTOM_ENDPOINT}, which the page's script turns into a command instead of a setting write:
+ * an id keys the vault entry, so nothing may be stored until a person has given one. C5 left this
+ * entry out because it had no flow to mint an id; C6 is that flow, and the ruling — one list of what
+ * can be picked — is what puts it back.</p>
+ */
+function customOption(): readonly VendorOption[] {
+  const { custom } = consultableVendors();
+
+  return custom === undefined ? [] : [{ value: CUSTOM_ENDPOINT, label: custom.label, hint: custom.hint }];
 }
 
 /**

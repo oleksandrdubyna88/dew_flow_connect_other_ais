@@ -5,6 +5,7 @@ import {
   CHOICE_FIELDS,
   CONSULTANT_DEFINITION_SINCE,
   CONSULTING_RUNTIMES,
+  CUSTOM_ENDPOINT,
   ConsultantChoice,
   DEFAULT_CONSULT,
   ResolvedConsultant,
@@ -18,9 +19,9 @@ import {
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
-import { consultantRecordUpdate, envBlock, settingWrite, settingsFrom } from '../settingsShape';
+import { consultantEndpointWrite, consultantRecordUpdate, endpointAnswer, endpointConflict, envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
-import { VENDOR_PRESETS, Vendor, vendorsFrom } from '../vendors';
+import { VENDOR_PRESETS, Vendor, normaliseId, vendorsFrom } from '../vendors';
 
 /**
  * The Consultant section: who answers each kind of caller, the caps, and the prompt box.
@@ -764,6 +765,21 @@ test('a vendor the catalogue can still offer is never in the list twice', () => 
   assert.equal(view.options.filter((one) => one.value === 'deepseek').length, 1);
 });
 
+test('every row offers the way to an endpoint of your own, and it is never the one selected', () => {
+  // The catalogue's blank preset — the entry *Add a reviewer* makes storable by ASKING for a name.
+  // C5 left it out because an id keys the vault entry and one that stores '' is an entry a person
+  // can see and cannot choose; C6 gives it the flow that mints one, so it can be offered.
+  const view = viewOf(definition('codex', 'codex'));
+  const custom = view.options.find((one) => one.value === CUSTOM_ENDPOINT);
+  const blank = VENDOR_PRESETS.find((one) => one.id.length === 0);
+
+  assert.ok(custom !== undefined, 'the ruling is that the list of what can be picked is the same list');
+  assert.equal(custom.label, blank!.label, 'under the catalogue’s own words, like every other option');
+  assert.equal(custom.hint, blank!.hint);
+  assert.ok(view.options.every((one) => one.value !== view.vendor || one.value !== CUSTOM_ENDPOINT),
+    'the sentinel is a request, never a selection');
+});
+
 test("an option carries the catalogue's own hint, not a bare name", () => {
   const offered = viewOf(definition('codex', 'codex')).options.find((one) => one.value === 'deepseek');
 
@@ -1121,6 +1137,66 @@ test('the reviewer rows handed to the write are the ones materialised', () => {
   assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', '', otherSide)['claude'],
     { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', executablePath: 'D:/other/codex.cmd' },
     'the other side\u0027s row lends its model and CLI path, so the rows argument is what decides');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Story C6 — an endpoint of the consultant's own: the name and the URL a person typed
+
+test("a custom endpoint is stored as THAT caller's own definition — the runtime and the URL, nothing borrowed", () => {
+  const written = consultantEndpointWrite(DEFAULT_CONSULT.stored, 'gemini', 'mistral', 'https://api.mistral.ai/v1');
+
+  assert.deepEqual(written['gemini'],
+    { vendor: 'mistral', runtime: 'codex', model: '', baseUrl: 'https://api.mistral.ai/v1' },
+    'what the catalogue’s blank preset IS: the codex runtime at an endpoint, under the name that keys the vault');
+  assert.deepEqual(written['claude'], DEFAULT_CONSULT.stored['claude'],
+    'and the other three callers are untouched — the command carries a caller for a reason');
+});
+
+test('a name that normalises to nothing writes nothing, and neither does a caller this build does not have', () => {
+  // The id is the vault key. There is no entry to store it under and nothing to show a person, so
+  // the only honest outcome is no write at all.
+  assert.deepEqual(consultantEndpointWrite(DEFAULT_CONSULT.stored, 'gemini', '  ', 'https://api.example.com/v1'),
+    DEFAULT_CONSULT.stored);
+  assert.deepEqual(consultantEndpointWrite(DEFAULT_CONSULT.stored, '__proto__', 'mistral', 'https://api.example.com/v1'),
+    DEFAULT_CONSULT.stored);
+});
+
+test('the name is normalised the way Add a reviewer normalises it — one flow, one id, one vault key', () => {
+  assert.equal(
+    (consultantEndpointWrite(DEFAULT_CONSULT.stored, 'claude', 'My Mistral!', 'https://api.mistral.ai/v1')['claude'] as { vendor: string }).vendor,
+    normaliseId('My Mistral!'),
+  );
+});
+
+test('an id already held at a DIFFERENT endpoint is refused — one name is one credential', () => {
+  // Two endpoints under one name would send one key to whichever answered second. The check spans
+  // the reviewer rows AND the other callers, because both key the vault by id.
+  const rows = [{ ...vendor('mistral'), baseUrl: 'https://api.mistral.ai/v1' }];
+  const consultants = { claude: { vendor: 'acme', runtime: 'codex', model: '', baseUrl: 'https://acme.example/v1' } };
+
+  assert.match(endpointConflict('mistral', 'https://other.example/v1', rows, consultants), /mistral/);
+  assert.match(endpointConflict('acme', 'https://other.example/v1', rows, consultants), /acme/);
+  assert.equal(endpointConflict('mistral', 'https://api.mistral.ai/v1', rows, consultants), '',
+    'the same endpoint under the same name is one vault key used twice, which is the point of a name');
+  assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants), '');
+});
+
+test('a dismissed box writes nothing — the SECOND one as much as the first', () => {
+  // A person who typed a name and then closed the URL box has consented to no more than one who
+  // closed the first, and an endpoint minted from a name alone would have nowhere to reach.
+  assert.equal(endpointAnswer(undefined, undefined), undefined);
+  assert.equal(endpointAnswer('mistral', undefined), undefined);
+  assert.equal(endpointAnswer(undefined, 'https://api.mistral.ai/v1'), undefined);
+  assert.equal(endpointAnswer('  ', 'https://api.mistral.ai/v1'), undefined, 'a name that keys no vault entry is no name');
+  assert.deepEqual(endpointAnswer('My Mistral!', '  https://api.mistral.ai/v1  '),
+    { id: 'my-mistral', baseUrl: 'https://api.mistral.ai/v1' });
+});
+
+test('a Team server is not a thing a custom endpoint can become', () => {
+  // The forbidding is by construction: `remote` is the runtime, and this write names `codex`.
+  const written = consultantEndpointWrite(DEFAULT_CONSULT.stored, 'codex', 'acme-codex', 'https://coai.acme.example');
+
+  assert.equal((written['codex'] as { runtime: string }).runtime, 'codex');
 });
 
 test('an emptied prompt box removes the override rather than writing a prompt that says nothing', () => {
