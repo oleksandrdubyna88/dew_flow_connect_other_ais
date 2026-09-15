@@ -61,6 +61,43 @@ unreachable from this path now, and stays as the guard for every other one.
 `{ ...preset, id: offered.id }` where `offered` was the ARRAY. `offered.id` is `undefined`, which
 would have written a row with no id *and* skipped `askCustomEndpoint` for the blank preset — one
 line, two defects, neither visible in a passing pure test.
+### A run with no spaces in it wraps, and the two boxes that scroll keep scrolling (2026-09-15)
+
+A question with a long path or URL in it ran off the right-hand edge and the conversation grew a
+horizontal scrollbar (issue #299). `white-space: pre-wrap` — on `.msg.you .what` and on `.passage` —
+wraps only where a break opportunity already exists, which in practice means a space. A Windows
+path, a URL, a stack frame or a base64 blob has none.
+
+The overflow became a SCROLLBAR rather than a spill because of the layout: `body` is
+`overflow: hidden` so the page itself cannot scroll, and `#scroll` sets only `overflow-y: auto` —
+per CSS, `overflow-x: visible` **computes to `auto`** when the other axis is not `visible`. The
+question is the widest thing on the page because a `you` bubble is not what the person typed: it is
+the composed prompt, fence and captured passage included.
+
+`.msg .what` and `.passage` now carry **`overflow-wrap: anywhere`**.
+
+**Why `anywhere` and not `break-word`, which the three siblings on this page use** (`.askedText`,
+`#say`, `#ghost`): the two differ in exactly one way, and the plan round is what surfaced it —
+`break-word` does not affect a box's intrinsic **min-content** width, `anywhere` does. Where a box is
+sized BY its content, `break-word` leaves it as wide as the unbreakable run and the scrollbar
+survives the fix. That is not the case here — `#scroll` is a flex item of a **column** container, so
+its automatic minimum is on height (which is why the neighbouring comment sets `min-height: 0`), and
+`.msg` is a plain block — so `break-word` would have worked. `anywhere` was taken because it costs
+nothing, because `panelView.ts`'s `.round .line` already settled on it for this same symptom, and
+because it makes the question moot rather than something the next reader has to re-derive.
+
+**`.msg .what pre, .msg .what table { overflow-wrap: normal; }`** takes it back where it must not
+apply. `overflow-wrap` is inherited, and both of those boxes scroll on purpose. The `pre` would have
+been safe by accident — `white-space: pre` leaves the property nothing to act on — and safe by
+accident stops being safe the day somebody makes it `pre-wrap`. The **table** is the real one: it is
+`display: block; overflow-x: auto` and its cells *do* wrap, so inheriting the wrap would have broken
+a long token in a cell, re-flowed the columns and quietly removed the horizontal scroll the rule was
+written for. Its test pins both halves — the exclusion, and that `pre` keeps `overflow-x: auto`
+*without* gaining `white-space: pre-wrap`.
+
+**What this is not:** evidence that text wraps. No test here can observe that — the page harness runs
+the page's script against a DOM shim with no layout engine, so `scrollWidth` is a number the test
+set. The declarations are what is checkable; the gap is named in `module_tests.md`.
 
 ### What the code round did to the chat tab (2026-09-08)
 

@@ -1329,6 +1329,63 @@ test('the prose is the editor\'s foreground and has room to breathe', () => {
   assert.doesNotMatch(ruleFor(css, '.msg.you .what'), /opacity/, 'the person\'s own words are dimmed');
 });
 
+// ---------- a long run with no spaces in it (issue #299) ----------
+//
+// `white-space: pre-wrap` wraps only where there is already a break opportunity, which in practice
+// means a space. A Windows path, a URL, a stack frame or a base64 blob has none, so it overflows —
+// and because `body` cannot scroll (`overflow: hidden`) while `#scroll` sets only `overflow-y`, the
+// computed `overflow-x` becomes `auto` and the whole conversation slides sideways instead.
+//
+// `anywhere` rather than `break-word`: the two differ in that `break-word` does not affect a box's
+// intrinsic min-content width, so it leaves the scrollbar in place wherever a box is sized BY its
+// content. Nothing between `#scroll` and `.msg` is such a box today — `.msg` is a plain block — but
+// the sibling surface (`panelView.ts`, `.round .line`) already uses `anywhere` for this exact
+// symptom, and taking it costs nothing. (gemini, the plan round.)
+
+test('a question with no spaces in it wraps instead of widening the page', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+
+  assert.match(
+    ruleFor(css, '.msg .what'),
+    /overflow-wrap: anywhere/,
+    'a long path in a question cannot break, so it widens the bubble and the conversation scrolls sideways',
+  );
+});
+
+test('the captured passage wraps too', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+
+  assert.match(
+    ruleFor(css, '.passage'),
+    /overflow-wrap: anywhere/,
+    'the code a question was asked about cannot break, and it is usually the widest thing on the page',
+  );
+});
+
+test('the boxes that scroll on purpose do not inherit the wrap', () => {
+  // A REGRESSION GUARD, green before this change and after it. `overflow-wrap` is inherited, and two
+  // boxes inside `.msg .what` scroll deliberately: `pre`, whose comment says "a long line of code
+  // must not widen the page", and `table`, which is `display: block; overflow-x: auto` and whose
+  // CELLS do wrap. Without the exclusion, a long token in a cell would re-flow the columns and
+  // quietly remove the scroll the rule exists for. (codex, the plan round.)
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+
+  assert.match(
+    ruleFor(css, '.msg .what pre, .msg .what table'),
+    /overflow-wrap: normal/,
+    'the code block and the table now inherit the wrap, so their own horizontal scroll is gone',
+  );
+
+  // Both halves. A `pre` keeping `overflow-x: auto` while its `white-space` became `pre-wrap` would
+  // wrap its lines with every other assertion here still green.
+  assert.match(ruleFor(css, '.msg .what pre'), /overflow-x: auto/, 'the code block stopped scrolling in its own box');
+  assert.doesNotMatch(
+    ruleFor(css, '.msg .what pre'),
+    /white-space: pre-wrap/,
+    'the code block wraps its lines now, which is the decision this box was built to hold',
+  );
+});
+
 test('a link posts to the host and never navigates the page itself', () => {
   const page = runChatPage();
   page.deliver({

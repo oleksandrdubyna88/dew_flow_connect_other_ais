@@ -236,6 +236,18 @@ The most valuable section, and the first one people drop.
 - **No extension host in CI**, per the table above — so a defect that needs the real `vscode` API to
   appear (a command wired to the wrong handler, a webview CSP change) is caught by installing the
   build and using it, which is exactly how the 0.18.1 SQLite defect was found.
+- **No LAYOUT anywhere, so no CSS behaviour is ever observed.** The page harness executes a page's
+  SCRIPT against a hand-written DOM shim; the shim has no layout engine, so `scrollWidth`,
+  `clientWidth`, `getBoundingClientRect` and computed styles are whatever the test set them to. What
+  a CSS change can therefore be tested for is that the DECLARATION is in the stylesheet — which
+  `chatPage.test.ts`'s `rules()`/`ruleFor()` parser reads as data — and that a rule which must NOT
+  inherit something says so. That a long unbreakable run actually wraps, or that the conversation has
+  no horizontal scrollbar, is **not** proven here and cannot be without a real browser. The wrap fix
+  of 2026-09-15 (issue #299) is asserted exactly this far and no further: `.msg .what` and `.passage`
+  carry `overflow-wrap: anywhere`, `.msg .what pre, .msg .what table` carry `overflow-wrap: normal`,
+  and the `pre` keeps `overflow-x: auto` without gaining `white-space: pre-wrap`. A test that
+  inserted a long string and asserted "no overflow" against the shim would assert something the shim
+  decided, and would look like evidence while proving less than the declaration does.
 - **One platform per run.** The suites run on the CI matrix; the AOT publish covers six RIDs and the
   release smoke exercises the binary on every RID whose machine can execute it — but `osx-x64` is
   cross-built on an arm64 runner and is not executed there.
