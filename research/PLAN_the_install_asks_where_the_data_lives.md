@@ -4,8 +4,12 @@
 > folder that already holds a history is adopted, the block copied to the clipboard carries the two
 > variables, the panel can change the folder or move what is in it, and the move copies, verifies and
 > then unlocks a separate delete. Extension 0.44.0. **The `coai` gate ran both stages:** a plan round
-> (3 reviewers, `good_enough`, 18 findings — 12 accepted) and a code round (12 reviewers, `revise`,
-> 31 findings — 16 accepted), every finding resolved with a reason. Still owed: one real run on a
+> (3 reviewers, `good_enough`, 18 findings — 12 accepted) and two code rounds (12 then 3 reviewers,
+> `revise` then `good_enough`, 31 and 10 findings — 16 and 6 accepted), every finding resolved with a
+> reason. **The second code round earned its keep**: three reviewers independently found that round
+> one's own fix had left the copy and the verification on the picked root while everything else took
+> `<destination>/<side>`, so a partitioned move would have put the history in one directory and
+> pointed the settings at an empty one beside it. Still owed: one real run on a
 > machine with a NAS — a tail, because every refusal and every count below is asserted, and what a
 > live run adds is the one thing a test cannot have, which is a real SMB share.
 >

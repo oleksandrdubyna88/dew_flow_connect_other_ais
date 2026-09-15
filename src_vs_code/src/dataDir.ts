@@ -89,8 +89,14 @@ export function directoryFor(root: string, side: string): string {
   return named.length === 0 ? absolute : join(absolute, named);
 }
 
-/** `%LOCALAPPDATA%\coai-mcp`, or its equivalent — what `PanelSettings.DefaultDataDir` answers. */
-function defaultDataDir(): string {
+/**
+ * `%LOCALAPPDATA%\coai-mcp`, or its equivalent — what `PanelSettings.DefaultDataDir` answers.
+ *
+ * <p>Exported because "is the default what this window is actually using" is a question the install
+ * flow has to ask: a shared setting made on another side is what a window with no override resolves,
+ * so being TOLD to keep the default is not the same as already being on it.</p>
+ */
+export function defaultDataDir(): string {
   const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
 
   return `${localAppData}/coai-mcp`;
