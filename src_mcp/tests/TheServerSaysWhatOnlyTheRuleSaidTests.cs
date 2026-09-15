@@ -29,6 +29,11 @@ namespace CoaiMcp.Tests;
 /// <see cref="RoundMachineTests"/> owns the override rule, including the sharp half of it (an
 /// exhausted escalate stage has no rounds left either, so "no rounds" is not "a person was asked").
 /// Writing those again here would be a second implementation of a guarantee that already has one.</para>
+/// <para>The phrasings these pin are SHORT on purpose. The instruction block has a 2 KiB budget
+/// (<see cref="TheInstructionsFitWhatAClientKeepsTests"/>), and the first draft of these three
+/// paragraphs pushed the text to 2,966 characters — so the end of it, including `consult`, never
+/// reached a session at all. The claim is what is asserted here; the wording is as long as the
+/// budget allows.</para>
 /// <para>A sentence on a shipping surface that the machine does not implement is worse than no
 /// sentence, so each claim was read against the machine before it was written down. That caught one:
 /// the draft said the override is "refused while rounds remain", which is the rule the code USED to
@@ -56,14 +61,14 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     public void CallHumanIsAnEnforcedStopAndTheToolsSaySo() =>
         Instructions.Should().Contain("call_human")
             .And.Contain("REFUSE")
-            .And.Contain("does not reopen",
+            .And.Contain("does not clear it",
                 "the verdict stopping the shipping and the tools refusing are different claims, and only "
                 + "the second one is what the round machine does");
 
     [Fact]
     public void OnlyAPersonClearsTheGate() =>
         Instructions.Should().Contain("humanDecision: \"proceed\"")
-            .And.Contain("ONLY after a call_human verdict",
+            .And.Contain("ONLY after that verdict",
                 "an AI that could grant itself the override is an AI the stop does not stop — and the "
                 + "rule is what the override would CHANGE, not how many rounds are left");
 
