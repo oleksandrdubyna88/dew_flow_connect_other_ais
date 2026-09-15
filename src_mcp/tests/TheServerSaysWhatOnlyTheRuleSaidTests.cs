@@ -67,6 +67,44 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
                 "an AI that could grant itself the override is an AI the stop does not stop — and the "
                 + "rule is what the override would CHANGE, not how many rounds are left");
 
+    /// <summary>
+    /// The `resolve` tool description is the OTHER surface that states the override rule, and it is
+    /// the one a caller reads first.
+    /// </summary>
+    /// <remarks>
+    /// <para>It carried the stale claim too, which is how this was found: correcting the server
+    /// instructions alone would have left a caller reading "refused while rounds remain" in the tool
+    /// metadata beside a server saying something else.</para>
+    /// <para>Read from the source of <c>Tools.cs</c>, the way <see cref="ScenarioCoverageTests"/>
+    /// reads the tool names: the registry needs a live host to enumerate, and this is a check about
+    /// TEXT. Both directions are asserted — the corrected rule present AND the old one absent —
+    /// because a source-read test that matches only a fragment survives its own break.</para>
+    /// </remarks>
+    [Fact]
+    public void TheResolveToolDescriptionStatesTheSameOverrideRule()
+    {
+        var source = File.ReadAllText(ToolsSourcePath());
+
+        source.Should().Contain("applies only after that verdict",
+            "the tool description is where a caller meets the rule before any round runs");
+        source.Should().NotContain("refused while rounds remain",
+            "that is the rule the round machine had and corrected: the override is judged by what it "
+            + "would CHANGE, not by how many rounds are left");
+    }
+
+    private static string ToolsSourcePath()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "src_mcp", "src", "Tools.cs")))
+        {
+            here = here.Parent;
+        }
+
+        here.Should().NotBeNull("Tools.cs was not found above the test binary");
+
+        return Path.Combine(here!.FullName, "src_mcp", "src", "Tools.cs");
+    }
+
     [Fact]
     public void TheProtocolIsStillThereForACallerThatHasNoRuleFile() =>
         Instructions.Should().Contain("open").And.Contain("review_plan").And.Contain("review_code")
