@@ -1,5 +1,29 @@
 # Changelog
 
+## Extension 0.45.1 — 2026-09-15
+
+**Moving your data now takes the logs with it, and `rounds.md`.** Both were filed as things written
+again by themselves, and neither is: a new run writes a new log and says nothing about the runs
+already recorded, and nothing has written `rounds.md` since the rounds log became a database — it is
+the history as it stood before that, and it was being left behind for ever on exactly the machines
+about to be reformatted.
+
+**Three more things a real data directory turned out to hold**, found by looking at one that has been
+in daily use rather than by scanning the source: `engines/` (a lock, a waiting queue and the history
+behind them, for arbitration over a local model engine), `bin/` (where logs were written before
+2026-09-06) and `settings.json.bak`. None of them is copied — a held lock on a NAS hands another
+machine a claim on a card it cannot see — and all three are named in the inventory now, so the next
+person reading it sees what a real folder contains.
+
+**A folder that has merely been logged into is still a valid destination.** Moving something and
+being destroyed by it are two questions, and the logs are where they come apart: a log file is named
+for its run and its pid, so a second installation's logs land beside the first's and overwrite
+nothing. Refusing on them would have refused every folder a server has ever been pointed at.
+
+**One caveat, stated rather than hidden:** on an installation partitioned with `coai.dataSide`, the
+server writes its logs to the ROOT folder and not to the side directory, so a partitioned move finds
+none there to take. That is a defect in the server half with its own plan; the entry says so.
+
 ## Extension 0.45.0 — 2026-09-15
 
 **A chat turn can no longer end with nothing on the screen.** If the model came back having said

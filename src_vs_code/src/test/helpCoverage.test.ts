@@ -255,3 +255,26 @@ test('a translation is a translation, not the English text pasted across', () =>
     }
   }
 });
+
+test('every language says the logs move, not only English', () => {
+  // `bodyFor` marks a translation that is MISSING and says nothing about one that is BEHIND, which
+  // is this repository's own recorded trap — the audit-log article was a release out of date in four
+  // languages and nothing caught it. The five were edited together when the logs started moving
+  // (2026-09-15); this is what catches the next change that forgets one. (codex, plan round.)
+  const article = HELP_ARTICLES.find((one) => one.id === 'where-your-data-lives');
+  assert.ok(article !== undefined, 'the storage article has been renamed, and this asserts nothing');
+
+  for (const language of HELP_LANGUAGES) {
+    const { body, fallback } = bodyFor(article, language);
+    assert.equal(fallback, false, `the ${language} storage article is missing, so a reader gets English`);
+    assert.match(
+      Object.values(body).join(' '),
+      // Two alphabets. The Russian and Ukrainian articles say "логи", which a Latin-only pattern
+      // reads as an absence — the first version of this test did exactly that and accused a
+      // translation that was perfectly correct.
+      /log|лог/iu,
+      `the ${language} storage article never mentions the logs, so a reader of it moves their data `
+      + 'believing the logs stayed behind — or does not know to look for them',
+    );
+  }
+});

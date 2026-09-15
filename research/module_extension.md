@@ -2114,6 +2114,40 @@ sources for paths composed under the data directory and fails on one the fixture
 - **A failed copy says the destination is partially written**, because the next attempt refuses a
   folder holding any part of a history, and somebody who is not told meets a refusal they cannot clear.
 
+### What a real installation added to the inventory (2026-09-15)
+
+**A scan of the source could not substitute for looking at one.** Checked against `V:\connectOtherAis`
+on a NAS and the default directory of a machine in daily use: the scan reads the paths the code
+composes TODAY, and a directory in use for months also holds what older versions composed and what is
+composed where the patterns do not reach. Three entries it had never heard of were sitting in it —
+`engines/` (a lock, a waiting queue and the history behind them, for arbitration over a local model
+engine; a held lock copied to a NAS hands another machine a claim on a card it cannot see), `bin/`
+(where logs were written before 2026-09-06) and `settings.json.bak`. None is copied; all three are
+named now.
+
+`logs/` and `rounds.md` went the other way, from "written again by itself" to carried — the first by
+the operator's decision, the second because nothing has written it since the rounds log became a
+database, which is precisely what makes it the kind of thing left behind for ever. That split one
+property in two: **`DATA_TO_MOVE` is what a move CARRIES; `HISTORY_THAT_CLASHES` is what makes a
+destination refuse.** They differ by `logs/` alone — a log file is named for its run and its pid, so a
+second installation's logs land beside the first's and overwrite nothing, where one `coai.db` lands on
+top of another. Refusing on logs would have refused every folder a server had ever been pointed at.
+
+**The live check also settled the tail the plan was carrying.** On a UNC-backed drive
+(`\\192.168.1.113\Shared_Drive_Work`): both halves resolve the same string for the same pair,
+partitioned and not; a 46 MB history copied in 19.5 s and read back as the same 548 rounds and 9 090
+findings; a side directory read 0 rounds while the root held 548, so the partition does not leak; a
+refused side name exits non-zero, which `readLog` turns into `read: false` rather than a verified
+empty history; and `coai.db-wal`/`-shm` appeared in the source directory simply because the log had
+been read — which is the evidence that refusing a move on a sidecar, as the first build did, would
+have refused this very installation.
+
+One caveat the entry states in full: on an installation partitioned with `coai.dataSide`, the server
+writes its logs to the ROOT and not to the side directory, because `SettingsFile.DataDirFrom` applies
+no side. A partitioned move therefore finds none there to take until
+[../todo/PLAN_the_settings_file_ignores_the_side.md](../todo/PLAN_the_settings_file_ignores_the_side.md)
+ships.
+
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
 
 | Record | Scope | What it is |
