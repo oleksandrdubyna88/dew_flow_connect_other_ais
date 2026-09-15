@@ -1,8 +1,9 @@
 import { hostname } from 'node:os';
+import { resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
-import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, directoryFor, serverEnv } from './dataDir';
-import { destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
+import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, directoryFor, serverEnv } from './dataDir';
+import { destinationPlaceRefusal, destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
 import { serverPath } from './installer';
@@ -39,16 +40,32 @@ import { asText } from './asText';
  * <p>Answering nothing keeps the default, on purpose: a dismissed dialog must leave an installation
  * that works, not one that is half-configured.</p>
  */
-export async function askWhereDataLives(context: vscode.ExtensionContext): Promise<void> {
-  const DEFAULT = 'Keep it in the default folder';
+export async function askWhereDataLives(
+  context: vscode.ExtensionContext,
+  /**
+   * Whether this is the FIRST install on this side, which changes two things.
+   *
+   * <p>The install path hands the block over itself, so this flow must not — two modals about the
+   * same paste, the first describing it as an update to a client that does not exist yet (codex).
+   * And "keep the default" means "change nothing" there, where from the Change command it has to
+   * mean "put it back", which is what the advertised command was silently failing to do.</p>
+   */
+  installing = false,
+): Promise<ChoiceOutcome> {
+  const DEFAULT = installing ? 'Keep it in the default folder' : 'Put it back in the default folder';
   const CHOOSE = 'Choose a folder…';
   const answer = await vscode.window.showQuickPick([DEFAULT, CHOOSE], {
     title: 'Where should ConnectOtherAIs keep its data?',
     placeHolder: `${coaiDataDir()} — rounds, sessions, chats and spending`,
     ignoreFocusOut: true,
   });
-  if (answer !== CHOOSE) {
-    return;
+  if (answer === undefined) {
+    return 'unchanged';
+  }
+  if (answer === DEFAULT) {
+    // On an install this is genuinely nothing to do. From the Change command it is a RESET, and
+    // returning here was the command quietly doing nothing at all. (codex, code round.)
+    return installing ? 'unchanged' : saveChoice(context, '', '');
   }
 
   const picked = await vscode.window.showOpenDialog({
@@ -60,7 +77,7 @@ export async function askWhereDataLives(context: vscode.ExtensionContext): Promi
   });
   const folder = picked?.[0];
   if (folder === undefined) {
-    return;
+    return 'unchanged';
   }
 
   // The ROOT is read first only to offer the sides already in it, which is a fact about the root.
@@ -70,7 +87,7 @@ export async function askWhereDataLives(context: vscode.ExtensionContext): Promi
   const inTheRoot = await whatIsIn(folder);
   const side = await askForSideName(inTheRoot);
   if (side === undefined) {
-    return;
+    return 'unchanged';
   }
 
   const resolved = directoryFor(folder.fsPath, side);
@@ -86,25 +103,54 @@ export async function askWhereDataLives(context: vscode.ExtensionContext): Promi
     go,
   );
   if (confirmed !== go) {
-    return;
+    return 'unchanged';
   }
 
+  const saved = await saveChoice(context, folder.fsPath, side);
+  if (saved === 'saved' && !installing) {
+    // Not on the install path: that flow copies the block itself, and doing it here as well showed
+    // two modals about one paste — the first describing it as an update to a client that is not
+    // configured yet. (codex, code round.)
+    await tellClientsToCatchUp(context, resolved);
+  }
+
+  return saved;
+}
+
+/** What a chooser did, so its caller can tell "nothing to do" from "it did not work". */
+export type ChoiceOutcome = 'saved' | 'unchanged' | 'refused';
+
+/**
+ * Write the pair and put it into effect, or report that it was refused.
+ *
+ * <p>Both settings or neither is the intent, and the honest limitation is that VS Code gives no
+ * transaction: if the second write is refused the first has landed. That is why the outcome is
+ * REPORTED rather than swallowed — `install()` used to go on and copy a block built from a state
+ * nobody had asked for, while the install record it had just written stopped the question ever being
+ * asked again. (codex, code round.)</p>
+ */
+async function saveChoice(
+  context: vscode.ExtensionContext,
+  directory: string,
+  side: string,
+): Promise<ChoiceOutcome> {
   const config = vscode.workspace.getConfiguration('coai');
   try {
-    await saveSetting(context, config, 'dataDirectory', folder.fsPath);
+    await saveSetting(context, config, 'dataDirectory', directory);
     await saveSetting(context, config, 'dataSide', side);
   } catch (error) {
-    // The choice did not land, so nothing may claim it did — and the block copied next must carry
-    // what is actually in effect rather than what was asked for.
     reportRefusal(context, 'dataDirectory', error);
+    // Whatever landed is now in effect, and the panel must show THAT rather than what was asked for.
+    storageReadsThisSide(context);
 
-    return;
+    return 'refused';
   }
 
-  // In effect for THIS window immediately: the block about to be copied is built from it, and so is
-  // every path the panel resolves from here on.
+  // In effect for THIS window immediately: every path the panel resolves from here on, and the block
+  // anybody copies next, are built from it.
   storageReadsThisSide(context);
-  await tellClientsToCatchUp(context, resolved);
+
+  return 'saved';
 }
 
 /**
@@ -193,21 +239,39 @@ async function askForSideName(found: FolderReport): Promise<string | undefined> 
  */
 async function whatIsIn(folder: vscode.Uri): Promise<FolderReport> {
   try {
-    const entries = await withinReason(vscode.workspace.fs.readDirectory(folder));
-    const inside = await Promise.all(entries.map(async ([name, kind]) => ({
-      name,
-      isDirectory: kind === vscode.FileType.Directory,
-      hasDatabase: kind === vscode.FileType.Directory
-        && await exists(vscode.Uri.joinPath(folder, name, DATABASE_FILE)),
-    })));
-
-    return {
-      hasDatabase: entries.some(([name, kind]) => name === DATABASE_FILE && kind === vscode.FileType.File),
-      sides: sidesIn(inside),
-    };
+    // The WHOLE inspection inside the deadline, not only the listing. Bounding `readDirectory` and
+    // then starting an unbounded `stat` per entry left the flow hanging exactly where it had been
+    // hanging before, on the second call rather than the first. (codex, code round.)
+    return await withinReason(inspect(folder));
   } catch {
     return { hasDatabase: false, sides: [] };
   }
+}
+
+/** How many child directories are asked about at once. A NAS is not a local disk. */
+const PROBES_AT_ONCE = 8;
+
+async function inspect(folder: vscode.Uri): Promise<FolderReport> {
+  const entries = await vscode.workspace.fs.readDirectory(folder);
+  const directories = entries.filter(([, kind]) => kind === vscode.FileType.Directory);
+  const inside: { name: string; isDirectory: boolean; hasDatabase: boolean }[] = [];
+
+  // In batches rather than all at once: a root with ten thousand subdirectories would otherwise open
+  // ten thousand concurrent requests against one share, which is slower than doing it in order and
+  // is how a probe stops answering at all. (codex, code round.)
+  for (let at = 0; at < directories.length; at += PROBES_AT_ONCE) {
+    const batch = directories.slice(at, at + PROBES_AT_ONCE);
+    inside.push(...await Promise.all(batch.map(async ([name]) => ({
+      name,
+      isDirectory: true,
+      hasDatabase: await exists(vscode.Uri.joinPath(folder, name, DATABASE_FILE)),
+    }))));
+  }
+
+  return {
+    hasDatabase: entries.some(([name, kind]) => name === DATABASE_FILE && kind === vscode.FileType.File),
+    sides: sidesIn(inside),
+  };
 }
 
 /** How long a folder has to answer before the flow stops waiting for it. */
@@ -290,7 +354,22 @@ export async function moveDataDirectory(
     return;
   }
 
-  const clash = destinationRefusal(await historyIn(destination));
+  // WHERE it is, before what is in it. `C:\coai` into `C:\coai\new` passes every other check and
+  // then loses the copy to the delete that follows. (codex, Blocking.)
+  const place = destinationPlaceRefusal(from, destination.fsPath, isInside);
+  if (place.length > 0) {
+    void vscode.window.showWarningMessage(place);
+
+    return;
+  }
+
+  // The side travels with the data. Saving an empty one silently unpartitioned an installation that
+  // had been partitioned on purpose — and on a shared NAS that is exactly the collision a side
+  // exists to prevent. (gemini, code round.)
+  const side = dataSideName();
+  const landing = vscode.Uri.file(directoryFor(destination.fsPath, side));
+
+  const clash = destinationRefusal(await historyIn(landing));
   if (clash.length > 0) {
     void vscode.window.showWarningMessage(clash);
 
@@ -308,7 +387,9 @@ export async function moveDataDirectory(
     {
       modal: true,
       detail: `Nothing is deleted. ${from} is left exactly as it is, and you can delete it yourself `
-        + 'once you have seen your history in the new folder.\n\nWhat is copied: '
+        + 'once you have seen your history in the new folder.\n\nOn a network drive this can take '
+        + 'minutes: the chat conversations and the sessions are thousands of small files, and the '
+        + 'progress names each entry as it starts rather than each file.\n\nWhat is copied: '
         + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`,
     },
     go,
@@ -333,16 +414,10 @@ export async function moveDataDirectory(
     },
   );
 
-  await context.globalState.update(MOVE_RECORD, {
-    from,
-    to: destination.fsPath,
-    verified: copied.length === 0,
-    // What the SOURCE held when it was copied, so the delete can tell later whether anything has
-    // written to it since — the one defence against a server this extension cannot stop or see.
-    held: before,
-  } satisfies MoveRecord);
-
   if (copied.length > 0) {
+    // NOTHING is recorded. A record written here could never be cleared except by another whole
+    // move, and a record that cannot be cleared is a state a person is trapped in. (gemini.)
+    await context.globalState.update(MOVE_RECORD, undefined);
     void vscode.window.showErrorMessage(copied);
 
     return;
@@ -351,21 +426,48 @@ export async function moveDataDirectory(
   // Only now does this window point at the new folder — after the copy AND after the check. Pointing
   // first and copying second would show an empty history for as long as the copy took, and for ever
   // if it failed.
-  const config = vscode.workspace.getConfiguration('coai');
-  try {
-    await saveSetting(context, config, 'dataDirectory', destination.fsPath);
-    await saveSetting(context, config, 'dataSide', '');
-  } catch (error) {
-    reportRefusal(context, 'dataDirectory', error);
+  if (await saveChoice(context, destination.fsPath, side) !== 'saved') {
+    // The settings did not land, so this window still reads the OLD folder. Recording the move as
+    // verified here would enable a delete of the directory in use. (codex, code round.)
+    await context.globalState.update(MOVE_RECORD, undefined);
+    void vscode.window.showWarningMessage(
+      `Everything was copied to ${landing.fsPath} and reads back the same, but this window could not `
+      + 'be pointed at it. Nothing has been deleted; set the folder yourself in Settings, as '
+      + 'coai.dataDirectory.');
 
     return;
   }
-  storageReadsThisSide(context);
+
+  // The record is written LAST, when the copy verified and the settings landed — the two conditions
+  // under which deleting the old folder is a safe thing to offer.
+  await context.globalState.update(MOVE_RECORD, {
+    from,
+    to: landing.fsPath,
+    verified: true,
+    // What the SOURCE held when it was copied, so the delete can tell later whether anything has
+    // written to it since — the one defence against a server this extension cannot stop or see.
+    held: before,
+  } satisfies MoveRecord);
 
   void vscode.window.showInformationMessage(
-    `Your data is in ${destination.fsPath} and reads back the same ${before.rounds} rounds. `
-    + `${from} still holds the original — delete it with "Delete the old data folder" once you are sure.`);
-  await tellClientsToCatchUp(context, destination.fsPath);
+    `Your data is in ${landing.fsPath} and reads back the same ${before.rounds} rounds. ${from} still `
+    + 'holds the original — delete it from the Command Palette, with "ConnectOtherAIs: Delete the old '
+    + 'data folder", once you are sure.');
+  await tellClientsToCatchUp(context, landing.fsPath);
+}
+
+/**
+ * Whether one path is the other, or sits inside it — the platform's own comparison.
+ *
+ * <p>Case-insensitive on Windows, where `C:\Coai` and `c:\coai` are one directory, and a separator
+ * is appended before the prefix test so `C:\coai2` is not read as living inside `C:\coai`.</p>
+ */
+function isInside(outer: string, inner: string): boolean {
+  const fold = (path: string): string => (process.platform === 'win32' ? path.toLowerCase() : path);
+  const a = fold(resolve(outer));
+  const b = fold(resolve(inner));
+
+  return b === a || b.startsWith(a.endsWith(sep) ? a : `${a}${sep}`);
 }
 
 /**

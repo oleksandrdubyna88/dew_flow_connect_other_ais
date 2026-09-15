@@ -28,7 +28,7 @@ import { startHousekeeping } from './chatStoreHousekeeping';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
-import { coaiDataDir, serverEnv } from './dataDir';
+import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
@@ -829,8 +829,16 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
       { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
       () => installLatest(context.globalStorageUri, context.globalState),
     );
-    if (firstTime) {
-      await askWhereDataLives(context);
+    if (firstTime && await askWhereDataLives(context, true) === 'refused') {
+      // The choice did not land, so the block below would carry a configuration nobody asked for —
+      // and the install record written moments ago stops the question ever being asked again. Say
+      // so instead of copying something misleading. (codex, code round.)
+      void vscode.window.showErrorMessage(
+        `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
+        + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
+        + 'where your data lives" and paste the block it gives you.');
+
+      return;
     }
     // The block carries the two variables — the ONE configuration a client entry must hold, because
     // the settings file that carries everything else lives inside the directory they select. See
@@ -1066,24 +1074,70 @@ async function countStorage(
     rounds: log?.totals.rounds ?? 0,
     sessions: await countIn(vscode.Uri.joinPath(root, 'sessions'), '.json'),
     usageLines: await countLines(vscode.Uri.joinPath(root, 'usage.jsonl')),
+    // Every moved DIRECTORY, so an edited prompt, a new picture or an audit record is seen — three
+    // counts covered the database, the sessions and the ledger, and the inventory moves sixteen
+    // things. (codex, code round.) What this still cannot see is a file edited in place without
+    // changing the count; hashing every byte of a copy that is on a network drive by definition is
+    // the price of that last increment, and it is not taken.
+    entries: await countEach(root),
   };
 }
 
-/** How many files of a kind a directory holds. A directory that is not there holds none. */
+/** How many entries each moved directory holds, by name. Absent directories are not named at all. */
+async function countEach(root: vscode.Uri): Promise<Record<string, number>> {
+  const counted: Record<string, number> = {};
+  for (const entry of DATA_TO_MOVE.filter((name) => name.endsWith('/'))) {
+    const held = await countIn(vscode.Uri.joinPath(root, entry.replace(/\/$/u, '')), '');
+    if (held > 0) {
+      counted[entry] = held;
+    }
+  }
+
+  return counted;
+}
+
+/**
+ * How many entries of a kind a directory holds. A directory that is not there holds none.
+ *
+ * <p>An empty `extension` counts everything, including subdirectories: for `chat-conversations/` or
+ * `consultations/` what matters is that the count moves when something is added, not what it is.</p>
+ */
 async function countIn(directory: vscode.Uri, extension: string): Promise<number> {
   try {
-    return (await vscode.workspace.fs.readDirectory(directory))
-      .filter(([name, kind]) => kind === vscode.FileType.File && name.endsWith(extension)).length;
+    const entries = await vscode.workspace.fs.readDirectory(directory);
+
+    return extension.length === 0
+      ? entries.length
+      : entries.filter(([name, kind]) => kind === vscode.FileType.File && name.endsWith(extension)).length;
   } catch {
     return 0;
   }
 }
 
-/** How many non-empty lines a file holds. A file that is not there holds none. */
+/**
+ * How many non-empty lines a file holds. A file that is not there holds none.
+ *
+ * <p>Counted over the BYTES. Decoding the ledger into a string and splitting it allocated three
+ * full-size copies of a file that grows for ever — a gigabyte of it froze the flow before the
+ * progress notification existed to say anything. (codex, code round.) A newline is one byte in
+ * UTF-8 and cannot appear inside a multi-byte sequence, so counting them needs no decoder.</p>
+ */
 async function countLines(file: vscode.Uri): Promise<number> {
+  const NEWLINE = 0x0a;
   try {
-    return new TextDecoder().decode(await vscode.workspace.fs.readFile(file))
-      .split('\n').filter((line) => line.trim().length > 0).length;
+    const bytes = await vscode.workspace.fs.readFile(file);
+    let lines = 0;
+    let started = false;
+    for (const byte of bytes) {
+      if (byte === NEWLINE) {
+        lines += started ? 1 : 0;
+        started = false;
+      } else if (byte !== 0x0d && byte !== 0x20 && byte !== 0x09) {
+        started = true;
+      }
+    }
+
+    return lines + (started ? 1 : 0);
   } catch {
     return 0;
   }
