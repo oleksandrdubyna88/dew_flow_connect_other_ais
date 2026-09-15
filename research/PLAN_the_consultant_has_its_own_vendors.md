@@ -1,8 +1,28 @@
 # PLAN — the consultant has its own vendors
 
-> Status: **EPICS A AND B IMPLEMENTED 2026-09-15 (A1 and A2 in PR #262; B3 and B4 on
-> `feat/the-consultant-server-half`); epic C remains planned.** Written 2026-09-14 and reviewed by the
-> gate the same day —
+> Status: **IMPLEMENTED, 2026-09-15.** All six stories shipped: A1 and A2 in PR #262, B3 and B4 in
+> PR #266, C5 and C6 on `feat/the-consultant-custom-endpoint`. Every story ran its own plan and code
+> round through the gate; the rounds and their accepted findings are recorded in the commit messages
+> and in `research/module_extension.md`.
+>
+> **Deviations from the plan as written.** (1) The plan predicted an older server would IGNORE a
+> definition's model; B4 measured it and the opposite is true — it uses the definition's model and
+> drops only the three new fields, and a `codex` row carrying a base URL is refused outright. Both
+> fail backwards, which is what justified a skew note over a version gate. (2) C5 was to keep picking
+> a vendor lifting the model off a same-named reviewer row; it does not, because that was the last
+> place the consultant reached into somebody else's settings, and three story-A2 tests were rewritten
+> rather than kept green. (3) The section gained two things the plan did not name, both from gate
+> rounds: the other half of `CannotConsult` (a definition on a runtime outside the allowlist says so)
+> and `vaultKeyNote`, which says when one vendor id points at two endpoints. (4) `endpointConflict`
+> grew a third holder of names — the catalogue itself — and learned to exclude the caller being
+> edited, without which a person could never change their own endpoint.
+>
+> **The open tail** is the one rejection recorded rather than dismissed: a shared, versioned
+> capability contract between the two halves, in *What is deliberately NOT in this plan* below with
+> the reason and the shape to reach for. It is not a phase of this plan left unbuilt — it is a
+> different plan, and nothing here waits on it.
+>
+> Written 2026-09-14 and reviewed by the gate the same day —
 > verdict `good_enough`, 3 of 3 reviewers, 13 gating findings against a threshold of 6; twelve
 > accepted and folded in below, two rejected with reasons (see *What the plan round changed*).
 > Scope: the Consultant section of the panel (`consultantView.ts`, `consultSettings.ts`,
@@ -10,9 +30,9 @@
 > (`ConsultationService.cs`, `ConsultantRouting.cs`, `SettingsJsonContext.cs`). Operator ruling,
 > 2026-09-14.
 >
-> Related docs: [PLAN_consultant.md](../research/PLAN_consultant.md) — the feature as it shipped;
-> [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md).
-> Boundary with [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md):
+> Related docs: [PLAN_consultant.md](PLAN_consultant.md) — the feature as it shipped;
+> [module_extension.md](module_extension.md), [module_server.md](module_server.md).
+> Boundary with [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md):
 > that plan decides **which vendor** answers each caller by measurement; this one decides **where a
 > consultant's configuration lives**. Neither changes the other's subject — the shipped default MAP
 > (`claude→codex`, `codex→claude`, `gemini→codex`, `other→codex`) is phase 0's to move, and this plan
@@ -327,7 +347,7 @@ the OLD server runs while the projection still stands.
 - Every story opens with its RED test, observed failing for the real symptom, reported with the pass.
 - New section behaviour is asserted by RUNNING the page, never over its source text
   (`.agents/PROJECT.md`); the existing source-text assertions in `consultant.test.ts` are left to
-  [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) and none is added.
+  [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) and none is added.
 - `panelServerDefaultsAgreement` keeps the two halves' defaults and DTO names level by reading the C#.
 
 ## Definition of Done

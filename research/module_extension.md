@@ -2385,6 +2385,42 @@ door left open. `endpointAnswer` is the only part of the two-box flow a test can
 dismissal means nothing: the second box as much as the first, because a person who typed a name and then
 changed their mind consented to no more than one who closed the first.
 
+**What C6's code round changed, and one of them was a regression of C5's own making.** An entry the rule
+could not place can name something the catalogue still offers — `deepseek` names no runtime and needs no
+reviewer row — and C5 had removed the duplicate option by keeping the catalogue's. That left the
+catalogue's `deepseek` marked SELECTED on an unavailable row, and choosing an already-selected option fires
+no `change` event at all: the one click anybody would try did nothing, so the row could not be repaired
+from the control that shows it. The row now carries `selected`, and an unplaceable one selects an option
+whose value is empty — unstorable by construction, since `vendorChosen` refuses an empty id — which puts
+every catalogue entry one change event away. The repair has to be reachable, not merely present.
+
+`endpointConflict` gained a third holder of names and lost one. The CATALOGUE holds names even where no
+reviewer row exists: without that, a person could call their own endpoint `deepseek` and the next caller to
+pick DeepSeek from the list would share its vault key with a different service. And the caller being EDITED
+is excluded — counting a caller's own record made its endpoint unchangeable for good and told them a name
+they had chosen belonged to somebody else. The cure also stops naming an endpoint when the clash has none
+of its own (`claude` is a catalogue preset and a vault key, with no URL to point anybody at).
+
+`badEndpoint` parses instead of guessing: `startsWith('http')` accepted `http-not-a-url`, closed the box,
+stored the setting, and let the person find out the next time they were stuck. It also refuses a credential
+in the URL — `https://user:token@host/v1` and `?api_key=…` both work against many gateways, and both end up
+in `settings.json`, which for a WORKSPACE setting is a file people commit. This product keeps keys in one
+CredsForDevs entry so they are never in argv, a log line or a settings file, and an endpoint box is not
+where that stops being true.
+
+`vaultKeyNote` is the other half of the same invariant. `endpointConflict` guards the flow that MINTS a
+name, and the endpoint box in each row goes nowhere near it — a person can point a consultant called
+`mistral` somewhere the reviewer called `mistral` does not, and one vault entry is then offered to two
+services. Refusing an inline edit would mean discarding what somebody typed with nowhere to say why, so the
+panel SAYS it, beside the section, in the same `stale` class the server-skew note uses. It lives in
+`consultSettings.ts` rather than in the section for exactly the reason its sibling does: the sentence needs
+the reviewer rows, which `consultantBody` has not had since C5.
+
+The custom endpoint's RUNTIME now comes from the catalogue entry rather than being named at the write, so
+the picker cannot show one preset's label while the definition stores another; and the page script reads
+the sentinel from `CUSTOM_ENDPOINT` instead of repeating the string, so renaming it cannot leave the option
+and its handler disagreeing.
+
 **Two catalogue tests were rewritten to derive from `VENDOR_PRESETS`** rather than name its contents.
 `common/testing.md` names both failure directions of a hand-copied list, and the second one applied here:
 `['codex', 'antigravity', 'claude', 'deepseek', 'openrouter', 'local']` would go red the day a vendor is
@@ -2399,7 +2435,7 @@ last borrowing: picking an id that a reviewer row happens to share no longer lif
 person who wants it picks it in the box beside the vendor, where they can see it.
 
 **A legacy entry resolves into a definition when it is READ (2026-09-14, story A1 of
-[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)).**
+[PLAN_the_consultant_has_its_own_vendors.md](PLAN_the_consultant_has_its_own_vendors.md)).**
 `ConsultantChoice` carries `runtime`, `baseUrl` and `executablePath` beside `vendor` and `model`, and
 `runtime: ''` is a LEGACY reference — every map written before this, and the four shipped pairs, which
 stay byte-for-byte the legacy pairs `ConsultantRouting.Shipped` holds. `resolveConsultant` is the one
@@ -2496,7 +2532,7 @@ fail loudly — it silently stops putting the caret back, in every control on th
 said so within a second.
 
 **The write stores a DEFINITION, not a reference (2026-09-14, story A2 of
-[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)).**
+[PLAN_the_consultant_has_its_own_vendors.md](PLAN_the_consultant_has_its_own_vendors.md)).**
 `consultantRecordUpdate` used to put back `{vendor, model}`, where the vendor was a reviewer row's id
 and the runtime, the endpoint, the CLI path and the model-when-none-was-named were borrowed from that
 row on every read. Story A1 made the READ resolve that; this is the other half, because until

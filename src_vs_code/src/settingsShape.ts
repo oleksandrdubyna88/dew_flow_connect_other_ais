@@ -10,7 +10,7 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
-import { DEFAULT_VENDORS, Vendor, normaliseId, vendorsEnv } from './vendors';
+import { DEFAULT_VENDORS, VENDOR_PRESETS, Vendor, normaliseId, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
@@ -289,14 +289,19 @@ export function consultantEndpointWrite(
   baseUrl: string,
 ): Record<string, unknown> {
   const id = normaliseId(name);
-  if (id.length === 0 || !CALLER_KINDS.some((one) => one.id === caller)) {
+  // The runtime comes from the catalogue entry the person picked, never from here. Deciding it at
+  // the write meant the picker could show that preset's label while the stored definition named
+  // something else — one edit to `VENDOR_PRESETS` away from an endpoint launched through the wrong
+  // CLI. (codex, C6's code round.)
+  const { custom } = consultableVendors();
+  if (id.length === 0 || custom === undefined || !CALLER_KINDS.some((one) => one.id === caller)) {
     return { ...current };
   }
 
   return merged(
     current,
     caller,
-    { kind: 'definition', vendor: id, runtime: 'codex', model: '', baseUrl: baseUrl.trim(), executablePath: '' },
+    { kind: 'definition', vendor: id, runtime: custom.runtime, model: '', baseUrl: baseUrl.trim(), executablePath: '' },
     undefined,
   );
 }
@@ -317,10 +322,11 @@ export function endpointAnswer(
   baseUrl: string | undefined,
 ): { readonly id: string; readonly baseUrl: string } | undefined {
   const id = normaliseId(name ?? '');
+  const where = (baseUrl ?? '').trim();
 
-  return name === undefined || baseUrl === undefined || id.length === 0
+  return name === undefined || baseUrl === undefined || id.length === 0 || where.length === 0
     ? undefined
-    : { id, baseUrl: baseUrl.trim() };
+    : { id, baseUrl: where };
 }
 
 /**
@@ -338,19 +344,86 @@ export function endpointConflict(
   baseUrl: string,
   vendors: readonly Vendor[],
   consultants: Readonly<Record<string, unknown>>,
+  caller: string,
 ): string {
   const id = normaliseId(name);
   const wanted = baseUrl.trim();
-  const rows = vendors.map((one) => ({ id: one.id, baseUrl: one.baseUrl, what: 'a reviewer' }));
-  const theirs = Object.values(consultants)
-    .map((one) => consultantChoiceFrom(one))
-    .map((one) => ({ id: one.vendor, baseUrl: one.baseUrl, what: "another caller's consultant" }));
-  const clash = [...rows, ...theirs].find((one) => one.id.toLowerCase() === id.toLowerCase() && one.baseUrl !== wanted);
+  const clash = holders(vendors, consultants, caller)
+    .find((one) => one.id.toLowerCase() === id.toLowerCase() && one.baseUrl !== wanted);
 
   return clash === undefined
     ? ''
     : `'${id}' is already ${clash.what}${clash.baseUrl.length > 0 ? ` at ${clash.baseUrl}` : ''}`
-      + ' — one name is one key in the vault, so pick another name or use that endpoint';
+      + ' — one name is one key in the vault, so pick another name'
+      + (clash.baseUrl.length > 0 ? ' or use that endpoint' : '');
+}
+
+/**
+ * Why a typed endpoint is not one — or `undefined` when it is fine to go on.
+ *
+ * <p>`startsWith('http')` was the whole check, and it accepts `http-not-a-url`: the box closes, the
+ * setting is stored, and the person learns it is wrong the next time they are stuck and a
+ * consultation fails. Parsing is the only way to know, and `URL` is the parser both halves of this
+ * product already trust. (codex, C6's code round.)</p>
+ *
+ * <p><b>A credential in the URL is refused rather than stored.</b> `https://user:token@host/v1` and
+ * `?api_key=…` both work against many gateways, and both end up in `settings.json` — which for a
+ * WORKSPACE setting is a file people commit. This product keeps keys in one CredsForDevs entry
+ * precisely so they are never in argv, a log line or a settings file, and an endpoint box is not the
+ * place to make an exception. The vault entry under this name is where the key goes. (codex, C6's
+ * code round; I took the refusal and not the redaction — the URL a conflict names is one already in
+ * this person's own settings, shown back to that same person.)</p>
+ */
+export function badEndpoint(typed: string): string | undefined {
+  const text = typed.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return 'A base URL is needed — something like https://api.example.com/v1';
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.hostname.length === 0) {
+    return 'The endpoint has to be an http or https address';
+  }
+
+  return parsed.username.length > 0 || parsed.password.length > 0 || SECRETISH.some((key) => parsed.searchParams.has(key))
+    ? 'Leave the key out of the URL — it goes in the vault entry under this name, which is what keeps it out of settings.json'
+    : undefined;
+}
+
+/** Query names that carry a secret often enough that one in a stored URL is a mistake, not a choice. */
+const SECRETISH: readonly string[] = ['api_key', 'apikey', 'key', 'token', 'access_token', 'password'];
+
+/**
+ * Everything that already means something by a name — and the caller doing the editing is not one.
+ *
+ * <p>Three holders, because all three key the vault the same way. The reviewer ROWS. The CATALOGUE,
+ * which is the one no reviewer row need exist for: with no `deepseek` row configured a person could
+ * name their own endpoint `deepseek`, and the next caller to pick DeepSeek out of the list would
+ * share a vault key with a different service (codex, C6's code round). And the OTHER callers'
+ * consultants — but not this caller's own, which is the record about to be replaced: counting it
+ * made a person's own endpoint unchangeable for good, and told them a name they had chosen belonged
+ * to somebody else (gemini, C6's code round, from two roles).</p>
+ *
+ * <p>A holder with no endpoint of its own still holds the NAME — `claude` is a catalogue preset and
+ * a vault key — so it clashes, and the sentence then stops short of telling anyone to use an
+ * endpoint there is none of.</p>
+ */
+function holders(
+  vendors: readonly Vendor[],
+  consultants: Readonly<Record<string, unknown>>,
+  caller: string,
+): readonly { readonly id: string; readonly baseUrl: string; readonly what: string }[] {
+  return [
+    ...vendors.map((one) => ({ id: one.id, baseUrl: one.baseUrl, what: 'a reviewer' })),
+    ...VENDOR_PRESETS.filter((one) => one.id.length > 0)
+      .map((one) => ({ id: one.id, baseUrl: one.baseUrl, what: `what this build calls ${one.label}` })),
+    ...Object.entries(consultants)
+      .filter(([whose]) => whose !== caller)
+      .map(([, one]) => consultantChoiceFrom(one))
+      .map((one) => ({ id: one.vendor, baseUrl: one.baseUrl, what: "another caller's consultant" })),
+  ];
 }
 
 /**

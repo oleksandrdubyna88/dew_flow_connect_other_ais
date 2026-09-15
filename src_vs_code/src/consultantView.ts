@@ -17,7 +17,6 @@ import {
   CONSULTING_RUNTIMES,
   CUSTOM_ENDPOINT,
   ConsultSettings,
-  ConsultantPreset,
   consultableVendors,
   sameVendorNote,
 } from './consultSettings';
@@ -67,6 +66,19 @@ export interface ConsultantRowView {
   readonly baseUrl: string;
   readonly executablePath: string;
   readonly options: readonly VendorOption[];
+  /**
+   * Which option the picker shows as chosen — usually {@link vendor}, and deliberately NOT for an
+   * entry the rule could not place.
+   *
+   * <p>An unplaceable entry can name something the catalogue still offers: `deepseek` names no
+   * runtime and needs no reviewer row, so without one it is unavailable while the picker lists it as
+   * a working choice. Marking THAT option selected makes choosing it fire no `change` event at all,
+   * so the single click a person would try does nothing and the row stays broken — the repair has to
+   * be reachable, not merely present. So an unplaceable row selects the option that stores nothing,
+   * and every catalogue entry beneath it is one change event away. (codex, C6's code round; the
+   * regression came from C5's de-duplication, which removed the other option there was to pick.)</p>
+   */
+  readonly selected: string;
   readonly models: readonly ModelChoice[];
   /** What the empty model option means HERE — a runtime's default, or that there will be no call. */
   readonly modelPlaceholder: string;
@@ -136,21 +148,25 @@ export function consultantRowView(
   state: ConsultantViewState,
 ): ConsultantRowView {
   const resolved = consult.byCaller[caller.id];
-  const catalogue = consultableVendors().offered;
+  // Read ONCE per row and passed down, rather than asked for again inside each helper.
+  const picker = consultableVendors();
 
   return resolved === undefined || resolved.kind === 'unavailable'
-    ? unplaceable(caller, resolved?.vendor ?? '', resolved?.model ?? '', resolved?.why ?? '', catalogue)
-    : placed(caller, resolved, catalogue, state);
+    ? unplaceable(caller, resolved?.vendor ?? '', resolved?.model ?? '', resolved?.why ?? '', picker)
+    : placed(caller, resolved, picker, state);
 }
+
+/** What a row may offer: the catalogue it can store, and the door to one of your own. */
+type Picker = ReturnType<typeof consultableVendors>;
 
 /** A definition: the catalogue knows it, or it stays selected under its own name. */
 function placed(
   caller: { id: string; label: string },
   one: { vendor: string; runtime: Runtime; model: string; baseUrl: string; executablePath: string },
-  catalogue: readonly ConsultantPreset[],
+  picker: Picker,
   state: ConsultantViewState,
 ): ConsultantRowView {
-  const known = catalogue.some((preset) => preset.id === one.vendor);
+  const known = picker.offered.some((preset) => preset.id === one.vendor);
   const placeable = CONSULTING_RUNTIMES.includes(one.runtime);
   const models = placeable ? modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []) : [];
 
@@ -162,7 +178,8 @@ function placed(
     model: one.model,
     baseUrl: one.baseUrl,
     executablePath: one.executablePath,
-    options: known ? offeredOptions(catalogue) : [ownOption(one), ...offeredOptions(catalogue)],
+    options: known ? offeredOptions(picker) : [ownOption(one), ...offeredOptions(picker)],
+    selected: one.vendor,
     models,
     modelPlaceholder: placeable ? RUNTIME_DEFAULT : NO_MODEL,
     keptModel: kept(one.model, models),
@@ -190,18 +207,17 @@ function unplaceable(
   vendor: string,
   model: string,
   why: string,
-  catalogue: readonly ConsultantPreset[],
+  picker: Picker,
 ): ConsultantRowView {
-  // The catalogue can already hold this id — `deepseek` names no runtime and needs no reviewer row,
-  // so a legacy entry naming it arrives here while the picker offers it two lines below. Prepending
-  // an own-option then put two `<option value="deepseek">` in one select: a person clicks the vendor
-  // in front of them, reaches whichever the browser resolves to, and reads the same broken row back.
-  // The catalogue's entry is the one that can be picked INTO something, so it is the one that stays.
-  // (This story's code round, `codex`.)
-  const offered = offeredOptions(catalogue);
-  const own: readonly VendorOption[] = offered.some((one) => one.value === vendor)
-    ? []
-    : [{ value: vendor, label: `${vendor} — not a consultant this build can place`, hint: '' }];
+  // The stored entry is shown, and it STORES NOTHING. The catalogue can already hold this id —
+  // `deepseek` names no runtime and needs no reviewer row — and the two ways of getting that wrong
+  // are both real: give this option the entry's own id and one select carries two
+  // `<option value="deepseek">`, so a person reaches whichever the browser resolves to; give the
+  // catalogue's option the selection instead and choosing it fires no `change` at all, so the row
+  // cannot be repaired by the one click anybody would try. An empty value is neither. It cannot be
+  // stored — `vendorChosen` refuses an empty id — and it leaves every catalogue entry below it one
+  // change event away. (C5's code round found the first; C6's found the second.)
+  const own: VendorOption = { value: '', label: `${vendor} — not a consultant this build can place`, hint: '' };
 
   return {
     caller,
@@ -211,7 +227,8 @@ function unplaceable(
     model,
     baseUrl: '',
     executablePath: '',
-    options: [...own, ...offered],
+    options: [own, ...offeredOptions(picker)],
+    selected: '',
     models: [],
     modelPlaceholder: NO_MODEL,
     keptModel: model,
@@ -222,10 +239,10 @@ function unplaceable(
 }
 
 /** The catalogue as a person reads it — the labels *Add a reviewer* offers, not internal ids. */
-function offeredOptions(catalogue: readonly ConsultantPreset[]): readonly VendorOption[] {
+function offeredOptions(picker: Picker): readonly VendorOption[] {
   return [
-    ...catalogue.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint })),
-    ...customOption(),
+    ...picker.offered.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint })),
+    ...customOption(picker.custom),
   ];
 }
 
@@ -238,9 +255,7 @@ function offeredOptions(catalogue: readonly ConsultantPreset[]): readonly Vendor
  * entry out because it had no flow to mint an id; C6 is that flow, and the ruling — one list of what
  * can be picked — is what puts it back.</p>
  */
-function customOption(): readonly VendorOption[] {
-  const { custom } = consultableVendors();
-
+function customOption(custom: { label: string; hint: string } | undefined): readonly VendorOption[] {
   return custom === undefined ? [] : [{ value: CUSTOM_ENDPOINT, label: custom.label, hint: custom.hint }];
 }
 
@@ -313,7 +328,7 @@ function row(view: ConsultantRowView): string {
   return `<div class="field consultant-row" data-caller="${caller}">
   <label for="consultVendor-${caller}">${escapeHtml(view.caller.label)} asks</label>
   <select id="consultVendor-${caller}" data-setting="consultVendor" data-caller="${caller}">
-${view.options.map((one) => option(one.value, one.label, view.vendor, one.hint)).join('\n')}
+${view.options.map((one) => option(one.value, one.label, view.selected, one.hint)).join('\n')}
   </select>
   <select id="consultModel-${caller}" data-setting="consultModel" data-caller="${caller}">
 ${option('', view.modelPlaceholder, view.model)}

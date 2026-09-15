@@ -12,7 +12,7 @@ import type { Phrase } from './phrases';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
-import { consultantSkewNote } from './consultSettings';
+import { CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
@@ -313,6 +313,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('consultant', 'Consultant', open,
       `<div id="live-consultations">${consultationsBody(state.consultations ?? [], nowMs)}</div>`
       + consultantSkew(state)
+      + vaultKeySplit(state)
       // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
       // borrowed a reviewer row is the defect this plan ended. The rows still reach the PANEL — the
       // skew note above reads them, because what an older server does with a definition is decided
@@ -365,7 +366,7 @@ ${body}
       vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
       return;
     }
-    if (value === '__endpoint__') {
+    if (value === '${CUSTOM_ENDPOINT}') {
       // Not a vendor — a request for one. An id keys the vault entry, so nothing may be stored until
       // the host has asked for a name and a base URL; the caller says whose row is waiting for it.
       el.value = real.get(el) || '';
@@ -1543,6 +1544,21 @@ function consultantSkew(state: PanelState): string {
   // server answers through them: a definition a row still backs reaches the same place on both
   // halves, and only one nothing backs is mishandled. (gemini, B4's plan round.)
   const note = consultantSkewNote(state.server.version, state.settings.consult, state.vendors);
+
+  return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
+}
+
+/**
+ * One vendor id pointing at two endpoints — the consultant's, and the reviewer's of that name.
+ *
+ * <p>Beside the section rather than inside it, and for the same reason as {@link consultantSkew}:
+ * the sentence needs the reviewer ROWS, which `consultantBody` has not had since story C5. The
+ * `stale` class is the one its three siblings use, so a person reads one kind of warning for one
+ * kind of problem. (gemini, C6's code round — the endpoint box in a row cannot be refused without
+ * silently discarding what somebody typed, so what it can do is say so.)</p>
+ */
+function vaultKeySplit(state: PanelState): string {
+  const note = vaultKeyNote(state.settings.consult, state.vendors);
 
   return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
 }

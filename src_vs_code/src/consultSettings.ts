@@ -479,6 +479,40 @@ export function consultantSkewNote(
 }
 
 /**
+ * One name pointing at two endpoints, said rather than silently allowed.
+ *
+ * <p>The flow that MINTS a name refuses a clash — `endpointConflict`, in the two boxes — but the
+ * endpoint box in each row goes nowhere near it, and there is no honest way to make it: refusing an
+ * inline edit means throwing away what somebody typed with nowhere to say why. A vendor id keys ONE
+ * entry in the vault, so a consultant called `mistral` at one URL beside a reviewer called `mistral`
+ * at another is one credential being offered to two services, and only the person can decide which
+ * was the mistake. (gemini, C6's code round.)</p>
+ *
+ * <p>It lives here rather than in the section for the same reason `consultantSkewNote` does: the
+ * sentence needs the reviewer ROWS, and the section deliberately holds none since story C5. The
+ * panel, which has both, puts it beside the rows.</p>
+ */
+export function vaultKeyNote(consult: ConsultSettings, vendors: readonly Vendor[]): string {
+  const split = CALLER_KINDS
+    .map(({ id }) => consult.byCaller[id])
+    .filter((one) => one !== undefined && one.kind === 'definition')
+    .map((one) => ({ one, row: vendors.find((row) => row.id.toLowerCase() === one.vendor.toLowerCase()) }))
+    .find(({ one, row }) => row !== undefined && row.baseUrl !== one.baseUrl);
+
+  return split === undefined
+    ? ''
+    : `The consultant '${split.one.vendor}' and the reviewer of that name point at different endpoints `
+      + `(${endpointWords(split.one.baseUrl)} and ${endpointWords(split.row!.baseUrl)}). A vendor id keys ONE entry `
+      + 'in the vault, so both would be offered the same credential — give one of them another name, or point them '
+      + 'at the same place.';
+}
+
+/** An endpoint as a person reads it, including the one that is the CLI's own. */
+function endpointWords(baseUrl: string): string {
+  return baseUrl.length === 0 ? 'the CLI’s own' : baseUrl;
+}
+
+/**
  * Whether an older server's answer for this caller differs from what the section means.
  *
  * <p>Three conditions, in the order they cost nothing to ask. EMITTED at all — a pristine caller
@@ -578,8 +612,16 @@ export interface ConsultantPreset {
 export function consultableVendors(): {
   readonly offered: readonly ConsultantPreset[];
   readonly refused: readonly { readonly id: string; readonly label: string; readonly why: string }[];
-  /** The catalogue's own words for "one of your own" — absent only if the catalogue drops the entry. */
-  readonly custom: { readonly label: string; readonly hint: string } | undefined;
+  /**
+   * The catalogue's own words for "one of your own", and the RUNTIME it says such a thing runs on.
+   *
+   * <p>The runtime travels because the write must not decide it: hard-coding `codex` there meant the
+   * picker showing this preset's label while the stored definition named a runtime the catalogue no
+   * longer said it was — the two would drift the day the blank entry became anything else, and the
+   * endpoint would launch through the wrong CLI or be refused. Absent only if the catalogue drops
+   * the entry, or gives it a runtime that cannot consult. (codex, C6's code round.)</p>
+   */
+  readonly custom: { readonly label: string; readonly hint: string; readonly runtime: Runtime } | undefined;
 } {
   const named = VENDOR_PRESETS.filter((preset) => preset.id.length > 0);
   const blank = VENDOR_PRESETS.find((preset) => preset.id.length === 0);
@@ -595,7 +637,7 @@ export function consultableVendors(): {
       })),
     custom: blank === undefined || !CONSULTING_RUNTIMES.includes(blank.runtime)
       ? undefined
-      : { label: blank.label, hint: blank.hint },
+      : { label: blank.label, hint: blank.hint, runtime: blank.runtime },
   };
 }
 

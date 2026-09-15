@@ -197,6 +197,26 @@ test('the consultant’s OWN CLI path is written for the caller whose row holds 
   }, 'a consultant that looks up its CLI on PATH cannot be pointed at one until this box exists');
 });
 
+test('every caller kind has its own controls, and each writes for the caller whose row holds it', () => {
+  // Counted over a page that has been RUN, rather than over its source text. The source cannot tell
+  // a control wired to the right caller from one wired to the wrong one — every `data-caller` it
+  // needs is present either way — so this asserts both halves at once: that each caller has exactly
+  // one of each control, and that changing it writes for that caller. (codex, C6's code round; the
+  // count used to be a regular expression over the markup.)
+  const page = run();
+
+  for (const caller of ['claude', 'codex', 'gemini', 'other']) {
+    for (const setting of ['consultVendor', 'consultModel']) {
+      const one = control(page, setting, caller);
+      one.value = setting === 'consultVendor' ? 'claude' : 'haiku';
+      one.fire('change');
+
+      assert.equal(lastWrite(page)['caller'], caller, `${setting} in the ${caller} row wrote for somebody else`);
+      assert.equal(lastWrite(page)['key'], setting);
+    }
+  }
+});
+
 test('choosing the custom endpoint asks the HOST, for THAT caller, and writes no setting at all', () => {
   // An id keys the vault entry and the usage ledger, so the one thing that must not happen is the
   // sentinel reaching disk: `{ vendor: '' }` is an entry a person can see in their settings file and

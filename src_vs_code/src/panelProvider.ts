@@ -60,6 +60,7 @@ import {
 } from './modelPrices';
 import {
   ConfigReader,
+  badEndpoint,
   consultantEndpointWrite,
   consultantRecordUpdate,
   endpointAnswer,
@@ -2373,7 +2374,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the same name is not a clash: it is one service named once. Dismissing either box returns
    * `undefined` and nothing anywhere is written. (gemini, C6's plan round.)</p>
    */
-  private async askCustomEndpoint(title: string): Promise<{ id: string; baseUrl: string } | undefined> {
+  private async askCustomEndpoint(title: string, caller = ''): Promise<{ id: string; baseUrl: string } | undefined> {
     const config = vscode.workspace.getConfiguration('coai');
     const rows = vendorsFrom(this.read(config)('vendors'));
     const consultants = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
@@ -2391,9 +2392,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       title: `${title}: ${normaliseId(name)}`,
       prompt: 'Its OpenAI-compatible base URL',
       placeHolder: 'https://api.example.com/v1',
-      validateInput: (v) => (v.trim().startsWith('http')
-        ? (endpointConflict(name, v, rows, consultants) || undefined)
-        : 'A base URL is needed'),
+      validateInput: (v) => (badEndpoint(v) ?? (endpointConflict(name, v, rows, consultants, caller) || undefined)),
     });
 
     return endpointAnswer(name, baseUrl);
@@ -2411,7 +2410,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * round, on where the definition lands.)</p>
    */
   private async customConsultant(caller: string): Promise<void> {
-    const own = await this.askCustomEndpoint('A consultant of your own');
+    const own = await this.askCustomEndpoint('A consultant of your own', caller);
     if (own === undefined) {
       return; // dismissed at either box — the row keeps the vendor it had
     }

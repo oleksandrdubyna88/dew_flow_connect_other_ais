@@ -233,7 +233,7 @@ each measured live for two turns (the table above). A configured row whose runti
 conversation is refused BY NAME (`ConsultantResolution.CannotConsult`), never substituted.
 
 **The consultant has its own vendors** (2026-09-15, story B3 of
-[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)). An
+[PLAN_the_consultant_has_its_own_vendors.md](PLAN_the_consultant_has_its_own_vendors.md)). An
 entry is either a DEFINITION — `{vendor, runtime, model, baseUrl, executablePath}`, the consultant's own
 — or a LEGACY reference, `{vendor, model}` with no runtime: everything written before this date and the
 shipped pairs, which stay byte-for-byte legacy-shaped so a sibling plan owns their values. The wire DTO's
