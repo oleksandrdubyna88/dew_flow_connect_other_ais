@@ -23,10 +23,20 @@ public static class CandidatePath
     /// trust, and the breadth bought nothing: a scratch checkout that is not named here still skips,
     /// for the honest reason that its path is gone or its commit is unreachable.</para>
     /// </remarks>
+    /// <remarks>
+    /// <para>Stored WITHOUT delimiters, because the delimiters belong to the matcher: these are
+    /// component names, and <see cref="IsTransient"/> is what decides that a component is bounded by
+    /// slashes on both sides. Written the other way — <c>"/temp/claude/"</c> against a bare
+    /// <c>"/todelete"</c> — the data had to carry a rule about its own matching that only one of the
+    /// two entries obeyed, and the method needed a conditional to paper over the difference.</para>
+    /// <para>They are also not paths this program ever opens. Nothing here is created, read or
+    /// written; they are needles in a <c>Contains</c> over a candidate's path, and the whole purpose
+    /// is to REFUSE what matches.</para>
+    /// </remarks>
     private static readonly string[] Transient =
     [
-        "/temp/claude/",
-        "/todelete",
+        "temp/claude",
+        "todelete",
     ];
 
     /// <summary>The path as a comparison can use it: forward slashes, lower case, no trailing slash.</summary>
@@ -35,19 +45,18 @@ public static class CandidatePath
 
     /// <summary>Whether this path is a scratch directory rather than somebody's repository.</summary>
     /// <remarks>
-    /// Each fragment is matched as a whole path COMPONENT, not as a substring: `/todelete` must not
-    /// claim `/todelete_benchmarks/repo` or `/dev/todelete-fixtures`, which are ordinary directories
-    /// whose names merely begin the same way. Caught twice — once accepted and not done, once found
-    /// again by the same two reviewers.
+    /// Each name is matched as a whole path COMPONENT: `todelete` must not claim
+    /// `todelete_benchmarks/repo` or `dev/todelete-fixtures`, which are ordinary directories whose
+    /// names merely begin the same way. Bounding BOTH ends with a slash is what says so, and the
+    /// path is padded at both ends so a name can match first or last. Caught twice — once accepted
+    /// and not done, once found again by the same two reviewers.
     /// </remarks>
     public static bool IsTransient(string path)
     {
-        var canonical = Canonical(path) + "/";
+        var bounded = "/" + Canonical(path) + "/";
 
         return Array.Exists(
             Transient,
-            fragment => canonical.Contains(
-                fragment.EndsWith('/') ? fragment : fragment + "/",
-                StringComparison.Ordinal));
+            name => bounded.Contains("/" + name + "/", StringComparison.Ordinal));
     }
 }
