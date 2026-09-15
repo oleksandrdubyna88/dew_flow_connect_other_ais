@@ -109,7 +109,7 @@ export type ChatCommand =
    * only while that message is one of the person's own. A page naming the question would be naming a
    * message it has only a rendering of.</p>
    */
-  | { readonly kind: 'retry' }
+  | { readonly kind: 'retry'; readonly at: number }
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
   | { readonly kind: 'pageError'; readonly message: string }
@@ -357,8 +357,14 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     }
     case 'unattach':
       return { kind: 'unattach' };
-    case 'retry':
-      return { kind: 'retry' };
+    case 'retry': {
+      // WITH the transcript length the button was drawn for, and refused without it. A press that
+      // cannot say which state it was made in is a press the host would have to interpret against
+      // whatever is trailing now — the wildcard the stop command refuses for the same reason.
+      const at = message.at;
+
+      return typeof at === 'number' && Number.isInteger(at) && at >= 0 ? { kind: 'retry', at } : IGNORE;
+    }
     case 'restart':
       return { kind: 'restart' };
     case 'useLocal':

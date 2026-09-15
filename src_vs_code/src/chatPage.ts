@@ -562,16 +562,26 @@ export function chatCappedHtml(capped: boolean): string {
  * got is worse than no control — the rule this repository wrote down when a round with nothing to open
  * was made a line rather than a disclosure. So the button appears when the host says a retry is
  * available, and a failure with no retry behind it is still a failure worth reading.</p>
+ *
+ * <p><b>`at` is how long the transcript was when this button was drawn, and it is carried back with
+ * the press for the same reason the stop control carries its turn number.</b> A button on screen can
+ * only ever name the state it was rendered for, and this message can land after that state has moved:
+ * a question fails, the person types a new one and sends it, and in the width of a frame before the
+ * push that clears this region they click the button still sitting under it. Without the number the
+ * host would take "the trailing question" as it stands NOW and retry the wrong one. With it, the host
+ * refuses a press whose transcript has moved. (codex, the plan round.)</p>
  */
-export function chatFailureHtml(failure: string, canRetry: boolean): string {
+export function chatFailureHtml(failure: string, canRetry: boolean, at: number): string {
   if (failure.length === 0) {
     return '';
   }
-  // `data-retry` rather than an id, because the listener is DELEGATED to `#failure` - the container
+  // `data-retry` rather than an id, because the listener is DELEGATED to the region - the container
   // survives every rewrite of its own contents, so the control is live after the first failure, the
-  // fifth, and the one that follows a page error which wiped the region. An id would work equally
-  // well for the query; the attribute is what the delegated handler matches on.
-  const again = canRetry ? '<button type="button" class="retry" data-retry>Try again</button>' : '';
+  // fifth, and the one that follows a page error which wiped it. The attribute is what the delegated
+  // handler matches on, and it carries the number above.
+  const again = canRetry
+    ? `<button type="button" class="retry" data-retry="${escapeHtml(String(at))}">Try again</button>`
+    : '';
 
   return `<div class="failure"><span class="said">${escapeHtml(failure)}</span>${again}</div>`;
 }
@@ -871,7 +881,7 @@ function regionsOf(state: ChatPageState): Regions {
     messages: chatMessagesHtml(state.messages, state.marks, state.carryFrom, state.running),
     thinking: chatStatusHtml(state.running, 0, state.turn),
     capped: chatCappedHtml(state.capped),
-    failure: chatFailureHtml(state.failure, state.canRetry),
+    failure: chatFailureHtml(state.failure, state.canRetry, state.messages.length),
   };
 }
 
@@ -1565,7 +1575,10 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // region from the host's state, so nothing has to enable it again.
       if (pressed.disabled) { return; }
       pressed.disabled = true;
-      vscode.postMessage({ type: 'command', command: 'retry' });
+      // WITH the transcript length it was drawn for. The host refuses a press whose transcript has
+      // moved, so a button still on screen from a failure the conversation has already gone past
+      // cannot retry whatever happens to be trailing now.
+      vscode.postMessage({ type: 'command', command: 'retry', at: Number(pressed.dataset.retry) });
     });
   }
   // Delegated on the row, because a push replaces both rows whenever the saved lists change.
