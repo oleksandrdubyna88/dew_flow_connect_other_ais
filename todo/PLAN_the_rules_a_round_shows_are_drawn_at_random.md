@@ -2,7 +2,8 @@
 
 > Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners/Context/RuleFiles.cs`,
 > the three stage entry points in `src_mcp/src/Server/PanelService.cs`, and their tests. The topic
-> vocabulary belongs to `dew_flow_conventions` and ships as its **own pull request** (epic 3);
+> vocabulary belongs to `dew_flow_conventions` and ships as its **own pull request** (epic 4, and see
+> *External dependencies*);
 > nothing here edits that submodule beyond a pin.
 >
 > **Boundary with [PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md)** (in progress): that
@@ -13,8 +14,8 @@
 >
 > **Plan gate round 1** (2026-09-15, session `d9e01697`, all 3 reviewers answered, verdict
 > `good_enough` on a one-round budget): 18 findings, **17 accepted, 1 rejected with a reason**. What
-> the accepted ones changed is recorded under *What the plan round changed* below — they altered the
-> shape of epic 4, not only its detail.
+> the accepted ones changed is recorded under *What the plan round changed* below; the epic/story split
+> that followed corrected four more things, under *What the split changed*.
 >
 > Related docs: [PLAN_shared_rules_reach_reviewers.md](../research/PLAN_shared_rules_reach_reviewers.md)
 > (shipped — it made the rules reach a reviewer at all),
@@ -75,7 +76,7 @@ block they have never had.
    for byte** — with no cache, no session hash and no seeded draw. Selection is a pure function of
    *(stage, changed paths, symbols in the added lines, rule-source revision)*, and **so is every
    fallback path**. The revision is part of the input, not an assumption: the plan and document gates
-   read rules from `repoPath` at HEAD while the code stage reads them from the worktree, and a promoted
+   read rules from the `repoPath` working tree while the code stage reads them from the worktree, and a promoted
    `release` pin changes the corpus under both — so two rounds across such a change are *different*
    inputs and are expected to differ. The tests assert identity within one revision and say so.
 2. A rule is in the prompt **because something in the change selected it**, and the round can say which
@@ -89,163 +90,197 @@ block they have never had.
 
 ## Constraints that shape the design
 
-- **The plan and document stages have no worktree, deliberately** — `NeedsWorktree: false,
+- **The plan and document stages have no worktree, deliberately** - `NeedsWorktree: false,
   ReadsCheckout: false` ([PanelService.cs:426](../src_mcp/src/Server/PanelService.cs#L426)), because an
   agentic CLI handed a checkout goes exploring and that cost a ten-minute plan round. Their rules are
-  read from `repoPath` at HEAD. Acceptable: at plan time there is no commit under review.
-- **The code stage reads from the round's worktree on purpose** — the rules as of the commit under
-  review, not as of this afternoon. **Not to be traded away**, which is why epic 2 fixes the resolver
-  rather than falling back to HEAD (see *What the plan round changed*, finding 16).
-- **One root, named once.** The manifest's `source` paths are relative to the `--repo` root the
-  resolver was given, and the gate reads them against **that same root** — the round's worktree for the
-  code stage, `repoPath` for the other two. No path is ever resolved against a different root than the
-  one that produced it, and a read that escapes the root is refused.
-- **Sequence at the code stage is fixed**: `WorktreeManager.AddAsync` → `SubmodulePopulator` →
-  resolver → reads. A resolver launched before population sees an empty mount, which is why it is not
-  launched there.
+  read from `repoPath` - and `Collect` reads the **working tree**, not HEAD. That is the honest input
+  at plan time: the plan under review describes work about to happen in that tree.
+- **The code stage reads from the round's worktree on purpose** - the rules as of the commit under
+  review, not as of this afternoon. Not to be traded away.
+- **One root, named once.** A manifest's `source` paths are relative to the `--repo` root the resolver
+  was given, and the gate reads them against **that same root**. No path is resolved against a root
+  other than the one that produced it, and a read that escapes the root is refused.
+- **The resolver cannot serve the code stage yet, and this is settled by reading rather than by an
+  experiment.** Two independent refusals, both verified 2026-09-15:
+  1. `SubmodulePopulator` fills a worktree mount with `git submodule update --init`. `node_modules/` is
+     git-ignored in `dew_flow_conventions`, and `tools/lib/rule-catalog.mjs` imports `yaml` and
+     `picomatch` - ESM ignores `NODE_PATH`, so the worktree's own copy of the script dies with
+     `ERR_MODULE_NOT_FOUND` before it reaches any git check.
+  2. Running the PARENT checkout's script against `--repo <worktree>` is refused by `revision()`
+     (`rule-cli.mjs:84`): `realpath(<repo>/.agents/conventions) !== realpath(installedRoot)` ->
+     *"Run this repository's own mounted resolver"*.
+
+  So the resolver is live **today** exactly where the mount carries its dependencies: the live parent
+  checkout, which is the root of the plan and document stages. The code stage - the only stage that has
+  the draw - runs the deterministic walk until **dependency E1** lands. The build order follows the
+  capability: document, then plan, then code, with the code launch written in its FINAL shape so it
+  begins succeeding the day `release` carries the fix, with no change here.
 - **`read` cannot serve this gate; `explain` can.** The resolver refuses a payload over 32 KiB per read
-  (`rule-cli.mjs:112`) and directs the caller to `explain` plus one `--only` read per rule — N launches
+  (`rule-cli.mjs:112`) and directs the caller to `explain` plus one `--only` read per rule - N launches
   a round. `explain` returns a manifest with `id`, `source`, `bytes`, `hash` and `reasons` per selected
-  rule; the gate reads those files itself, keeping the budget logic and the omission note. One `node`
-  launch per round.
-- **The budget is the bundle's, not the prompt's.** `PlanBytes`/`DocumentBytes` in the log line are
-  measurements, not caps; the rules bundle carries its own 80 000-byte budget at every stage, and
-  nothing silently truncates one to make room for the other.
-- **The three selection paths are alternatives, not pools that merge.** Exactly one answers a round,
-  and the precedence is fixed: *(a)* a resolver manifest, when the stage has selectors and the resolver
-  answered — candidates are the manifest's rules in canonical order, each carrying its `reasons`;
-  *(b)* the **static stage set**, for a stage with no diff to select from (plan, document); *(c)* the
-  **deterministic fallback walk**, only when a path that should have produced a manifest failed. A
-  round never unions (a) with (c) — a fallback that quietly added rules to a successful selection would
-  reintroduce exactly the "why is this rule here" the manifest's `reasons` exist to answer — and the
-  prompt names which path answered.
+  rule; the gate reads those files itself. One `node` launch per round.
+- **The budget is the bundle's, not the prompt's.** `PlanBytes`/`DocumentBytes` in the log lines are
+  measurements, not caps; the rules bundle carries its own 80 000-byte budget at every stage.
+- **The three selection paths are alternatives, not pools that merge.** Exactly one answers a round:
+  *(a)* a resolver manifest, ordered canonically, each rule carrying its `reasons`; *(b)* the **stage
+  tier**, for a gate with no diff to select from; *(c)* the **deterministic walk**, when a path that
+  should have produced a manifest failed. A round never unions (a) with (c) - a fallback that quietly
+  added rules to a successful selection would reintroduce exactly the "why is this rule here" the
+  manifest's `reasons` exist to answer - and the prompt names which path answered.
+
+### External dependencies - both `dew_flow_conventions` pull requests, both arriving by release promotion
+
+- **E1 - the resolver accepts a sibling worktree.** Relax `revision()` from PATH identity to SHA
+  identity: accept a `--repo` whose index gitlink equals `installedRoot`'s HEAD and whose mount is
+  clean at that SHA. The parent's script then serves a worktree, and no `node_modules` is needed inside
+  it. Until E1, the code stage falls back by design, not by accident.
+- **E2 - the `topics:` vocabulary.** `rule-catalog.mjs:83` **throws** on an unknown metadata key, and
+  `selectRules` takes only `--task` and `--file`. So a `topics:` key added out of order does not
+  degrade - it breaks the resolver for all six consumers. E2 is why epic 4 is conditional and why its
+  triggers map to the vocabulary that exists today.
 
 ## Build order
 
-Four epics. The gate's operator commands ask for the epic/story split to be made with Fable at
-implementation start and for `review_code` after **every** story — the phases below are the intended
-shape, to be confirmed by that split rather than to replace it.
+Four epics, from the split made with Fable at the gate's instruction, after it corrected four things in
+the intended shape - recorded under *What the split changed*. Every story: implement, test, update
+`research/module_*.md`, `review_code` on that story's own diff, resolve every finding, commit. Build and
+run with `dotnet build dew_flow_connect_other_ais.slnx` then
+`./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*<Class>"`, then the whole
+executable; never `dotnet test`.
 
-### Epic 1 — the plan and document gates get the rules they are judged against
+`RuleFiles.cs` is already 354 lines, so new behaviour goes in new files (`RuleOrder.cs`,
+`StageRules.cs`, `RuleManifest.cs`, `RuleResolver.cs`) and the discovery walk (`FolderFiles`,
+`NeutralRuleFolders`, `MissingRuleMount`) is not touched - which is what keeps the boundary with
+[PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md) physical rather than merely stated.
 
-1. Give `ReviewPlanAsync` a rules bundle read from `repoPath` at HEAD, rendered through the existing
-   `RulesSection`. The stage keeps `NeedsWorktree: false` — a bundle is text, not a checkout.
-2. The same for the document gate ([:825](../src_mcp/src/Server/PanelService.cs#L825)). Its inputs are
-   the document's own repository-relative path (it has one) and `--task docs`; where the document is
-   not in the repository, the static set of step 3 is the whole answer.
-3. A **static stage set**, held in one place: the plan gate gets architecture, layering, reuse-first,
-   planning-docs, testing strategy and security; the document gate gets the documentation and planning
-   rules; neither gets `dotnet-build`, `nuget-packages` or `logging-serilog`. **This set is not deleted
-   when epic 2 lands** — it is the baseline for a stage with no diff, and it is retired only when a
-   `--task plan` invocation with no `--file` has been shown, against the promoted `release` vocabulary,
-   to return the same rules or better (finding 15). **Each baseline is retired against its own task**:
-   the plan baseline needs the `--task plan` equivalence, the document baseline a `--task docs` one.
-   They are different sets, so one equivalence proves nothing about the other, and a baseline whose
-   equivalence has not been run stays permanent.
-4. Re-check `RolesWithRulesInMind` — the Conventions-role gating was written when only the code stage
-   had rules, and a stage that now has them must not inherit the rule-less assumption. The sentence
-   that tells the caller WHY a Conventions reviewer was skipped already ships
-   ([PLAN_a_skipped_role_reaches_the_ai.md](../research/PLAN_a_skipped_role_reaches_the_ai.md),
-   implemented 2026-09-10); it has to stay accurate once two more stages can carry rules.
+### Epic 1 - selection becomes a seam, and every deterministic order exists before the draw goes
 
-### Epic 2 — `RuleFiles` asks the resolver what this change selects
+*Done when* `Collect` takes an explicit candidate order; the walk has a pinned priority that shows the
+doctrines under a tight budget; the plan and document gates carry a rules bundle from an ordered stage
+tier; the draw is still the code stage's order and every existing `RuleFilesTests` is green.
 
-5. A `RuleManifest` reader: launch `node .agents/conventions/tools/rules.mjs explain --repo <root>
-   --task <task> --file <path> …` through the existing `IProcessLauncher` — no second process helper
-   (reuse-first).
-6. **More changed paths than the resolver takes are batched, never dropped.** Paths are sorted
-   canonically, split into deterministic batches of 256, and the manifests merged by rule id; a path
-   that still cannot be resolved is named in the prompt beside the omissions. A selector silently
-   discarded is a rule silently missing, which reads to a reviewer as compliance (finding 10).
-7. `Collect` takes a manifest when one is available: candidates are the manifest's rules in
-   **canonical order** — reason strength first (path match, then topic, then task, then always-loaded),
-   ties broken by rule id, never by enumeration order. The budget, the whole-file rule and the omission
-   note are unchanged; each rule carries its `reasons` into the prompt.
-8. **One fallback boundary, covering every way this can go wrong** (findings 0, 1, 12): `node` absent
-   or not executable, a launch that throws before any output, a bounded timeout with the process tree
-   killed, a non-zero exit, malformed or partial JSON, a manifest naming a file that cannot be read,
-   a mount that is empty or dirty, a worktree the resolver refuses. Every one of them lands on the same
-   path — the deterministic walk of epic 4 — with the reason logged and a sentence in the prompt saying
-   the selection was untargeted. A partial payload is never sent as if it were a complete selection.
+**1.1 - `RuleOrder`: the seam, and the walk's priority.** *(Fable - the order decides who starves, and
+being wrong here is the 2026-09-06 regression on exactly the path that runs when the resolver is
+unavailable.)* `RuleFiles.Collect(repoPath, budgetBytes, RuleOrder order)` replaces the `int? seed`
+parameter; new `RuleOrder.cs` carries `Walk` (instruction files, then this repository's own rules, then
+the mount by tier: the language doctrines, then `security`, `testing`, `reuse-first`, `coding-style`,
+`knowledge-base`, then the rest by ordinal path) and `Drawn(int?)`, which wraps today's shuffle and
+stays the default so nothing changes yet.
+**RED:** `TheFallbackOrder_ShowsTheDoctrines_NotOnlyTheTwoLongestFiles` - real sizes, a 45 000-byte
+budget, `order: RuleOrder.Walk` built first as the plain alphabetical walk, so it fails with
+`Expected paths to contain ".agents/conventions/common/testing.md"`: the measured symptom itself.
+**Reviewer looks at:** that the default path is unchanged; the tier table's names and rationale; that
+`Walk` is total - an unknown name falls through, nothing is dropped.
 
-> **Experiment before step 7 is written, and its outcome is not a fallback to HEAD.** Does the resolver
-> accept a linked worktree once `SubmodulePopulator` has filled it? It requires the mounted checkout to
-> match the index gitlink and be clean. If it refuses, the fix is in `dew_flow_conventions` — teach
-> `rule-cli.mjs` to resolve from a git worktree — because resolving against the parent checkout would
-> select rules "as of this afternoon" for a commit under review, which this plan's own constraints
-> forbid (finding 16). Until that lands, the code stage falls back to the deterministic walk **of the
-> worktree**, which is still the rules as of the commit.
+**1.2 - `StageRules`: the plan and document tiers, as data.** *(Opus - a list and its test; the policy
+is judged by reading it.)* Ordered path-suffix lists, keyed by suffix (`common/reuse-first.md`) so one
+key works whether it is filtering a walk or ordering a manifest.
+**RED:** `APlanRound_GetsTheHighLevelRules_AndNotTheBuildRecipes`, with `dotnet-build`, `nuget-packages`
+and `logging-serilog` present in the mount and absent from the result.
+**Reviewer looks at:** the lists themselves - is `git-workflow` rightly absent from the plan tier, is
+`testing` at 24.7 KB worth a third of the plan budget.
 
-### Epic 3 — topics and symbol triggers, a pure function of the diff
+**1.3 - The plan gate is given the rules it is judged against.** *(Opus - wiring behind decided
+policy.)* `ReviewPlanAsync` collects with `RuleOrder.Staged(StageRules.Plan)`; the log line loses
+"no rules at this stage" and gains the bytes and the omission count.
+**RED:** `APlanRound_IsGivenTheRulesItIsJudgedAgainst`, read through the fake CLI's recorded stdin,
+failing with `Expected prompt to contain "## The rules this project has written down"`. With
+`APlanRound_StillGetsNoWorktree` and `TheRulesBundleHasItsOwnBudget_AndDoesNotTruncateThePlanText`.
+**Reviewer looks at:** `NeedsWorktree`/`ReadsCheckout` untouched; the comment saying WORKING TREE.
 
-9. **Conventions half, separate pull request**: a `topics:` key beside the existing `tasks:`, with a
-   domain vocabulary (`efcore`, `threading`, `validation`, `http-client`, …) backfilled across the 24
-   rules. Today's vocabulary is lifecycle-shaped and only 9 of 24 rules carry `paths:` at all, so this
-   axis is new. It must stay language-neutral: the corpus serves Rust and TypeScript too. Delivery
-   cost: the mount tracks the `release` branch, so the vocabulary arrives by release promotion.
-10. **`topics:` is additive, never a gate** (finding 4). A rule without one keeps being selected by its
-    `tasks:` and `paths:` exactly as today; no rule can become unreachable by not being tagged, and the
-    backfill is therefore an improvement in recall rather than a migration that can lose rules.
-11. **This repository's half**: a symbol trigger table over the diff's **added lines only** —
-    `CancellationToken`, `IAsyncDisposable`, `lock`, `HttpClient`, `Channel<T>` → topics, passed to the
-    resolver as additional selectors. Deterministic, explainable, no index, no model.
-12. Where that table lives is a decision to take, not to assume. Recommended: in `dew_flow_conventions`
-    beside the rules, so every consumer shares one copy and it is pinned with them; the cost is a
-    release promotion and a pin cascade per change. A C# table here is cheaper to change and starts
-    drifting the day a second consumer wants it.
+**1.4 - The document gate is given the rules that govern documents.** *(Opus.)* Same shape;
+`DocumentOutcome.Ready` gains a repo-relative `Path` as a field - never a parse of the name - empty when
+the document is outside the repository.
+**RED:** `ADocumentRound_IsGivenTheRulesItIsJudgedAgainst`, plus
+`ADocumentOutsideTheRepository_StillGetsTheStaticDocumentTier`.
+**Reviewer looks at:** no root escape on the out-of-repo path; the purpose still leads the prompt.
 
-**Rejected, with the reason recorded**: BM25 or embedding ranking over the corpus. It reintroduces the
-property this plan exists to remove — a one-line change to a diff silently permutes the ranking, and
-nobody can answer "why was this rule shown?". Path globs and topic tags answer it by construction.
+### Epic 2 - the resolver says what the change selects, and every way it can fail lands on the walk
 
-### Epic 4 — the draw dies, and nothing replaces it with chance
+*Done when* a manifest drives selection on the document and plan stages; the code stage asks in its
+final shape and falls back with the reason logged and named in the prompt; omissions and missing mounts
+survive both paths.
 
-13. **A deterministic overflow policy first** (findings 8, 14). When the selected rules exceed the
-    budget, the order above decides who fits — reason strength, then rule id — and everything that did
-    not fit is named in the existing omission note. Whole files stay whole. This is what makes step 14
-    unconditional: the corpus will keep exceeding 80 000 bytes (`testing.md` 24 687 +
-    `git-workflow.md` 21 754 + `reliability.md` 16 520 is 62 KB before anything else is selected), and
-    a plan that waits for it not to would never remove the draw at all.
-14. **Delete `Shuffled` and the `seed` parameter** ([RuleFiles.cs:257](../src_mcp/runners/Context/RuleFiles.cs#L257)),
-    unconditionally, once steps 7 and 13 are in. Two tests go with it —
-    `TwoRoundsSeeTwoDifferentHalvesOfTheFamilyRules`
-    ([RuleFilesTests.cs:334](../src_mcp/tests/RuleFilesTests.cs#L334)) and
-    `AcrossEnoughRounds_EveryFamilyRuleGetsRead` ([:354](../src_mcp/tests/RuleFilesTests.cs#L354)) —
-    replaced by the determinism tests. `ADozenRealRuleFiles_FitTheDefaultBudget`
-    ([:313](../src_mcp/tests/RuleFilesTests.cs#L313)) stays and gains a selected-payload sibling.
-15. **The fallback walk is deterministic too, and it does not starve** (findings 11, 17). `FolderFiles`
-    ([RuleFiles.cs:263](../src_mcp/runners/Context/RuleFiles.cs#L263)) de-duplicates its candidates and
-    then sorts them by case-insensitive PATH alone — which is an order, but not a priority: it is the
-    alphabet that put `development-workflow.md` and `http-contracts.md` first in 2026-09-06 and starved
-    the doctrines. **The canonical fallback order, defined here and asserted in the tests**:
+**2.1 - `RuleManifest`: parse, batch, merge.** *(Opus - pure functions with exhaustive tests.)* A
+`RuleSelection` union of `Resolved(manifest)` and `Unavailable(reason)` - no nulls, no flags.
+**RED:** `MoreChangedFilesThanTheResolverTakes_AreBatched_NotDropped`,
+`MalformedOrPartialJson_IsNotASelection`, `TwoBatchesNamingOneRule_MergeItsReasons`.
+**Reviewer looks at:** unknown JSON fields tolerated - the manifest carries `instructions`,
+`taskVocabulary` and `version` this code does not model.
 
-    1. the instruction files, in `InstructionFiles` order (they are the entry points and always fit);
-    2. this repository's own rules (`.agents/rules`), by ordinal path;
-    3. the mount's rules by CATEGORY — `common/` first, then the language directory matching the
-       change's own file extensions, then the remaining language directories in ordinal order;
-    4. within a category, by ordinal path;
-    5. ties, which after 4 can only be a duplicate path, resolved by rule id.
+**2.2 - `RuleResolver`: the launch, and the one fallback boundary.** *(Fable - it executes a script from
+the repository under review with the server's privileges, kills a process tree on timeout, and confines
+reads to one root; being wrong here is a security defect, not a quality one.)* Not launched at all when
+the mount's script is absent, so a legacy repository costs no process start.
+**RED:** `AMissingNode_AThrownLaunch_ATimeout_ABadExitAndMalformedJson_AllFallBack` - five launchers,
+one assertion shape - with `TheResolverIsLaunchedFromTheRootItReads_AndNowhereElse` and
+`ARepositoryWithoutTheMount_IsNotAskedAtAll`.
+**Reviewer looks at:** the trust boundary - WHICH mounts may have their script run, decided and written
+down; the timeout with a tree kill; that no exception type escapes the boundary.
 
-    Ordinal, not culture- or case-sensitive comparison, so the order does not depend on the machine.
-    Without this, deleting the draw restores the starvation it was installed against — on exactly the
-    path that runs when the resolver is unavailable.
-16. **Record the measurement** the draw's removal is no longer gated on: for a representative diff, how
-    much of the budget the selected payload uses and which rules were omitted. It is evidence about the
-    policy's quality, and the input to the modularization follow-up — not a precondition for landing.
+**2.3 - `Collect` from a manifest: canonical order, reasons in the prompt, omissions that survive.**
+*(Fable - this is the overflow policy, which is the plan's one guarantee, plus root containment of every
+manifest path.)* Order: instruction files, own rules, manifest rules carrying a `path:` reason, the
+stage tier, then the rest by id. A `source` outside the root makes the whole selection `Unavailable`
+rather than a bundle with a hole in it.
+**RED:** `AManifestNamingAnUnreadableFile_FallsBack_RatherThanSendingAPartialBundle`,
+`AnOverBudgetManifest_NamesEveryOmittedRule`, `AnEmptyMount_FallsBackAndNamesTheMount`,
+`TheManifestsSelection_IsTheBundle_InCanonicalOrder`, `EachSelectedRule_SaysWhyItIsInThePrompt`.
+**Reviewer looks at:** a partial bundle impossible by construction; the tie-break chain exactly as
+documented; nothing enumerating the filesystem on this path.
 
-**Rejected, with the reason recorded**: sticky rules across rounds ("a rule present in round N stays in
-round N+1"). Stateful where a pure function will do, monotonically growing against a fixed budget so a
-third round evicts anyway, and it needs per-branch persistence nothing here has. Purity gives the same
-stability for free.
+**2.4 - Three stages ask; one of them falls back on purpose today.** *(Opus - the decisions are made.)*
+Document: root `repoPath`, `--task docs --file <its own path>`. Plan: root `repoPath`, `--task plan`.
+Code: root the round's worktree after population, script from the parent mount,
+`--task implement --file <every changed path>` - written in its final shape, falling back until E1.
+**RED:** `TheCodeStage_AsksWithTheWorktreeAsRoot_AndTheParentsScript`,
+`AResolverThatIsDown_StillGivesEveryStageItsRules`.
+**Reviewer looks at:** the sequence `AddAsync` then populate then launch then read; the log line naming
+which mode ran.
+
+### Epic 3 - the draw dies, and nothing replaces it with chance
+
+*Done when* `Random.Shared` is gone from the selection path, both paths are pinned byte-identical-twice
+at one rule revision, and the measurement is recorded.
+
+**3.1 - Delete the draw.** *(Opus - a deletion behind two already-pinned orders.)* `Drawn` goes, `Walk`
+becomes the default, the `S2245` pragma and the draw's remarks go with it. The two shuffle tests are
+deleted and replaced, not merely removed. `SeededShuffle` itself stays - `PromptDeal` uses it.
+**RED:** `TwoRoundsThroughTheFallbackPath_ShowByteIdenticalRules` - twenty equal-sized mount files under
+a 40 000-byte budget, collected twice, failing today with `Expected second.Files to equal first.Files`.
+**Reviewer looks at:** `Random` absent from `runners/Context`; the 1.1 starvation test still green.
+
+**3.2 - The record.** *(Opus. No RED test - nothing behavioural, and the summary says so.)*
+`research/RESULTS_rules_selection_budget.md`: bytes selected, rules omitted and the mode per stage, from
+the log lines rather than from arithmetic, as the evidence the modularization follow-up needs.
+
+### Epic 4 - symbol triggers widen the selection through the vocabulary that exists (CONDITIONAL, severable)
+
+*Done when* a deterministic token-to-task table over the diff's ADDED lines adds tasks to the code
+stage's launch, a token in a removed line selects nothing, and the prompt says which symbol selected a
+rule.
+
+**Decision rule, taken at 3.2 rather than now:** epic 4's effect on the code gate is invisible until E1
+ships, and its `topics:` half needs E2. If `release` carries neither by the time 3.2 lands, this epic is
+extracted into its own `todo/` plan at promotion instead of being built blind.
+
+**4.1 - `AddedLines` and `SymbolTriggers`.** *(Opus.)* Triggers map to the **existing** task vocabulary -
+`HttpClient` to `http`, `ILogger`/`Serilog` to `logging`, `DbContext`/`Migration` to `storage`,
+`.razor`/`StateHasChanged` to `ui`, `PackageReference` to `dependencies` - because E2 does not exist and
+an unknown key throws.
+**RED:** `ATokenInAnAddedLine_SelectsItsTask` / `ATokenInARemovedLine_DoesNot`.
+
+**4.2 - The code stage passes them.** *(Opus.)* Derived tasks deduplicated and sorted so the argv is
+byte-stable; the reason renders as `task:http <- HttpClient added in src/X.cs`.
+**RED:** `ARuleSelectedByASymbol_SaysWhichSymbol`.
 
 ### Follow-up, not in this build order
 
-**Rule modularization** — split rules over 15 KB into sections, in `dew_flow_conventions`. Selection is
+**Rule modularization** - split rules over 15 KB into sections, in `dew_flow_conventions`. Selection is
 whole-file, so one selected rule can take a third of the budget: `testing.md` 24 687,
 `git-workflow.md` 21 754, `reliability.md` 16 520. Tagging makes the payload relevant; it does not make
-it small. The interaction to respect: `tools/rules.test.mjs` SHA-pins the migrated rule bodies against
-a baseline, so a split updates that baseline deliberately rather than as a side effect. Own plan, own
-pull request, informed by step 16's measurement.
+it small. `tools/rules.test.mjs` SHA-pins the migrated rule bodies, so a split updates that baseline
+deliberately rather than as a side effect. Informed by story 3.2's measurement.
 
 ## What the plan round changed
 
@@ -283,57 +318,78 @@ rather than pools that merge; and the fallback needed its category order written
 `FolderFiles` sorts by path alone — an order, but not a priority, and it is the alphabet that caused
 the starvation in the first place.
 
+## What the split changed
+
+The epic/story split was made with Fable, as the gate's operator command requires, and it corrected
+four things in the shape the plan gate had approved. Each was verified against the source before it was
+taken:
+
+- **The stage tier cannot be a "baseline to retire" - it is the overflow ORDER.** `--task plan` against
+  today's vocabulary selects roughly 110 KB: the always-loaded core plus ten `task:plan` rules including
+  `git-workflow` 21.8 KB and `development-workflow` 14.2 KB. They all tie on reason strength, so
+  "reason strength, then rule id" fills the budget alphabetically and omits `reuse-first`,
+  `subagent-models`, `task-lifecycle` and `post-deploy-checks` - the 2026-09-06 failure with a different
+  alphabet. The static set therefore stays permanently, as a priority tier inside one canonical order.
+  This supersedes the plan round's finding 15 AND the automated reviewer's retirement-equivalence
+  comment: there is no retirement to test.
+- **Epic 1 could not ship before a selection seam existed.** The plan tier plus the instruction files is
+  about 90 KB against an 80 KB budget, so a plan gate built before `RuleOrder` would either inherit the
+  draw or grow a second private ordering. The seam is now story 1.1, and the fallback priority moved
+  into epic 1 from the old epic 4 - the constraint already said it had to exist before the draw went.
+- **The worktree question was answered by reading, and the answer inverts the build order.** Both
+  refusals are in *Constraints* above. The code stage is the resolver's LAST consumer, not its first;
+  document and plan can use it today.
+- **The topics axis is not merely absent, it is breaking if added early.** `rule-catalog.mjs:83` throws
+  on an unknown metadata key, so a `topics:` key shipped before the consumers can read it takes the
+  resolver down for all six. Epic 4's triggers map to the existing task vocabulary, and the epic is
+  conditional and severable.
+
+Smaller corrections taken: the measurement is a docs story, not a code story; the
+`RolesWithRulesInMind` re-check is one assertion because no Conventions role is scheduled on the plan or
+document stages; and "read from `repoPath` at HEAD" was simply wrong - `Collect` reads the working tree,
+which is the honest input at plan time.
+
 ## Test plan
 
-xUnit v3 on Microsoft Testing Platform — build, then run the **executable**; never `dotnet test`:
+xUnit v3 on Microsoft Testing Platform - build, then run the **executable**; never `dotnet test`:
 
 ```bash
 dotnet build dew_flow_connect_other_ais.slnx
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*RuleFilesTests"
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ConventionsPassTests"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*RuleOrderTests"
+./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe
 ```
 
-| Epic | Test | Guarantee |
-|---|---|---|
-| 1 | `APlanRound_IsGivenTheRulesItIsJudgedAgainst` | **RED first** — no rules today |
-| 1 | `ADocumentRound_IsGivenTheRulesItIsJudgedAgainst` | **RED first** — same gap, second gate |
-| 1 | `APlanRound_GetsTheHighLevelRules_AndNotTheBuildRecipes` | the stage split |
-| 1 | `APlanRound_StillGetsNoWorktree` | protects the ten-minute-round fix |
-| 1 | `TheRulesBundleHasItsOwnBudget_AndDoesNotTruncateThePlanText` | the budget question |
-| 2 | `TheManifestsSelection_IsTheBundle_InCanonicalOrder` | the wiring and the order |
-| 2 | `MoreChangedFilesThanTheResolverTakes_AreBatched_NotDropped` | no silent selector loss |
-| 2 | `APathThatCouldNotBeResolved_IsNamedInThePrompt` | the disclosure for step 6 |
-| 2 | `AMissingNode_AThrownLaunch_ATimeout_ABadExitAndMalformedJson_AllFallBack` | one boundary, every mode |
-| 2 | `AManifestNamingAnUnreadableFile_FallsBack_RatherThanSendingAPartialBundle` | the read phase |
-| 2 | `AnEmptyMount_FallsBackAndNamesTheMount` | `MissingMounts` survives selection |
-| 2 | `AnOverBudgetManifest_NamesEveryOmittedRule` | `Omitted` survives selection |
-| 3 | `ATokenInAnAddedLine_SelectsItsTopic` / `…InARemovedLine_DoesNot` | added lines only |
-| 3 | `ARuleWithNoTopics_IsStillSelectedByItsTasksAndPaths` | topics are additive |
-| 3 | `TheSameDiffTwice_SelectsTheSameTopics` | purity |
-| 4 | `TwoRoundsOverTheSameChange_AtOneRuleRevision_ShowByteIdenticalRules` | replaces the two shuffle tests |
-| 4 | `TwoRoundsThroughTheFallbackPath_ShowByteIdenticalRules` | the path finding 11 named |
-| 4 | `TheFallbackOrder_ShowsTheDoctrines_NotOnlyTheTwoLongestFiles` | the 2026-09-06 starvation |
-| 4 | `TheFallbackOrder_TakesCommonBeforeTheLanguageDirectories_ByCategoryNotAlphabet` | the category order of step 15 |
-| 4 | `ARuleRevisionChange_IsADifferentInput_AndIsNotAssertedIdentical` | scopes the guarantee honestly |
-| 1 | `TheDocumentBaselineIsRetired_OnlyAgainstATaskDocsEquivalence` | one baseline, one equivalence |
+Every story's RED test is named in its entry above, and each opens with the failure message that
+describes the real symptom rather than a setup error. Three of them are the load-bearing ones:
 
-Epic 1 reports the RED failure message before the fix as well as the pass after it; every epic reports
-the runner's own output.
+| Story | Test | What its RED proves |
+|---|---|---|
+| 1.1 | `TheFallbackOrder_ShowsTheDoctrines_NotOnlyTheTwoLongestFiles` | the 2026-09-06 starvation, reproduced under a tight budget |
+| 1.3 | `APlanRound_IsGivenTheRulesItIsJudgedAgainst` | the plan gate is judged against nothing today |
+| 3.1 | `TwoRoundsThroughTheFallbackPath_ShowByteIdenticalRules` | the draw itself, observed as two different bundles |
+
+Determinism is asserted **within one rule-source revision**; a promoted `release` pin is a different
+input, and `ARuleRevisionChange_IsADifferentInput_AndIsNotAssertedIdentical` says so rather than
+pretending otherwise.
 
 ## Definition of Done
 
-- [ ] Epics 1–4 landed in order, each story reviewed with `review_code`, its findings resolved, its
-      documentation and tests updated, and committed before the next one starts.
-- [ ] Epic 1 began with a failing test whose message describes the real symptom.
-- [ ] The conventions half of epic 3 is a **separate pull request**; this repository's pull request
-      touches the submodule only as a pin.
-- [ ] No round can fail because of a resolver, a submodule, `node` or a file read — every mode lands on
+- [ ] Epics 1-3 landed in order, story by story, each reviewed with `review_code` on its own diff, its
+      findings resolved, its documentation and tests updated, and committed before the next one starts.
+- [ ] Epic 4 built only if E1 and E2 have arrived; otherwise extracted into its own `todo/` plan, with
+      the decision recorded at story 3.2.
+- [ ] Each story that fixes a defect began with a failing test whose message names the real symptom, and
+      both the RED message and the GREEN result are reported.
+- [ ] No round can fail because of a resolver, a submodule, `node` or a file read - every mode lands on
       the deterministic walk with a logged reason, and the prompt says the selection was untargeted.
 - [ ] The omission and missing-mount notes are asserted, not assumed.
-- [ ] `Random.Shared` is gone from `RuleFiles`, and both the selected path and the fallback path are
-      pinned by a byte-identical-twice test.
-- [ ] The step 16 measurement is recorded in `research/`.
-- [ ] `research/module_runners.md` and `research/module_server.md` updated; `architecture.md` updated if
-      the resolver dependency crosses a container boundary; Mermaid re-rendered.
+- [ ] `Random.Shared` is gone from the selection path, and both the selected and the fallback paths are
+      pinned by a byte-identical-twice test at one rule revision.
+- [ ] `research/RESULTS_rules_selection_budget.md` records the measurement.
+- [ ] `research/module_runners.md` and `research/module_server.md` updated as the stories land;
+      `architecture.md` gains the node resolver as an external dependency of `coai-mcp`, Mermaid
+      re-rendered.
+- [ ] E1 and E2 are raised as their own `dew_flow_conventions` pull requests, and this repository's pin
+      follows them rather than anticipating them.
 - [ ] Promoted to `research/` with `IMPLEMENTED <date>`, its deviations recorded, the follow-up
-      extracted into its own `todo/` plan, and `todo/README.md` updated.
+      extracted, and `todo/README.md` updated.
