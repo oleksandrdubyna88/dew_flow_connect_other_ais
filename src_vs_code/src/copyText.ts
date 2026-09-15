@@ -97,46 +97,69 @@ export interface TextCopier {
  * <p>Its own unit because it owns state the queue does not care about — which attempt is newest —
  * and because the copier around it was over this repository's length limit with it inlined.</p>
  */
+/**
+ * The newest text ANYBODY asked the clipboard to hold, and when they asked.
+ *
+ * <p><b>Module-level, because there is one system clipboard and there were two opinions about it.</b>
+ * Every copier used to keep its own record, so a correction belonging to the chat could land after a
+ * phrase had been copied from the panel and put the answer back over it — two callers, one resource,
+ * and neither able to see the other. (codex, the plan round.) The counter only ever increases, which
+ * is what makes "is something newer wanted than the write that just landed" answerable at all.</p>
+ */
+let wanted: { readonly at: number; readonly text: string } | undefined;
+let issued = 0;
+
+/**
+ * Write, and put the newest text back if this write is overtaken while it is in flight.
+ *
+ * <p>A clipboard write cannot be cancelled, so the only honest strategy is to let every write finish
+ * and re-assert whatever is newest afterwards. <b>Every</b> write goes through here — the first one
+ * and every correction — which is the part that took two rounds to get right: the first version
+ * corrected with a bare `ports.writeText` that nothing watched, so a correction overtaken by a press
+ * settled last and restored text already copied past, and a correction that hung was never
+ * reconsidered at all. (CodeRabbit on #273, then codex and gemini on this plan.)</p>
+ *
+ * <p>It terminates because a re-launch happens only when the generation has MOVED, and generations
+ * are handed out one per press: with no new press, `now.at === at` and it stops.</p>
+ */
+function launch(ports: CopyPorts, at: number, text: string): Promise<void> {
+  const write = ports.writeText(text);
+  void write.then(
+    () => {
+      const now = wanted;
+      if (now !== undefined && now.at !== at) {
+        void launch(ports, now.at, now.text);
+      }
+    },
+    // A correction that is REFUSED ends the chain, deliberately rather than by omission. The press it
+    // is repairing has already been reported to the person as failed, and a clipboard that refused
+    // one write will refuse the retry — so repeating would be a loop with no exit that says nothing
+    // new. Nothing waits on this promise either, so a correction that never settles cannot hold up a
+    // later press: the ceiling that releases the QUEUE is separate from minding what lands.
+    () => undefined,
+  );
+
+  return write;
+}
+
 function boundedWriter(ports: CopyPorts, ceilingMs: number): (text: string) => Promise<void> {
-  /** The newest text anybody asked for, and when. What a late write must not be allowed to undo. */
-  let wanted: { readonly at: number; readonly text: string } | undefined;
-  let issued = 0;
-
   /**
-   * A write we stopped waiting for is still RUNNING, and can still land.
+   * The write, or the ceiling — whichever comes first.
    *
-   * <p>Giving up on the wait releases the queue, which is the point; it does not cancel anything,
-   * because a clipboard write cannot be cancelled. So if the abandoned one eventually lands and
-   * something newer has been asked for since, the newer text is put back. Without this, a write that
-   * hung past the ceiling and then succeeded would quietly replace what the person copied after it.
-   * (codex and gemini, the code round, independently and from different roles.)</p>
+   * <p>The ceiling governs only how long the QUEUE waits, never whether the write is still watched:
+   * giving up on the wait releases the next press, and `launch` goes on minding what lands. The timer
+   * never outlives the attempt.</p>
    */
-  function reinstate(write: Promise<void>, mine: number): void {
-    void write.then(
-      () => {
-        const now = wanted;
-        if (now !== undefined && now.at !== mine) {
-          void Promise.resolve(ports.writeText(now.text)).catch(() => undefined);
-        }
-      },
-      () => undefined,
-    );
-  }
-
-  /** The write, or the ceiling — whichever comes first. The timer never outlives the attempt. */
   return async function written(text: string): Promise<void> {
     issued += 1;
     const mine = issued;
     wanted = { at: mine, text };
-    const write = ports.writeText(text);
+    const write = launch(ports, mine, text);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([write, new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error('the clipboard did not answer')), ceilingMs);
       })]);
-    } catch (failure) {
-      reinstate(write, mine);
-      throw failure;
     } finally {
       clearTimeout(timer);
     }

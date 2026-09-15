@@ -450,6 +450,20 @@ control drawn for one answer is not obeyed against another. The write also has a
 that never SETTLES — a permission prompt nobody answers — would otherwise leave every later press
 queued behind it for ever, with nothing said.
 
+**And a write abandoned at that ceiling is still running.** A clipboard write cannot be cancelled, so
+the only honest strategy is to let every write finish and re-assert whatever is newest afterwards —
+which is what `launch` does, for the first write and for every correction alike. That uniformity took
+two review rounds to arrive at: the first version corrected with a bare write nothing watched, so a
+correction overtaken by a press settled last and put back text the person had already copied past,
+and a correction that hung was never reconsidered at all.
+
+**The record of "newest" is module-level, because there is one clipboard and there were two opinions
+about it.** Each copier used to keep its own, so a correction belonging to the chat could land on top
+of a phrase just copied from the panel — two callers, one resource, neither able to see the other.
+The ceiling now governs only how long the QUEUE waits; minding what actually lands is not bounded by
+it. The loop terminates because a re-launch happens only when the generation has moved, and
+generations are handed out one per press.
+
 **Three refusals, one sentence between two of them.** An ordinal past the end and a signature that
 disagrees both say *That block is no longer part of this answer* — from the person's side they are
 one fact. A clipboard that rejects says so separately. All three go to the status bar through

@@ -797,6 +797,44 @@ test('the shipped block control asks the host for the block it names', () => {
   assert.strictEqual(asked[0]?.['text'], undefined, 'the shipped control sent text the host did not ask for');
 });
 
+test('a control the renderer drew, pressed on the shipped page, copies that block', async () => {
+  // THE JOIN. Two halves were each exercised and never met: this file proved the listener forwards a
+  // dataset, and `answerCopy.test.ts` proved a coordinate resolves to the right text — but nothing
+  // carried a coordinate the RENDERER produced through the SHIPPED listener and on into the host.
+  // A parser or a listener that dropped a field would have passed both. (CodeRabbit, on #273.)
+  const { chatMessagesHtml } = await import('../chatPage');
+  const { chatCommandOf } = await import('../chatMessages');
+  const { blockToCopy } = await import('../answerCopy');
+  const { textCopier } = await import('../copyText');
+
+  const answer = ['Before.', '', '```ts', 'const first = 1;', '```', '', '```reply', 'Send this onward.', '```'].join('\n');
+  const markup = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: answer }]);
+  // The real attributes of the real second control, not a dataset invented for the test.
+  const drawn = [...markup.matchAll(/data-block="(\d+)" data-at="(\d+)" data-sig="([^"]+)"/g)]
+    .map((one) => ({ block: one[1] ?? '', at: one[2] ?? '', sig: one[3] ?? '' }));
+  assert.strictEqual(drawn.length, 2, 'the fixture did not draw the two controls this test is about');
+
+  const { posted, clickIn } = runPage();
+  clickIn('messages', drawn[1] ?? {});
+
+  const asked = posted.filter((message) => message['command'] === 'copyBlock');
+  assert.strictEqual(asked.length, 1, 'the shipped page did not forward the press');
+
+  const command = chatCommandOf(asked[0] as Record<string, unknown>);
+  assert.strictEqual(command.kind, 'copyBlock', 'the host refused a message its own page produced');
+
+  const wrote: string[] = [];
+  await textCopier({
+    writeText: (text) => { wrote.push(text); return Promise.resolve(); },
+    say: () => ({ dispose: () => undefined }),
+  }).copy(() => (command.kind === 'copyBlock'
+    ? blockToCopy(answer, command.block, command.sig)
+    : { kind: 'refused', said: 'unreachable' }));
+
+  assert.deepStrictEqual(wrote, ['Send this onward.'],
+    'the press that crossed the whole seam did not copy the block it was drawn for');
+});
+
 test('the shipped Clear button empties the composer, and repaints it', () => {
   // The box draws its own text TRANSPARENT and a layer behind it does the drawing, so emptying the
   // value without repainting leaves the old words on screen over an empty box. A screenshot of a
