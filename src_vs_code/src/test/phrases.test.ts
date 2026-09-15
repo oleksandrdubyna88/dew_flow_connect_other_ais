@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { freshPhraseRow, phraseById, phrasesFrom } from '../phrases';
+import { freshPhraseRow, phraseById, phraseColours, phrasesFrom } from '../phrases';
 
 /**
  * The phrases a person keeps, read from a setting they can edit by hand.
@@ -142,4 +142,39 @@ test('a phrase that opens with a blank line is named from the first line that ha
   const [phrase] = phrasesFrom([{ id: 'a', text: '\n\n   \nSELECT * FROM claims' }]);
 
   assert.equal(phrase?.name, 'SELECT * FROM claims', 'the button carries a blank label, so nobody can see it');
+});
+
+test('a colour per phrase, decided over the whole list', () => {
+  const ids = ['phrase-1', 'phrase-2', 'phrase-3'];
+
+  const colour = phraseColours(ids);
+  const again = phraseColours(ids);
+
+  const worn = ids.map(colour);
+  assert.equal(new Set(worn).size, ids.length, `two phrases share a colour: ${worn.join(', ')}`);
+  // Both halves: "all different" alone is satisfied by an allocator that answers differently every
+  // time it is built, and then a phrase changes colour on every repaint.
+  for (const id of ids) {
+    assert.equal(again(id), colour(id), `${id} is a different colour the second time it is asked`);
+  }
+});
+
+test('a phrase keeps its colour when another is added beside it', () => {
+  // The property the whole design rests on: a name's slot comes from a hash of the name itself, so
+  // the list decides who wins a genuine collision rather than who gets which colour. Measured over
+  // the real allocator rather than assumed. (gemini, the plan round, predicted the opposite.)
+  const before = phraseColours(['phrase-1', 'phrase-2', 'phrase-3']);
+  const after = phraseColours(['phrase-1', 'phrase-2', 'phrase-3', 'phrase-4']);
+
+  for (const id of ['phrase-1', 'phrase-2', 'phrase-3']) {
+    assert.equal(after(id), before(id), `${id} changed colour because a fourth phrase was added`);
+  }
+});
+
+test('a dozen phrases still get a dozen colours', () => {
+  const many = Array.from({ length: 12 }, (_, at) => `phrase-${at + 1}`);
+
+  const colour = phraseColours(many);
+
+  assert.equal(new Set(many.map(colour)).size, 12, 'the palette ran out before twelve phrases');
 });

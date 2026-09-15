@@ -1,5 +1,6 @@
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { escapeHtml } from './webviewHtml';
+import { PHRASE_FALLBACK_COLOUR, phraseColours } from './phrases';
 
 /**
  * The tab where a person keeps the phrases they stopped wanting to retype.
@@ -109,13 +110,21 @@ export function phraseRepaints(command: PhraseCommand): boolean {
   return command.kind === 'add' || command.kind === 'remove';
 }
 
-function phraseRow(row: PhraseRowView): string {
-  return `<div class="phrase" data-id="${escapeHtml(row.id)}">
+function phraseRow(row: PhraseRowView, colour: string): string {
+  const id = escapeHtml(row.id);
+
+  // Labelled, not merely placeheld. A placeholder disappears the moment the box has content, which
+  // is the normal state of a saved phrase — so the only cue to which box was which vanished exactly
+  // when somebody needed it. The `for`/`id` pairing is what makes these labels rather than captions
+  // sitting nearby, and it is the half a screen reader depends on.
+  return `<div class="phrase" data-id="${id}" style="border-left-color:${colour}">
   <div class="head">
-    <input type="text" data-field="name" value="${escapeHtml(row.name)}" placeholder="A name for the button">
-    <button type="button" class="remove" data-remove data-id="${escapeHtml(row.id)}">Remove</button>
+    <label for="phrase-name-${id}">Name</label>
+    <input type="text" id="phrase-name-${id}" data-field="name" value="${escapeHtml(row.name)}" placeholder="A name for the button">
+    <button type="button" class="remove" data-remove data-id="${id}">Remove</button>
   </div>
-  <textarea data-field="text" rows="${PHRASE_ROWS}" placeholder="What lands on the clipboard">${escapeHtml(row.text)}</textarea>
+  <label for="phrase-text-${id}">What it copies</label>
+  <textarea id="phrase-text-${id}" data-field="text" rows="${PHRASE_ROWS}" placeholder="What lands on the clipboard">${escapeHtml(row.text)}</textarea>
 </div>`;
 }
 
@@ -124,7 +133,12 @@ function styles(uiScale: number): string {
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
   h1 { font-size: 1.2em; margin: 0; }
   .lead { opacity: .8; margin: 0 0 12px; }
-  .phrase { border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-left-color: var(--vscode-textLink-foreground); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
+  /* The frame and the edge WIDTH are here; the hue is inline, per row, because it is decided over
+     the whole list rather than named by a class. The fallback keeps a row deliberate when nothing
+     has given it a colour. */
+  .phrase { border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-left-color: ${PHRASE_FALLBACK_COLOUR}; border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
+  .phrase label { display: block; font-size: .85em; opacity: .75; margin: 0 0 2px; }
+  .phrase .head label { margin: 0; }
   .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .head input[type="text"] { flex: 1 1 12rem; min-width: 0; }
   input, textarea { font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 3px; padding: 4px 6px; }
@@ -181,7 +195,11 @@ function script(nonce: string): string {
 
 /** The page. Its own function so the document below stays readable, as every page here does it. */
 export function phrasesHtml(state: PhrasesPageState, nonce: string): string {
-  const rows = state.rows.map(phraseRow).join('');
+  // Built ONCE, over the whole list: "no two phrases share a colour" is a statement about the list
+  // and cannot be decided one row at a time. The same expression runs in the sidebar, which is what
+  // makes a phrase the same colour on its button as in its box here.
+  const colour = phraseColours(state.rows.map((row) => row.id));
+  const rows = state.rows.map((row) => phraseRow(row, colour(row.id))).join('');
   const empty = state.rows.length > 0
     ? ''
     : '<p class="lead">No phrases yet. <b>Add a phrase</b> and it appears in the panel, under <b>Phrases</b>.</p>';

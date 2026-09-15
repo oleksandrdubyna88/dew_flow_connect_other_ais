@@ -122,3 +122,62 @@ test('a save that later succeeds takes the failure line away again', () => {
   assert.match(page, /said\.type === 'saveOk'/, 'nothing clears the failure line when a save works again');
   assert.match(page, /banner\.hidden = true/, 'the failure line is never hidden again once shown');
 });
+
+// ---------- a phrase you can tell apart (issue #295) ----------
+//
+// Six phrases were six identical rectangles: `.phrase` gave every one the same left edge, so the
+// only way to find one was to read it. And the edit form had no labels at all — two placeholders,
+// which vanish the moment a box has content, which is the normal state of a saved phrase.
+
+test('every phrase on the page wears its own colour', () => {
+  const many: readonly PhraseRowView[] = Array.from({ length: 8 }, (_, at) => ({
+    id: `phrase-${at + 1}`, name: `Phrase ${at + 1}`, text: 'words',
+  }));
+
+  const page = phrasesHtml({ rows: many, uiScale: 1 }, 'NONCE');
+
+  // Every row carries a colour, and no two carry the same one. Asserting only "each has a style"
+  // passes for a page that painted all eight the same fallback, which is the defect reported.
+  const worn = many.map((row) => {
+    const found = new RegExp(`data-id="${row.id}" style="border-left-color:([^"]+)"`).exec(page);
+    assert.ok(found, `${row.id} has no colour of its own`);
+
+    return found[1]!;
+  });
+
+  assert.equal(new Set(worn).size, worn.length, `two phrases share a colour: ${worn.join(', ')}`);
+});
+
+test('the frame is still a frame, whatever colour its edge is', () => {
+  // The hue is inline; the BORDER is in the stylesheet. Without the rule the inline colour paints
+  // nothing and the rows go back to being flat boxes — which is what was reported.
+  const css = html().split('<style>')[1]!.split('</style>')[0]!;
+  const rule = css.split('.phrase {')[1]?.split('}')[0] ?? '';
+
+  assert.ok(rule.length > 0, 'the .phrase rule is gone, so the rows are unframed whatever colour they carry');
+  assert.match(rule, /border: 1px solid/, 'the entries have no frame');
+  assert.match(rule, /border-left-width: 3px/, 'the left edge has no width, so the colour paints nothing');
+});
+
+test('both boxes say what they are, and say it to a screen reader too', () => {
+  const page = html();
+
+  for (const [field, words] of [['name', 'Name'], ['text', 'What it copies']]) {
+    // The label's `for` must name the control's `id` — that pairing is what makes it a label rather
+    // than a caption sitting nearby, and it is the half a person using a screen reader depends on.
+    const label = new RegExp(`<label for="(phrase-${field}-a)">([^<]+)</label>`).exec(page);
+    assert.ok(label, `the ${field} box has no label`);
+    assert.equal(label[2], words, `the ${field} box is labelled "${label[2]}"`);
+    assert.ok(page.includes(`id="${label[1]}"`), `${label[1]} labels a control that does not exist`);
+  }
+});
+
+test('nothing about a phrase changed to buy the colour and the labels', () => {
+  const page = html();
+
+  for (const hook of ['data-field="name"', 'data-field="text"', 'data-remove data-id="a"', 'data-id="a"']) {
+    assert.ok(page.includes(hook), `the row lost ${hook}`);
+  }
+  assert.match(page, /value="Ship it"/, 'the name box no longer holds the name');
+  assert.match(page, /make a pr, accept it, deploy/, 'the phrase itself is no longer in its box');
+});

@@ -6,6 +6,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 import type { Phrase } from '../phrases';
 import { phrasesFrom } from '../phrases';
 import { DEFAULTS } from '../settingsShape';
+import { phrasesHtml } from '../phrasesPage';
 
 /**
  * The Phrases section: the half of this feature a person actually touches.
@@ -130,4 +131,52 @@ test('the button says Copied only when the host says the write landed', () => {
   assert.match(page, /message\?\.type === 'copied'/, 'the page never hears that a copy landed');
   assert.match(page, /'Copied'/, 'no button ever confirms itself');
   assert.ok(!/data-command="copyPhrase"[^>]*onclick/.test(page), 'the button changes itself on the click, before the write');
+});
+
+// ---------- the button and the box are the same colour (issue #295) ----------
+
+test('a phrase is the same colour on its button as in the editor', () => {
+  // THE assertion that guards this feature. Each surface builds its own allocator from its own
+  // state, so a per-surface test can be green while the two disagree — which is the defect the
+  // allocator exists to prevent and the lesson from the Consultant change immediately before this
+  // one. (gemini, the plan round.)
+  const page = phrasesHtml({ rows: PHRASES.map((p) => ({ id: p.id, name: p.name, text: p.text })), uiScale: 1 }, 'NONCE');
+  const panel = panelHtml(state(), 'n0nce');
+
+  for (const phrase of PHRASES) {
+    const inEditor = new RegExp(`data-id="${phrase.id}" style="border-left-color:([^"]+)"`).exec(page);
+    const onButton = new RegExp(`data-command="copyPhrase" data-id="${phrase.id}"[^>]*style="border-left-color:([^"]+)"`).exec(panel);
+
+    assert.ok(inEditor, `${phrase.id} has no colour in the editor`);
+    assert.ok(onButton, `${phrase.id}'s button has no colour`);
+    assert.equal(onButton[1], inEditor[1], `${phrase.id} is one colour in the editor and another on its button`);
+  }
+});
+
+test('a phrase keeps its colour when the two surfaces are one phrase apart', () => {
+  // The editor and the sidebar are separate webviews refreshed on their own clocks, so one can hold
+  // a list the other has not caught up with. A shared phrase must not change colour because of a
+  // phrase it is not. (gemini, the plan round — the half of that finding that was right.)
+  const shared = PHRASES[0]!;
+  const withExtra = [...PHRASES, ...phrasesFrom([{ id: 'c', name: 'Later', text: 'and again' }])];
+
+  const small = panelHtml(state(PHRASES), 'n0nce');
+  const large = panelHtml(state(withExtra), 'n0nce');
+
+  const colourIn = (html: string): string => {
+    const found = new RegExp(`data-command="copyPhrase" data-id="${shared.id}"[^>]*style="border-left-color:([^"]+)"`).exec(html);
+    assert.ok(found, `${shared.id} has no colour`);
+
+    return found[1]!;
+  };
+
+  assert.equal(colourIn(large), colourIn(small), 'a phrase changed colour because another one was added beside it');
+});
+
+test('a phrase button is a frame with an edge, not a bare button', () => {
+  const css = panelHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+  const rule = css.split('.phrases .run {')[1]?.split('}')[0] ?? '';
+
+  assert.ok(rule.length > 0, 'the .phrases .run rule is gone');
+  assert.match(rule, /border-left: 3px solid/, 'the button has no left edge, so its inline colour paints nothing');
 });

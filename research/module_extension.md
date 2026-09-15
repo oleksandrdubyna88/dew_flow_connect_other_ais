@@ -8,6 +8,38 @@
 > this file's own preference, and the reason is written there rather than left as a version bump
 > somebody finds later.
 
+### A phrase is the same colour in both places, and its boxes say what they are (2026-09-15)
+
+Six phrases were six identical rectangles: `.phrase` gave every one the same left edge, so finding
+one meant reading them. The same six are buttons in the sidebar, and nothing connected a button to
+the box that defines it — you found out from the clipboard. And the edit form had **no labels at
+all**: two `placeholder` attributes, which disappear the moment a box has content, which is the
+normal state of a saved phrase (issue #295).
+
+`phraseColours(ids)` in `phrases.ts` delegates to `vendorPalette`. **Reuse rather than convenience** —
+that file spends thirty lines on why "no two the same" can only be promised over a LIST and never by
+hashing one name at a time, and the argument transfers unchanged. Both surfaces call it over their
+own ids, and a test asserts the colour for a given phrase is the same string in the editor page and
+in the panel.
+
+**Three properties of that allocator were MEASURED rather than assumed**, because the plan round
+predicted the opposite of all three:
+
+| claim | measured |
+|---|---|
+| "only 7 hues are available, so 8 phrases collide" | 8 ids → **8 distinct colours**; 12 → **12**; the 13th repeats, which is that palette's documented end. The five anchored vendor slots are offered LAST, not withheld. |
+| "adding a phrase re-sorts the list and shuffles the colours" | adding a 7th moved **0 of 6**; adding a late-sorting id moved **0**. A name's slot comes from a hash of the name itself; the list only decides who wins a genuine collision. |
+| "the add flow builds rows client-side, so new ones render unlabelled" | `phrasesPage.ts` contains no `createElement`, `innerHTML` or `appendChild` at all; Add posts to the host, which rewrites `panel.webview.html` — a new row is rendered by `phraseRow` like every other. |
+
+That first property is what makes the cross-surface promise hold even though the editor and the
+sidebar are separate webviews refreshed on their own clocks and can be one phrase apart. There is a
+test for exactly that case.
+
+The labels are `<label for=…>` paired with control ids (`phrase-name-<id>`, `phrase-text-<id>`) —
+**Name** and **What it copies**. The `for`/`id` pairing is what makes them labels rather than
+captions sitting nearby, and it is the half a screen reader depends on; the test asserts the pairing,
+not merely the presence of the word.
+
 ### A reviewer's status carries a mark you can see without reading (2026-09-15)
 
 Six reviewers in a running round were six near-identical grey 11px lines differing in one word
