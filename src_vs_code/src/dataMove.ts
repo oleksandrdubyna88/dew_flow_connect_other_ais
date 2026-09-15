@@ -30,6 +30,21 @@ export interface StorageFingerprint {
   readonly sessions: number;
   /** Lines of the spending ledger. */
   readonly usageLines: number;
+  /**
+   * How many entries each moved DIRECTORY holds, by name.
+   *
+   * <p>Three counts could not see an edited prompt, a replaced picture or an audit record — they
+   * cover the database, the sessions and the ledger, and the inventory moves sixteen things (codex,
+   * code round). This sees anything added to or removed from the rest of them.</p>
+   *
+   * <p>What it deliberately does NOT see is a file edited in place without changing the count. The
+   * cure for that is hashing every byte of a copy that is on a network drive by definition, and the
+   * price is not worth the last increment — so it is said here rather than implied.</p>
+   *
+   * <p>Optional, because a record written before this existed has none, and a comparison that cannot
+   * be made must not read as one that passed.</p>
+   */
+  readonly entries?: Readonly<Record<string, number>>;
 }
 
 /** What is known about the last move, kept so the delete can be offered later — or refused. */
@@ -58,6 +73,35 @@ export interface MoveRecord {
  * whatever already runs there, carries nothing this move would overwrite, and refusing on it would
  * refuse most of the real destinations somebody would pick.</p>
  */
+/**
+ * Why this destination cannot be the one, on the grounds of WHERE it is, or empty.
+ *
+ * <p><b>The worst finding of the code round</b> (codex, Blocking). `C:\coai` moved into
+ * `C:\coai\new` passes every other check — the destination is empty, nothing is running, the copy
+ * succeeds and verifies. Then deleting the source takes the copy inside it, and the configuration is
+ * left pointing at a directory that no longer exists.</p>
+ *
+ * <p>Both paths are compared after canonicalising, and a separator is appended before the prefix
+ * test so that `C:\coai2` is not read as living inside `C:\coai`.</p>
+ *
+ * @param within Whether the second path is the first, or sits inside it. Injected so the rule is
+ *   testable without a filesystem, and so the caller supplies the platform's own comparison.
+ */
+export function destinationPlaceRefusal(source: string, destination: string, within: (outer: string, inner: string) => boolean): string {
+  if (within(source, destination)) {
+    return `${destination} is inside ${source}, which is the folder being copied. The copy would `
+      + 'land inside its own source, and deleting the old folder afterwards would take the copy with '
+      + 'it. Choose a folder outside this one.';
+  }
+
+  if (within(destination, source)) {
+    return `${destination} contains ${source}, the folder being copied. Choose a folder that is not `
+      + 'above this one.';
+  }
+
+  return '';
+}
+
 export function destinationRefusal(holds: readonly string[]): string {
   const clashes = holds.filter((entry) => DATA_TO_MOVE.includes(entry));
   if (clashes.length === 0) {
@@ -148,11 +192,23 @@ export function sourceChangedSince(record: MoveRecord, now: StorageFingerprint):
 
 /** The counts that differ, as a person reads them — or empty when none do. */
 function differences(before: StorageFingerprint, after: StorageFingerprint): string {
-  return ([
+  const counted: (readonly [string, number, number])[] = [
     ['rounds', before.rounds, after.rounds],
     ['sessions', before.sessions, after.sessions],
     ['ledger lines', before.usageLines, after.usageLines],
-  ] as const)
+  ];
+
+  // Compared only when BOTH sides have them. One side without is a comparison that cannot be made,
+  // and reporting "0 before, 40 after" for a record that simply predates this field would refuse
+  // every move made by an older build.
+  if (before.entries !== undefined && after.entries !== undefined) {
+    const named = new Set([...Object.keys(before.entries), ...Object.keys(after.entries)]);
+    for (const name of [...named].sort((a, b) => a.localeCompare(b))) {
+      counted.push([name, before.entries[name] ?? 0, after.entries[name] ?? 0]);
+    }
+  }
+
+  return counted
     .filter(([, from, to]) => from !== to)
     .map(([what, from, to]) => `${what}: ${from} before, ${to} after`)
     .join('; ');

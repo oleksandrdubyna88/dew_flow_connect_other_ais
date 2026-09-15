@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  destinationPlaceRefusal,
   destinationRefusal,
   mayDeleteTheOldCopy,
   sourceChangedSince,
@@ -52,6 +53,39 @@ test('a destination holding only things that are not moved is allowed', () => {
   // `logs/` and `servers/` are written by whatever already ran there. They carry no history and are
   // not copied, so their presence says nothing about whether this move is safe.
   assert.equal(destinationRefusal(['logs/', 'servers/']), '');
+});
+
+// ---------- and WHERE it is, which is the one that would have eaten the copy ----------
+
+/** The real containment rule, as `dataCommands.ts` supplies it: canonicalised, separator-aware. */
+const within = (outer: string, inner: string): boolean =>
+  inner === outer || inner.startsWith(outer.endsWith('\\') ? outer : `${outer}\\`);
+
+test('a destination inside the source is refused before anything is copied', () => {
+  // codex, Blocking. C:\coai -> C:\coai\new passes every other check: empty, quiet, copies, verifies
+  // — and then deleting the source takes the copy inside it, leaving the configuration pointing at a
+  // directory that no longer exists.
+  const refusal = destinationPlaceRefusal('C:\\coai', 'C:\\coai\\new', within);
+
+  assert.match(refusal, /inside/u);
+  assert.match(refusal, /delet/iu, 'and says what would have happened');
+});
+
+test('a destination that IS the source is refused', () => {
+  assert.notEqual(destinationPlaceRefusal('C:\\coai', 'C:\\coai', within), '');
+});
+
+test('a destination that contains the source is refused too', () => {
+  assert.notEqual(destinationPlaceRefusal('C:\\coai\\data', 'C:\\coai', within), '');
+});
+
+test('a sibling whose name merely starts the same is allowed', () => {
+  // `C:\coai2` is not inside `C:\coai`, and a prefix test without the separator would say it was.
+  assert.equal(destinationPlaceRefusal('C:\\coai', 'C:\\coai2', within), '');
+});
+
+test('an unrelated folder is refused by nothing', () => {
+  assert.equal(destinationPlaceRefusal('C:\\coai', 'Z:\\coai', within), '');
 });
 
 // ---------- the source ----------
@@ -142,6 +176,27 @@ test('a source that has been written to since the move is not deleted', () => {
   assert.match(changed, /1284/u);
   assert.match(changed, /1285/u);
   assert.match(changed, /not been deleted|nothing has been deleted/iu);
+});
+
+test('a prompt added since the copy is seen, because every moved directory is counted', () => {
+  // codex, code round: three counts covered the database, the sessions and the ledger, and the
+  // inventory moves sixteen things — an edited prompt, a new picture or an audit record passed
+  // straight through a verification that called the move safe.
+  const held = { ...BEFORE, entries: { 'prompts/': 3, 'chat-conversations/': 12 } };
+  const now = { ...BEFORE, entries: { 'prompts/': 4, 'chat-conversations/': 12 } };
+
+  assert.match(
+    sourceChangedSince({ from: 'C:\\old', to: 'Z:\\coai', verified: true, held }, now),
+    /prompts\/: 3 before, 4 after/u);
+});
+
+test('and a comparison that cannot be made is not reported as a difference', () => {
+  // A record from before this field has no counts. Reading that as "0 before, 40 after" would
+  // refuse every move an older build made, for a reason that is not true.
+  const held = { ...BEFORE };
+  const now = { ...BEFORE, entries: { 'prompts/': 4 } };
+
+  assert.equal(sourceChangedSince({ from: 'C:\\old', to: 'Z:\\coai', verified: true, held }, now), '');
 });
 
 test('a source that is exactly as the move left it may be deleted', () => {

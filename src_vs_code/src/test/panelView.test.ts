@@ -1522,12 +1522,10 @@ test('a fixture that carries no storage renders no section at all', () => {
 
 // ---------- changing it, and saying where the answer came from (issue #115) ----------
 
-test('the section offers a way to change the directory', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
-  const section = html.slice(html.indexOf('Where this window keeps its data'));
-
-  assert.match(section.slice(0, section.indexOf('</details>')), /data-command="changeDataDirectory"/u);
-});
+// Whether the controls WORK is asserted by running the page's own script, in
+// `panelStorageScript.test.ts` — `.agents/PROJECT.md` refuses a new behavioural assertion over page
+// source text, and "is the button wired" is exactly that. What stays here is what the section SAYS,
+// which is the output of a pure function and has no program to run. (codex, code round.)
 
 test('the section says which layer answered, so nobody has to deduce it', () => {
   // The panel and the server CAN read different directories, and the product has always known it.

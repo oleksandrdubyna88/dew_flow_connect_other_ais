@@ -3,9 +3,11 @@
 > Status: **IMPLEMENTED, 2026-09-15.** The first install on a side asks where the data should live, a
 > folder that already holds a history is adopted, the block copied to the clipboard carries the two
 > variables, the panel can change the folder or move what is in it, and the move copies, verifies and
-> then unlocks a separate delete. Extension 0.44.0. Still owed: the `coai` plan and code rounds, and
-> one real run on a machine with a NAS — a tail, because every refusal and every count below is
-> asserted, and what a live run adds is the one thing a test cannot have, which is a real SMB share.
+> then unlocks a separate delete. Extension 0.44.0. **The `coai` gate ran both stages:** a plan round
+> (3 reviewers, `good_enough`, 18 findings — 12 accepted) and a code round (12 reviewers, `revise`,
+> 31 findings — 16 accepted), every finding resolved with a reason. Still owed: one real run on a
+> machine with a NAS — a tail, because every refusal and every count below is asserted, and what a
+> live run adds is the one thing a test cannot have, which is a real SMB share.
 >
 > **What shipped differently from the plan below, and why:**
 >
