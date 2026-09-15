@@ -2,6 +2,15 @@
 
 ## Extension 0.47.0 — 2026-09-15
 
+**A question with a long path in it wraps, instead of sliding the conversation sideways** (#299).
+Ask about something whose text carries a Windows path, a URL, a stack frame or a long id, and the
+question ran off the right-hand edge and put a horizontal scrollbar under the whole conversation.
+It wraps now — and so does the code passage attached to a question.
+
+A fenced code block inside an answer, and a wide table, still scroll in their own boxes as they
+did: a long line of code is not something you want broken in the middle, and that was already a
+decision here rather than an accident.
+
 **Add a reviewer offers the whole catalogue, and the Claude entry is called Claude Code.** Two
 separate things used to hide it, and either one on its own reads as *this product has no Claude
 Code*.
