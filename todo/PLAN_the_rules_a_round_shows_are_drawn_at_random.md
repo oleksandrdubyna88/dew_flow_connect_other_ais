@@ -194,6 +194,12 @@ and `logging-serilog` present in the mount and absent from the result.
 **Reviewer looks at:** the lists themselves - is `git-workflow` rightly absent from the plan tier, is
 `testing` at 24.7 KB worth a third of the plan budget.
 
+> **Both wiring stories owe one number.** A target repository pinned to an older conventions revision
+> - or to none - may not carry every entry a tier names, and `Staged` skips what it cannot find in
+> silence. A document round that matched none of its three rules must not look like one that matched
+> all three: 1.3 and 1.4 report how many of the tier's entries the target's mount produced, beside the
+> bytes and the omissions, and a round that matched none says so. Raised by story 1.2's code round.
+
 **1.3 - The plan gate is given the rules it is judged against.** *(Opus - wiring behind decided
 policy.)* `ReviewPlanAsync` collects with `RuleOrder.Staged(StageRules.Plan)`; the log line loses
 "no rules at this stage" and gains the bytes and the omission count.

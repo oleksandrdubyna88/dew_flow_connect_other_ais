@@ -15,6 +15,14 @@ namespace CoaiMcp.Runners.Context;
 /// this stage actually reviews. A dead entry is a lie in a table whose whole job is to be read, and a
 /// live but inapplicable one spends budget a relevant rule needed.
 /// <see cref="StageRulesTests"/> keeps the first half honest against the real mount.</para>
+/// <para><b>The half that check cannot cover, and what stories 1.3 and 1.4 owe because of it.</b> This
+/// gate reviews OTHER repositories. A target pinned to an older conventions revision — or to none —
+/// may not carry every entry named here, and <see cref="RuleOrder.Staged"/> skips what it cannot find,
+/// in silence. That silence is right for one entry and dangerous for a stage: a document round that
+/// found none of its three rules looks exactly like one that found all three. So the wiring stories
+/// must report how many of a tier's entries the target's mount actually produced, beside the bytes and
+/// the omissions, and a round that matched none must SAY so rather than let a reviewer read the
+/// absence as compliance. Raised by a code round on 2026-09-15, against this file.</para>
 /// <para><b>Why <c>rule-ownership.md</c> is absent</b>, though it is mounted and its tasks include
 /// <c>docs</c>: its own frontmatter scopes it to <c>common/*.md</c>, <c>csharp/*.md</c>,
 /// <c>rust/*.md</c>, <c>typescript/*.md</c> — the files of a shared-RULE repository — and its test is
