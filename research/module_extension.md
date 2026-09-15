@@ -428,7 +428,7 @@ Three details that had to be decided rather than discovered:
   cannot happen — but a position outlives the text under it, and a range check cannot see a rewrite
   that keeps the same number of blocks.
 
-`button` is now the twenty-fifth tag the renderer may emit, and the only one that is ours rather than
+`button` is now the twenty-sixth tag the renderer may emit, and the only one that is ours rather than
 the model's. Model text cannot become one — a raw html token is escaped and shown — and the shape of
 every emitted button is pinned by its own test, with a companion asserting that scan still finds one.
 

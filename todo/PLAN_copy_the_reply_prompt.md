@@ -384,12 +384,19 @@ must fail naming the wrong TEXT rather than a length; (b) make `answerBlocks` sk
 > a wiring check and not a behavioural one, which is why `PROJECT.md`'s refusal of new behavioural
 > source assertions does not cover it — and saying which of the two it is, is the point.
 
-**The ordinal of a quote that CONTAINS a fence is assigned on the way IN.** The quote's own row is
-emitted after `</blockquote>` — therefore after the inner fence's row — so the visual order of the
-rows and the order of the numbers are not the same, and the seam test's literal expectations depend
-on which it is. Measured on marked 18.0.12: such a quote's `text` is `"quoted\n```js\ninner()\n```"`,
-fence lines included, so the two controls overlap on purpose — the outer copies the quote whole, the
-inner copies just the code. The fixture pins both, and the help says it in one sentence.
+**The ordinal of a quote that CONTAINS a fence is assigned on the way OUT** — after its children, so
+the inner fence is numbered first and the numbers run in the same order as the rows. The quote's own
+row is emitted after `</blockquote>`, therefore after the inner fence's row, and numbering on the way
+out is what keeps the two orders together instead of against each other.
+
+> Written the other way round in the first draft of this plan, and caught by three reviewers
+> independently in story 1.1's code round — the danger being precisely that story 2.1's seam test
+> would have been written to the plan, expected the quote at ordinal 0, and either failed or provoked
+> a "fix" that reversed the renderer.
+
+Measured on marked 18.0.12: such a quote's `text` is `"quoted\n```js\ninner()\n```"`, fence lines
+included, so the two controls overlap on purpose — the outer copies the quote whole, the inner copies
+just the code. The fixture pins both, and the help says it in one sentence.
 
 > **The first block is `0`.** Asserted on its own, because the whole `push`-returns-length defect
 > shows up as every button being one out, and a test that only compares texts pairwise can be fooled

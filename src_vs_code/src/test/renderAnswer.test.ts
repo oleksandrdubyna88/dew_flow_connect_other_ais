@@ -27,7 +27,7 @@ import { answerBlocks, fileTargetOf, renderAnswer, signatureOf } from '../render
 const ALLOWED = new Set([
   'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'pre', 'code', 'blockquote', 'hr',
   'strong', 'em', 'del', 'br', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-  // The twenty-fifth, and the only one the renderer emits on its OWN behalf rather than because a
+  // The twenty-sixth, and the only one the renderer emits on its OWN behalf rather than because a
   // model wrote something. Model text cannot become one — a raw html token is escaped and shown, so
   // it has no `<` left — and the shape of every emitted button is pinned by its own test below.
   'button',
@@ -357,13 +357,21 @@ test('a block the renderer will not draw gets no control and consumes no ordinal
   // a quote AT the limit is still drawn and still earns a row. A fixture that stops short passes
   // without ever reaching the branch it names.
   const deep = `${'> '.repeat(11)}too deep`;
-  const html = renderAnswer([FENCE, 'shallow', FENCE, '', deep].join('\n'), 0);
-  const drawn = ordinals(html);
+  const markdown = [FENCE, 'shallow', FENCE, '', deep].join('\n');
+  const html = renderAnswer(markdown, 0);
 
-  assert.ok(drawn.includes(0), 'the shallow block lost its control');
-  assert.deepEqual(drawn, [...new Set(drawn)], 'an ordinal was handed out twice');
-  assert.equal(answerBlocks([FENCE, 'shallow', FENCE, '', deep].join('\n')).length, drawn.length,
-    'the recorded blocks and the drawn controls are different lists');
+  // The fixture REACHED the cut-off: past it the rest is emitted as escaped text, so the `&gt;` of a
+  // quote marker shown rather than drawn is the proof. Without this the numbers below would be a
+  // fixture that never crossed the branch it names.
+  assert.match(html, /&gt;/, 'the fixture never reached the depth the renderer stops drawing at');
+
+  // CONCRETE, and read back from the renderer rather than guessed. Both sides come from one
+  // implementation, so a row wrongly drawn for a too-deep block would appear in the ordinals AND in
+  // answerBlocks — a comparison of the two would stay green while the guarantee was gone. (codex,
+  // the code round.) Eleven nested quotes; the fence plus NINE of them are drawn, the rest is text.
+  assert.deepEqual(ordinals(html), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    'the drawn controls are not exactly the blocks the renderer is willing to draw');
+  assert.equal(answerBlocks(markdown).length, 10, 'the recorded blocks are not the drawn ones');
 });
 
 test('a block tagged reply says so on its button, and changes nothing else about the block', () => {

@@ -28,7 +28,7 @@ import { isConfinedRelativePath } from './chatMessages';
  *
  * <p>The tags this can produce, and no others: `p`, `h1`-`h6`, `ul`, `ol`, `li`, `pre`, `code`,
  * `blockquote`, `hr`, `strong`, `em`, `del`, `br`, `a`, `table`, `thead`, `tbody`, `tr`, `th`,
- * `td`, `button`.</p>
+ * `td`, `button` — twenty-six of them.</p>
  *
  * <p><b>`button` is the one tag here that is OURS rather than the model's.</b> Every fenced block and
  * every blockquote this draws gets a copy control of its own underneath it, because the only control
@@ -49,7 +49,14 @@ import { isConfinedRelativePath } from './chatMessages';
 /** How deep a list may nest before the rest is shown as text. A model has never needed more. */
 const MAX_DEPTH = 8;
 
-/** The fence tag this product reserves. A block opened with it is a reply meant to be sent onward. */
+/**
+ * The fence tag this product reserves. A block opened with it is a reply meant to be sent onward.
+ *
+ * <p>Matched case-INSENSITIVELY, because what produces it is a sentence a person wrote in their own
+ * prompt, in their own language, and a model that answers ```` ```Reply ```` has done what was asked.
+ * The tag is compared lowercased against this value, so this value is lowercase — the name is
+ * upper-case because it is a constant, which says nothing about what is in it.</p>
+ */
 const REPLY_TAG = 'reply';
 
 const COPY_BLOCK = 'Copy block';
@@ -78,9 +85,13 @@ export interface AnswerBlock {
  * markdown and refuses when it differs, which closes the hard half: a rewrite that keeps the same
  * number of blocks, where no range check can see anything wrong.</p>
  *
- * <p>FNV-1a over the whole string, with the length beside it — not a security measure and not asked
- * to be one. The page can only ever echo this back, and a wrong value refuses a copy rather than
- * causing one, so there is nothing here for a lie to buy. The residual is an ordinary collision.</p>
+ * <p>FNV-1a, chosen because it is eight lines with no dependency, one pass, and good enough at
+ * telling two texts apart — which is the entire job. It is <b>not</b> a security measure and must not
+ * be read as one: the page can only echo this value back, the host compares it against a signature it
+ * computes itself over its own stored text, and a value that does not match REFUSES a copy rather
+ * than causing one. There is nothing here for a lie to buy, which is why a cryptographic digest would
+ * be cost with no answer. The residual is an ordinary collision, and the length carried beside the
+ * hash is what makes the cheapest kind of collision — two texts of different lengths — impossible.</p>
  */
 export function signatureOf(markdown: string): string {
   let hash = 0x811c9dc5;
@@ -103,8 +114,27 @@ export function signatureOf(markdown: string): string {
  */
 interface Drawing {
   readonly at: number | undefined;
-  readonly sig: string;
+  /**
+   * The signature, computed at most once and only if a row is actually drawn.
+   *
+   * <p>Lazy because the common call is the one that draws nothing: every answer on the page is
+   * rendered without a message index by nobody's fault, and `answerBlocks` never needs a signature at
+   * all. Hashing the whole answer on those paths was work whose result was thrown away. (codex, the
+   * code round.)</p>
+   */
+  readonly signature: () => string;
   readonly blocks: AnswerBlock[];
+}
+
+/** One hash at most, and none at all unless something asks. */
+function lazySignature(markdown: string): () => string {
+  let made: string | undefined;
+
+  return () => {
+    made ??= signatureOf(markdown);
+
+    return made;
+  };
 }
 
 /**
@@ -121,7 +151,13 @@ function recordBlock(drawing: Drawing, block: AnswerBlock): number {
   return drawing.blocks.length - 1;
 }
 
-/** The control under a block — or nothing, when this walk is not drawing controls. */
+/**
+ * The control under a block — or nothing, when this walk is not drawing controls.
+ *
+ * <p>The empty string rather than a row without coordinates: a control that cannot say which message
+ * it belongs to is one nothing can act on, and drawing it would be the inert button that `at` was
+ * made optional to prevent.</p>
+ */
 function copyRow(drawing: Drawing, ordinal: number, reply: boolean): string {
   if (drawing.at === undefined) {
     return '';
@@ -129,8 +165,43 @@ function copyRow(drawing: Drawing, ordinal: number, reply: boolean): string {
 
   return '<p class="blockRow">'
     + `<button type="button" class="copy blockCopy" data-block="${ordinal}"`
-    + ` data-at="${drawing.at}" data-sig="${drawing.sig}">`
+    + ` data-at="${drawing.at}" data-sig="${drawing.signature()}">`
     + `${reply ? COPY_REPLY : COPY_BLOCK}</button></p>`;
+}
+
+/** A fenced block, and the control under it. */
+function codeBlock(token: Tokens.Code, drawing: Drawing): string {
+  const language = typeof token.lang === 'string' ? token.lang.split(/\s+/)[0] ?? '' : '';
+  // The language is a CLASS, never a value that reaches an attribute unfiltered: a fence saying
+  // ```" onmouseover=… is a fence a model can write.
+  const cssClass = /^[\w+-]{1,24}$/.test(language) ? ` class="language-${language}"` : '';
+  const text = String(token.text ?? '');
+  // ONCE, and used for both the record and the label. Computed twice, a later change to what counts
+  // as the tag could move one and not the other, leaving the host treating a block as a reply while
+  // the button says Copy block. (codex, the code round.)
+  const reply = language.toLowerCase() === REPLY_TAG;
+  const ordinal = recordBlock(drawing, { kind: 'code', reply, text });
+
+  return `<pre><code${cssClass}>${escapeHtml(text)}</code></pre>${copyRow(drawing, ordinal, reply)}`;
+}
+
+/**
+ * A quote, what it contains, and the control under it.
+ *
+ * <p>Numbered on the way OUT, after its children, so the ordinals run in the order the rows appear
+ * rather than against it. A quote holding a fence therefore gives two controls on purpose: the inner
+ * copies the code, the outer copies the quote whole — fence lines and all, which is what marked puts
+ * in a blockquote's own `text`.</p>
+ */
+function quoteBlock(token: Tokens.Generic, depth: number, drawing: Drawing): string {
+  const inner = blocks(token.tokens ?? [], depth + 1, drawing);
+  const ordinal = recordBlock(drawing, {
+    kind: 'quote',
+    reply: false,
+    text: String((token as Tokens.Blockquote).text ?? ''),
+  });
+
+  return `<blockquote>${inner}</blockquote>${copyRow(drawing, ordinal, false)}`;
 }
 
 /**
@@ -276,36 +347,10 @@ function blockToken(token: Tokens.Generic, depth: number, drawing: Drawing): str
       return 'tokens' in token && Array.isArray(token.tokens)
         ? inline(token.tokens as Tokens.Generic[], depth)
         : escapeHtml(String(token.text ?? ''));
-    case 'code': {
-      const code = token as Tokens.Code;
-      const language = typeof code.lang === 'string' ? code.lang.split(/\s+/)[0] ?? '' : '';
-      // The language is a CLASS, never a value that reaches an attribute unfiltered: a fence saying
-      // ```" onmouseover=… is a fence a model can write.
-      const cssClass = /^[\w+-]{1,24}$/.test(language) ? ` class="language-${language}"` : '';
-      const text = String(code.text ?? '');
-      const ordinal = recordBlock(drawing, {
-        kind: 'code',
-        reply: language.toLowerCase() === REPLY_TAG,
-        text,
-      });
-
-      return `<pre><code${cssClass}>${escapeHtml(text)}</code></pre>`
-        + copyRow(drawing, ordinal, language.toLowerCase() === REPLY_TAG);
-    }
-    case 'blockquote': {
-      // Numbered on the way OUT, after whatever it contains, so the ordinals run in the order the
-      // rows appear rather than against it. A quote holding a fence therefore gives two controls:
-      // the inner copies the code, the outer copies the quote whole — fence lines and all, which is
-      // what marked puts in a blockquote's own `text`.
-      const inner = blocks(token.tokens ?? [], depth + 1, drawing);
-      const ordinal = recordBlock(drawing, {
-        kind: 'quote',
-        reply: false,
-        text: String((token as Tokens.Blockquote).text ?? ''),
-      });
-
-      return `<blockquote>${inner}</blockquote>${copyRow(drawing, ordinal, false)}`;
-    }
+    case 'code':
+      return codeBlock(token as Tokens.Code, drawing);
+    case 'blockquote':
+      return quoteBlock(token, depth, drawing);
     case 'list': {
       const list = token as Tokens.List;
       const start = list.ordered && typeof list.start === 'number' && list.start !== 1
@@ -358,6 +403,15 @@ export function renderAnswer(markdown: string, at?: number): string {
  * written into a row IS the index into the list this returns, assigned by one function in one pass.
  * It is not a hypothetical agreement either — a top-level scan of the markdown and what the renderer
  * actually emits already differ on 1 of 39 real stored answers, over a fence inside a list item.</p>
+ *
+ * <p><b>The caller must hand this the SAME string the row was drawn from</b> — in practice
+ * `messages[index].text`, which is what the page was rendered from too. A copy of it that differs by
+ * a trailing newline is a different answer as far as the signature is concerned, and the copy would
+ * be refused rather than wrong; but refusing a valid press is still a defect. (local, the code
+ * round.)</p>
+ *
+ * <p>`undefined` for the message index, deliberately: this resolves blocks and draws nothing, so
+ * there is no row for an index to belong to and `copyRow` returns early on it.</p>
  */
 export function answerBlocks(markdown: string): readonly AnswerBlock[] {
   return walk(markdown, undefined).blocks;
@@ -372,7 +426,7 @@ export function answerBlocks(markdown: string): readonly AnswerBlock[] {
  * control for something it cannot resolve.</p>
  */
 function walk(markdown: string, at: number | undefined): { html: string; blocks: readonly AnswerBlock[] } {
-  const drawing: Drawing = { at, sig: signatureOf(markdown), blocks: [] };
+  const drawing: Drawing = { at, signature: lazySignature(markdown), blocks: [] };
   if (markdown.length === 0) {
     return { html: '', blocks: drawing.blocks };
   }
