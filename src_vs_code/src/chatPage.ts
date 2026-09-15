@@ -333,6 +333,71 @@ export function markedTurn(text: string, marks: TurnMarks): string {
     .join('');
 }
 
+/**
+ * How many lines of a question are shown before it is folded.
+ *
+ * <p>Exported so the test asserts the boundary the page actually uses, the way `FOLLOW_SLACK_PX` is.
+ * The CSS clamp below is written to match it and says so.</p>
+ */
+export const COLLAPSE_AFTER_LINES = 5;
+
+/**
+ * And how many characters, for a question that has no lines to count.
+ *
+ * <p><b>The character arm is not decoration — without it the rule would miss most of what it is
+ * for.</b> The operator's long questions are routinely ONE wrapped paragraph: a newline count says
+ * "1 line" about a message that fills the screen, so a newline-only rule would fold a forty-line
+ * paste and leave a four-hundred-word one alone. Either arm is enough on its own; a message is long
+ * when it is long to READ, and those are two different ways of being that.</p>
+ */
+export const COLLAPSE_AFTER_CHARS = 400;
+
+/** Whether a question is long enough to be worth folding. Pure, so the boundary is testable. */
+export function isLong(text: string): boolean {
+  return text.split('\n').length > COLLAPSE_AFTER_LINES || text.length > COLLAPSE_AFTER_CHARS;
+}
+
+/**
+ * A stable name for one folded message, from its CONTENT.
+ *
+ * <p><b>Not the index in the transcript, and that is a correction rather than a preference.</b> A
+ * retry drops the trailing question before re-asking it, so every index after it shifts by one — and
+ * a fold state keyed by index would then have message 3 wearing message 4's state: the wrong message
+ * opens, or one a person had open snaps shut under them. The gate caught that on the plan round
+ * before it was written.</p>
+ *
+ * <p>FNV-1a, which is a hash and not a cryptographic one — it only has to be stable and cheap. Two
+ * identical questions share a key and therefore fold together; that is the same text twice and
+ * folding it the same way is the honest answer rather than a collision to design around.</p>
+ *
+ * <p>Base 36, so the value is letters and digits only: it goes into an HTML attribute AND into a CSS
+ * attribute selector the page writes, and anything that could close a quote or a brace has no
+ * business in either.</p>
+ */
+export function foldKey(text: string): string {
+  let hash = 2_166_136_261;
+  for (let at = 0; at < text.length; at += 1) {
+    hash ^= text.charCodeAt(at);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * What the control offers to show, naming how much is hidden.
+ *
+ * <p>A cut that looks whole is worse than no cut — the rule the rounds log's own truncation notice
+ * was written for. So it counts, and it counts the thing the message actually has: a pasted document
+ * is measured in lines, and a single wrapped paragraph has one line and is measured in characters
+ * instead. Saying "1 line" about four hundred words would be a number that misleads.</p>
+ */
+export function foldLabel(text: string): string {
+  const lines = text.split('\n').length;
+
+  return lines > 1 ? `Show all ${lines} lines` : `Show all ${text.length} characters`;
+}
+
 /** The messages region on its own, so the host can push it without re-rendering the page. */
 export function chatMessagesHtml(
   messages: readonly ChatMessage[],
@@ -405,9 +470,21 @@ export function chatMessagesHtml(
         ? ''
         : `<div class="afterRow">${copy}${cutHere}</div>`;
 
-      return `<div class="msg ${mine ? 'you' : 'model'}">`
+      // FOLDED, and only what the person wrote. A pasted question of several hundred lines pushes
+      // every answer off the screen, and an answer is what the tab was opened to read. The control
+      // carries BOTH labels and the CSS shows one: the open state lives in a stylesheet the page
+      // rewrites, so nothing has to walk the transcript and re-apply it after a push.
+      const folded = mine && isLong(message.text);
+      const key = folded ? foldKey(message.text) : '';
+      const fold = folded
+        ? `<button type="button" class="fold" data-fold="${key}">`
+          + `<span class="more">${escapeHtml(foldLabel(message.text))}</span>`
+          + '<span class="less">Collapse</span></button>'
+        : '';
+
+      return `<div class="msg ${mine ? 'you' : 'model'}${folded ? ' long' : ''}"${folded ? ` data-fold="${key}"` : ''}>`
         + `<div class="who">${said}${copy}${cutHere}</div>`
-        + `<div class="what">${body}</div>${again}${end}</div>`;
+        + `<div class="what">${body}</div>${fold}${again}${end}</div>`;
     })
     .join('');
 }
@@ -722,6 +799,22 @@ function chatStyle(
   /* By NAME, not by inheritance: this rule sets a colour of its own, so the tone has to reach it
      through the property or the answers — the text somebody is actually reading — ignore it. */
   .msg .what { color: var(--coai-read); line-height: 1.55; }
+  /* FIVE LINES of a long question, at the line-height directly above: 5 x 1.55em. The number is
+  COLLAPSE_AFTER_LINES and the two must move together — a clamp that showed six lines of something
+  the host called long would fold a message and hide nothing. In em rather than lh because the
+  manifest declares support back to VS Code 1.85, whose engine has never heard of the lh unit, and
+  there the whole declaration would be dropped and the fold would hide nothing at all. */
+  .msg.long .what { max-height: 7.75em; overflow: hidden; }
+  /* The gradient is the only thing that says a fold is a fold rather than a message that happens to
+  end mid-sentence. It sits INSIDE the clamped box, so it cannot add height to what is being
+  measured. */
+  .msg.long .what { -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }
+  .fold { font: inherit; font-size: .85em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 2px 0; cursor: pointer; }
+  .fold:hover { text-decoration: underline; }
+  /* One label is shown and the other is not. WHICH one is decided by the stylesheet the page
+  rewrites, so an expanded question survives the transcript being replaced without anything walking
+  it afterwards to put the state back. */
+  .msg.long .fold .less { display: none; }
   .msg.you .what { white-space: pre-wrap; }
   .msg .what > :first-child { margin-top: 0; }
   .msg .what > :last-child { margin-bottom: 0; }
@@ -1127,6 +1220,41 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   function offerJump(show) {
     const control = document.getElementById('jump');
     if (control) { control.hidden = !show; }
+  }
+  // WHICH folded questions are open, and the page's alone. A view state that went to the host and
+  // came back applied is the toggle feedback loop this product shipped once already, so nothing here
+  // is ever posted.
+  var opened = {};
+  // Written as a STYLESHEET rather than a class per element. The transcript is replaced wholesale on
+  // every push, so a class would have to be put back afterwards by walking what the host just wrote -
+  // and the page would need a query it has no reason to own. A rule keyed by the message's content
+  // applies to whatever is in the DOM, including markup that arrives a second from now, so there is
+  // nothing to re-apply and nothing to forget to re-apply.
+  function paintFolds() {
+    const sheet = document.getElementById('folds');
+    if (!sheet) { return; }
+    let rules = '';
+    for (const key in opened) {
+      // The key is the host's own base-36 hash, and it is CHECKED anyway before it is written into a
+      // stylesheet. Anything that could close a quote or a brace here would be writing CSS of its
+      // own, and a page that trusts what it reads out of its own DOM is trusting whatever last wrote
+      // it.
+      if (opened[key] === true && /^[a-z0-9]+$/.test(key)) {
+        rules += '.msg.long[data-fold="' + key + '"] .what { max-height: none; -webkit-mask-image: none; mask-image: none; }'
+          + '.msg.long[data-fold="' + key + '"] .fold .more { display: none; }'
+          + '.msg.long[data-fold="' + key + '"] .fold .less { display: inline; }';
+      }
+    }
+    sheet.textContent = rules;
+  }
+  function toggleFold(key) {
+    opened[key] = opened[key] !== true;
+    paintFolds();
+    // NOT a scroll. The person pressed a control they were looking at, and the text grows downward
+    // from it - moving the page under them would take them away from the thing they just opened.
+    // What the layout change DOES invalidate is the remembered "were they at the bottom", which a
+    // composer resize reads later, so it is measured again once the new height is laid out.
+    afterLayout(rememberWhereTheyAre);
   }
   function scheduleFollow() {
     const token = ++pendingFollow;
@@ -1542,9 +1670,11 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     messagesRegion.addEventListener('click', function (event) {
       const target = event.target;
       if (!target || typeof target.closest !== 'function') { return; }
-      const acted = target.closest('[data-open], [data-file], [data-copy], [data-cut]');
+      const acted = target.closest('[data-open], [data-file], [data-copy], [data-cut], [data-fold]');
       if (!acted || !acted.dataset) { return; }
-      if (typeof acted.dataset.open === 'string') {
+      if (typeof acted.dataset.fold === 'string') {
+        toggleFold(acted.dataset.fold);
+      } else if (typeof acted.dataset.open === 'string') {
         vscode.postMessage({ type: 'command', command: 'openLink', url: acted.dataset.open });
       } else if (typeof acted.dataset.file === 'string') {
         vscode.postMessage({
@@ -1877,6 +2007,13 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <style>
 ${chatStyle(state.uiScale, state.textTone, state.models, state.messages)}
 </style>
+<!-- The page's own, and empty until somebody opens a folded question. Which questions are open is
+     PAGE state and never crosses to the host: a view state that round-trips and comes back applied
+     is the toggle feedback loop this product has already shipped once. Keeping it as a stylesheet
+     rather than a class on each element is what makes it survive the transcript being replaced -
+     CSS applies to whatever is in the DOM, so nothing has to walk it afterwards and put the state
+     back, and there is no querySelectorAll in the hot path to get wrong. -->
+<style id="folds"></style>
 </head>
 <body>
 ${chatBody(state, regions)}

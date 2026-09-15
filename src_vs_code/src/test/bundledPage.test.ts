@@ -973,6 +973,25 @@ test('the shipped page offers Try again on a failure, and one press sends one re
   );
 });
 
+test('the shipped page folds a long question and opens it again on a press', () => {
+  const long = 'x'.repeat(401);
+  const page = runPage({ messages: [{ role: 'you', text: long }] });
+  const markup = page.html.split('<script')[0];
+
+  assert.match(markup, /class="msg you long"/, 'the shipped page did not fold a long question');
+  const key = /data-fold="([a-z0-9]+)"/.exec(markup);
+  assert.ok(key, 'the folded question carries no key for the page to open it by');
+  assert.match(markup, /Show all 401 characters/, 'the control does not say how much is hidden');
+
+  page.clickIn('messages', { fold: key[1] });
+
+  assert.match(
+    String(page.nodes['folds']?.['textContent'] ?? ''),
+    new RegExp(`\\[data-fold="${key[1]}"\\] \\.what \\{ max-height: none;`),
+    'the minified page opened nothing — a binding the minifier renamed is how this has failed before',
+  );
+});
+
 test('the shipped page does not offer a retry when the host says there is nothing behind it', () => {
   const markup = runPage({ failure: 'the page hit an error', canRetry: false }).html.split('<script')[0];
 

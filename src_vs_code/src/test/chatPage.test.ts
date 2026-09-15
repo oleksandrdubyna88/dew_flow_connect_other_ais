@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { ChatMessage } from '../chatPage';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
-import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
+import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, COLLAPSE_AFTER_CHARS, COLLAPSE_AFTER_LINES, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, foldKey, foldLabel, isLong, shouldFollow } from '../chatPage';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -2627,5 +2627,112 @@ test('the retry control is still live after its region has been rewritten under 
     page.posted.filter((message) => message['command'] === 'retry'),
     [{ type: 'command', command: 'retry', at: 4 }],
     'the control went dead when its region was rewritten',
+  );
+});
+
+test('a question is long when it is long to READ, by either measure', () => {
+  // Both arms, at the boundary. The character arm is the one that matters most here: the operator's
+  // long questions are routinely ONE wrapped paragraph, which a newline count calls a single line.
+  assert.strictEqual(isLong('a\nb\nc\nd\ne'), false, `${String(COLLAPSE_AFTER_LINES)} lines is not long`);
+  assert.strictEqual(isLong('a\nb\nc\nd\ne\nf'), true, `${String(COLLAPSE_AFTER_LINES + 1)} lines is long`);
+  assert.strictEqual(isLong('x'.repeat(COLLAPSE_AFTER_CHARS)), false, 'the character boundary moved');
+  assert.strictEqual(isLong('x'.repeat(COLLAPSE_AFTER_CHARS + 1)), true, 'a wrapped paragraph never folds');
+  assert.strictEqual(isLong(''), false, 'an empty question was called long');
+});
+
+test('a folded question is named by its content, so a retry cannot shift the fold onto another', () => {
+  // NOT the index: a retry drops the trailing question before re-asking it, and every index after it
+  // shifts by one. Keyed by index, message 3 would wear message 4's state.
+  assert.strictEqual(foldKey('the same words'), foldKey('the same words'), 'the key is not stable');
+  assert.notStrictEqual(foldKey('one question'), foldKey('another question'), 'two questions share a key');
+  assert.match(foldKey('anything at all'), /^[a-z0-9]+$/, 'the key is not safe in an attribute or a selector');
+});
+
+test('the control says how much is hidden, in the unit the question actually has', () => {
+  assert.strictEqual(foldLabel('a\nb\nc'), 'Show all 3 lines');
+  assert.strictEqual(
+    foldLabel('x'.repeat(402)),
+    'Show all 402 characters',
+    'a single wrapped paragraph was described as one line',
+  );
+});
+
+test('a long question of your own is folded, and an answer never is', () => {
+  const long = 'x'.repeat(COLLAPSE_AFTER_CHARS + 1);
+  const html = chatMessagesHtml([{ role: 'you', text: long }, { role: 'model', text: long }]);
+  const mine = html.slice(0, html.indexOf('msg model'));
+
+  assert.match(mine, /class="msg you long"/, 'a long question of the operator\'s own was not folded');
+  assert.match(mine, new RegExp(`data-fold="${foldKey(long)}"`), 'the folded question carries no stable key');
+  assert.match(mine, /Show all 401 characters/, 'the control does not say how much is hidden');
+
+  // The operator asked for THEIR messages. An answer is what they opened the tab to read.
+  assert.doesNotMatch(html.slice(html.indexOf('msg model')), /data-fold/, 'an answer was folded too');
+});
+
+test('a short question is left alone entirely', () => {
+  const html = chatMessagesHtml([{ role: 'you', text: 'a short question' }]);
+
+  assert.doesNotMatch(html, /\blong\b/, 'a short question was folded');
+  assert.doesNotMatch(html, /data-fold/, 'a short question was given a fold control');
+});
+
+test('a folded question is clamped, and the clamp is the number of lines the host folds at', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const clamp = ruleFor(css, '.msg.long .what');
+
+  assert.match(clamp, /overflow: hidden/, 'a folded question would show all of itself anyway');
+  // 5 lines at the 1.55 line-height of the rule directly above it. The two numbers must move
+  // together: a clamp showing six lines of something the host called long hides nothing.
+  const height = /max-height: ([\d.]+)em/.exec(clamp);
+  assert.ok(height, 'the clamp is not in em — an engine without lh would drop the declaration entirely');
+  assert.strictEqual(
+    Number(height[1]),
+    Number((COLLAPSE_AFTER_LINES * 1.55).toFixed(2)),
+    'the clamp and COLLAPSE_AFTER_LINES disagree about how much a fold hides',
+  );
+  assert.match(ruleFor(css, '.msg.long .fold .less'), /display: none/, 'both labels show at once');
+});
+
+test('opening a folded question outlives the transcript being replaced, and closes again', () => {
+  const page = runChatPage();
+
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { fold: 'abc123' } }) } });
+
+  assert.match(
+    String(page.seen['folds']?.textContent ?? ''),
+    /\.msg\.long\[data-fold="abc123"\] \.what \{ max-height: none;/,
+    'opening a question wrote no rule, so the next push would snap it shut under the reader',
+  );
+
+  // THE POINT of keeping it as a stylesheet. The transcript is replaced wholesale on every push, and
+  // a class on the element would have to be put back afterwards by walking what the host just wrote.
+  page.deliver({ type: 'state', messagesHtml: '<div class="msg you long" data-fold="abc123"></div>' });
+  assert.match(String(page.seen['folds']?.textContent ?? ''), /abc123/, 'a push threw the fold state away');
+
+  // And BOTH ways. A question opened by accident must fold again, or the symptom the feature exists
+  // for is back with no way out of it. (gemini, the plan round.)
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { fold: 'abc123' } }) } });
+  assert.strictEqual(
+    String(page.seen['folds']?.textContent ?? ''),
+    '',
+    'the control opened the question but would not close it again',
+  );
+});
+
+test('a fold key the host did not write is never put into the stylesheet', () => {
+  // The page reads this key out of its own DOM, and writing it into a <style> unchecked would let
+  // whatever last wrote that DOM write CSS of its own. The host's keys are base-36 digits; nothing
+  // else is accepted.
+  const page = runChatPage();
+
+  page.fire('messages', 'click', {
+    target: { closest: () => ({ dataset: { fold: 'a"] .what { position: fixed } .x[y="b' } }) },
+  });
+
+  assert.strictEqual(
+    String(page.seen['folds']?.textContent ?? ''),
+    '',
+    'the page wrote a stylesheet out of text it read back from its own DOM',
   );
 });

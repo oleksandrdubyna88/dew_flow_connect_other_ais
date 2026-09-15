@@ -1,13 +1,14 @@
 # PLAN — an error you can see, and answer
 
-> Status: **partially implemented, 2026-09-15.** Stories A (an empty turn is a failure) and B+C (one
-> failure builder; the failure moves below the transcript and carries Retry) have shipped; story D
-> (a long question folds) is open. Scope: the chat tab's failure surface —
+> Status: **IMPLEMENTED, 2026-09-15.** All four stories have shipped — A (an empty turn is a failure,
+> carrying what it cost), B+C (one failure builder; the failure moves below the transcript and carries
+> Retry) and D (a long question folds). Deviations are recorded at the foot of this document.
+> Scope: the chat tab's failure surface —
 > `src_vs_code/src/chatPage.ts`, `chatPanel.ts`, `chatMessages.ts`, `chatCommand.ts`, `agyAdapter.ts`,
 > `claudeAdapter.ts`, `codexAdapter.ts`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [architecture.md](../research/architecture.md).
+> Related docs: [module_extension.md](module_extension.md), [architecture.md](architecture.md),
+> [module_tests.md](module_tests.md).
 
 ## The symptom
 
@@ -240,3 +241,53 @@ WSL, both written to that day. The questions are captured; nothing is watching t
 
 It is a different subsystem, a different fix, and quite possibly a configuration answer rather than a
 code change. It gets its own plan.
+
+## What shipped differently — the deviations
+
+**B stopped being a story.** The build order had four; an extracted builder that changes no behaviour
+is a refactor, not a story, so B was folded into C and reviewed with it. Three stories, one epic,
+against the gate operator's 2–4 epics — said at the time and accepted, because the whole change is
+about 350 lines on one surface.
+
+**An empty turn's cost was nearly lost.** The plan said to classify an empty answer as a failure and
+stopped there. Doing exactly that dropped `usage` on the way, because `AdapterEvent`'s failing arm had
+nowhere to carry it — so a thinking-tier model that burns its whole budget and returns nothing became
+the one turn billed by the vendor and written into the ledger as free, which is precisely the turn
+somebody hunting waste is looking for. The code round caught it. The failing arm carries usage now.
+
+**The retry needed two guards the plan did not foresee.** The plan had the duplicate-question trap and
+the dead-button trap. The gate added: a press must name the transcript length it was drawn for, or a
+button still on screen after a NEW question was sent retries that one instead (the shape `stop`
+already uses for its turn number); and a refused press must redraw from the thread's ACTUAL running
+state, because a hard-coded `running: false` retired the thinking line and unlocked the composer over
+a turn still in flight. Four reviewers found the second independently.
+
+**A retry is pinned to the model that failed.** Not in the plan at all. Without it, switching model
+after a failure and pressing *Try again* sent the question to the NEW model — which is what *Re-ask*
+is for, so the two features would have been the same feature with different labels. `thread.failedWith`
+records the pair; the control is withdrawn rather than redirected when it no longer matches. Adding the
+field made `RESET_DECIDES_EVERY_THREAD_FIELD` refuse to compile until the reset classified it, which
+is exactly what that check exists for.
+
+**`retryFrom` shrank to a string.** It was specified to return the question AND the transcript without
+it. No caller used the second half — `oneRetry` slices `thread.messages` itself, because a projection
+to `{role, text}` drops the marks and the model a stored message carries — and it cost an O(N) copy of
+the conversation on every state push. Three reviewers found that independently.
+
+**The fold's open set is a stylesheet, not a class.** The plan said a page-local map re-applied by
+`data-i` after each write. Two things killed that: the gate refused index keys, since a retry drops the
+trailing question and shifts every index after it; and re-applying anything requires walking the
+transcript, which both page harnesses stub `querySelectorAll` away from. A rule keyed by a content hash
+applies to whatever is in the DOM, so there is nothing to re-apply and the harness obstacle the plan
+flagged never had to be solved. The control toggles both ways, which the plan had not said.
+
+**The fold measures characters as well as lines.** In the plan from the clarifying round, and worth
+recording as the thing that made the feature work at all: the operator's long questions are routinely
+one wrapped paragraph, and a newline-only rule would have folded a forty-line paste while leaving a
+four-hundred-word one alone.
+
+**Not done, and deliberate.** A failure and its retry are live state and are not saved with the
+conversation, so a restored tab shows neither — named in the code at the `restoredPage` call site and
+raised as a Minor on the code round. Persisting it means deciding how long a retry stays offered across
+a reload, against a vendor that may have been reconfigured since; that is a plan, not a hunk in this
+one.
