@@ -70,7 +70,17 @@ async function press(
     index: control.index, block: control.block, sig: control.sig,
   });
   assert.equal(command.kind, 'copyBlock', 'the parser refused a message the page itself produced');
-  await textCopier(ports_).copy(() => blockToCopy(answer, control.block, control.sig));
+  assert.ok(command.kind === 'copyBlock');
+
+  // The PARSED fields, never the raw ones. Resolving with what the page sent would let a parser that
+  // answered `block: 0` for every message pass this test while the shipped host copied block 0 for
+  // every control. (codex, the code round — and it was doing exactly that.)
+  assert.deepEqual(
+    { index: command.index, block: command.block, sig: command.sig },
+    control,
+    'the parser changed the coordinate the page posted',
+  );
+  await textCopier(ports_).copy(() => blockToCopy(answer, command.block, command.sig));
 }
 
 test('the control the page rendered for a block copies that block and no other', async () => {
@@ -246,6 +256,48 @@ test('a clipboard that never answers gives up rather than wedging every later pr
   assert.match(said[0] ?? '', /could not be copied/, 'a wedged write said nothing to the person');
   assert.equal(second.copied, true, 'the press after a wedged one never reached the clipboard');
   assert.deepEqual(wrote, ['x'], 'the retry did not write');
+});
+
+test('a write we stopped waiting for cannot undo the one that came after it', async () => {
+  // Giving up on a wait releases the queue; it does not cancel the write, because a clipboard write
+  // cannot be cancelled. So the abandoned one can still land — AFTER the person has copied something
+  // else — and quietly replace it. The copier puts the newer text back. (codex and gemini, the code
+  // round, independently and from different roles.)
+  const answer = [FENCE, 'first', FENCE, '', FENCE, 'second', FENCE].join('\n');
+  const wrote: string[] = [];
+  let release: (() => void) | undefined;
+  let attempt = 0;
+  const slow: CopyPorts = {
+    writeText: (text) => {
+      attempt += 1;
+      if (attempt === 1) {
+        // Hangs past the ceiling, then lands — the one shape a race alone does not cover.
+        return new Promise<void>((resolve) => {
+          release = () => {
+            wrote.push(text);
+            resolve();
+          };
+        });
+      }
+      wrote.push(text);
+
+      return Promise.resolve();
+    },
+    say: () => ({ dispose: () => undefined }),
+  };
+  const copier = textCopier(slow, 20);
+
+  const stalled = await copier.copy(() => blockToCopy(answer, 0, signatureOf(answer)));
+  const after = await copier.copy(() => blockToCopy(answer, 1, signatureOf(answer)));
+  assert.equal(stalled.copied, false, 'a write that outran the ceiling was reported as copied');
+  assert.equal(after.copied, true, 'the press after a stalled one never landed');
+  assert.deepEqual(wrote, ['second'], 'the stalled write was not the one that was abandoned');
+
+  release?.();
+  await new Promise((resolve) => { setTimeout(resolve, 10); });
+
+  assert.deepEqual(wrote, ['second', 'first', 'second'],
+    'a write that landed late was left holding the clipboard over the newer one');
 });
 
 test('a press after a refused one still reaches the clipboard', async () => {

@@ -61,6 +61,9 @@ export function phraseCopier(ports: CopyPorts): { copy(phrases: readonly Phrase[
             kind: 'copy',
             text: decision.phrase.text,
             done: `Copied “${decision.phrase.name}” — paste it with Ctrl+V.`,
+            // Its OWN sentence, unchanged by the extraction: a phrase that could not be copied still
+            // says it was a phrase. (codex, the code round.)
+            failed: 'The phrase could not be copied — the clipboard is held by another program.',
           };
       });
     },
