@@ -50,9 +50,11 @@ public sealed record RuleOrder
     /// <c>security.md</c>, <c>reuse-first.md</c> and all four language doctrines were never shown to
     /// any reviewer, ever. Not because the budget was small: because they were last in line, and the
     /// line never changed.</para>
-    /// <para>Raising the budget cannot fix that; a different draw each round can. That was the
-    /// operator's call and the right one at the time: a rule shown sometimes is infinitely more than a
-    /// rule shown never.</para>
+    /// <para>Raising the budget cannot fix that; a different draw each round can. At 80 KB of 199 a
+    /// round sees about two fifths of the family rules, so a given rule is shown roughly every second
+    /// or third round — and across the rounds of one change, with several reviewers each, most of the
+    /// set gets read. That was the operator's call and the right one at the time: a rule shown
+    /// sometimes is infinitely more than a rule shown never.</para>
     /// <para>Its cost is the reason <see cref="Walk"/> exists. A developer who pushes a fix and runs a
     /// second round is answered out of a different part of the rule book, which reads as noise — so
     /// the draw is kept only until every deterministic order is wired in, and then deleted.</para>
@@ -72,17 +74,31 @@ public sealed record RuleOrder
     /// The order for a gate with NO diff: the named tier, and nothing else from the mount.
     /// </summary>
     /// <remarks>
-    /// <para>The one order here that FILTERS. A plan or document round has no change to select from,
-    /// so the mount's other rules are not "lower priority" — they are not what the stage is judged
-    /// against at all, and letting them in would spend a budget the tier needs. When epic 2 brings a
-    /// resolver manifest, this same list ORDERS the selection instead of replacing it.</para>
-    /// <para><b>When nothing matches</b> it yields nothing, and that is not a failure: the instruction
-    /// files and the repository's own rules are outside every order, so the reviewer still sees this
-    /// repository's own written rules and simply none of the family's. A caller that must tell the two
-    /// apart reads the bundle — the mount contributed no file.</para>
+    /// <para>The one order here that FILTERS, and it filters ONLY. A plan or document round has no
+    /// change to select from, so the mount's other rules are not "lower priority" — they are not what
+    /// the stage is judged against at all, and letting them in would spend a budget the tier needs.</para>
+    /// <para><b>It is not the epic 2 ordering.</b> An earlier draft of this comment claimed the same
+    /// list would "order a manifest instead of filtering"; a code round pointed out that it cannot —
+    /// handed a manifest carrying rules outside the tier, this would silently DROP them. The tier list
+    /// is shared with that future ordering; this entry point is not. Epic 2 adds its own, and until it
+    /// does, nothing here may be called with a manifest.</para>
+    /// <para><b>An entry that matches nothing is skipped in silence, and a tier that matches nothing
+    /// yields nothing.</b> That is not a failure and it is not softened by a fallback: falling back to
+    /// <see cref="Walk"/> would hand a plan reviewer the code rules the tier exists to exclude. What
+    /// the reviewer sees in that case is the instruction files and this repository's OWN rules — which
+    /// are outside every order — and none of the family's. A caller that must tell "the tier was
+    /// satisfied" from "the tier matched nothing" reads the bundle: the mount contributed no file.
+    /// <c>StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount</c> is what keeps a typo
+    /// or an upstream rename from reaching that silence.</para>
     /// </remarks>
-    public static RuleOrder Staged(IReadOnlyList<string> tier) =>
-        new(candidates => tier.SelectMany(entry => Named(candidates, entry)));
+    public static RuleOrder Staged(IReadOnlyList<string> tier)
+    {
+        // Snapshotted: a caller's array stays theirs to mutate, and an order that changed under a
+        // later round would be exactly the instability this whole plan exists to remove.
+        string[] entries = [.. tier];
+
+        return new(candidates => entries.SelectMany(entry => Named(candidates, entry)));
+    }
 
     /// <summary>Orders the mount's rule files. Total, and never drops one — except <see cref="Staged"/>, which filters.</summary>
     public IEnumerable<string> Mount(IReadOnlyList<RuleCandidate> candidates) => _mount(candidates);
@@ -138,7 +154,16 @@ public sealed record RuleOrder
         return rank < 0 ? Tiers.Length : rank;
     }
 
-    /// <summary>Every candidate that IS the named rule — one entry names one file, not a family of tails.</summary>
+    /// <summary>
+    /// Every candidate that IS the named rule — one entry names one file, not a family of tails.
+    /// </summary>
+    /// <remarks>
+    /// A code round asked for <c>Take(1)</c> here, against two mounts both carrying
+    /// <c>common/security.md</c>. Writing that test showed the state is unreachable: a mount is only
+    /// collected when it sits at one of <c>RuleFiles.RuleFolders</c>' known paths, and two mounts
+    /// cannot share one path — the test passed with the guard removed, which is the definition of a
+    /// guard worth nothing. Left ungated rather than carrying defensive code no input can reach.
+    /// </remarks>
     private static IEnumerable<string> Named(IReadOnlyList<RuleCandidate> candidates, string entry) =>
         candidates
             .Where(candidate => candidate.WithinMount.Equals(entry, StringComparison.OrdinalIgnoreCase))
