@@ -280,6 +280,16 @@ export interface ReviewerRow {
    * two lines and has no use for one.</p>
    */
   readonly said: string;
+  /**
+   * The status ALONE, normalised — `said` keeps the status and its detail welded together.
+   *
+   * <p>Here so a renderer can mark the status without re-parsing the sentence. `said` is deliberately
+   * unchanged: the rounds-log page reads these same rows, and splitting the word out of the sentence
+   * would change what it shows for no reason anybody asked for.</p>
+   *
+   * <p>Empty when the file records no usable status, exactly as `said` is.</p>
+   */
+  readonly status: string;
 }
 
 /**
@@ -314,7 +324,7 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
  * when the session file records neither a status nor any detail, and the callers then write neither
  * a dangling dash nor an indented empty line.</p>
  */
-function restOf(state: ReviewerState, model: string, detail: readonly string[]): { rest: string; said: string } {
+function restOf(state: ReviewerState, model: string, detail: readonly string[]): { rest: string; said: string; status: string } {
   // The effort belongs with the model: both are part of WHAT ran rather than of what it did. It is
   // there only when the launch actually applied one, which today means a local engine; a hosted
   // reviewer has none and reads exactly as it did (issue #129).
@@ -334,7 +344,7 @@ function restOf(state: ReviewerState, model: string, detail: readonly string[]):
 
   // The detail survives a missing status: findings and a duration are facts the file still records,
   // and suppressing them because the status is blank hides information rather than tidying it.
-  return { rest: `/${state.role}${named}`, said: `${status}${brackets}`.trim() };
+  return { rest: `/${state.role}${named}`, said: `${status}${brackets}`.trim(), status };
 }
 
 /** The model this state names, or empty — anything that is not a usable string is absent. */
