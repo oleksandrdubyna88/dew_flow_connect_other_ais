@@ -23,7 +23,7 @@ import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProve
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
-import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from './dataDir';
+import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
@@ -1232,11 +1232,33 @@ function storageBlock(storage: DataLocation | undefined): string {
 
   return `<h3>Where this window keeps its data</h3>
 <div class="status">${escapeHtml(storage.directory)}</div>
+${cameFrom(storage.source)}
 ${side}
 ${notes}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
+<button class="link" type="button" data-command="changeDataDirectory">Change where data is kept…</button>
 ${pointAServerHere(storage)}
 ${movingHint(storage)}`;
+}
+
+/**
+ * Which layer answered, said rather than left to be deduced.
+ *
+ * <p>Four answers and four different things to do about them, which is the whole reason the field
+ * exists. A variable in this window's environment is not something the panel can change; a choice
+ * this side made is; and a value inherited from the SHARED setting is the one worth a warning — it
+ * was set on some other side of this machine, where the same NAS is reached by a different mount,
+ * so it may name a path that does not exist here.</p>
+ */
+function cameFrom(source: StorageSource): string {
+  const said: Readonly<Record<StorageSource, string>> = {
+    environment: 'From <code>COAI_DATA_DIR</code> in this window\'s own environment, which outranks any setting.',
+    'this side': 'Chosen for this side of the machine.',
+    'shared setting': 'From <code>coai.dataDirectory</code>, set for every side of this machine — check it is a path that exists on THIS side, since the same drive is reached by a different route from Windows and from WSL.',
+    default: 'The default folder — nothing has been chosen, so a reinstalled machine starts a fresh history here.',
+  };
+
+  return `<div class="hint">${said[source]}</div>`;
 }
 
 /**
@@ -1279,10 +1301,12 @@ function pointAServerHere(storage: DataLocation): string {
  * instruction that silently destroys a side's history if that side already has one.</p>
  */
 function movingHint(storage: DataLocation): string {
-  const move = DATA_TO_MOVE.map((name) => `<code>${escapeHtml(name)}</code>`).join(', ');
+  const move = DATA_TO_MOVE.map((name) => `<li><code>${escapeHtml(name)}</code></li>`).join('');
   const leave = DATA_TO_LEAVE.map((name) => `<code>${escapeHtml(name)}</code>`).join(' and ');
 
-  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY ${move} into ${escapeHtml(storage.directory)}, start it again, and check that the rounds list here still shows your history before deleting anything from the old place. <b>Only into an empty one:</b> if there is already a <code>coai.db</code> where you are copying to, that side has its own history and copying over it destroys that history — back it up and decide which one you are keeping first. Leave ${leave} behind: the first is scratch, pruned on every <code>open</code>, and the second holds sign-ins that belong to the side that made them.</div>`;
+  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY all of this into ${escapeHtml(storage.directory)}:</div>
+<ul class="inventory">${move}</ul>
+<div class="hint">Start it again and check that the rounds list here still shows your history before deleting anything from the old place. <b>Only into an empty one:</b> if there is already a <code>coai.db</code> where you are copying to, that side has its own history and copying over it destroys that history — back it up and decide which one you are keeping first. Leave ${leave} behind: the first is scratch, pruned on every <code>open</code>, and the second holds sign-ins that belong to the side that made them.</div>`;
 }
 
 function questionsSection(questions: readonly Escalation[]): string {
@@ -2174,6 +2198,11 @@ const CSS = `
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 64px; width: 64px; }
   .hint { opacity: .65; font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
+  /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
+     room, one where there is not, and never a reason to scroll sideways. */
+  .inventory { opacity: .65; font-size: 11px; margin: 3px 0 0; padding-left: 16px;
+    columns: 2; column-gap: 12px; overflow-wrap: anywhere; }
+  .inventory li { break-inside: avoid; }
   input[type="text"], input[type="url"], input[type="number"], select, textarea {
     background: var(--vscode-input-background); color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px;
@@ -2424,6 +2453,9 @@ export const PANEL_COMMANDS = [
   'copyPhrase',
   // And the way into the phrases tab, which the section points at the same way.
   'editPhrases',
+  // Where the data is kept. It runs the same question the first install on a side asks, so there is
+  // one flow rather than two ways of answering it differently (issue #115).
+  'changeDataDirectory',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -2441,6 +2473,7 @@ export const VSCODE_COMMAND_FOR = {
   editChatPresets: 'coai.editChatPresets',
   editRoles: 'coai.editRoles',
   editPhrases: 'coai.editPhrases',
+  changeDataDirectory: 'coai.changeDataDirectory',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {
@@ -2496,5 +2529,10 @@ export function staticKey(state: PanelState): string {
     // panel, including renders nothing to do with phrases. A rename and a rewrite both still repaint,
     // because both change what is drawn. (Code round, gemini and codex, one finding each.)
     state.phrases?.map((phrase) => [phrase.id, phrase.name, hoverFor(phrase)]),
+    // Where the data lives, which now has a button under it. It was out of this key while it was
+    // static text, and that was harmless for exactly as long as nothing in it could change — each
+    // of the four entries above is a control that was frozen for the life of a panel by this same
+    // omission, and "the directory I just chose is still showing the old one" is the fifth.
+    state.storage,
   ]);
 }
