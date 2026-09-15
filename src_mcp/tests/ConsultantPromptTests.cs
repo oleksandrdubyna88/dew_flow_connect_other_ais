@@ -324,12 +324,12 @@ public sealed class ConsultantResolverTests
 
     /// <summary>
     /// A definition on a runtime outside the allowlist is refused naming the caller kind, the vendor,
-    /// the runtime and the list — the match is exact, so a spelling nobody can launch is refused too.
+    /// the runtime and the list.
     /// </summary>
     [Theory]
     [InlineData("remote")]
     [InlineData("gemini")]
-    [InlineData("Codex")]
+    [InlineData("nothing-of-the-sort")]
     public void ADefinitionOnARuntimeOutsideTheAllowlist_IsRefusedNamingEverything(string runtime)
     {
         var why = Why(ConsultantResolver.Resolve(
@@ -337,6 +337,60 @@ public sealed class ConsultantResolverTests
 
         why.Should().Contain("'gemini' caller").And.Contain("'team-codex'").And.Contain($"'{runtime}'")
             .And.Contain("codex, claude, antigravity, local").And.Contain("Consultant section");
+    }
+
+    /// <summary>
+    /// A runtime is recognised without case, and travels on in the allowlist's own spelling.
+    /// </summary>
+    /// <remarks>
+    /// The two halves have to agree about the same file. The panel reads a stored runtime through a
+    /// list of lower-case names, so <c>"Codex"</c> was no runtime to it at all: it fell back to a
+    /// legacy reference, resolved the entry by its id, and drew a consultant this server refused —
+    /// because here any non-empty runtime is a definition. Canonicalising also means one spelling
+    /// reaches <c>RuntimeResolution.NameOf</c> and the adapters, whatever a person typed.
+    /// (gemini and the local reviewer, independently, on B3's plan round.)
+    /// </remarks>
+    [Theory]
+    [InlineData("Codex", "codex")]
+    [InlineData("CLAUDE", "claude")]
+    [InlineData("AntiGravity", "antigravity")]
+    public void ARuntimeIsRecognisedWithoutCase_AndCarriesTheAllowlistsOwnSpelling(string stored, string canonical)
+    {
+        var row = Row(ConsultantResolver.Resolve(
+            new ConsultantChoice("mine", Runtime: stored), CallerIdentity.Claude, NoRows));
+
+        row.Runtime.Should().Be(canonical, "the panel recognises it without case too, and one name must reach the adapters");
+    }
+
+    /// <summary>
+    /// Rule (a) is asked BEFORE rule (b), and an id that is both a row and a runtime name proves it.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>codex</c> is the case where the two rules collide: it names a reviewer row a person
+    /// made AND a runtime this build ships. The row wins, because a legacy entry has always meant
+    /// "whatever that row is set to" — including its endpoint and its CLI path, which the bare runtime
+    /// has none of.</para>
+    /// <para>Worth knowing what this pins and what it does not: delete that row and the same entry
+    /// resolves by rule (b) to the plain runtime, so the consultant quietly loses the endpoint it was
+    /// borrowing. That is the whole defect this plan is about, and the cure is not here — it is that
+    /// the first edit in the Consultant section stores a definition and stops borrowing. (gemini, on
+    /// B3's plan round, which asked for the precedence to be stated rather than inferred.)</para>
+    /// </remarks>
+    [Fact]
+    public void ARowIsPreferredToARuntimeOfTheSameName_EvenWhenItIsSwitchedOff()
+    {
+        var rows = new ProviderSettings[]
+        {
+            new("codex") { Runtime = "codex", Model = "gpt-5.6-luna", BaseUrl = "https://a-custom-endpoint", Enabled = false },
+        };
+
+        var borrowed = Row(ConsultantResolver.Resolve(new ConsultantChoice("codex"), CallerIdentity.Claude, rows));
+        var bare = Row(ConsultantResolver.Resolve(new ConsultantChoice("codex"), CallerIdentity.Claude, NoRows));
+
+        borrowed.BaseUrl.Should().Be("https://a-custom-endpoint", "the row is asked first, switched off or not");
+        borrowed.Model.Should().Be("gpt-5.6-luna");
+        bare.BaseUrl.Should().BeEmpty("with no row, rule (b) gives the runtime the id names and nothing else");
+        bare.Model.Should().BeEmpty();
     }
 
     /// <summary>Rule (a): the row is matched case-insensitively, borrowed from whether or not it reviews, and the entry's own id is kept.</summary>
