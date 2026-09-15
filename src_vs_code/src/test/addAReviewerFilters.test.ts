@@ -46,9 +46,13 @@ test('the catalogue is offered whole: the filter that dropped a configured prese
     !host.includes('VENDOR_PRESETS.filter('),
     'a preset already configured is still being dropped from the list, which is the one-way door',
   );
+  // The WHOLE expression, `existing` included. Asserting only that `presetsOffered(VENDOR_PRESETS`
+  // appears would stay green if the host passed `new Set()` — and then a configured claude would be
+  // offered as `claude` again and refused by saveVendor, which is the defect this line is for.
+  // (codex, the code round.)
   assert.ok(
-    host.includes('presetsOffered(VENDOR_PRESETS'),
-    'the offering no longer goes through the function that allocates a free id',
+    host.includes('reviewerPickItems(presetsOffered(VENDOR_PRESETS, existing))'),
+    'the offering no longer goes through the function that allocates a free id, or is not told what is already taken',
   );
 });
 
@@ -59,7 +63,7 @@ test('a picked preset is saved under the id the offering resolved, and the blank
   // the second would pass on a line that resolved the id and then spread a different preset over it.
   assert.match(
     host,
-    /\.\.\.picked\.offered!?\.preset,\s*id: picked\.offered!?\.id/,
+    /\.\.\.chosen\.preset,\s*id: chosen\.id/,
     'the row is saved under the preset’s own id, so a second one collides with the first',
   );
   assert.ok(

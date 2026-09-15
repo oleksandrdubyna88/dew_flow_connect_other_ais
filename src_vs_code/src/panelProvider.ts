@@ -2329,7 +2329,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // second row of anything impossible and said nothing about why the entry had gone — the same
     // one-way door VENDOR_PRESETS' own docblock records for gemini. A preset whose id is taken now
     // comes with the next free one and an item that says so.
-    const offered = reviewerPickItems(presetsOffered(VENDOR_PRESETS, existing));
+    const items = reviewerPickItems(presetsOffered(VENDOR_PRESETS, existing));
     // Only servers THIS SIDE holds a token for. One that is merely configured — or one signed in on
     // another side of this machine — can neither be asked what it offers nor run a review here, so
     // offering it would be a dead entry.
@@ -2340,7 +2340,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     );
     const picked = await vscode.window.showQuickPick(
       [
-        ...offered.map((p) => ({
+        ...items.map((p) => ({
           label: p.label,
           detail: p.detail,
           description: p.description,
@@ -2378,10 +2378,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // `server` above and `offered` here are the two arms of the list, and the branch above returns,
+    // so this is only ever reached for a catalogue entry. It is written as a guard rather than a
+    // non-null assertion because four reviewers in one round read the assertion as a crash waiting
+    // for anyone who picked a Team server — it was not, and a guard means nobody has to prove that
+    // again from the control flow.
+    const chosen = picked.offered;
+    if (chosen === undefined) {
+      return;
+    }
+
     // The id comes from the OFFERING, not from the preset: a second row of a configured vendor was
-    // allocated `<id>-2` there. The blank preset keeps its empty id, so the branch below still asks
-    // for a name and a URL rather than writing a row nobody named.
-    let vendor: Vendor = { ...picked.offered!.preset, id: picked.offered!.id };
+    // allocated its own free name there. The blank preset keeps its empty id, so the branch below
+    // still asks for a name and a URL rather than writing a row nobody named.
+    let vendor: Vendor = { ...chosen.preset, id: chosen.id };
     if (vendor.id.length === 0) {
       const own = await this.askCustomEndpoint('Add a reviewer');
       if (own === undefined) {

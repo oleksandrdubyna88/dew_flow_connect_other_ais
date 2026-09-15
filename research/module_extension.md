@@ -18,9 +18,16 @@ only `{ title, placeHolder }`, so VS Code filtered on the **label** alone: typin
 emptied the list. The product calls it Claude Code everywhere else — `consultSettings.ts`'s
 `CALLER_KINDS` is `{ id: 'claude', label: 'Claude Code' }` — so a person who read that in the
 Consultant section was searching for words this pick could not match. The label is now
-`Claude Code (a second one)`; the parenthetical and the hint stay, because the reviewer IS a second,
-separate `claude -p` process and not the session driving the gate, and that is the one thing the
-entry has to say. The options object now carries `matchOnDetail` **and** `matchOnDescription`.
+`Claude Code`, and the options object carries `matchOnDetail` **and** `matchOnDescription`.
+
+**`(a second one)` left the label, and that was the code round's doing.** The plan had kept it,
+on the reasoning that the reviewer IS a second, separate `claude -p` process rather than the
+session driving the gate, and that this is the one thing the entry has to say. It still is — but
+once a configured preset can be offered again, the pick ALSO says *you already have one — this
+adds `claude-2`*, and "a second one" then means two different things two lines apart in the same
+list. The distinction moved into the hint, which `matchOnDetail` has just made searchable:
+*"A SECOND, separate claude -p process — not the Claude Code session running this gate"*. Nothing
+was lost; it is said once, in the place a person can now find by typing it.
 
 **A preset already configured was dropped, silently.** `addVendor` filtered
 `VENDOR_PRESETS` by whether its id was already in `coai.vendors`, so an installation with a `claude`
@@ -37,7 +44,12 @@ only be tested by reading the file as text:
   back blank**, which is what keeps the blank preset falling into `askCustomEndpoint` instead of
   being written under an id nobody chose.
 - `presetsOffered(presets, taken)` — every entry, each with the id it would take and whether it is a
-  second row.
+  second row. **It allocates over the LIST, not one entry at a time**: the reserved set starts
+  holding every preset's own id and grows as the list is walked. Against the configured ids alone,
+  a catalogue that one day holds both `claude` and `claude-2` would resolve BOTH to `claude-2` while
+  `claude` is configured, and whichever was picked second would be refused as a duplicate with
+  nothing said about why. The same reasoning `vendorColour.ts` gives for its palette: a promise
+  about a list cannot be kept one item at a time. (codex, the code round.)
 - `reviewerPickItems(offered)` — the rows, with the hint as `detail` and, for a second row only, a
   `description` naming the id it will get.
 

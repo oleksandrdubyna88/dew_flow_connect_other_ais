@@ -1,12 +1,40 @@
 # PLAN — Add a reviewer says "Claude Code", and says it twice
 
-> Status: **plan only, nothing implemented yet, 2026-09-15.** Kind: **bug** (two causes, one
-> symptom). Scope: `src_vs_code/src/vendors.ts` (the preset label and one new pure function),
+> Status: **IMPLEMENTED, 2026-09-15.** Kind: **bug** (two causes, one symptom). Scope:
+> `src_vs_code/src/vendors.ts` (the preset label and three new pure functions),
 > `src_vs_code/src/panelProvider.ts` (`addVendor`'s offering and its quick pick), and tests.
 > Origin: [issue #294](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/294)
 > — *"add reviewer нет клод кода"*.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md), [module_tests.md](module_tests.md).
+>
+> ## Deviations — what shipped differently, and why
+>
+> 1. **`(a second one)` left the label.** The plan kept it deliberately (point 3 of *What must be
+>    true*), and the code round overturned that, correctly: once a configured preset can be offered
+>    again, the pick also says *you already have one — this adds `claude-2`*, so "a second one" meant
+>    two different things two lines apart in one list. The label is plain `Claude Code`; the
+>    distinction moved into the hint, which `matchOnDetail` had just made searchable. The plan's own
+>    DoD item "(a second one) and the hint survive the rename" is therefore NOT met as written, and
+>    that is the right outcome — the thing it was protecting is still said, once, where it can be
+>    found.
+> 2. **The id allocator reserves over the whole LIST**, not against the configured ids alone. Not in
+>    the plan; raised in the code round. A catalogue holding both `claude` and `claude-2` would
+>    otherwise resolve both to `claude-2` whenever `claude` was configured. No preset has such an id
+>    today, so this is a latent collision closed before it existed.
+> 3. **A guard replaced the non-null assertion** in `addVendor`. `picked.offered!` was safe — the
+>    Team-server branch returns above it — but four reviewers in one round read it as a crash, so it
+>    is now `const chosen = picked.offered; if (chosen === undefined) { return; }`, which nobody has
+>    to re-derive from the control flow.
+> 4. **`reviewerPickItems` was added** as a third pure function. The plan had two; the round asked
+>    for the pick's ITEMS to be decided outside the host as well, so that the description is tested
+>    by calling it rather than by reading `panelProvider.ts`.
+>
+> **Checked, and not done:** nobody has driven the real quick pick. `matchOnDetail` and
+> `matchOnDescription` are asserted as source text because this suite has no extension host — that
+> gap is named in `module_tests.md` rather than implied. What was NOT checked: whether VS Code's
+> filter matches a `description` on the same terms as a `detail`; the flags are documented to, and
+> the behaviour was not observed here.
 
 ## The symptom
 
