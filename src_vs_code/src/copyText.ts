@@ -46,6 +46,20 @@ export type CopyDecision =
 /** How long a confirmation stays on the status bar. Long enough to notice, short enough to ignore. */
 export const SAID_FOR_MS = 3000;
 
+/**
+ * How long a single write may take before the queue stops waiting for it.
+ *
+ * <p>Every wait has a ceiling. A write that never SETTLES — a permission prompt nobody answers, a
+ * host that forgets to resolve — is worse than one that rejects: the chain behind it never runs, so
+ * the next press does nothing, for ever, with nothing said. A rejection is already handled; this is
+ * the case that has no natural end. (codex, the plan round.)</p>
+ *
+ * <p>Five seconds is far past any real clipboard write and short enough that a person pressing again
+ * gets an answer rather than silence. Giving up on the wait does not cancel the write: if it lands
+ * afterwards the clipboard simply holds it, which is the same outcome as a slow success.</p>
+ */
+export const WRITE_CEILING_MS = 5000;
+
 export interface TextCopier {
   copy(decide: () => CopyDecision): Promise<CopyReport>;
 }
@@ -64,13 +78,30 @@ export interface TextCopier {
  * <p>The decision is taken as a FUNCTION, evaluated when its turn comes rather than when the press
  * arrived: what a caller resolves may depend on state a press ahead of it in the queue changed.</p>
  */
-export function textCopier(ports: CopyPorts): TextCopier {
+export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): TextCopier {
   let live: Said | undefined;
   let working: Promise<unknown> = Promise.resolve();
 
   function tell(said: string): void {
     live?.dispose();
     live = ports.say(said, SAID_FOR_MS);
+  }
+
+  /** The write, or the ceiling — whichever comes first. A timer left running would outlive the turn. */
+  async function written(text: string): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        ports.writeText(text),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('the clipboard did not answer')), ceilingMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    }
   }
 
   async function once(decide: () => CopyDecision): Promise<CopyReport> {
@@ -81,7 +112,7 @@ export function textCopier(ports: CopyPorts): TextCopier {
       return { copied: false, said: decision.said };
     }
     try {
-      await ports.writeText(decision.text);
+      await written(decision.text);
     } catch {
       // The write is the only thing that can fail here, and a person who is told nothing pastes
       // whatever was on the clipboard before — which is the failure this sentence exists to stop.
