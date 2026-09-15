@@ -39,6 +39,9 @@ export interface PageMessage {
   readonly at?: unknown;
   /** Which half of the instruction left the box — `role` or `task`. */
   readonly which?: unknown;
+  /** Which block of an answer a copy control named, and the signature it was drawn with. */
+  readonly block?: unknown;
+  readonly sig?: unknown;
 }
 
 export type ChatCommand =
@@ -131,7 +134,24 @@ export type ChatCommand =
    */
   | { readonly kind: 'openFile'; readonly path: string; readonly line: number }
   | { readonly kind: 'copyAnswer'; readonly index: number }
+  /**
+   * One BLOCK of an answer — a fenced block or a quote — by the position the renderer gave it.
+   *
+   * <p>A coordinate and a claim, never text. `index` says which message, `block` which of the blocks
+   * that message's markdown produces, and `sig` is what the renderer signed that markdown with when
+   * it drew the control. The host resolves all three against the markdown IT holds, so a page that
+   * lies can only be refused.</p>
+   */
+  | { readonly kind: 'copyBlock'; readonly index: number; readonly block: number; readonly sig: string }
   | { readonly kind: 'ignore' };
+
+/**
+ * A signature is a short token the renderer made, so a long one is not one.
+ *
+ * <p>Bounded because it arrives from the page and reaches a comparison: there is no reason to carry
+ * more than the renderer emits, and a cap is cheaper than wondering. (codex, the plan round.)</p>
+ */
+const SIGNATURE_MAX = 64;
 
 const IGNORE: ChatCommand = { kind: 'ignore' };
 
@@ -346,6 +366,17 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
 
       return typeof index === 'number' && Number.isSafeInteger(index) && index >= 0
         ? { kind: 'copyAnswer', index }
+        : IGNORE;
+    }
+    case 'copyBlock': {
+      // All three or none. A half-read coordinate is not a smaller request, it is a different one:
+      // `Number(undefined)` is NaN and would fall through as a position nothing can resolve.
+      const { index, block, sig } = message;
+      const position = typeof index === 'number' && Number.isSafeInteger(index) && index >= 0
+        && typeof block === 'number' && Number.isSafeInteger(block) && block >= 0;
+
+      return position && typeof sig === 'string' && sig.length > 0 && sig.length <= SIGNATURE_MAX
+        ? { kind: 'copyBlock', index, block, sig }
         : IGNORE;
     }
     case 'reask':

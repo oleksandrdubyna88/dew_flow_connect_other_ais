@@ -451,7 +451,10 @@ export function chatMessagesHtml(
       // for looking at a sent turn — the role, the task and three lines of machinery, all one grey.
       const body = mine
         ? markedTurn(message.text, message.marks === undefined ? marks : { ...marks, ...message.marks })
-        : renderAnswer(message.text);
+        // The INDEX goes in, because every block of the answer gets a copy control of its own and a
+        // control has to be able to say which message it belongs to. A renderer told nothing draws
+        // none of them, which is what kept the enumerator shippable before this line existed.
+        : renderAnswer(message.text, index);
       // The copy control carries the INDEX, and the host reads the message out of the same array
       // this was rendered from - so what is copied is the markdown that arrived, which is the one
       // thing a selection cannot give: selecting the page gives what the page shows.
@@ -463,7 +466,12 @@ export function chatMessagesHtml(
         : `<span class="author">${mine ? 'You' : 'The other AI'}</span>`;
       const copy = mine
         ? ''
-        : `<button type="button" class="copy" data-copy="${index}" title="Copy this answer as Markdown">Copy</button>`;
+        // COPY ANSWER, not Copy. An answer that ends in a fence now carries that block's own control
+        // immediately above this row, and two adjacent buttons reading the same word with different
+        // scopes is the confusion this whole feature began as: the operator read the row below an
+        // answer as belonging to the block above it, which is exactly what its name invited.
+        // (gemini, the plan round.)
+        : `<button type="button" class="copy" data-copy="${index}" title="Copy the whole answer as Markdown">Copy answer</button>`;
       // CARRY NOTHING ABOVE. On the last answer only, and it names what it does rather than what it
       // breaks: nothing is deleted and the conversation stays whole on screen — what changes is where
       // a HANDOVER starts, to another model or to a Team server that is told everything every turn.
@@ -852,6 +860,12 @@ function chatStyle(
   /* Its own box, and it scrolls inside it: a long line of code must not widen the page. */
   .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
   .msg .what pre code { background: none; padding: 0; }
+  /* The control for ONE block, under the block it belongs to. Right-aligned and pulled up against
+     it, so it reads as that block's footer rather than as the start of what follows — the same
+     reasoning the afterRow class already carries, whose row it sits above when an answer ends in a
+     block. No backticks in here: this comment lives inside a template literal, and one would end it
+     dozens of lines from where the error is reported. */
+  .msg .what .blockRow { display: flex; justify-content: flex-end; margin: -.45em 0 .7em; }
   .msg .what blockquote { margin: 0 0 .7em; padding-left: 10px; border-left: 2px solid var(--vscode-panel-border); opacity: .9; }
   .msg .what table { border-collapse: collapse; margin: 0 0 .7em; display: block; overflow-x: auto; }
   .msg .what th, .msg .what td { border: 1px solid var(--vscode-panel-border); padding: 3px 8px; text-align: left; }
@@ -1696,7 +1710,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     messagesRegion.addEventListener('click', function (event) {
       const target = event.target;
       if (!target || typeof target.closest !== 'function') { return; }
-      const acted = target.closest('[data-open], [data-file], [data-copy], [data-cut], [data-fold]');
+      const acted = target.closest('[data-open], [data-file], [data-copy], [data-cut], [data-fold], [data-block]');
       if (!acted || !acted.dataset) { return; }
       if (typeof acted.dataset.fold === 'string') {
         toggleFold(acted.dataset.fold);
@@ -1714,6 +1728,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // on it — so a press that failed to record shows nothing, rather than a line that is not
         // durable while the next handover quietly carries everything above it.
         vscode.postMessage({ type: 'carryFrom', at: Number(acted.dataset.cut) });
+      } else if (typeof acted.dataset.block === 'string') {
+        // A POSITION and a signature, never the text. The host reads the block out of the markdown it
+        // holds, through the same walk that drew this control — so the page cannot decide what lands
+        // on the clipboard, and a stale button is refused rather than obeyed.
+        vscode.postMessage({
+          type: 'command', command: 'copyBlock',
+          index: Number(acted.dataset.at), block: Number(acted.dataset.block),
+          sig: acted.dataset.sig,
+        });
       }
     });
   }

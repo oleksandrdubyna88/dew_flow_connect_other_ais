@@ -119,6 +119,21 @@ export interface ChatPanelHooks {
    */
   readonly onCopyAnswer: (id: object, index: number) => void;
   /**
+   * Copy ONE block of the answer at `index` — a fenced block or a quote — by its position.
+   *
+   * <p>The position is the index into what the renderer drew for that message, and `sig` is what it
+   * signed the markdown with at the time. The host resolves both against the markdown it holds, so
+   * nothing about the text crosses this boundary and a control drawn for an answer that has since
+   * changed is refused rather than obeyed.</p>
+   *
+   * <p><b>The position is only as stable as the message's text.</b> It holds because a message is
+   * written once and messages are appended, never reordered — the property `data-copy` has relied on
+   * since it shipped. Anything that rewrites an answer's text in place breaks it, and the signature
+   * is what turns that break into a refusal instead of a wrong copy. Whoever changes how answers are
+   * stored should read this sentence as addressed to them.</p>
+   */
+  readonly onCopyBlock: (id: object, index: number, block: number, sig: string) => void;
+  /**
    * Open a file an ANSWER named, at a line.
    *
    * <p>A hook rather than something this module does, for the reason every other action here is one:
@@ -349,6 +364,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       return;
     case 'copyAnswer':
       hooks.onCopyAnswer(id, command.index);
+
+      return;
+    case 'copyBlock':
+      hooks.onCopyBlock(id, command.index, command.block, command.sig);
 
       return;
     case 'reask':
