@@ -202,13 +202,45 @@ export function badEndpoint(typed: string): string | undefined {
     return 'The endpoint has to be an http or https address';
   }
 
-  return parsed.username.length > 0 || parsed.password.length > 0 || SECRETISH.some((key) => parsed.searchParams.has(key))
+  return parsed.username.length > 0 || parsed.password.length > 0 || carriesAKey(parsed)
     ? 'Leave the key out of the URL — it goes in the vault entry under this name, which is what keeps it out of settings.json'
     : undefined;
 }
 
-/** Query names that carry a secret often enough that one in a stored URL is a mistake, not a choice. */
-const SECRETISH: readonly string[] = ['api_key', 'apikey', 'key', 'token', 'access_token', 'password'];
+/**
+ * Words that make a parameter a credential, matched inside the name and without case.
+ *
+ * <p>The first version of this list was the half-dozen spellings I thought of, compared exactly, and
+ * the gate was right that a gateway names the parameter what it likes: `x-api-key`, `apiKey` and
+ * `subscription-key` are all in the wild and all missed by an exact match against `api_key`. So the
+ * test is CONTAINMENT, case-blind — which is the right shape for the job, because the cost of a
+ * false positive here is a sentence asking someone to move a key into the vault, and the cost of a
+ * miss is a live credential in a file people commit.</p>
+ *
+ * <p>It stays a list of words rather than becoming "refuse any query string": an endpoint that names
+ * an API version or a deployment is ordinary — `?api-version=2024-02-01` is how Azure spells one —
+ * and refusing those would send people back to pasting keys somewhere worse. (codex, the code round
+ * on this split.)</p>
+ */
+const CREDENTIAL_WORDS: readonly string[] = [
+  'key', 'token', 'secret', 'password', 'passwd', 'authorization', 'auth', 'credential', 'sig', 'signature',
+];
+
+/**
+ * Whether a URL carries a credential in its query or its fragment.
+ *
+ * <p>The fragment is read for the same reason the query is. A `#` never reaches the server, so it is
+ * not a leak to the vendor — but this string is about to be written into `settings.json`, and a
+ * workspace settings file is a file people commit, which is the whole point of refusing it.</p>
+ */
+function carriesAKey(parsed: URL): boolean {
+  const named = [
+    ...[...parsed.searchParams.keys()],
+    ...[...new URLSearchParams(parsed.hash.replace(/^#/, '')).keys()],
+  ];
+
+  return named.some((name) => CREDENTIAL_WORDS.some((word) => name.toLowerCase().includes(word)));
+}
 
 /**
  * Everything that already means something by a name — and the caller doing the editing is not one.
@@ -406,11 +438,3 @@ function editedDefinition(one: ConsultantDefinition, field: ConsultantField, val
     executablePath: field === 'executablePath' ? value : one.executablePath,
   };
 }
-
-/**
- * One role's entry changed inside a role-keyed record, with every other role kept.
- *
- * <p>A record, MERGED rather than replaced. Replacing it would drop the three roles the person did
- * not touch, and the symptom would be the one this shape was introduced to fix — a number that will
- * not stick — for three roles instead of one.</p>
- */

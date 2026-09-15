@@ -2437,7 +2437,12 @@ stored the setting, and let the person find out the next time they were stuck. I
 in the URL — `https://user:token@host/v1` and `?api_key=…` both work against many gateways, and both end up
 in `settings.json`, which for a WORKSPACE setting is a file people commit. This product keeps keys in one
 CredsForDevs entry so they are never in argv, a log line or a settings file, and an endpoint box is not
-where that stops being true.
+where that stops being true. The first version of that check compared a parameter's name against a
+half-dozen spellings EXACTLY, which missed `x-api-key`, `apiKey` and `subscription-key` — all in the wild.
+It is containment against `CREDENTIAL_WORDS` now, case-blind, and it reads the FRAGMENT as well as the
+query: a `#` never reaches the server, but it does reach the settings file, which is the thing being
+protected. It stays a list of words rather than "refuse any query string", because `?api-version=…` is how
+Azure names a deployment and refusing those would send people back to pasting keys somewhere worse.
 
 `vaultKeyNote` is the other half of the same invariant. `endpointConflict` guards the flow that MINTS a
 name, and the endpoint box in each row goes nowhere near it — a person can point a consultant called
@@ -2451,6 +2456,27 @@ The custom endpoint's RUNTIME now comes from the catalogue entry rather than bei
 the picker cannot show one preset's label while the definition stores another; and the page script reads
 the sentinel from `CUSTOM_ENDPOINT` instead of repeating the string, so renaming it cannot leave the option
 and its handler disagreeing.
+
+**The write path is its own module since 2026-09-15 (`consultantWrite.ts`).** `settingsShape.ts` had
+reached 1054 lines against the 800 the shared coding-style rule allows, and epic C put about a hundred of
+them there. Two unrelated jobs were sharing that file: one about SETTINGS in general — the `CoaiSettings`
+type, the defaults, the side overlay, `settingsFrom`, `envBlock`, the role helpers — and one about this
+single feature. The second was a contiguous block needing nothing from the rest of the file, with nothing
+below it using any of its helpers, so the seam was the only line that divides the file without cutting a
+dependency rather than a judgement about where to draw one.
+
+Its five entry points are `consultantRecordUpdate` (a control in the section changed — the vendor picker,
+or one of the three per-caller fields), `consultantEndpointWrite` (a custom endpoint minted for one
+caller), `endpointConflict` (whether a name is already spoken for at a DIFFERENT endpoint, returned as a
+sentence so an input box can refuse while it is still open), `endpointAnswer` (what two closed prompt
+boxes mean, and what a dismissal of either means, which is nothing) and `badEndpoint` (whether a typed URL
+is one, and carries no credential). It depends on `consultSettings.ts` for the resolution rule and the
+caller kinds, and on `vendors.ts` for the catalogue and `normaliseId`; `panelProvider.ts` is its only
+production caller. `consultSettings.ts` is the READ half of the same feature — the rule, the defaults, the
+skew and vault-key notes — so the two sit beside each other, which is where somebody looking for either
+would look. Nothing moved into `research/architecture.md`: that map is subsystem-level — it names the
+extension, not its files — and splitting one module inside the extension changes no cross-module
+interaction.
 
 **Two catalogue tests were rewritten to derive from `VENDOR_PRESETS`** rather than name its contents.
 `common/testing.md` names both failure directions of a hand-copied list, and the second one applied here:
