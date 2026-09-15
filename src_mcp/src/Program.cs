@@ -808,6 +808,22 @@ internal static class Program
         loop. `review_code` REFUSES until a plan round has reached `proceed`; skipped stages are
         impossible, not discouraged. `providers` says what is configured and what it authenticates
         as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
+        A round's reply can carry COMMANDS, and they outrank your own defaults. The person who owns
+        this gate sets switches in the panel; when any are on, every reply carries a `commands` list
+        and a preamble saying they must be followed. They are instructions about HOW to work — split
+        this plan into stories, work autonomously, use that model for the risky half — not opinions to
+        weigh against your habits. Follow them, and say in your summary which ones you applied. An
+        empty list means the operator has set nothing, which is the default.
+        Reject in round ONE, not only when the rounds run out. A finding that is wrong, out of this
+        task's scope, or already covered gets its reasoned rejection the first time it appears.
+        Accepting everything to be agreeable is what stops the loop converging: each accepted finding
+        rewrites the plan, and the next round is handed fresh text with new things to find in it, so
+        the count never falls. Rejecting early is the only way the round after this one is about the
+        same document.
+        A `call_human` verdict is an enforced stop, not advice: `review_plan` and `review_code` REFUSE
+        while it stands, and recording decisions does not reopen them. Call `ask_human`; the person's
+        answer decides. Only they can pass `humanDecision: "proceed"` to `resolve`, and it is
+        refused while rounds remain — so you cannot grant yourself the override.
         `consult` is for when YOU are stuck: an independent model, chosen by the configured route and
         usually another vendor's, reads this checkout read-only with its uncommitted diff and answers
         advice, not orders — verify it, then report back on the same consultationId. The person can
