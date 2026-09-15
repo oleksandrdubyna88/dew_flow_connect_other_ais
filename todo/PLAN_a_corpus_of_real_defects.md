@@ -104,12 +104,31 @@ language the table says which node kinds are a function and which identifier kin
 data, not code. **`.mjs` and `.cjs` must map to the JavaScript grammar**: they are 39 candidates,
 8 % of the corpus, and exactly what a naive `.js` check drops.
 
-**Open, and blocking story 2: the binding package needs operator approval.** `TreeSitter.DotNet` is
-**MIT**, 205 k downloads, six releases from 2025-05-04 to 2026-01-22 — fresh by the twelve-month bar
-— but it is published by one person (Marius Greuel), and
-`.agents/conventions/csharp/nuget-packages.md` says an individual's package is *always* asked about
-first, however popular. The fallback if it is refused is **Option D**: Roslyn for `.cs`, the
-TypeScript compiler API for `.ts`/`.js`, two normalizers and two property tests.
+**The binding package is APPROVED, 2026-09-15, on three conditions.** `TreeSitter.DotNet` is **MIT**,
+205 k downloads, six releases from 2025-05-04 to 2026-01-22 — fresh by the twelve-month bar — but
+published by one person (Marius Greuel), which `.agents/conventions/csharp/nuget-packages.md` says is
+*always* asked about first, however popular. It was asked and granted. **Option D — Roslyn for `.cs`
+and the TypeScript compiler API for `.ts`/`.js` — is declined outright**: splitting the normalising
+logic across two engines costs more than the dependency does, and it would mean two property tests
+guarding one guarantee.
+
+The three conditions, which are part of the story's Definition of Done:
+
+1. **The version is pinned hard, and never floats.** Central package management is on here, so the
+   pin lives in `Directory.Packages.props` and the `.csproj` carries a bare `<PackageReference>` —
+   that is where the family's other standing pins are recorded, with the reason beside them. This one
+   is an explicit exception to the monthly latest-stable bump: an individual's package moves when we
+   decide to move it, having read what changed, not when a tool notices a release.
+2. **The publish prunes the grammars it does not use.** Keep `c-sharp`, `typescript` and
+   `javascript`; drop the other twenty-five. That is ~60 MB of ballast per RID on something people
+   download, and a step in the publish rather than a note for later. *(`tsx` is excluded by that
+   list. It is consistent with the measurement — no `.tsx` appeared among the 462 candidates — and it
+   is one line to add the day one does.)*
+3. **The library sits behind `IAstNormalizer`.** Nothing outside the implementing project sees
+   `TreeSitter`, a `Language`, a node or a P/Invoke. The interface belongs in `CoaiMcp.Core`, which is
+   pure and already knows nothing of IO; the implementation and the whole native dependency live in
+   one project behind it. That is also what makes Option D cheap to reach for later if this
+   dependency ever has to go — a second implementation of one interface, not a second design.
 
 ## The collector contract
 
@@ -258,7 +277,12 @@ the returned rank.
 
 ## Definition of Done
 
-- [ ] Story 1 reports the count, and the decision to continue is recorded against it.
+- [x] Story 1 reports the count, and the decision to continue is recorded against it.
+- [ ] `TreeSitter.DotNet` is pinned in `Directory.Packages.props` with its reason, and exempted
+      from the monthly bump in writing.
+- [ ] The publish keeps three grammars and drops the rest, and something FAILS if that step is
+      removed — an unchecked pruning step is a step that silently stops running.
+- [ ] Nothing outside the normalizer's own project names `TreeSitter`, and a test says so.
 - [ ] The guard tests reachability, never equality, and has a test that would fail on equality.
 - [ ] `skipped` and `failed` are distinct, and a zero-knowledge failure is `failed`.
 - [ ] Skip reasons are attributed to the stage that produced them — a funnel, not a flat percentage,
