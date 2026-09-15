@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Xunit;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -440,6 +441,191 @@ public sealed class PanelServiceTests : IAsyncLifetime
         finally
         {
             Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
+    }
+
+    /// <summary>
+    /// A family mount with one rule of the plan tier in it, and one rule that is not.
+    /// </summary>
+    private void WriteFamilyRules()
+    {
+        File.WriteAllText(Path.Combine(_repo, ".gitmodules"),
+            "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        var common = Directory.CreateDirectory(Path.Combine(_repo, ".agents", "conventions", "common")).FullName;
+        File.WriteAllText(Path.Combine(common, "reuse-first.md"), "Look before you build.");
+        File.WriteAllText(Path.Combine(common, "logging-serilog.md"), "Serilog, coloured, one file per run.");
+    }
+
+    /// <summary>The prompt a reviewer was actually handed, from the fake CLI's own recording.</summary>
+    /// <remarks>
+    /// NUL-joined argv with the stdin text last — asserted on the RECORDED launch rather than on the
+    /// context a test passed to <c>BuildWork</c>, because the question here is whether the STAGE
+    /// builds the rules into its context, and a test that hands the context in cannot answer it.
+    /// </remarks>
+    private static string RecordedPrompt(string record) =>
+        Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split('\0')[^1]).First();
+
+    /// <summary>
+    /// The plan gate is judged against the rules this project wrote down.
+    /// </summary>
+    /// <remarks>
+    /// Until this shipped the stage said so in its own log line — "no diff and no rules at this
+    /// stage" — so a plan reviewer held this repository's plan to its own taste, and a conventions
+    /// finding has nothing to quote.
+    /// </remarks>
+    [Fact]
+    public async Task APlanRound_IsGivenTheRulesItIsJudgedAgainst()
+    {
+        WriteFamilyRules();
+        var record = Directory.CreateTempSubdirectory("coai-plan-rules-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var prompt = RecordedPrompt(record);
+            prompt.Should().Contain("The rules this project has written down");
+            prompt.Should().Contain("Look before you build", "a rule of the plan tier");
+            prompt.Should().NotContain("one file per run",
+                "a logging recipe is not what a PLAN is judged against");
+
+            // The rules come BEFORE the thing they judge. A prompt carrying the right rules after
+            // the plan has already been read is a prompt that taught the reviewer nothing in time.
+            prompt.IndexOf("The rules this project has written down", StringComparison.Ordinal)
+                .Should().BeLessThan(prompt.IndexOf("The plan under review", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A partial mount says how much of the tier it had — in the PROMPT, where the reviewer is.
+    /// </summary>
+    /// <remarks>
+    /// The failure this prevents: a round judged against one rule of seven reads exactly like a round
+    /// judged against all seven, so a reviewer's silence about a rule it never saw looks like
+    /// compliance. Raised on story 1.2's code round and again on this one's plan round.
+    /// </remarks>
+    [Fact]
+    public async Task APlanRoundWhoseTierIsOnlyPartlyHere_SaysSoToTheReviewer()
+    {
+        WriteFamilyRules();
+        var record = Directory.CreateTempSubdirectory("coai-plan-partial-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            // WriteFamilyRules carries exactly one rule of the plan tier.
+            RecordedPrompt(record).Should().Contain($"1 of the {StageRules.Plan.Length} rules");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A repository carrying NONE of the tier is told so in the strongest words the prompt has.
+    /// </summary>
+    [Fact]
+    public async Task APlanRoundWithNoneOfItsTier_TellsTheReviewerNotToReadItAsCompliance()
+    {
+        var record = Directory.CreateTempSubdirectory("coai-plan-none-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var prompt = RecordedPrompt(record);
+            prompt.Should().Contain("NONE of the");
+            prompt.Should().Contain("Do not read their absence as compliance");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The plan stage is handed no checkout, and this is what keeps that true.
+    /// </summary>
+    /// <remarks>
+    /// Its working directory is an empty scratch folder on purpose: an agentic CLI handed a checkout
+    /// goes exploring, which is what made a plan round take ten minutes. It is also why the rules are
+    /// collected from <c>repoPath</c> — collecting from the working directory would gather nothing
+    /// while looking like it worked.
+    /// </remarks>
+    [Fact]
+    public async Task APlanRound_StillGetsNoWorktree()
+    {
+        WriteFamilyRules();
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+
+        await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+        var worktrees = await _launcher.RunAsync(new ProcessRequest(
+            "git", ["worktree", "list", "--porcelain"], _repo));
+        worktrees.StdOut.Split("worktree ", StringSplitOptions.RemoveEmptyEntries)
+            .Should().ContainSingle("the plan stage is handed no checkout — that is what keeps an "
+                + "agentic CLI answering instead of exploring, and it is why the rules come from repoPath");
+    }
+
+    /// <summary>
+    /// The CODE stage is untouched by the two gates that gained rules.
+    /// </summary>
+    /// <remarks>
+    /// It collects with the default order, not a stage tier — so a rule outside the plan tier still
+    /// reaches a code reviewer. Without this, a later change that gave every stage a tier would pass
+    /// the two new tests while quietly narrowing the one stage that was already working.
+    /// </remarks>
+    [Fact]
+    public async Task TheCodeStage_StillCollectsEveryRule_NotAStageTier()
+    {
+        WriteFamilyRules();
+
+        // Committed, because the code stage reads its rules from the round's WORKTREE at the
+        // reviewed SHA — the rules as of the commit under review, not as of this afternoon. That is
+        // the property the plan and document stages deliberately do NOT share: they have no commit.
+        await Git("add", ".");
+        await Git("commit", "-m", "the family rules");
+
+        var record = Directory.CreateTempSubdirectory("coai-code-rules-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            await service.ResolveAsync(_repo, "feature", "[]");
+            foreach (var file in Directory.GetFiles(record))
+            {
+                File.Delete(file);
+            }
+
+            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+            var prompts = Directory.GetFiles(record, "*.argv")
+                .Select(f => File.ReadAllText(f).Split('\0')[^1]);
+            prompts.Should().Contain(p => p.Contains("one file per run", StringComparison.Ordinal),
+                "the logging rule is outside the PLAN tier and must still reach a code reviewer");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
         }
     }
 }

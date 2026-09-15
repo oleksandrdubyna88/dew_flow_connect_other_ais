@@ -93,12 +93,21 @@ sequenceDiagram
   entry would pull in a file nobody meant and spend the budget of the rule it was impersonating —
   caught by a red test rather than in production.
 
-- **The tiers a gate with NO diff will be judged against exist as data; no stage reads them yet.**
+- **Tier coverage counts what a reviewer was SHOWN, not what the tree contains.** Each `RuleFile`
+  carries its mount-relative name (`common/security.md`), set where the mounts are known, and
+  `RuleBundle.MatchedCount` / `TierCoverage` count and phrase the tier against `Files` — the rendered
+  ones. A rule discovered and then dropped by the byte budget, or found and unreadable, is a rule
+  nobody saw; counting it would let a prompt claim "all seven are below" over a section showing two,
+  and a reviewer's silence about the other five would read as compliance. A code round caught exactly
+  that, and `ATierRuleTheBudgetDropped_IsNotCountedAsShown` reproduces it — 7 reported against 2 shown.
+  The wording lives beside `Render()` because both are prompt text.
+
+- **The tiers a gate with NO diff is judged against, wired into both stages.**
   `StageRules.Plan` and `StageRules.Document` (`Context/StageRules.cs`) are ordered lists, and
   `RuleOrder.Staged(tier)` is the one order that FILTERS — a plan or document round has no change to
   select from, so the mount's other rules are not lower priority, they are not what the stage is judged
-  against. **Both gates still send no rules at all**: the wiring is stories 1.3 and 1.4 of the plan, and
-  `Drawn()` remains what `Collect` uses by default. When a tier matches nothing the mount contributes
+  against. The CODE stage is untouched: it still collects every rule in `RuleOrder`'s default order, and
+  `Drawn()` remains that default until epic 3. When a tier matches nothing the mount contributes
   nothing, deliberately and without a fallback — falling back to `Walk` would hand a plan reviewer the
   code rules the tier exists to exclude — and the reviewer still sees this repository's own rules,
   which are outside every order. Every entry is checked against the corpus this repository PINS by

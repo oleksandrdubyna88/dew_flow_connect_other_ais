@@ -184,6 +184,54 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         notes[0].GetProperty("notes").GetString().Should().Contain("settles almost nothing");
     }
 
+    /// <summary>
+    /// A family mount carrying one rule of the document tier and one that is not.
+    /// </summary>
+    private void WriteFamilyRules()
+    {
+        File.WriteAllText(Path.Combine(_repo, ".gitmodules"),
+            "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        var common = Directory.CreateDirectory(Path.Combine(_repo, ".agents", "conventions", "common")).FullName;
+        File.WriteAllText(Path.Combine(common, "knowledge-base.md"), "research tracks the system as it is.");
+        File.WriteAllText(Path.Combine(common, "dotnet-build.md"), "Build with the response file.");
+    }
+
+    /// <summary>
+    /// A document round is judged against the rules that govern DOCUMENTS.
+    /// </summary>
+    /// <remarks>
+    /// It said so itself until this shipped — "no diff and no rules at this stage" — so a reviewer
+    /// asked whether a document belongs in <c>research/</c> had nothing to answer from but its own
+    /// taste. Asserted on the RECORDED launch, not on a context handed to <c>BuildWork</c>: the
+    /// question is whether the STAGE builds the rules in.
+    /// </remarks>
+    [Fact]
+    public async Task ADocumentRound_IsGivenTheRulesItIsJudgedAgainst()
+    {
+        WriteFamilyRules();
+        var record = Directory.CreateTempSubdirectory("coai-doc-rules-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "main");
+
+            await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
+
+            var prompt = Directory.GetFiles(record, "*.argv")
+                .Select(f => File.ReadAllText(f).Split('\0')[^1]).First();
+            prompt.Should().Contain("The rules this project has written down");
+            prompt.Should().Contain("research tracks the system as it is", "a rule of the document tier");
+            prompt.Should().NotContain("Build with the response file",
+                "a build recipe is not what a DOCUMENT is judged against");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
+
     /// <summary>The reviewer is handed the document and the purpose — not one of the two.</summary>
     [Fact]
     public async Task TheReviewer_IsHandedThePurposeAndTheDocument()
