@@ -555,6 +555,21 @@ test('the note names the callers an older server would answer differently, and n
   assert.ok(!note.includes('Codex'), `a legacy entry resolved from that row was named: ${note}`);
 });
 
+test('a definition backed by a SWITCHED-OFF row is called out — an older server refuses that row', () => {
+  // The refusal for a disabled reviewer row was only removed in story B3. An older server still has
+  // it, so a definition whose fields a disabled row reproduces exactly does NOT reach the same place
+  // there: it is refused as switched off. Matching the fields is not enough; the row has to be one
+  // that older server would actually use. (gemini, B4's code round.)
+  const rows = [{ id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', enabled: false }];
+  const settings = consultSettingsFrom(reader({
+    consultants: { claude: { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' } },
+    vendors: rows,
+  }));
+
+  assert.match(consultantSkewNote(OLDER, settings, vendorsFrom(rows)), /Claude Code/,
+    'an older server refuses a switched-off row, so it does not reproduce the definition');
+});
+
 test('the note is silent for a server that reads the definition, a later one, and one nobody has installed', () => {
   const settings = consultSettingsFrom(reader({
     consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus' } },
