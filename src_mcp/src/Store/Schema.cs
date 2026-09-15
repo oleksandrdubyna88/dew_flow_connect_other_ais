@@ -28,7 +28,7 @@ internal static class Schema
     // Consultations is LAST because main's WhoCalled shipped first: a file migrated by that build
     // already records three steps, so inserting ahead of it would leave those databases without the
     // consultations table while believing they had run every step.
-    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations];
+    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -206,5 +206,16 @@ internal static class Schema
         ALTER TABLE rounds ADD COLUMN caller_client         TEXT NOT NULL DEFAULT '';
         ALTER TABLE rounds ADD COLUMN caller_client_version TEXT NOT NULL DEFAULT '';
         ALTER TABLE rounds ADD COLUMN caller_model          TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>The other end of the range a code round read.</summary>
+    /// <remarks>
+    /// <c>head_sha</c> shipped alone, and one end of a range does not describe a diff. The base is
+    /// also the half that cannot be recovered afterwards: the commit stays in the repository whether
+    /// or not anybody wrote it down, while the ref the diff was resolved against lives in a local
+    /// for the length of one call and is then gone for good.
+    /// </remarks>
+    internal const string WhatItWasAgainst = """
+        ALTER TABLE rounds ADD COLUMN base_ref TEXT NOT NULL DEFAULT '';
         """;
 }

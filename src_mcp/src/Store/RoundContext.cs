@@ -41,6 +41,20 @@ public readonly record struct RoundContext(
     ImmutableArray<Finding> ReRaised = default,
     string AgentLog = "")
 {
+    /// <summary>What the diff the reviewers read was actually compared against.</summary>
+    /// <remarks>
+    /// <para><see cref="HeadSha"/> names one end of a range. Without the other end a code round's
+    /// diff cannot be rebuilt from this store at all — and the base is unrecoverable the moment the
+    /// round is over, because nothing else on the machine remembers what it was.</para>
+    /// <para>The RESOLVED base, not the ref the caller asked for. The two differ whenever the merge
+    /// base is used instead of the ref itself — a case the round already warns its reviewers about
+    /// in as many words — and it is the resolved one that makes the diff reconstructible.</para>
+    /// <para>An init property rather than a constructor parameter, for the same reason
+    /// <see cref="Finding.Role"/> is one: every existing call site keeps working, and a round
+    /// recorded by an older build simply has none.</para>
+    /// </remarks>
+    public string BaseRef { get; init; } = string.Empty;
+
     /// <summary>Whether this finding is one the caller had already rejected.</summary>
     /// <remarks>
     /// Through the product's OWN rule for "the same defect" — same category, same file, lines within

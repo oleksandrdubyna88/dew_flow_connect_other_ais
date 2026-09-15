@@ -677,6 +677,24 @@ having: that is the blind-spot corpus. A **rejection** is a disagreement, and on
 raises again is flagged `re_raised` — the gate discounts those, and a disagreement the caller keeps
 defending is the more interesting kind.
 
+### What the diff was against (`base_ref`, 2026-09-15)
+
+`rounds.head_sha` is the commit the reviewers read. It is one end of a range, and until this column
+a code round's diff could not be rebuilt from the store at all — the base lived in a local inside the
+call that resolved it and was gone the moment that call returned. It is also the only fact about a
+round the repository does not keep on its own behalf: the commit stays in the object database whether
+or not anybody wrote it down, the base does not.
+
+It is the **resolved** base, not the ref the caller named. `main` becomes the merge base of main and
+the branch, which is what the diff was actually taken against, and when the two share no ancestor the
+round already tells its reviewers so in as many words. Recording the ref would store the question
+rather than the answer.
+
+It travels out on `RoundWork`, because the stage that assembles the diff is the only thing that
+resolves it and the round is written down long after that call returned. A plan round assembles no
+diff and leaves it empty, and so does every round recorded before this column existed — which is the
+honest value rather than a gap: a base nobody resolved is not a base.
+
 ### Which AI called it, and which model (issue #174, 2026-09-13)
 
 `rounds.caller` is the calling agent's own SESSION id. Four more columns say who that agent **is**:

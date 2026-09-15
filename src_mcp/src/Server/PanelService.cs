@@ -586,12 +586,18 @@ public sealed partial class PanelService
                         round, NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                return WithSkippedByRule(
+                var built = WithSkippedByRule(
                     BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses),
                     notAsked);
+
+                // The RESOLVED base, not `baseRef`: when the two differ the reviewers are told so a
+                // few lines above, and it is the resolved one the diff was actually taken against.
+                // Recorded here because this local is the only place it exists — by the time the
+                // round is written down the call that computed it has returned.
+                return built with { BaseRef = collected.ComparedAgainst };
             })
             { RolesPerVendor = PanelConfig.CodeRoleNames.Length },
             ct);
@@ -1316,7 +1322,12 @@ public sealed partial class PanelService
                     merged,
                     // Which AI asked for it rides on `record` itself — see RoundContext's remarks.
                     new Store.RoundContext(
-                        planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record)));
+                        planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))
+                    {
+                        // From the work, because the stage that assembled the diff is the only thing
+                        // that resolved it. A plan round assembles none and leaves this empty.
+                        BaseRef = roundWork.BaseRef,
+                    });
 
                 // Phase 2's instrument, and NOTHING is called: how many findings this round handed
                 // back that the caller had already accepted and fixed. It is counted here because
@@ -2592,6 +2603,16 @@ internal sealed record RoundWork(
     IReadOnlyList<SkippedRole> NotAsked,
     IReadOnlyList<ExcludedRole> Excluded)
 {
+    /// <summary>What the diff in this work was RESOLVED against, for the record of the round.</summary>
+    /// <remarks>
+    /// The stage that assembles the diff is the only place that knows this — the caller names a ref,
+    /// and what the diff is actually taken against may be the merge base of that ref instead. It
+    /// rides back out on the work because the round that records it runs after the assembling is
+    /// done and has no other way to reach the local it lived in. Empty for a plan round, which
+    /// compares nothing.
+    /// </remarks>
+    public string BaseRef { get; init; } = string.Empty;
+
     public RoundWork(IReadOnlyList<ReviewerWork> reviewers, IReadOnlyList<SkippedRole> notAsked)
         : this(reviewers, notAsked, [])
     {
