@@ -17,7 +17,7 @@ import {
   sameVendorNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
-import { consultantBody } from '../consultantView';
+import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
 import { consultantRecordUpdate, envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
 import { Vendor, vendorsFrom } from '../vendors';
@@ -592,18 +592,36 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
 // ---------------------------------------------------------------------------------------------
 // Which rows may be consulted
 
-test('a vendor that cannot hold a conversation is NAMED with its reason, never filtered away', () => {
-  const { offered, refused } = consultableVendors([
-    vendor('codex'),
-    vendor('remsoftdev-claude', 'remote'),
-    vendor('gem', 'gemini'),
-    vendor('off', 'claude', false),
-  ]);
+test('a catalogue entry that cannot hold a conversation is NAMED with its reason, never filtered away', () => {
+  const { offered, refused } = consultableVendors();
 
-  assert.deepEqual(offered.map((one) => one.id), ['codex']);
-  assert.deepEqual(refused.map((one) => one.vendor.id), ['remsoftdev-claude', 'gem', 'off']);
-  assert.match(refused[0]!.why, /remote/, 'the reason must name the runtime, or it explains nothing');
-  assert.equal(refused[2]!.why, 'switched off');
+  assert.ok(!offered.some((one) => one.id === 'gemini'), 'the retired Gemini preset cannot consult');
+  assert.deepEqual(refused.map((one) => one.id), ['gemini'],
+    'the only preset this build refuses is the retired one — anything else missing would be a silent gap');
+  assert.match(refused[0]!.why, /gemini/, 'the reason must name the runtime, or it explains nothing');
+  assert.ok(refused[0]!.label.length > 0, 'a person reads the label, not the id');
+});
+
+test('no Team server can be offered as a consultant, by construction rather than by a filter', () => {
+  // The ruling's third clause. It holds because `remote` rows are not in VENDOR_PRESETS at all —
+  // the chat appends its servers separately — so there is no filter here that somebody could
+  // forget, and no reachable input that would put one in the list.
+  const { offered, refused } = consultableVendors();
+
+  assert.ok(!offered.some((one) => one.runtime === 'remote'));
+  assert.ok(!refused.some((one) => one.id.includes('-')), 'a Team-server row id is `<server>-<vendor>`, and none can reach this list');
+});
+
+test('the picker is the CATALOGUE — every consulting preset is offered, whatever is in Reviewers', () => {
+  const { offered } = consultableVendors();
+
+  assert.deepEqual(
+    offered.map((one) => one.id),
+    ['codex', 'antigravity', 'claude', 'deepseek', 'openrouter', 'local'],
+    'the list a person can pick from is what the product SUPPORTS, not what somebody happens to review with',
+  );
+  assert.ok(offered.every((one) => one.label.length > 0 && one.hint.length > 0),
+    'each entry carries the label and the sentence Add a reviewer shows — one catalogue, read the same way twice');
 });
 
 test('the offered runtimes are the ones the server can actually resolve', () => {
@@ -614,102 +632,138 @@ test('the offered runtimes are the ones the server can actually resolve', () => 
 });
 
 // ---------------------------------------------------------------------------------------------
-// The section itself
+// The section itself — decided as a VALUE, rendered as markup
 
-const rows = [vendor('codex'), vendor('claude', 'claude'), vendor('antigravity', 'antigravity')];
+/** One caller's row, resolved the way the reader resolves it, then decided the way the section does. */
+function viewOf(stored: ConsultantChoice, rows: readonly Vendor[] = [], caller = 'claude'): ConsultantRowView {
+  const settings = {
+    ...DEFAULT_CONSULT,
+    byCaller: { ...DEFAULT_CONSULT.byCaller, [caller]: resolveConsultant(stored, rows) },
+  };
 
-// A `byCaller` fixture goes through `resolveConsultant` with the SAME rows the body is handed, which
-// is what the reader does: the map holds the rule's answers, and a hand-built one would either be a
-// definition the rows contradict or a fixture typed by an `as`.
+  return consultantRowView({ id: caller, label: 'Claude Code' }, settings, {});
+}
+
+test("a consultant the catalogue knows is offered under the catalogue's own label", () => {
+  const view = viewOf(definition('codex', 'codex'));
+
+  assert.equal(view.state, 'offered');
+  assert.equal(view.vendor, 'codex');
+  assert.ok(view.options.some((one) => one.value === 'codex' && one.label === 'Codex (OpenAI)'),
+    'the row offers an internal id where Add a reviewer offers a name');
+});
+
+test('a consultant the catalogue does NOT know stays selected, labelled from what it is', () => {
+  // Every custom endpoint is one of these, and so is a preset this build retires. Falling through to
+  // the first offered entry would show a pair nobody chose and offer it as valid.
+  const view = viewOf(definition('mine', 'codex', '', 'https://api.example.com/v1'));
+
+  assert.equal(view.state, 'stranded');
+  assert.equal(view.options[0]!.value, 'mine', 'the stored choice is not in the catalogue and must still be the selected one');
+  assert.match(view.options[0]!.label, /mine — your own, on codex at https:\/\/api\.example\.com\/v1/);
+  assert.ok(view.options.some((one) => one.value === 'codex'), 'and the catalogue is still offered beside it');
+});
+
+test('an entry the rule cannot place carries its REASON and offers no model', () => {
+  const view = viewOf(legacy('retired-thing'), []);
+
+  assert.equal(view.state, 'unavailable');
+  assert.deepEqual(view.models, [], "offering another runtime's models would be a choice nobody made");
+  assert.equal(view.hints.length, 1);
+  assert.match(view.hints[0]!, /retired-thing/, 'the reason names the vendor, and it comes from the rule that refused it');
+});
+
+test('a row carries only the settings its runtime actually has', () => {
+  const codex = viewOf(definition('codex', 'codex'));
+  const claude = viewOf(definition('claude', 'claude'));
+  const local = viewOf(definition('local', 'local'));
+
+  assert.deepEqual([codex.takesBaseUrl, codex.takesExecutablePath], [true, true]);
+  assert.deepEqual([claude.takesBaseUrl, claude.takesExecutablePath], [false, true],
+    'the Claude CLI has no OpenAI-compatible endpoint to point anywhere');
+  assert.deepEqual([local.takesBaseUrl, local.takesExecutablePath], [true, false],
+    'a local engine is an endpoint and not a CLI');
+});
+
+test('the section says what this build cannot consult through, rather than offering it silently', () => {
+  // ConsultantResolution matches `"codex" when vendor.BaseUrl.Length == 0` and answers CannotConsult
+  // for everything else, which ConsultantsTests pins. So DeepSeek, OpenRouter and any custom endpoint
+  // are storable and not runnable, and the row has to say so.
+  const custom = viewOf(definition('deepseek', 'codex', 'deepseek-chat', 'https://api.deepseek.com/v1'));
+  const plain = viewOf(definition('codex', 'codex'));
+
+  assert.ok(custom.hints.some((hint) => /custom endpoint/.test(hint)),
+    'a consultant this build refuses by name must say so where it is chosen');
+  assert.ok(!plain.hints.some((hint) => /custom endpoint/.test(hint)), 'and a plain codex consultant must not');
+});
+
+test('a caller pointed at its own vendor is told what to think, and no other caller is', () => {
+  assert.ok(viewOf(definition('claude', 'claude'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
+  assert.ok(!viewOf(definition('codex', 'codex'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
+});
 
 test('every caller kind gets a row of its own, keyed by the caller', () => {
-  const html = consultantBody(DEFAULT_CONSULT, { vendors: rows });
+  const html = consultantBody(DEFAULT_CONSULT, {});
 
   for (const { id, label } of CALLER_KINDS) {
     assert.ok(html.includes(`data-caller="${id}"`), `${id} has no row`);
     assert.ok(html.includes(`${label} asks`), `${label} is not named in words`);
   }
-  // Two controls per row, and both carry the caller: without it the provider would write whichever
-  // of the four the document holds first.
+  // Every control carries the caller: without it the provider would write whichever of the four the
+  // document holds first. The two selects are on every row; the two inputs only where the runtime
+  // has them, which is why they are counted against the rows that take one.
   assert.equal((html.match(/data-setting="consultVendor" data-caller=/g) ?? []).length, CALLER_KINDS.length);
   assert.equal((html.match(/data-setting="consultModel" data-caller=/g) ?? []).length, CALLER_KINDS.length);
+  const takingAPath = CALLER_KINDS.filter(({ id }) => consultantRowView({ id, label: id }, DEFAULT_CONSULT, {}).takesExecutablePath);
+  assert.equal((html.match(/data-setting="consultExecutablePath" data-caller=/g) ?? []).length, takingAPath.length);
 });
 
-test('a saved vendor that no longer resolves is stranded in the list, not replaced', () => {
+test('a saved model is kept whatever the vendor lists, and named for what it is', () => {
+  // Two different keepers, and they belong to different states. On a row with a RUNTIME, `modelsFor`
+  // keeps a model it does not know and marks it as yours — the same function the reviewer cards use,
+  // so the two sections cannot label one model two ways.
+  const known = viewOf(definition('codex', 'codex', 'gpt-4'));
+
+  assert.equal(known.model, 'gpt-4');
+  assert.ok(known.models.some((one) => one.id === 'gpt-4' && /yours/.test(one.label)),
+    'the shared model list is what keeps it, and it says whose it is');
+
+  // On an UNAVAILABLE row there is no runtime to ask for a list at all, so the saved model would
+  // vanish from the very row asking about it. The section keeps it and names it for what it is.
+  const unplaceable = viewOf(legacy('retired-thing', 'r1'), []);
+
+  assert.deepEqual(unplaceable.models, []);
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('deepseek'), rows) } },
-    { vendors: rows },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('retired-thing', 'r1'), []) } },
+    {},
   );
-
-  assert.match(html, /deepseek — not configured any more/);
-  // Falling through to the first offered row would show a pair nobody chose and offer it as valid.
-  assert.match(html, /<option value="deepseek"[^>]*selected/);
-});
-
-test('a saved model is kept whatever the vendor lists, and both ways of saying so are on screen', () => {
-  // A vendor that IS configured: the reviewers' own model list keeps a value it does not know and
-  // marks it as yours — the same function, so the two sections cannot label one model two ways.
-  const configured = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('codex', 'gpt-4'), rows) } },
-    { vendors: rows, codexModels: [{ id: 'gpt-5.6-luna', label: 'gpt-5.6-luna' }] },
-  );
-  assert.match(configured, /<option value="gpt-4" selected>gpt-4 \(yours\)/);
-
-  // A vendor that is NOT configured any more has no model list at all, so the saved model would
-  // vanish from the row that is asking about it. It is kept, and named for what it is.
-  const stranded = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('deepseek', 'r1'), rows) } },
-    { vendors: rows },
-  );
-  assert.match(stranded, /r1 — not offered by this vendor/);
-});
-
-test('with nothing consultable the sentence is said BESIDE the rows, never instead of them', () => {
-  const onlyGemini = [vendor('gem', 'gemini')];
-  const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('codex'), onlyGemini) } },
-    { vendors: onlyGemini },
-  );
-
-  assert.match(html, /No configured vendor can hold a consultation yet/);
-  // The rows stay: this is the one moment a person is deciding what to configure, and what each
-  // caller is already set to is what they need to see. (codex, the code round.)
-  for (const { id } of CALLER_KINDS) {
-    assert.ok(html.includes(`data-caller="${id}"`), `${id} lost its row when nothing could answer`);
-  }
-  assert.match(html, /codex — not configured any more/);
-  // The vendor is still named with its reason — it is configured, and a person can see it is.
-  assert.match(html, /gem cannot consult/);
-});
-
-test('a reviewer switched off says SO, rather than reading as one that was deleted', () => {
-  const withOff = [...rows, vendor('off', 'claude', false)];
-  const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('off'), withOff) } },
-    { vendors: withOff },
-  );
-
-  assert.match(html, /off — switched off in Reviewers/);
-  assert.ok(!html.includes('off — not configured any more'), 'the row contradicted the sentence underneath it');
+  assert.match(html, /r1 — not offered by this vendor/);
 });
 
 test('a vendor id is escaped, because it is a name a person typed', () => {
+  // A source assertion on purpose: there is no program to run for "this value appears escaped", and
+  // `.agents/PROJECT.md` keeps exactly that case legitimate.
   const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: resolveConsultant(legacy('<script>x</script>'), rows) } },
-    { vendors: rows },
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: resolveConsultant(legacy('<script>x</script>'), []) } },
+    {},
   );
 
   assert.ok(!html.includes('<script>x</script>'));
 });
 
-test('the default model option keeps its noun when the row has no model of its own', () => {
-  const html = consultantBody(DEFAULT_CONSULT, { vendors: rows });
+test("the empty model option names the RUNTIME's default, because there is no row to borrow from", () => {
+  const html = consultantBody(DEFAULT_CONSULT, {});
 
-  assert.match(html, /<option value="" selected>the row’s own model<\/option>/);
+  assert.match(html, /<option value="" selected>the runtime’s own default<\/option>/);
+  assert.ok(!html.includes('the row’s own'), 'the consultant stopped borrowing a reviewer row, and the words followed');
+});
+
+test("the section says these settings are the consultant's own", () => {
+  assert.match(consultantBody(DEFAULT_CONSULT, {}), /These are the CONSULTANT’s own settings|These are the CONSULTANT's own settings/);
 });
 
 test('the three caps are on screen with the numbers in force', () => {
-  const html = consultantBody({ ...DEFAULT_CONSULT, turns: 3, callsPerSession: 4, idleMinutes: 30 }, { vendors: rows });
+  const html = consultantBody({ ...DEFAULT_CONSULT, turns: 3, callsPerSession: 4, idleMinutes: 30 }, {});
 
   assert.match(html, /data-setting="consultTurns" value="3"/);
   assert.match(html, /data-setting="consultCallsPerSession" value="4"/);
@@ -718,12 +772,12 @@ test('the three caps are on screen with the numbers in force', () => {
 });
 
 test('the prompt box shows the override on disk, and says what empty means', () => {
-  const shipped = consultantBody(DEFAULT_CONSULT, { vendors: rows });
+  const shipped = consultantBody(DEFAULT_CONSULT, {});
   assert.match(shipped, /data-setting="consultPrompt" data-file="consult.md"/);
   assert.match(shipped, /Empty is the prompt this build ships with/);
   assert.match(shipped, /data-command="restoreConsultPrompt"/);
 
-  const edited = consultantBody(DEFAULT_CONSULT, { vendors: rows, consultPrompt: 'Answer <b>briefly</b>.' });
+  const edited = consultantBody(DEFAULT_CONSULT, { consultPrompt: 'Answer <b>briefly</b>.' });
   assert.match(edited, /Answer &lt;b&gt;briefly&lt;\/b&gt;\./, 'a prompt is text, and it is escaped like every other value');
 });
 
@@ -740,7 +794,7 @@ test('a caller-keyed control is routed by its caller, not as a vendor called `cl
   assert.equal(settingWrite({ key: 'consultVendor', value: 'x', vendor: 'claude', caller: 'claude' })?.kind, 'caller');
 });
 
-test('writing one caller keeps the other three, and a new vendor clears the model', () => {
+test('writing one caller keeps the other three, and a new vendor brings its OWN model', () => {
   const stored = {
     claude: { vendor: 'codex', model: 'gpt-5.6-luna' },
     codex: { vendor: 'claude', model: 'opus' },
@@ -748,8 +802,12 @@ test('writing one caller keeps the other three, and a new vendor clears the mode
 
   const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'antigravity', []);
 
-  assert.deepEqual(changed['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: '' },
-    'a model named for one vendor is not a model the next one offers');
+  // The old vendor's model goes — a model named for one vendor is not a model the next one offers —
+  // and what replaces it is the CATALOGUE entry's own, since story C5: picking `Antigravity (Google)`
+  // here stores exactly what picking it in *Add a reviewer* would, because it is the same catalogue.
+  // Antigravity ships a default model of its own, and a row without one cannot run.
+  assert.deepEqual(changed['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high' },
+    'the vendor a person picked is stored as the catalogue describes it');
   assert.deepEqual(changed['codex'], stored['codex'], 'the callers nobody touched must survive the write');
 
   const model = consultantRecordUpdate(changed, 'claude', 'consultModel', 'gemini-3.7-flash-high', []);
@@ -776,14 +834,20 @@ test('changing a model writes the caller\u0027s whole definition, not a bare ref
     'the edit must materialise the runtime and the CLI path the entry was borrowing, not write a reference again');
 });
 
-test('choosing a vendor writes the model that vendor will actually use', () => {
+test('choosing a vendor stores the CATALOGUE entry, never a reviewer row of the same name', () => {
+  // Changed deliberately in story C5, and it is the last place the consultant reached into somebody
+  // else's settings. Until then, picking `codex` borrowed the model off a reviewer row that happened
+  // to share the name — which is the borrowing this whole plan removes, arriving by the back door at
+  // the moment of choosing. A person who wants that model picks it in the box beside the vendor,
+  // where they can see it. The reviewer row here is deliberately tuned differently to prove it is
+  // not consulted.
   const stored = { claude: { vendor: 'antigravity', model: 'gemini-3.7' } };
-  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna' }];
+  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna', executablePath: 'C:/someone-elses/codex.cmd' }];
 
   const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'codex', rows);
 
-  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' },
-    'the row lends its model to a consultant that names no model of its own, so that is what is stored');
+  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: '' },
+    'the catalogue describes plain codex, and that is what a person picking it asked for');
 });
 
 test('an empty vendor id is never written', () => {
@@ -847,7 +911,9 @@ test('a new vendor leaves none of the old one\u0027s endpoint or CLI path behind
 
   const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'claude', []);
 
-  assert.deepEqual(changed['claude'], { vendor: 'claude', runtime: 'claude', model: '' },
+  // `claude` in the catalogue ships `haiku`, so that is what a person picking it gets — the endpoint
+  // and CLI path of the vendor they left behind are what must not survive.
+  assert.deepEqual(changed['claude'], { vendor: 'claude', runtime: 'claude', model: 'haiku' },
     'the row is REPLACED by what the new vendor resolves to; a merge would have left DeepSeek\u0027s endpoint pointing out of a Claude consultant');
 });
 
@@ -903,6 +969,21 @@ test('choosing the vendor that is already chosen keeps the consultant\u0027s own
 
   assert.deepEqual(changed['claude'], stored['claude'],
     'clearing the model is for a vendor CHANGE; re-sending the vendor already chosen must not hand the row\u0027s values back over the person\u0027s own');
+});
+
+test('choosing a catalogue entry that is not itself a runtime writes THAT preset’s definition', () => {
+  // `deepseek` and `openrouter` name no runtime and need no reviewer row: what they ARE is a
+  // runtime plus an endpoint, and that is exactly what the catalogue holds. Stored as a bare
+  // reference they resolve to UNAVAILABLE — so the picker would offer an entry the section then
+  // draws as unplaceable, in one gesture.
+  const changed = consultantRecordUpdate({}, 'claude', 'consultVendor', 'deepseek', []);
+
+  assert.deepEqual(changed['claude'], {
+    vendor: 'deepseek',
+    runtime: 'codex',
+    model: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com/v1',
+  }, 'the catalogue entry a person picked is what has to be stored — its runtime and its endpoint, never its name alone');
 });
 
 test('a field this build does not know inside a caller\u0027s row survives an edit beside it', () => {

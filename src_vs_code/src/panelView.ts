@@ -313,8 +313,11 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('consultant', 'Consultant', open,
       `<div id="live-consultations">${consultationsBody(state.consultations ?? [], nowMs)}</div>`
       + consultantSkew(state)
+      // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
+      // borrowed a reviewer row is the defect this plan ended. The rows still reach the PANEL — the
+      // skew note above reads them, because what an older server does with a definition is decided
+      // through them.
       + consultantBody(state.settings.consult, {
-        vendors: state.vendors,
         codexModels: state.codexModels,
         agyModels: state.agyModels,
         consultPrompt: state.consultPrompt,

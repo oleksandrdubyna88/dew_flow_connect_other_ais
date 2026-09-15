@@ -19,6 +19,7 @@ import {
   ConsultSettings,
   DEFAULT_CONSULT,
   ResolvedConsultant,
+  consultableVendors,
   consultantChoiceFrom,
   consultSettingsFrom,
   CONSULT_SETTINGS,
@@ -302,7 +303,37 @@ function vendorChosen(
 
   return id === starting.vendor
     ? merged(current, caller, resolveConsultant(starting, vendors), current[caller])
-    : merged(current, caller, resolveConsultant(bareReference(id), vendors), undefined);
+    : merged(current, caller, chosen(id, vendors), undefined);
+}
+
+/**
+ * What a newly picked vendor MEANS — the catalogue first, since story C5.
+ *
+ * <p>The picker offers the catalogue now, so what a person chose is a CATALOGUE ENTRY, and the entry
+ * says what it is: DeepSeek is the codex runtime at `api.deepseek.com`, OpenRouter is the codex
+ * runtime at theirs. Resolving the bare id instead — which is all this did before — sent both of them
+ * to the UNAVAILABLE state, because no reviewer row of that name exists and neither id is a runtime:
+ * the section offered an entry that could not be stored.</p>
+ *
+ * <p>It also settles a question the ruling had already answered. For an id that IS a runtime name,
+ * this stores the plain runtime rather than the model of a reviewer row with the same name. That is
+ * the point of the whole plan — three independent sets of settings — and it is the last place the
+ * consultant was still reaching into somebody's reviewer. A person who wants that model chooses it
+ * in the box beside the vendor, where they can see it.</p>
+ */
+function chosen(id: string, vendors: readonly Vendor[]): ResolvedConsultant {
+  const preset = consultableVendors().offered.find((one) => one.id === id);
+
+  return preset === undefined
+    ? resolveConsultant(bareReference(id), vendors)
+    : {
+      kind: 'definition',
+      vendor: preset.id,
+      runtime: preset.runtime,
+      model: preset.model,
+      baseUrl: preset.baseUrl,
+      executablePath: preset.executablePath,
+    };
 }
 
 function fieldEdited(
