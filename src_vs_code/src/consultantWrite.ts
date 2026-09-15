@@ -166,11 +166,19 @@ export function endpointConflict(
   const clash = holders(vendors, consultants, caller)
     .find((one) => one.id.toLowerCase() === id.toLowerCase() && one.baseUrl !== wanted);
 
-  return clash === undefined
-    ? ''
-    : `'${id}' is already ${clash.what}${clash.baseUrl.length > 0 ? ` at ${clash.baseUrl}` : ''}`
-      + ' — one name is one key in the vault, so pick another name'
-      + (clash.baseUrl.length > 0 ? ' or use that endpoint' : '');
+  if (clash === undefined) {
+    return '';
+  }
+
+  // Both halves named, because a holder can have no endpoint of its own — `claude` is a catalogue
+  // preset and a vault key with no URL — and the sentence then has neither a place to name nor an
+  // endpoint to offer. Inline this was a ternary inside a template literal inside a ternary, which
+  // SonarCloud flagged three times over and was right to.
+  const where = clash.baseUrl.length > 0 ? ` at ${clash.baseUrl}` : '';
+  const orUseIt = clash.baseUrl.length > 0 ? ' or use that endpoint' : '';
+
+  return `'${id}' is already ${clash.what}${where}`
+    + ` — one name is one key in the vault, so pick another name${orUseIt}`;
 }
 
 /**
@@ -235,8 +243,8 @@ const CREDENTIAL_WORDS: readonly string[] = [
  */
 function carriesAKey(parsed: URL): boolean {
   const named = [
-    ...[...parsed.searchParams.keys()],
-    ...[...new URLSearchParams(parsed.hash.replace(/^#/, '')).keys()],
+    ...parsed.searchParams.keys(),
+    ...new URLSearchParams(parsed.hash.replace(/^#/, '')).keys(),
   ];
 
   return named.some((name) => CREDENTIAL_WORDS.some((word) => name.toLowerCase().includes(word)));
