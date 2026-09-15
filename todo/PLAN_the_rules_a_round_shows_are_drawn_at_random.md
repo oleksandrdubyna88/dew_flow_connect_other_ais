@@ -71,9 +71,13 @@ block they have never had.
 
 ## What must be true when this is done
 
-1. The same change, reviewed twice, shows the **same rules, byte for byte** — with no cache, no session
-   hash and no seeded draw. Selection is a pure function of *(stage, changed paths, symbols in the
-   added lines)*, and **so is every fallback path**.
+1. The same change, reviewed twice **at the same rule-source revision**, shows the **same rules, byte
+   for byte** — with no cache, no session hash and no seeded draw. Selection is a pure function of
+   *(stage, changed paths, symbols in the added lines, rule-source revision)*, and **so is every
+   fallback path**. The revision is part of the input, not an assumption: the plan and document gates
+   read rules from `repoPath` at HEAD while the code stage reads them from the worktree, and a promoted
+   `release` pin changes the corpus under both — so two rounds across such a change are *different*
+   inputs and are expected to differ. The tests assert identity within one revision and say so.
 2. A rule is in the prompt **because something in the change selected it**, and the round can say which
    reason.
 3. What did not fit is still **named**, and so is a mount that gave nothing. A reviewer told nothing
@@ -107,6 +111,14 @@ block they have never had.
 - **The budget is the bundle's, not the prompt's.** `PlanBytes`/`DocumentBytes` in the log line are
   measurements, not caps; the rules bundle carries its own 80 000-byte budget at every stage, and
   nothing silently truncates one to make room for the other.
+- **The three selection paths are alternatives, not pools that merge.** Exactly one answers a round,
+  and the precedence is fixed: *(a)* a resolver manifest, when the stage has selectors and the resolver
+  answered — candidates are the manifest's rules in canonical order, each carrying its `reasons`;
+  *(b)* the **static stage set**, for a stage with no diff to select from (plan, document); *(c)* the
+  **deterministic fallback walk**, only when a path that should have produced a manifest failed. A
+  round never unions (a) with (c) — a fallback that quietly added rules to a successful selection would
+  reintroduce exactly the "why is this rule here" the manifest's `reasons` exist to answer — and the
+  prompt names which path answered.
 
 ## Build order
 
@@ -126,7 +138,10 @@ shape, to be confirmed by that split rather than to replace it.
    rules; neither gets `dotnet-build`, `nuget-packages` or `logging-serilog`. **This set is not deleted
    when epic 2 lands** — it is the baseline for a stage with no diff, and it is retired only when a
    `--task plan` invocation with no `--file` has been shown, against the promoted `release` vocabulary,
-   to return the same rules or better (finding 15).
+   to return the same rules or better (finding 15). **Each baseline is retired against its own task**:
+   the plan baseline needs the `--task plan` equivalence, the document baseline a `--task docs` one.
+   They are different sets, so one equivalence proves nothing about the other, and a baseline whose
+   equivalence has not been run stays permanent.
 4. Re-check `RolesWithRulesInMind` — the Conventions-role gating was written when only the code stage
    had rules, and a stage that now has them must not inherit the rule-less assumption. The sentence
    that tells the caller WHY a Conventions reviewer was skipped already ships
@@ -199,12 +214,21 @@ nobody can answer "why was this rule shown?". Path globs and topic tags answer i
     replaced by the determinism tests. `ADozenRealRuleFiles_FitTheDefaultBudget`
     ([:313](../src_mcp/tests/RuleFilesTests.cs#L313)) stays and gains a selected-payload sibling.
 15. **The fallback walk is deterministic too, and it does not starve** (findings 11, 17). `FolderFiles`
-    already sorts its candidates ([RuleFiles.cs:263](../src_mcp/runners/Context/RuleFiles.cs#L263)), so
-    the ordering exists — what is missing is a test that pins it and a priority that survives the
-    budget: instruction files, then this repository's own rules, then the mount's rules by category
-    order rather than by the alphabet that put `development-workflow.md` and `http-contracts.md` first
-    in 2026-09-06. Without this, deleting the draw restores the starvation it was installed against on
-    exactly the path that runs when the resolver is unavailable.
+    ([RuleFiles.cs:263](../src_mcp/runners/Context/RuleFiles.cs#L263)) de-duplicates its candidates and
+    then sorts them by case-insensitive PATH alone — which is an order, but not a priority: it is the
+    alphabet that put `development-workflow.md` and `http-contracts.md` first in 2026-09-06 and starved
+    the doctrines. **The canonical fallback order, defined here and asserted in the tests**:
+
+    1. the instruction files, in `InstructionFiles` order (they are the entry points and always fit);
+    2. this repository's own rules (`.agents/rules`), by ordinal path;
+    3. the mount's rules by CATEGORY — `common/` first, then the language directory matching the
+       change's own file extensions, then the remaining language directories in ordinal order;
+    4. within a category, by ordinal path;
+    5. ties, which after 4 can only be a duplicate path, resolved by rule id.
+
+    Ordinal, not culture- or case-sensitive comparison, so the order does not depend on the machine.
+    Without this, deleting the draw restores the starvation it was installed against — on exactly the
+    path that runs when the resolver is unavailable.
 16. **Record the measurement** the draw's removal is no longer gated on: for a representative diff, how
     much of the budget the selected payload uses and which rules were omitted. It is evidence about the
     policy's quality, and the input to the modularization follow-up — not a precondition for landing.
@@ -251,6 +275,14 @@ It targets the discovery plan's code rather than this one, and its premise does 
 round gets its own linked worktree (`_worktrees.AddAsync(repoPath, sha, sessionId, round)`), and `open`
 prunes what a killed session left behind, so two rounds cannot populate one directory.
 
+**The automated reviewer on the pull request** (CodeRabbit, 2026-09-15) added four, all accepted: the
+byte-identical guarantee had to be scoped to a rule-source revision, since the corpus moves under a
+`release` promotion; each static baseline is retired against its OWN task equivalence, plan and
+document being different sets; the three selection paths are alternatives with a stated precedence
+rather than pools that merge; and the fallback needed its category order written down, because
+`FolderFiles` sorts by path alone — an order, but not a priority, and it is the alphabet that caused
+the starvation in the first place.
+
 ## Test plan
 
 xUnit v3 on Microsoft Testing Platform — build, then run the **executable**; never `dotnet test`:
@@ -278,9 +310,12 @@ dotnet build dew_flow_connect_other_ais.slnx
 | 3 | `ATokenInAnAddedLine_SelectsItsTopic` / `…InARemovedLine_DoesNot` | added lines only |
 | 3 | `ARuleWithNoTopics_IsStillSelectedByItsTasksAndPaths` | topics are additive |
 | 3 | `TheSameDiffTwice_SelectsTheSameTopics` | purity |
-| 4 | `TwoRoundsOverTheSameChange_ShowByteIdenticalRules` | replaces the two shuffle tests |
+| 4 | `TwoRoundsOverTheSameChange_AtOneRuleRevision_ShowByteIdenticalRules` | replaces the two shuffle tests |
 | 4 | `TwoRoundsThroughTheFallbackPath_ShowByteIdenticalRules` | the path finding 11 named |
 | 4 | `TheFallbackOrder_ShowsTheDoctrines_NotOnlyTheTwoLongestFiles` | the 2026-09-06 starvation |
+| 4 | `TheFallbackOrder_TakesCommonBeforeTheLanguageDirectories_ByCategoryNotAlphabet` | the category order of step 15 |
+| 4 | `ARuleRevisionChange_IsADifferentInput_AndIsNotAssertedIdentical` | scopes the guarantee honestly |
+| 1 | `TheDocumentBaselineIsRetired_OnlyAgainstATaskDocsEquivalence` | one baseline, one equivalence |
 
 Epic 1 reports the RED failure message before the fix as well as the pass after it; every epic reports
 the runner's own output.
