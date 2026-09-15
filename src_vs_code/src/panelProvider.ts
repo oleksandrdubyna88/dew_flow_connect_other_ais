@@ -82,7 +82,15 @@ import {
   writeWslconfig,
   wslconfigWith,
 } from './wslNetwork';
-import { normaliseId, pinnedDocument, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
+import {
+  normaliseId,
+  pinnedDocument,
+  presetsOffered,
+  reviewerPickItems,
+  Vendor,
+  VENDOR_PRESETS,
+  vendorsFrom,
+} from './vendors';
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
 
 /**
@@ -2317,8 +2325,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private async addVendor(): Promise<void> {
     const existing = new Set(this.vendorsHere().map((v) => v.id));
-    // A preset already in the panel is not offered twice; the blank one (empty id) always is.
-    const offered = VENDOR_PRESETS.filter((p) => p.id.length === 0 || !existing.has(p.id));
+    // The catalogue is offered WHOLE. It used to drop any preset already in the panel, which made a
+    // second row of anything impossible and said nothing about why the entry had gone — the same
+    // one-way door VENDOR_PRESETS' own docblock records for gemini. A preset whose id is taken now
+    // comes with the next free one and an item that says so.
+    const offered = reviewerPickItems(presetsOffered(VENDOR_PRESETS, existing));
     // Only servers THIS SIDE holds a token for. One that is merely configured — or one signed in on
     // another side of this machine — can neither be asked what it offers nor run a review here, so
     // offering it would be a dead entry.
@@ -2329,15 +2340,30 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     );
     const picked = await vscode.window.showQuickPick(
       [
-        ...offered.map((p) => ({ label: p.label, detail: p.hint, preset: p, server: undefined })),
+        ...offered.map((p) => ({
+          label: p.label,
+          detail: p.detail,
+          description: p.description,
+          offered: p.offered,
+          server: undefined,
+        })),
         ...teamServers.map((s) => ({
           label: `Team server ${s.name}`,
           detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
-          preset: undefined,
+          description: '',
+          offered: undefined,
           server: s,
         })),
       ],
-      { title: 'Add a reviewer', placeHolder: 'Which vendor should review as well?' },
+      {
+        title: 'Add a reviewer',
+        placeHolder: 'Which vendor should review as well?',
+        // Both, and neither is decoration. Without matchOnDetail a person typing words from an
+        // entry's hint gets an empty list; without matchOnDescription the same happens to anyone
+        // typing the id a second row will take, which is only ever written in the description.
+        matchOnDetail: true,
+        matchOnDescription: true,
+      },
     );
     if (picked === undefined) {
       return;
@@ -2352,7 +2378,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    let vendor: Vendor = { ...picked.preset! };
+    // The id comes from the OFFERING, not from the preset: a second row of a configured vendor was
+    // allocated `<id>-2` there. The blank preset keeps its empty id, so the branch below still asks
+    // for a name and a URL rather than writing a row nobody named.
+    let vendor: Vendor = { ...picked.offered!.preset, id: picked.offered!.id };
     if (vendor.id.length === 0) {
       const own = await this.askCustomEndpoint('Add a reviewer');
       if (own === undefined) {

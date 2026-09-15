@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_VENDORS, normaliseId, VENDOR_PRESETS, vendorsEnv, vendorsFrom } from '../vendors';
+import {
+  DEFAULT_VENDORS,
+  freeVendorId,
+  normaliseId,
+  presetsOffered,
+  reviewerPickItems,
+  VENDOR_PRESETS,
+  vendorsEnv,
+  vendorsFrom,
+} from '../vendors';
 
 test('every default vendor can be added back after being removed', () => {
   // The one-way door the operator walked through: gemini shipped as a default but was missing
@@ -98,4 +107,82 @@ test('an absent path stays absent rather than becoming an empty string the serve
   const env = JSON.parse(vendorsEnv([{ id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }])) as Record<string, string>[];
 
   assert.equal(env[0]!['executablePath'], '');
+});
+
+// ---------- Add a reviewer: finding Claude Code, and adding a second of anything ----------
+//
+// Two separate things hid the Claude entry, and either alone reads as "the catalogue has no
+// Claude Code". The words were not in it — the quick pick filters on the label, and the label
+// said `Claude (a second one)` — and a preset whose id was already configured was dropped from
+// the list without a word, so an installation with a claude reviewer could not add a second.
+// That second half is the one-way door the docblock above VENDOR_PRESETS is already about.
+
+test('the Claude preset is one a person searching for Claude Code can find', () => {
+  // By id, not "some preset": an assertion that ANY label contains the words stays green while
+  // the claude entry keeps its old label and the search goes on failing. (codex, the plan round.)
+  const claude = VENDOR_PRESETS.find((p) => p.id === 'claude');
+
+  assert.ok(claude, 'the catalogue has no claude preset at all');
+  assert.match(claude.label, /Claude Code/, 'the words a person types are not in the label they filter on');
+  assert.match(
+    claude.label + ' ' + claude.hint,
+    /second/,
+    'the entry no longer says it is a SECOND, separate process — which is the thing that made it worth explaining',
+  );
+});
+
+test('a free id is the preset’s own when nothing holds it, and the next one when something does', () => {
+  assert.equal(freeVendorId('claude', new Set()), 'claude');
+  assert.equal(freeVendorId('claude', new Set(['claude'])), 'claude-2');
+  assert.equal(freeVendorId('claude', new Set(['claude', 'claude-2'])), 'claude-3');
+});
+
+test('a blank base comes back blank, so the custom-endpoint flow still asks for a name', () => {
+  // The blank preset names itself through askCustomEndpoint. Minting `-2` for it here would put a
+  // row in the settings under an id the person never chose, and skip the box that asks.
+  assert.equal(freeVendorId('', new Set(['claude'])), '');
+});
+
+test('a preset already configured is still offered, under a free id', () => {
+  const offered = presetsOffered(VENDOR_PRESETS, new Set(['claude']));
+
+  const claude = offered.find((one) => one.preset.id === 'claude');
+  assert.ok(claude, 'a preset already in the panel vanished from the list, which is the one-way door');
+  assert.equal(claude.id, 'claude-2', 'a second row would collide with the first');
+  assert.equal(claude.second, true, 'nothing would tell the person this adds another');
+
+  // Both halves of the condition, or this passes against a function that calls everything a second
+  // row: a preset nobody holds keeps its own id and is NOT marked.
+  const codex = offered.find((one) => one.preset.id === 'codex');
+  assert.ok(codex, 'the catalogue lost codex');
+  assert.equal(codex.id, 'codex');
+  assert.equal(codex.second, false);
+});
+
+test('every catalogue entry survives the offering, whatever is already configured', () => {
+  const taken = new Set(VENDOR_PRESETS.map((p) => p.id).filter((id) => id.length > 0));
+
+  const offered = presetsOffered(VENDOR_PRESETS, taken);
+
+  assert.equal(offered.length, VENDOR_PRESETS.length, 'the list is the catalogue, never what is left of it');
+});
+
+test('the item for a second row says which id it will take, and the others say nothing', () => {
+  const items = reviewerPickItems(presetsOffered(VENDOR_PRESETS, new Set(['claude'])));
+
+  const claude = items.find((one) => one.offered.preset.id === 'claude');
+  assert.ok(claude, 'the claude entry is not among the items');
+  assert.match(claude.description, /claude-2/, 'the person is not told what the new row will be called');
+
+  const codex = items.find((one) => one.offered.preset.id === 'codex');
+  assert.ok(codex, 'the codex entry is not among the items');
+  assert.equal(codex.description, '', 'an ordinary entry is dressed as though it were a duplicate');
+});
+
+test('a pick item carries the hint as its detail, which is the text the filter has to reach', () => {
+  const claude = reviewerPickItems(presetsOffered(VENDOR_PRESETS, new Set()))
+    .find((one) => one.offered.preset.id === 'claude');
+
+  assert.ok(claude);
+  assert.equal(claude.detail, VENDOR_PRESETS.find((p) => p.id === 'claude')!.hint);
 });

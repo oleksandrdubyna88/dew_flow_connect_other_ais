@@ -170,7 +170,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionOut: 0,
   },
   {
-    label: 'Claude (a second one)',
+    label: 'Claude Code (a second one)',
     hint: 'A separate claude -p process: it sees the plan and the diff, never the conversation that produced them.',
     id: 'claude',
     runtime: 'claude',
@@ -307,6 +307,79 @@ export function normaliseId(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+/** A catalogue entry: a vendor row with the two strings the pick shows. */
+export type VendorPreset = Vendor & { label: string; hint: string };
+
+/** A catalogue entry as the pick offers it, with the id the new row would actually take. */
+export interface OfferedPreset {
+  readonly preset: VendorPreset;
+  /** What the new row will be called: the preset's own id, or the next free one. */
+  readonly id: string;
+  /** One of this preset's id is already configured, so this adds another. */
+  readonly second: boolean;
+}
+
+/** One row of the Add-a-reviewer pick, decided here so it can be tested without a VS Code host. */
+export interface ReviewerPickItem {
+  readonly label: string;
+  readonly detail: string;
+  /** Empty unless this adds a second row, in which case it names the id that row will take. */
+  readonly description: string;
+  readonly offered: OfferedPreset;
+}
+
+/**
+ * The id a new row of this preset takes: its own, or the next free `<id>-N`.
+ *
+ * <p>A blank base comes back blank. The blank preset names itself through `askCustomEndpoint`, and
+ * minting `-2` for it would write a row under an id the person never chose and skip the box that
+ * asks for one.</p>
+ */
+export function freeVendorId(base: string, taken: ReadonlySet<string>): string {
+  if (base.length === 0 || !taken.has(base)) {
+    return base;
+  }
+
+  let next = 2;
+  while (taken.has(`${base}-${next}`)) {
+    next += 1;
+  }
+
+  return `${base}-${next}`;
+}
+
+/**
+ * Every catalogue entry, with the id each would take — never a filtered list.
+ *
+ * <p>This used to drop any preset whose id was already configured, which meant an installation
+ * with a `claude` reviewer could not add a second one and was told nothing about why the entry had
+ * gone. That is the same one-way door the docblock above {@link VENDOR_PRESETS} records for gemini:
+ * the catalogue is the list of what EXISTS, not what is left over.</p>
+ */
+export function presetsOffered(
+  presets: readonly VendorPreset[],
+  taken: ReadonlySet<string>,
+): readonly OfferedPreset[] {
+  return presets.map((preset) => ({
+    preset,
+    id: freeVendorId(preset.id, taken),
+    second: preset.id.length > 0 && taken.has(preset.id),
+  }));
+}
+
+/**
+ * The pick's rows. The hint is the `detail` because that is the text a person filters on once
+ * `matchOnDetail` is set, and a second row says in its `description` what it will be called.
+ */
+export function reviewerPickItems(offered: readonly OfferedPreset[]): readonly ReviewerPickItem[] {
+  return offered.map((one) => ({
+    label: one.preset.label,
+    detail: one.preset.hint,
+    description: one.second ? `you already have one — this adds ${one.id}` : '',
+    offered: one,
+  }));
 }
 
 /**
