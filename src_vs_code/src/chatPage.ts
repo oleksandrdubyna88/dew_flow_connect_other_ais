@@ -885,7 +885,17 @@ function regionsOf(state: ChatPageState): Regions {
   };
 }
 
-/** The document, without its head or its script. */
+/**
+ * The document, without its head or its script.
+ *
+ * <p><b>The failure region sits BELOW the conversation, beside the thinking line it replaces.</b> It
+ * used to be directly under the passage, at the top of the scrolling region — and writing a region
+ * counts as something arriving, so the very same push ran the follow rule and carried the reader down
+ * to the newest message, leaving the error a screen or more above them. A turn that failed says so
+ * where a person waiting for it is already looking. (The operator, 2026-09-15, having watched a 503
+ * scroll itself out of sight.) The order is asserted in `chatPage.test.ts`; it is a static property
+ * of the markup, so there is no program to run for it.</p>
+ */
 function chatBody(state: ChatPageState, regions: Regions): string {
   const locked = state.running || state.capped;
 
@@ -906,11 +916,6 @@ ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" ar
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="messages">${regions.messages}</div>
 <div id="thinking">${regions.thinking}</div>
-<!-- BELOW the conversation, beside the thinking line it replaces. It used to sit directly under the
-     passage, at the top of the scrolling region - and writing it counts as something arriving, so
-     the very same push scrolled the reader down to the newest message and left the error a screen
-     or more above them. A turn that failed says so where a person waiting for it was already
-     looking. (The operator, 2026-09-15, having watched a 503 scroll itself out of sight.) -->
 <div id="failure">${regions.failure}</div>
 <div id="capped">${regions.capped}</div>
 </main>
