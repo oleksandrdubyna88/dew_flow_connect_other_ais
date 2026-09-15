@@ -43,6 +43,21 @@
 
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+
+    <!-- tree-sitter for the normalizer, and a STANDING PIN: this one does not move with the monthly
+         latest-stable bump, it moves when we decide to move it having read what changed.
+
+         Approved by the operator on 2026-09-15 under `csharp/nuget-packages.md`, which requires an
+         individual's package to be asked about however popular it is. MIT, 205k downloads, six
+         releases between 2025-05-04 and 2026-01-22 — fresh, but published by one person
+         (Marius Greuel), and that is the whole reason for the pin.
+
+         It is here rather than a hand-written P/Invoke because of what it CARRIES: prebuilt native
+         grammars for eight RIDs. Writing the binding is easy; sourcing and building the grammars is
+         the part that is not, and doing it ourselves was the cost that nearly bought a Rust
+         toolchain. The publish drops every grammar but c-sharp/typescript/javascript — about 60 MB
+         per RID of languages nobody here parses. -->
+    <PackageVersion Include="TreeSitter.DotNet" Version="1.3.0" />
   </ItemGroup>
 
   <ItemGroup>
