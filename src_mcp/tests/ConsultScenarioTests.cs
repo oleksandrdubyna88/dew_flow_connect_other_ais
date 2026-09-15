@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -116,6 +117,15 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
     /// child, so a test that assumed the kind was <c>other</c> would pass in one terminal and fail in
     /// another. Every vendor variable is cleared and exactly one is set; the caller's id follows from
     /// the same variable, so a consultation opened and resumed inside one test has one owner.
+    /// <para><b>Mutating the PROCESS environment is safe here only because of the collection this class
+    /// is in</b>, which is worth writing down rather than leaving to be rediscovered. xUnit runs one
+    /// collection's classes sequentially, and every suite that touches these variables — this one,
+    /// <c>SplitOrderTests</c>, <c>McpContractTests</c> — is in <c>fakecli-env</c>. The two that merely
+    /// mention the names, <c>CallerSessionsTests</c> and <c>TheRoundKnowsWhoCalledItTests</c>, never
+    /// read the environment at all: they hand <c>CallerIdentity.From</c> a lookup of their own, which
+    /// is why they need no collection. A new class that reads the real environment joins
+    /// <c>fakecli-env</c> or races this one — and the symptom would be the worst kind, passing alone
+    /// and failing in the suite. (gemini, B3's code round; the answer was already here and unsaid.)</para>
     /// </remarks>
     private static IDisposable CallingAs(string variable)
     {
@@ -612,7 +622,7 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         refusal.Should().Contain("'claude' caller", "the guard knows who is calling; the adapter factory's refusal does not")
             .And.Contain("remsoftdev-codex")
             .And.Contain("'remote'")
-            .And.Contain("codex, claude, antigravity, local", "the allowlist is named so the cure is on screen")
+            .And.Contain(string.Join(", ", ConsultantResolution.Consulting), "the allowlist is named so the cure is on screen")
             .And.Contain("Consultant section");
         new ConsultationStore(_data).All().Should().BeEmpty("nothing was built, so nothing was recorded");
         (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");

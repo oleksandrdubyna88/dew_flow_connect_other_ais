@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -302,6 +303,13 @@ public sealed class ConsultantResolverTests
 {
     private static readonly IReadOnlyList<ProviderSettings> NoRows = [];
 
+    /// <summary>
+    /// The allowlist as the refusals print it, DERIVED rather than retyped — a list a test repeats
+    /// stops noticing the fifth entry, and this one is printed to a person as the cure.
+    /// (codex and gemini, independently, on B3's code round.)
+    /// </summary>
+    private static string Allowlist => string.Join(", ", ConsultantResolution.Consulting);
+
     private static ProviderSettings Row(ResolvedConsultant resolved) =>
         resolved.Should().BeOfType<ResolvedConsultant.Definition>().Subject.Vendor;
 
@@ -336,7 +344,7 @@ public sealed class ConsultantResolverTests
             new ConsultantChoice("team-codex", Runtime: runtime, BaseUrl: "https://coai.example.test"), CallerIdentity.Gemini, NoRows));
 
         why.Should().Contain("'gemini' caller").And.Contain("'team-codex'").And.Contain($"'{runtime}'")
-            .And.Contain("codex, claude, antigravity, local").And.Contain("Consultant section");
+            .And.Contain(Allowlist).And.Contain("Consultant section");
     }
 
     /// <summary>
@@ -360,6 +368,85 @@ public sealed class ConsultantResolverTests
             new ConsultantChoice("mine", Runtime: stored), CallerIdentity.Claude, NoRows));
 
         row.Runtime.Should().Be(canonical, "the panel recognises it without case too, and one name must reach the adapters");
+    }
+
+    /// <summary>
+    /// A record frozen on a runtime no consultant may run on is refused, whatever today's settings say.
+    /// </summary>
+    /// <remarks>
+    /// The invariant is that a working tree is never routed at a Team server by a consultation — and
+    /// every other guard in this file asks what the settings say NOW. A record is not settings: it
+    /// carries the runtime written when it was opened, so a build that has stopped consulting on that
+    /// runtime, or a record that arrived any other way, must not reach a launch merely because today's
+    /// description agrees with it. Watched failing with the allowlist check removed from
+    /// <c>Resumed</c>: the resume was ALLOWED, because the frozen runtime matched the definition's.
+    /// (gemini, B3's code round.)
+    /// </remarks>
+    [Fact]
+    public void ARecordFrozenOnARuntimeNoConsultantMayRunOn_IsRefusedHoweverTodayIsConfigured()
+    {
+        var consultants = new Dictionary<string, ConsultantChoice>(StringComparer.Ordinal)
+        {
+            [CallerIdentity.Claude] = new("team-codex", Runtime: "remote", BaseUrl: "https://coai.example.test"),
+        };
+
+        var why = Why(ConsultantResolver.Resumed(
+            Opened("team-codex", model: "", runtime: "remote"), consultants, NoRows));
+
+        why.Should().Contain("'remote'").And.Contain(Allowlist).And.Contain("cannot be resumed");
+    }
+
+    /// <summary>
+    /// A definition stored in another spelling does not read as a runtime that moved.
+    /// </summary>
+    /// <remarks>
+    /// The record holds the allowlist's spelling, because that is what was written when the
+    /// consultation opened. A definition carrying the person's — <c>"Codex"</c> — used to reach the
+    /// comparison uncanonicalised and be refused as a moved runtime that never moved. (gemini, B3's
+    /// code round, on the fix its own plan round had asked for.)
+    /// </remarks>
+    [Fact]
+    public void ADefinitionStoredInAnotherSpelling_DoesNotReadAsARuntimeThatMoved()
+    {
+        var consultants = new Dictionary<string, ConsultantChoice>(StringComparer.Ordinal)
+        {
+            [CallerIdentity.Claude] = new("mine", Runtime: "Codex", ExecutablePath: "C:/mine/codex.cmd"),
+        };
+
+        var row = Row(ConsultantResolver.Resumed(
+            Opened("mine", model: "gpt-5.6-luna", runtime: "codex"), consultants, NoRows));
+
+        row.ExecutablePath.Should().Be("C:/mine/codex.cmd", "the runtime is the same one, spelled differently");
+        row.Model.Should().Be("gpt-5.6-luna", "the record's model is what stays frozen");
+    }
+
+    /// <summary>
+    /// The record's OWN caller kind decides which definition describes its vendor today.
+    /// </summary>
+    /// <remarks>
+    /// One id is one vault entry, but not one set of settings: two caller kinds may define the same
+    /// vendor differently. Scanning the map's values alone let dictionary order pick, so a resume could
+    /// be refused for a runtime mismatch against a definition belonging to somebody else's caller.
+    /// (gemini, B3's code round.)
+    /// </remarks>
+    [Fact]
+    public void ADefinitionUnderTheRecordsOwnCallerKind_IsPreferredToAnotherCallersOfTheSameName()
+    {
+        // A SORTED map, and that is the test rather than an incidental choice: with a plain Dictionary
+        // the scan's first match depends on hashing, so the guard's absence would show as a failure
+        // only some of the time — a test that passes by luck is the thing this repository calls
+        // decoration. Ordinally, `claude` precedes `gemini`, so somebody else's definition is
+        // ALWAYS what a scan over the values alone would reach first.
+        var consultants = new SortedDictionary<string, ConsultantChoice>(StringComparer.Ordinal)
+        {
+            [CallerIdentity.Claude] = new("agent", Runtime: "claude", ExecutablePath: "C:/someone-elses/claude.cmd"),
+            [CallerIdentity.Gemini] = new("agent", Runtime: "codex", ExecutablePath: "C:/my/codex.cmd"),
+        };
+        var record = Opened("agent", model: "", runtime: "codex") with { CallerKind = CallerIdentity.Gemini };
+
+        var row = Row(ConsultantResolver.Resumed(record, consultants, NoRows));
+
+        row.ExecutablePath.Should().Be("C:/my/codex.cmd", "the record was opened for a gemini caller, so that caller's row is what describes its vendor");
     }
 
     /// <summary>
@@ -431,7 +518,7 @@ public sealed class ConsultantResolverTests
     {
         var why = Why(ConsultantResolver.Resolve(new ConsultantChoice("deepseek"), CallerIdentity.Other, NoRows));
 
-        why.Should().Contain("'other' caller").And.Contain("'deepseek'").And.Contain("codex, claude, antigravity, local")
+        why.Should().Contain("'other' caller").And.Contain("'deepseek'").And.Contain(Allowlist)
             .And.Contain("Consultant section").And.Contain("add a reviewer under that name");
         why.Should().NotContain("vendor row", "the cure is no longer to pick a reviewer row");
     }
@@ -467,7 +554,11 @@ public sealed class ConsultantResolverTests
 
         var why = Why(ConsultantResolver.Resumed(Opened("deepseek", "", "codex"), ConsultantRouting.Shipped, NoRows));
 
-        why.Should().Contain("0198aaaa-bbbb").And.Contain("'deepseek'").And.Contain("no longer configured").And.Contain("start a new consultation");
+        // The refusal names the caller kind and the frozen runtime as well as the vendor: somebody
+        // reading it is looking at a consultation from hours or days ago, and the useful question is
+        // WHICH setting went — that caller's row, or the reviewer it used to borrow from.
+        why.Should().Contain("0198aaaa-bbbb").And.Contain("'deepseek'").And.Contain($"'{CallerIdentity.Claude}' caller")
+            .And.Contain("'codex'").And.Contain("nothing this build can describe").And.Contain("start a new consultation");
     }
 
     /// <summary>A CLI path belongs to a CLI: an id redefined onto another runtime is refused, never lent to the record's adapter.</summary>

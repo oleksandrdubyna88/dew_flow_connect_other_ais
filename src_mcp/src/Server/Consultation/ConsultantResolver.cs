@@ -98,27 +98,56 @@ public static class ConsultantResolver
         ConsultationRecord record,
         IReadOnlyDictionary<string, ConsultantChoice> consultants,
         IReadOnlyList<ProviderSettings> rows) =>
+        Consulting(record.Runtime) is null
+            ? new ResolvedConsultant.Unavailable(FrozenOnAForeignRuntime(record))
+            : OnTodaysDescription(record, consultants, rows);
+
+    private static ResolvedConsultant OnTodaysDescription(
+        ConsultationRecord record,
+        IReadOnlyDictionary<string, ConsultantChoice> consultants,
+        IReadOnlyList<ProviderSettings> rows) =>
         Today(record, consultants, rows) switch
         {
-            ResolvedConsultant.Definition today when RuntimeResolution.NameOf(today.Vendor.Identity()) == record.Runtime =>
+            ResolvedConsultant.Definition today when SameId(RuntimeResolution.NameOf(today.Vendor.Identity()), record.Runtime) =>
                 new ResolvedConsultant.Definition(Frozen(record, today.Vendor)),
             ResolvedConsultant.Definition today => new ResolvedConsultant.Unavailable(MovedRuntime(record, today.Vendor)),
             _ => new ResolvedConsultant.Unavailable(NoLongerConfigured(record)),
         };
 
-    /// <summary>What the record's vendor id means TODAY: a definition under any caller kind first, then the legacy path.</summary>
+    /// <summary>What the record's vendor id means TODAY: a definition, its OWN caller kind asked first, then the legacy path.</summary>
     /// <remarks>
-    /// A definition found here is taken without the allowlist check <see cref="Resolve"/> applies,
-    /// because what will RUN is the record's frozen runtime, not the definition's: a definition whose
-    /// runtime differs — <c>remote</c> among them — is refused by the runtime comparison above, naming both.
+    /// <para>The record's caller kind is asked before the others, and that is not tidiness: two caller
+    /// kinds may define the same vendor id differently — one id is one vault entry, but not one set of
+    /// settings — and <c>Values.FirstOrDefault</c> alone would let dictionary order decide which, so a
+    /// resume could be refused for a runtime mismatch against a definition belonging to somebody else's
+    /// caller. Its own is authoritative; any other is a last resort, because one id is still one vendor.
+    /// (gemini, B3's code round.)</para>
+    /// <para>The definition is canonicalised on the way through: a stored <c>"Codex"</c> would otherwise
+    /// reach the comparison below in the person's spelling while the record holds the allowlist's, and a
+    /// resume would be refused as a moved runtime that never moved.</para>
+    /// <para>The allowlist is not re-applied to the definition here, because what will RUN is the
+    /// record's frozen runtime — which <see cref="Resumed"/> allowlists before anything reaches this
+    /// method — and a definition whose runtime differs is refused by the comparison above, naming both.</para>
     /// </remarks>
     private static ResolvedConsultant Today(
         ConsultationRecord record,
         IReadOnlyDictionary<string, ConsultantChoice> consultants,
         IReadOnlyList<ProviderSettings> rows) =>
-        consultants.Values.FirstOrDefault(choice => choice.IsDefinition && SameId(choice.Vendor, record.Vendor)) is { } defined
-            ? new ResolvedConsultant.Definition(AsProvider(defined))
+        DefinedFor(record, consultants) is { } defined
+            ? new ResolvedConsultant.Definition(AsProvider(Canonical(defined)))
             : Legacy(new ConsultantChoice(record.Vendor, record.Model), record.CallerKind, rows);
+
+    private static ConsultantChoice? DefinedFor(ConsultationRecord record, IReadOnlyDictionary<string, ConsultantChoice> consultants) =>
+        consultants.TryGetValue(record.CallerKind, out var own) && own.IsDefinition && SameId(own.Vendor, record.Vendor)
+            ? own
+            : consultants.Values.FirstOrDefault(choice => choice.IsDefinition && SameId(choice.Vendor, record.Vendor));
+
+    /// <summary>The allowlist's own spelling of a runtime, or null when a consultant may not run on it.</summary>
+    private static string? Consulting(string runtime) =>
+        ConsultantResolution.Consulting.FirstOrDefault(one => SameId(one, runtime));
+
+    private static ConsultantChoice Canonical(ConsultantChoice choice) =>
+        Consulting(choice.Runtime) is { } runtime ? choice with { Runtime = runtime } : choice;
 
     /// <summary>
     /// A definition is itself — once its runtime is one a consultant may run on. The check comes
@@ -137,7 +166,7 @@ public static class ConsultantResolver
     /// half that would launch it.</para>
     /// </remarks>
     private static ResolvedConsultant Defined(ConsultantChoice choice, string callerKind) =>
-        ConsultantResolution.Consulting.FirstOrDefault(one => SameId(one, choice.Runtime)) is { } runtime
+        Consulting(choice.Runtime) is { } runtime
             ? new ResolvedConsultant.Definition(AsProvider(choice with { Runtime = runtime }))
             : new ResolvedConsultant.Unavailable(ForeignRuntime(choice, callerKind));
 
@@ -211,9 +240,32 @@ public static class ConsultantResolver
         + "or add a reviewer under that name";
 
     /// <summary>A resumed consultation whose vendor nothing describes any more. The cure is a new one.</summary>
+    /// <remarks>
+    /// Names the caller kind and the runtime as well as the vendor, because the person reading it is
+    /// looking at a consultation from hours or days ago and the useful question is WHICH setting went:
+    /// the row for that kind in the Consultant section, or the reviewer it used to borrow from.
+    /// (gemini, B3's code round.)
+    /// </remarks>
     private static string NoLongerConfigured(ConsultationRecord record) =>
-        $"consultation {record.Id} was opened on the vendor '{record.Vendor}', which is no longer configured — "
-        + "a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation";
+        $"consultation {record.Id}, opened for a '{record.CallerKind}' caller on the vendor '{record.Vendor}' "
+        + $"running on '{record.Runtime}', names nothing this build can describe any more — check that caller's row "
+        + $"in {Section}. A consultation stays on the vendor it started with, so this one cannot go on; start a new consultation";
+
+    /// <summary>
+    /// A resumed consultation whose own FROZEN runtime is one no consultant may run on.
+    /// </summary>
+    /// <remarks>
+    /// The allowlist is asked of the record before anything today is read. Every other guard here is
+    /// about what the settings say NOW, and a record is not settings: it carries a runtime written when
+    /// it was opened, and a build that has since stopped consulting on that runtime — or a record that
+    /// arrived any other way — must not reach a launch because today's description happens to agree with
+    /// it. A working tree is never routed at a Team server by a consultation, resumed or new.
+    /// (gemini, B3's code round.)
+    /// </remarks>
+    private static string FrozenOnAForeignRuntime(ConsultationRecord record) =>
+        $"consultation {record.Id} was opened on the vendor '{record.Vendor}' running on '{record.Runtime}', "
+        + $"which is not a runtime a consultant may run on ({Allowlist}) — it cannot be resumed; "
+        + $"choose a consultant for this caller in {Section} and start a new consultation";
 
     /// <summary>A resumed consultation whose vendor id now runs on another CLI — refused rather than launched on the wrong binary.</summary>
     private static string MovedRuntime(ConsultationRecord record, ProviderSettings today) =>
