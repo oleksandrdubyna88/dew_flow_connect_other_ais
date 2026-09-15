@@ -127,7 +127,7 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
     /// <c>fakecli-env</c> or races this one — and the symptom would be the worst kind, passing alone
     /// and failing in the suite. (gemini, B3's code round; the answer was already here and unsaid.)</para>
     /// </remarks>
-    private static IDisposable CallingAs(string variable)
+    private static RestoredEnvironment CallingAs(string variable)
     {
         var saved = CallerVariables.Select(name => (name, Environment.GetEnvironmentVariable(name))).ToList();
         foreach (var name in CallerVariables)
