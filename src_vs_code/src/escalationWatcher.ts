@@ -7,6 +7,39 @@ import {
   shouldPrompt,
   statusBarText,
 } from './escalations';
+import { WatchedDir, usableDirs, watchedDirs } from './escalationDirs';
+
+/** The setting that names other installations' data directories. */
+export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
+
+/**
+ * The directories named in the setting, as typed.
+ *
+ * <p>Trimmed and emptied here and normalised in `escalationDirs.ts`, which is where the rules a test
+ * can reach live. A value that is not a list of strings is no list at all rather than a guess.</p>
+ */
+function alsoWatchDataDirectories(): readonly string[] {
+  const value: unknown = vscode.workspace.getConfiguration().get(ALSO_WATCH_SETTING);
+
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+/**
+ * A directory string as a `Uri`, however it was written.
+ *
+ * <p>`watchedDirs` round-trips this window's own directory through `toString()`, so what comes back
+ * for it is already a URI and must be parsed rather than treated as a path — while what a person
+ * typed into the setting is a filesystem path and must be treated as one. Getting that backwards
+ * makes the window's own questions disappear, which is the one thing this class may never do.</p>
+ */
+function asUri(dir: string, own: vscode.Uri): vscode.Uri {
+  return dir === own.toString() ? own : vscode.Uri.file(dir);
+}
+
+/** A thrown thing, as a sentence — the same shape `cliChatLaunch.ts` uses. */
+function asText(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
 
 /**
  * Watches the server's escalation directory and puts the question in front of a person.
@@ -28,11 +61,28 @@ export class EscalationWatcher {
   /** Called after every refresh, so a view can repaint without polling on its own. */
   public onChanged: () => void = () => {};
 
+  /**
+   * Every directory whose questions this window answers — its own first, then what was named.
+   *
+   * <p>Rebuilt whenever the setting changes, because a list read once at activation is a setting that
+   * appears not to work until the window is reloaded. (gemini, the plan round.)</p>
+   */
+  private watchedRoots: readonly vscode.Uri[] = [];
+  /** What was asked for and what came of it, for the panel to render. */
+  private asked: readonly WatchedDir[] = [];
+  /** The per-directory file watchers, torn down and rebuilt when the setting moves. */
+  private readonly watchers: vscode.Disposable[] = [];
+
   constructor(private readonly dataDir: vscode.Uri) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.statusItem.command = 'coai.showRounds';
     this.statusItem.tooltip = 'A ConnectOtherAIs review is waiting on your answer';
     this.disposables.push(this.statusItem);
+  }
+
+  /** What the panel names: each directory asked for, and the reason one cannot be watched. */
+  get watchedDirectories(): readonly WatchedDir[] {
+    return this.asked;
   }
 
   /** Everything currently unanswered — the rounds view renders these. */
@@ -41,20 +91,55 @@ export class EscalationWatcher {
   }
 
   start(): void {
-    const pattern = new vscode.RelativePattern(this.dataDir, 'escalations/*.json');
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-    this.disposables.push(
-      watcher,
-      watcher.onDidCreate(() => void this.refresh()),
-      watcher.onDidChange(() => void this.refresh()),
-      watcher.onDidDelete(() => void this.refresh()),
-    );
+    this.rebuild();
+    // The setting names other installations' directories, and a list read once at activation is a
+    // setting that appears not to work until the window is reloaded.
+    this.disposables.push(vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(ALSO_WATCH_SETTING)) {
+        this.rebuild();
+        void this.refresh();
+      }
+    }));
 
     // A watcher on a path outside the workspace is not guaranteed on every platform; the poll is
-    // what makes the promise "you will see the question" true rather than likely.
+    // what makes the promise "you will see the question" true rather than likely. It is also the
+    // whole mechanism on a \\wsl.localhost or a network path, where events are not delivered at all.
     const timer = setInterval(() => void this.refresh(), 5000);
     this.disposables.push(new vscode.Disposable(() => clearInterval(timer)));
     void this.refresh();
+  }
+
+  /** Read the setting, work out the list, and put a watcher on each directory that can have one. */
+  private rebuild(): void {
+    for (const watcher of this.watchers.splice(0)) {
+      watcher.dispose();
+    }
+    this.asked = watchedDirs(this.dataDir.toString(), alsoWatchDataDirectories(), process.platform);
+    this.watchedRoots = usableDirs(this.asked).map((dir) => asUri(dir, this.dataDir));
+
+    for (const root of this.watchedRoots) {
+      // Each in its own try: a path that cannot be watched — a distribution that is not running, a
+      // share that is not mounted — must not stop the others being watched, this window's own above
+      // all. The poll still reaches it if it comes back.
+      try {
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(root, 'escalations/*.json'),
+        );
+        this.watchers.push(
+          watcher,
+          watcher.onDidCreate(() => void this.refresh()),
+          watcher.onDidChange(() => void this.refresh()),
+          watcher.onDidDelete(() => void this.refresh()),
+        );
+      } catch {
+        // Watched by the poll alone from here. Nothing is lost but the immediacy.
+      }
+    }
+    this.disposables.push(new vscode.Disposable(() => {
+      for (const watcher of this.watchers.splice(0)) {
+        watcher.dispose();
+      }
+    }));
   }
 
   dispose(): void {
@@ -135,21 +220,63 @@ export class EscalationWatcher {
       text = typed.trim();
     }
 
+    // BESIDE THE QUESTION, not in this window's own directory. A question can come from another
+    // installation — a Claude Code session inside WSL writing into the WSL store — and the server
+    // that asked polls the directory it wrote in and nowhere else. An answer written here would
+    // leave that round blocked for ever, having been answered.
+    const root = escalation.from === undefined || escalation.from.length === 0
+      ? this.dataDir
+      : vscode.Uri.parse(escalation.from);
     // Atomic: the server polls this directory, and half a file must never resolve a question.
-    const dir = vscode.Uri.joinPath(this.dataDir, 'escalations');
+    //
+    // The TEMP file is created in the SAME directory as the target, and that is not tidiness: a
+    // rename across two filesystems throws EXDEV, so a temp written here and renamed into a WSL or
+    // NAS directory would fail every single time and the answer would never land. (gemini, the plan
+    // round, Blocking.)
+    const dir = vscode.Uri.joinPath(root, 'escalations');
     const target = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json`);
     const temp = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json.tmp`);
     const bytes = new TextEncoder().encode(
       answerJson(escalation.id, text.trim(), new Date().toISOString(), decision),
     );
-    await vscode.workspace.fs.writeFile(temp, bytes);
-    await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+    try {
+      await vscode.workspace.fs.writeFile(temp, bytes);
+      await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+    } catch (reason) {
+      // KEPT, not swallowed. A mount can go read-only or disappear between the question being found
+      // and the answer being typed, and an answer that silently failed to land looks exactly like one
+      // that did — while the round it was for blocks. The question stays open so it can be tried
+      // again. (codex and local, the plan round.)
+      void vscode.window.showErrorMessage(
+        `The answer could not be written to ${dir.fsPath} — the question is still open. ${asText(reason)}`,
+      );
+
+      return;
+    }
     await this.refresh();
   }
 
-  /** Every question whose answer file is not there yet. */
+  /**
+   * Every question whose answer file is not there yet, from every directory being watched.
+   *
+   * <p><b>Each directory is read on its own and its failures stay inside it.</b> A disconnected NAS,
+   * a WSL distribution that is shut down, a path with a typo: any of them throws on read, and one
+   * unhandled throw would stop the questions from THIS window's own directory being seen — turning a
+   * setting that adds a directory into a setting that silences the feature. (codex, the plan round.)
+   * </p>
+   */
   private async readOpen(): Promise<Escalation[]> {
-    const dir = vscode.Uri.joinPath(this.dataDir, 'escalations');
+    const found: Escalation[] = [];
+    for (const root of this.watchedRoots) {
+      found.push(...await this.readOpenIn(root));
+    }
+
+    return found;
+  }
+
+  /** The questions in ONE directory, tagged with where they came from. */
+  private async readOpenIn(root: vscode.Uri): Promise<Escalation[]> {
+    const dir = vscode.Uri.joinPath(root, 'escalations');
     const found: Escalation[] = [];
     try {
       const entries = await vscode.workspace.fs.readDirectory(dir);
@@ -163,13 +290,17 @@ export class EscalationWatcher {
           continue;
         }
         const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
-        const escalation = parseEscalation(new TextDecoder().decode(bytes));
+        // TAGGED with the directory it came from, so its answer goes back beside it rather than into
+        // this window's own store, where the server that asked polls nowhere.
+        const escalation = parseEscalation(new TextDecoder().decode(bytes), root.toString());
         if (escalation !== undefined) {
           found.push(escalation);
         }
       }
     } catch {
-      // No escalations directory yet — nothing has ever been asked.
+      // No escalations directory yet — nothing has ever been asked — or a directory somebody named
+      // that is not reachable from here. Neither is this window's problem to throw about; the panel
+      // is where an unreadable directory is reported.
     }
     return found;
   }

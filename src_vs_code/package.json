@@ -516,6 +516,12 @@
           "default": "",
           "markdownDescription": "Where the rounds database, the sessions and the chats are kept. Empty is the default folder (`%LOCALAPPDATA%\\coai-mcp`, or `~/.local/share/coai-mcp`). Point it at a **network drive or a NAS** and your history survives reinstalling the operating system: the same folder is picked up again the next time you install the MCP server. **Always kept per side of this machine**, whatever *Separate settings for each side* says — the same NAS is `Z:\\coai` in a Windows window and `/mnt/z/coai` in a WSL one, so one shared value would be wrong in one of them. A server only reads it from its own MCP client entry, which is why *Install the MCP server…* puts it in the block it copies."
         },
+        "coai.alsoWatchDataDirectories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "markdownDescription": "Data folders belonging to **other installations**, whose questions this window should also answer. A round that calls for a human writes its question into the data folder of whichever installation is running it — so a Claude Code session inside **WSL** writes into the WSL folder, and a Windows window watching only its own never shows the modal while that round blocks. Name the other folder here and its questions appear beside your own; the answer is written back next to the question, where the server that asked is looking. Only the questions are shared — no database is opened across the boundary. From a Windows window a WSL folder must be named the way Windows can reach it, `\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp`; a path starting with `/` is refused and says so, because guessing which distribution you meant would mean watching a folder you never chose. *Where this window keeps its data* lists what is being watched and what could not be read."
+        },
         "coai.dataSide": {
           "type": "string",
           "default": "",

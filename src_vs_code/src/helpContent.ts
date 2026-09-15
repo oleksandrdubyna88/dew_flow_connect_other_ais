@@ -334,7 +334,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       why:
         'A round is BLOCKED behind that question. A notification that can be missed is the wrong shape for it, which is why there are three surfaces and dismissing the modal loses nothing.',
       setup:
-        'Nothing to set up. The server writes the question as a file in the directory this extension already watches — no port is opened by either half.',
+        'Nothing to set up for the ordinary case: the server writes the question as a file in the directory this extension already watches, and no port is opened by either half. One case does need a setting. A round running in ANOTHER installation — a Claude Code session inside WSL, say — writes its question into that installation\'s data folder, and a window watching only its own never shows it while the round blocks. `coai.alsoWatchDataDirectories` names the other folders, so questions from another installation appear beside your own and the answer is written back beside the question, where the server that asked is looking. Only the questions are shared; no database is opened across the boundary. From a Windows window a WSL folder has to be named the way Windows reaches it, `\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp` — a path starting with `/` is refused and says so, rather than watching a folder nobody chose.',
       usage:
         'Answer it in the panel, in the modal, or from the status bar; they are the same action. Your answer goes back to the AI that asked, translated into the language it asked in, with your own words kept beside it.',
       whatCanGoWrong:
