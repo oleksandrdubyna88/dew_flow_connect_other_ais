@@ -814,25 +814,32 @@ test('a control the renderer drew, pressed on the shipped page, copies that bloc
     .map((one) => ({ block: one[1] ?? '', at: one[2] ?? '', sig: one[3] ?? '' }));
   assert.strictEqual(drawn.length, 2, 'the fixture did not draw the two controls this test is about');
 
-  const { posted, clickIn } = runPage();
-  clickIn('messages', drawn[1] ?? {});
+  // BOTH controls, each against its own expected text. Pressing only the second would pass against a
+  // listener or parser that always answered the second block. (codex, the code round.)
+  const expected = ['const first = 1;', 'Send this onward.'];
 
-  const asked = posted.filter((message) => message['command'] === 'copyBlock');
-  assert.strictEqual(asked.length, 1, 'the shipped page did not forward the press');
+  for (let at = 0; at < drawn.length; at += 1) {
+    const { posted, clickIn } = runPage();
+    clickIn('messages', drawn[at] ?? {});
 
-  const command = chatCommandOf(asked[0] as Record<string, unknown>);
-  assert.strictEqual(command.kind, 'copyBlock', 'the host refused a message its own page produced');
+    const asked = posted.filter((message) => message['command'] === 'copyBlock');
+    assert.strictEqual(asked.length, 1, `the shipped page did not forward the press on control ${at}`);
 
-  const wrote: string[] = [];
-  await textCopier({
-    writeText: (text) => { wrote.push(text); return Promise.resolve(); },
-    say: () => ({ dispose: () => undefined }),
-  }).copy(() => (command.kind === 'copyBlock'
-    ? blockToCopy(answer, command.block, command.sig)
-    : { kind: 'refused', said: 'unreachable' }));
+    const command = chatCommandOf(asked[0] as Record<string, unknown>);
+    assert.strictEqual(command.kind, 'copyBlock', 'the host refused a message its own page produced');
 
-  assert.deepStrictEqual(wrote, ['Send this onward.'],
-    'the press that crossed the whole seam did not copy the block it was drawn for');
+    const wrote: string[] = [];
+    // eslint-disable-next-line no-await-in-loop
+    await textCopier({
+      writeText: (text) => { wrote.push(text); return Promise.resolve(); },
+      say: () => ({ dispose: () => undefined }),
+    }).copy(() => (command.kind === 'copyBlock'
+      ? blockToCopy(answer, command.block, command.sig)
+      : { kind: 'refused', said: 'unreachable' }));
+
+    assert.deepStrictEqual(wrote, [expected[at]],
+      `the press that crossed the whole seam on control ${at} copied the wrong block`);
+  }
 });
 
 test('the shipped Clear button empties the composer, and repaints it', () => {

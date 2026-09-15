@@ -106,8 +106,16 @@ export interface TextCopier {
  * and neither able to see the other. (codex, the plan round.) The counter only ever increases, which
  * is what makes "is something newer wanted than the write that just landed" answerable at all.</p>
  */
-let wanted: { readonly at: number; readonly text: string } | undefined;
-let issued = 0;
+let wanted: { readonly at: number; readonly text: string; readonly ports: CopyPorts } | undefined;
+
+/**
+ * Stamped when the PRESS happens, not when its write starts.
+ *
+ * <p>Stamping at the write let a press that had been waiting behind a slow one take a number newer
+ * than a press made after it — so the person's last press lost to their first. The number has to mean
+ * "when this was asked for". (codex, the code round.)</p>
+ */
+let pressed = 0;
 
 /**
  * Write, and put the newest text back if this write is overtaken while it is in flight.
@@ -128,7 +136,11 @@ function launch(ports: CopyPorts, at: number, text: string): Promise<void> {
     () => {
       const now = wanted;
       if (now !== undefined && now.at !== at) {
-        void launch(ports, now.at, now.text);
+        // Through the ports of whoever WANTED this text, never the ports of the write that happened
+        // to settle last. They are the same clipboard today, but they are not the same object: each
+        // copier is handed its own, and a correction routed through a foreign one would be writing
+        // one caller's words down another caller's channel. (gemini, the code round, twice.)
+        void launch(now.ports, now.at, now.text);
       }
     },
     // A correction that is REFUSED ends the chain, deliberately rather than by omission. The press it
@@ -142,7 +154,7 @@ function launch(ports: CopyPorts, at: number, text: string): Promise<void> {
   return write;
 }
 
-function boundedWriter(ports: CopyPorts, ceilingMs: number): (text: string) => Promise<void> {
+function boundedWriter(ports: CopyPorts, ceilingMs: number): (text: string, at: number) => Promise<void> {
   /**
    * The write, or the ceiling — whichever comes first.
    *
@@ -150,10 +162,13 @@ function boundedWriter(ports: CopyPorts, ceilingMs: number): (text: string) => P
    * giving up on the wait releases the next press, and `launch` goes on minding what lands. The timer
    * never outlives the attempt.</p>
    */
-  return async function written(text: string): Promise<void> {
-    issued += 1;
-    const mine = issued;
-    wanted = { at: mine, text };
+  return async function written(text: string, mine: number): Promise<void> {
+    // FORWARD only. A press that waited behind a slow one still writes — its own press asked for it —
+    // but it must not make itself the newest thing anybody wanted, or a later press would be undone
+    // by an earlier one finally getting its turn.
+    if (wanted === undefined || mine > wanted.at) {
+      wanted = { at: mine, text, ports };
+    }
     const write = launch(ports, mine, text);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -187,7 +202,7 @@ export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): Text
     live = ports.say(said, SAID_FOR_MS);
   }
 
-  async function once(decide: () => CopyDecision): Promise<CopyReport> {
+  async function once(decide: () => CopyDecision, mine: number): Promise<CopyReport> {
     const decision = decided(decide);
     if (decision.kind === 'refused') {
       tell(decision.said);
@@ -195,7 +210,7 @@ export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): Text
       return { copied: false, said: decision.said };
     }
     try {
-      await written(decision.text);
+      await written(decision.text, mine);
     } catch {
       // A person who is told nothing pastes whatever was on the clipboard before — which is the
       // failure this sentence exists to stop. The words are the CALLER's.
@@ -210,9 +225,14 @@ export function textCopier(ports: CopyPorts, ceilingMs = WRITE_CEILING_MS): Text
 
   return {
     copy(decide): Promise<CopyReport> {
+      // STAMPED HERE, at the press, before anything queues. What the queue decides is the ORDER the
+      // writes go out in; what this number decides is whose text is newest, and those are different
+      // questions the moment one press waits behind another.
+      pressed += 1;
+      const mine = pressed;
       // Chained onto whatever is in flight, and onto its FAILURE too — a refused write must not
       // break the queue for the press after it.
-      const next = working.then(() => once(decide), () => once(decide));
+      const next = working.then(() => once(decide, mine), () => once(decide, mine));
       working = next;
 
       return next;

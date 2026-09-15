@@ -340,8 +340,44 @@ test('a corrective write is tracked too, and cannot put back what is already sta
   releaseCorrection?.();
   await new Promise((resolve) => { setTimeout(resolve, 30); });
 
+  // THE CORRECTIONS THEMSELVES, asserted rather than assumed. Without them the sequence is three
+  // writes and this test would otherwise pass on the last one happening to be right — which is what a
+  // guard that only reads the final value cannot tell apart. (codex, the code round.)
+  assert.deepEqual(started, ['first', 'second', 'second', 'third', 'third'],
+    'the corrective writes were not made: nothing put the newer text back');
   assert.equal(landed.at(-1), 'third',
     'a corrective write landed last and put back text the person had already copied past');
+});
+
+test('a correction the clipboard refuses stops, rather than retrying for ever', async () => {
+  // The chain ends on a refusal deliberately: the press being repaired was already reported failed,
+  // and a clipboard that refused one write will refuse the retry. Asserted so that "deliberately"
+  // stays true of the code and not just of the comment. (local, the code round.)
+  const answer = [FENCE, 'one', FENCE, '', FENCE, 'two', FENCE].join('\n');
+  const sig = signatureOf(answer);
+  const started: string[] = [];
+  let releaseStalled: (() => void) | undefined;
+  const ports_: CopyPorts = {
+    writeText: (text) => {
+      started.push(text);
+      if (started.length === 1) {
+        return new Promise<void>((resolve) => { releaseStalled = resolve; });
+      }
+
+      // Every write after the stalled one refuses, the correction included.
+      return Promise.reject(new Error('the clipboard is held by another program'));
+    },
+    say: () => ({ dispose: () => undefined }),
+  };
+  const copier = textCopier(ports_, 20);
+
+  await copier.copy(() => blockToCopy(answer, 0, sig));
+  await copier.copy(() => blockToCopy(answer, 1, sig));
+  releaseStalled?.();
+  await new Promise((resolve) => { setTimeout(resolve, 40); });
+
+  // One stalled write, one refused press, ONE refused correction — and then it stops.
+  assert.deepEqual(started, ['one', 'two', 'two'], 'a refused correction was retried, or never tried');
 });
 
 test('a correction from one copier cannot land on top of what another copier just copied', async () => {
@@ -353,12 +389,11 @@ test('a correction from one copier cannot land on top of what another copier jus
   const answer = [FENCE, 'the answer', FENCE].join('\n');
   /** The one clipboard both copiers write to, in the order writes actually LAND. */
   const landed: string[] = [];
+  const started: string[] = [];
   let releaseStalled: (() => void) | undefined;
-  let stalled = false;
   const clipboard = (text: string): Promise<void> => {
-    if (!stalled) {
-      stalled = true;
-
+    started.push(text);
+    if (started.length === 1) {
       return new Promise<void>((resolve) => {
         releaseStalled = () => { landed.push(text); resolve(); };
       });
@@ -377,6 +412,11 @@ test('a correction from one copier cannot land on top of what another copier jus
   releaseStalled?.();                                                       // the stalled write lands late
   await new Promise((resolve) => { setTimeout(resolve, 30); });
 
+  // The CORRECTION is asserted, not inferred from the final value: a third write, putting the phrase
+  // back after the chat's abandoned one landed. Without it there are two writes and the last is the
+  // answer. (codex, the code round.)
+  assert.deepEqual(started, ['the answer', 'a phrase', 'a phrase'],
+    'the chat never corrected after its abandoned write landed');
   assert.equal(landed.at(-1), 'a phrase',
     'a correction from the chat put its answer back over the phrase the person had just copied');
 });
