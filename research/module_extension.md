@@ -2334,6 +2334,32 @@ boxes, and `strandedModel` keeps the stored model on screen, because emptying a 
 person's saved value with it. The entry itself is untouched, as rule (c) is untouched — the way out is the
 catalogue sitting in the same select.
 
+**The code round found the way out was blocked.** `deepseek` names no runtime and needs no reviewer row, so
+a stored bare reference to it is UNAVAILABLE — while the picker offers it two lines below as a working
+choice. Two things then went wrong at once, and both are fixed here. The row carried its OWN option *and*
+the catalogue's, two `<option value="deepseek">` in one select; and `vendorChosen` kept the stored entry
+whenever `id === starting.vendor`, so picking it wrote the same unresolved reference back. A person clicked
+the vendor their own row was already showing them and nothing happened. The A2 guard that shortcut exists
+for protects a DEFINITION — a re-selection must not hand a reviewer row's values back over what the person
+set — and a reference holds nothing of theirs to protect, so it is now narrowed to `starting.runtime !== ''`
+and a re-selection MATERIALISES the catalogue entry. The duplicate is gone by keeping the catalogue's
+option, which is the one that can be picked INTO something.
+
+**Three decisions left the markup in the same round**, which is the rest of C5's own argument carried
+through: `modelPlaceholder` (the empty model option means *the runtime's own default* on a runtime that
+will be asked and *no model until this consultant is one the build can place* on one that will not — the
+first was being said to both), `keptModel` (a saved model the list does not hold, carried by the row), and
+`VendorOption.hint` (the catalogue's own sentence, which *Add a reviewer* shows and this picker was
+dropping — one catalogue read the same way twice means both halves travel, not just the name). `row()` now
+renders and decides nothing, and each of the three is asserted as a value rather than as page text.
+
+**Two catalogue tests were rewritten to derive from `VENDOR_PRESETS`** rather than name its contents.
+`common/testing.md` names both failure directions of a hand-copied list, and the second one applied here:
+`['codex', 'antigravity', 'claude', 'deepseek', 'openrouter', 'local']` would go red the day a vendor is
+added, for a change that alters nothing the test describes. What they assert now is the invariant — every
+named preset is accounted for as offered or refused, the offered set is exactly the consulting ones, and
+each carries the catalogue's own label and hint.
+
 **Choosing a vendor stores the CATALOGUE entry.** `consultantRecordUpdate` consults the catalogue before
 resolving a bare id: picking `DeepSeek` stores its runtime and its endpoint, where before it stored a name
 that resolved to the unavailable state — an entry the section offered and could not keep. It also ends the

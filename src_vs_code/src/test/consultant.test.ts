@@ -20,7 +20,7 @@ import { consultPromptWrite } from '../consultPrompt';
 import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
 import { consultantRecordUpdate, envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
-import { Vendor, vendorsFrom } from '../vendors';
+import { VENDOR_PRESETS, Vendor, vendorsFrom } from '../vendors';
 
 /**
  * The Consultant section: who answers each kind of caller, the caps, and the prompt box.
@@ -593,13 +593,18 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
 // Which rows may be consulted
 
 test('a catalogue entry that cannot hold a conversation is NAMED with its reason, never filtered away', () => {
-  const { offered, refused } = consultableVendors();
+  // Derived from the catalogue, not copied out of it: a hand-written expectation here would go red
+  // the day somebody adds a vendor — for a change that alters nothing this test describes — and
+  // would still be green if a preset stopped being named. (`common/testing.md`, the palette test.)
+  const { refused } = consultableVendors();
+  const cannot = named().filter((one) => !CONSULTING_RUNTIMES.includes(one.runtime));
 
-  assert.ok(!offered.some((one) => one.id === 'gemini'), 'the retired Gemini preset cannot consult');
-  assert.deepEqual(refused.map((one) => one.id), ['gemini'],
-    'the only preset this build refuses is the retired one — anything else missing would be a silent gap');
-  assert.match(refused[0]!.why, /gemini/, 'the reason must name the runtime, or it explains nothing');
-  assert.ok(refused[0]!.label.length > 0, 'a person reads the label, not the id');
+  assert.deepEqual([...refused].map((one) => one.id).sort(), cannot.map((one) => one.id).sort(),
+    'every preset this build cannot consult with is named here — one missing is a silent gap');
+  assert.ok(refused.every((one) => one.why.includes(preset(one.id).runtime)),
+    'the reason must name the runtime, or it explains nothing');
+  assert.ok(refused.every((one) => one.label === preset(one.id).label && one.label.length > 0),
+    'a person reads the label, not the id');
 });
 
 test('no Team server can be offered as a consultant, by construction rather than by a filter', () => {
@@ -612,15 +617,32 @@ test('no Team server can be offered as a consultant, by construction rather than
   assert.ok(!refused.some((one) => one.id.includes('-')), 'a Team-server row id is `<server>-<vendor>`, and none can reach this list');
 });
 
+/** The catalogue as *Add a reviewer* holds it — every named preset, which is the source of truth here. */
+function named(): readonly (typeof VENDOR_PRESETS)[number][] {
+  return VENDOR_PRESETS.filter((one) => one.id.length > 0);
+}
+
+function preset(id: string): (typeof VENDOR_PRESETS)[number] {
+  const found = named().find((one) => one.id === id);
+  assert.ok(found !== undefined, `the catalogue has no preset '${id}'`);
+
+  return found;
+}
+
 test('the picker is the CATALOGUE — every consulting preset is offered, whatever is in Reviewers', () => {
-  const { offered } = consultableVendors();
+  const { offered, refused } = consultableVendors();
 
   assert.deepEqual(
-    offered.map((one) => one.id),
-    ['codex', 'antigravity', 'claude', 'deepseek', 'openrouter', 'local'],
-    'the list a person can pick from is what the product SUPPORTS, not what somebody happens to review with',
+    [...offered.map((one) => one.id), ...refused.map((one) => one.id)].sort(),
+    named().map((one) => one.id).sort(),
+    'every named preset is accounted for — offered or refused — and none is silently absent',
   );
-  assert.ok(offered.every((one) => one.label.length > 0 && one.hint.length > 0),
+  assert.deepEqual(
+    offered.map((one) => one.id),
+    named().filter((one) => CONSULTING_RUNTIMES.includes(one.runtime)).map((one) => one.id),
+    'what a person can pick is what the product SUPPORTS, not what somebody happens to review with',
+  );
+  assert.ok(offered.every((one) => one.label === preset(one.id).label && one.hint === preset(one.id).hint),
     'each entry carries the label and the sentence Add a reviewer shows — one catalogue, read the same way twice');
 });
 
@@ -717,13 +739,37 @@ test('a consultant materialised from a Team-server row says the build cannot con
     'and no settings of its own, because nothing here will be launched');
 });
 
-test('the model a refused consultant is on is still on screen — kept, never dropped under the person', () => {
-  const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolvedDefinition('acme-codex', 'remote', 'gpt-5') } },
-    {},
-  );
+test('the model a refused consultant is on is KEPT — emptying the list never drops it under the person', () => {
+  const view = viewOf(legacy('acme-codex'), [{ ...vendor('acme-codex', 'remote'), model: 'gpt-5' }]);
 
-  assert.ok(html.includes('gpt-5'), 'emptying the list must not take the stored model off the screen with it');
+  assert.equal(view.keptModel, 'gpt-5', 'a saved value the list no longer holds is the row’s to carry, not the list’s');
+  assert.equal(viewOf(definition('claude', 'claude', 'haiku')).keptModel, '',
+    'and a model the list DOES hold is not repeated beside it');
+});
+
+test('the empty model option says what is true of THIS row, rather than one sentence for all of them', () => {
+  assert.match(viewOf(definition('codex', 'codex')).modelPlaceholder, /default/);
+  assert.match(viewOf(legacy('retired-thing'), []).modelPlaceholder, /cannot place|can place/);
+  assert.ok(!/default/.test(viewOf(legacy('acme-codex'), [vendor('acme-codex', 'remote')]).modelPlaceholder),
+    'a runtime this build will never ask has no default to fall back to, and saying it has one is a lie a person acts on');
+});
+
+test('a vendor the catalogue can still offer is never in the list twice', () => {
+  // `deepseek` is in the catalogue AND can be a stored entry the rule could not place — no reviewer
+  // row of that name, and it is not a runtime. The row then carried its own option and the
+  // catalogue's, two `<option value="deepseek">` in one select: a person clicks the vendor in front
+  // of them, hits whichever the browser selects, and reads the same broken row back.
+  const view = viewOf(legacy('deepseek'), []);
+
+  assert.equal(view.options.filter((one) => one.value === 'deepseek').length, 1);
+});
+
+test("an option carries the catalogue's own hint, not a bare name", () => {
+  const offered = viewOf(definition('codex', 'codex')).options.find((one) => one.value === 'deepseek');
+
+  assert.ok(offered !== undefined, 'the catalogue is offered in every row');
+  assert.equal(offered.hint, preset('deepseek').hint,
+    'Add a reviewer shows the sentence that says what a vendor IS; a picker that drops it leaves a person guessing');
 });
 
 test('a caller pointed at its own vendor is told what to think, and no other caller is', () => {
@@ -998,6 +1044,20 @@ test('choosing the vendor that is already chosen keeps the consultant\u0027s own
 
   assert.deepEqual(changed['claude'], stored['claude'],
     'clearing the model is for a vendor CHANGE; re-sending the vendor already chosen must not hand the row\u0027s values back over the person\u0027s own');
+});
+
+test('picking the vendor the row already shows MATERIALISES it, when what is stored is only a reference', () => {
+  // The catalogue offers DeepSeek, and a stored entry can hold that id with nothing to resolve it —
+  // no reviewer row of that name, and it is not a runtime, so rule (c) leaves it unavailable. The
+  // row said DeepSeek and the picker offered DeepSeek, and `id === starting.vendor` handed the same
+  // unresolved reference straight back: a person clicked the vendor in front of them and the row
+  // did not change. The A2 guard this narrows is for a DEFINITION, where re-sending the vendor must
+  // not hand a reviewer row's values back over what the person set.
+  const changed = consultantRecordUpdate({ claude: { vendor: 'deepseek', model: '' } }, 'claude', 'consultVendor', 'deepseek', []);
+
+  assert.deepEqual(changed['claude'], {
+    vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1',
+  });
 });
 
 test('choosing a catalogue entry that is not itself a runtime writes THAT preset’s definition', () => {

@@ -32,10 +32,19 @@ export interface ConsultantViewState {
   readonly consultPrompt?: string | undefined;
 }
 
-/** One option in a row's vendor picker: what is stored, and what a person reads. */
+/**
+ * One option in a row's vendor picker: what is stored, and what a person reads.
+ *
+ * <p>The `hint` is the catalogue's own sentence — the one *Add a reviewer* shows under each vendor,
+ * saying what it IS and how it runs. One catalogue read the same way twice means both halves of the
+ * entry travel, not just the name; a picker showing bare names leaves a person choosing between
+ * `DeepSeek` and `OpenRouter` with nothing to choose ON. Empty for a row's own stored entry, whose
+ * label already says what it is. (This story's code round, `codex`.)</p>
+ */
 export interface VendorOption {
   readonly value: string;
   readonly label: string;
+  readonly hint: string;
 }
 
 /**
@@ -58,12 +67,27 @@ export interface ConsultantRowView {
   readonly executablePath: string;
   readonly options: readonly VendorOption[];
   readonly models: readonly ModelChoice[];
+  /** What the empty model option means HERE — a runtime's default, or that there will be no call. */
+  readonly modelPlaceholder: string;
+  /**
+   * The row's own model when the list above does not hold it — kept, and never dropped under the person.
+   *
+   * <p>A decision rather than markup, like the rest of this value: emptying a list must not take a
+   * saved value off the screen with it, and whether it has to be carried is a question about the
+   * model and the list, which a template literal is the wrong place to ask. Empty when the list
+   * already offers it, so nothing is ever shown twice.</p>
+   */
+  readonly keptModel: string;
   /** Which of the consultant's own settings this runtime actually has. */
   readonly takesBaseUrl: boolean;
   readonly takesExecutablePath: boolean;
   /** What to think about this pair — said, never decided for the person. */
   readonly hints: readonly string[];
 }
+
+/** The empty model option, in the two cases it means genuinely different things. */
+const RUNTIME_DEFAULT = 'the runtime’s own default';
+const NO_MODEL = 'no model until this consultant is one the build can place';
 
 /**
  * The section's body.
@@ -127,6 +151,7 @@ function placed(
 ): ConsultantRowView {
   const known = catalogue.some((preset) => preset.id === one.vendor);
   const placeable = CONSULTING_RUNTIMES.includes(one.runtime);
+  const models = placeable ? modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []) : [];
 
   return {
     caller,
@@ -137,11 +162,18 @@ function placed(
     baseUrl: one.baseUrl,
     executablePath: one.executablePath,
     options: known ? offeredOptions(catalogue) : [ownOption(one), ...offeredOptions(catalogue)],
-    models: placeable ? modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []) : [],
+    models,
+    modelPlaceholder: placeable ? RUNTIME_DEFAULT : NO_MODEL,
+    keptModel: kept(one.model, models),
     takesBaseUrl: placeable && (one.runtime === 'codex' || one.runtime === 'local'),
     takesExecutablePath: placeable && one.runtime !== 'local',
     hints: hintsFor(caller.id, one),
   };
+}
+
+/** A saved model the list above does not hold — carried by the row, or empty when it is already there. */
+function kept(model: string, models: readonly ModelChoice[]): string {
+  return model.length > 0 && !models.some((one) => one.id === model) ? model : '';
 }
 
 /**
@@ -159,6 +191,17 @@ function unplaceable(
   why: string,
   catalogue: readonly ConsultantPreset[],
 ): ConsultantRowView {
+  // The catalogue can already hold this id — `deepseek` names no runtime and needs no reviewer row,
+  // so a legacy entry naming it arrives here while the picker offers it two lines below. Prepending
+  // an own-option then put two `<option value="deepseek">` in one select: a person clicks the vendor
+  // in front of them, reaches whichever the browser resolves to, and reads the same broken row back.
+  // The catalogue's entry is the one that can be picked INTO something, so it is the one that stays.
+  // (This story's code round, `codex`.)
+  const offered = offeredOptions(catalogue);
+  const own: readonly VendorOption[] = offered.some((one) => one.value === vendor)
+    ? []
+    : [{ value: vendor, label: `${vendor} — not a consultant this build can place`, hint: '' }];
+
   return {
     caller,
     state: 'unavailable',
@@ -167,8 +210,10 @@ function unplaceable(
     model,
     baseUrl: '',
     executablePath: '',
-    options: [{ value: vendor, label: `${vendor} — not a consultant this build can place` }, ...offeredOptions(catalogue)],
+    options: [...own, ...offered],
     models: [],
+    modelPlaceholder: NO_MODEL,
+    keptModel: model,
     takesBaseUrl: false,
     takesExecutablePath: false,
     hints: why.length === 0 ? [] : [why],
@@ -177,7 +222,7 @@ function unplaceable(
 
 /** The catalogue as a person reads it — the labels *Add a reviewer* offers, not internal ids. */
 function offeredOptions(catalogue: readonly ConsultantPreset[]): readonly VendorOption[] {
-  return catalogue.map((preset) => ({ value: preset.id, label: preset.label }));
+  return catalogue.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint }));
 }
 
 /**
@@ -192,6 +237,7 @@ function ownOption(one: { vendor: string; runtime: Runtime; baseUrl: string }): 
   return {
     value: one.vendor,
     label: `${one.vendor} — your own, on ${one.runtime}${one.baseUrl.length > 0 ? ` at ${one.baseUrl}` : ''}`,
+    hint: '',
   };
 }
 
@@ -248,29 +294,17 @@ function row(view: ConsultantRowView): string {
   return `<div class="field consultant-row" data-caller="${caller}">
   <label for="consultVendor-${caller}">${escapeHtml(view.caller.label)} asks</label>
   <select id="consultVendor-${caller}" data-setting="consultVendor" data-caller="${caller}">
-${view.options.map((one) => option(one.value, one.label, view.vendor)).join('\n')}
+${view.options.map((one) => option(one.value, one.label, view.vendor, one.hint)).join('\n')}
   </select>
   <select id="consultModel-${caller}" data-setting="consultModel" data-caller="${caller}">
-${option('', modelPlaceholder(view), view.model)}
+${option('', view.modelPlaceholder, view.model)}
 ${view.models.map((model) => option(model.id, model.label, view.model)).join('\n')}
-${strandedModel(view)}
+${view.keptModel.length === 0 ? '' : option(view.keptModel, `${view.keptModel} — not offered by this vendor`, view.model)}
   </select>
 ${view.takesBaseUrl ? field(caller, 'consultBaseUrl', 'Endpoint', view.baseUrl, 'https://api.example.com/v1') : ''}
 ${view.takesExecutablePath ? field(caller, 'consultExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}
 ${view.hints.map((hint) => `  <div class="hint">${escapeHtml(hint)}</div>`).join('\n')}
 </div>`;
-}
-
-/** The empty model option: what happens when this row names no model of its own. */
-function modelPlaceholder(view: ConsultantRowView): string {
-  return view.state === 'unavailable' ? 'no model until this consultant is one the build can place' : 'the runtime’s own default';
-}
-
-/** A saved model the vendor no longer offers is KEPT and marked, never dropped under the person. */
-function strandedModel(view: ConsultantRowView): string {
-  return view.model.length > 0 && !view.models.some((one) => one.id === view.model)
-    ? option(view.model, `${view.model} — not offered by this vendor`, view.model)
-    : '';
 }
 
 /** One of the consultant's OWN settings, keyed by caller so the write path knows whose it is. */
@@ -279,8 +313,10 @@ function field(caller: string, setting: string, label: string, value: string, pl
   <input type="text" id="${setting}-${caller}" data-setting="${setting}" data-caller="${caller}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">`;
 }
 
-function option(value: string, label: string, selected: string): string {
-  return `    <option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+function option(value: string, label: string, selected: string, hint = ''): string {
+  const title = hint.length === 0 ? '' : ` title="${escapeHtml(hint)}"`;
+
+  return `    <option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}${title}>${escapeHtml(label)}</option>`;
 }
 
 /**
