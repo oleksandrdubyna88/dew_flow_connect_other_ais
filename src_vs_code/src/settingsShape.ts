@@ -14,7 +14,6 @@ import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
-  CHOICE_FIELDS,
   ConsultantChoice,
   ConsultantDefinition,
   ConsultSettings,
@@ -23,6 +22,7 @@ import {
   consultantChoiceFrom,
   consultSettingsFrom,
   CONSULT_SETTINGS,
+  isChoiceField,
   resolveConsultant,
   sameCallers,
 } from './consultSettings';
@@ -348,11 +348,7 @@ function merged(
 function unnamedFields(row: unknown): Record<string, unknown> {
   const stored = typeof row === 'object' && row !== null && !Array.isArray(row) ? row as Record<string, unknown> : {};
 
-  return Object.fromEntries(Object.entries(stored).filter(([key]) => !isNamedField(key)));
-}
-
-function isNamedField(key: string): boolean {
-  return CHOICE_FIELDS.some((one) => one === key);
+  return Object.fromEntries(Object.entries(stored).filter(([key]) => !isChoiceField(key)));
 }
 
 /**
@@ -377,9 +373,11 @@ function storedShape(one: ResolvedConsultant): Record<string, unknown> {
 
 /** One field replaced. An unplaceable entry admits only its model — nothing else has a meaning yet. */
 function edited(one: ResolvedConsultant, field: ConsultantField, value: string): ResolvedConsultant {
-  return one.kind === 'definition'
-    ? editedDefinition(one, field, value)
-    : field === 'model' ? { ...one, model: value } : one;
+  if (one.kind === 'definition') {
+    return editedDefinition(one, field, value);
+  }
+
+  return field === 'model' ? { ...one, model: value } : one;
 }
 
 function editedDefinition(one: ConsultantDefinition, field: ConsultantField, value: string): ResolvedConsultant {
