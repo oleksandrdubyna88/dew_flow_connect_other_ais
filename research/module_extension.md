@@ -474,6 +474,13 @@ Two things about that record had to be got right, and the code round found both:
   caller whose text it is, not through whichever write happened to settle last. They are the same
   clipboard today and they are not the same object — each copier is handed its own.
 
+**And the guarantee stops at this extension host, which is narrower than the clipboard.** Two windows
+are two hosts and therefore two of that record, so a write stalled in one window can settle after a
+newer copy in the other and take the clipboard with nothing able to see it. Coordinating across hosts
+would need a resource every host shares — a great deal of machinery for the repair of a timeout — so
+the promise is *the newest press in this window wins*, written down rather than quietly widened to
+the system.
+
 **Three refusals, one sentence between two of them.** An ordinal past the end and a signature that
 disagrees both say *That block is no longer part of this answer* — from the person's side they are
 one fact. A clipboard that rejects says so separately. All three go to the status bar through
