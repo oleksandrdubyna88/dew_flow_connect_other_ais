@@ -1086,12 +1086,20 @@ async function countLines(file: vscode.Uri): Promise<number> {
   }
 }
 
-/** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */
+/**
+ * The server's own session files, from the ONE place that knows where they are.
+ *
+ * <p>It used to resolve the directory here, for a third time in this product and differently from
+ * both of the others: it read `COAI_DATA_DIR` raw, ignored `COAI_DATA_SIDE` entirely, and did not
+ * trim. On a side-partitioned installation that read `<root>/sessions` while everything else wrote
+ * `<root>/<side>/sessions`, so the rounds-log page listed somebody else's sessions or none.</p>
+ *
+ * <p>The settings layer made it worse rather than exposing it: a directory chosen in the panel lives
+ * in a setting, which a `process.env` read cannot see at all — so this would have gone on reading
+ * `%LOCALAPPDATA%` for every person who used the new feature. One rule, asked once.</p>
+ */
 async function readSessions(): Promise<SessionFile[]> {
-  const configured = process.env['COAI_DATA_DIR'];
-  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
-  const dir = vscode.Uri.file(configured ?? `${localAppData}/coai-mcp`);
-  const sessionsDir = vscode.Uri.joinPath(dir, 'sessions');
+  const sessionsDir = vscode.Uri.joinPath(dataDir(), 'sessions');
   const sessions: SessionFile[] = [];
   try {
     for (const [name, kind] of await vscode.workspace.fs.readDirectory(sessionsDir)) {

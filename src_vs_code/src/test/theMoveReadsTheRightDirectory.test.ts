@@ -65,6 +65,27 @@ test('and it is the counter, so the verification is comparing two real directori
   );
 });
 
+test('nothing resolves the data directory by reading the variables itself', () => {
+  // There were THREE answers to "where is the data" in this product, and the third was in
+  // `extension.ts`: a raw `COAI_DATA_DIR` read that ignored `COAI_DATA_SIDE` and did not trim, so a
+  // side-partitioned installation listed sessions from `<root>` while everything else wrote
+  // `<root>/<side>`. The settings layer would have made it permanent rather than exposing it — a
+  // setting is invisible to a `process.env` read, so that copy would have gone on reading
+  // %LOCALAPPDATA% for everyone who chose a folder.
+  const offenders = sourcesIn(SRC)
+    .filter((file) => !file.endsWith('dataDir.ts'))
+    .filter((file) => /process\.env\[["']COAI_DATA_(DIR|SIDE)["']\]/u.test(withoutComments(readFileSync(file, 'utf8'))))
+    .map((file) => file.slice(SRC.length + 1));
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'these read the storage variables directly instead of asking dataDir.ts. A second answer to '
+    + '"where does the data live" is a second answer that drifts, and the drift is silent: it shows '
+    + 'as an empty list rather than an error.',
+  );
+});
+
 test('the directory it is given is handed to the child as the root, with no side', () => {
   // The unambiguity the doc claims: a path that already carries its side resolves to itself when no
   // side is named, so a side cannot be applied twice. Asserted by running a child that prints what

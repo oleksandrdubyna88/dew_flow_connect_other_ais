@@ -1829,9 +1829,64 @@ Three more things the round insisted on, each cheap and each load-bearing:
   long as the share takes to time out — every panel interaction hung, with nothing on screen to say
   why.
 
-Nothing here moves anything. Copying stays out of scope: a partial copy, a file in use, a database
-being written while it is read — the instructions say to stop the server, copy, verify the rounds
-list, and only then delete.
+Nothing here moved anything — until the section below, which built the half that acts.
+
+### The install asks where the data lives, and the panel can move it (2026-09-15)
+
+The last part of issue #115. The two sections above made a chosen directory RESOLVE correctly and
+made it VISIBLE; every way to ask for one was still a hand-edited MCP client entry, so a reinstalled
+machine started a fresh history beside a NAS that held the old one.
+
+**The first install on a side asks.** The trigger is this side's install record, read before the
+download because `installLatest` writes it at the end of one. A folder that already holds a database
+is **adopted** — the reinstall case working as intended, and the exact inverse of the rule the move
+follows, where a non-empty destination is refused because copying over it destroys what is there.
+Both rules are about the same folder; neither is phrased as "the destination is checked", and
+`dataChoice.ts` and `dataMove.ts` hold one each.
+
+**The choice lives in two settings**, `coai.dataDirectory` and `coai.dataSide`, and they are
+**always per side** whatever `perSideSettings` says (`ALWAYS_PER_SIDE` in `settingsShape.ts`). Every
+other overlaid setting is a fact about the WORK; these two are facts about a side's filesystem, and
+`Z:\coai` and `/mnt/z/coai` are one NAS and not one string — a shared value is wrong on at least one
+side by construction rather than by preference.
+
+`chooseStorage` in `dataDir.ts` asks the layers in order — the environment, this side's choice, the
+shared setting, the platform default — and **whichever layer names the DIRECTORY names the side**,
+because composing one layer's root with another's side builds a path nobody configured, which then
+exists and is empty. `DataLocation.source` carries which one answered, and the panel says it.
+
+**Two things without which none of it works**, both invisible from outside:
+
+- The extension host resolves its own directory from `process.env` ONLY, and a VS Code window has no
+  `COAI_DATA_DIR`. An unpersisted choice would leave the panel reading `%LOCALAPPDATA%` while the
+  server writes to the NAS — the "two have come apart" state this whole area exists to diagnose, as
+  the NORMAL state for everyone who used the feature. `storageReadsThisSide` therefore runs FIRST in
+  `activate`, before the watchers and the chat store resolve anything.
+- Every read of the rounds database is a SPAWN of the server binary, and `LaunchOptions` carried no
+  environment. `serverRun` is now the only door to that binary and supplies `serverEnv()` as a
+  DEFAULT rather than a parameter — a parameter is what the fourth call site forgets, and what that
+  produces is an empty list rather than an error. `serverRunAt` is the single deliberate exception,
+  for reading a copy back before anything is pointed at it, and a call-graph test holds it to one
+  caller.
+
+**The block the installer copies carries the two keys.** The guard that forbade an `env` on that
+call is amended rather than dropped: it allows `serverEnv()` and nothing else, and the reasoning is
+the rule's own — a pasted key freezes a setting the settings FILE could otherwise change live, and
+these two can never be in that file, because the file lives inside the directory they select.
+
+**The move copies, verifies, and deletes nothing.** It refuses while reviewers are running or a
+write-ahead log sits beside the database; it refuses a destination holding any part of a history; it
+fingerprints rounds, sessions and ledger lines, copies, reads the new folder back and compares. Only
+a verified move unlocks *Delete the old data folder*, a separate command reading a record in
+`globalState` — so the gate survives the window reload somebody does while going away to check their
+history.
+
+**And the inventory was wrong.** `DATA_TO_MOVE` named four entries; the two halves write sixteen.
+Following the instructions this panel printed lost a person's edited prompts, their whole spending
+history, the entire chat half of the product, the audit records and the rounds still in
+`coai.db-wal` — silently, every time, because a copy that misses a file reports success.
+`shared/data-inventory.json` now names every entry with its fate, and a suite scans BOTH halves'
+sources for paths composed under the data directory and fails on one the fixture has never heard of.
 
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
 

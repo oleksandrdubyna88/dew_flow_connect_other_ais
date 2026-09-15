@@ -233,6 +233,21 @@ function currentChoice(): ChosenStorage {
  * because a key that means nothing invites the question of what it is for. This is also what the
  * install flow puts in the block it copies, and what every spawned read of the database is given.</p>
  */
+/**
+ * The ROOT a layer named, absolute — empty when nothing named one and the default is in use.
+ *
+ * <p>The root rather than the resolved directory: a side lives inside it, and both the "there is a
+ * loose database in the shared root" note and the probe that feeds it are questions about the root
+ * itself. The panel used to read `COAI_DATA_DIR` directly for this, which stopped being the whole
+ * answer the moment a directory could be chosen in a setting — and the failure is quiet, because a
+ * note that never fires looks exactly like a note with nothing to say.</p>
+ */
+export function chosenRoot(): string {
+  const chosen = currentChoice();
+
+  return chosen.directory.length === 0 ? '' : resolve(chosen.directory);
+}
+
 export function serverEnv(): Readonly<Record<string, string>> {
   const chosen = currentChoice();
   if (chosen.directory.length === 0 || (chosen.side.length > 0 && !usableSideName(chosen.side))) {
