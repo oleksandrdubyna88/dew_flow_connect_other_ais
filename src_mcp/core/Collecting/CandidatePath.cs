@@ -34,10 +34,20 @@ public static class CandidatePath
         path.Replace('\\', '/').ToLowerInvariant().TrimEnd('/');
 
     /// <summary>Whether this path is a scratch directory rather than somebody's repository.</summary>
+    /// <remarks>
+    /// Each fragment is matched as a whole path COMPONENT, not as a substring: `/todelete` must not
+    /// claim `/todelete_benchmarks/repo` or `/dev/todelete-fixtures`, which are ordinary directories
+    /// whose names merely begin the same way. Caught twice — once accepted and not done, once found
+    /// again by the same two reviewers.
+    /// </remarks>
     public static bool IsTransient(string path)
     {
-        var canonical = Canonical(path);
+        var canonical = Canonical(path) + "/";
 
-        return Array.Exists(Transient, fragment => canonical.Contains(fragment, StringComparison.Ordinal));
+        return Array.Exists(
+            Transient,
+            fragment => canonical.Contains(
+                fragment.EndsWith('/') ? fragment : fragment + "/",
+                StringComparison.Ordinal));
     }
 }

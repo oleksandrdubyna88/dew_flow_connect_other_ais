@@ -297,33 +297,42 @@ public sealed class RoundsDb : IDisposable
     /// state and then died before the reason would leave a row saying it was skipped and refusing to
     /// say why — and the next run would pass over it, because the state is no longer empty. Written
     /// once, after every piece of evidence is in hand. (Plan round, codex.)</para>
-    /// <para><b>Conditional on the row still being unprocessed.</b> Two collector runs can read the
-    /// same pending finding; an unconditional UPDATE let the slower one overwrite a `collected` row
-    /// and its fix commit with its own later verdict. A write that changes nothing answers false, and
-    /// the run counts it as a lost race rather than as work it did. (Code round, codex.)</para>
+    /// <para><b>A compare-and-swap on the state the run READ, not on emptiness.</b> Two collector
+    /// runs can read the same finding; an unconditional UPDATE let the slower one overwrite a
+    /// `collected` row and its fix commit with its own later verdict. The first guard was written as
+    /// `collect_state = ''` — which is the same thing only for a run that takes unprocessed rows, and
+    /// `--all` exists precisely to revisit decided ones. It recomputed every candidate and persisted
+    /// NOTHING, silently: the feature that makes a repaired walk worth having did not work at all.
+    /// Swapping against <paramref name="was"/> keeps the race guard exactly (a pending row swaps from
+    /// `''`) and lets a revisit through. (Code round, gemini and codex, independently, twice.)</para>
     /// <para>The id, not the ordinal: a candidate is identified here by the row it came from, and
     /// `BugsQuery` hands that id over for exactly this.</para>
     /// </remarks>
     /// <returns>Whether this run was the one that claimed the row.</returns>
-    public bool RecordCollect(long findingId, string state, string reason, string fixSha, string runId)
+    /// <param name="was">
+    /// The state the row carried when this run read it — empty for an unprocessed candidate. The
+    /// write lands only if the row still says that, so a run that lost the race is told.
+    /// </param>
+    public bool RecordCollect(
+        long findingId, string was, string state, string reason, string fixSha, string runId)
     {
         using var write = _db.CreateCommand();
         write.CommandText = """
             UPDATE findings
                SET collect_state = $state, collect_reason = $reason,
                    fix_sha = $fix, collect_run_id = $run
-             WHERE id = $id AND collect_state = ''
+             WHERE id = $id AND collect_state = $was
             """;
         Bind(write, "$state", state);
         Bind(write, "$reason", reason);
         Bind(write, "$fix", fixSha);
         Bind(write, "$run", runId);
         Bind(write, "$id", findingId);
+        Bind(write, "$was", was);
 
-        // Conditional on the row still being unprocessed, and the caller is told. Two runs can read
-        // the same pending finding; an unconditional write let the slower one replace a `collected`
-        // row and its fix_sha with its own later verdict, so durable state depended on timing.
-        // (Code round, codex.)
+        // The swap, and the caller is told whether it won. Two runs can read the same finding; an
+        // unconditional write let the slower one replace a `collected` row and its fix_sha with its
+        // own later verdict, so durable state depended on timing. (Code round, codex.)
         return write.ExecuteNonQuery() == 1;
     }
 

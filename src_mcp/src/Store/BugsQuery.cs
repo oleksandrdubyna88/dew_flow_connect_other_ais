@@ -151,6 +151,9 @@ public static class BugsQuery
                COALESCE((SELECT later.head_sha FROM rounds later
                          WHERE later.session_id = r.session_id AND later.stage = r.stage
                            AND later.number > r.number AND later.head_sha != ''
+                           -- and it must have MOVED: a re-review that committed nothing carries the
+                           -- same head_sha, and head..head is an empty interval that finds no fix.
+                           AND later.head_sha != r.head_sha
                          ORDER BY later.number LIMIT 1), '') AS later_sha
         FROM findings f
             JOIN rounds r ON r.id = f.round_id
@@ -171,6 +174,9 @@ public static class BugsQuery
                COALESCE((SELECT later.head_sha FROM rounds later
                          WHERE later.session_id = r.session_id AND later.stage = r.stage
                            AND later.number > r.number AND later.head_sha != ''
+                           -- and it must have MOVED: a re-review that committed nothing carries the
+                           -- same head_sha, and head..head is an empty interval that finds no fix.
+                           AND later.head_sha != r.head_sha
                          ORDER BY later.number LIMIT 1), '') AS later_sha
         FROM findings f
             JOIN rounds r ON r.id = f.round_id

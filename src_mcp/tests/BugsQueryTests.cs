@@ -69,6 +69,48 @@ public sealed class BugsQueryTests : IDisposable
             [.. findings.Select((_, i) => Decisions.Accept(findings, i))]);
     }
 
+    /// <summary>
+    /// The interval ends at the next round that actually MOVED, and a re-review does not count.
+    /// </summary>
+    /// <remarks>
+    /// <para>`later_sha` is the state after this round's fixes, and for an orphaned commit it is
+    /// the only interval there is — 37 % of measured candidates. It had no test at all.</para>
+    /// <para>A round that reviewed the same commit again — a repair, a reviewer that timed out and
+    /// was re-run — carries the SAME `head_sha`. Offered as the interval end it gives `head..head`,
+    /// which is empty, so the walk finds nothing and the candidate is filed `fix_commit_not_found`
+    /// while the fix sits one round further on. (Code round, codex.)</para>
+    /// </remarks>
+    [Fact]
+    public void TheIntervalEndsAtTheNextRoundThatMoved()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var first = Found("a race on the cache");
+        db.RecordRound(Session, Round(), [first], new RoundContext("SCOPE", "aaaa111", "claude-code"));
+        db.RecordDecisions(Session.SessionId, "CodeReview", 1, [Decisions.Accept([first], 0)]);
+
+        // Round two re-reviewed the same commit: nothing was pushed between them.
+        db.RecordRound(
+            Session, Round(number: 2), [Found("another")], new RoundContext("SCOPE", "aaaa111", "claude-code"));
+        // Round three is where the fixes landed.
+        db.RecordRound(
+            Session, Round(number: 3), [Found("a third")], new RoundContext("SCOPE", "bbbb222", "claude-code"));
+
+        BugsQuery.Read(_dir).Candidates.Should().ContainSingle()
+            .Which.LaterSha.Should().Be("bbbb222", "head..head is an empty interval, not an end");
+    }
+
+    /// <summary>With nothing after it, a candidate has no bounded interval and says so.</summary>
+    [Fact]
+    public void ARoundWithNothingAfterIt_HasNoInterval()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var only = Found("a race on the cache");
+        db.RecordRound(Session, Round(), [only], new RoundContext("SCOPE", "aaaa111", "claude-code"));
+        db.RecordDecisions(Session.SessionId, "CodeReview", 1, [Decisions.Accept([only], 0)]);
+
+        BugsQuery.Read(_dir).Candidates.Should().ContainSingle().Which.LaterSha.Should().BeEmpty();
+    }
+
     [Fact]
     public void AnAcceptedRuntimeFindingOnCode_IsMaterialForTheCorpus()
     {

@@ -1,10 +1,17 @@
 # PLAN — the gate's own findings become a corpus of real defects
 
-> Status: **stories 0, 1 and 2 shipped; 3–6 are open.** `rounds.base_ref` went first (PR #268)
-> because every round that ran without it lost that half permanently, and the read side followed
-> (PR #272). Story 2 is blocked on one package approval — see *The parser* below.
-> Scope: a new `Bugz` panel section, a `coai-normalize` sidecar, a `coai-bugs` ingest server, and
-> four columns on `findings`.
+> Status: **stories 0–3 shipped; 4–6 are open.** `rounds.base_ref` went first (PR #268) because
+> every round that ran without it lost that half permanently, and the read side followed (PR #272).
+> Story 2's package was approved on three conditions — pinned version, grammars pruned at publish,
+> the library behind `IAstNormalizer` — and all three are in. Story 3 is the collector.
+> Scope: a new `Bugz` panel section, a `coai-bugs` ingest server, and four columns on `findings`.
+>
+> **Two deviations from the plan as written.** The normalizer was planned as a `coai-normalize`
+> sidecar and is a MODE of `coai-mcp` instead: the reason for a separate binary was Roslyn under
+> `PublishAot`, and tree-sitter reaches its grammars by P/Invoke, which Native AOT carries. A second
+> release line would have bought nothing. And the Rust toolchain the plan once carried is gone — the
+> binding ships prebuilt natives for every RID this product targets, so there is no third toolchain
+> in CI.
 >
 > Related docs: [module_server.md](../research/module_server.md) (the rounds database),
 > [module_extension.md](../research/module_extension.md) (the panel),

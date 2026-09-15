@@ -131,12 +131,36 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
                 return (string.Empty, CollectOutcome.Fail(SkipReason.GitFailed));
             }
 
-            if (later.Ok && await DescendsAsync(candidate, candidate.LaterSha, ct) is true)
+            // A git FAILURE judging the interval is not "there is no interval". Falling through to
+            // the refs here turned a timeout into an open-ended walk down whichever branch happened
+            // to contain the commit — a different search, reported as though it were this one.
+            // Every other git failure in this class is a `failed`; this one silently was not.
+            // (Code round, gemini.)
+            if (later.Ok)
             {
-                return (candidate.LaterSha, null);
+                return await DescendsAsync(candidate, candidate.LaterSha, ct) switch
+                {
+                    true => (candidate.LaterSha, null),
+                    // It exists but does not descend — a stale row, or a session whose later round
+                    // was taken on another line of work. The open-ended walk is the honest fallback.
+                    false => await OpenEndedAsync(candidate, ct),
+                    _ => (string.Empty, CollectOutcome.Fail(SkipReason.GitFailed)),
+                };
             }
         }
 
+        return await OpenEndedAsync(candidate, ct);
+    }
+
+    /// <summary>The end of an unbounded search: a ref that DESCENDS from the broken commit.</summary>
+    /// <remarks>
+    /// Which refs CONTAIN the commit, never which refs exist — walking a ref that does not descend
+    /// from it would attribute somebody else's edit as the fix. No ref containing it means there is
+    /// no history to walk forward through at all, which is what `head_sha_orphaned` says.
+    /// </remarks>
+    private async Task<(string To, CollectOutcome? Outcome)> OpenEndedAsync(
+        Candidate candidate, CancellationToken ct)
+    {
         var containing = await git.RefsContainingAsync(candidate.RepoPath, candidate.HeadSha, ct);
         if (!containing.Ran)
         {

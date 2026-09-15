@@ -141,13 +141,77 @@ public sealed class CollectRunTests : IAsyncLifetime
         (await Run()).Candidates.Should().Be(0, "the first run left nothing unprocessed");
     }
 
-    private async Task<CollectSummary> Run()
+    /// <summary>
+    /// A revisiting run WRITES what it finds — the whole point of `collect_state` being text.
+    /// </summary>
+    /// <remarks>
+    /// <para>The claim guard was `collect_state = ''`, which is "the row is still unprocessed" —
+    /// and a revisit is by definition a row that is not. So `--all` re-read every candidate, ran
+    /// every git command again, recomputed the right answer, and persisted NOTHING. The summary
+    /// even reported it as collected, because the summary counts outcomes and the row counts
+    /// writes. Silent, and it disabled the one feature the ternary state exists for. Two reviewers
+    /// found it independently. (Code round, gemini and codex.)</para>
+    /// <para>The shape is the real one: the first run genuinely cannot find a fix because the fix
+    /// has not been committed yet, and the second run — after it has — must be able to say so.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ARevisitingRunPersistsWhatItFinds()
+    {
+        var broken = await Head();
+        Seed(broken, "Totals.cs", 5);
+
+        (await Run()).Skipped.Should().Be(1, "nothing has fixed it yet");
+        Row()["collect_state"].Should().Be("skipped");
+
+        await File.WriteAllTextAsync(Path.Combine(_repo, "Totals.cs"), Fixed);
+        await Commit("hold the lock");
+        var fix = await Head();
+
+        var revisit = await Run(all: true);
+
+        revisit.Collected.Should().Be(1);
+        revisit.Lost.Should().Be(0, "nobody else touched the row, so the swap must have landed");
+        var row = Row();
+        row["collect_state"].Should().Be("collected", "a revisit that writes nothing is not a revisit");
+        row["fix_sha"].Should().Be(fix);
+        row["collect_run_id"].Should().Be(revisit.RunId);
+        row["collect_reason"].Should().BeEmpty("the earlier skip reason is no longer true");
+    }
+
+    /// <summary>A row another run decided in the meantime is not overwritten.</summary>
+    /// <remarks>
+    /// The race guard the swap has to keep: two runs read the same pending finding, and the slower
+    /// one must not replace the winner's verdict and its fix commit with its own. Fixtured by
+    /// deciding the row out from under a run that has already read it.
+    /// </remarks>
+    [Fact]
+    public async Task ARowDecidedByAnotherRunIsNotOverwritten()
+    {
+        var broken = await Head();
+        await File.WriteAllTextAsync(Path.Combine(_repo, "Totals.cs"), Fixed);
+        await Commit("hold the lock");
+        Seed(broken, "Totals.cs", 5);
+
+        var winner = await Run();
+        winner.Collected.Should().Be(1);
+
+        // The loser read the row while it was still pending, and only now gets to write.
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var claimed = db.RecordCollect(
+            Id(), was: string.Empty, "skipped", "fix_commit_not_found", string.Empty, "the-loser");
+
+        claimed.Should().BeFalse("the row no longer says what that run read");
+        Row()["collect_state"].Should().Be("collected");
+        Row()["collect_run_id"].Should().Be(winner.RunId);
+    }
+
+    private async Task<CollectSummary> Run(bool all = false)
     {
         using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
         var run = new CollectRun(
             new Collector(new GitHistory(_launcher), new TreeSitterNormalizer()), TimeProvider.System);
 
-        return await run.RunAsync(_data, db, 50);
+        return await run.RunAsync(_data, db, 50, all);
     }
 
     /// <summary>One accepted, gating, runtime finding pointing at a real commit.</summary>
@@ -165,6 +229,18 @@ public sealed class CollectRunTests : IAsyncLifetime
             [found],
             new RoundContext("SCOPE", headSha, "claude-code"));
         db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept([found], 0)]);
+    }
+
+    /// <summary>The seeded finding's row id, which is what a collector run claims by.</summary>
+    private long Id()
+    {
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={Path.Combine(_data, RoundsDb.FileName)};Pooling=False");
+        db.Open();
+        using var read = db.CreateCommand();
+        read.CommandText = "SELECT id FROM findings";
+
+        return (long)read.ExecuteScalar()!;
     }
 
     private Dictionary<string, string> Row()
