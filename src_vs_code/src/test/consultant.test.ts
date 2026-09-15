@@ -682,6 +682,66 @@ test('editing the model of an entry this build cannot place invents no runtime',
     'an unplaceable entry is shown back exactly as stored; guessing a runtime would send the tree somewhere nobody chose');
 });
 
+test('a new vendor leaves none of the old one\u0027s endpoint or CLI path behind', () => {
+  const stored = {
+    claude: {
+      vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat',
+      baseUrl: 'https://api.deepseek.com/v1', executablePath: 'C:/codex.cmd',
+    },
+  };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'claude', []);
+
+  assert.deepEqual(changed['claude'], { vendor: 'claude', runtime: 'claude', model: '' },
+    'the row is REPLACED by what the new vendor resolves to; a merge would have left DeepSeek\u0027s endpoint pointing out of a Claude consultant');
+});
+
+test('an endpoint typed at an entry this build cannot place is refused, not stored', () => {
+  const stored = { claude: { vendor: 'retired-vendor', model: 'm' } };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', 'https://api.example.com/v1', []);
+
+  assert.deepEqual(changed['claude'], { vendor: 'retired-vendor', model: 'm' },
+    'an entry with no runtime has nothing for an endpoint to belong to; storing one would make a bare reference look like a definition');
+});
+
+test('a consultant\u0027s own endpoint survives an edit to its model', () => {
+  const stored = {
+    claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+  };
+  // A row of the same name, deliberately carrying DIFFERENT values: if the write re-lent the row's
+  // endpoint the way a legacy reference does, this is what would overwrite the person's own.
+  const rows = [{ ...vendor('deepseek'), model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/BETA' }];
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'deepseek-reasoner', rows);
+
+  assert.deepEqual(
+    changed['claude'],
+    { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/v1' },
+    'a definition resolves to itself, so only the field the person edited moves — the row lends nothing to a consultant that is no longer a reference to it');
+});
+
+/**
+ * What the ROWS argument decides — and what this cannot prove.
+ *
+ * <p>It proves the function materialises from the rows it is HANDED, so handing it the wrong side's
+ * rows would store the wrong side's values. It does not prove `panelProvider` hands it the right
+ * ones: that is one line reading `this.read(config)('vendors')` beside the line that reads the
+ * consultants map, and it needs a running extension host to observe. Said here rather than left to
+ * be inferred from a green test.</p>
+ */
+test('the reviewer rows handed to the write are the ones materialised', () => {
+  const stored = { claude: { vendor: 'codex', model: '' } };
+  const oneSide = [{ ...vendor('codex'), model: 'gpt-5.6-luna' }];
+  const otherSide = [{ ...vendor('codex'), model: 'gpt-6-astra', executablePath: 'D:/other/codex.cmd' }];
+
+  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultModel', '', oneSide)['claude'],
+    { vendor: 'codex', runtime: 'codex', model: '' });
+  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', '', otherSide)['claude'],
+    { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', executablePath: 'D:/other/codex.cmd' },
+    'the other side\u0027s row lends its model and CLI path, so the rows argument is what decides');
+});
+
 test('an emptied prompt box removes the override rather than writing a prompt that says nothing', () => {
   assert.deepEqual(consultPromptWrite(''), { kind: 'remove' });
   assert.deepEqual(consultPromptWrite('  \n  '), { kind: 'remove' });

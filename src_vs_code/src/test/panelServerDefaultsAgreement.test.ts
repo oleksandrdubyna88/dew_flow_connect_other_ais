@@ -196,6 +196,31 @@ test('a pristine panel writes no consult key either', () => {
 });
 
 /**
+ * The shipped consultant map has a THIRD copy, and it is the one no test was reading.
+ *
+ * <p>`ConsultantRouting.Shipped` in C# and `DEFAULT_CONSULT` in TypeScript are held level by the test
+ * above. The manifest's `coai.consultants.default` is those four pairs again — what VS Code shows in
+ * the settings editor, and what it restores when somebody presses the revert arrow. A schema edit
+ * changing one pair there would leave both other copies green while a reset chose a different
+ * consultant. This family has already paid for a decision living in three places and being updated in
+ * two. (codex, A2's plan round.)</p>
+ */
+test('the manifest ships the same four consultant pairs as the code', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
+  };
+
+  assert.deepStrictEqual(
+    manifest.contributes.configuration.properties['coai.consultants']?.default,
+    Object.fromEntries(CALLER_KINDS.map(({ id }) => [id, {
+      vendor: DEFAULT_CONSULT.stored[id]!.vendor,
+      model: DEFAULT_CONSULT.stored[id]!.model,
+    }])),
+    'the settings editor would restore a consultant map the code does not ship',
+  );
+});
+
+/**
  * The same contract from the direction the reader meets it since a legacy entry resolves on read.
  *
  * <p>`DEFAULTS` is a value that never went through `consultSettingsFrom`; a real panel's settings did,

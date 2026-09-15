@@ -190,7 +190,13 @@ RED: *a legacy entry reads as a definition — after the read its runtime is pre
 `codex` entry with an empty model materialises its reviewer row's model* (today `''`).
 Discharges 1 (read half), 3, 4, 7 (state half).
 
-**A2 · The write path stores a definition, never a bare reference** — *Opus*.
+**A2 · The write path stores a definition, never a bare reference** — *Opus*. Its own plan round
+added four rules, each now pinned by a test: the caller's row is REPLACED by what the new vendor
+resolves to, never merged into, so none of the old vendor's endpoint or CLI path is left behind; an
+endpoint or CLI path typed at an UNPLACEABLE entry is refused rather than stored, because an entry
+with no runtime has nothing for an endpoint to belong to; a definition resolves to ITSELF, so editing
+one field never re-lends the reviewer row's values over a person's own; and the manifest's
+`coai.consultants.default` — a third copy of the shipped map — is held level with the code.
 Files: `settingsShape.ts` (`consultantRecordUpdate`), `panelProvider.ts` (`write`, `case 'caller'`),
 `package.json` (`coai.consultants`), `test/consultant.test.ts`, `test/settingsAreDeclared.test.ts`.
 Done when: an edit writes the edited caller's row as a FULL definition and leaves the other three rows
