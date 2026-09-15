@@ -19,7 +19,8 @@ import {
   vaultKeyNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
-import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
+import { CALLER_NEUTRAL, ConsultantRowView, callerColour, consultantBody, consultantRowView } from '../consultantView';
+import { vendorPalette } from '../vendorColour';
 import {
   badEndpoint,
   consultantEndpointWrite,
@@ -1322,4 +1323,78 @@ test('an emptied prompt box removes the override rather than writing a prompt th
   // Kept verbatim: a prompt's trailing blank line is the author's, and the server composes its own
   // sections after it.
   assert.deepEqual(consultPromptWrite('Answer briefly.\n\n'), { kind: 'write', text: 'Answer briefly.\n\n' });
+});
+
+// ---------- each row is a framed group in its client's own colour (issue #291) ----------
+//
+// REVIEWERS draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
+// the same colour follows it into Active rounds and the rounds log. CONSULTANT drew four flat
+// `.field` blocks: no frame, nothing grouping a caller's controls, no colour. `.consultant-row`
+// existed as a data hook with no CSS rule anywhere.
+//
+// Three of the four caller ids are ANCHORED in vendorColour.ts, so they get the colour they already
+// have everywhere else for free. `other` is not a vendor and takes a neutral edge — the operator's
+// ruling, and it is also what stops it colliding with a configured reviewer's colour.
+
+test('a caller wears the colour its vendor has everywhere else', () => {
+  const configured = ['codex', 'antigravity', 'local'];
+  const palette = vendorPalette(configured);
+
+  // Against the ALLOCATOR, never a hard-coded hex: a literal here would drift the day the palette
+  // moves and would say nothing about whether the two views agree.
+  for (const id of ['claude', 'codex', 'gemini']) {
+    assert.equal(callerColour(id, palette), palette(id), `${id} does not wear its own vendor colour`);
+  }
+});
+
+test('another client is not dressed as a vendor', () => {
+  const palette = vendorPalette(['codex', 'antigravity']);
+
+  assert.equal(callerColour('other', palette), CALLER_NEUTRAL, 'another client was given a vendor colour');
+  // Both halves. Asserting only "it is the neutral token" would pass if the palette happened to
+  // return that token; this says the palette was not consulted for it at all.
+  assert.notEqual(callerColour('other', palette), palette('other'), 'the neutral edge is whatever the palette said');
+});
+
+test('no palette means a neutral edge, not a crash and not a colour', () => {
+  assert.equal(callerColour('claude', undefined), CALLER_NEUTRAL);
+  assert.equal(callerColour('other', undefined), CALLER_NEUTRAL);
+});
+
+test('every consultant row is a framed box carrying its own edge colour', () => {
+  const palette = vendorPalette(['codex', 'antigravity']);
+
+  const html = consultantBody(DEFAULT_CONSULT, { colour: palette });
+
+  for (const { id } of CALLER_KINDS) {
+    const expected = callerColour(id, palette);
+    assert.ok(
+      html.includes(`data-caller="${id}" style="border-left-color:${expected}"`),
+      `${id}'s row carries no edge colour of its own`,
+    );
+  }
+});
+
+test('the rows still do what they did, and still say what they said', () => {
+  // The frame must not have been bought by rewriting the controls or dropping the guidance.
+  const palette = vendorPalette(['codex']);
+  const framed = consultantBody(DEFAULT_CONSULT, { colour: palette });
+  const plain = consultantBody(DEFAULT_CONSULT, {});
+
+  for (const { id, label } of CALLER_KINDS) {
+    for (const hook of [
+      `id="consultVendor-${id}"`,
+      `data-setting="consultVendor" data-caller="${id}"`,
+      `id="consultModel-${id}"`,
+      `data-setting="consultModel" data-caller="${id}"`,
+    ]) {
+      assert.ok(framed.includes(hook), `${id} lost ${hook}`);
+    }
+    assert.ok(framed.includes(`${label} asks`), `${label} is no longer named in words`);
+  }
+
+  // Every hint the section carried before still reads the same. A row refactor that dropped one
+  // would otherwise pass every assertion above. (codex, the plan round.)
+  const hints = (text: string): readonly string[] => text.split('<div class="hint">').slice(1).map((part) => part.split('</div>')[0] ?? '');
+  assert.deepEqual(hints(framed), hints(plain), 'the guidance under the rows changed');
 });

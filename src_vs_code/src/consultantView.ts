@@ -22,6 +22,7 @@ import {
 } from './consultSettings';
 import { escapeHtml } from './escapeHtml';
 import { ModelChoice, Runtime, modelsFor } from './models';
+import { VendorPalette } from './vendorColour';
 
 /** What the section needs beyond the settings themselves. The reviewer rows are NOT among them. */
 export interface ConsultantViewState {
@@ -30,7 +31,49 @@ export interface ConsultantViewState {
   readonly agyModels?: readonly ModelChoice[];
   /** The prompt override as it is ON DISK, or empty for "the one this build ships with". */
   readonly consultPrompt?: string | undefined;
+  /**
+   * The REVIEWERS' own palette, so a caller wears the colour its vendor has everywhere else.
+   *
+   * <p>Handed in rather than built here, because the promise is made over a LIST: every view asks
+   * for the palette of the CONFIGURED reviewers, never of whoever happens to appear in the thing it
+   * is drawing. Building one from the four caller kinds would be a second list and a second
+   * assignment, which is the defect `vendorColour.ts` exists to prevent.</p>
+   *
+   * <p>Optional because a caller with no palette is a legitimate state — the panel always passes
+   * one, including the empty-vendor case, where the anchored ids still answer.</p>
+   */
+  readonly colour?: VendorPalette;
 }
+
+/**
+ * The edge a caller that is not a vendor gets.
+ *
+ * <p>The same token `.role-code` uses, and for the same job: this marks a container rather than an
+ * entity. "Another client" is not a vendor and must not look like one — and nothing drawn from the
+ * palette can then collide with it, which a hashed colour for an unanchored id could.</p>
+ */
+export const CALLER_NEUTRAL = 'var(--vscode-widget-border)';
+
+/**
+ * The stripe for a caller: its vendor's own colour, or a neutral edge.
+ *
+ * <p>`claude`, `codex` and `gemini` are ANCHORED in the palette, so they answer with the colour they
+ * already have on their reviewer card and in a running round whether or not a reviewer of that name
+ * is configured. That is the whole of the cross-view promise, and it costs nothing here.</p>
+ *
+ * <p>Pure, and exported, so the decision is tested by calling it rather than by reading the page it
+ * ends up in.</p>
+ */
+export function callerColour(callerId: string, colour: VendorPalette | undefined): string {
+  if (callerId === OTHER_CALLER || colour === undefined) {
+    return CALLER_NEUTRAL;
+  }
+
+  return colour(callerId);
+}
+
+/** The caller kind that is not a vendor: anything this product does not recognise by name. */
+const OTHER_CALLER = 'other';
 
 /**
  * One option in a row's vendor picker: what is stored, and what a person reads.
@@ -116,7 +159,7 @@ export function consultantBody(consult: ConsultSettings, state: ConsultantViewSt
   <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let a stuck AI consult another vendor</label>
   <div class="hint">The AI calls <code>consult</code> itself when it is stuck. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
-${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state))).join('\n')}
+${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.colour))).join('\n')}
 <div class="hint">These are the CONSULTANT’s own settings. A vendor here shares its name — and so its key in the vault — with the reviewer row of the same name, and nothing else: change a reviewer's model or endpoint and the consultant stays where you put it.</div>
 ${refused.map(refusal).join('\n')}
 <div class="field inline">
@@ -322,10 +365,13 @@ function foreignRuntime(runtime: Runtime): string {
 }
 
 /** One caller's row: which vendor answers it, on which model, and with what of its own. */
-function row(view: ConsultantRowView): string {
+function row(view: ConsultantRowView, colour: string): string {
   const caller = escapeHtml(view.caller.id);
 
-  return `<div class="field consultant-row" data-caller="${caller}">
+  // The colour is INLINE and the frame is a class, exactly as a reviewer card does it: the width and
+  // the fallback belong in the stylesheet, the hue is computed per caller and cannot be named by a
+  // class. CSP-legal — this page declares style-src 'unsafe-inline'.
+  return `<div class="field consultant-row" data-caller="${caller}" style="border-left-color:${colour}">
   <label for="consultVendor-${caller}">${escapeHtml(view.caller.label)} asks</label>
   <select id="consultVendor-${caller}" data-setting="consultVendor" data-caller="${caller}">
 ${view.options.map((one) => option(one.value, one.label, view.selected, one.hint)).join('\n')}
