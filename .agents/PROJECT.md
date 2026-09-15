@@ -52,8 +52,8 @@ node .agents/conventions/tools/pin-check.mjs
   What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
-  `--ask-remote` and
-  `--providers`, and their stdout is their entire interface — `--log` has been read from stdout by
+  `--ask-remote`, `--providers`, `--bugs-json`, `--normalize` and `--collect-bugs`, and their stdout
+  is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
   bulk export stopped being one spawn per round (2026-09-14). That last one is a MODE rather than a
@@ -65,7 +65,9 @@ node .agents/conventions/tools/pin-check.mjs
   request fault that presented as an old binary would send the client down the fallback and hide the
   fault behind a successful-looking export. This paragraph used to name only `--help` and
   `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
-  2026-09-07 and was right to. **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
+  2026-09-07 and was right to; a code round read it literally again on 2026-09-15, when the corpus
+  collector had added three modes and named none of them here.
+  **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
   the rule is unchanged and absolute.
 - **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
   handed to VS Code as text, so a substring assertion over that text cannot see a control wired to

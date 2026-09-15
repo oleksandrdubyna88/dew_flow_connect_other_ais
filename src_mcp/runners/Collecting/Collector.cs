@@ -31,6 +31,26 @@ public sealed record Candidate(
 /// </remarks>
 public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
 {
+    /// <summary>How far a walk will follow a file's history before giving up.</summary>
+    /// <remarks>
+    /// A file with ten thousand commits would otherwise spend one candidate's whole budget on a
+    /// history nobody reads to the end of, and the collector's contract is that a run finishes. Past
+    /// the bound the answer is an honest <c>fix_commit_not_found</c>: not found WITHIN the bound is
+    /// what it says, and the state is text so a later run with a wider one can revisit it.
+    /// </remarks>
+    private const int WalkCap = 200;
+
+    /// <summary>
+    /// Whether a path is a repository, remembered for the run.
+    /// </summary>
+    /// <remarks>
+    /// A batch of candidates out of one checkout asked <c>git rev-parse --git-dir</c> once per
+    /// candidate — process startup repeated for an answer that depends only on the path. Keyed by the
+    /// canonical path, because the same repository is recorded three ways in the live database.
+    /// (Code round, codex.)
+    /// </remarks>
+    private readonly Dictionary<string, bool> _repositories = new(StringComparer.Ordinal);
+
     /// <summary>What became of this candidate.</summary>
     public async Task<CollectOutcome> CollectAsync(Candidate candidate, CancellationToken ct = default)
     {
@@ -39,7 +59,15 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
             return CollectOutcome.Skip(SkipReason.RepoPathTransient);
         }
 
-        if (!await git.IsRepositoryAsync(candidate.RepoPath, ct))
+        var repository = await IsRepositoryAsync(candidate.RepoPath, ct);
+        if (!repository.Ran)
+        {
+            // A probe that did not finish says nothing about the path. Recording it as missing would
+            // mark the candidate processed and bury an outage in the skip funnel.
+            return CollectOutcome.Fail(SkipReason.GitFailed);
+        }
+
+        if (!repository.Ok)
         {
             return CollectOutcome.Skip(SkipReason.RepoPathMissing);
         }
@@ -53,6 +81,26 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
         return present.Ok
             ? await WithIntervalAsync(candidate, ct)
             : CollectOutcome.Skip(SkipReason.HeadShaUnreachable);
+    }
+
+    /// <summary>The repository probe, asked once per canonical path per run.</summary>
+    private async Task<GitAnswer> IsRepositoryAsync(string repoPath, CancellationToken ct)
+    {
+        var key = CandidatePath.Canonical(repoPath);
+        if (_repositories.TryGetValue(key, out var known))
+        {
+            return new GitAnswer(true, known, string.Empty);
+        }
+
+        var answer = await git.IsRepositoryAsync(repoPath, ct);
+        if (answer.Ran)
+        {
+            // Only a COMPLETED probe is remembered: caching a timeout would turn one slow moment
+            // into every candidate in that repository being wrong for the rest of the run.
+            _repositories[key] = answer.Ok;
+        }
+
+        return answer;
     }
 
     /// <summary>Finds the interval to search, then searches it.</summary>
@@ -117,8 +165,41 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
     /// Preferring the session's branch keeps the walk on the line of work the finding belongs to; the
     /// fallback exists because that branch is usually the one squash-merge deleted.
     /// </remarks>
-    private static string Preferred(IReadOnlyList<string> refs, string branch) =>
-        refs.FirstOrDefault(name => name.EndsWith('/' + branch, StringComparison.Ordinal)) ?? refs[0];
+    /// <summary>
+    /// The session's own branch when it descends, else an integration branch, else any ref.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Exact ref names, not a suffix.</b> `EndsWith("/" + branch)` matches `refs/heads/main`
+    /// for a branch called `main` and also `refs/heads/feature/main` for one called `main` — and an
+    /// empty branch name matched everything ending in a slash. (Code round, gemini.)</para>
+    /// <para><b>And an integration branch before an arbitrary one.</b> The fallback took `refs[0]`,
+    /// which is whatever `for-each-ref` happened to print first — a dead tag as readily as the line
+    /// of work the fix actually landed on. (Code round, gemini.)</para>
+    /// </remarks>
+    private static string Preferred(IReadOnlyList<string> refs, string branch)
+    {
+        var wanted = branch.Length == 0
+            ? []
+            : (string[])[$"refs/heads/{branch}", $"refs/remotes/origin/{branch}"];
+
+        foreach (var name in wanted.Concat(Integration))
+        {
+            if (refs.Contains(name, StringComparer.Ordinal))
+            {
+                return name;
+            }
+        }
+
+        return refs[0];
+    }
+
+    /// <summary>Where fixes land when the branch that found them is gone.</summary>
+    private static readonly string[] Integration =
+    [
+        "refs/heads/main", "refs/remotes/origin/main",
+        "refs/heads/master", "refs/remotes/origin/master",
+        "refs/heads/trunk", "refs/remotes/origin/trunk",
+    ];
 
     /// <summary>Reads the method at the broken commit, then looks for the commit that changed it.</summary>
     private async Task<CollectOutcome> LocateThenWalkAsync(Candidate candidate, string to, CancellationToken ct)
@@ -166,15 +247,15 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
     private async Task<CollectOutcome> WalkAsync(
         Candidate candidate, string to, SourceLanguage language, EnclosingSymbol symbol, CancellationToken ct)
     {
-        var commits = await git.CommitsTouchingAsync(
-            candidate.RepoPath, candidate.HeadSha, to, candidate.File, ct);
+        var (ran, commits) = await git.CommitsTouchingAsync(
+            candidate.RepoPath, candidate.HeadSha, to, candidate.File, WalkCap, ct);
 
-        if (!commits.Ran)
+        if (!ran)
         {
             return CollectOutcome.Fail(SkipReason.GitFailed);
         }
 
-        if (commits.Lines.Count == 0)
+        if (commits.Count == 0)
         {
             return CollectOutcome.Skip(SkipReason.FixCommitNotFound);
         }
@@ -182,15 +263,29 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
         var skeletonBefore = normalizer.Normalise(language, symbol.Source);
         var everFound = false;
 
-        foreach (var sha in commits.Lines)
+        foreach (var touched in commits)
         {
-            var later = await git.FileAtAsync(candidate.RepoPath, sha, candidate.File, ct);
+            // The path AT THAT COMMIT, not today's: `--follow` reports commits from before a rename.
+            var later = await git.FileAtAsync(candidate.RepoPath, touched.Sha, touched.Path, ct);
             if (!later.Ran)
             {
                 return CollectOutcome.Fail(SkipReason.GitFailed);
             }
 
-            if (!later.Ok || normalizer.LocateNamed(language, later.Out, symbol.Name) is not { } moved)
+            if (!later.Ok)
+            {
+                continue;
+            }
+
+            // An overload set shares a name, so a name is not an identity. Refusing an ambiguous one
+            // is the safe direction: comparing the wrong overload would record an unrelated commit as
+            // this defect's fix, with a sha to prove it. (Code round, codex, twice.)
+            if (normalizer.CountNamed(language, later.Out, symbol.Name) > 1)
+            {
+                return CollectOutcome.Skip(SkipReason.SymbolAmbiguous);
+            }
+
+            if (normalizer.LocateNamed(language, later.Out, symbol.Name) is not { } moved)
             {
                 continue;
             }
@@ -200,7 +295,7 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
             if (!string.Equals(skeletonAfter, skeletonBefore, StringComparison.Ordinal))
             {
                 return new CollectOutcome(
-                    CollectState.Collected, [], sha, symbol.Name, skeletonBefore, skeletonAfter);
+                    CollectState.Collected, [], touched.Sha, symbol.Name, skeletonBefore, skeletonAfter);
             }
         }
 

@@ -371,9 +371,17 @@ internal static class Program
             new Runners.Collecting.Collector(
                 new Runners.Collecting.GitHistory(new ProcessLauncher()),
                 new Normalizer.TreeSitterNormalizer()),
-            TimeProvider.System);
+            TimeProvider.System,
+            // Progress on stderr, because stdout is the JSON interface — a run of two hundred
+            // candidates is minutes of git subprocesses and a silent terminal cannot be told from a
+            // hung one.
+            Console.Error);
 
-        var summary = await run.RunAsync(settings.DataDir, db, Limit(args, Store.BugsQuery.DefaultLimit));
+        var summary = await run.RunAsync(
+            settings.DataDir,
+            db,
+            Limit(args, Store.BugsQuery.DefaultLimit),
+            all: Array.IndexOf(args, "--all") >= 0);
         Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
             summary, Server.ServerJsonContext.Default.CollectSummary));
 
@@ -1046,8 +1054,9 @@ internal static class Program
         reads no source files itself; each request carries the text. Exits 66 when the request cannot
         be read and 73 when the answers cannot be written; a method it could not locate is an answer,
         not a failure.
-        `--collect-bugs [--limit 200]` decides what became of every unprocessed candidate — the fix
-        commit, or the reason there is none — and writes it to the findings rows. Prints the funnel.
+        `--collect-bugs [--limit 200] [--all]` decides what became of every unprocessed candidate — the fix
+        commit, or the reason there is none — and writes it to the findings rows. Prints the funnel on
+        stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
         Configure it in your client as:

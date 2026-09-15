@@ -86,6 +86,14 @@ public static class SkipReason
     /// </remarks>
     public const string MethodUnchanged = "method_unchanged";
 
+    /// <summary>More than one function of that name is there, so the name is not an identity.</summary>
+    /// <remarks>
+    /// An overload set shares a name. Comparing the first match would record an unrelated overload's
+    /// change as this defect's fix, with a commit sha to prove it — so an ambiguous name skips
+    /// instead. Wrong-but-skipped is the safe direction; wrong-but-collected is not.
+    /// </remarks>
+    public const string SymbolAmbiguous = "symbol_ambiguous";
+
     /// <summary>The method is not in the later commit under that name any more.</summary>
     public const string SymbolGone = "symbol_gone";
 

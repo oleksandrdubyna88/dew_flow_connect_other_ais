@@ -321,6 +321,67 @@ public sealed class CollectorTests : IAsyncLifetime
         outcome.Reason.Should().Be(SkipReason.RepoPathMissing);
     }
 
+    /// <summary>A sha that could be read as a git OPTION is refused, not run.</summary>
+    /// <remarks>
+    /// These values come out of a database whose rows were written by reviewers' answers, so "it is
+    /// always a hex id" is an assumption. A revision beginning with `--` is an option to git, and no
+    /// amount of quoting changes that because there is no shell to quote for. (Code round, gemini.)
+    /// </remarks>
+    [Theory]
+    [InlineData("--upload-pack=touch pwned")]
+    [InlineData("--help")]
+    [InlineData("-n1")]
+    [InlineData("not a sha at all")]
+    public async Task AShaThatCouldBeAnOption_IsRefused(string sha)
+    {
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", sha, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.HeadShaUnreachable, "it never reached git at all");
+    }
+
+    /// <summary>Two methods of one name are not one method.</summary>
+    /// <remarks>
+    /// An overload set shares a name, so taking the first match would record an unrelated overload's
+    /// change as this defect's fix — with a commit sha attached, which is worse than not collecting
+    /// it. Raised twice, independently, on the code round. (codex.)
+    /// </remarks>
+    [Fact]
+    public async Task AnOverloadedNameIsRefused_RatherThanGuessed()
+    {
+        const string twoOverloads = """
+            public sealed class Totals
+            {
+                public int GetOrAdd(string key)
+                {
+                    return _items[key];
+                }
+
+                public int GetOrAdd(string key, int value)
+                {
+                    if (!_items.ContainsKey(key))
+                    {
+                        _items.Add(key, value);
+                    }
+
+                    return _items[key];
+                }
+            }
+            """;
+
+        await Write("Totals.cs", twoOverloads);
+        await Commit("two overloads, one defective");
+        var broken = await Head();
+        // Any later commit touching the file is enough: the walk must refuse before it compares.
+        await Write("Totals.cs", twoOverloads + Environment.NewLine + "// touched");
+        await Commit("touch the file");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 13));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.SymbolAmbiguous);
+    }
+
     private async Task<string> Head()
     {
         var result = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo));

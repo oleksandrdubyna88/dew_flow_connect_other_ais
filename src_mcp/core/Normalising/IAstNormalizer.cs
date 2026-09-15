@@ -81,6 +81,15 @@ public interface IAstNormalizer
     /// </remarks>
     EnclosingSymbol? LocateNamed(SourceLanguage language, string source, string name);
 
+    /// <summary>How many functions of this name the source has.</summary>
+    /// <remarks>
+    /// A name is not an identity: an overload set shares one. The collector asks this before it
+    /// compares anything, because taking the first match would record an unrelated overload's change
+    /// as a defect's fix — and it would do so with a commit sha attached, which is worse than not
+    /// collecting it at all.
+    /// </remarks>
+    int CountNamed(SourceLanguage language, string source, string name);
+
     /// <summary>
     /// Rewrites a method so that nothing of this project is left in it.
     /// </summary>
