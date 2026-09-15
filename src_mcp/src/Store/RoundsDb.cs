@@ -385,18 +385,18 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = """
             INSERT INTO rounds (session_id, stage, number, subject, status, verdict, gating,
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
-                                plan_text, head_sha, caller, agent_log,
+                                plan_text, head_sha, base_ref, caller, agent_log,
                                 caller_vendor, caller_client, caller_client_version, caller_model)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
-                    $plan, $sha, $caller, $agentLog,
+                    $plan, $sha, $baseRef, $caller, $agentLog,
                     $vendor, $client, $clientVersion, $model)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
                 tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out, cost_usd = excluded.cost_usd,
-                plan_text = excluded.plan_text, head_sha = excluded.head_sha, caller = excluded.caller,
-                agent_log = excluded.agent_log,
+                plan_text = excluded.plan_text, head_sha = excluded.head_sha, base_ref = excluded.base_ref,
+                caller = excluded.caller, agent_log = excluded.agent_log,
                 caller_vendor = excluded.caller_vendor, caller_client = excluded.caller_client,
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model
             RETURNING id
@@ -415,6 +415,7 @@ public sealed class RoundsDb : IDisposable
         // passes nothing hands over a struct whose strings are null, and these columns are NOT NULL.
         Bind(write, "$plan", context.PlanText ?? string.Empty);
         Bind(write, "$sha", context.HeadSha ?? string.Empty);
+        Bind(write, "$baseRef", context.BaseRef ?? string.Empty);
         Bind(write, "$caller", context.Caller ?? string.Empty);
         Bind(write, "$agentLog", context.AgentLog ?? string.Empty);
         // From the ROUND, which is the only thing that owns this: RoundRecord.Caller is the copy

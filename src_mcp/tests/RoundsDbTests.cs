@@ -301,6 +301,23 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
+    public void TheBaseTheDiffWasAgainstIsKeptWithTheRound()
+    {
+        // The commit is one end of the range the reviewers read; this is the other. Without it the
+        // round's diff cannot be rebuilt from the store, and unlike the commit the base is gone the
+        // moment the round ends — it lives in a local and nothing else on the machine keeps it.
+        using var db = RoundsDb.Open(_dir, _log)!;
+
+        db.RecordRound(Session, Round(), [Found("one")],
+            new RoundContext("SCOPE — the cost column", "7133c2f", "claude-code")
+            {
+                BaseRef = "origin/main",
+            });
+
+        Query("SELECT base_ref FROM rounds").Single()["base_ref"].Should().Be("origin/main");
+    }
+
+    [Fact]
     public void WhatTheAgentWasDoingIsKeptWithTheRoundItPrecedes()
     {
         // The operator's framing: the stretch between one gate and the next belongs to the gate it

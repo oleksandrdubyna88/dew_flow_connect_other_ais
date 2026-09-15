@@ -120,6 +120,30 @@ public sealed class EndToEndTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
+    /// <summary>Same git as <see cref="Git"/>, but the answer comes back.</summary>
+    private async Task<string> GitSays(params string[] args)
+    {
+        var result = await _launcher.RunAsync(new ProcessRequest("git", args, _repo));
+        result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
+        return result.StdOut.Trim();
+    }
+
+    /// <summary>One column of one stage's round, read straight from the projection.</summary>
+    /// <remarks>
+    /// Not through <c>RoundsQuery</c>: that is the log page's reader and shows what the page shows.
+    /// The question here is whether the column was WRITTEN, which is a question about the table.
+    /// </remarks>
+    private string RoundColumn(string stage, string column)
+    {
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={Path.Combine(_data, Store.RoundsDb.FileName)}");
+        db.Open();
+        using var read = db.CreateCommand();
+        read.CommandText = $"SELECT {column} FROM rounds WHERE stage = $stage";
+        read.Parameters.AddWithValue("$stage", stage);
+        return read.ExecuteScalar()?.ToString() ?? string.Empty;
+    }
+
     private PanelService Service(
         StagePolicy onExhausted = StagePolicy.Human,
         int maxRounds = 3,
@@ -432,6 +456,34 @@ public sealed class EndToEndTests : IAsyncLifetime
         Script(FourMajors);
         Parse(await service.ReviewPlanAsync(_repo, "feature", "the plan"))
             .GetProperty("verdict").GetString().Should().Be("call_human", "the ladder is exhausted");
+    }
+
+    [Fact]
+    public async Task ACodeRound_RecordsWhatItsDiffWasAgainst_NotOnlyWhatItWasAt()
+    {
+        // `head_sha` is one end of the range the reviewers read. The other end lived in a local
+        // inside the call that resolved it and was gone the moment the call returned, so a round's
+        // diff could not be rebuilt from the store at all — the one fact about a round that the
+        // repository does not keep on its own behalf.
+        //
+        // What is recorded is the RESOLVED base, not the ref the caller named: `main` resolves to
+        // the merge base of main and the branch, which in this fixture is main's own commit.
+        var service = Service();
+        await service.OpenAsync(_repo, "feature");
+        Script(Clean);
+        await service.ReviewPlanAsync(_repo, "feature", "plan");
+        await service.ResolveAsync(_repo, "feature", "[]");
+
+        Script(Clean);
+        await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+        RoundColumn("CodeReview", "base_ref").Should().Be(
+            await GitSays("rev-parse", "main"),
+            "the diff was taken against main's commit, and that is what makes it reproducible");
+
+        // And a plan round leaves it empty rather than guessing: it assembles no diff, so there is
+        // no base, and an invented one would be a fact nobody established.
+        RoundColumn("PlanReview", "base_ref").Should().BeEmpty("a plan round compares nothing");
     }
 
     [Fact]
