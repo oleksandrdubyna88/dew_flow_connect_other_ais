@@ -1,4 +1,4 @@
-import { ChatAdapter, NOTHING, parsed, text, count, inside } from './chatAdapter';
+import { ChatAdapter, NOTHING, answerOrEmpty, parsed, text, count, inside } from './chatAdapter';
 
 /**
  * `codex` — no pipe at all: a process per turn, resuming a session the vendor stores itself.
@@ -80,9 +80,9 @@ export const codexAdapter: ChatAdapter = {
     if (kind === 'item.completed') {
       const item = (event['item'] ?? {}) as Record<string, unknown>;
 
-      return text(item['type']) === 'agent_message'
-        ? { kind: 'answer', text: text(item['text']).trim() }
-        : NOTHING;
+      // An `agent_message` is this vendor's terminal answer, so an empty one is an empty turn. Any
+      // OTHER completed item is an intermediate line and stays `nothing` — it never reaches here.
+      return text(item['type']) === 'agent_message' ? answerOrEmpty(text(item['text'])) : NOTHING;
     }
     // The answer is an `item.completed` and the numbers are on `turn.completed`, a separate line
     // arriving after it — which is why the seam has a `usage` event at all. The file's own header

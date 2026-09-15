@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { AGY_ARGS, agyAdapter } from '../agyAdapter';
 import { CLAUDE_ARGS, claudeAdapter } from '../claudeAdapter';
 import { CODEX_ARGS, codexAdapter } from '../codexAdapter';
-import { ChatAdapter } from '../chatAdapter';
+import { ChatAdapter, EMPTY_ANSWER } from '../chatAdapter';
 
 /**
  * Three vendors, three wire protocols, one seam.
@@ -251,4 +251,64 @@ test('a PERSISTENT vendor puts its numbers ON the answer, because its turn ends 
   assert.strictEqual(claudeAdapter.cumulative, false);
   assert.strictEqual(agyAdapter.cumulative, false);
   assert.strictEqual(codexAdapter.cumulative, true, 'the per-turn vendor is the cumulative one');
+});
+
+/**
+ * A turn that comes back with no words in it.
+ *
+ * <p>Reported by the operator on 2026-09-15: the thinking line ran, then stopped, and nothing
+ * appeared — no answer, no error, the composer unlocked. A terminal result carrying no text was
+ * being read as an answer of zero length, which the page renders as the words "The other AI" at
+ * `opacity: .7` with nothing under them.</p>
+ *
+ * <p>The ERROR branch beside it has argued this exact case since it was written — "a page showing
+ * nothing would look like a model with nothing to say". This is that sentence applied to the branch
+ * that never got it. A thinking-tier model that spends its budget reasoning and returns empty
+ * content is the plausible producer, and the vendor 503s of that week put one under exactly that
+ * pressure.</p>
+ */
+test('a turn that comes back with no words is a failure, not a model with nothing to say', () => {
+  const silent: readonly { readonly name: string; readonly adapter: ChatAdapter; readonly line: string }[] = [
+    // The field is simply absent.
+    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS"}}' },
+    // Present and empty.
+    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS","response":""}}' },
+    // Whitespace only, which trims to nothing — the same thing to a reader.
+    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS","response":"  \\n "}}' },
+    { name: 'claude', adapter: claudeAdapter, line: '{"type":"result","subtype":"success"}' },
+    { name: 'claude', adapter: claudeAdapter, line: '{"type":"result","subtype":"success","result":"  "}' },
+    { name: 'codex', adapter: codexAdapter, line: '{"type":"item.completed","item":{"id":"item_0","type":"agent_message"}}' },
+    { name: 'codex', adapter: codexAdapter, line: '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":" "}}' },
+  ];
+
+  for (const { name, adapter, line } of silent) {
+    const event = adapter.classify(line);
+
+    assert.strictEqual(event.kind, 'failure', `${name} read an empty turn as an answer: ${line}`);
+    assert.strictEqual(
+      (event as { failure: string }).failure,
+      EMPTY_ANSWER,
+      `${name} failed an empty turn without saying it was empty`,
+    );
+  }
+});
+
+test('the empty-turn guard did not eat the answers that have words in them', () => {
+  // The guard is one `length > 0` away from swallowing every turn, and a seam that answers nothing
+  // is indistinguishable from a vendor that is down. Both halves are asserted, or neither is.
+  const spoke: readonly { readonly name: string; readonly adapter: ChatAdapter; readonly line: string }[] = [
+    { name: 'agy', adapter: agyAdapter, line: '{"event":"result","result":{"status":"SUCCESS","response":"  it means this  "}}' },
+    { name: 'claude', adapter: claudeAdapter, line: '{"type":"result","subtype":"success","result":" the answer "}' },
+    { name: 'codex', adapter: codexAdapter, line: '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"BANANA"}}' },
+  ];
+
+  for (const { name, adapter, line } of spoke) {
+    const event = adapter.classify(line);
+
+    assert.strictEqual(event.kind, 'answer', `${name} lost a real answer to the empty-turn guard`);
+    assert.ok(
+      (event as { text: string }).text.length > 0,
+      `${name} answered with text the guard should have kept`,
+    );
+  }
 });
