@@ -352,20 +352,20 @@ the OLD server runs while the projection still stands.
 
 ## Definition of Done
 
-- [ ] The Consultant section reads no reviewer row for its PICKER, and `ConsultationService` reads
+- [x] The Consultant section reads no reviewer row for its PICKER, and `ConsultationService` reads
       `settings.Providers` only on the legacy path.
-- [ ] The vendor picker is `VENDOR_PRESETS` filtered by `CONSULTING_RUNTIMES`, with catalogue labels.
-- [ ] No Team server can be chosen as a consultant, by construction — and a wire payload naming
+- [x] The vendor picker is `VENDOR_PRESETS` filtered by `CONSULTING_RUNTIMES`, with catalogue labels.
+- [x] No Team server can be chosen as a consultant, by construction — and a wire payload naming
       `remote` is refused by name before any provider is built.
-- [ ] URL, model and CLI path are per-caller and independent of Reviewers and of the chat.
-- [ ] The vault entry stays keyed by the vendor id; no credential is duplicated.
-- [ ] Old `coai.consultants` maps keep working with no write, including a custom id and an id that
+- [x] URL, model and CLI path are per-caller and independent of Reviewers and of the chat.
+- [x] The vault entry stays keyed by the vendor id; no credential is duplicated.
+- [x] Old `coai.consultants` maps keep working with no write, including a custom id and an id that
       matches nothing — the last of which is an explicit, actionable unavailable state.
-- [ ] The new wire field was measured against a server half that predates it, the three replies
+- [x] The new wire field was measured against a server half that predates it, the three replies
       recorded verbatim, and the skew surfaced in the panel.
-- [ ] The section tells the truth about entries this build's server cannot consult through.
-- [ ] Five help catalogues updated in the commit that changes the English.
-- [ ] Every story: RED observed before the fix, green after, both suites run whole, both reported, its
+- [x] The section tells the truth about entries this build's server cannot consult through.
+- [x] Five help catalogues updated in the commit that changes the English.
+- [x] Every story: RED observed before the fix, green after, both suites run whole, both reported, its
       own `review_code` round resolved, docs updated, committed.
 
 ## What is deliberately NOT in this plan
