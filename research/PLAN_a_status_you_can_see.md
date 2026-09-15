@@ -14,8 +14,12 @@
 >
 > 1. **Five CSS rules, not four.** The plan budgeted only colours. `statusMark(...)` is concatenated
 >    straight onto the escaped sentence, so with no rule of its own the glyph rendered flush against
->    the word — `✓done`. `.reviewer .said .mark` carries `display: inline-block`, a fixed `width` and
->    a `margin-right`. (gemini, the plan round.)
+>    the word — `✓done`. `.reviewer .said .mark` carries `display: inline-block`, a `min-width` and
+>    a `margin-right`. (gemini, the plan round.) The code round then made that width a MINIMUM
+>    rather than a fixed one: a glyph wider than 1.1em in somebody else's font would be CLIPPED by a
+>    fixed width, and a clipped status mark is worse than a row that shifts. (uxdx, the code round;
+>    and CodeRabbit on PR #306, for the fact that this paragraph still said "fixed" after the code
+>    had stopped being.)
 > 2. **An unrecognised status gets an EMPTY mark, not nothing.** The plan said "no mark". That would
 >    have started such a row a glyph-width left of every other row — a ragged column, which is the
 >    same "hard to read" the issue is about. The span is rendered and held to the same width; only
@@ -137,10 +141,11 @@ so with no rule the glyph renders flush against the word — `✓done`. Putting 
 would leave a leading space on rows whose mark is empty. So:
 
 ```css
-.reviewer .said .mark { display: inline-block; width: 1.1em; margin-right: 2px; }
+.reviewer .said .mark { display: inline-block; min-width: 1.1em; vertical-align: baseline; margin-right: 2px; }
 ```
 
-`inline-block` with a fixed width is what reserves the column for the empty case above; the margin is
+`inline-block` with a MINIMUM width is what reserves the column for the empty case above without
+clipping a glyph that needs more room; the margin is
 what separates the glyph from the word. (gemini, the plan round.)
 
 ### The four marks
