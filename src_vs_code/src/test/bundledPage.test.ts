@@ -401,8 +401,13 @@ function bundleOf(module_: string, exported: string): string {
   return bundle;
 }
 
-/** The chat page as it ships: bundled, minified, then rendered. */
-function bundledChatPage(): { bundle: string; html: string } {
+/**
+ * The chat page as it ships: bundled, minified, then rendered.
+ *
+ * @param over what this render needs that the default state does not — a failure to show, a retry to
+ *   offer. Spread LAST, so a scenario names only the field it is about.
+ */
+function bundledChatPage(over: Record<string, unknown> = {}): { bundle: string; html: string } {
   const bundle = bundleOf('chatPage.ts', 'chatPageHtml');
   const shim = { exports: {} as Record<string, unknown> };
   new Function('module', 'exports', bundle)(shim, shim.exports);
@@ -437,6 +442,8 @@ function bundledChatPage(): { bundle: string; html: string } {
       marks: { role: '', task: '', service: [] },
       uiScale: 0,
       textTone: 0,
+      canRetry: false,
+      ...over,
     },
     'n0nce',
   );
@@ -480,7 +487,7 @@ interface StubNode extends Record<string, unknown> {
   readonly classList: StubClassList;
 }
 
-function runPage(): {
+function runPage(over: Record<string, unknown> = {}): {
   readonly html: string;
   readonly rendered: Map<string, string>;
   readonly nodes: Record<string, StubNode>;
@@ -493,7 +500,7 @@ function runPage(): {
   readonly push: (data: unknown) => void;
   readonly frame: () => void;
 } {
-  const { html } = bundledChatPage();
+  const { html } = bundledChatPage(over);
   const script = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
   const posted: Array<Record<string, unknown>> = [];
   const rendered = new Map(
@@ -927,4 +934,48 @@ test('the chat page script the bundle produces parses and runs', () => {
   // The trap must be installed, not merely written: a webview swallows a thrown error, and a page
   // that stops answering Enter with no sign of why is the defect it exists to name.
   assert.strictEqual(typeof window_['onerror'], 'function', 'the page installed no error trap');
+});
+
+/**
+ * The retry flow, on the page AS IT SHIPS.
+ *
+ * <p>The unit tests drive the page module's own script; this drives the bundled, minified one, which
+ * is what a person actually presses. It exists because that is where this repository has been bitten:
+ * a function referenced only from inside a template string gets renamed by the minifier, and the page
+ * dies with a name that is not defined — twice, in the rounds log. A control added to a region and
+ * listened for by a delegated handler is exactly that shape.</p>
+ */
+test('the shipped page offers Try again on a failure, and one press sends one retry naming its state', () => {
+  const page = runPage({
+    failure: 'the model returned an empty answer',
+    canRetry: true,
+    messages: [{ role: 'you', text: 'the question that failed' }],
+  });
+
+  // THE MARKUP, not the whole document: the page's own script carries the selector `[data-retry]`
+  // as a string, so a whole-document match is true whatever the state is. The file's header records
+  // that this exact mistake has been made here before.
+  const markup = page.html.split('<script')[0];
+
+  assert.match(markup, /id="failure"/, 'the shipped page rendered no failure region at all');
+  assert.match(markup, /data-retry="1"/, 'the shipped page offered no retry naming the state it was drawn for');
+  assert.match(markup, /Try again/, 'the control does not say what pressing it does');
+
+  // One press. The guard against a SECOND press is unit-level, where the harness can hand the
+  // handler the same element twice — this stub fabricates a fresh one per click, so a disabled flag
+  // written on the first would be invisible to the second and the assertion would prove nothing.
+  page.clickIn('failure', { retry: '1' });
+
+  assert.deepEqual(
+    page.posted.filter((message) => message['command'] === 'retry'),
+    [{ type: 'command', command: 'retry', at: 1 }],
+    'the minified page sent no retry — a binding the minifier renamed is how this has failed before',
+  );
+});
+
+test('the shipped page does not offer a retry when the host says there is nothing behind it', () => {
+  const markup = runPage({ failure: 'the page hit an error', canRetry: false }).html.split('<script')[0];
+
+  assert.match(markup, /the page hit an error/, 'a failure with no retry stopped being readable');
+  assert.doesNotMatch(markup, /data-retry/, 'the shipped page offered a button the host did not offer');
 });

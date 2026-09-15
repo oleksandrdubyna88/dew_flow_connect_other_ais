@@ -1839,9 +1839,16 @@ async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Promise<v
     // REDRAWN, not merely declined. The page disabled the control the moment it was pressed, so a
     // decline that pushed nothing would leave a dead button on screen for as long as the tab is
     // open — the person having pressed the one thing offered to them and got a greyed-out control
-    // and silence. Pushing the state rebuilds the region from what is actually true now, which is
-    // either a live button or no button. (gemini, the plan round.)
-    show(entry, false, '');
+    // and silence. Pushing the state rebuilds the region from what is true now. (gemini, the plan
+    // round.)
+    //
+    // WITH THE THREAD'S OWN running, not a hard-coded false. Four reviewers found the same thing on
+    // the code round: the press that gets refused is almost always the one made after a NEW question
+    // was sent, so a push saying nothing is running would retire the thinking line and unlock the
+    // composer over a turn that is still in flight — offering a second send down a pipe that carries
+    // one. The failure is empty here because that newer turn cleared it, which is the same event that
+    // moved the transcript and made this press stale.
+    show(entry, thread.running, '');
 
     return;
   }
@@ -1849,7 +1856,7 @@ async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Promise<v
   // Clamped for the reason the re-ask above clamps it: a stored mark past the end would point at an
   // unrelated message as soon as the conversation grew again.
   thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
-  await oneTurn(entry, again.question, thread.generation);
+  await oneTurn(entry, again, thread.generation);
 }
 
 async function oneTurn(entry: ChatEntry, text: string, began: number): Promise<void> {

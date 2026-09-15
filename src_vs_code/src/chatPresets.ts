@@ -280,10 +280,14 @@ export function reaskFrom(
  * line, an answer that arrived late, a carry) the tail is no longer a question nobody answered and
  * there is nothing here to retry.</p>
  *
- * <p>`said` is the transcript WITHOUT that question, because the caller re-asks through the ordinary
- * turn path, which appends the question itself. Handing back both halves is what stops a retry
- * printing the question twice — the trap the plan named and the reason this returns a pair rather
- * than a string.</p>
+ * <p><b>It returns the question and NOTHING else, unlike `reaskFrom` above it.</b> The first version
+ * handed back a `said` transcript as well, and the caller never used it: `oneRetry` slices
+ * `thread.messages` itself, because a projection to `{role, text}` would drop the marks, the model
+ * and everything else a stored message carries. So the pair was two rollback implementations where
+ * one is needed — and, worse, an O(N) copy of the whole conversation on EVERY state push, since the
+ * only other caller is `canRetry`, which asks nothing of it but whether it is undefined. Three
+ * reviewers found that independently on the code round. Reading the trailing message is now the whole
+ * of the work.</p>
  *
  * <p>Beside `reaskFrom` because the two read the same transcript for almost the same thing and a
  * reader comparing them should not have to open two files. Neither of them is really about presets;
@@ -291,17 +295,10 @@ export function reaskFrom(
  */
 export function retryFrom(
   messages: readonly { readonly role: 'you' | 'model'; readonly text: string }[],
-): { readonly said: readonly { readonly role: 'you' | 'model'; readonly text: string }[]; readonly question: string } | undefined {
-  const last = messages.length - 1;
-  const question = messages[last];
-  if (question?.role !== 'you' || question.text.trim().length === 0) {
-    return undefined;
-  }
+): string | undefined {
+  const question = messages[messages.length - 1];
 
-  return {
-    said: messages.slice(0, last).map((message) => ({ role: message.role, text: message.text })),
-    question: question.text,
-  };
+  return question?.role === 'you' && question.text.trim().length > 0 ? question.text : undefined;
 }
 
 

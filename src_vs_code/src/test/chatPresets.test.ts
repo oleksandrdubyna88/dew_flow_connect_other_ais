@@ -182,15 +182,12 @@ const FAILED = [
   { role: 'you' as const, text: 'the question that failed' },
 ];
 
-test('a retry sends the question that failed, and the transcript it comes back to does not repeat it', () => {
-  const again = retryFrom(FAILED);
-
-  assert.strictEqual(again?.question, 'the question that failed');
-  assert.deepStrictEqual(
-    again?.said.map((message) => message.text),
-    ['first question', 'first answer'],
-    'the question is still in the transcript the retry hands back, so asking it again would show it twice',
-  );
+test('a retry sends the question that failed, and reads nothing else to find it', () => {
+  // The question ALONE. An earlier version also returned the transcript without it, which no caller
+  // used — oneRetry slices thread.messages itself so a stored message keeps its marks and its model —
+  // and which cost a full copy of the conversation on every state push, because canRetry asks this
+  // nothing but whether it is undefined. (Three reviewers, the code round.)
+  assert.strictEqual(retryFrom(FAILED), 'the question that failed');
 });
 
 test('there is nothing to retry when the last thing said was an answer', () => {
