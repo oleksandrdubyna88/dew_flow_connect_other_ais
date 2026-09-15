@@ -1570,6 +1570,16 @@ still sitting under it — without the number the host would take *the trailing 
 then and retry somebody's next question instead. `chatCommandOf` refuses a retry that names no whole,
 non-negative number, so there is no wildcard to fall back on.
 
+**A retry goes to the model that failed, or it is not offered.** A retry is the same question to the
+same model; a re-ask is the same question to a different one, and that difference is the whole of what
+tells the two features apart — so a retry that followed whatever is selected when the button is pressed
+would be a re-ask wearing the other one's label. Nothing else records which model failed: a failed turn
+appends no answer, and an answer is the only message carrying the model that produced it. So the failing
+branch writes `thread.failedWith = pairOf(thread)`, a new turn clears it, a reset omits it from the slate
+(`Freshened`, which the `RESET_DECIDES_EVERY_THREAD_FIELD` check forces every thread field to declare),
+and `canRetry` requires it to still match. Switch model after a failure and the control is withdrawn
+rather than silently redirected — Re-ask is already on the Send button for that.
+
 **A refused retry still redraws the region.** The page disables the control the moment it is pressed,
 so a decline that pushed nothing would leave a dead button on screen for the life of the tab — the
 person having pressed the one thing offered them and got a greyed-out control and silence. `oneRetry`

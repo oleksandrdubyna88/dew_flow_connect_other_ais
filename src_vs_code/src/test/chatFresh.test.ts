@@ -58,6 +58,8 @@ test('the slate a reset installs is exactly these fields, and nothing else', () 
     // forget, its thread id being instance state of a session object that is now gone.
     reopen: true,
     running: false,
+    // A new slate has failed at nothing, so it offers no retry of anything.
+    failedWith: '',
     createdAt: 1_700_000_000_000,
     usedAt: 1_700_000_000_000,
   } satisfies Freshened);

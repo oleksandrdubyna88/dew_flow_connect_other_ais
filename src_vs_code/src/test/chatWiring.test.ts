@@ -197,6 +197,32 @@ test('a stopped turn is written into the transcript before the conversation is c
   );
 });
 
+test('a retry goes to the model that failed, or it is not offered at all', () => {
+  // A retry is the same question to the same model; a re-ask is the same question to a DIFFERENT
+  // one. That difference is the whole of what tells the two features apart, so a retry that followed
+  // whatever is selected when the button is pressed would be a re-ask wearing the other one's label.
+  // Nothing else records which model failed — a failed turn appends no answer, and an answer is the
+  // only message carrying the model that produced it. (codex, the second code round.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /if \(!result\.ok\) \{[\s\S]{0,400}?thread\.failedWith = pairOf\(thread\)/u,
+    'a failed turn no longer records which pair it failed under, so a retry cannot know where to go',
+  );
+  assert.match(
+    text,
+    /canRetry:[\s\S]{0,400}?thread\.failedWith === pairOf\(thread\)/u,
+    'the retry is offered without checking the model still matches the one that failed',
+  );
+  // And cleared when a new turn supersedes the failure, or the offer outlives what it was about.
+  assert.match(
+    text,
+    /thread\.running = true;[\s\S]{0,300}?thread\.failedWith = '';/u,
+    'a new turn leaves the old failure retryable behind it',
+  );
+});
+
 test('a retry leaves the carry exactly as the failure left it', () => {
   // The failing branch of `oneTurn` deliberately does NOT clear `thread.carry` — its comment says so
   // in as many words: "the retry — the same question, one keypress later". `oneRetry` is that
