@@ -95,9 +95,17 @@ export function capture(
    * which is a question rather than an event source at this boundary.</p>
    */
   stop?: () => boolean,
+  /**
+   * Variables the child needs beyond what it inherits.
+   *
+   * <p>One kind of caller fills this in: a read of the rounds database, which spawns a server that
+   * resolves its own data directory from its own environment. `serverRun` in `roundsDbRead.ts` is
+   * the door that does it — a version probe does not care where the data lives.</p>
+   */
+  env?: Readonly<Record<string, string>>,
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
-    const child = launch(target, args, { shell });
+    const child = launch(target, args, env === undefined ? { shell } : { shell, env });
 
     let output = '';
     let answered = false;

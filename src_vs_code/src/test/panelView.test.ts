@@ -1365,6 +1365,7 @@ const where = (over: Partial<DataLocation> = {}): DataLocation => ({
   refusal: '',
   notes: [],
   env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },
+  source: 'environment',
   ...over,
 });
 
@@ -1517,4 +1518,49 @@ test('a refused side is a sentence on the page, not a section that vanished', ()
 test('a fixture that carries no storage renders no section at all', () => {
   // The established convention for an optional field here: absent means a test that does not care.
   assert.ok(!panelHtml(state(), 'n').includes('Where this window keeps its data'));
+});
+
+// ---------- changing it, and saying where the answer came from (issue #115) ----------
+
+// Whether the controls WORK is asserted by running the page's own script, in
+// `panelStorageScript.test.ts` — `.agents/PROJECT.md` refuses a new behavioural assertion over page
+// source text, and "is the button wired" is exactly that. What stays here is what the section SAYS,
+// which is the output of a pure function and has no program to run. (codex, code round.)
+
+test('the section says which layer answered, so nobody has to deduce it', () => {
+  // The panel and the server CAN read different directories, and the product has always known it.
+  // Saying "this came from a setting on this side" is what turns "why is my history missing" from a
+  // deduction into a sentence.
+  const fromSetting = panelHtml(state({ storage: where({ source: 'this side' }) }), 'n');
+  const fromEnvironment = panelHtml(state({ storage: where({ source: 'environment' }) }), 'n');
+
+  assert.match(fromSetting, /this side/u);
+  assert.match(fromEnvironment, /COAI_DATA_DIR/u);
+  assert.notEqual(fromSetting, fromEnvironment, 'the two sources read identically, so neither is said');
+});
+
+test('a directory inherited from the shared setting says that it was', () => {
+  // The case worth naming on its own: the value was set on the OTHER side of this machine, where
+  // the same NAS has a different mount path, and it may well not exist here.
+  const html = panelHtml(state({ storage: where({ source: 'shared setting' }) }), 'n');
+
+  assert.match(html, /set for every side of this machine/u);
+});
+
+test('the list of what to move is a list, not a sentence sixteen items long', () => {
+  // It was four items in a comma sentence, and it is sixteen now. The same prose would be a
+  // paragraph nobody finishes, in a sidebar whose width is somebody else's choice.
+  const html = panelHtml(state({ storage: where() }), 'n');
+  const at = html.indexOf('Moving to another folder');
+  // Never an unchecked `slice(indexOf(...))`: a heading that has been reworded gives -1, which
+  // slices the LAST CHARACTER of the page and then fails complaining about a missing entry rather
+  // than a missing section. This file's own idiom, and it is what this test cost when the advice was
+  // reworded to say which direction the copy goes in.
+  assert.ok(at >= 0, 'the moving advice has been renamed, and this test is now asserting nothing');
+  const section = html.slice(at);
+
+  for (const name of DATA_TO_MOVE) {
+    assert.ok(section.includes(escapeHtml(name)), `${name} is not named where a person would copy it`);
+  }
+  assert.match(section, /<ul|<li/u, 'sixteen names run together are not read');
 });

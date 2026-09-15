@@ -45,7 +45,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey, serverRun } from './roundsDbRead';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -117,9 +117,9 @@ import {
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { asText } from './asText';
-import { coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
+import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
@@ -447,7 +447,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       server.fsPath,
       keys,
       keysFileIn(this.context.globalStorageUri.fsPath),
-      (args, capMs) => capture(server.fsPath, [...args], false, capMs, stop),
+      // Through `serverRun`, not `capture` directly: that is the door that carries the data
+      // directory this window chose, and a batch read that skipped it would export the rounds of a
+      // different directory from the one the list beside it is showing.
+      serverRun(server.fsPath, stop),
       readFindings,
       stop);
   }
@@ -1565,6 +1568,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // tab shipped with, and which two tests now guard.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editPhrases);
         break;
+      case 'changeDataDirectory':
+        // Delegated for the same reason `installServer` is: the flow it runs owns dialogs, a folder
+        // picker and a setting write, and the panel has no business holding any of them. It is the
+        // SAME flow the first install asks, so there is one question with one answer rather than two
+        // that drift.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.changeDataDirectory);
+        break;
+      case 'moveDataDirectory':
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.moveDataDirectory);
+        break;
       case 'copyPhrase':
         await this.copyPhrase(id);
         break;
@@ -2621,7 +2634,9 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
     // gemini. A probe that throws is a probe that answered "not there", which is the honest reading
     // of a permission error on a path we are only describing.
     const present = new Set<string>();
-    const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
+    // The chosen ROOT, from whichever layer named it — never the variable, which stopped being the
+    // whole answer when a directory could be chosen in a setting.
+    const configured = chosenRoot();
     for (const path of configured.length === 0 ? [] : probePaths()) {
       if (await reachable(path)) {
         present.add(path);
@@ -2637,13 +2652,16 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
       refusal: `This window could not work out where its data lives: ${asText(error)}`,
       notes: [],
       env: {},
+      // Nothing resolved, so no layer answered. Naming one here would be this surface guessing about
+      // the very question it has just failed to answer.
+      source: 'default',
     };
   }
 }
 
 /** The two paths the notes ask about — the shared root's database, and this side's directory. */
 function probePaths(): readonly string[] {
-  const root = resolve((process.env['COAI_DATA_DIR'] ?? '').trim());
+  const root = chosenRoot();
 
   return [join(root, 'coai.db'), coaiDataDir()];
 }

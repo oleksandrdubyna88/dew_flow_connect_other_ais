@@ -3,6 +3,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
+import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
 import { ChatPanels } from './chatPanels';
@@ -27,12 +28,12 @@ import { startHousekeeping } from './chatStoreHousekeeping';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
-import { coaiDataDir } from './dataDir';
+import { coaiDataDir, DATA_TO_MOVE, serverEnv } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
+import { installedVersion, installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
@@ -43,12 +44,14 @@ import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from
 import { ExportableRow } from './roundsCsv';
 import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
+import { readLog, serverRunAt } from './roundsDbRead';
+import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor } from './sideConfig';
+import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -62,6 +65,11 @@ import { vendorsFrom } from './vendors';
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
+  // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
+  // this has run it answers the DEFAULT directory. A window that read the choice late would watch
+  // the wrong directory for escalations and write a Team-server token where nothing reads it.
+  storageReadsThisSide(context);
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be
@@ -342,6 +350,9 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
+        // Re-read WHERE first: `mirrorSettings` writes the settings file into the data directory, so
+        // a changed `coai.dataDirectory` has to be in effect before that write chooses its path.
+        storageReadsThisSide(context);
         mirrorSettings(settingsSync);
         void panel.render();
       }
@@ -354,6 +365,26 @@ export function activate(context: vscode.ExtensionContext): void {
     // setting, and only the context says which side this window is.
     vscode.commands.registerCommand('coai.editRoles', () => { openRoles(context); }),
     vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
+    // The same question the first install on a side asks, reachable afterwards. One flow: two ways
+    // of asking it would be two ways of answering it differently.
+    vscode.commands.registerCommand('coai.changeDataDirectory', async () => {
+      await askWhereDataLives(context);
+      await panel.render();
+    }),
+    vscode.commands.registerCommand('coai.moveDataDirectory', async () => {
+      // The counter is passed IN rather than reached for, because it is the one part of a move that
+      // needs a process: rounds are counted in SQL by the server binary, and counting them at the
+      // DESTINATION means running that binary against a directory this window is not pointed at yet.
+      await moveDataDirectory(context, (directory) => countStorage(context, directory));
+      await panel.render();
+    }),
+    vscode.commands.registerCommand('coai.deleteOldDataFolder', async () => {
+      // The same counter the move used: the old folder is read ONE more time, right before it is
+      // deleted, and compared with what the move recorded. It is the only thing standing between a
+      // round written after the copy and a directory that is gone.
+      await deleteTheOldDataFolder(context, (directory) => countStorage(context, directory));
+      await panel.render();
+    }),
     vscode.commands.registerCommand('coai.help', showHelp),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
@@ -791,11 +822,28 @@ async function installServer(context: vscode.ExtensionContext): Promise<void> {
 
 async function install(context: vscode.ExtensionContext): Promise<void> {
   try {
+    // Asked BEFORE the download, because `installLatest` writes this side's record at the end of it
+    // and the question is "has this side ever installed", not "did that just succeed".
+    const firstTime = installedVersion(context.globalState, context.globalStorageUri) === undefined;
     const target = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
       () => installLatest(context.globalStorageUri, context.globalState),
     );
-    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath));
+    if (firstTime && await askWhereDataLives(context, true) === 'refused') {
+      // The choice did not land, so the block below would carry a configuration nobody asked for —
+      // and the install record written moments ago stops the question ever being asked again. Say
+      // so instead of copying something misleading. (codex, code round.)
+      void vscode.window.showErrorMessage(
+        `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
+        + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
+        + 'where your data lives" and paste the block it gives you.');
+
+      return;
+    }
+    // The block carries the two variables — the ONE configuration a client entry must hold, because
+    // the settings file that carries everything else lives inside the directory they select. See
+    // `serverEnv`, and the guard in `install.test.ts` that allows these two keys and no others.
+    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, serverEnv()));
     const targets = clientTargetsLine(CLIENT_TARGETS);
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
@@ -806,6 +854,7 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
     );
   }
 }
+
 
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
@@ -818,7 +867,9 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
   // that did not exist and called it installed. `stat` answers it; asking for the full status would
   // launch a `--version` process to learn something the stat already knew.
   const installed = await serverExists(context.globalStorageUri);
-  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath));
+  // The same block the install flow copies, carrying the same two variables: a person who comes back
+  // to the ⋯ menu after choosing a directory must not be handed an entry that ignores the choice.
+  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, serverEnv()));
   void vscode.window.showInformationMessage(
     installed
       ? 'The MCP config block is on your clipboard — paste it into your client and restart it.'
@@ -994,12 +1045,123 @@ async function runExport(
   });
 }
 
-/** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */
+/**
+ * What a data directory holds, counted — the before and after of a move.
+ *
+ * <p>Three counts, because they fail differently: the database is one file and nearly always
+ * arrives whole, the sessions are a hundred small ones and are exactly what a partial copy loses,
+ * and the ledger is a single growing file. `verificationFailure` compares them; this only counts.</p>
+ *
+ * <p>The rounds are counted by the SERVER, in SQL, because there is no SQLite in this extension —
+ * which is also why this needs the binary and a directory to point it at. The other two are files,
+ * and are read wherever they are.</p>
+ */
+async function countStorage(
+  context: vscode.ExtensionContext,
+  resolvedDirectory: string,
+): Promise<StorageFingerprint> {
+  const server = serverPath(context.globalStorageUri);
+  const root = vscode.Uri.file(resolvedDirectory);
+
+  // `limit: 1` because only the TOTALS are wanted, and they are counted in SQL rather than over the
+  // page that comes back — asking for two hundred rounds to count them would be reading a history
+  // to learn how long it is.
+  const log = server === undefined
+    ? undefined
+    : await readLog(server.fsPath, { limit: 1 }, serverRunAt(server.fsPath, resolvedDirectory));
+
+  return {
+    // `log.read` is the server saying it ANSWERED, as opposed to `readLog` turning a spawn that
+    // failed into an empty log. Without carrying it, a source and a destination that both failed to
+    // read produce identical all-zero counts, verify each other, and offer a delete for a directory
+    // nothing ever read. (CodeRabbit, Major.)
+    read: log?.read === true,
+    rounds: log?.totals.rounds ?? 0,
+    sessions: await countIn(vscode.Uri.joinPath(root, 'sessions'), '.json'),
+    usageLines: await countLines(vscode.Uri.joinPath(root, 'usage.jsonl')),
+    // Every moved DIRECTORY, so an edited prompt, a new picture or an audit record is seen — three
+    // counts covered the database, the sessions and the ledger, and the inventory moves sixteen
+    // things. (codex, code round.) What this still cannot see is a file edited in place without
+    // changing the count; hashing every byte of a copy that is on a network drive by definition is
+    // the price of that last increment, and it is not taken.
+    entries: await countEach(root),
+  };
+}
+
+/** How many entries each moved directory holds, by name. Absent directories are not named at all. */
+async function countEach(root: vscode.Uri): Promise<Record<string, number>> {
+  const counted: Record<string, number> = {};
+  for (const entry of DATA_TO_MOVE.filter((name) => name.endsWith('/'))) {
+    const held = await countIn(vscode.Uri.joinPath(root, entry.replace(/\/$/u, '')), '');
+    if (held > 0) {
+      counted[entry] = held;
+    }
+  }
+
+  return counted;
+}
+
+/**
+ * How many entries of a kind a directory holds. A directory that is not there holds none.
+ *
+ * <p>An empty `extension` counts everything, including subdirectories: for `chat-conversations/` or
+ * `consultations/` what matters is that the count moves when something is added, not what it is.</p>
+ */
+async function countIn(directory: vscode.Uri, extension: string): Promise<number> {
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(directory);
+
+    return extension.length === 0
+      ? entries.length
+      : entries.filter(([name, kind]) => kind === vscode.FileType.File && name.endsWith(extension)).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * How many non-empty lines a file holds. A file that is not there holds none.
+ *
+ * <p>Counted over the BYTES. Decoding the ledger into a string and splitting it allocated three
+ * full-size copies of a file that grows for ever — a gigabyte of it froze the flow before the
+ * progress notification existed to say anything. (codex, code round.) A newline is one byte in
+ * UTF-8 and cannot appear inside a multi-byte sequence, so counting them needs no decoder.</p>
+ */
+async function countLines(file: vscode.Uri): Promise<number> {
+  const NEWLINE = 0x0a;
+  try {
+    const bytes = await vscode.workspace.fs.readFile(file);
+    let lines = 0;
+    let started = false;
+    for (const byte of bytes) {
+      if (byte === NEWLINE) {
+        lines += started ? 1 : 0;
+        started = false;
+      } else if (byte !== 0x0d && byte !== 0x20 && byte !== 0x09) {
+        started = true;
+      }
+    }
+
+    return lines + (started ? 1 : 0);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * The server's own session files, from the ONE place that knows where they are.
+ *
+ * <p>It used to resolve the directory here, for a third time in this product and differently from
+ * both of the others: it read `COAI_DATA_DIR` raw, ignored `COAI_DATA_SIDE` entirely, and did not
+ * trim. On a side-partitioned installation that read `<root>/sessions` while everything else wrote
+ * `<root>/<side>/sessions`, so the rounds-log page listed somebody else's sessions or none.</p>
+ *
+ * <p>The settings layer made it worse rather than exposing it: a directory chosen in the panel lives
+ * in a setting, which a `process.env` read cannot see at all — so this would have gone on reading
+ * `%LOCALAPPDATA%` for every person who used the new feature. One rule, asked once.</p>
+ */
 async function readSessions(): Promise<SessionFile[]> {
-  const configured = process.env['COAI_DATA_DIR'];
-  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
-  const dir = vscode.Uri.file(configured ?? `${localAppData}/coai-mcp`);
-  const sessionsDir = vscode.Uri.joinPath(dir, 'sessions');
+  const sessionsDir = vscode.Uri.joinPath(dataDir(), 'sessions');
   const sessions: SessionFile[] = [];
   try {
     for (const [name, kind] of await vscode.workspace.fs.readDirectory(sessionsDir)) {

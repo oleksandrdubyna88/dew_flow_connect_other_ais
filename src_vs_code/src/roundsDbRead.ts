@@ -1,6 +1,7 @@
 import { DbFinding, DbLog, EMPTY_LOG, ManyFound, parseFindings, parseLog, parseManyFindings } from './roundsDb';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
+import { serverEnv } from './dataDir';
 
 /**
  * Asking the server for its rounds database.
@@ -56,7 +57,7 @@ export interface Page {
  * it gave yesterday. The two halves of this product update separately; the log that comes back says
  * which shape it came from, so the page offers paging only where paging exists.</p>
  */
-export async function readLog(executable: string, page: Page = {}, run: Run = spawn(executable)): Promise<DbLog> {
+export async function readLog(executable: string, page: Page = {}, run: Run = serverRun(executable)): Promise<DbLog> {
   if (executable.length === 0) {
     return EMPTY_LOG;
   }
@@ -111,7 +112,7 @@ export interface Found {
 export async function readFindings(
   executable: string,
   key: RoundKey,
-  run: Run = spawn(executable),
+  run: Run = serverRun(executable),
 ): Promise<Found> {
   if (executable.length === 0) {
     return { state: 'failed', findings: [] };
@@ -184,7 +185,7 @@ export async function readManyFindings(
   executable: string,
   keys: readonly RoundKey[],
   withKeysFile: WithKeysFile,
-  run: Run = spawn(executable),
+  run: Run = serverRun(executable),
   readOne: typeof readFindings = readFindings,
   stop?: () => boolean,
 ): Promise<readonly FoundRound[]> {
@@ -294,7 +295,41 @@ export function keysFileIn(folder: string): WithKeysFile {
   };
 }
 
-/** The real spawn. Injectable above it, so every branch of both readers is a unit test. */
-function spawn(executable: string): Run {
-  return (args, capMs) => capture(executable, [...args], false, capMs);
+/**
+ * The real spawn, and the ONE way the server binary is started in order to be read from.
+ *
+ * <p>Injectable everywhere above it, so every branch of both readers is a unit test — and the
+ * DEFAULT of every reader, so a caller cannot forget the part that matters.</p>
+ *
+ * <p><b>`serverEnv()` is that part (issue #115).</b> The binary resolves its own data directory from
+ * its own environment, and a directory a person chose lives in a SETTING, because a VS Code window
+ * has no `COAI_DATA_DIR` to inherit. A child left to inherit this window's environment therefore
+ * asks the DEFAULT directory about a history that is on a NAS, and is told — truthfully and
+ * uselessly — that there is none. It is not a parameter: a parameter is a thing three call sites
+ * remember and the fourth does not, and what that fourth one produces is an empty list rather than
+ * an error.</p>
+ */
+export function serverRun(executable: string, stop?: () => boolean): Run {
+  return (args, capMs) => capture(executable, [...args], false, capMs, stop, serverEnv());
+}
+
+/**
+ * The same spawn, asked about a directory this window is NOT pointed at.
+ *
+ * <p>The one legitimate reason to want that, and it has one caller: verifying a move. The copy has
+ * to be read back from where it landed BEFORE this window is pointed there, because pointing first
+ * would show an empty history for as long as the copy took and for ever if it failed.</p>
+ *
+ * <p>It is named differently from {@link serverRun} rather than being a parameter on it, so that the
+ * default door cannot quietly become the wrong-directory one. `theMoveReadsTheRightDirectory.test.ts`
+ * asserts this function's only caller in `src/` — the same guard `writeWslconfig` carries, for the
+ * same reason: a second caller must be a deliberate decision.</p>
+ *
+ * <p>The directory is passed RESOLVED and with no side, which is what makes it unambiguous: a path
+ * that already includes its side resolves to itself when no side is named, so there is no way to
+ * apply one twice.</p>
+ */
+export function serverRunAt(executable: string, resolvedDirectory: string): Run {
+  return (args, capMs) =>
+    capture(executable, [...args], false, capMs, undefined, { COAI_DATA_DIR: resolvedDirectory });
 }

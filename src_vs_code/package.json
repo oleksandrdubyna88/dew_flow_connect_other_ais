@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.43.1",
+  "version": "0.44.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -155,6 +155,21 @@
       {
         "command": "coai.editPhrases",
         "title": "Edit phrases",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.changeDataDirectory",
+        "title": "Change where your data lives",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.moveDataDirectory",
+        "title": "Move your data to another folder",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.deleteOldDataFolder",
+        "title": "Delete the old data folder",
         "category": "ConnectOtherAIs"
       },
       {
@@ -495,6 +510,16 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Keep **separate settings for each side of this machine** — a local window, and each WSL distro or remote host on its own. Off (the default) is one set of settings for every window, exactly as before. On, each side keeps its own values, seeded from what it had at the moment you switched it on, so nothing changes until you edit something. For one person working for several companies on one machine: a different proxy (`baseUrl`), a different CLI path and a different vault key per side. Does **not** separate `uiScale` or `helpLanguage` — a text size belongs to you, not to the company. Stored in the extension's own state, not in `settings.json`, because VS Code hands one `settings.json` to every extension host."
+        },
+        "coai.dataDirectory": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where the rounds database, the sessions and the chats are kept. Empty is the default folder (`%LOCALAPPDATA%\\coai-mcp`, or `~/.local/share/coai-mcp`). Point it at a **network drive or a NAS** and your history survives reinstalling the operating system: the same folder is picked up again the next time you install the MCP server. **Always kept per side of this machine**, whatever *Separate settings for each side* says — the same NAS is `Z:\\coai` in a Windows window and `/mnt/z/coai` in a WSL one, so one shared value would be wrong in one of them. A server only reads it from its own MCP client entry, which is why *Install the MCP server…* puts it in the block it copies."
+        },
+        "coai.dataSide": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "A name for **this** installation inside the folder above, so two that share one folder keep their own database, sessions and sign-ins — a NAS reached from both Windows and WSL. Empty means the folder is not divided, which is right when only this installation uses it. Trimmed and lower-cased before it is used, so `Windows` and `windows` are one name; what is left may contain letters, digits, dot, dash and underscore, and anything else is refused rather than quietly ignored — the server will not start on it. Ignored when no folder is chosen: a side only divides a folder you named."
         },
         "coai.autonomous": {
           "type": "boolean",

@@ -474,6 +474,25 @@ export const OVERLAID_SETTINGS: readonly string[] = [
 ];
 
 /**
+ * The settings a side keeps its own copy of WHATEVER the per-side switch says (issue #115).
+ *
+ * <p>Every entry of {@link OVERLAID_SETTINGS} is a fact about the WORK — which vendors review, which
+ * roles run, which company's server they belong to — so sharing them across the sides of one machine
+ * is a choice a person can reasonably make, and the switch is how they make it. These two are facts
+ * about a side's FILESYSTEM. `Z:\coai` and `/mnt/z/coai` are one NAS and not one string, so a
+ * Windows window and a WSL window pointed at the same mount need different values: a shared one is
+ * wrong on at least one of them by construction rather than by preference.</p>
+ *
+ * <p>They are declared in the manifest all the same, so the shared value is what a side that has
+ * never chosen falls back to, and so a person can read and edit them without opening a panel.</p>
+ *
+ * <p>Deliberately NOT part of {@link CoaiSettings}: `envBlock` turns that into the settings file the
+ * server reads out of its data directory, and these two are the only settings that cannot live
+ * there — the file is inside the directory they select.</p>
+ */
+export const ALWAYS_PER_SIDE: readonly string[] = ['dataDirectory', 'dataSide'];
+
+/**
  * A reader that answers from this side's overlay first, and from the shared settings otherwise.
  *
  * <p>The fallback is what keeps a forked side working after an update: a setting added by a new

@@ -1,5 +1,70 @@
 # Changelog
 
+## Extension 0.44.0 — 2026-09-15
+
+**Installing the MCP server for the first time now asks where your data should live.** Keep the
+default folder, or choose one — a network drive or a NAS — and your rounds, sessions, chats and
+spending survive reinstalling the operating system on top of them. Choosing a folder that already
+holds a database **adopts** it: that is how a reinstalled machine picks its own history back up, and
+nothing in it is moved or overwritten. The question is asked once per side of a machine, at the one
+moment you are already configuring this product and already have a paste to make.
+
+**The block that goes to your clipboard now carries the folder.** A server only ever learns where to
+write from the client entry that starts it, so the two variables travel in the block you already
+paste once. Everything else stays where it is: settings still reach the server through its own file,
+and a key pasted into a client entry would freeze that setting for good.
+
+**The panel can change it afterwards, and says which layer answered.** *Where this window keeps its
+data* now carries *Change where your data lives…* and *Move what is here to another folder…*, and a
+line saying whether the folder came from this window's environment, from a choice made for this side
+of the machine, from the setting every side shares, or from nothing at all. The last three are
+different problems and used to look identical.
+
+**Moving copies, checks, and deletes nothing.** It refuses while reviewers are still running, and
+warns — rather than refusing — when a write-ahead log is sitting beside the database: that means
+something has it open or was stopped while it did, and those files travel with it. It refuses a
+folder that already holds a history of its own. Then it
+copies, reads the new folder back, and compares the rounds, the sessions and the ledger with the old
+one. **Delete the old data folder** is a separate command and stays refused until a move has checked
+out.
+
+**The list of what a move takes was wrong, and it was wrong silently.** It named four things; this
+product writes sixteen. Anyone who followed the instructions printed here kept their rounds and lost
+their edited prompts, their whole spending history, every chat and its pictures, the audit records —
+and the rounds committed most recently, which live in `coai.db-wal` until a clean shutdown moves
+them into the database. A copy that misses a file does not fail, so none of that was ever reported.
+The list is now complete, and a test compares it against every folder either half of this product
+actually writes.
+
+**Two settings, `coai.dataDirectory` and `coai.dataSide`**, both kept per side of the machine
+whatever *Separate settings for each side* says — the same NAS is `Z:\coai` in a Windows window
+and `/mnt/z/coai` in a WSL one, so one shared value would be wrong in one of them.
+
+**Help:** a new article, *Where your data lives, and how to keep it*, in all five languages. The
+audit-log article is corrected in all five as well — it had said since 2026-09-06 that logs live
+beside the installed binary, when they moved under the data folder.
+
+**What the review round changed, and it is worth knowing about.** Four things, each of which would
+have been a quiet way to lose data:
+
+- **Changing or moving the folder now hands you the updated config block and says to paste it.**
+  Three reviewers found the same trap independently: the panel follows your choice at once, and the
+  MCP client goes on starting its server with the entry it was given months ago — so the server
+  keeps writing to the old folder while the screen says otherwise. After a move that is worse than
+  confusing, because deleting the old folder then deletes something still being written to. The
+  delete now says so before it asks.
+- **The old folder is read once more, immediately before it is deleted**, and compared with what the
+  move recorded. This extension cannot stop the server your client starts, and cannot see one
+  attached — so a round appended after the copy used to be deleted in silence. Now it refuses.
+- **A write-ahead log beside the database no longer refuses the move.** It made the feature
+  unreachable for exactly the installations most likely to want it — one unclean stop leaves a
+  sidecar behind for good — and it contradicted the copy, which takes both sidecars precisely
+  because they carry committed rounds. It is said instead of enforced.
+- **The install asks the folder it is actually going to use.** It probed the folder you picked while
+  the installation would use the side directory inside it, so "this already holds a database" could
+  be true of one and false of the other. The side is settled first now, and you are shown what was
+  found and asked to confirm before anything is saved.
+
 ## Extension 0.43.1 — 2026-09-14
 
 **The ⋯ menu now names the version of what it will actually give you: *Copy the CLAUDE.md snippet
