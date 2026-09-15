@@ -297,24 +297,34 @@ public sealed class RoundsDb : IDisposable
     /// state and then died before the reason would leave a row saying it was skipped and refusing to
     /// say why — and the next run would pass over it, because the state is no longer empty. Written
     /// once, after every piece of evidence is in hand. (Plan round, codex.)</para>
+    /// <para><b>Conditional on the row still being unprocessed.</b> Two collector runs can read the
+    /// same pending finding; an unconditional UPDATE let the slower one overwrite a `collected` row
+    /// and its fix commit with its own later verdict. A write that changes nothing answers false, and
+    /// the run counts it as a lost race rather than as work it did. (Code round, codex.)</para>
     /// <para>The id, not the ordinal: a candidate is identified here by the row it came from, and
     /// `BugsQuery` hands that id over for exactly this.</para>
     /// </remarks>
-    public void RecordCollect(long findingId, string state, string reason, string fixSha, string runId)
+    /// <returns>Whether this run was the one that claimed the row.</returns>
+    public bool RecordCollect(long findingId, string state, string reason, string fixSha, string runId)
     {
         using var write = _db.CreateCommand();
         write.CommandText = """
             UPDATE findings
                SET collect_state = $state, collect_reason = $reason,
                    fix_sha = $fix, collect_run_id = $run
-             WHERE id = $id
+             WHERE id = $id AND collect_state = ''
             """;
         Bind(write, "$state", state);
         Bind(write, "$reason", reason);
         Bind(write, "$fix", fixSha);
         Bind(write, "$run", runId);
         Bind(write, "$id", findingId);
-        write.ExecuteNonQuery();
+
+        // Conditional on the row still being unprocessed, and the caller is told. Two runs can read
+        // the same pending finding; an unconditional write let the slower one replace a `collected`
+        // row and its fix_sha with its own later verdict, so durable state depended on timing.
+        // (Code round, codex.)
+        return write.ExecuteNonQuery() == 1;
     }
 
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>

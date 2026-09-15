@@ -172,12 +172,43 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
         return tree is null ? null : Named(tree.RootNode, FunctionKinds(language), name);
     }
 
+    public int CountNamed(SourceLanguage language, string source, string name)
+    {
+        if (Grammar(language) is not { } grammar || name.Length == 0)
+        {
+            return 0;
+        }
+
+        using var parsed = new Language(grammar.Library, grammar.Function);
+        using var parser = new Parser(parsed);
+        using var tree = parser.Parse(source);
+
+        return tree is null ? 0 : CountNamed(tree.RootNode, FunctionKinds(language), name);
+    }
+
+    private static int CountNamed(Node node, string[] kinds, string name)
+    {
+        var found = 0;
+        foreach (var child in node.Children)
+        {
+            if (kinds.Contains(child.Type) && NameOf(child) == name)
+            {
+                found += 1;
+            }
+
+            found += CountNamed(child, kinds, name);
+        }
+
+        return found;
+    }
+
     /// <summary>The first function of this name, anywhere in the tree.</summary>
     /// <remarks>
-    /// FIRST rather than only: an overload set shares a name, and picking the first is a deliberate
-    /// approximation the collector can live with — a finding whose method has overloads compares the
-    /// wrong one at worst, and the skeleton comparison that follows will then read as unchanged and
-    /// skip it. Wrong-but-skipped is the safe direction; wrong-but-collected is not.
+    /// FIRST rather than only, and safe ONLY because the caller refuses an ambiguous name before it
+    /// asks: an overload set shares a name, and the first match is then a coin toss whose loss is a
+    /// commit sha recorded as some other overload's fix. See <see cref="CountNamed"/>, which the
+    /// collector consults first. The approximation was argued for on the plan round and the code
+    /// round refused it, twice and independently — rightly.
     /// </remarks>
     private static EnclosingSymbol? Named(Node node, string[] kinds, string name)
     {
