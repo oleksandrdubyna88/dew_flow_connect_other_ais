@@ -188,6 +188,28 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
+    /// A tier rule the budget dropped is NOT counted as one the reviewer was shown.
+    /// </summary>
+    /// <remarks>
+    /// The coverage sentence answers "how much of my tier am I holding", so it is counted from what
+    /// was RENDERED. Counted from what the tree contains, a prompt would say "all seven are below"
+    /// over a section showing two — and a reviewer's silence about the other five would read as
+    /// compliance, which is the exact failure the sentence exists to prevent. (codex, code round.)
+    /// </remarks>
+    [Fact]
+    public void ATierRuleTheBudgetDropped_IsNotCountedAsShown()
+    {
+        WriteTier(StageRules.Plan);
+
+        // Room for two of the seven.
+        var bundle = RuleFiles.Collect(_repo, 21_000, RuleOrder.Staged(StageRules.Plan));
+
+        bundle.MatchedCount(StageRules.Plan).Should().Be(2);
+        bundle.TierCoverage(StageRules.Plan).Should().Contain($"2 of the {StageRules.Plan.Length}");
+        bundle.TierCoverage(StageRules.Plan).Should().NotContain("All ");
+    }
+
+    /// <summary>
     /// The tier is an order because the budget is real: the first entries fit, the rest are named.
     /// </summary>
     [Fact]

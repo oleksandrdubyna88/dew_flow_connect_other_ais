@@ -4,7 +4,12 @@ using CoaiMcp.Runners.Git;
 namespace CoaiMcp.Runners.Context;
 
 /// <summary>One rule document as the reviewers will see it.</summary>
-public sealed record RuleFile(string Path, string Text);
+/// <param name="WithinMount">
+/// Relative to the mount root — <c>common/security.md</c> — or the path itself when the file is not
+/// under a mount. It is what a stage tier names a rule by, and it travels with the file so coverage
+/// can be counted from what a reviewer was SHOWN rather than from what the tree happened to contain.
+/// </param>
+public sealed record RuleFile(string Path, string Text, string WithinMount = "");
 
 /// <summary>
 /// The project's own written conventions, as a block a reviewer can be judged against.
@@ -27,19 +32,47 @@ public sealed record RuleBundle(IReadOnlyList<RuleFile> Files, IReadOnlyList<str
     public IReadOnlyList<string> MissingMounts { get; init; } = [];
 
     /// <summary>
-    /// The mount-relative names the mount CARRIES — <c>common/security.md</c>, not
-    /// <c>.agents/conventions/common/security.md</c> — whatever the order then did with them.
+    /// How many of a stage tier's rules this bundle actually SHOWS a reviewer.
     /// </summary>
     /// <remarks>
-    /// So a caller can count how many of a stage tier the target actually carried. This gate reviews
-    /// OTHER repositories: one pinned to an older conventions revision carries only some of what a
-    /// tier names, and <see cref="RuleOrder.Staged"/> skips what it cannot find in silence — right for
-    /// one entry, dangerous for a stage, because a round that matched none of its rules otherwise
-    /// reads exactly like a round that matched all of them. Computed here because this is where the
-    /// mounts are known; deriving it from a path suffix outside would be the same mistake a code round
-    /// already caught in the tier matching itself.
+    /// <para>Counted from <see cref="Files"/> — what was rendered — and deliberately not from what the
+    /// tree contains. A rule discovered and then dropped by the byte budget, or found and unreadable,
+    /// is a rule the reviewer never saw; counting it as present would let a prompt say "all seven are
+    /// here" over a section showing six, which is the false-compliance this number exists to prevent.
+    /// A code round caught exactly that. What did not fit is still named by <see cref="Omitted"/>.</para>
+    /// <para>Lives here rather than in a caller because <see cref="RuleFile.WithinMount"/> is set where
+    /// the mounts are known; deriving it outside would mean matching by path suffix, which is the
+    /// mistake an earlier code round caught in the tier matching itself.</para>
     /// </remarks>
-    public IReadOnlyList<string> FromMount { get; init; } = [];
+    public int MatchedCount(IReadOnlyList<string> tier) =>
+        tier.Count(entry => Files.Any(file => file.WithinMount.Equals(entry, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// The sentence that tells a reviewer how much of its tier it is actually holding.
+    /// </summary>
+    /// <remarks>
+    /// In the PROMPT, not only the log: a number a person must go and find in a log cannot prevent the
+    /// failure it exists for — a round judged against NONE of its rules reads exactly like one judged
+    /// against all of them, and the REVIEWER is who needs to know which it was. Three sentences,
+    /// because the three cases mean different things and the last must never be read as compliance.
+    /// It sits beside <see cref="Render"/> because that is already prompt text.
+    /// </remarks>
+    public string TierCoverage(IReadOnlyList<string> tier)
+    {
+        var matched = MatchedCount(tier);
+
+        if (matched == tier.Count)
+        {
+            return $"> All {tier.Count} of the rules this stage is judged against are below.\n\n";
+        }
+
+        return matched == 0
+            ? $"> **NONE of the {tier.Count} rules this stage is judged against are here** — this "
+              + "repository pins a different revision of the shared rules, or none at all. Do not read "
+              + "their absence as compliance; say that they were missing.\n\n"
+            : $"> {matched} of the {tier.Count} rules this stage is judged against are below; the rest "
+              + "are not in this repository or did not fit. Do not read their absence as compliance.\n\n";
+    }
 
     public bool HasRules => Files.Count > 0 || MissingMounts.Count > 0;
 
@@ -213,18 +246,13 @@ public static class RuleFiles
                 continue;
             }
 
-            kept.Add(new RuleFile(relative, text));
+            kept.Add(new RuleFile(relative, text, Candidate(relative, mounts).WithinMount));
             used += text.Length;
         }
 
         return new RuleBundle(kept, omitted, used)
         {
             MissingMounts = EmptyRuleMounts(repoPath, mounts, folders),
-            FromMount = [.. folders
-                .Where(p => UnderAnyMount(p, mounts))
-                .Select(p => Candidate(p, mounts).WithinMount)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(p => p, StringComparer.Ordinal)],
         };
     }
 
