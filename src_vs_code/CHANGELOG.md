@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.46.0 — 2026-09-15
 
 **A question asked by a session in WSL now reaches the window you are sitting at.** When the gate needs
 a person, the server writes the question into the data folder of whichever installation is running that
