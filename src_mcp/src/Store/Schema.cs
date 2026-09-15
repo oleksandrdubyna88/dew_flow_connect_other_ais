@@ -28,7 +28,7 @@ internal static class Schema
     // Consultations is LAST because main's WhoCalled shipped first: a file migrated by that build
     // already records three steps, so inserting ahead of it would leave those databases without the
     // consultations table while believing they had run every step.
-    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst];
+    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -217,5 +217,27 @@ internal static class Schema
     /// </remarks>
     internal const string WhatItWasAgainst = """
         ALTER TABLE rounds ADD COLUMN base_ref TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>What the corpus collector has done with a finding, if anything.</summary>
+    /// <remarks>
+    /// <para>An accepted finding is a defect a person confirmed, and the collector turns those into
+    /// anonymous before/after pairs. These four columns are what it may not lose: WHICH run looked
+    /// at a finding, what it concluded, why it concluded that, and the commit it found the fix in.
+    /// See <c>todo/PLAN_a_corpus_of_real_defects.md</c>.</para>
+    /// <para><b><c>collect_state</c> is text and not a flag</b>, and that is the load-bearing choice.
+    /// A boolean says only "looked at", so the first run consumes every finding it saw and a second
+    /// run — with a better prompt, a wider language set, a repaired walk — can never see them again.
+    /// Three states plus the empty one keep a skip distinguishable from a success, and
+    /// <c>collect_reason</c> keeps WHY: a skip rate is a measurement, and the trigger for changing
+    /// how the fix is resolved is a number nobody can read off a flag.</para>
+    /// <para>Only <c>collect_state</c> is read by <see cref="BugsQuery"/> today; the other three are
+    /// written by the collector and read back beside it, so a run's own record is one row.</para>
+    /// </remarks>
+    internal const string TheCollectorsState = """
+        ALTER TABLE findings ADD COLUMN collect_state  TEXT NOT NULL DEFAULT '';
+        ALTER TABLE findings ADD COLUMN collect_run_id TEXT NOT NULL DEFAULT '';
+        ALTER TABLE findings ADD COLUMN collect_reason TEXT NOT NULL DEFAULT '';
+        ALTER TABLE findings ADD COLUMN fix_sha        TEXT NOT NULL DEFAULT '';
         """;
 }
