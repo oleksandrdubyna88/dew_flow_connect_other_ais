@@ -308,7 +308,7 @@ internal static class Program
     /// <para>74 (EX_IOERR) for a database that would not be read, as <c>--log --paged</c> answers:
     /// an empty corpus and a success would read as "no material", which is the one wrong answer.</para>
     /// </remarks>
-    private static int BugsJson(string[] args)
+    internal static int BugsJson(string[] args)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
         try
