@@ -464,6 +464,16 @@ The ceiling now governs only how long the QUEUE waits; minding what actually lan
 it. The loop terminates because a re-launch happens only when the generation has moved, and
 generations are handed out one per press.
 
+Two things about that record had to be got right, and the code round found both:
+
+- **It is stamped at the PRESS, not when the write starts.** Stamping at the write let a press that
+  had been waiting behind a slow one take a number newer than a press made after it — so the person's
+  last press lost to their first. The record also only ever moves forward: a delayed older press still
+  writes, because it was asked for, but it does not make itself the newest thing anybody wanted.
+- **It carries the PORTS of whoever wanted it.** A correction must go out through the channel of the
+  caller whose text it is, not through whichever write happened to settle last. They are the same
+  clipboard today and they are not the same object — each copier is handed its own.
+
 **Three refusals, one sentence between two of them.** An ordinal past the end and a signature that
 disagrees both say *That block is no longer part of this answer* — from the person's side they are
 one fact. A clipboard that rejects says so separately. All three go to the status bar through
