@@ -848,7 +848,7 @@ function chatStyle(
      symptom (panelView.ts, .round .line) and matching it costs nothing. Without either, pre-wrap
      wraps at spaces only, the bubble overflows, and since body cannot scroll while #scroll sets
      only overflow-y, the computed overflow-x becomes auto and the whole conversation slides
-     sideways. (No backticks in here: this stylesheet is a template literal, and one would end it.) */
+     sideways. */
   .msg .what { color: var(--coai-read); line-height: 1.55; overflow-wrap: anywhere; }
   /* FIVE LINES of a long question, at the line-height directly above. DERIVED from
   COLLAPSE_AFTER_LINES rather than written out, so the host's decision boundary and the visual clamp
@@ -875,8 +875,11 @@ function chatStyle(
   .msg .what ul, .msg .what ol { margin: 0 0 .7em; padding-left: 1.6em; }
   .msg .what li { margin: .15em 0; }
   .msg .what code { font-family: var(--vscode-editor-font-family, monospace); font-size: .92em; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.18)); border-radius: 3px; padding: 0 .3em; }
-  /* Its own box, and it scrolls inside it: a long line of code must not widen the page. */
-  .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
+  /* Its own box, and it scrolls inside it: a long line of code must not widen the page. The
+     white-space is stated rather than left to the UA default for pre, because the whole of that
+     decision now rests on it: with the wrap above inherited, a pre that became pre-wrap would start
+     breaking code mid-token. Saying it here is what makes the test below able to hold it. */
+  .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; white-space: pre; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
   /* The wrap above is INHERITED, and these two are the boxes it must not reach. The pre would be
      safe by accident — white-space: pre leaves overflow-wrap nothing to act on — and safe by
      accident stops being safe the day somebody makes it pre-wrap. The table is the real one: it is
