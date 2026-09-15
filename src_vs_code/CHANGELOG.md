@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.45.0 — 2026-09-15
 
 **A chat turn can no longer end with nothing on the screen.** If the model came back having said
 nothing at all, the tab showed exactly that: the *Thinking…* line stopped, no answer appeared, no
