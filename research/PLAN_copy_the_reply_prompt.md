@@ -1,13 +1,53 @@
 # PLAN — Copy the reply prompt
 
-> Status: **plan only, nothing implemented yet, 2026-09-15.** Scope: the chat page's answer
+> Status: **IMPLEMENTED, 2026-09-15.** Both stories shipped in #273. Scope: the chat page's answer
 > rendering and its per-message controls — `src_vs_code/src/renderAnswer.ts`, `chatPage.ts`,
-> `chatMessages.ts`, `chatPanel.ts`, `chatCommand.ts`. No new module: the enumerator has to be the
-> render walk itself, for the reason set out under *The two-enumerator bug*.
+> `chatMessages.ts`, `chatPanel.ts`, `chatCommand.ts`, plus two modules the plan did not foresee,
+> `answerCopy.ts` and `copyText.ts`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_carry_nothing_above.md](../research/PLAN_carry_nothing_above.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_carry_nothing_above.md](PLAN_carry_nothing_above.md),
+> [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
+
+## What shipped differently
+
+Everything the plan set out shipped. Four things arrived differently, and each is written into the
+sections below rather than only here, because they are the design now.
+
+1. **"No new module" was wrong, and the gate proved it before a line was written.** The plan put the
+   host decision in `chatCommand.ts`. Nothing in this repository imports that file — it closes over
+   `vscode` and there is no stub — so the end-to-end test the plan specified *could not have been
+   run at all*. The decision lives in `answerCopy.ts`, pure, and the hook is two delegations.
+2. **`copyText.ts` exists because reuse was taken rather than described.** `phraseCopy.ts` already
+   solved two problems this path has — writes chained so two presses land in the order made, and one
+   status line disposed before the next. Its machinery was extracted; `phraseCopier` delegates to it
+   with its public shape and its nine tests unchanged.
+3. **`at` became optional rather than defaulting to `0`.** With a default, story 1.1 alone would have
+   put live controls under every fence on the page before anything could act on them.
+4. **A quote is numbered on the way OUT, not IN.** The plan said the opposite and the code said this;
+   three reviewers caught the contradiction in story 1.1's code round, and the cost would have landed
+   in story 2.1, whose seam test would have been written to the plan and expected the quote first.
+
+Two more the code rounds added, neither in the plan: **the write has a ceiling** (a clipboard that
+never settles would otherwise wedge every later press for the life of the session, and one abandoned
+at the ceiling can still land, so the newer text is put back), and **the whole-answer control stopped
+failing silently** — it wrote with a bare `void` and no catch, which is one site of a protective
+decision guarded and the other left.
+
+## The open tail
+
+- **The `reply` tag is only as good as the prompt that asks for it.** The product recognises the tag
+  and never requests it; a model that ignores it gets a plain *Copy block*, and nothing here can tell
+  "the model ignored the instruction" from "there was no reply to give". That is the deliberate
+  trade — the measurement below is the argument against guessing.
+- **Every ordinary blockquote carries a control.** Chosen by the operator with the cost stated and
+  measured at 9 rows across 39 answers. If it reads as noise in use, narrowing to fenced blocks is a
+  one-line change.
+- **A collection-only mode for `answerBlocks` was refused**, and the reason is worth keeping: two
+  traversal modes is the divergence this whole design exists to prevent. The hot-path half of that
+  objection was taken instead, as a lazy signature.
+- **CodeRabbit never reviewed #273.** Its check reported *pass* with "Review rate limited", which is
+  not an approval; the change had four multi-model gate rounds and a green CI instead.
 
 ## The symptom
 
