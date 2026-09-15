@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DATA_TO_LEAVE, DATA_TO_MOVE } from '../dataDir';
+import { DATA_TO_LEAVE, DATA_TO_MOVE, HISTORY_THAT_CLASHES, MOVES_WITHOUT_CLASHING } from '../dataDir';
 
 /**
  * What is written under the data directory, and whether anything has been forgotten.
@@ -32,6 +32,8 @@ interface Entry {
   readonly kind: 'file' | 'directory';
   readonly move: boolean;
   readonly mention: boolean;
+  /** Whether its presence in a DESTINATION refuses the move. Absent on everything that never moves. */
+  readonly clash?: boolean;
   readonly why: string;
 }
 
@@ -62,6 +64,25 @@ test('and what it says to leave is what the inventory says is a trap', () => {
     [...DATA_TO_LEAVE].sort((a, b) => a.localeCompare(b)),
     INVENTORY.filter((entry) => !entry.move && entry.mention).map((entry) => entry.path)
       .sort((a, b) => a.localeCompare(b)),
+  );
+});
+
+test('what refuses a destination is what the inventory marks as clashing', () => {
+  // Two questions about one entry, and they are the same for everything except logs/. The lists are
+  // DERIVED from `move` and `clash` rather than one being a filter over the other with a name
+  // written into it — a filter with a magic string cannot be changed independently of the list it
+  // filters, which is what a reviewer said and what this pins. (codex and local, code round.)
+  assert.deepEqual(
+    [...HISTORY_THAT_CLASHES].sort((a, b) => a.localeCompare(b)),
+    INVENTORY.filter((entry) => entry.clash === true).map((entry) => entry.path)
+      .sort((a, b) => a.localeCompare(b)),
+  );
+});
+
+test('and the one that moves without clashing is exactly the logs', () => {
+  assert.deepEqual(
+    [...MOVES_WITHOUT_CLASHING],
+    INVENTORY.filter((entry) => entry.move && entry.clash !== true).map((entry) => entry.path),
   );
 });
 

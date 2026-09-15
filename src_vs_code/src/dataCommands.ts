@@ -1,9 +1,9 @@
 import { hostname } from 'node:os';
-import { resolve, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
 import { chosenRoot, coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, defaultDataDir, directoryFor, serverEnv } from './dataDir';
-import { destinationPlaceRefusal, destinationRefusal, logsLeftBehind, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
+import { destinationPlaceRefusal, destinationRefusal, logsStrandedInTheRoot, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
 import { serverPath } from './installer';
@@ -441,10 +441,13 @@ export async function moveDataDirectory(
   // move cannot take them — and it must not let that be discovered afterwards. All three reviewers
   // of the plan round found it, one rating it Blocking: the logs would stay on the machine somebody
   // is about to reformat, which is the exact thing they moved their data to avoid.
-  const rootLogs = vscode.Uri.joinPath(vscode.Uri.file(chosenRoot()), 'logs');
-  const stranded = side.length === 0 || !(await exists(rootLogs))
-    ? ''
-    : logsLeftBehind(side, rootLogs.fsPath);
+  //
+  // Decided from the fingerprint just read, with NO filesystem call: `chosenRoot()` is empty on a
+  // default directory, `exists()` cannot tell a permission error from an absence, and a probe here
+  // runs while a modal is open. The code round found all three. `|| defaultDataDir()` is what the
+  // root actually is when nothing was chosen.
+  const rootLogsPath = join(chosenRoot().length === 0 ? defaultDataDir() : chosenRoot(), 'logs');
+  const stranded = logsStrandedInTheRoot(side, rootLogsPath, before);
   const go = 'Copy it';
   const confirmed = await vscode.window.showWarningMessage(
     `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${landing.fsPath}?`,
@@ -521,6 +524,19 @@ export async function moveDataDirectory(
     `Your data is in ${landing.fsPath} and reads back the same ${before.rounds} rounds. ${from} still `
     + 'holds the original — delete it from the Command Palette, with "ConnectOtherAIs: Delete the old '
     + 'data folder", once you are sure.');
+
+  if (stranded.length > 0) {
+    // "Copy that folder yourself" named a path and offered nothing, which two reviewers called close
+    // to not telling somebody at all. Opening it is one line and turns finding it into a click; a
+    // second copy flow for one directory — its own destination, refusals and verification — would be
+    // a feature rather than a fix.
+    const SHOW = 'Show me the logs';
+    void vscode.window.showWarningMessage(stranded, SHOW).then((choice) => {
+      if (choice === SHOW) {
+        void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(rootLogsPath));
+      }
+    });
+  }
   await tellClientsToCatchUp(context, landing.fsPath);
 }
 

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   destinationPlaceRefusal,
   destinationRefusal,
-  logsLeftBehind,
+  logsStrandedInTheRoot,
   mayDeleteTheOldCopy,
   sourceChangedSince,
   sourceRefusal,
@@ -131,14 +131,18 @@ test('a quiet source is refused by nothing', () => {
   assert.equal(sourceRefusal(NOTHING_RUNNING), '');
 });
 
+const BEFORE = { rounds: 1284, sessions: 96, usageLines: 5120, read: true };
+
 // ---------- what a partitioned move leaves behind, said out loud ----------
+
+const ROOT_LOGS = 'V:\\connectOtherAis\\logs';
 
 test('a partitioned move says the logs are not coming', () => {
   // All three vendors of the plan round, independently, one Blocking. The server writes logs to the
   // ROOT of a chosen folder and not to the side inside it, so a partitioned move finds none to take,
   // succeeds, and leaves them on the machine somebody is about to reformat. Writing that in the
   // inventory was not telling anybody: nobody opens a JSON fixture while moving their data.
-  const said = logsLeftBehind('windows-desktop01', 'V:\\connectOtherAis\\logs');
+  const said = logsStrandedInTheRoot('windows-desktop01', ROOT_LOGS, BEFORE);
 
   assert.match(said, /NOT part of this move/u);
   assert.match(said, /windows-desktop01/u);
@@ -146,16 +150,23 @@ test('a partitioned move says the logs are not coming', () => {
 });
 
 test('an unpartitioned move says nothing about logs, because they are in the folder', () => {
-  assert.equal(logsLeftBehind('', 'V:\\connectOtherAis\\logs'), '');
+  assert.equal(logsStrandedInTheRoot('', ROOT_LOGS, BEFORE), '');
 });
 
-test('and a partitioned installation with no logs at all is not warned about them', () => {
-  assert.equal(logsLeftBehind('windows-desktop01', ''), '');
+test('and a partitioned installation with no logs anywhere is not warned about them', () => {
+  assert.equal(logsStrandedInTheRoot('windows-desktop01', '   ', BEFORE), '');
+});
+
+test('a partitioned source that DOES hold logs is not warned either', () => {
+  // The answer that survives the server's own fix. When `SettingsFile.DataDirFrom` starts applying
+  // the side, the logs will be inside the folder being copied — the fingerprint will say so, this
+  // returns nothing, and nobody has to remember to come back and edit it. (codex, code round.)
+  const withLogs = { ...BEFORE, entries: { 'logs/': 926 } };
+
+  assert.equal(logsStrandedInTheRoot('windows-desktop01', ROOT_LOGS, withLogs), '');
 });
 
 // ---------- the verification ----------
-
-const BEFORE = { rounds: 1284, sessions: 96, usageLines: 5120, read: true };
 
 test('a move that carried everything verifies', () => {
   assert.equal(verificationFailure(BEFORE, { ...BEFORE }), '');

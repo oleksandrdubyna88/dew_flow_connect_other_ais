@@ -474,7 +474,20 @@ export const DATA_TO_MOVE: readonly string[] = [
  * is not worth building for it — but it is not impossible, and saying so costs a sentence. (gemini,
  * plan round.)</p>
  */
-export const HISTORY_THAT_CLASHES: readonly string[] = DATA_TO_MOVE.filter((entry) => entry !== 'logs/');
+/**
+ * The one entry that MOVES and does not CLASH, named once so neither list repeats it.
+ *
+ * <p>A filter with a magic string inside it cannot be changed independently of the list it filters —
+ * a reviewer's point on the code round, and right. `shared/data-inventory.json` carries `move` and
+ * `clash` per entry as the source of truth, and `theInventoryIsComplete.test.ts` asserts BOTH lists
+ * against those two fields — so removing `logs/` from what moves cannot leave a stale exception
+ * behind here, and adding a second append-only entry is a red test rather than a silent refusal of
+ * every destination that already holds one.</p>
+ */
+export const MOVES_WITHOUT_CLASHING: readonly string[] = ['logs/'];
+
+export const HISTORY_THAT_CLASHES: readonly string[] =
+  DATA_TO_MOVE.filter((entry) => !MOVES_WITHOUT_CLASHING.includes(entry));
 
 /**
  * What to leave behind, with the reason each one is a trap.
