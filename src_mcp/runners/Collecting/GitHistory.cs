@@ -54,7 +54,12 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     /// refusing the value can. The same check `ContextAssembler` already applies for the same reason.
     /// (Code round, gemini.)
     /// </remarks>
-    [GeneratedRegex("^[0-9a-fA-F]{4,64}$", RegexOptions.CultureInvariant)]
+    /// <remarks>
+    /// EXACTLY forty: `rounds.head_sha` is written from `%H`, so a short id here is a malformed row
+    /// rather than an abbreviation somebody meant. Accepting four-to-sixty-four let a truncated value
+    /// reach git, which then answers about whatever object it happens to disambiguate to.
+    /// </remarks>
+    [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant)]
     private static partial Regex ObjectId { get; }
 
     private static bool IsCommitish(string value) => ObjectId.IsMatch(value);

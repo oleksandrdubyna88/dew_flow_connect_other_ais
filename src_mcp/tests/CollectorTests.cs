@@ -340,6 +340,29 @@ public sealed class CollectorTests : IAsyncLifetime
         outcome.Reason.Should().Be(SkipReason.HeadShaUnreachable, "it never reached git at all");
     }
 
+    /// <summary>An ABBREVIATED sha is refused rather than disambiguated.</summary>
+    /// <remarks>
+    /// `rounds.head_sha` is written from `%H`, so it is forty characters or the row is malformed.
+    /// The validator accepted four to sixty-four, which let a truncated value reach git — and git
+    /// resolves an abbreviation to whatever object it happens to disambiguate to, so a corrupt row
+    /// would be collected against a real commit and the fix sha would look convincing. Refusing is
+    /// the only answer that cannot be silently wrong. (Code round, codex.)
+    /// </remarks>
+    [Fact]
+    public async Task AnAbbreviatedShaIsRefused_RatherThanDisambiguated()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+
+        var outcome = await _collector.CollectAsync(
+            new Candidate(_repo, "main", broken[..8], "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(
+            SkipReason.HeadShaUnreachable, "a short id is a malformed row, not an abbreviation");
+    }
+
     /// <summary>Two methods of one name are not one method.</summary>
     /// <remarks>
     /// An overload set shares a name, so taking the first match would record an unrelated overload's
@@ -382,6 +405,37 @@ public sealed class CollectorTests : IAsyncLifetime
         outcome.Reason.Should().Be(SkipReason.SymbolAmbiguous);
     }
 
+    /// <summary>
+    /// A git failure judging the interval is a FAILURE, not a quiet switch to a different search.
+    /// </summary>
+    /// <remarks>
+    /// <para>When the ancestry check could not be answered, the code fell through to the
+    /// open-ended path and walked whichever ref happened to contain the commit — a DIFFERENT
+    /// search, reported as though it were the bounded one, and a fix sha attributed from a branch
+    /// nobody asked about. Every other git failure in the collector is a `failed`; this one was
+    /// silently not. (Code round, gemini.)</para>
+    /// <para>The fixture times out exactly one subcommand, because that is the shape of the real
+    /// thing: git answers everything else perfectly well while one call does not come back.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AGitFailureJudgingTheInterval_IsAFailureNotAnOpenEndedWalk()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        var later = await Head();
+        var collector = new Collector(
+            new GitHistory(new FlakyGit(_launcher, "merge-base")), new TreeSitterNormalizer());
+
+        var outcome = await collector.CollectAsync(
+            new Candidate(_repo, "main", broken, "Totals.cs", 10, LaterSha: later));
+
+        outcome.State.Should().Be(
+            CollectState.Failed, "we learned nothing about the interval, so nothing may be claimed");
+        outcome.Reason.Should().Be(SkipReason.GitFailed);
+        outcome.FixSha.Should().BeEmpty("a failure attributes no commit");
+    }
+
     private async Task<string> Head()
     {
         var result = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo));
@@ -404,4 +458,17 @@ public sealed class CollectorTests : IAsyncLifetime
         var result = await _launcher.RunAsync(new ProcessRequest("git", args, _repo));
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
+}
+
+/// <summary>Real git, except for one subcommand that never comes back.</summary>
+/// <remarks>
+/// The only failure shape worth fixturing: git answers everything else, so a test that asserts on
+/// the ONE call cannot pass by accident because the whole repository was unreadable.
+/// </remarks>
+internal sealed class FlakyGit(IProcessLauncher real, string subcommand) : IProcessLauncher
+{
+    public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+        request.Arguments.Contains(subcommand, StringComparer.Ordinal)
+            ? Task.FromResult(new ProcessResult(-1, string.Empty, string.Empty, TimedOut: true))
+            : real.RunAsync(request, ct);
 }

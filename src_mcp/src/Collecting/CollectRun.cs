@@ -59,8 +59,9 @@ public sealed class CollectRun(Collector collector, TimeProvider time, TextWrite
             // Written per candidate rather than at the end: a run interrupted after forty of fifty has
             // done forty candidates' work, and throwing that away because the fiftieth was still
             // running would make a long run something nobody dares start.
+            // What this run READ, so a revisit under `--all` can land while a lost race still cannot.
             var claimed = db.RecordCollect(
-                candidate.Id, State(outcome.State), outcome.Reason, outcome.FixSha, runId);
+                candidate.Id, candidate.CollectState, State(outcome.State), outcome.Reason, outcome.FixSha, runId);
 
             decided.Add((outcome, claimed));
             Say($"  [{index + 1}/{candidates.Count}] {Short(candidate.RepoPath)} {candidate.File}:{candidate.Line}"

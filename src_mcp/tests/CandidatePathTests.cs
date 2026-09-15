@@ -40,6 +40,22 @@ public sealed class CandidatePathTests
         CandidatePath.IsTransient(path).Should().BeFalse();
 
     /// <summary>
+    /// A directory whose name merely BEGINS with a scratch name is not a scratch directory.
+    /// </summary>
+    /// <remarks>
+    /// The fragments were matched as substrings, so `/todelete` claimed `todelete_benchmarks` and
+    /// `todelete-fixtures` — ordinary repositories, refused before git was asked anything and
+    /// counted in the funnel as scratch. A whole path COMPONENT is what was meant, and what is now
+    /// matched. Two reviewers found this; the second time after it had been accepted and not done.
+    /// </remarks>
+    [Theory]
+    [InlineData(@"D:\rsd\todelete_benchmarks\repo")]
+    [InlineData("/home/x/todelete-fixtures")]
+    [InlineData(@"D:\work\temp\claudent\repo")]
+    public void ANameThatMerelyStartsTheSameWayIsNot(string path) =>
+        CandidatePath.IsTransient(path).Should().BeFalse();
+
+    /// <summary>
     /// One repository spelled three ways is one repository.
     /// </summary>
     /// <remarks>

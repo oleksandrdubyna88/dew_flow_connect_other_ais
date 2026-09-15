@@ -972,7 +972,8 @@ out rather than composed from a shared array of predicates, on the precedent Son
 first run would consume every finding it saw and a second run — better prompt, wider language set,
 repaired walk — could never reach them. `''`/`collected`/`skipped`/`failed` plus `collect_reason`
 keep a skip distinguishable from a success *and* say why, which is what makes a skip rate a
-measurement. `--all` shows the handled ones too.
+measurement. `--all` shows the handled ones too — and, since the second code round, actually
+*writes* what it finds there (see *A revisit has to be able to land*, below).
 
 **It is the one read-only mode that migrates first.** `BugsQuery` never writes — a reader that writes
 is not a reader — but it is the first caller to want the collector's columns, and a person may run
@@ -1051,6 +1052,49 @@ if it ever is again.
 Tested against real git — a real squash-merge, a real deleted branch, a real orphan — because every
 failure this guards against is git's, and a fake git would assert what we believe about git rather
 than git.
+
+#### The interval has to be a real interval
+
+`later_sha` — the next round's commit in the same session — bounds the search, and for an orphaned
+commit it is the only bound there is: 37 % of measured candidates have one. It must be a round that
+**moved**. A re-review, a repair, a reviewer that timed out and was run again all carry the *same*
+`head_sha`, and offered as the interval end that gives `head..head` — an empty range, no commits, and
+the candidate filed `fix_commit_not_found` while the fix sat one round further on. The subqueries now
+carry `AND later.head_sha != r.head_sha`. The SQL had no test at all before this round.
+
+#### A revisit has to be able to land
+
+`collect_state` is text so that a later run with a repaired walk can revisit what an earlier one
+skipped — and the write refused to. `RecordCollect`'s claim was `WHERE id = $id AND collect_state = ''`,
+which is *the row is still unprocessed*: the same thing as the race guard only for a run that takes
+pending rows, and `--all` exists precisely to take decided ones. It recomputed every candidate, ran
+every git command again, reached the right answer and persisted **nothing**, reporting each row as a
+lost race. The state's whole purpose did not work.
+
+It is now a compare-and-swap on the state the run READ (`WHERE id = $id AND collect_state = $was`).
+A pending row swaps from `''`, which is the original race guard exactly; a revisit swaps from
+`skipped`. A run that lost the race is still told, and still counts the row as somebody else's work.
+
+#### A git failure is never a quieter search
+
+The collector's contract is that every git failure is `failed`, never a skip — and one path broke it
+silently. When the ancestry check on `later_sha` could not be *answered*, the code fell through to the
+open-ended ref walk: a different search down whichever branch happened to contain the commit, reported
+as though it were the bounded one, attributing a fix sha from a line of work nobody asked about. An
+unanswerable check is now `failed`. A later commit that exists but does not descend still falls back to
+the ref walk — that is a stale row, not an outage, and refusing it would discard collectable material.
+
+#### Two validators that were looser than their columns
+
+`head_sha` is written from `%H`, so it is forty characters or the row is malformed — but the validator
+accepted four to sixty-four, which let a truncated value reach git. Git resolves an abbreviation to
+whatever object it disambiguates to, so a corrupt row was **collected** against a real commit with a
+convincing fix sha. It is `^[0-9a-fA-F]{40}$` now. And `CandidatePath.IsTransient` matched its scratch
+fragments as substrings, so `/todelete` claimed `todelete_benchmarks` and `todelete-fixtures` —
+ordinary repositories, refused before git was asked anything. Whole path components now.
+
+Every one of these was proved by breaking the fix again and watching the test go red with the real
+symptom, which is how the abbreviated sha turned out to be collected rather than merely accepted.
 
 Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 3.
 
