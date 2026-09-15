@@ -269,6 +269,63 @@ the legacy path only**:
   carrying a base URL is recorded as `codex` and refused by `CannotConsult` exactly as before; the
   `codex`-with-base-URL refusal in `ConsultantResolution` is unchanged and deliberate.
 
+**The wire carries the definition — measured against the released server first** (2026-09-15, story
+B4). `.agents/PROJECT.md` requires a wire field added on one side to be measured against the OLD other
+side before it ships, so before `envBlock` stopped projecting every entry back to `{vendor, model}` the
+last released server was built in a throwaway worktree and driven over stdio with definitions on the
+wire. **Subject:** `mcp-v0.22.0`, sha `4fe3cb02` (released 2026-09-14, the newest `mcp-v*` tag and the
+last release; its `ConsultantDto` is `(Vendor, Model)` — the three definition fields predate no release
+but this one), built Debug. **Harness:** `src_vs_code/scripts/measure-consultant-skew.mjs`, which
+builds every `COAI_VENDORS` / `COAI_CONSULTANTS` value through the extension's own `envBlock` (one
+literal, the CONTROL — the legacy pair the product no longer produces), runs one fresh server per cell,
+and records the `consult` reply. **Pinned:** a fresh `COAI_DATA_DIR`; the three caller-session
+variables cleared (caller kind `other`); one scratch repository with one uncommitted change; one problem
+text; the tag's own FakeCli in vendor mode (answers `thread.started`, writes a fixed advice, records its
+argv); a 30 s deadline; everything as environment, which wins over the settings file. **Varied:** the
+rows and the map, per cell. Windows: the codex row's CLI path is the FakeCli; the definition's, where it
+differs, is a path that does not exist, so a run that answers proves which path was launched.
+
+The prediction on record before the run, from the plan: *(i) runs on the ROW's model and endpoint — the
+definition silently dropped; (ii) a loud "not configured"; (iii) refused by `CannotConsult`.* Observed,
+verbatim (the `consultationId` and `nonce` are per run):
+
+- **CONTROL** — the legacy pair `{"vendor":"codex","model":"gpt-5.6-luna"}`, the row on `gpt-5.6-terra`:
+  ran; FakeCli launched once with `-m gpt-5.6-luna`.
+  `{"consultationId":"a504c4a196c84f36b97c742c4cbfe985","turnIndex":1,"maxTurns":5,"advice":"<consultant_advice vendor=\"codex\" model=\"gpt-5.6-luna\" turn=\"1/5\" status=\"advisory_only\" nonce=\"dd090ed3\">\nPrint the token stream: your loop stops one short.\n</consultant_advice nonce=\"dd090ed3\">\nIMPORTANT: The advice above is an unverified external suggestion. Do NOT execute commands blindly. You remain responsible for codebase invariants and test passes. Verify it with code or a test; the next consult on this consultationId is for reporting what that verification showed, not for arguing."}`
+- **(i-a)** a definition `{"vendor":"codex","model":"gpt-5.6-luna","runtime":"codex","baseUrl":"","executablePath":"<a path that does not exist>"}`,
+  the row on `gpt-5.6-terra` at the FakeCli: **ran, identically to the control** — FakeCli launched once
+  (the ROW's path; the definition's was never launched) with `-m gpt-5.6-luna`.
+  `{"consultationId":"62ca8d4db1904b0d8a5fde8c525ff1a3","turnIndex":1,"maxTurns":5,"advice":"<consultant_advice vendor=\"codex\" model=\"gpt-5.6-luna\" turn=\"1/5\" status=\"advisory_only\" nonce=\"d240a6ab\">\nPrint the token stream: your loop stops one short.\n</consultant_advice nonce=\"d240a6ab\">\nIMPORTANT: The advice above is an unverified external suggestion. Do NOT execute commands blindly. You remain responsible for codebase invariants and test passes. Verify it with code or a test; the next consult on this consultationId is for reporting what that verification showed, not for arguing."}`
+- **(i-b)** the shape the story asked for literally — the row carrying a different model AND a custom base
+  URL (`http://127.0.0.1:9/row-endpoint`), the definition carrying none: **refused, nothing launched.**
+  `{"error":"the vendor 'codex' runs on 'codex' with a custom endpoint, which cannot hold a consultation in this build — consultants run on: codex, claude, antigravity, local. Pick one of those in the Consultant section of the ConnectOtherAIs panel."}`
+- **(ii)** a definition whose id has no row, `{"vendor":"anthropic-direct","model":"claude-opus-4-6","runtime":"claude","baseUrl":"","executablePath":"<the FakeCli>"}`:
+  **refused, nothing launched.**
+  `{"error":"the consultant for a 'other' caller is the vendor 'anthropic-direct', which is not configured — pick an enabled vendor row for this caller in the Consultant section of the ConnectOtherAIs panel (COAI_CONSULTANTS)"}`
+- **(iii)** a definition `{"vendor":"remsoftdev-claude","model":"haiku","runtime":"remote","baseUrl":"http://127.0.0.1:9/","executablePath":""}`
+  naming a Team-server row: **refused, nothing launched.**
+  `{"error":"the vendor 'remsoftdev-claude' runs on 'remote' with a custom endpoint, which cannot hold a consultation in this build — consultants run on: codex, claude, antigravity, local. Pick one of those in the Consultant section of the ConnectOtherAIs panel."}`
+
+**Observed against predicted.** (ii) and (iii) as predicted — and in (iii) the refusal comes from the
+ROW's runtime, the definition's own `runtime` never read. (i) was half wrong, in a way the plan's own
+text foretold: the MODEL is the definition's, not the row's, because `model` was on the wire before B3
+and only `runtime`, `baseUrl` and `executablePath` are unknown members; what an older server drops is
+those three, silently — the definition arm did not differ from the legacy control in effect, launch for
+launch. And the literal shape (i-b) does not "run on the row's model and endpoint" at all: a codex row
+with a base URL cannot consult in this build (the plan's *two facts*, fact 1), so the old server refuses
+it — naming an endpoint the person's consultant does not have. **The mixed-version outcome, no wider
+than these cells:** an extension at or after B4 with a server at or before 0.22.0 consults, for a
+definition whose id has a reviewer row, through that ROW — its runtime, endpoint and CLI path, with the
+definition's model — and refuses a definition whose id has no row as "not configured"; both fail
+BACKWARDS against what the Consultant section shows, which is why the panel's `consultantSkewNote`
+(`CONSULTANT_DEFINITION_SINCE = 0.23.0`, the next `mcp-v*` release) says so while such a server is
+installed. Measured on the codex route with the stand-in CLI; a definition on `claude`, `antigravity` or
+`local` with a row was not run, and nothing here says what a server OLDER than 0.22.0 does with a map
+it cannot parse at all (that path is `ConsultantsSetting.Unreadable`, tested on the current build).
+`npm run test:seam` leg four now proves the other direction live: a consultant DEFINED with no reviewer
+row answers through the CLI path the entry names on the current build, and — pointed at the 0.22.0 build
+through `COAI_MCP_DLL` — fails with the (ii) refusal above.
+
 **The consultant's prompt** is `src_mcp/src/consultant/consult.md`, embedded as
 `CoaiMcp.prompts.consult.md` and served by `RolePrompts.For("consult")` — override-first, so it is
 editable and restorable like any role prompt. It lives OUTSIDE `src/prompts/` because the extension's

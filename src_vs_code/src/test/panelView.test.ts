@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
-import { DEFAULTS } from '../settingsShape';
+import { DEFAULTS, settingsFrom } from '../settingsShape';
+import { CONSULTANT_DEFINITION_SINCE } from '../consultSettings';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
 import type { TeamServerState } from '../teamServerView';
 import { vendorPalette } from '../vendorColour';
@@ -1087,6 +1088,41 @@ test('an older server that would run the role anyway is called out', () => {
   assert.ok(!current.includes('does not know a role can be switched off'), 'a server that knows is not nagged');
   assert.ok(!nothingOff.includes('does not know a role can be switched off'),
     'and neither is one where nothing is switched off — there is nothing to get wrong');
+});
+
+/** The Consultant section alone, so the assertion cannot be satisfied by text in another section. */
+function consultantSection(html: string): string {
+  const from = html.indexOf('data-section="consultant"');
+  const to = html.indexOf('data-section="prompts"');
+  assert.ok(from > 0 && to > from, 'the Consultant section is bounded by the one after it');
+
+  return html.slice(from, to);
+}
+
+test('an older server that would consult through the reviewer row anyway is called out, in the Consultant section', () => {
+  // The fourth skew of this shape and, like the role switch, it fails BACKWARDS: the section shows a
+  // consultant's own endpoint and CLI path while an older server runs the reviewer row's — measured
+  // against mcp-v0.22.0 on 2026-09-15 (story B4). The sentence itself is `consultantSkewNote`'s and
+  // is tested there; this is that it reaches the page, in the section it is about, only when it is due.
+  const stored: Record<string, unknown> = {
+    consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus', executablePath: '/opt/claude' } },
+  };
+  const defined = settingsFrom((section) => stored[section]);
+  const known = (version: string): PanelState['server'] => ({ kind: 'known', version, remembered: true, updateOffered: false });
+  // One step below the marker, DERIVED from it: a literal would go red the day the marker moves.
+  const parts = CONSULTANT_DEFINITION_SINCE.split('.').map(Number);
+  const older = [...parts.slice(0, -1), parts[parts.length - 1]! - 1].join('.');
+
+  const old = panelHtml(state({ settings: defined, server: known(older) }), 'n0nce');
+  const current = panelHtml(state({ settings: defined, server: known(CONSULTANT_DEFINITION_SINCE) }), 'n0nce');
+  const nothingDefined = panelHtml(state({ server: known(older) }), 'n0nce');
+
+  const section = consultantSection(old);
+  assert.match(section, /does not read a consultant[\s\S]*Claude Code/);
+  assert.ok(section.includes(older) && section.includes(CONSULTANT_DEFINITION_SINCE), 'the two versions are not both named');
+  assert.ok(!current.includes('does not read a consultant'), 'a server that reads the definition is not nagged');
+  assert.ok(!nothingDefined.includes('does not read a consultant'),
+    'and neither is one where no consultant is defined — the row runs on both halves');
 });
 
 /**

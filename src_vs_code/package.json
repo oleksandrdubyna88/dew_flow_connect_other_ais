@@ -926,7 +926,8 @@
     "test:fresh": "npm run compile && node scripts/live-fresh.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
-    "measure:append": "node scripts/measure-append.mjs"
+    "measure:append": "node scripts/measure-append.mjs",
+    "measure:consultant-skew": "npm run compile && node scripts/measure-consultant-skew.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

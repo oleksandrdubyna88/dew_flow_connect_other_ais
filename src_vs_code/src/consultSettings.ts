@@ -10,6 +10,7 @@
  * which vendor a caller gets and enforces the caps; the panel only edits them.</p>
  */
 
+import { compareVersions } from './coaiInstall';
 import { Runtime, RUNTIMES } from './models';
 import { Vendor, vendorsFrom } from './vendors';
 
@@ -280,8 +281,12 @@ export function sameCallers(
  * `coai.consultants` a caller kind with no key and a caller kind whose vendor is blank both mean
  * "no choice made" — `callers` reads either as the shipped pair — so a map that lacks a kind must
  * equal one that holds that kind's empty choice, not differ from everything.</p>
+ *
+ * <p>Exported since story B4, because `envBlock` asks it per CALLER: only an entry that differs from
+ * its shipped pair travels, and the whole-map question {@link sameCallers} answers is not the
+ * per-caller one. One comparison for both, so the two cannot disagree about what "differs" means.</p>
  */
-function sameChoice(one: ConsultantChoice | undefined, other: ConsultantChoice | undefined): boolean {
+export function sameChoice(one: ConsultantChoice | undefined, other: ConsultantChoice | undefined): boolean {
   return CHOICE_FIELDS.every((field) => (one?.[field] ?? '') === (other?.[field] ?? ''));
 }
 
@@ -401,6 +406,68 @@ export function sameVendorNote(callerKind: string, runtime: string): string {
   return (CALLER_RUNTIMES[callerKind] ?? []).includes(runtime)
     ? 'the same vendor as the caller — worth it only with a stronger model, since a model cannot see its own blind spot'
     : '';
+}
+
+/**
+ * The first `coai-mcp` that reads a consultant's DEFINITION — its own runtime, endpoint and CLI path.
+ *
+ * <p>The same shape of skew as `ROLE_SWITCH_SINCE` in `prompts.ts`, and it fails the same way —
+ * BACKWARDS — which is why it has to be said out loud. Measured 2026-09-15 (story B4 of
+ * `PLAN_the_consultant_has_its_own_vendors`) against the last released server, mcp-v0.22.0
+ * (4fe3cb02), driven over stdio with a definition on the wire: its DTO is `(Vendor, Model)`,
+ * `System.Text.Json` skips the three members it does not declare, and it consulted through the
+ * REVIEWER ROW with the same id — that row's runtime, endpoint and CLI path — with the entry's model,
+ * launch for launch what it did for the legacy pair; a definition whose id had no reviewer row was
+ * refused "not configured". So a person who made the consultant's endpoint or CLI path its own sees it
+ * in the section and gets the reviewer's, and one who defined a consultant with no reviewer row sees
+ * a consultant and gets a refusal. The replies are verbatim in `research/module_server.md`.</p>
+ *
+ * <p>`0.23.0`: the last release is 0.22.0, a server's version is stamped from its `mcp-v*` tag at
+ * release (`release.yml`), and the server half of this plan (story B3) is the first server change since
+ * that tag — a feature, which every feature-bearing server release of the last week took as a minor
+ * bump. Set too LOW this stays silent on a server that drops the definition, the unsafe direction; set
+ * too high it nags a current one. Whoever cuts the release keeps it level with the tag.</p>
+ */
+export const CONSULTANT_DEFINITION_SINCE = '0.23.0';
+
+/**
+ * The sentence the Consultant section shows while the installed server would consult through the
+ * reviewer row instead of the definition the section draws — or nothing.
+ *
+ * <p>Nothing unless the server is KNOWN and strictly older — the rule its three siblings apply
+ * (`conventionsSkew`, `roleSwitchSkew`, `customRolesSkew` in `panelView.ts`). Nothing unless some
+ * caller's STORED entry is a definition: a legacy entry, customised or not, means the reviewer row on
+ * both halves, so there is nothing an older server gets wrong about it, and a pristine map crosses as
+ * nothing at all. Pure, with the version as an argument, so every branch is a unit test rather than a
+ * paint; the caller is `panelView.ts`, which puts it in the section it is about.</p>
+ */
+export function consultantSkewNote(installedServerVersion: string, consult: ConsultSettings): string {
+  const affected = CALLER_KINDS.filter(({ id }) => isStoredDefinition(consult.stored[id])).map(({ label }) => label);
+  if (installedServerVersion.length === 0 || affected.length === 0 || !olderThanMarker(installedServerVersion)) {
+    return '';
+  }
+
+  return `The coai-mcp you have installed (${installedServerVersion}) does not read a consultant's own runtime, `
+    + `endpoint or CLI path. The consultant for ${listed(affected)} will run through the reviewer row with the same `
+    + 'vendor id instead — that row’s runtime, endpoint and CLI path, with the model chosen here — and one whose '
+    + `id names no reviewer row is refused as not configured, whatever this section shows. Update it to `
+    + `${CONSULTANT_DEFINITION_SINCE} or later — the MCP server section below.`;
+}
+
+/** A stored entry that says which CLI answers — the one kind an older server reads wrongly. */
+function isStoredDefinition(choice: ConsultantChoice | undefined): boolean {
+  return choice !== undefined && choice.runtime !== '';
+}
+
+function olderThanMarker(version: string): boolean {
+  return compareVersions(CONSULTANT_DEFINITION_SINCE, version) > 0;
+}
+
+/** `A`, `A and B`, `A, B and C` — the affected callers as a person would list them. */
+function listed(labels: readonly string[]): string {
+  return labels.length <= 1
+    ? labels.join('')
+    : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
 /** The rows this feature may consult with, and the reason a row cannot. */

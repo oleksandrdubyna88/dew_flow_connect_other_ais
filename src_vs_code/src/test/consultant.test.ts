@@ -3,12 +3,14 @@ import { test } from 'node:test';
 import {
   CALLER_KINDS,
   CHOICE_FIELDS,
+  CONSULTANT_DEFINITION_SINCE,
   CONSULTING_RUNTIMES,
   ConsultantChoice,
   DEFAULT_CONSULT,
   ResolvedConsultant,
   consultSettingsFrom,
   consultableVendors,
+  consultantSkewNote,
   isDefaultConsult,
   resolveConsultant,
   sameCallers,
@@ -425,23 +427,125 @@ test('sameCallers notices a change in EVERY field a choice has — the field lis
 });
 
 // ---------------------------------------------------------------------------------------------
-// What crosses the seam — unchanged by this story, and measured before B4 changes it
+// What crosses the seam — the DEFINITION, since story B4 measured one against the released server
+//
+// Measured 2026-09-15 against mcp-v0.22.0 (4fe3cb02), the last released server, whose
+// `ConsultantDto` is `(Vendor, Model)`: handed a definition it consulted through the REVIEWER ROW
+// with the same id — that row's runtime, endpoint and CLI path — with the entry's model, exactly as
+// it did for the legacy pair; a definition whose id had no row was refused "not configured". So the
+// wire now carries what the panel resolved, and `consultantSkewNote` says what an older server does
+// with it. The replies are recorded verbatim in `research/module_server.md` under B4.
 
-test('COAI_CONSULTANTS carries the bytes it carried before resolution existed: the stored pair, never what it resolved to', () => {
-  const stored: Record<string, unknown> = {
-    consultants: { claude: { vendor: 'codex', model: '' }, codex: { vendor: 'claude', model: 'opus' } },
+/** What `COAI_CONSULTANTS` carries, parsed — one map, as the server reads it. */
+function wire(stored: Record<string, unknown>): Record<string, unknown> {
+  const raw = envBlock(settingsFrom(reader(stored)), vendorsFrom(stored['vendors']))['COAI_CONSULTANTS'];
+
+  assert.ok(raw !== undefined, 'the premise: a map that differs from the shipped pairs is on the wire');
+
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+test('COAI_CONSULTANTS carries the RESOLVED definition — all five fields — never the stored pair', () => {
+  // A Codex caller pointed at `codex` — the same vendor, an explicit choice the shipped pair is not —
+  // as a legacy entry whose row is tuned. Before B4 this sent `{vendor:"codex", model:""}` and the
+  // server re-derived the row's model itself; now the panel's resolution IS what crosses, and an
+  // older server drops the three fields it does not know (measured — the block comment above). The
+  // KEY ORDER is not asserted here: `panelServerDefaultsAgreement` reads it off the C# DTO, and a
+  // second list of the same names beside this one would be the copy that rule forbids.
+  const map = wire({ consultants: { codex: { vendor: 'codex', model: '' } }, vendors: [LUNA_ROW] });
+
+  assert.deepEqual(map['codex'], { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', baseUrl: '', executablePath: '' });
+});
+
+test('a stored definition crosses as itself — its own endpoint and CLI path, nothing borrowed from a row', () => {
+  const map = wire({
+    consultants: { codex: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '/opt/claude/bin/claude' } },
     vendors: [LUNA_ROW],
-  };
-  const settings = settingsFrom(reader(stored));
+  });
 
-  // Today's bytes, verified against the code that produced them before this story touched it. A
-  // resolved entry would carry `gpt-5.6-luna` for the claude caller — a wire change B4 measures
-  // against an OLD server half first, and this story makes none.
-  assert.equal(
-    envBlock(settings, vendorsFrom(stored['vendors']))['COAI_CONSULTANTS'],
-    '{"claude":{"vendor":"codex","model":""},"codex":{"vendor":"claude","model":"opus"},"gemini":{"vendor":"codex","model":""},"other":{"vendor":"codex","model":""}}',
-  );
-  assert.equal(settings.consult.byCaller['claude']!.model, 'gpt-5.6-luna', 'the premise: the read resolved it');
+  assert.deepEqual(map['codex'], { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '/opt/claude/bin/claude' });
+});
+
+test('only the callers that differ from the shipped pair are on the wire — the file carries what differs, per caller', () => {
+  // Every caller used to travel whenever one differed, as a legacy pair the server resolved to the
+  // same thing it would have chosen with no key. A RESOLVED definition is not that: it freezes the
+  // panel's reading of a caller nobody configured, so an untouched caller now stays off the wire and
+  // the server resolves its own absence — which is what `ConsultantRouting.For` does for a kind the
+  // map lacks.
+  const map = wire({ consultants: { codex: { vendor: 'codex', model: '' } }, vendors: [LUNA_ROW] });
+
+  assert.deepEqual(Object.keys(map), ['codex']);
+});
+
+test('an UNAVAILABLE entry travels RAW — vendor and model, no runtime — so the server refuses it by name', () => {
+  // Rule (c) on the panel is rule (c) on the server: an entry that matched no row and names no
+  // runtime must reach the server exactly as stored, so `NothingNamed` can say which id, and must
+  // carry NO runtime — a runtime invented here would be a definition the server builds a provider
+  // for, sending a working tree to a vendor nobody chose.
+  const map = wire({ consultants: { other: { vendor: 'mistral', model: 'large' } }, vendors: [LUNA_ROW] });
+
+  assert.deepEqual(map, { other: { vendor: 'mistral', model: 'large' } });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The skew note — what an older server does with a definition, said while one is installed
+
+/** A version one step below the marker, derived from it so the test cannot drift when the marker moves. */
+function justBelow(marker: string): string {
+  const parts = marker.split('.').map(Number);
+  const last = parts.length - 1;
+
+  return [...parts.slice(0, last), parts[last]! - 1].join('.');
+}
+
+const OLDER = justBelow(CONSULTANT_DEFINITION_SINCE);
+
+test("an older server is called out while some caller's STORED entry is a definition", () => {
+  // Measured: mcp-v0.22.0 consulted through the reviewer row with the same id and dropped the
+  // definition's runtime, endpoint and CLI path — the section shows one thing, the row runs. The note
+  // names the installed version, the version that reads the definition, and WHO is affected.
+  const settings = consultSettingsFrom(reader({
+    consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus', executablePath: '/opt/claude' } },
+  }));
+  const note = consultantSkewNote(OLDER, settings);
+
+  assert.ok(note.includes(OLDER), `the installed version is not named: ${note}`);
+  assert.ok(note.includes(CONSULTANT_DEFINITION_SINCE), `the version to update to is not named: ${note}`);
+  assert.ok(note.includes('Claude Code'), `the affected caller is not named: ${note}`);
+  assert.ok(note.includes('reviewer row'), `what will actually run is not said: ${note}`);
+});
+
+test('the note names every affected caller and no other', () => {
+  const settings = consultSettingsFrom(reader({
+    consultants: {
+      claude: { vendor: 'claude', runtime: 'claude', model: 'opus' },
+      gemini: { vendor: 'codex', runtime: 'codex', model: '' },
+      codex: { vendor: 'codex', model: '' }, // customised, but a LEGACY entry — the row on both halves
+    },
+  }));
+  const note = consultantSkewNote(OLDER, settings);
+
+  assert.ok(note.includes('Claude Code') && note.includes('Gemini'), `both defined callers are not named: ${note}`);
+  assert.ok(!note.includes('Codex'), `a caller with a legacy entry was named: ${note}`);
+});
+
+test('the note is silent for a server that reads the definition, a later one, and one nobody has installed', () => {
+  const settings = consultSettingsFrom(reader({
+    consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus' } },
+  }));
+
+  assert.equal(consultantSkewNote(CONSULTANT_DEFINITION_SINCE, settings), '', 'the one that reads it says nothing');
+  assert.equal(consultantSkewNote('9.0.0', settings), '', 'nor does a later one');
+  assert.equal(consultantSkewNote('', settings), '', 'a server nobody has installed is not behind');
+});
+
+test('the note is silent when nothing on the wire is a definition — a legacy entry means the row on both halves', () => {
+  // A customised LEGACY entry crosses as the resolved row, and an older server runs that same row:
+  // nothing it gets wrong. A pristine map crosses as nothing at all.
+  const legacyOnly = consultSettingsFrom(reader({ consultants: { codex: { vendor: 'codex', model: 'gpt-5.5' } }, vendors: [LUNA_ROW] }));
+
+  assert.equal(consultantSkewNote(OLDER, legacyOnly), '');
+  assert.equal(consultantSkewNote(OLDER, DEFAULT_CONSULT), '');
 });
 
 // ---------------------------------------------------------------------------------------------

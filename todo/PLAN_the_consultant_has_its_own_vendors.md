@@ -1,7 +1,8 @@
 # PLAN — the consultant has its own vendors
 
-> Status: **EPIC A IMPLEMENTED 2026-09-15 (stories A1 and A2, PR #262); epics B and C remain
-> planned.** Written 2026-09-14 and reviewed by the gate the same day —
+> Status: **EPICS A AND B IMPLEMENTED 2026-09-15 (A1 and A2 in PR #262; B3 and B4 on
+> `feat/the-consultant-server-half`); epic C remains planned.** Written 2026-09-14 and reviewed by the
+> gate the same day —
 > verdict `good_enough`, 3 of 3 reviewers, 13 gating findings against a threshold of 6; twelve
 > accepted and folded in below, two rejected with reasons (see *What the plan round changed*).
 > Scope: the Consultant section of the panel (`consultantView.ts`, `consultSettings.ts`,
@@ -258,6 +259,22 @@ are in `module_server.md`; `CONSULTANT_DEFINITION_SINCE` and a pure `consultantS
 rendered; `panelServerDefaultsAgreement` asserts the DTO's property names equal the keys `envBlock`
 writes, by reading the C#.
 Discharges 1 (wire half), 9.
+**What the measurement found, recorded so the prediction above is read as the prediction it was.**
+Run 2026-09-15 against `mcp-v0.22.0` (4fe3cb02, the last release; `src_vs_code/scripts/measure-consultant-skew.mjs`,
+replies verbatim in `module_server.md`). (ii) and (iii) as predicted. (i) was half wrong: the old
+server dropped `runtime`, `baseUrl` and `executablePath` and consulted through the ROW — its CLI path,
+launch for launch as the legacy pair — but with the DEFINITION's model, because `model` was on the wire
+before B3; "the ROW's model" was never at stake. And the literal shape — a row carrying a different
+model AND a base URL — does not "run on the row's endpoint": this build's codex consultant refuses a
+custom endpoint (*two facts*, fact 1, above), so the old server REFUSES it, naming an endpoint the
+person's consultant does not have. Both halves of (i) fail backwards, which the skew note says. Two
+smaller deviations: (i) was measured in two cells on the codex route only (one that could run, one in
+the literal shape), with a legacy-pair control beside them; and the wire is per CALLER — a caller at
+its shipped pair stays off the wire rather than travelling as a legacy pair, since a resolved
+definition would freeze this panel's reading of a caller nobody configured. The seam gained a fourth
+leg — a consultant defined with no reviewer row answers through its own CLI path — watched failing
+against the 0.22.0 build with the (ii) refusal. `CONSULTANT_DEFINITION_SINCE` is `0.23.0`, the next
+`mcp-v*` release; whoever cuts it keeps the marker level with the tag.
 
 ### EPIC C — The section is the catalogue
 
