@@ -2648,12 +2648,26 @@ test('a folded question is named by its content, so a retry cannot shift the fol
   assert.match(foldKey('anything at all'), /^[a-z0-9]+$/, 'the key is not safe in an attribute or a selector');
 });
 
-test('the control says how much is hidden, in the unit the question actually has', () => {
-  assert.strictEqual(foldLabel('a\nb\nc'), 'Show all 3 lines');
+test('the control counts in the unit that made the question long, not the one it happens to have', () => {
+  // Long by LINES: say lines.
+  assert.strictEqual(foldLabel('a\nb\nc\nd\ne\nf'), 'Show all 6 lines');
+
+  // Long by CHARACTERS and one line: say characters. A newline count would call this "1 line".
   assert.strictEqual(
     foldLabel('x'.repeat(402)),
     'Show all 402 characters',
     'a single wrapped paragraph was described as one line',
+  );
+
+  // Long by CHARACTERS but with a few newlines in it — the case that reads as nonsense if the unit
+  // is chosen by "does it have more than one line". Three lines is FEWER than the five the fold
+  // shows, so "Show all 3 lines" offers to reveal less than is already on screen. (gemini, the plan
+  // round, Blocking.)
+  const fewLinesManyWords = `${'x'.repeat(200)}\n${'y'.repeat(200)}\n${'z'.repeat(200)}`;
+  assert.strictEqual(
+    foldLabel(fewLinesManyWords),
+    `Show all ${String(fewLinesManyWords.length)} characters`,
+    'a question long by characters offered to show fewer lines than the fold already shows',
   );
 });
 
