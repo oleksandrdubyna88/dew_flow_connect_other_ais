@@ -51,6 +51,43 @@ into the page, so the words in one are page content. A comment written as *"a st
 not know…"* put the phrase **does not know** into the HTML, and
 `panelServerPromptAgreement.test.ts` asserts that phrase is ABSENT when the server agrees about
 roles. The comment was reworded. A comment in this stylesheet is not a private note.
+### Each Consultant row is a framed group in its client's own colour (2026-09-15)
+
+**REVIEWERS** draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
+the same colour follows it into *Active rounds* and the rounds log — a vendor can be walked from its
+settings to its running round without reading. **CONSULTANT** drew four flat `.field` blocks: no
+frame, nothing grouping a caller's controls, no colour. `.consultant-row` existed as a *data* hook
+with no CSS rule anywhere in the panel (issue #291).
+
+Each caller row is now a framed box with a coloured left edge, and the colour comes from the **same
+allocator**: `vendorPalette(state.vendors.map(v => v.id))`, the expression `reviewersBody` already
+uses. That is what makes the cross-view promise true by construction rather than by coincidence —
+building a palette from the four caller kinds would be a second list and a second assignment, which
+is the defect `vendorColour.ts` exists to prevent.
+
+**Three of the four caller ids are ANCHORED** — `codex`, `gemini` and `claude` hold reserved slots
+whether or not a reviewer of that name is configured — so they answer with the colour they already
+have everywhere else, for free. The palette is therefore passed even when no reviewer is configured:
+an anchor exists for exactly that case.
+
+**`other` takes a neutral edge** (`var(--vscode-widget-border)`, the token `.role-code` uses for the
+same "container, not an entity" job). *Another client* is not a vendor and must not look like one —
+and it is unanchored, so a hashed colour for it could permanently collide with a configured
+reviewer's. Anchoring it instead was rejected: a sixth reserved slot would **move the colours of
+currently unanchored reviewers**, which `vendorColour.test.ts` pins.
+
+`callerColour(callerId, palette)` is pure and exported, so the decision is tested by calling it. The
+frame is `.consultant-row`, modelled on `.role` rather than on `.vendor`: its neighbours here are
+fields in a section, not cards in a list, so it takes the role box's tighter metrics. Joining the
+selector to `.vendor` was rejected — that would re-space these rows on any future change to the
+reviewer card, and pull in four descendant rules written for controls a consultant row does not have.
+
+**The assertion that matters is the integration one.** `callerColour` can be perfect and every test
+of it green while `panelHtml` simply never hands the palette to `consultantBody` — and the section
+then renders neutral edges in VS Code under a fully green suite. `panelView.test.ts` asserts the
+rendered page carries the same colour for `codex` on its card and on its caller row. Verified by
+deleting the wiring: **only** that test went red, which is what proved the unit tests alone were
+insufficient.
 
 ### The catalogue is offered whole, and says "Claude Code" (2026-09-15)
 

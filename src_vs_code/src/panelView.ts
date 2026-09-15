@@ -323,6 +323,11 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         codexModels: state.codexModels,
         agyModels: state.agyModels,
         consultPrompt: state.consultPrompt,
+        // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
+        // caller wears the colour its vendor has on its card and in a running round. Passed even
+        // when no reviewer is configured: the anchored ids answer regardless, which is what an
+        // anchor is for.
+        colour: vendorPalette(state.vendors.map((v) => v.id)),
       })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
@@ -2458,6 +2463,11 @@ const CSS = `
     --tone-keys: var(--vscode-charts-red, #f14c4c);
     --tone-code: var(--vscode-widget-border, #454545);
   }
+  /* One framed group per CALLER, modelled on .role rather than on .vendor: its neighbours here are
+     fields in a section, not cards in a list, so it takes the role box's tighter metrics. The edge
+     colour arrives inline, per caller; the width and the fallback are here, so a row without a
+     colour is still a deliberate box rather than a bare one. */
+  .consultant-row { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--vscode-widget-border); border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
   .group-head { font-size: 11px; font-weight: 600; opacity: .8; margin: 0 0 6px; }
   /* A left edge rather than a filled box: it marks the role at a glance without turning the

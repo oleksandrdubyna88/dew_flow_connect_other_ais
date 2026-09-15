@@ -1597,3 +1597,40 @@ test('the list of what to move is a list, not a sentence sixteen items long', ()
   }
   assert.match(section, /<ul|<li/u, 'sixteen names run together are not read');
 });
+
+/**
+ * A Consultant row and the reviewer card of the same name are the same colour, in the SAME page.
+ *
+ * <p>This is the assertion that fails if the wiring is deleted. `callerColour` can be perfect and
+ * every test of it green while `panelHtml` simply never hands the palette to `consultantBody` — and
+ * then the section renders neutral edges in VS Code with a fully green suite. So this asserts the
+ * rendered page, both halves of the promise in one string: the card's colour, and the row's.
+ * (gemini, the plan round: "delete the production line whose absence a user would notice, and watch
+ * THAT go red".)</p>
+ */
+test('a consultant row wears the same colour as the reviewer card of the same name', () => {
+  const html = panelHtml(state(), 'n0nce');
+
+  // codex is the id that is BOTH a configured reviewer in this fixture and a caller kind, so it is
+  // the one where "the same colour in two sections" is a claim about one page rather than about two
+  // functions. The card is asserted first: without it, the row assertion below compares against
+  // nothing.
+  const shared = DEFAULT_COLOUR('codex');
+  assert.ok(
+    html.includes(`<div class="vendor" style="border-left-color:${shared}">`),
+    'codex has no coloured reviewer card, so this test is comparing against nothing',
+  );
+  assert.ok(
+    html.includes(`data-caller="codex" style="border-left-color:${shared}"`),
+    'codex is a different colour in Consultant than on its reviewer card',
+  );
+
+  // claude and gemini are anchored, so they carry their own colour here even though this fixture
+  // configures neither as a reviewer — which is the point of an anchor.
+  for (const id of ['claude', 'gemini']) {
+    assert.ok(
+      html.includes(`data-caller="${id}" style="border-left-color:${DEFAULT_COLOUR(id)}"`),
+      `${id} does not wear its anchored colour in Consultant`,
+    );
+  }
+});

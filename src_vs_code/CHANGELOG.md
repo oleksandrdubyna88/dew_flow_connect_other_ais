@@ -2,6 +2,12 @@
 
 ## Extension 0.47.0 — 2026-09-15
 
+**The Consultant section reads like the Reviewers one** (#291). Each caller — *Claude Code asks…*,
+*Codex asks…*, *Gemini asks…* — is now a framed box with a coloured left edge, and the colour is
+**the one that vendor already wears** on its reviewer card and on its name in a running round, so
+you can follow it across the panel without reading. *Another client* takes a neutral edge, because
+it is not a vendor and should not be dressed as one.
+
 **A question with a long path in it wraps, instead of sliding the conversation sideways** (#299).
 Ask about something whose text carries a Windows path, a URL, a stack frame or a long id, and the
 question ran off the right-hand edge and put a horizontal scrollbar under the whole conversation.
