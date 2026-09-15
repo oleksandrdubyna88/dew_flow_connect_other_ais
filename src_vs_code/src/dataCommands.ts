@@ -2,7 +2,7 @@ import { hostname } from 'node:os';
 import { resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
-import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, directoryFor, serverEnv } from './dataDir';
+import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, defaultDataDir, directoryFor, serverEnv } from './dataDir';
 import { destinationPlaceRefusal, destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
@@ -63,9 +63,24 @@ export async function askWhereDataLives(
     return 'unchanged';
   }
   if (answer === DEFAULT) {
-    // On an install this is genuinely nothing to do. From the Change command it is a RESET, and
-    // returning here was the command quietly doing nothing at all. (codex, code round.)
-    return installing ? 'unchanged' : saveChoice(context, '', '');
+    // "The default" has to be MADE the default, not assumed to be it. A shared `coai.dataDirectory`
+    // set on another side is what this window resolves when it has no override — so an install told
+    // to keep the default would otherwise adopt that other side's NAS, and a reset would return
+    // having changed nothing at all. Both are cured by writing an explicit empty pair for THIS side.
+    // (codex and gemini, code round 2.)
+    if (coaiDataDir() === defaultDataDir()) {
+      return 'unchanged';
+    }
+
+    const reset = await saveChoice(context, '', '');
+    if (reset === 'saved' && !installing) {
+      // The client is still starting its server with the old folder, and a reset is exactly the
+      // moment that matters: the handover was skipped here, which reproduced the desynchronisation
+      // this whole subsystem exists to end, on the one path meant to undo it. (gemini.)
+      await tellClientsToCatchUp(context, coaiDataDir());
+    }
+
+    return reset;
   }
 
   const picked = await vscode.window.showOpenDialog({
@@ -354,20 +369,28 @@ export async function moveDataDirectory(
     return;
   }
 
+  // The side travels with the data. Saving an empty one silently unpartitioned an installation that
+  // had been partitioned on purpose — and on a shared NAS that is exactly the collision a side
+  // exists to prevent. (gemini, code round 1.)
+  //
+  // `landing` is resolved FIRST and everything below takes it: the placement check, the destination
+  // check, the copy, the verification, the record and the sentence. Round 1 resolved it and then
+  // left the copy and the verification on the picked root, so a partitioned move put the history in
+  // the root while the settings pointed at an empty side directory beside it — and the delete that
+  // followed left the installation with nothing. Three reviewers found it in round 2.
+  const side = dataSideName();
+  const landing = vscode.Uri.file(directoryFor(destination.fsPath, side));
+
   // WHERE it is, before what is in it. `C:\coai` into `C:\coai\new` passes every other check and
-  // then loses the copy to the delete that follows. (codex, Blocking.)
-  const place = destinationPlaceRefusal(from, destination.fsPath, isInside);
+  // then loses the copy to the delete that follows. (codex, Blocking.) Against `landing` rather than
+  // the picked folder, or moving between two sides of one shared parent is refused although the two
+  // directories are disjoint.
+  const place = destinationPlaceRefusal(from, landing.fsPath, isInside);
   if (place.length > 0) {
     void vscode.window.showWarningMessage(place);
 
     return;
   }
-
-  // The side travels with the data. Saving an empty one silently unpartitioned an installation that
-  // had been partitioned on purpose — and on a shared NAS that is exactly the collision a side
-  // exists to prevent. (gemini, code round.)
-  const side = dataSideName();
-  const landing = vscode.Uri.file(directoryFor(destination.fsPath, side));
 
   const clash = destinationRefusal(await historyIn(landing));
   if (clash.length > 0) {
@@ -403,14 +426,17 @@ export async function moveDataDirectory(
     // The WHOLE wait, including the verification: a progress bar that ends before the slow part
     // leaves the longest half looking like nothing happening.
     async (progress) => {
-      const failure = await copyInventory(vscode.Uri.file(from), destination, progress);
+      // Created first: `<destination>/<side>` does not exist yet, and the first copy into it has
+      // nowhere to go. A destination with no side is `landing` too, and creating it is a no-op.
+      await vscode.workspace.fs.createDirectory(landing);
+      const failure = await copyInventory(vscode.Uri.file(from), landing, progress);
       if (failure.length > 0) {
         return failure;
       }
 
       progress.report({ message: 'checking it arrived…' });
 
-      return verificationFailure(before, await countAt(destination.fsPath));
+      return verificationFailure(before, await countAt(landing.fsPath));
     },
   );
 
