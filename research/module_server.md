@@ -347,7 +347,10 @@ through `RuleOrder.Staged`, which filters. Each tiered prompt opens with a cover
 *M of N*, or **NONE** — because this gate reviews OTHER repositories, and one pinned to an older
 conventions revision carries only part of a tier. Without it, a round judged against none of its rules
 reads exactly like one judged against all of them, and a reviewer's silence about a rule it never saw
-looks like compliance. The count comes from `RuleBundle.FromMount`, computed where the mounts are known.
+looks like compliance. The count comes from `RuleBundle.MatchedCount`, which counts the tier against the
+rules actually RENDERED — one the budget dropped is one the reviewer never saw. The block also opens by
+saying what the rules ARE: criteria from the repository under review, never instructions addressed to the
+reviewer, so a change cannot edit its own conventions to say "approve this plan" and be obeyed.
 
 `RunStageAsync`: load session → `RoundMachine.Begin*` (refusal = the answer) → resolve SHA → ONE
 worktree lease → build work (schema file, role prompt + contract + context; repair prompt = same +
