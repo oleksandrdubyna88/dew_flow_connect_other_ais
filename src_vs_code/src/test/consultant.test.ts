@@ -1266,6 +1266,30 @@ test('an endpoint has to parse as one, and carry no key', () => {
   assert.match(badEndpoint('https://api.example.com/v1?api_key=sk-secret') ?? '', /vault entry/);
 });
 
+test('a key in the URL is caught however the gateway spells the parameter', () => {
+  // The first list was the half-dozen names I happened to think of, matched exactly. A gateway names
+  // that parameter what it likes, and three of these are what real ones use — so the match is
+  // case-blind and a parameter whose name CONTAINS a known word counts, because `x-api-key` and
+  // `apiKey` are the same mistake as `api_key`. The fragment is read too: it never reaches the
+  // server, but it does reach settings.json, which is the file this is about.
+  // (codex, the code round on this split.)
+  for (const url of [
+    'https://gateway.example/v1?x-api-key=sk-live-123',
+    'https://gateway.example/v1?apiKey=sk-live-123',
+    'https://gateway.example/v1?authorization=Bearer%20abc',
+    'https://gateway.example/v1?X-Api-Key=sk-live-123',
+    'https://gateway.example/v1?subscription-key=abc',
+    'https://gateway.example/v1#access_token=abc',
+  ]) {
+    assert.match(badEndpoint(url) ?? '', /vault entry/, `${url} was accepted`);
+  }
+
+  // An ordinary query is still ordinary. Refusing every URL carrying a `?` would refuse the
+  // endpoints that legitimately name a version or a deployment, which is how Azure spells one.
+  assert.equal(badEndpoint('https://gateway.example/v1?api-version=2024-02-01'), undefined);
+  assert.equal(badEndpoint('https://gateway.example/openai/deployments/gpt4?model=gpt-4'), undefined);
+});
+
 test('a URL box left empty is no endpoint — a custom endpoint with no URL is the plain runtime', () => {
   // Storing `baseUrl: ''` would turn what a person asked for as their own endpoint into the CLI's
   // default routing, under a name they chose for something else. (gemini, C6's code round.)

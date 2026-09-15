@@ -203,6 +203,13 @@ export function settingWrite(message: SettingMessage): SettingWrite | undefined 
   return { kind: 'plain', key, value };
 }
 
+/**
+ * One role's entry changed inside a role-keyed record, with every other role kept.
+ *
+ * <p>A record, MERGED rather than replaced. Replacing it would drop the three roles the person did
+ * not touch, and the symptom would be the one this shape was introduced to fix — a number that will
+ * not stick — for three roles instead of one.</p>
+ */
 export function roleRecordUpdate(
   current: Readonly<Record<string, unknown>>,
   role: string,
