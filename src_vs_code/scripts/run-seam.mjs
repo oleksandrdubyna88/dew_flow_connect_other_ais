@@ -58,8 +58,23 @@ if (binary === '') {
 const { serverSettingsJson } = await import('../out/serverSettingsFile.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { DEFAULTS } = await import('../out/settingsShape.js');
-const { DEFAULT_CONSULT } = await import('../out/consultSettings.js');
+const { DEFAULT_CONSULT, consultSettingsFrom } = await import('../out/consultSettings.js');
 const { tokenFileName } = await import('../out/teamServers.js');
+
+/**
+ * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
+ *
+ * <p>That is the fix this helper came from. This script is `.mjs` and nothing typechecks it, so when
+ * `ConsultSettings` gained a second map on 2026-09-15 — `stored`, the unresolved side `envBlock`
+ * compares against the shipped pairs — a literal that overrode only `byCaller` went on running, went
+ * on writing a settings file, and quietly stopped putting `COAI_CONSULTANTS` on the wire. The seam is
+ * what caught it: the real binary answered about `codex`, the shipped default, instead of the vendor
+ * this script had chosen. Reading through the product's own reader means the next field added to that
+ * type costs this script nothing.</p>
+ */
+const consultFrom = (consultants) => consultSettingsFrom(
+  (section) => (section === 'consultants' ? consultants : undefined),
+);
 
 /**
  * A catalog, from a server that exists for eight seconds.
@@ -416,7 +431,7 @@ const CHOSEN = 'a-vendor-nobody-configured';
 writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
   {
     ...DEFAULTS,
-    consult: { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, other: { vendor: CHOSEN, model: '' } } },
+    consult: consultFrom({ other: { vendor: CHOSEN, model: '' } }),
   },
   vendorsFrom([row]),
   '9.9.9',
