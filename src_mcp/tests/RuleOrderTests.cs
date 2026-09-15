@@ -105,6 +105,55 @@ public sealed class RuleOrderTests : IDisposable
         ]);
     }
 
+    /// <summary>
+    /// The tier names a language doctrine, not any file that happens to be called one.
+    /// </summary>
+    /// <remarks>
+    /// A doctrine is promoted because it is about the code in front of the reviewer. A
+    /// <c>common/doctrine.md</c> is not that, and promoting it ahead of <c>security.md</c> on the
+    /// strength of its filename would spend the budget the tier table exists to protect.
+    /// </remarks>
+    [Fact]
+    public void ADoctrineOutsideALanguageDirectory_IsNotPromotedAboveSecurity()
+    {
+        WriteFamilyMount();
+        Write(".agents/conventions/common/doctrine.md", Filler("common-doctrine", 30_000));
+
+        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+
+        bundle.Files.Select(file => file.Path).Should().Contain([
+            ".agents/conventions/common/security.md",
+            ".agents/conventions/common/testing.md",
+        ]);
+        bundle.Omitted.Should().Contain(".agents/conventions/common/doctrine.md");
+    }
+
+    /// <summary>
+    /// The tier table is matched the way the rest of the pipeline compares paths.
+    /// </summary>
+    /// <remarks>
+    /// <c>FolderFiles</c> de-duplicates and sorts its candidates with
+    /// <see cref="StringComparer.OrdinalIgnoreCase"/>, so a case-sensitive tier match would be a
+    /// second comparison rule inside one pipeline — and the rule it would starve is whichever one
+    /// somebody committed with a capital letter.
+    /// </remarks>
+    [Fact]
+    public void ATierNameInAnotherCase_StillMatchesItsTier()
+    {
+        // The competitor leads with a capital too, and sorts before `Testing.md` under BOTH
+        // comparers — so only the tier can put `Testing.md` first, and a case-sensitive tier match
+        // fails this test instead of passing it on an accident of ASCII, where every capital sorts
+        // ahead of every lowercase letter.
+        Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        Write(".agents/conventions/common/Alpha-rule.md", Filler("alpha", 25_000));
+        Write(".agents/conventions/common/Testing.md", Filler("testing", 25_000));
+
+        var bundle = RuleFiles.Collect(_repo, 26_000, RuleOrder.Walk);
+
+        bundle.Files.Select(file => file.Path).Should().Contain(".agents/conventions/common/Testing.md");
+        bundle.Omitted.Should().Contain(".agents/conventions/common/Alpha-rule.md");
+    }
+
     /// <summary>A name the tier table has never heard of is ordered, not dropped.</summary>
     [Fact]
     public void ARuleTheTierTableDoesNotName_IsStillOffered()

@@ -69,12 +69,19 @@ public sealed class RuleOrder
     /// <c>knowledge-base.md</c>, the three a reviewer cites when a change is built wrong rather than
     /// written wrong.</para>
     /// <para>Matched by path SUFFIX so one entry serves every mount layout, and unmatched names fall
-    /// through to ordinal order rather than being dropped — a rule invented tomorrow is ranked last,
-    /// never lost.</para>
+    /// through to alphabetical order rather than being dropped — a rule invented tomorrow is ranked
+    /// last, never lost.</para>
+    /// <para>The doctrines are named by their language DIRECTORY, not by the filename alone. A
+    /// suffix of <c>/doctrine.md</c> would also promote a <c>common/doctrine.md</c>, which is not
+    /// about the code in front of the reviewer — and the code round that found this showed what it
+    /// costs: a 30 KB file promoted on the strength of its name pushed BOTH <c>security.md</c> and
+    /// <c>testing.md</c> out of the budget, which is the starvation this table exists to prevent.</para>
     /// </remarks>
     private static readonly string[] Tiers =
     [
-        "/doctrine.md",
+        "csharp/doctrine.md",
+        "rust/doctrine.md",
+        "typescript/doctrine.md",
         "common/security.md",
         "common/testing.md",
         "common/reuse-first.md",
@@ -82,12 +89,22 @@ public sealed class RuleOrder
         "common/knowledge-base.md",
     ];
 
+    /// <remarks>
+    /// <para>One comparison rule for the whole pipeline: <c>RuleFiles.FolderFiles</c> de-duplicates
+    /// and sorts its candidates with <see cref="StringComparer.OrdinalIgnoreCase"/>, so a
+    /// case-SENSITIVE tier match here would be a second rule inside one collection — and the rule it
+    /// would starve is whichever one somebody committed with a capital letter.</para>
+    /// <para>The ordinal pass at the end is what keeps the order TOTAL: two paths differing only in
+    /// case tie under the first comparer, and a tie is where an order stops being deterministic.</para>
+    /// </remarks>
     private static IEnumerable<string> ByPath(IReadOnlyList<string> paths) =>
-        paths.OrderBy(Tier).ThenBy(path => path, StringComparer.Ordinal);
+        paths.OrderBy(Tier)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(path => path, StringComparer.Ordinal);
 
     private static int Tier(string path)
     {
-        var rank = Array.FindIndex(Tiers, suffix => path.EndsWith(suffix, StringComparison.Ordinal));
+        var rank = Array.FindIndex(Tiers, suffix => path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
 
         return rank < 0 ? Tiers.Length : rank;
     }
