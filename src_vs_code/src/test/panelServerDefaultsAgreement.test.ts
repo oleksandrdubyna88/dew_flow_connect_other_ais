@@ -116,11 +116,13 @@ test('the shipped consultant for every caller kind is the one the server would c
     'the panel and the server disagree about which callers EXIST',
   );
 
+  // The STORED pair is the contract: `Shipped` is what the server holds before it resolves anything,
+  // and `byCaller` is that pair already resolved against no rows.
   for (const { id } of CALLER_KINDS) {
     assert.strictEqual(
-      DEFAULT_CONSULT.byCaller[id]!.vendor,
+      DEFAULT_CONSULT.stored[id]!.vendor,
       shipped.get(id),
-      id + ': the panel shows ' + DEFAULT_CONSULT.byCaller[id]!.vendor + ', the server would ask ' + shipped.get(id),
+      id + ': the panel shows ' + DEFAULT_CONSULT.stored[id]!.vendor + ', the server would ask ' + shipped.get(id),
     );
   }
 });
