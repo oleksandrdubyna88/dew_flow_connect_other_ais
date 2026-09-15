@@ -59,4 +59,30 @@ public interface IAstNormalizer
     /// back to source until this.
     /// </returns>
     EnclosingSymbol? Locate(SourceLanguage language, string source, int line);
+
+    /// <summary>
+    /// Rewrites a method so that nothing of this project is left in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Kept: control flow, synchronisation primitives, await points, and the runtime's own
+    /// names — the shape of the failure. Removed: every identifier we chose, every string, every
+    /// number, every comment. What survives is what <see cref="RuntimeVocabulary"/> allows, plus
+    /// placeholders numbered in order of first appearance.</para>
+    /// <para><b>Deterministic.</b> The same method normalises to the same text every time, and two
+    /// methods that differ only in their names normalise to the SAME text — which is the whole
+    /// reason this exists: a corpus keyed on shape cannot be keyed on anything a rename would
+    /// change.</para>
+    /// <para>Whether the result is safe to send is not decided here. <see cref="Skeleton.Leaks"/>
+    /// answers that, and it is run twice: once by the collector, which can also compare against the
+    /// original, and once by the server, which never sees one.</para>
+    /// </remarks>
+    string Normalise(SourceLanguage language, string source);
+
+    /// <summary>The language's own reserved words, which are not ours to rename or to leak.</summary>
+    /// <remarks>
+    /// It comes from the normalizer because the normalizer has the grammar: tree-sitter names every
+    /// keyword as a node kind of its own, so this is read off the parser rather than typed out. A
+    /// hand-written list here would be a second copy of the grammar, worse and going stale.
+    /// </remarks>
+    IReadOnlySet<string> KeywordsOf(SourceLanguage language);
 }

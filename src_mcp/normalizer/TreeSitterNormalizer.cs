@@ -76,6 +76,42 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
             _ => SourceLanguage.Unsupported,
         };
 
+    public IReadOnlySet<string> KeywordsOf(SourceLanguage language)
+    {
+        if (Grammar(language) is not { } grammar)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        using var parsed = new Language(grammar.Library, grammar.Function);
+
+        // ANONYMOUS symbols are tree-sitter's literal tokens: the keywords and the punctuation. The
+        // grammar already knows them exactly, so reading them off it beats a hand-written list that
+        // would be a worse second copy and would go stale the first time a grammar is updated.
+        return new HashSet<string>(
+            parsed.Symbols.Where(symbol => symbol.Type == SymbolType.Anonymous).Select(symbol => symbol.Name)
+                .Concat(LiteralWords(language)),
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>Words of the language that some grammars model as NAMED nodes rather than tokens.</summary>
+    /// <remarks>
+    /// <c>true</c>, <c>false</c> and <c>null</c> are not reliably among the anonymous symbols: one
+    /// grammar spells them as literal tokens and another as nodes of their own, and the second kind
+    /// never appears in <see cref="Language.Symbols"/> as anonymous. The property test found them
+    /// surviving into skeletons and reported them as leaks, which they are not — they are words of
+    /// the language and carry nothing of ours.
+    /// </remarks>
+    private static string[] LiteralWords(SourceLanguage language) => language switch
+    {
+        // `_` is the discard. It is a name nobody chose and it carries nothing — the opposite of a
+        // leak — so it is kept rather than numbered, which also stops `(_, i) =>` reading as if the
+        // discard were a variable somebody meant to use.
+        SourceLanguage.CSharp => ["true", "false", "null", "this", "base", "value", "default", "_"],
+        SourceLanguage.Unsupported => [],
+        _ => ["true", "false", "null", "undefined", "this", "super"],
+    };
+
     public EnclosingSymbol? Locate(SourceLanguage language, string source, int line)
     {
         if (Grammar(language) is not { } grammar || line < 1)
@@ -113,4 +149,123 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
 
         return null;
     }
-}
+
+    public string Normalise(SourceLanguage language, string source)
+    {
+        if (Grammar(language) is not { } grammar)
+        {
+            return string.Empty;
+        }
+
+        using var parsed = new Language(grammar.Library, grammar.Function);
+        using var parser = new Parser(parsed);
+
+        // A METHOD parses on its own; a CONSTRUCTOR does not, and neither does a property or a class
+        // method lifted out of its type. The collector only ever hands over a bare member, so this is
+        // the common case rather than an edge of it: parsed alone, `private Thing(int a)` becomes a
+        // malformed tree whose parameters carry no `name` field, and their names go unrenamed —
+        // found by the property test on this repository's own `DecisionAt.cs`, where `ordinal` and
+        // `decision` survived into a skeleton.
+        //
+        // So: try it bare, and when the grammar itself says the tree is broken, parse it again inside
+        // a type and take the wrapper off afterwards.
+        using var bare = parser.Parse(source);
+        var wrapped = bare is null || bare.RootNode.HasError;
+        var text = wrapped ? Wrapper + "\n" + source + "\n}" : source;
+        using var reparsed = wrapped ? parser.Parse(text) : null;
+
+        if ((wrapped ? reparsed : bare)?.RootNode is not { } root)
+        {
+            return string.Empty;
+        }
+
+        var rewrites = new List<Rewrite>();
+        Collect(root, new Placeholders(RuntimeVocabulary.For(language)), rewrites);
+        var skeleton = Rewriting.Apply(text, rewrites);
+
+        return wrapped ? Unwrap(skeleton) : skeleton;
+    }
+
+    /// <summary>
+    /// The smallest thing a member can legally live inside — the same word in all three languages.
+    /// </summary>
+    private const string Wrapper = "class W {";
+
+    /// <summary>Takes the wrapper back off: its opening line and its closing brace.</summary>
+    /// <remarks>
+    /// The wrapper's own name is normalised with everything else, so it leaves no WORD behind — only
+    /// a line, which this removes. Numbering shifts by one type against an unwrapped parse, and that
+    /// is harmless because it shifts the same way for every member parsed the same way, which is what
+    /// determinism actually requires.
+    /// </remarks>
+    private static string Unwrap(string skeleton)
+    {
+        var lines = skeleton.Split('\n').ToList();
+        if (lines.Count > 0)
+        {
+            lines.RemoveAt(0);
+        }
+
+        if (lines.Count > 0 && lines[^1].Trim() == "}")
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    /// <summary>Walks the tree once, deciding what each leaf becomes.</summary>
+    /// <remarks>
+    /// Leaves only: a comment, a literal and an identifier are all leaves, and replacing a parent
+    /// would throw away the structure the skeleton exists to keep.
+    /// </remarks>
+    private static void Collect(Node node, Placeholders placeholders, List<Rewrite> rewrites)
+    {
+        foreach (var child in node.Children)
+        {
+            if (Replacement(child, placeholders) is { } text)
+            {
+                rewrites.Add(new Rewrite(child.StartIndex, child.EndIndex, text));
+                continue;
+            }
+
+            Collect(child, placeholders, rewrites);
+        }
+    }
+
+    /// <summary>What a node becomes, or nothing when it is kept and descended into.</summary>
+    private static string? Replacement(Node node, Placeholders placeholders)
+    {
+        var kind = node.Type;
+        if (kind.Contains("comment", StringComparison.Ordinal))
+        {
+            // Comments say the most of all: a ticket number, a customer, a person's name.
+            return string.Empty;
+        }
+
+        if (kind.Contains("string", StringComparison.Ordinal) || kind == "character_literal")
+        {
+            // The whole node, including an interpolated one's expressions: a domain leaks through a
+            // string more often than through anything else, and half a string is not safer.
+            return "\"\"";
+        }
+
+        if (kind is "integer_literal" or "real_literal" or "number")
+        {
+            return "0";
+        }
+
+        return node.Children.Any() || !NamesSomething(kind) ? null : placeholders.For(node);
+    }
+
+    /// <summary>Whether a leaf is a NAME, which is the only thing that gets renamed.</summary>
+    /// <remarks>
+    /// Not just "contains identifier". A C# lambda written <c>f => f.Name</c> gives its parameter the
+    /// kind <c>implicit_parameter</c>, which contains no such word — so it was skipped entirely while
+    /// the <c>f</c> in the BODY, an ordinary identifier, was renamed. The skeleton then read
+    /// <c>method_2(f => var_3.method_3)</c> and leaked a name. Found by the property test over this
+    /// repository's own `AgentLog.cs`; a one-letter name is still a name.
+    /// </remarks>
+    private static bool NamesSomething(string kind) =>
+        kind.Contains("identifier", StringComparison.Ordinal) || kind == "implicit_parameter";
+    }
