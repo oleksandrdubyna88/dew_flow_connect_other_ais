@@ -280,6 +280,58 @@ on code. Pointing that step at a cloud vendor by accident would leak before anyt
 model cluster at 4s and 5s, so a threshold over them filters nothing. Sort by category in code, from
 the returned rank.
 
+### Story 4 — the `Bugz` section, and the run state it needs first
+
+**The surface.** One new panel section, `Bugz`, carrying four controls: a model picker, a **Collect**
+button, a **Review bugs** button (story 5's page, present and disabled until a run has collected
+something), and the ingest server's address.
+
+**`collect_runs` comes BEFORE any markup, and story 3 did not build it.** Story 3 stamps a run id on
+every row it claims, so *which run decided this finding* is answerable; what is not stored anywhere is
+*what run X did* or *is a run in flight right now*. `CollectSummary` is computed, printed to stderr
+and lost when the process exits. That was sufficient for a CLI one-shot, which was story 3's only
+surface — and it is not sufficient for a button.
+
+The durable-status rule (`.agents/conventions/common/durable-status.md`) is explicit: an action that
+starts a process must reflect real state across a reload, the source of truth is persisted
+server-side and re-read on load, and a crash must never leave the UI stuck in-flight. With nothing
+persisted about a run, a Collect button is exactly the *clicked → reloaded → state lost* case the rule
+exists to forbid. So:
+
+1. `collect_runs` as one appended `Schema.Steps` entry, per the contract above.
+2. `CollectRun` writes the row **before** the first candidate, and completes it at the end — not one
+   write at the finish, which is the shape that cannot represent *running*.
+3. A **startup sweep** for a run with no `finished_utc`, mirroring the `InProgress` sweeps the rest of
+   this codebase already runs. A VS Code window that closed mid-run killed its child, and that run
+   must not read as in-flight forever.
+4. The panel reads it through the one-shot mode, because **the panel owns no SQLite** — `--bugs-json`
+   grows a `lastRun` object rather than gaining a second mode and a second spawn.
+
+**The server address is a dialog, not a box — and this is a constraint, not a preference.**
+`staticKey` in `panelView.ts` is the list of state whose change repaints the panel. The Bugz section
+MUST be in it, or the Collect button can never repaint to show a run's progress and item 1 above buys
+nothing. But that same function carries a warning learned the hard way: a section holding a free-text
+control must NOT be in `staticKey`, because the page then rebuilds under a focused box on every
+keystroke — which is why the chat section's prompt textarea became a picker. A server URL is free
+text, so the two requirements collide, and the codebase has already settled it twice:
+`addTeamServer` and `customConsultant` collect a URL through `vscode.window.showInputBox` behind a
+command button, with a validator that can refuse while the box is still open. Bugz follows them. No
+inline text control enters this section.
+
+**The model picker is the Consultant's row with a narrower vendor list.** `modelsFor` and
+`modelsProvenance` are not consultant-specific and the two-select shape is `consultantBody`'s. The
+list must be narrower for a reason that is not stylistic: the ranking pass reads `title`, `why` and
+`fix`, which are full of domain names and are **not** sanitised — the normaliser runs later, on code.
+Pointing that step at a cloud vendor by accident leaks before anything has been anonymised.
+
+**Line references drift under this file.** `panelView.ts` moved twice in one day while story 3 was in
+review (`staticKey` 2450 → 2556 → 2626, `section()` 708 → 730 → 735, `consultantBody` 30 → 112) because
+a parallel session works it. Every reference here is re-verified at the moment it is used, never
+trusted from this document.
+
+**Not in this story:** the review page itself (story 5) and anything that sends a pair anywhere
+(story 6). Collect writes to the local database and nothing leaves the machine.
+
 ## Test plan
 
 - `BugsQuery` against a seeded `RoundsDb`, the `RoundsDbTests` pattern: real SQLite, temp directory.
