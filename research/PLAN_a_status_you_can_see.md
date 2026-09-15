@@ -4,8 +4,9 @@
 > `src_vs_code/src/rounds.ts` (one field on `ReviewerRow`), `src_vs_code/src/panelView.ts` (the
 > reviewer line and five CSS rules), and their tests. Origin:
 > [issue #286](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/286) —
-> *"done / running / queued … нужно как то выделять, что б понимать, статус. читать тяжело. давай
-> рядом делать иконки для каждого статуса. done - зеленая галочка, остальные придумай"*.
+> *"done / running / queued — they need marking somehow so the status is understandable. It is
+> hard to read. Let us put icons beside each status: done a green tick, invent the rest."*
+> (translated from the operator's Russian; this repository's documentation is English.)
 >
 > Related docs: [module_extension.md](module_extension.md), [module_tests.md](module_tests.md).
 >
@@ -72,10 +73,18 @@ why this is not a pure CSS change.
 3. The word is still written. The mark is an addition, never a replacement: this panel's own rule,
    written at `panelView.ts:1402`, is *"The colour is never the only signal — the name is always
    written."*
-4. A status the panel does not recognise gets **no mark** and is otherwise unchanged. The vocabulary
-   belongs to the server; inventing a glyph for a word we have not seen would be a guess rendered as
-   a fact.
-5. A reviewer with no status still gets no second line at all, exactly as now.
+4. A status the panel does not recognise gets **no glyph and no meaning invented** — the vocabulary
+   belongs to the server, and a glyph for a word we have not seen would be a guess rendered as a
+   fact. It still holds its place in the column: an empty mark of the same width, because a row
+   whose text starts a glyph-width to the left of every other row is the same raggedness this change
+   is against. *(Corrected here after the code round found this sentence still reading "no mark"
+   while the code rendered an empty one — the deviation had been recorded and the requirement had
+   not, which is exactly the contradiction a reader would trip over.)*
+5. A reviewer with no status AND no detail still gets no second line at all, exactly as now. One
+   with no status but a findings count or a duration keeps the detail-only line it already had —
+   `restOf` says why in its own comment, and this change does not touch it. (The first draft of
+   this line said simply "no second line", which the code round correctly read as a claim the code
+   does not make.)
 6. The detail — findings, the queued note, duration, tokens — is unchanged in content and order.
 7. The mark is decorative to a screen reader, because the word beside it already says it.
 
