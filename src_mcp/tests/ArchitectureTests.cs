@@ -21,4 +21,39 @@ public sealed class ArchitectureTests
             ["System.Diagnostics.Process", "System.Net.Http", "System.Net.Sockets", "System.Net.Primitives"],
             "the pure core must not spawn, call, or listen — that is what the runners are for");
     }
+
+    /// <summary>
+    /// tree-sitter is named by exactly one project, and `CoaiMcp.Normalizer` is it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The third condition of the operator's approval of <c>TreeSitter.DotNet</c> on
+    /// 2026-09-15: an individual's native dependency may be taken, but it may not spread. Everything
+    /// else speaks to <c>IAstNormalizer</c>, which lives in the pure core and mentions no parser, no
+    /// language, no node and no P/Invoke.</para>
+    /// <para>It is also what keeps the declined alternative cheap. If this dependency ever has to go,
+    /// a parser per language — Roslyn for C#, the TypeScript compiler API for the rest — is a second
+    /// implementation of one interface rather than a second design.</para>
+    /// <para>A reference is the checkable form of "names it": a project that so much as declares a
+    /// <c>TreeSitter.Node</c> acquires one, and a project that does not cannot have leaked.</para>
+    /// </remarks>
+    [Fact]
+    public void OnlyTheNormalizerNamesTreeSitter()
+    {
+        var elsewhere = new[]
+        {
+            typeof(Finding).Assembly,                               // CoaiMcp.Core
+            typeof(Runners.Processes.ProcessLauncher).Assembly,     // CoaiMcp.Runners
+            typeof(Store.RoundsDb).Assembly,                        // coai-mcp itself
+        };
+
+        foreach (var assembly in elsewhere)
+        {
+            assembly.GetReferencedAssemblies().Select(a => a.Name).Should().NotContain(
+                "TreeSitter",
+                $"{assembly.GetName().Name} must reach the parser through IAstNormalizer, never directly");
+        }
+
+        typeof(Normalizer.TreeSitterNormalizer).Assembly.GetReferencedAssemblies().Select(a => a.Name)
+            .Should().Contain("TreeSitter", "and the one project that implements the seam does name it");
+    }
 }

@@ -205,3 +205,38 @@ site became a compile error rather than a silently empty list.
 The five-active limit has counted per bucket since plan 1 (`RoleComposition.MaxActivePerBucket`); the
 extension counted per STAGE until plan 4, which was invisible only because document roles ran in
 nothing.
+
+## `IAstNormalizer` — a native parser that cannot spread (2026-09-15)
+
+`Normalising/IAstNormalizer.cs` is a seam and nothing else: `SourceLanguage`, `EnclosingSymbol`, and
+two operations — which language a path is in, and which function a line fell inside. The core names no
+parser, no node and no P/Invoke, and does no IO; the caller reads the file out of git, because only
+the caller knows which commit it wants.
+
+It exists because a finding names a file and a line and nothing else. `Finding` has no symbol field
+(and gaining one would only work on findings not yet written), so the corpus collector resolves the
+enclosing method mechanically instead — which works retroactively on everything already stored.
+
+**The implementation lives in `CoaiMcp.Normalizer` and nowhere else**, over tree-sitter. That was the
+third condition of the operator's approval of `TreeSitter.DotNet` on 2026-09-15: an individual's
+native dependency may be taken, but it may not spread. `ArchitectureTests.OnlyTheNormalizerNamesTreeSitter`
+holds the line from both ends — the core, the runners and `coai-mcp` must not reference the parser,
+and the normalizer must, which is what stops the check passing vacuously.
+
+It is also what keeps the rejected alternative cheap. Roslyn for C# and the TypeScript compiler API
+for the rest was declined because two engines means two property tests guarding one guarantee; if the
+dependency ever has to go, it returns as a second implementation of this interface rather than a
+second design.
+
+**Syntax, not semantics**, is why one parser is enough for three languages: finding the function
+around a line and telling an identifier from the syntax around it need node kinds, never a type.
+
+Two facts about the grammars, both learned by running them:
+
+- The per-language table holds a **library and an entry point**, which are not the same word. The
+  binding derives both from one id — `tree-sitter-{id}` and `tree_sitter_{id}` — and so cannot name
+  C# at all: that grammar is `tree-sitter-c-sharp` with an entry point of `tree_sitter_c_sharp`.
+- A C# `method_declaration` **includes** its modifiers; a TypeScript `function_declaration` does
+  **not** include `export`, which belongs to the statement wrapping it. Left as the grammar has it:
+  a vector is built per language and compared against its own, and `export` is not control flow, a
+  synchronisation primitive, an await point or a runtime type.
