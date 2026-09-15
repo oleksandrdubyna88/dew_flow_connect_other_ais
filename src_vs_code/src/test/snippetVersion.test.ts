@@ -8,6 +8,7 @@ import {
   callerVersionIn,
   claudeSnippet,
   CALLER_VERSION,
+  DOCUMENT_VERSION,
   HALF_IDS,
   halvesIn,
   KNOWN_HALVES,
@@ -418,7 +419,13 @@ test('a paste carrying a half this build has never heard of is ahead, not curren
  */
 test('a newer half in a second block is not hidden by the first', () => {
   const current = claudeSnippet();
-  const newerBelow = `${current}\n\n${current.replace('coai-document v1', 'coai-document v2')}`;
+  // Derived from the constant, not retyped: these literals were `coai-document v1`, and the day
+  // DOCUMENT_VERSION moved to 2 the replace matched nothing, the second block came out identical to
+  // the first, and a test about a NEWER half quietly asserted nothing.
+  const newerBelow = `${current}\n\n${current.replace(
+    `coai-document v${DOCUMENT_VERSION}`,
+    `coai-document v${DOCUMENT_VERSION + 1}`,
+  )}`;
 
   assert.equal(snippetStatus(newerBelow).kind, 'ahead');
 });
@@ -433,7 +440,7 @@ test('a newer half in a second block is not hidden by the first', () => {
  */
 test('a stale block above a current one is still reported as older', () => {
   const current = claudeSnippet();
-  const staleAbove = `${current.replace('coai-snippet v5', 'coai-snippet v1')}\n\n${current}`;
+  const staleAbove = `${current.replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1')}\n\n${current}`;
 
   assert.equal(snippetStatus(staleAbove).kind, 'older');
 });
@@ -448,7 +455,7 @@ test('a stale block above a current one is still reported as older', () => {
  */
 test('a copy that is newer in one half and missing another is ahead, not older', () => {
   const aheadAndIncomplete = claudeSnippet()
-    .replace('coai-document v1', 'coai-document v9')
+    .replace(`coai-document v${DOCUMENT_VERSION}`, 'coai-document v9')
     .replace(/<!-- coai-consultant v\d+ -->\n?/, '');
 
   assert.equal(snippetStatus(aheadAndIncomplete).kind, 'ahead');
