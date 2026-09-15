@@ -170,8 +170,13 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionOut: 0,
   },
   {
-    label: 'Claude Code (a second one)',
-    hint: 'A separate claude -p process: it sees the plan and the diff, never the conversation that produced them.',
+    label: 'Claude Code',
+    // "(a second one)" used to be in the LABEL, and it had to leave it: once a configured preset
+    // can be added again, the pick says "this adds claude-2" in the description, and a label also
+    // saying "a second one" is the same words meaning something else two lines apart. The
+    // distinction it carried is not lost — it is here, where matchOnDetail now lets a person search
+    // for it. (uxdx, the code round.)
+    hint: 'A SECOND, separate claude -p process — not the Claude Code session running this gate: it sees the plan and the diff, never the conversation that produced them.',
     id: 'claude',
     runtime: 'claude',
     model: 'haiku',
@@ -362,11 +367,29 @@ export function presetsOffered(
   presets: readonly VendorPreset[],
   taken: ReadonlySet<string>,
 ): readonly OfferedPreset[] {
-  return presets.map((preset) => ({
-    preset,
-    id: freeVendorId(preset.id, taken),
-    second: preset.id.length > 0 && taken.has(preset.id),
-  }));
+  // The reserved set grows as the list is walked, and it starts holding every preset's OWN id.
+  // Allocating each entry against the configured ids alone would hand two rows the same name the
+  // day a preset is called `claude-2` while `claude` is configured: both would resolve to
+  // `claude-2`, and whichever was picked second would be refused as a duplicate with no
+  // explanation. (codex, the code round.)
+  const reserved = new Set<string>(taken);
+  for (const preset of presets) {
+    if (preset.id.length > 0) {
+      reserved.add(preset.id);
+    }
+  }
+
+  return presets.map((preset) => {
+    const second = preset.id.length > 0 && taken.has(preset.id);
+    // A preset nobody holds keeps its own id — it is in `reserved` only to stop ANOTHER entry
+    // claiming it, so the reservation must not push it off its own name.
+    const id = second ? freeVendorId(preset.id, reserved) : preset.id;
+    if (id.length > 0) {
+      reserved.add(id);
+    }
+
+    return { preset, id, second };
+  });
 }
 
 /**

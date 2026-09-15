@@ -126,7 +126,7 @@ test('the Claude preset is one a person searching for Claude Code can find', () 
   assert.match(claude.label, /Claude Code/, 'the words a person types are not in the label they filter on');
   assert.match(
     claude.label + ' ' + claude.hint,
-    /second/,
+    /second/i,
     'the entry no longer says it is a SECOND, separate process — which is the thing that made it worth explaining',
   );
 });
@@ -157,6 +157,31 @@ test('a preset already configured is still offered, under a free id', () => {
   assert.ok(codex, 'the catalogue lost codex');
   assert.equal(codex.id, 'codex');
   assert.equal(codex.second, false);
+});
+
+test('no two entries in one offering are given the same id', () => {
+  // The allocation is over the LIST, not one entry at a time. Against the configured ids alone,
+  // a catalogue holding both `claude` and `claude-2` would resolve BOTH to `claude-2` the day
+  // `claude` is configured, and whichever was picked second would be refused as a duplicate with
+  // nothing said about why. (codex, the code round.)
+  const catalogue = [
+    { ...VENDOR_PRESETS.find((p) => p.id === 'claude')! },
+    { ...VENDOR_PRESETS.find((p) => p.id === 'claude')!, id: 'claude-2', label: 'Claude Code, again' },
+  ];
+
+  const ids = presetsOffered(catalogue, new Set(['claude'])).map((one) => one.id);
+
+  assert.equal(new Set(ids).size, ids.length, `two entries were offered the same id: ${ids.join(', ')}`);
+});
+
+test('a preset nobody holds is never pushed off its own name by the reservation', () => {
+  // The other half: reserving every preset's id must not make an un-taken entry rename itself.
+  const offered = presetsOffered(VENDOR_PRESETS, new Set());
+
+  for (const one of offered) {
+    assert.equal(one.id, one.preset.id, `${one.preset.id} was renamed although nothing held it`);
+    assert.equal(one.second, false);
+  }
 });
 
 test('every catalogue entry survives the offering, whatever is already configured', () => {

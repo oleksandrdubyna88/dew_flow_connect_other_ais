@@ -8,14 +8,17 @@ Code*.
 
 The entry was labelled `Claude (a second one)`, and the pick searched **names only** — so typing
 *Claude Code*, which is what the Consultant section calls it, emptied the list. It is now
-**Claude Code (a second one)**, and the filter box searches the description under each entry as
-well, so the words in the hint find it too.
+**Claude Code**, and the filter box searches the line under each entry as well, so the words in
+the hint find it too. The hint is where "a second, separate `claude -p` process, not the Claude
+Code session running this gate" now lives — it had to leave the label, because the pick can now
+also say *this adds another one*, and the same words two lines apart meant two different things.
 
 And a vendor you already had was dropped from the list without a word, which meant you could never
 add a **second** row of one — no `claude` on haiku for the cheap passes beside a `claude` on opus
 for the hard rounds. The catalogue is now offered whole: pick something you already have and it
-adds `claude-2`, with the entry saying up front what the new row will be called. Removing a
-reviewer is unchanged, and still refuses to remove your last one.
+adds the next free name — `claude-2` when that one is free, `claude-3` if it is not — and the entry
+says up front which it will be. Removing a reviewer is unchanged, and still refuses to remove your
+last one.
 
 ## Extension 0.46.0 — 2026-09-15
 
