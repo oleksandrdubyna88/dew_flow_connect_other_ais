@@ -32,6 +32,17 @@
 >    nobody's consent, so it was worth sharpening rather than working around.
 > 6. **The inventory's RED run wrote its own evidence**: the failure named the twelve entries the
 >    shipped list was losing. Nothing had to be argued.
+> 7. **The gate's plan round found six more, and they were the best findings of the task.** The
+>    re-paste gap (three reviewers, independently): a changed folder takes effect here at once while
+>    the MCP client keeps its old entry, so the server writes to the old folder and a later delete
+>    destroys something still being written to. The source re-read immediately before the delete,
+>    which is the only defence available against a writer this extension can neither stop nor see. A
+>    WAL sidecar warning rather than refusing, which had made the feature unreachable for every
+>    installation that had ever been killed. Probing `<root>/<side>` rather than the picked root, and
+>    confirming what was found before saving. A bounded probe. And a failed copy that says the
+>    destination is partially written. Twelve of the eighteen findings were accepted; the six
+>    rejected are recorded with their reasons in the session — four were factually wrong about what
+>    had shipped, and two described work already done.
 >
 > Scope as built: `src_vs_code/src/` (`dataDir.ts`, `dataChoice.ts`, `dataMove.ts`, `dataCommands.ts`,
 > `extension.ts`, `mcpBlock.ts`, `panelView.ts`, `panelProvider.ts`, `processLauncher.ts`,

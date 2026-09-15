@@ -66,7 +66,27 @@ export function coaiDataDir(): string {
   // Path.Combine, never writes. Both resolve to the same directory, so nothing was broken — but the
   // two halves printed different strings for one place, which is precisely what the shared vectors
   // exist to catch and what the panel now puts on screen. (codex, code round.)
-  return join(root, chosen.side);
+  return directoryFor(root, chosen.side);
+}
+
+/**
+ * Where a root and a side resolve to, which is the rule `coaiDataDir` applies to whatever it read.
+ *
+ * <p>Its own function because the INSTALL flow needs the same answer before anything is saved. It
+ * probed the chosen root instead, so "this folder already holds a database" could be true of the
+ * root and false of `<root>/<side>` — the directory actually about to be used — and a history
+ * already sitting in `<root>/<side>` was not found at all. (codex, plan round.) One rule, asked by
+ * both, rather than the install flow composing a path of its own.</p>
+ *
+ * <p>An unusable side is the caller's to refuse; this composes what was asked for. `coaiDataDir`
+ * throws on one and `whereData` renders it, which are the two right answers for those two
+ * surfaces.</p>
+ */
+export function directoryFor(root: string, side: string): string {
+  const absolute = resolve(root.trim());
+  const named = side.trim().toLowerCase();
+
+  return named.length === 0 ? absolute : join(absolute, named);
 }
 
 /** `%LOCALAPPDATA%\coai-mcp`, or its equivalent — what `PanelSettings.DefaultDataDir` answers. */

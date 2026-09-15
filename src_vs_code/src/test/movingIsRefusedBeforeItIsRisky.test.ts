@@ -3,7 +3,9 @@ import { test } from 'node:test';
 import {
   destinationRefusal,
   mayDeleteTheOldCopy,
+  sourceChangedSince,
   sourceRefusal,
+  sourceWarning,
   verificationFailure,
 } from '../dataMove';
 
@@ -54,11 +56,24 @@ test('a destination holding only things that are not moved is allowed', () => {
 
 // ---------- the source ----------
 
-test('a source with a write-ahead log beside its database is refused', () => {
-  const refusal = sourceRefusal({ sidecars: ['coai.db-wal'], livePids: 0 });
+test('a source with a write-ahead log beside its database is NOT refused', () => {
+  // The gate's round (codex, Major): refusing on a sidecar makes this feature unreachable for
+  // exactly the installations most likely to want it — an unclean stop leaves one behind, and it
+  // never goes away by itself. It is also inconsistent with the inventory, which copies BOTH
+  // sidecars precisely because they carry committed rounds: with nothing running, copying the three
+  // files together IS a consistent snapshot.
+  assert.equal(sourceRefusal({ sidecars: ['coai.db-wal'], livePids: 0 }), '');
+});
 
-  assert.match(refusal, /coai\.db-wal/u);
-  assert.match(refusal, /stop|restart|running/iu, 'and it says what to do about it');
+test('but it is warned about, because it means something stopped badly or is attached', () => {
+  const warning = sourceWarning({ sidecars: ['coai.db-wal', 'coai.db-shm'], livePids: 0 });
+
+  assert.match(warning, /coai\.db-wal/u);
+  assert.match(warning, /copied|copy/iu, 'and says they travel with the database rather than alarming');
+});
+
+test('a quiet source warns about nothing', () => {
+  assert.equal(sourceWarning(NOTHING_RUNNING), '');
 });
 
 test('a source with reviewers still running is refused', () => {
@@ -111,6 +126,36 @@ test('nothing may be deleted before a move has been verified', () => {
 
 test('a verified move may have its old copy deleted', () => {
   assert.equal(mayDeleteTheOldCopy({ from: 'C:\\old', to: 'Z:\\coai', verified: true }), true);
+});
+
+// ---------- and the source must not have moved on since ----------
+
+test('a source that has been written to since the move is not deleted', () => {
+  // codex and gemini, independently: the extension cannot stop the MCP client's server, so a
+  // quiescent-looking directory can still have one attached — the server opens the database per
+  // write and closes it, so the absence of a sidecar proves nothing. What IS available is to read
+  // the source again immediately before deleting it, and refuse when it has grown since the copy.
+  const changed = sourceChangedSince(
+    { from: 'C:\\old', to: 'Z:\\coai', verified: true, held: BEFORE },
+    { ...BEFORE, rounds: BEFORE.rounds + 1 });
+
+  assert.match(changed, /1284/u);
+  assert.match(changed, /1285/u);
+  assert.match(changed, /not been deleted|nothing has been deleted/iu);
+});
+
+test('a source that is exactly as the move left it may be deleted', () => {
+  assert.equal(
+    sourceChangedSince({ from: 'C:\\old', to: 'Z:\\coai', verified: true, held: BEFORE }, { ...BEFORE }),
+    '');
+});
+
+test('a record from a build that kept no fingerprint refuses rather than guessing', () => {
+  // An older record has no `held`. Treating "I cannot compare" as "nothing changed" is the one
+  // reading that deletes a directory nobody checked.
+  assert.notEqual(
+    sourceChangedSince({ from: 'C:\\old', to: 'Z:\\coai', verified: true }, { ...BEFORE }),
+    '');
 });
 
 test('a move whose old and new directory are the same may not delete anything', () => {

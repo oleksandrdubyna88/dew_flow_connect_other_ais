@@ -6,7 +6,9 @@ import {
   sideRefusal,
   sidesIn,
 } from '../dataChoice';
-import { usableSideName } from '../dataDir';
+import { directoryFor, usableSideName } from '../dataDir';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 /**
  * What the install flow asks, and what it says about the answer.
@@ -109,6 +111,29 @@ test('the sentence never claims a history a folder does not have', () => {
   const empty = adoptionSentence('Z:\\coai', { hasDatabase: false, sides: [] });
 
   assert.ok(!/already holds/u.test(empty));
+});
+
+// ---------- which directory is actually asked about ----------
+
+test('the folder probed is the one the side resolves to, not the root that was picked', () => {
+  // codex, Major, on the plan round — and a real defect in the first build. The probe read the
+  // chosen ROOT while the installation would use `<root>/<side>`, so "this folder already holds a
+  // database" could be true of the root and false of the directory actually adopted; and a history
+  // already sitting in `<root>/<side>` was not found at all. The side has to be settled first.
+  assert.equal(directoryFor('/srv/coai', 'windows'), join(resolve('/srv/coai'), 'windows'));
+  assert.equal(directoryFor('/srv/coai', ''), resolve('/srv/coai'), 'no side means the root itself');
+});
+
+test('and the flow probes that composed directory, not the picked one', () => {
+  // Structural, because the flow is behind `vscode`. It pins the whole call rather than the name:
+  // `whatIsIn(folder)` was the defect, and matching only "whatIsIn" would have passed on it.
+  const flow = readFileSync(join(__dirname, '..', '..', 'src', 'dataCommands.ts'), 'utf8');
+
+  assert.match(
+    flow,
+    /const resolved = directoryFor\(folder\.fsPath, side\);[\s\S]{0,400}?whatIsIn\(vscode\.Uri\.file\(resolved\)\)/u,
+    'the install flow probes something other than the directory the side resolves to',
+  );
 });
 
 // ---------- reading a folder ----------

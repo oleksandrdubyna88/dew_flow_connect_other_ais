@@ -379,7 +379,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.deleteOldDataFolder', async () => {
-      await deleteTheOldDataFolder(context);
+      // The same counter the move used: the old folder is read ONE more time, right before it is
+      // deleted, and compared with what the move recorded. It is the only thing standing between a
+      // round written after the copy and a directory that is gone.
+      await deleteTheOldDataFolder(context, (directory) => countStorage(context, directory));
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.help', showHelp),

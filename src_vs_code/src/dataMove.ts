@@ -37,6 +37,13 @@ export interface MoveRecord {
   readonly from: string;
   readonly to: string;
   readonly verified: boolean;
+  /**
+   * What the SOURCE held when the copy was taken.
+   *
+   * <p>Optional because a record written by an older build has none — and that is treated as
+   * "cannot compare", never as "nothing changed". See {@link sourceChangedSince}.</p>
+   */
+  readonly held?: StorageFingerprint;
 }
 
 /**
@@ -80,14 +87,75 @@ export function sourceRefusal(activity: SourceActivity): string {
       + 'are writing to.';
   }
 
-  if (activity.sidecars.length > 0) {
-    return `${activity.sidecars.join(' and ')} ${activity.sidecars.length === 1 ? 'is' : 'are'} beside `
-      + 'the database, which means something has it open or was stopped while it did — and the rounds '
-      + 'committed most recently are in there rather than in coai.db. Stop the server (your MCP client '
-      + 'restarting it is what releases the database) and try again.';
+  return '';
+}
+
+/**
+ * What is worth saying about the source before copying it, or empty.
+ *
+ * <p><b>A write-ahead log used to refuse the move, and that was wrong twice over</b> (codex, plan
+ * round). It made the feature unreachable for exactly the installations most likely to want it: an
+ * unclean stop leaves a sidecar behind and nothing removes it by itself, so those installations
+ * could never move at all. And it contradicted the inventory, which copies BOTH sidecars precisely
+ * because they carry committed rounds — with nothing running, copying the three files together IS a
+ * consistent snapshot.</p>
+ *
+ * <p>So it is said rather than enforced. What the extension genuinely cannot know is whether the MCP
+ * client has a server attached, because the server opens the database per write and closes it: an
+ * absent sidecar proves nothing either. The defence that actually holds is
+ * {@link sourceChangedSince}, read immediately before the delete.</p>
+ */
+export function sourceWarning(activity: SourceActivity): string {
+  if (activity.sidecars.length === 0) {
+    return '';
   }
 
-  return '';
+  return `${activity.sidecars.join(' and ')} ${activity.sidecars.length === 1 ? 'is' : 'are'} beside `
+    + 'the database, which means something has it open or was stopped while it did. They are copied '
+    + 'with it, so the rounds in them travel too — but if your MCP client is running, stop it first: '
+    + 'a database copied while it is being written to arrives missing whatever was written during the '
+    + 'copy.';
+}
+
+/**
+ * Why the old folder must not be deleted after all, or empty.
+ *
+ * <p><b>The one defence available against a writer nobody can enumerate.</b> The extension cannot
+ * stop the MCP client's server, and cannot detect one attached — so a move can copy, verify, and
+ * then have the server append another round to the SOURCE before anybody presses delete. Both codex
+ * and gemini raised it, from different directions.</p>
+ *
+ * <p>Reading the source again immediately before deleting it turns that silent loss into a refusal.
+ * A record with no fingerprint — written by an older build — cannot be compared, and "cannot
+ * compare" is not "nothing changed": it refuses, because the alternative is deleting a directory
+ * nobody checked.</p>
+ */
+export function sourceChangedSince(record: MoveRecord, now: StorageFingerprint): string {
+  if (record.held === undefined) {
+    return `${record.from} was moved by an older version of this extension, which did not record what `
+      + 'it held. There is nothing to compare it against, so it is not deleted — remove it yourself '
+      + 'once you have seen your history in the new folder.';
+  }
+
+  const moved = differences(record.held, now);
+
+  return moved.length === 0
+    ? ''
+    : `${record.from} has been written to since it was copied — ${moved}. Something is still using `
+      + 'it, which is almost always an MCP client that has not been restarted with the new folder. '
+      + 'Nothing has been deleted.';
+}
+
+/** The counts that differ, as a person reads them — or empty when none do. */
+function differences(before: StorageFingerprint, after: StorageFingerprint): string {
+  return ([
+    ['rounds', before.rounds, after.rounds],
+    ['sessions', before.sessions, after.sessions],
+    ['ledger lines', before.usageLines, after.usageLines],
+  ] as const)
+    .filter(([, from, to]) => from !== to)
+    .map(([what, from, to]) => `${what}: ${from} before, ${to} after`)
+    .join('; ');
 }
 
 /**
@@ -102,20 +170,12 @@ export function sourceRefusal(activity: SourceActivity): string {
  * racing. "At least as many" would pass both.</p>
  */
 export function verificationFailure(before: StorageFingerprint, after: StorageFingerprint): string {
-  const differences = [
-    ['rounds', before.rounds, after.rounds] as const,
-    ['sessions', before.sessions, after.sessions] as const,
-    ['ledger lines', before.usageLines, after.usageLines] as const,
-  ].filter(([, from, to]) => from !== to);
+  const said = differences(before, after);
 
-  if (differences.length === 0) {
-    return '';
-  }
-
-  const said = differences.map(([what, from, to]) => `${what}: ${from} before, ${to} after`).join('; ');
-
-  return `The new folder does not read back what the old one held — ${said}. Nothing has been `
-    + 'deleted, and the old folder is exactly as it was; check what is missing before using either.';
+  return said.length === 0
+    ? ''
+    : `The new folder does not read back what the old one held — ${said}. Nothing has been deleted, `
+      + 'and the old folder is exactly as it was; check what is missing before using either.';
 }
 
 /**

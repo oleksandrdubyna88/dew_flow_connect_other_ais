@@ -1,9 +1,11 @@
 import { hostname } from 'node:os';
 import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
-import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE } from './dataDir';
-import { destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceRefusal, StorageFingerprint, verificationFailure } from './dataMove';
+import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, directoryFor, serverEnv } from './dataDir';
+import { destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
+import { mcpServerBlock } from './mcpBlock';
+import { serverPath } from './installer';
 import { asText } from './asText';
 
 /**
@@ -61,9 +63,29 @@ export async function askWhereDataLives(context: vscode.ExtensionContext): Promi
     return;
   }
 
-  const found = await whatIsIn(folder);
-  const side = await askForSideName(found);
+  // The ROOT is read first only to offer the sides already in it, which is a fact about the root.
+  // What is ADOPTED is `<root>/<side>`, and asking the root about that was the defect: "this folder
+  // already holds a database" could be true of the root and false of the directory about to be used,
+  // and a history sitting in `<root>/<side>` was not found at all. (codex, plan round.)
+  const inTheRoot = await whatIsIn(folder);
+  const side = await askForSideName(inTheRoot);
   if (side === undefined) {
+    return;
+  }
+
+  const resolved = directoryFor(folder.fsPath, side);
+  const found = side.trim().length === 0 ? inTheRoot : await whatIsIn(vscode.Uri.file(resolved));
+
+  // SHOWN BEFORE ANYTHING IS SAVED. It used to be a notification afterwards, which told a person
+  // what they had adopted only once adopting it was done — and adopting the wrong folder is not
+  // obviously recoverable. (local, plan round.)
+  const go = found.hasDatabase ? 'Continue this history' : 'Use this folder';
+  const confirmed = await vscode.window.showInformationMessage(
+    `Keep this installation's data in ${resolved}?`,
+    { modal: true, detail: adoptionSentence(resolved, found) },
+    go,
+  );
+  if (confirmed !== go) {
     return;
   }
 
@@ -82,7 +104,50 @@ export async function askWhereDataLives(context: vscode.ExtensionContext): Promi
   // In effect for THIS window immediately: the block about to be copied is built from it, and so is
   // every path the panel resolves from here on.
   storageReadsThisSide(context);
-  void vscode.window.showInformationMessage(adoptionSentence(folder.fsPath, found));
+  await tellClientsToCatchUp(context, resolved);
+}
+
+/**
+ * Hand over the block that makes a client's server agree, and say plainly that it must be pasted.
+ *
+ * <p><b>Without this the feature is a trap</b>, and three reviewers found it independently on the
+ * plan round. A person changes the folder, the panel follows immediately, and the MCP client goes on
+ * starting its server with the environment it was given months ago — so the server keeps writing to
+ * the OLD folder while everything on screen says otherwise. After a MOVE it is worse than confusing:
+ * deleting the old folder then deletes a directory something is still writing to.</p>
+ *
+ * <p>The extension cannot update that client entry — it has never written another program's config
+ * file and this change does not start — so what it can do is put the replacement on the clipboard at
+ * the moment it becomes necessary, and say what happens if it is not pasted.</p>
+ *
+ * <p>Two things are named that a person cannot see for themselves: the path has to be the one that
+ * names this folder where the SERVER runs, which on WSL is a different string for the same drive
+ * (codex); and other windows of this side keep the old folder until they are reloaded, because a
+ * per-side choice lives in `globalState`, which raises no configuration event (gemini).</p>
+ */
+async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory: string): Promise<void> {
+  const server = serverPath(context.globalStorageUri);
+  if (server === undefined) {
+    void vscode.window.showInformationMessage(
+      `This window now reads ${directory}. Install the MCP server, then paste the block it gives you `
+      + 'into your MCP client — until you do, the server writes where its own entry tells it to.');
+
+    return;
+  }
+
+  await vscode.env.clipboard.writeText(mcpServerBlock(server.fsPath, serverEnv()));
+  void vscode.window.showWarningMessage(
+    `This window now reads ${directory}, and the updated MCP config block is on your clipboard.`,
+    {
+      modal: true,
+      detail: 'Paste it into your MCP client and restart it. Until you do, the server it starts keeps '
+        + 'writing to the folder its own entry names — which is the old one.\n\nThe path has to be the '
+        + 'one that names this folder where the SERVER runs: the same drive is reached by a different '
+        + 'route from Windows and from WSL.\n\nOther windows of this side keep the old folder until '
+        + 'they are reloaded.',
+    },
+    'I have pasted it',
+  );
 }
 
 /**
@@ -128,7 +193,7 @@ async function askForSideName(found: FolderReport): Promise<string | undefined> 
  */
 async function whatIsIn(folder: vscode.Uri): Promise<FolderReport> {
   try {
-    const entries = await vscode.workspace.fs.readDirectory(folder);
+    const entries = await withinReason(vscode.workspace.fs.readDirectory(folder));
     const inside = await Promise.all(entries.map(async ([name, kind]) => ({
       name,
       isDirectory: kind === vscode.FileType.Directory,
@@ -143,6 +208,29 @@ async function whatIsIn(folder: vscode.Uri): Promise<FolderReport> {
   } catch {
     return { hasDatabase: false, sides: [] };
   }
+}
+
+/** How long a folder has to answer before the flow stops waiting for it. */
+const PROBE_MS = 8_000;
+
+/**
+ * A read that cannot wait for ever, because the folder being read is a network share.
+ *
+ * <p>Asynchronous was never the whole answer (codex, plan round): a disconnected SMB share does not
+ * reject, it waits — far longer than a person will, and the install flow had no bound at all, so a
+ * bad path looked like a dialog that had simply stopped. The timeout turns that into the same
+ * outcome as a permission error, which the caller already handles: nothing was found, and the
+ * sentence it produces says to check the path.</p>
+ *
+ * <p>The underlying call is not cancelled, because `workspace.fs` gives no handle to cancel it with;
+ * what is bounded is how long anybody waits on the answer.</p>
+ */
+function withinReason<T>(work: Thenable<T>): Promise<T> {
+  return Promise.race([
+    Promise.resolve(work),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`that folder did not answer within ${PROBE_MS / 1000} seconds`)), PROBE_MS)),
+  ]);
 }
 
 /** Whether a path is there, as a question rather than an exception. */
@@ -182,7 +270,8 @@ export async function moveDataDirectory(
 ): Promise<void> {
   const from = coaiDataDir();
 
-  const busy = sourceRefusal(await whatIsRunningIn(from));
+  const activity = await whatIsRunningIn(from);
+  const busy = sourceRefusal(activity);
   if (busy.length > 0) {
     void vscode.window.showWarningMessage(busy);
 
@@ -209,6 +298,10 @@ export async function moveDataDirectory(
   }
 
   const before = await countAt(from);
+  // Said rather than refused. A sidecar means something has the database open or was stopped while
+  // it did — and since the sidecars are copied WITH it, the rounds in them travel too. Refusing on
+  // one made this feature unreachable for every installation that had ever been killed. (codex.)
+  const sidecars = sourceWarning(activity);
   const go = 'Copy it';
   const confirmed = await vscode.window.showWarningMessage(
     `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${destination.fsPath}?`,
@@ -216,7 +309,7 @@ export async function moveDataDirectory(
       modal: true,
       detail: `Nothing is deleted. ${from} is left exactly as it is, and you can delete it yourself `
         + 'once you have seen your history in the new folder.\n\nWhat is copied: '
-        + `${DATA_TO_MOVE.join(', ')}.`,
+        + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`,
     },
     go,
   );
@@ -244,6 +337,9 @@ export async function moveDataDirectory(
     from,
     to: destination.fsPath,
     verified: copied.length === 0,
+    // What the SOURCE held when it was copied, so the delete can tell later whether anything has
+    // written to it since — the one defence against a server this extension cannot stop or see.
+    held: before,
   } satisfies MoveRecord);
 
   if (copied.length > 0) {
@@ -269,6 +365,7 @@ export async function moveDataDirectory(
   void vscode.window.showInformationMessage(
     `Your data is in ${destination.fsPath} and reads back the same ${before.rounds} rounds. `
     + `${from} still holds the original — delete it with "Delete the old data folder" once you are sure.`);
+  await tellClientsToCatchUp(context, destination.fsPath);
 }
 
 /**
@@ -280,7 +377,10 @@ export async function moveDataDirectory(
  * flag would make this offer disappear at exactly the moment somebody went away to check their
  * history and came back.</p>
  */
-export async function deleteTheOldDataFolder(context: vscode.ExtensionContext): Promise<void> {
+export async function deleteTheOldDataFolder(
+  context: vscode.ExtensionContext,
+  countAt: (resolvedDirectory: string) => Promise<StorageFingerprint>,
+): Promise<void> {
   const record = context.globalState.get<MoveRecord>(MOVE_RECORD);
   if (!mayDeleteTheOldCopy(record)) {
     void vscode.window.showInformationMessage(
@@ -293,13 +393,29 @@ export async function deleteTheOldDataFolder(context: vscode.ExtensionContext): 
   }
 
   const old = record!.from;
+
+  // READ AGAIN, right now. The extension cannot stop the MCP client's server and cannot detect one
+  // attached — the server opens the database per write and closes it, so an idle-looking folder
+  // proves nothing. A move can therefore copy, verify, and then have a round appended to the SOURCE
+  // before anybody presses this. Reading it once more turns that silent loss into a refusal, and it
+  // is the only defence available here. (codex and gemini, plan round.)
+  const moved = sourceChangedSince(record!, await countAt(old));
+  if (moved.length > 0) {
+    void vscode.window.showWarningMessage(moved);
+
+    return;
+  }
+
   const go = 'Delete it';
   const confirmed = await vscode.window.showWarningMessage(
     `Delete ${old}?`,
     {
       modal: true,
-      detail: `Its contents were copied to ${record!.to} and read back the same. This cannot be `
-        + 'undone, and it is the last copy of anything the move did not take — the sign-in tokens '
+      detail: `Its contents were copied to ${record!.to}, read back the same, and nothing has written `
+        + 'to it since.\n\nBefore you press this: every MCP client must already have been given the '
+        + 'new block and restarted. A client still configured for this folder will recreate it and '
+        + 'write there, and you will be reading one history while it writes another.\n\nThis cannot '
+        + 'be undone, and it is the last copy of anything the move did not take — the sign-in tokens '
         + 'and the scratch worktrees are deliberately not copied.',
     },
     go,
@@ -377,8 +493,12 @@ async function copyInventory(
     try {
       await vscode.workspace.fs.copy(source, vscode.Uri.joinPath(to, name), { overwrite: false });
     } catch (error) {
-      return `${name} could not be copied: ${asText(error)}. Nothing has been deleted, and `
-        + `${from.fsPath} is unchanged — it is still your data.`;
+      // The destination is now PARTLY written, and saying so is the whole of this sentence's job:
+      // the next attempt refuses a folder holding any part of a history, so somebody who is not told
+      // meets a refusal they cannot explain and cannot clear. (local, plan round.)
+      return `${name} could not be copied: ${asText(error)}.\n\nNothing has been deleted and `
+        + `${from.fsPath} is unchanged — it is still your data. ${to.fsPath} now holds a PARTIAL `
+        + 'copy, which is not a history: empty it before trying again, or choose another folder.';
     }
   }
 
