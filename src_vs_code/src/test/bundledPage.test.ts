@@ -987,8 +987,36 @@ test('the shipped page folds a long question and opens it again on a press', () 
 
   assert.match(
     String(page.nodes['folds']?.['textContent'] ?? ''),
-    new RegExp(`\\[data-fold="${key[1]}"\\] \\.what \\{ max-height: none;`),
+    new RegExp(`\\[data-folded="${key[1]}"\\] \\.what \\{ max-height: none;`),
     'the minified page opened nothing — a binding the minifier renamed is how this has failed before',
+  );
+});
+
+test('reading a folded question does not fold it — only its control does', () => {
+  // The container carries the key for the STYLESHEET to match on, and the button carries the one the
+  // listener matches on. They were the same attribute at first, so `closest('[data-fold]')` found the
+  // message itself and any click inside the text — including the first click of selecting it to copy
+  // — toggled the fold under the reader. This stub honours the selector, which is what makes the
+  // difference visible. (gemini, the code round, twice.)
+  const long = 'x'.repeat(401);
+  const page = runPage({ messages: [{ role: 'you', text: long }] });
+  const key = /data-fold="([a-z0-9]+)"/.exec(page.html.split('<script')[0]);
+  assert.ok(key, 'the folded question carries no key on its control');
+
+  page.clickIn('messages', { folded: key[1] });
+
+  assert.strictEqual(
+    String(page.nodes['folds']?.['textContent'] ?? ''),
+    '',
+    'clicking the body of a folded question toggled it',
+  );
+
+  page.clickIn('messages', { fold: key[1] });
+
+  assert.match(
+    String(page.nodes['folds']?.['textContent'] ?? ''),
+    new RegExp(`\\[data-folded="${key[1]}"\\]`),
+    'the control itself stopped opening the question',
   );
 });
 

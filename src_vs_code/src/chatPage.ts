@@ -352,9 +352,27 @@ export const COLLAPSE_AFTER_LINES = 5;
  */
 export const COLLAPSE_AFTER_CHARS = 400;
 
+/**
+ * How many lines a question has, counted without building an array of them.
+ *
+ * <p>`split` allocates one string per line, and a pasted stack trace of fifty thousand lines is
+ * exactly the input this feature exists for — counted twice per message per render, once to decide
+ * and once to label. A scan allocates nothing. (Two reviewers, the code round.)</p>
+ */
+function lineCount(text: string): number {
+  let lines = 1;
+  for (let at = text.indexOf('\n'); at !== -1; at = text.indexOf('\n', at + 1)) {
+    lines += 1;
+  }
+
+  return lines;
+}
+
 /** Whether a question is long enough to be worth folding. Pure, so the boundary is testable. */
 export function isLong(text: string): boolean {
-  return text.split('\n').length > COLLAPSE_AFTER_LINES || text.length > COLLAPSE_AFTER_CHARS;
+  // The CHEAP arm first: a length is a property, a line count is a scan, and most long questions
+  // here are long by length.
+  return text.length > COLLAPSE_AFTER_CHARS || lineCount(text) > COLLAPSE_AFTER_LINES;
 }
 
 /**
@@ -395,7 +413,7 @@ export function foldKey(text: string): string {
  * visibly cut. Lines when the line arm fired, characters otherwise. (gemini, the plan round.)</p>
  */
 export function foldLabel(text: string): string {
-  const lines = text.split('\n').length;
+  const lines = lineCount(text);
 
   return lines > COLLAPSE_AFTER_LINES ? `Show all ${lines} lines` : `Show all ${text.length} characters`;
 }
@@ -484,7 +502,12 @@ export function chatMessagesHtml(
           + '<span class="less">Collapse</span></button>'
         : '';
 
-      return `<div class="msg ${mine ? 'you' : 'model'}${folded ? ' long' : ''}"${folded ? ` data-fold="${key}"` : ''}>`
+      // TWO attribute names for one key, and they are not interchangeable. The container carries
+      // `data-folded` for the STYLESHEET to match on; the control carries `data-fold`, which is what
+      // the delegated listener matches. They were the same name at first, and then closest() found
+      // the message itself — so any click inside the question, including the first click of selecting
+      // it to copy, toggled the fold under the reader. (gemini, the code round, twice.)
+      return `<div class="msg ${mine ? 'you' : 'model'}${folded ? ' long' : ''}"${folded ? ` data-folded="${key}"` : ''}>`
         + `<div class="who">${said}${copy}${cutHere}</div>`
         + `<div class="what">${body}</div>${fold}${again}${end}</div>`;
     })
@@ -801,12 +824,13 @@ function chatStyle(
   /* By NAME, not by inheritance: this rule sets a colour of its own, so the tone has to reach it
      through the property or the answers — the text somebody is actually reading — ignore it. */
   .msg .what { color: var(--coai-read); line-height: 1.55; }
-  /* FIVE LINES of a long question, at the line-height directly above: 5 x 1.55em. The number is
-  COLLAPSE_AFTER_LINES and the two must move together — a clamp that showed six lines of something
-  the host called long would fold a message and hide nothing. In em rather than lh because the
-  manifest declares support back to VS Code 1.85, whose engine has never heard of the lh unit, and
-  there the whole declaration would be dropped and the fold would hide nothing at all. */
-  .msg.long .what { max-height: 7.75em; overflow: hidden; }
+  /* FIVE LINES of a long question, at the line-height directly above. DERIVED from
+  COLLAPSE_AFTER_LINES rather than written out, so the host's decision boundary and the visual clamp
+  cannot drift apart — a clamp showing six lines of something the host called long would fold a
+  message and hide nothing. In em rather than lh because the manifest declares support back to VS
+  Code 1.85, whose engine has never heard of the lh unit, and there the whole declaration would be
+  dropped and the fold would hide nothing at all. */
+  .msg.long .what { max-height: ${COLLAPSE_AFTER_LINES * 1.55}em; overflow: hidden; }
   /* The gradient is the only thing that says a fold is a fold rather than a message that happens to
   end mid-sentence. It sits INSIDE the clamped box, so it cannot add height to what is being
   measured. */
@@ -1242,9 +1266,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // own, and a page that trusts what it reads out of its own DOM is trusting whatever last wrote
       // it.
       if (opened[key] === true && /^[a-z0-9]+$/.test(key)) {
-        rules += '.msg.long[data-fold="' + key + '"] .what { max-height: none; -webkit-mask-image: none; mask-image: none; }'
-          + '.msg.long[data-fold="' + key + '"] .fold .more { display: none; }'
-          + '.msg.long[data-fold="' + key + '"] .fold .less { display: inline; }';
+        rules += '.msg.long[data-folded="' + key + '"] .what { max-height: none; -webkit-mask-image: none; mask-image: none; }'
+          + '.msg.long[data-folded="' + key + '"] .fold .more { display: none; }'
+          + '.msg.long[data-folded="' + key + '"] .fold .less { display: inline; }';
       }
     }
     sheet.textContent = rules;
