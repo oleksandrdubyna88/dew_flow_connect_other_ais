@@ -9,6 +9,21 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
+/// Tests that redirect <c>Console.Out</c>, which is one object for the whole process.
+/// </summary>
+/// <remarks>
+/// <para>A test that captures stdout replaces it globally, so two of them running at once read each
+/// other's output: the second JSON document lands in the first one's writer and the second writer
+/// gets nothing at all. Measured the moment this file's mode tests joined
+/// <see cref="ABatchFindingsReadTests"/> — one run failed here with "'{' is invalid after a single
+/// JSON value", the next failed THERE with "the input does not contain any JSON tokens", which is
+/// the same defect seen from each end.</para>
+/// <para>The classes in it also share <c>COAI_DATA_DIR</c>, so serialising them settles both.</para>
+/// </remarks>
+[CollectionDefinition("console-out", DisableParallelization = true)]
+public sealed class ConsoleOutCollection;
+
+/// <summary>
 /// The accepted findings read back as material for a corpus, rather than as a log.
 /// </summary>
 /// <remarks>
@@ -19,6 +34,7 @@ namespace CoaiMcp.Tests;
 /// <para>Real SQLite over a temp directory, as <see cref="RoundsDbTests"/> does and for the same
 /// reason: the thing under test is the SQL.</para>
 /// </remarks>
+[Collection("console-out")]
 public sealed class BugsQueryTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-bugs-" + Guid.NewGuid().ToString("N")[..8]);
@@ -158,7 +174,7 @@ public sealed class BugsQueryTests : IDisposable
     {
         using var db = RoundsDb.Open(_dir, _log)!;
         AcceptAll(db, Round(), Found("a timeout nobody sets"), Found("a race on the cache"));
-        Handled(db, "a race on the cache", "skipped", "fix_commit_not_found");
+        Handled("a race on the cache", "skipped", "fix_commit_not_found");
 
         BugsQuery.Read(_dir).Candidates.Select(c => c.Title)
             .Should().BeEquivalentTo(["a timeout nobody sets"]);
@@ -200,8 +216,82 @@ public sealed class BugsQueryTests : IDisposable
         Program.Classify(["--bugs"]).Should().Be(Program.Startup.Usage, "a near miss is refused, not guessed");
     }
 
+    /// <summary>The mode prints the corpus as JSON, which is the only shape the panel can read.</summary>
+    /// <remarks>
+    /// Driven through <c>Program.BugsJson</c> rather than through <c>BugsQuery</c> because the
+    /// serialisation is the half that can fail on its own: this binary has reflection-free JSON, so
+    /// a shape missing from <c>ServerJsonContext</c> throws at run time while every unit test of the
+    /// reader stays green.
+    /// </remarks>
+    [Fact]
+    public void TheModePrintsTheCorpusAsJson()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            AcceptAll(db, Round(), Found("a timeout nobody sets"), Found("a race on the cache"));
+        }
+
+        var answer = RunMode(["--bugs-json"], out var code);
+
+        code.Should().Be(0);
+        answer.GetProperty("funnel").GetProperty("unprocessed").GetInt32().Should().Be(2);
+        var titles = answer.GetProperty("candidates").EnumerateArray()
+            .Select(c => c.GetProperty("title").GetString());
+        titles.Should().BeEquivalentTo(["a timeout nobody sets", "a race on the cache"]);
+    }
+
+    /// <summary>A data directory with no database is nought candidates and a success.</summary>
+    /// <remarks>
+    /// The mode OPENS the database before it reads, which on an empty directory creates one. That
+    /// is what makes this the happy path rather than an error: a machine where no round has ever run
+    /// has no corpus, and saying so is the right answer.
+    /// </remarks>
+    [Fact]
+    public void TheModeOnAMachineThatHasReviewedNothing_SaysSo()
+    {
+        var answer = RunMode(["--bugs-json"], out var code);
+
+        code.Should().Be(0);
+        answer.GetProperty("funnel").GetProperty("all").GetInt32().Should().Be(0);
+        answer.GetProperty("candidates").GetArrayLength().Should().Be(0);
+    }
+
+    /// <summary><c>--all</c> reaches the findings a run has already handled.</summary>
+    [Fact]
+    public void TheModePassesAllThrough_SoASecondLookIsPossible()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            AcceptAll(db, Round(), Found("a timeout nobody sets"), Found("a race on the cache"));
+            Handled("a race on the cache", "collected", "");
+        }
+
+        RunMode(["--bugs-json"], out _).GetProperty("candidates").GetArrayLength().Should().Be(1);
+        RunMode(["--bugs-json", "--all"], out _).GetProperty("candidates").GetArrayLength().Should().Be(2);
+    }
+
+    /// <summary>Run the one-shot mode against this test's data directory and parse what it printed.</summary>
+    private System.Text.Json.JsonElement RunMode(string[] args, out int code)
+    {
+        Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
+        var written = new StringWriter();
+        var was = Console.Out;
+        Console.SetOut(written);
+        try
+        {
+            code = Program.BugsJson(args);
+        }
+        finally
+        {
+            Console.SetOut(was);
+            Environment.SetEnvironmentVariable("COAI_DATA_DIR", null);
+        }
+
+        return System.Text.Json.JsonDocument.Parse(written.ToString()).RootElement.Clone();
+    }
+
     /// <summary>Mark one finding as a collector run would, by its title.</summary>
-    private void Handled(RoundsDb db, string title, string state, string reason)
+    private void Handled(string title, string state, string reason)
     {
         using var write = new Microsoft.Data.Sqlite.SqliteConnection(
             $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
