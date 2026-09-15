@@ -105,6 +105,14 @@ export interface TextCopier {
  * phrase had been copied from the panel and put the answer back over it — two callers, one resource,
  * and neither able to see the other. (codex, the plan round.) The counter only ever increases, which
  * is what makes "is something newer wanted than the write that just landed" answerable at all.</p>
+ *
+ * <p><b>The guarantee is bounded by this MODULE, and the clipboard is not.</b> Two VS Code windows are
+ * two extension hosts and therefore two of this record: a write stalled in one window can settle after
+ * a newer copy in the other and take the clipboard, and nothing here can see it happen. Coordinating
+ * that would mean a resource shared by every host, which is a great deal of machinery for a repair of
+ * a timeout. So the promise is "the newest press in THIS window wins", and it is written down rather
+ * than quietly widened to the system. (codex, the second code round, and it was right that the plan
+ * claimed more than the code can hold.)</p>
  */
 let wanted: { readonly at: number; readonly text: string; readonly ports: CopyPorts } | undefined;
 
