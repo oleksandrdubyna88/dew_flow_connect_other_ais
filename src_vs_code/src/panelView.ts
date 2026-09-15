@@ -327,7 +327,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         // caller wears the colour its vendor has on its card and in a running round. Passed even
         // when no reviewer is configured: the anchored ids answer regardless, which is what an
         // anchor is for.
-        colour: vendorPalette(state.vendors.map((v) => v.id)),
+        palette: vendorPalette(state.vendors.map((v) => v.id)),
       })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),

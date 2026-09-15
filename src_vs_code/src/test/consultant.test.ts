@@ -1364,7 +1364,7 @@ test('no palette means a neutral edge, not a crash and not a colour', () => {
 test('every consultant row is a framed box carrying its own edge colour', () => {
   const palette = vendorPalette(['codex', 'antigravity']);
 
-  const html = consultantBody(DEFAULT_CONSULT, { colour: palette });
+  const html = consultantBody(DEFAULT_CONSULT, { palette });
 
   for (const { id } of CALLER_KINDS) {
     const expected = callerColour(id, palette);
@@ -1378,7 +1378,7 @@ test('every consultant row is a framed box carrying its own edge colour', () => 
 test('the rows still do what they did, and still say what they said', () => {
   // The frame must not have been bought by rewriting the controls or dropping the guidance.
   const palette = vendorPalette(['codex']);
-  const framed = consultantBody(DEFAULT_CONSULT, { colour: palette });
+  const framed = consultantBody(DEFAULT_CONSULT, { palette });
   const plain = consultantBody(DEFAULT_CONSULT, {});
 
   for (const { id, label } of CALLER_KINDS) {

@@ -42,7 +42,7 @@ export interface ConsultantViewState {
    * <p>Optional because a caller with no palette is a legitimate state — the panel always passes
    * one, including the empty-vendor case, where the anchored ids still answer.</p>
    */
-  readonly colour?: VendorPalette;
+  readonly palette?: VendorPalette;
 }
 
 /**
@@ -159,7 +159,7 @@ export function consultantBody(consult: ConsultSettings, state: ConsultantViewSt
   <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let a stuck AI consult another vendor</label>
   <div class="hint">The AI calls <code>consult</code> itself when it is stuck. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
-${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.colour))).join('\n')}
+${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.palette))).join('\n')}
 <div class="hint">These are the CONSULTANT’s own settings. A vendor here shares its name — and so its key in the vault — with the reviewer row of the same name, and nothing else: change a reviewer's model or endpoint and the consultant stays where you put it.</div>
 ${refused.map(refusal).join('\n')}
 <div class="field inline">

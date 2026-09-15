@@ -1616,9 +1616,16 @@ test('a consultant row wears the same colour as the reviewer card of the same na
   // functions. The card is asserted first: without it, the row assertion below compares against
   // nothing.
   const shared = DEFAULT_COLOUR('codex');
+
+  // Scoped to CODEX's card, not to "some card wearing codex's colour": with two vendors configured,
+  // a page that swapped their colours would satisfy a bare `includes` twice over and the
+  // codex-to-codex equality this test is named for would be false. So the card is found by the id
+  // its own label carries. (codex, the code round.)
+  const codexCard = html.split('<div class="vendor" ').find((part) => part.includes('for="v-codex"'));
+  assert.ok(codexCard, 'there is no codex reviewer card, so this test is comparing against nothing');
   assert.ok(
-    html.includes(`<div class="vendor" style="border-left-color:${shared}">`),
-    'codex has no coloured reviewer card, so this test is comparing against nothing',
+    codexCard.startsWith(`style="border-left-color:${shared}">`),
+    `codex's own card is not wearing codex's colour: ${codexCard.slice(0, 80)}`,
   );
   assert.ok(
     html.includes(`data-caller="codex" style="border-left-color:${shared}"`),
@@ -1633,4 +1640,14 @@ test('a consultant row wears the same colour as the reviewer card of the same na
       `${id} does not wear its anchored colour in Consultant`,
     );
   }
+
+  // The FRAME, not only the edge colour. `consultantBody` emits no stylesheet, so a test over its
+  // output alone stays green after `.consultant-row` loses its rule — and the rows go back to being
+  // flat `.field` blocks with a coloured line, which is the defect reported. Asserted here, where
+  // the page and its stylesheet are the same string. (codex, the code round.)
+  const css = html.split('<style>')[1]?.split('</style>')[0] ?? '';
+  const frame = css.split('.consultant-row {')[1]?.split('}')[0] ?? '';
+  assert.ok(frame.length > 0, 'the .consultant-row rule is gone, so the rows are unframed whatever colour they carry');
+  assert.match(frame, /border: 1px solid/, 'the rows have no frame — only a left edge');
+  assert.match(frame, /border-left: 3px solid/, 'the left edge has no width, so the inline colour paints nothing');
 });
