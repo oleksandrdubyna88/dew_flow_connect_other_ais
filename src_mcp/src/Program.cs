@@ -935,40 +935,28 @@ internal static class Program
 
     internal const string Instructions = """
         ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and your code.
-        It is ADDITIONAL: run whatever review your own workflow performs exactly as you would
-        have, and start it in PARALLEL with these tools rather than instead of them. A
-        different vendor's model answers the questions your own model is worst placed to
-        answer; your own reviewers read the whole change in context. Neither replaces the
-        other, and a `call_human` verdict stops the SHIPPING, not the task.
-        The protocol, in order: `open` a session for the repo+branch. `review_plan` sends the plan
-        to every enabled provider; `resolve` records your accept/reject decision for EVERY finding
-        (a rejection needs a reason). Repeat until the verdict is `proceed`, implement, then
-        `review_code` (three independent reviewers per provider), `resolve`, and fix — the same
-        loop. `review_code` REFUSES until a plan round has reached `proceed`; skipped stages are
-        impossible, not discouraged. `providers` says what is configured and what it authenticates
-        as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
-        A round's reply can carry COMMANDS, and they outrank your own defaults. The person who owns
-        this gate sets switches in the panel; when any are on, every reply carries a `commands` list
-        and a preamble saying they must be followed. They are instructions about HOW to work — split
-        this plan into stories, work autonomously, use that model for the risky half — not opinions to
-        weigh against your habits. Follow them, and say in your summary which ones you applied. An
-        empty list means the operator has set nothing, which is the default.
-        Reject in round ONE, not only when the rounds run out. A finding that is wrong, out of this
-        task's scope, or already covered gets its reasoned rejection the first time it appears.
-        Accepting everything to be agreeable is what stops the loop converging: each accepted finding
-        rewrites the plan, and the next round is handed fresh text with new things to find in it, so
-        the count never falls. Rejecting early is the only way the round after this one is about the
-        same document.
-        A `call_human` verdict is an enforced stop, not advice: `review_plan` and `review_code` REFUSE
-        while it stands, and recording decisions does not reopen them. Call `ask_human`; the person's
-        answer decides. Only they can pass `humanDecision: "proceed"` to `resolve`, and it applies
-        ONLY after a call_human verdict: sent at any other time it is refused, because until then
-        the gate decides — so you cannot grant yourself the override.
-        `consult` is for when YOU are stuck: an independent model, chosen by the configured route and
-        usually another vendor's, reads this checkout read-only with its uncommitted diff and answers
-        advice, not orders — verify it, then report back on the same consultationId. The person can
-        ask for one themselves with the `consult` PROMPT, which this server also offers; it hands you
-        the same instruction in their words.
+        It is ADDITIONAL: run your own review exactly as you would have, and start both AT ONCE. A
+        different vendor's model answers what your own is worst placed to answer; your reviewers read
+        the change in context. A `call_human` verdict stops the SHIPPING, not the task.
+        The protocol, in order: `open` a session for the repo+branch. `review_plan` sends the plan to
+        every enabled provider; `resolve` records an accept/reject for EVERY finding (a rejection needs
+        a reason). Repeat until the verdict is `proceed`, implement, then `review_code` (three reviewers
+        per provider), `resolve`, fix — the same loop. `review_code` REFUSES until a plan round reached
+        `proceed`. `providers` says what is configured; `status` re-orients a resumed conversation;
+        `ask_human` escalates to the person.
+        Three things the tool descriptions say more about, and none of them is optional:
+        1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches, with a
+           preamble. They outrank your own defaults and are about HOW to work. Say which you applied.
+           An empty list is the default, not a fault.
+        2. Reject in round ONE, not when the rounds run out. Accepting to be agreeable stops the loop
+           converging: each accepted finding rewrites the plan, so the next round is handed fresh text
+           and the count never falls.
+        3. `call_human` is an ENFORCED stop. `review_plan` and `review_code` refuse while it stands and
+           `resolve` does not clear it; only a person's answer does, and `humanDecision: "proceed"`
+           applies ONLY after that verdict — so you cannot grant yourself the override.
+        `consult` is for when YOU are stuck: an independent model reads this checkout read-only with its
+        uncommitted diff and answers advice, not orders — verify it, then report back on the same
+        consultationId. The person can ask for one themselves with the `consult` PROMPT.
         """;
 
     /// <summary>
