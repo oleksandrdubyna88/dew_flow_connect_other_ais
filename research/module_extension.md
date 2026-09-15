@@ -2020,6 +2020,29 @@ id that pattern does not match is dropped whole rather than escaped, so a forgot
 fail loudly — it silently stops putting the caret back, in every control on the panel. Eight tests
 said so within a second.
 
+**The write stores a DEFINITION, not a reference (2026-09-14, story A2 of
+[PLAN_the_consultant_has_its_own_vendors.md](../todo/PLAN_the_consultant_has_its_own_vendors.md)).**
+`consultantRecordUpdate` used to put back `{vendor, model}`, where the vendor was a reviewer row's id
+and the runtime, the endpoint, the CLI path and the model-when-none-was-named were borrowed from that
+row on every read. Story A1 made the READ resolve that; this is the other half, because until
+something writes, the file still holds the reference and the consultant still follows the row. The
+function now takes the reviewer rows, runs `resolveConsultant`, and stores the result whole — so the
+first edit in the section is what makes the two settings genuinely independent. It takes the rows
+through the SIDE-AWARE reader on the same `config` object the surrounding branch uses, since
+`consultants` is an overlaid setting and the rows must come from the side being written.
+Four rules it keeps: a vendor change still clears the model BEFORE resolving (a model named for one
+vendor is not one the next offers), and what lands is the model the new vendor will really use — its
+row's, where a row lends one; a blank or whitespace id is REFUSED and the map comes back untouched,
+because it keys no vault entry and names no runtime; an entry the rule cannot place stays a bare
+reference and gains no invented runtime, only its model being editable; and the merge is into the RAW
+stored object, so a caller kind this build has no name for survives, which is the same reason the
+server's `Merge` keeps unknown kinds. `runtime` is always written — it is what tells a definition from
+the legacy reference — while `baseUrl` and `executablePath` are written only when they hold something,
+since absent and empty mean the same to every reader and the file is one people edit by hand. The
+three new fields are declared in `package.json` beside `vendor` and `model`, and `consultBaseUrl` /
+`consultExecutablePath` join `consultModel` in the map of setting keys to fields, so an unknown key
+writes nothing instead of landing in the model — which is what it used to do.
+
 **A caller KIND is not a runtime, and `gemini` is the case that proves it.** The caller kinds are
 what `CallerIdentity.KindFrom` answers — `claude`, `codex`, `gemini`, `other` — while the vendor row
 that runs Gemini models is on the `antigravity` runtime. A name-to-name comparison therefore withheld

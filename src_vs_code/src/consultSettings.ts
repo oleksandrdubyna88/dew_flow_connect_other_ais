@@ -441,10 +441,22 @@ function resolveAll(
   );
 }
 
+/**
+ * ONE stored row, read exactly as {@link consultSettingsFrom} reads the four.
+ *
+ * <p>Exported for the WRITE path, which has to start from the row as stored before it resolves and
+ * puts a definition back (`consultantRecordUpdate`). It is the same reader rather than a second one
+ * on purpose: two spellings of "what does this row say" is how the panel comes to store a shape its
+ * own reader will not accept.</p>
+ */
+export function consultantChoiceFrom(row: unknown): ConsultantChoice {
+  return entryFrom(asRecord(row));
+}
+
 /** The stored map, one entry per caller kind: what is written, trimmed — or the shipped pair. */
 function callers(stored: Record<string, unknown>): Record<string, ConsultantChoice> {
   return Object.fromEntries(CALLER_KINDS.map(({ id }): [string, ConsultantChoice] => {
-    const entry = entryFrom(asRecord(stored[id]));
+    const entry = consultantChoiceFrom(stored[id]);
 
     return [id, entry.vendor.length > 0 ? entry : DEFAULT_CONSULT.stored[id]];
   }));
