@@ -1,5 +1,31 @@
 # Changelog
 
+## Extension 0.46.0 — 2026-09-15
+
+**The Consultant section picks a vendor the way *Add a reviewer* does, and can mint an endpoint of
+your own.** Until now the picker listed reviewer ROWS, labelled in internal ids — `codex ·
+gpt-5.6-luna` — two sections below a picker offering `Codex (OpenAI)` and `DeepSeek`: one product,
+two lists, and the one reached for second was the one written in ids. It now reads the catalogue, and
+the blank preset that could not be offered before — an id keys the vault entry and the usage ledger,
+so an option whose stored value is empty is one you can see and cannot choose — is carried as a
+REQUEST rather than a setting, through the same flow that adds a reviewer. Plus what four gate rounds
+found on the way, including a way out of a stranded row that had been blocked.
+
+**A copy that did not land can no longer put stale text back over what you copied next.** 0.45.1
+shipped the per-block copy controls; this fixes a defect in the machinery underneath them. A clipboard
+write cannot be cancelled, so when one stalls past its ceiling the queue is released and the newer
+text is put back once the stalled write finally lands — but that corrective write is itself a write,
+and a press landing while one was in flight let the correction settle last and restore text you had
+already copied past.
+
+Three things behind that, none of them visible unless they go wrong: every write and every correction
+now take the same path, so a correction cannot escape the accounting; the newest **press** wins rather
+than the newest write to *start*, so a press queued behind a slow one no longer beats a press made
+after it; and a correction goes out through the channel of whoever wanted the text — the chat and the
+phrase list each have their own, and there is one clipboard between them. The guarantee is bounded to
+one window and says so: two VS Code windows are two extension hosts, and neither can see the other's
+presses.
+
 ## Extension 0.45.1 — 2026-09-15
 
 **Moving your data now takes the logs with it, and `rounds.md`.** Both were filed as things written
