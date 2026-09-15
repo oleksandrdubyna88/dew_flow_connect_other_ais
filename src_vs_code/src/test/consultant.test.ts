@@ -16,10 +16,11 @@ import {
   resolveConsultant,
   sameCallers,
   sameVendorNote,
+  vaultKeyNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
 import { ConsultantRowView, consultantBody, consultantRowView } from '../consultantView';
-import { consultantEndpointWrite, consultantRecordUpdate, endpointAnswer, endpointConflict, envBlock, settingWrite, settingsFrom } from '../settingsShape';
+import { badEndpoint, consultantEndpointWrite, consultantRecordUpdate, endpointAnswer, endpointConflict, envBlock, settingWrite, settingsFrom } from '../settingsShape';
 import { Runtime } from '../models';
 import { VENDOR_PRESETS, Vendor, normaliseId, vendorsFrom } from '../vendors';
 
@@ -755,6 +756,18 @@ test('the empty model option says what is true of THIS row, rather than one sent
     'a runtime this build will never ask has no default to fall back to, and saying it has one is a lie a person acts on');
 });
 
+test('an entry the rule could not place is not shown as a CHOSEN catalogue vendor', () => {
+  // The repair is in the same select, and it has to be REACHABLE. Marking the catalogue's own
+  // deepseek as selected makes choosing it fire no change event at all, so the one click a person
+  // would try does nothing and the row stays unplaceable. (codex, C6's code round — a regression
+  // from C5's de-duplication, which removed the only other option there was to pick.)
+  const view = viewOf(legacy('deepseek'), []);
+
+  assert.equal(view.state, 'unavailable');
+  assert.equal(view.selected, '', 'nothing storable is selected, so every catalogue entry is one change event away');
+  assert.ok(view.options.some((one) => one.value === 'deepseek'), 'and the entry that repairs it is offered');
+});
+
 test('a vendor the catalogue can still offer is never in the list twice', () => {
   // `deepseek` is in the catalogue AND can be a stored entry the rule could not place — no reviewer
   // row of that name, and it is not a runtime. The row then carried its own option and the
@@ -793,20 +806,16 @@ test('a caller pointed at its own vendor is told what to think, and no other cal
   assert.ok(!viewOf(definition('codex', 'codex'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
 });
 
-test('every caller kind gets a row of its own, keyed by the caller', () => {
+test('every caller kind is named in words a person reads', () => {
+  // The CONTROLS each caller gets are counted in `consultantSectionScript.test.ts`, over a page that
+  // has actually been run — a substring assertion cannot tell a control wired to the right caller
+  // from one wired to the wrong one, which is the whole reason the rule refuses it. What is left
+  // here is copy, and copy has no branch for a running page to reveal. (codex, C6's code round.)
   const html = consultantBody(DEFAULT_CONSULT, {});
 
-  for (const { id, label } of CALLER_KINDS) {
-    assert.ok(html.includes(`data-caller="${id}"`), `${id} has no row`);
+  for (const { label } of CALLER_KINDS) {
     assert.ok(html.includes(`${label} asks`), `${label} is not named in words`);
   }
-  // Every control carries the caller: without it the provider would write whichever of the four the
-  // document holds first. The two selects are on every row; the two inputs only where the runtime
-  // has them, which is why they are counted against the rows that take one.
-  assert.equal((html.match(/data-setting="consultVendor" data-caller=/g) ?? []).length, CALLER_KINDS.length);
-  assert.equal((html.match(/data-setting="consultModel" data-caller=/g) ?? []).length, CALLER_KINDS.length);
-  const takingAPath = CALLER_KINDS.filter(({ id }) => consultantRowView({ id, label: id }, DEFAULT_CONSULT, {}).takesExecutablePath);
-  assert.equal((html.match(/data-setting="consultExecutablePath" data-caller=/g) ?? []).length, takingAPath.length);
 });
 
 test('a saved model is kept whatever the vendor lists, and named for what it is', () => {
@@ -824,11 +833,7 @@ test('a saved model is kept whatever the vendor lists, and named for what it is'
   const unplaceable = viewOf(legacy('retired-thing', 'r1'), []);
 
   assert.deepEqual(unplaceable.models, []);
-  const html = consultantBody(
-    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolveConsultant(legacy('retired-thing', 'r1'), []) } },
-    {},
-  );
-  assert.match(html, /r1 — not offered by this vendor/);
+  assert.equal(unplaceable.keptModel, 'r1', 'the row carries it, which is the decision — the markup only renders one');
 });
 
 test('a vendor id is escaped, because it is a name a person typed', () => {
@@ -842,11 +847,11 @@ test('a vendor id is escaped, because it is a name a person typed', () => {
   assert.ok(!html.includes('<script>x</script>'));
 });
 
-test("the empty model option names the RUNTIME's default, because there is no row to borrow from", () => {
-  const html = consultantBody(DEFAULT_CONSULT, {});
-
-  assert.match(html, /<option value="" selected>the runtime’s own default<\/option>/);
-  assert.ok(!html.includes('the row’s own'), 'the consultant stopped borrowing a reviewer row, and the words followed');
+test("the section stopped saying 'the row's own' anywhere, because there is no row to borrow from", () => {
+  // Copy, and the absence of it: what the empty model option SAYS is decided in `modelPlaceholder`
+  // and asserted as a value two tests above. This is the phrase the old section used, which must not
+  // survive anywhere in the words — there is no branch here for a running page to show.
+  assert.ok(!consultantBody(DEFAULT_CONSULT, {}).includes('the row’s own'));
 });
 
 test("the section says these settings are the consultant's own", () => {
@@ -1145,9 +1150,17 @@ test('the reviewer rows handed to the write are the ones materialised', () => {
 test("a custom endpoint is stored as THAT caller's own definition — the runtime and the URL, nothing borrowed", () => {
   const written = consultantEndpointWrite(DEFAULT_CONSULT.stored, 'gemini', 'mistral', 'https://api.mistral.ai/v1');
 
+  // The runtime is DERIVED from the catalogue's blank preset, not named here: the write must store
+  // what that entry says it is, or the picker offers one thing under a label and stores another the
+  // day somebody edits the catalogue. (codex, C6's code round.)
   assert.deepEqual(written['gemini'],
-    { vendor: 'mistral', runtime: 'codex', model: '', baseUrl: 'https://api.mistral.ai/v1' },
-    'what the catalogue’s blank preset IS: the codex runtime at an endpoint, under the name that keys the vault');
+    {
+      vendor: 'mistral',
+      runtime: VENDOR_PRESETS.find((one) => one.id.length === 0)!.runtime,
+      model: '',
+      baseUrl: 'https://api.mistral.ai/v1',
+    },
+    'what the catalogue’s blank preset IS: its runtime at an endpoint, under the name that keys the vault');
   assert.deepEqual(written['claude'], DEFAULT_CONSULT.stored['claude'],
     'and the other three callers are untouched — the command carries a caller for a reason');
 });
@@ -1172,13 +1185,85 @@ test('an id already held at a DIFFERENT endpoint is refused — one name is one 
   // Two endpoints under one name would send one key to whichever answered second. The check spans
   // the reviewer rows AND the other callers, because both key the vault by id.
   const rows = [{ ...vendor('mistral'), baseUrl: 'https://api.mistral.ai/v1' }];
-  const consultants = { claude: { vendor: 'acme', runtime: 'codex', model: '', baseUrl: 'https://acme.example/v1' } };
+  const consultants = { gemini: { vendor: 'acme', runtime: 'codex', model: '', baseUrl: 'https://acme.example/v1' } };
 
-  assert.match(endpointConflict('mistral', 'https://other.example/v1', rows, consultants), /mistral/);
-  assert.match(endpointConflict('acme', 'https://other.example/v1', rows, consultants), /acme/);
-  assert.equal(endpointConflict('mistral', 'https://api.mistral.ai/v1', rows, consultants), '',
+  assert.match(endpointConflict('mistral', 'https://other.example/v1', rows, consultants, 'claude'), /mistral/);
+  assert.match(endpointConflict('acme', 'https://other.example/v1', rows, consultants, 'claude'), /acme/);
+  assert.equal(endpointConflict('mistral', 'https://api.mistral.ai/v1', rows, consultants, 'claude'), '',
     'the same endpoint under the same name is one vault key used twice, which is the point of a name');
-  assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants), '');
+  assert.equal(endpointConflict('brand-new', 'https://new.example/v1', rows, consultants, 'claude'), '');
+});
+
+test("a caller can change its OWN endpoint — its own record is not something it collides with", () => {
+  // Re-running the flow on a caller that already has a custom endpoint is how a person moves it from
+  // one port to another. Counting that caller's own record as a clash makes its URL unchangeable
+  // for good, and the message tells them a name they chose is somebody else's. (gemini, twice.)
+  const mine = { claude: { vendor: 'local-mistral', runtime: 'codex', model: '', baseUrl: 'http://localhost:8000/v1' } };
+
+  assert.equal(endpointConflict('local-mistral', 'http://localhost:8080/v1', [], mine, 'claude'), '');
+  assert.match(endpointConflict('local-mistral', 'http://localhost:8080/v1', [], mine, 'gemini'), /local-mistral/,
+    'another caller holding it is still a clash — it is the same vault key');
+});
+
+test('a name the CATALOGUE already means something by is refused at a different endpoint', () => {
+  // With no `deepseek` reviewer row a person could name their own endpoint `deepseek`, and the next
+  // caller to pick DeepSeek from the catalogue would share its vault key with a different service.
+  // The catalogue is a holder of names exactly as the rows are. (codex, C6's code round.)
+  assert.match(endpointConflict('deepseek', 'https://mine.example/v1', [], {}, 'claude'), /deepseek/);
+  assert.equal(endpointConflict('deepseek', 'https://api.deepseek.com/v1', [], {}, 'claude'), '',
+    'the catalogue entry at its own URL is the same service named once');
+});
+
+test('the cure never names an endpoint that does not exist', () => {
+  // `claude` is a catalogue preset with no base URL of its own. Telling a person to "use that
+  // endpoint" when there is none to use is advice they cannot follow. (gemini, C6's code round.)
+  const why = endpointConflict('claude', 'https://mine.example/v1', [], {}, 'codex');
+
+  assert.match(why, /claude/);
+  assert.ok(!/use that endpoint/.test(why), 'there is no endpoint to point at, so the sentence must not point at one');
+});
+
+test('one name at two endpoints is SAID, however the second one got there', () => {
+  // `endpointConflict` guards the flow that MINTS a name; the inline endpoint box in each row goes
+  // nowhere near it. A person can edit a consultant's URL to anything, under a name a reviewer row
+  // already holds, and the vault entry that name keys is then pointed at two services. The panel
+  // cannot refuse that edit without silently discarding what somebody typed, so it SAYS it — beside
+  // the section, the way the server-skew note does, because the sentence needs the reviewer rows and
+  // the section deliberately has none. (gemini, C6's code round.)
+  const consult = {
+    ...DEFAULT_CONSULT,
+    byCaller: {
+      ...DEFAULT_CONSULT.byCaller,
+      claude: resolvedDefinition('mistral', 'codex', '', 'https://mine.example/v1'),
+    },
+  };
+
+  const said = vaultKeyNote(consult, [{ ...vendor('mistral'), baseUrl: 'https://api.mistral.ai/v1' }]);
+  assert.match(said, /mistral/);
+  assert.match(said, /https:\/\/api\.mistral\.ai\/v1/);
+  assert.equal(vaultKeyNote(consult, [{ ...vendor('mistral'), baseUrl: 'https://mine.example/v1' }]), '',
+    'the same endpoint under one name is one service named once, which is what a shared key is FOR');
+  assert.equal(vaultKeyNote(consult, []), '', 'and with no row of that name there is nothing to disagree with');
+});
+
+test('an endpoint has to parse as one, and carry no key', () => {
+  // `startsWith('http')` accepted `http-not-a-url`: the box closed, the setting was stored, and the
+  // person found out the next time they were stuck. (codex, C6's code round.)
+  assert.equal(badEndpoint('https://api.example.com/v1'), undefined);
+  assert.equal(badEndpoint('  http://localhost:11434/v1  '), undefined);
+  assert.match(badEndpoint('http-not-a-url') ?? '', /base URL/);
+  assert.match(badEndpoint('') ?? '', /base URL/);
+  assert.match(badEndpoint('ftp://example.com/v1') ?? '', /http or https/);
+  // A key in the URL lands in settings.json, and a WORKSPACE settings.json is a file people commit.
+  assert.match(badEndpoint('https://me:sk-secret@api.example.com/v1') ?? '', /vault entry/);
+  assert.match(badEndpoint('https://api.example.com/v1?api_key=sk-secret') ?? '', /vault entry/);
+});
+
+test('a URL box left empty is no endpoint — a custom endpoint with no URL is the plain runtime', () => {
+  // Storing `baseUrl: ''` would turn what a person asked for as their own endpoint into the CLI's
+  // default routing, under a name they chose for something else. (gemini, C6's code round.)
+  assert.equal(endpointAnswer('mistral', ''), undefined);
+  assert.equal(endpointAnswer('mistral', '   '), undefined);
 });
 
 test('a dismissed box writes nothing — the SECOND one as much as the first', () => {
