@@ -52,12 +52,28 @@ and the two files that caused that starvation by sorting first are among the one
 Deleting the draw therefore cannot restore the failure the draw was installed against. The tier fills
 the budget almost exactly: 78 672 of 80 000, with 1 328 bytes to spare.
 
-**It also prices the trade, which is the part not to bury.** The walk shows a FIXED set. The 24 rules
-outside it — `git-workflow`, `pull-requests`, `reliability`, `platform-limits`, `task-lifecycle` and the
-rest — move from *shown roughly every second or third round* under the draw to **never shown** on this
-path. Determinism buys a gate a developer can trust and spends coverage to do it.
+**It also priced a trade that was then refused.** A purely fixed order shows a FIXED set: the 24 rules
+outside the tier — `git-workflow`, `pull-requests`, `reliability`, `platform-limits`, `task-lifecycle`
+and the rest — would move from *shown roughly every second or third round* under the draw to **never
+shown** on this path. Three reviewers of epic 3's plan round said independently that this ships a
+coverage regression on the only path a code round takes today, and they were right.
 
-Three things bear on whether that is the right trade today:
+**What shipped instead: the tail rotates by BRANCH.** The tier is fixed — every round, on every branch,
+gets the eight rules above. The rest are ordered by a SHA-256 of *(branch, rule name)*, so:
+
+- two rounds of one fix show **identical** rules, which is the defect the plan was opened for, because
+  a branch is what a round is about and it does not change while a developer fixes what a round found;
+- different branches read different parts of the corpus, so every rule is still reached across a
+  team's work — the draw's one real virtue, kept without the draw;
+- nothing consults a clock, a counter or a random source, and anyone holding the branch name can
+  reproduce the order exactly. `string.GetHashCode` would NOT do: .NET randomises it per process, which
+  would have reintroduced the very defect inside its own fix.
+
+The test that justified the draw — *"a rule that is never drawn is a rule that is never applied"* —
+survives as `AcrossEnoughBranches_EveryFamilyRuleGetsRead`, with sixty branch names in place of sixty
+seeds and the same assertion.
+
+Three things still bear on the budget:
 
 1. **The omissions are not silent.** Every bundle names them — *"N further rule file(s) omitted for
    length: …"* — and tells the reviewer that a rule it was not shown is not a rule the change complies
@@ -65,7 +81,7 @@ Three things bear on whether that is the right trade today:
 2. **This path is the only path for code rounds today.** The resolver that would select by what a change
    actually touches cannot run: its dependencies are absent from a fresh submodule checkout and it
    refuses a sibling worktree (dependency E1, in the conventions repository). Until that lands, a code
-   round always falls back.
+   round always takes this path — which is exactly why the tail rotates rather than staying fixed.
 3. **`testing.md` alone is 25 082 bytes — 31 % of the budget.** Splitting the rules over 15 KB is what
    would make room for more of the corpus without touching the order. That follow-up's case rests on
    this table.

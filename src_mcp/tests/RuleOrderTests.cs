@@ -48,6 +48,9 @@ public sealed class RuleOrderTests : IDisposable
     /// first, and <c>testing.md</c> at 25 KB is the single largest rule in the corpus. A 45 000-byte
     /// budget holds the tiers exactly and refuses the alphabet, which is the whole point.
     /// </remarks>
+    private void WriteMount() =>
+        Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+
     private void WriteFamilyMount()
     {
         Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
@@ -75,6 +78,116 @@ public sealed class RuleOrderTests : IDisposable
         bundle.Omitted.Should().Contain([
             ".agents/conventions/common/development-workflow.md",
             ".agents/conventions/common/http-contracts.md",
+        ]);
+    }
+
+    /// <summary>
+    /// Twenty rules, one branch, two rounds: the same bundle both times.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect the whole plan was opened for. A developer pushes a fix, runs a second round,
+    /// and is answered out of a different part of the rule book — because the mount was SHUFFLED per
+    /// round. Asserted through the DEFAULT entry point, with no order argument, because the wiring is
+    /// half the claim: an order that is deterministic in isolation proves nothing if `Collect` still
+    /// reaches for the draw.</para>
+    /// <para>Twenty equal-sized files against a budget holding four, so a shuffle is caught with
+    /// probability about 1 − 1/4845 per run.</para>
+    /// </remarks>
+    [Fact]
+    public void TwoRoundsOnOneBranch_ShowByteIdenticalRules()
+    {
+        WriteMount();
+        for (var i = 0; i < 20; i++)
+        {
+            Write($".agents/conventions/common/rule-{i:00}.md", Filler($"rule{i:00}", 10_000));
+        }
+
+        var first = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/the-composer-stays-put"));
+        var second = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/the-composer-stays-put"));
+
+        second.Files.Select(file => file.Path).Should().Equal(first.Files.Select(file => file.Path));
+        second.Omitted.Should().Equal(first.Omitted);
+    }
+
+    /// <summary>
+    /// Two branches read different parts of the corpus, so the rules outside the tier are still read.
+    /// </summary>
+    /// <remarks>
+    /// The cost of a FIXED order, measured in `research/RESULTS_rules_selection_budget.md`: the tier
+    /// fills the budget, so the other 24 rules would never be shown to any code round. Ordering the
+    /// tail by the branch keeps the draw's coverage — every rule is read across the team's branches —
+    /// without the draw's instability, because a branch is what a round is about and it does not
+    /// change between the rounds of one fix.
+    /// </remarks>
+    [Fact]
+    public void TwoBranches_SeeDifferentTails_SoTheCorpusIsStillRead()
+    {
+        WriteMount();
+        for (var i = 0; i < 20; i++)
+        {
+            Write($".agents/conventions/common/rule-{i:00}.md", Filler($"rule{i:00}", 10_000));
+        }
+
+        var one = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/one"));
+        var other = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("feat/another"));
+
+        other.Files.Select(file => file.Path)
+            .Should().NotEqual(one.Files.Select(file => file.Path));
+    }
+
+    /// <summary>
+    /// The tier is the tier on every branch — only the tail rotates.
+    /// </summary>
+    [Fact]
+    public void TheTier_IsTheSameWhateverTheBranch()
+    {
+        WriteFamilyMount();
+
+        var one = RuleFiles.Collect(_repo, 45_000, RuleOrder.ForBranch("fix/one"));
+        var other = RuleFiles.Collect(_repo, 45_000, RuleOrder.ForBranch("feat/another"));
+
+        foreach (var bundle in (RuleBundle[])[one, other])
+        {
+            bundle.Files.Select(file => file.Path).Should().Contain([
+                ".agents/conventions/common/testing.md",
+                ".agents/conventions/common/security.md",
+                ".agents/conventions/csharp/doctrine.md",
+                ".agents/conventions/typescript/doctrine.md",
+            ]);
+        }
+    }
+
+    /// <summary>
+    /// The tail order is the same on every machine and in every process.
+    /// </summary>
+    /// <remarks>
+    /// This is why the order is a SHA-256 of the branch and the rule name rather than
+    /// <see cref="string.GetHashCode()"/>: .NET randomises string hashing per PROCESS, so a
+    /// GetHashCode-ordered tail would differ between two rounds of one fix on one machine — the exact
+    /// defect this epic removes, reintroduced by the fix for it. The expected sequence is written
+    /// down, so a change of hash cannot pass unnoticed.
+    /// </remarks>
+    [Fact]
+    public void TheTailOrder_IsPinned_SoItCannotDriftBetweenProcesses()
+    {
+        WriteMount();
+        foreach (var name in (string[])["alpha", "beta", "gamma", "delta"])
+        {
+            Write($".agents/conventions/common/{name}.md", Filler(name, 100));
+        }
+
+        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("fix/the-draw-dies")).Files
+            .Select(file => file.Path).ToList();
+
+        // Deliberately NOT alphabetical. The first branch name tried here produced alpha-beta-delta-
+        // gamma, which is exactly the order an implementation that ignored the key would give — a
+        // test that cannot tell the two apart is worth nothing, so the fixture uses a branch whose
+        // order only the hash can produce.
+        paths.Should().Equal([
+            ".agents/conventions/common/alpha.md",
+            ".agents/conventions/common/gamma.md",
+            ".agents/conventions/common/beta.md",
+            ".agents/conventions/common/delta.md",
         ]);
     }
 
