@@ -13,6 +13,13 @@ all of them — an answer with no words in it is a failure, and it says so.
 returns nothing is billed for every token of it, and it was the one kind of turn the spending view
 recorded as free.
 
+**A long question of your own folds itself up.** Paste a few hundred lines into the box and every
+answer used to be pushed off the screen. Questions longer than five lines — or longer than about four
+hundred characters, which is what one long wrapped paragraph is — now show their first five lines and
+a link saying exactly how much is hidden. Press it to read the whole thing, press it again to fold it
+back. Answers are never folded, and what you have opened stays open while the conversation goes on
+around it.
+
 **An error appears where you are already looking, and offers to try again.** It used to be drawn at
 the very top of the conversation, under the passage — and because writing it counts as something
 arriving, the same update scrolled you down to the newest message and left the error a screen or more

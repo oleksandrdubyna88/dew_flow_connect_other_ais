@@ -1527,6 +1527,37 @@ and written into the ledger as free, exactly the turn somebody hunting waste is 
 failing arm carries usage now, `CliChatSession` holds it as it holds an answer's, and `chatCommand`
 was already writing the ledger before either branch for this same reason.
 
+### A long question folds (2026-09-15)
+
+A pasted question of several hundred lines pushed every answer off the screen, and an answer is what
+the tab was opened to read. A question of the PERSON'S own is folded to `COLLAPSE_AFTER_LINES` when
+`isLong` says so — more than five newlines **or** more than `COLLAPSE_AFTER_CHARS` characters. The
+character arm is not decoration: the operator's long questions are routinely one wrapped paragraph, so
+a newline count calls a screenful "1 line" and a newline-only rule would fold a forty-line paste and
+leave a four-hundred-word one alone. Answers are never folded.
+
+**Keyed by content, never by index.** `foldKey` is FNV-1a in base 36, so the value is digits and
+letters and is safe both in an HTML attribute and in the CSS attribute selector the page writes. Index
+keys were the plan's first draft and the gate refused them: a retry drops the trailing question before
+re-asking it, so every index after it shifts by one and message 3 would wear message 4's state. Two
+identical questions share a key and fold together, which is the same text twice and the honest answer
+rather than a collision to design around.
+
+**The open set is a STYLESHEET the page rewrites, not a class on each element.** `#messages` is
+replaced wholesale on every push, so a class would have to be put back afterwards by walking what the
+host just wrote — and both page harnesses stub `querySelectorAll` to nothing, so that walk would be
+untestable as well as fragile. A rule keyed by `data-fold` applies to whatever is in the DOM, including
+markup that arrives a second later: nothing re-applies the state because nothing ever has to. The key
+is re-checked against `/^[a-z0-9]+$/` before it is written, because a page that trusts text it reads
+back from its own DOM is trusting whoever last wrote it.
+
+Nothing crosses to the host. That is the toggle feedback loop this product has already shipped once,
+and the fold is page state by construction rather than by discipline. Pressing the control does not
+scroll: the person pressed something they were looking at and the text grows downward from it, so
+moving the page under them would take them away from what they just opened — but the remembered "were
+they at the bottom" is measured again after the new height is laid out, because a composer resize reads
+it later.
+
 ### The failure is under the conversation, and it offers a retry (2026-09-15)
 
 The scrolling region's order is `passage → messages → thinking → failure → capped`. It used to be
