@@ -105,6 +105,19 @@ internal static class Program
         /// </remarks>
         Findings,
         FindingsMany,
+
+        /// <summary>
+        /// Print the accepted findings as corpus material, with the funnel that produced them.
+        /// </summary>
+        /// <remarks>
+        /// <para>The same reasoning as <see cref="Log"/> — the panel owns no SQLite — for a different
+        /// question. <c>--log</c> answers "what happened in this round"; this answers "which defects
+        /// are worth keeping", which filters on things the log has no opinion about.</para>
+        /// <para>It MIGRATES before it reads, unlike the other read-only modes, because it is the
+        /// first thing that asks for the collector's columns and a person may well run it before the
+        /// server has opened the database with a build that has them.</para>
+        /// </remarks>
+        Bugs,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -122,6 +135,7 @@ internal static class Program
                 "--log" => Startup.Log,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
+                "--bugs-json" => Startup.Bugs,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -159,6 +173,9 @@ internal static class Program
 
             case Startup.FindingsMany:
                 return FindingsManyJson(args);
+
+            case Startup.Bugs:
+                return BugsJson(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -270,6 +287,57 @@ internal static class Program
             // The legacy shape keeps exit 0 and an empty log, which is what it has always answered
             // and what an extension too old to read a code expects. (CodeRabbit, on the PR.)
             return Paged(args) ? 74 : 0; // EX_IOERR
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The accepted findings as corpus material, with the funnel that produced them.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It opens the database for WRITING first, and only to migrate it.</b> Every other
+    /// one-shot read here is read-only, and this one would be too but for being the first caller
+    /// that wants the collector's columns: a person running it before the server has opened the file
+    /// with a build that has them would otherwise be told, truthfully and uselessly, that there are
+    /// nought candidates. <c>RoundsDb.Open</c> is the only thing that migrates and it is idempotent
+    /// through <c>user_version</c>, so this costs an open and changes nothing on a current file.</para>
+    /// <para>The limit goes through the shared <see cref="Limit"/> helper, which clamps to
+    /// <c>RoundsQuery.MaxLimit</c> — the same 1 000 <c>BugsQuery</c> clamps to, deliberately, so a
+    /// caller cannot discover that two maxima disagree.</para>
+    /// <para>74 (EX_IOERR) for a database that would not be read, as <c>--log --paged</c> answers:
+    /// an empty corpus and a success would read as "no material", which is the one wrong answer.</para>
+    /// </remarks>
+    private static int BugsJson(string[] args)
+    {
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        try
+        {
+            using (var migrated = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None))
+            {
+                // Opened and closed: the migration is the whole point of the statement. A file that
+                // would not open is REPORTED rather than answered with an empty corpus — "no
+                // material" and "the database would not open" ask for different things from whoever
+                // reads it, and `Open` swallows the exception because a round must survive a
+                // projection it cannot write. Nothing here is a round.
+                if (migrated is null)
+                {
+                    Note("the rounds database could not be opened; no corpus can be read from it");
+                    return 74; // EX_IOERR
+                }
+            }
+
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                Store.BugsQuery.Read(
+                    settings.DataDir,
+                    Limit(args, Store.BugsQuery.DefaultLimit),
+                    all: Array.IndexOf(args, "--all") >= 0),
+                Server.ServerJsonContext.Default.BugCorpus));
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+            return 74; // EX_IOERR
         }
 
         return 0;
@@ -874,6 +942,8 @@ internal static class Program
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.
+        `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
+        funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

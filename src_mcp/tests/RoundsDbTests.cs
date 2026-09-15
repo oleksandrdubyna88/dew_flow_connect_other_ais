@@ -473,6 +473,40 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     /// <summary>
+    /// A database from before the collector gains its columns, and its own findings are material.
+    /// </summary>
+    /// <remarks>
+    /// The same failure the test above exists for, one step further along and with a reader that
+    /// would meet it differently. <c>BugsQuery</c> opens READ-ONLY and never migrates, so on a file
+    /// an older build wrote its query names a column that is not there — and the honest-looking
+    /// answer to that is nought candidates, which reads as "no material" rather than "wrong schema".
+    /// The mode migrates before it reads; this proves the migration is what makes the read work.
+    /// </remarks>
+    [Fact]
+    public void ADatabaseFromBeforeTheCollector_GainsItsColumns_AndItsFindingsAreMaterial()
+    {
+        Directory.CreateDirectory(_dir);
+        using (var older = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False"))
+        {
+            older.Open();
+            Execute(older, OldSchema);
+            Execute(older, "PRAGMA user_version=2");
+        }
+
+        // Before the migration the reader cannot answer, and says so as an empty corpus.
+        BugsQuery.Read(_dir).Candidates.Should().BeEmpty("the columns it filters on do not exist yet");
+
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var found = Found("the retry never gives up");
+        db.RecordRound(Session, Round(), [found], new RoundContext("SCOPE", "7133c2f", "claude-code"));
+        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept([found], 0)]);
+
+        var candidate = BugsQuery.Read(_dir).Candidates.Should().ContainSingle().Subject;
+        candidate.Title.Should().Be("the retry never gives up");
+        candidate.CollectState.Should().BeEmpty("a finding an older build wrote was never looked at");
+    }
+
+    /// <summary>
     /// A step that fails part-way leaves NEITHER its schema change nor its version bump behind.
     /// </summary>
     /// <remarks>
