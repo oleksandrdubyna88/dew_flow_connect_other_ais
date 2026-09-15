@@ -1,11 +1,37 @@
 # PLAN — a question with a long path in it wraps instead of scrolling the conversation sideways
 
-> Status: **plan only, nothing implemented yet, 2026-09-15.** Kind: **bug**. Scope: two CSS rules in
+> Status: **IMPLEMENTED, 2026-09-15.** Kind: **bug**. Scope: three CSS rules in
 > `src_vs_code/src/chatPage.ts` and their tests. Origin:
 > [issue #299](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/299) —
 > *"должен быть врап текста, а не прокрутка вправо"*.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md), [module_tests.md](module_tests.md).
+>
+> ## Deviations — what shipped differently, and why
+>
+> 1. **`anywhere`, not `break-word`.** The draft chose `break-word` to match three siblings on the
+>    same page. The plan round pointed out the one way the keywords differ — `break-word` does not
+>    shrink a box's intrinsic min-content width, `anywhere` does — so `break-word` leaves the
+>    scrollbar wherever a box is sized BY its content. **The round's stated mechanism did not apply
+>    here** (`#scroll` is a flex item of a *column* container, so its automatic minimum is on height;
+>    `.msg` is a plain block), and it was taken anyway because it is free, because `panelView.ts`
+>    already settled on it for this symptom, and because it ends the question rather than leaving it
+>    to be re-derived.
+> 2. **A third rule was added**, which the plan did not have:
+>    `.msg .what pre, .msg .what table { overflow-wrap: normal; }`. `overflow-wrap` is inherited, and
+>    the table is `display: block; overflow-x: auto` with cells that *do* wrap — the inherited wrap
+>    would have re-flowed its columns and removed the horizontal scroll the rule exists for.
+> 3. **The third test was described as a guard that would be green from the start. It was not** — it
+>    went red with *"there is no rule for .msg .what pre, .msg .what table"*, because the exclusion it
+>    asserts is new code. Half red test, half regression guard; the plan now says so rather than
+>    claiming a guard was "watched failing".
+>
+> **Checked, and not done:** that text actually wraps. The page harness executes a page's script
+> against a DOM shim with **no layout engine**, so `scrollWidth` and computed styles are numbers the
+> test sets — there is nothing in this repository that can observe wrapping or the absence of a
+> scrollbar. What was NOT checked: the rendered result in a real VS Code webview; the declarations
+> are asserted and the behaviour is inferred from them. Recorded as an uncovered flow in
+> `module_tests.md`.
 
 ## The symptom
 
