@@ -158,6 +158,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.changeDataDirectory",
+        "title": "Change where your data lives",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.help",
         "title": "Help",
         "category": "ConnectOtherAIs",

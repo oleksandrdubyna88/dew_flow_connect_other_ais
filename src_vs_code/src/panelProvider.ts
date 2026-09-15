@@ -1568,6 +1568,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // tab shipped with, and which two tests now guard.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editPhrases);
         break;
+      case 'changeDataDirectory':
+        // Delegated for the same reason `installServer` is: the flow it runs owns dialogs, a folder
+        // picker and a setting write, and the panel has no business holding any of them. It is the
+        // SAME flow the first install asks, so there is one question with one answer rather than two
+        // that drift.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.changeDataDirectory);
+        break;
       case 'copyPhrase':
         await this.copyPhrase(id);
         break;

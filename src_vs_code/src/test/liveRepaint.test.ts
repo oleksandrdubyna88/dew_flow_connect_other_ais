@@ -53,6 +53,35 @@ test('a newly published server version repaints the Server section', () => {
 });
 
 /**
+ * The storage section, which now has a control in it (issue #115).
+ *
+ * <p>It was left out of the key while it was static text, and that was harmless for exactly as long
+ * as nothing in it could change. The docstring above `staticKey` records four controls frozen for
+ * the life of a panel by this same omission — the spending window, the local model list, the
+ * consultant's prompt, the phrases list — and a *Change…* button whose directory never updates
+ * would be the fifth.</p>
+ */
+test('choosing a different data directory repaints the section that says so', () => {
+  const here = {
+    directory: '/srv/coai/windows',
+    side: 'windows',
+    ignoredSide: '',
+    refusal: '',
+    notes: [],
+    env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },
+    source: 'this side' as const,
+  };
+  const elsewhere = { ...here, directory: '/mnt/nas/coai', side: '', env: { COAI_DATA_DIR: '/mnt/nas/coai' } };
+
+  assert.notEqual(
+    staticKey(state({ storage: here })),
+    staticKey(state({ storage: elsewhere })),
+    'the directory changed and the panel would paint the same HTML — which a person reads as a '
+    + 'button that did nothing',
+  );
+});
+
+/**
  * The other half of the guard on {@link PANEL_COMMANDS}.
  *
  * <p>The provider switches over that list with an exhaustiveness check, so a declared command
