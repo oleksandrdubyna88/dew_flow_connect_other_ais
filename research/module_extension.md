@@ -1543,6 +1543,13 @@ re-asking it, so every index after it shifts by one and message 3 would wear mes
 identical questions share a key and fold together, which is the same text twice and the honest answer
 rather than a collision to design around.
 
+**Two attribute names for one key, and they are not interchangeable.** The message container carries
+`data-folded` for the stylesheet to match on; the control carries `data-fold`, which is what the
+delegated listener matches. They were the same name at first, and `closest('[data-fold]')` then found
+the message itself — so any click inside the question, including the first click of selecting it to
+copy, toggled the fold under the reader. Two reviewers found it on the code round, and the shipped-page
+stub honours the selector, which is what makes it visible in a test.
+
 **The open set is a STYLESHEET the page rewrites, not a class on each element.** `#messages` is
 replaced wholesale on every push, so a class would have to be put back afterwards by walking what the
 host just wrote — and both page harnesses stub `querySelectorAll` to nothing, so that walk would be

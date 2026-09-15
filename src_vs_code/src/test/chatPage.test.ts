@@ -2715,7 +2715,7 @@ test('opening a folded question outlives the transcript being replaced, and clos
 
   assert.match(
     String(page.seen['folds']?.textContent ?? ''),
-    /\.msg\.long\[data-fold="abc123"\] \.what \{ max-height: none;/,
+    /\.msg\.long\[data-folded="abc123"\] \.what \{ max-height: none;/,
     'opening a question wrote no rule, so the next push would snap it shut under the reader',
   );
 
