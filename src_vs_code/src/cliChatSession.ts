@@ -394,6 +394,9 @@ export class CliChatSession implements ChatSession {
       return;
     }
     if (event.kind === 'failure') {
+      // The failure's own numbers win over a held `usage` event, exactly as an answer's do. A turn
+      // that failed still cost what the vendor charged for it, and `settle` prices both arms.
+      this.lastUsage = event.usage ?? this.lastUsage;
       this.settle({ ok: false, failure: event.failure });
     }
   }

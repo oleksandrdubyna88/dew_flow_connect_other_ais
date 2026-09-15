@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**A chat turn can no longer end with nothing on the screen.** If the model came back having said
+nothing at all, the tab showed exactly that: the *Thinking…* line stopped, no answer appeared, no
+error appeared, and the box unlocked as though the turn had worked. Underneath, a finished turn
+carrying no text was being read as an answer that happened to be empty, so the page drew the words
+*The other AI* with nothing under them. All three runtimes had the same gap and it is now one rule for
+all of them — an answer with no words in it is a failure, and it says so.
+
+**And that turn now shows what it cost.** A model that spends its whole thinking budget and then
+returns nothing is billed for every token of it, and it was the one kind of turn the spending view
+recorded as free.
+
 ## Extension 0.44.0 — 2026-09-15
 
 **Installing the MCP server for the first time now asks where your data should live.** Keep the

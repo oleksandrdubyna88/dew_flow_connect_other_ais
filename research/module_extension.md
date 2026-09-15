@@ -1508,6 +1508,25 @@ conversation is bounded at 60 000.
 executable together, so a Claude model reaches the `claude` CLI and can never be routed through
 `agy`. A runtime with no adapter — a local OpenAI endpoint, a Team server — is still refused by name.
 
+**A turn that answers nothing is a failure, in one place for all three (2026-09-15).** Each adapter
+turned a TERMINAL result carrying no text into a valid answer of zero length — `agy`'s `SUCCESS` with
+no `response`, `claude`'s `success` subtype with no `result`, `codex`'s `agent_message` with no
+`text`. That reached the page as `{role: 'model', text: ''}`, which renders as the words *The other
+AI* at `opacity: .7` with nothing beneath them: the operator met it as a turn that thought and then
+showed nothing at all, no answer and no error, the composer unlocking as though it had worked. The
+ERROR branch sitting beside each of these had argued the same case since it was written — *a page
+showing nothing would look like a model with nothing to say* — and the SUCCESS branches never got the
+sentence. `chatAdapter.answerOrEmpty` is that sentence, once, the way `spent` is once; the constant
+`EMPTY_ANSWER` is what a person reads. A line that is not terminal is still `nothing` and never
+reaches it, so a tool call cannot be mistaken for an empty turn.
+
+**And it carries what the turn cost.** The first version dropped `usage` on the way to calling the
+turn a failure, because `AdapterEvent`'s failing arm had nowhere to put it — which made a
+thinking-tier model that burns its whole budget and returns nothing the one turn billed by the vendor
+and written into the ledger as free, exactly the turn somebody hunting waste is looking for. The
+failing arm carries usage now, `CliChatSession` holds it as it holds an answer's, and `chatCommand`
+was already writing the ledger before either branch for this same reason.
+
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

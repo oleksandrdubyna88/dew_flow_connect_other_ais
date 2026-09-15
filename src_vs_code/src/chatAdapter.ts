@@ -66,7 +66,17 @@ export type AdapterEvent =
    * discovering it. (codex, the second code round.)</p>
    */
   | { readonly kind: 'usage'; readonly usage: ReportedUsage }
-  | { readonly kind: 'failure'; readonly failure: string }
+  /**
+   * The turn produced no answer, and what it cost anyway.
+   *
+   * <p>`usage` is here for the same reason `TurnResult`'s failing arm has it and the ledger is
+   * written before either branch: a turn that failed cost real money as surely as one that answered,
+   * and the failures worth finding are precisely the expensive ones. A thinking-tier model that
+   * spends its whole budget reasoning and then returns nothing is the case this field exists for —
+   * without it that turn is billed by the vendor and recorded as free. (The code round, on the
+   * change that started classifying empty turns as failures and dropped their numbers doing it.)</p>
+   */
+  | { readonly kind: 'failure'; readonly failure: string; readonly usage?: ReportedUsage | undefined }
   | { readonly kind: 'nothing' };
 
 /** How a vendor is driven. See the note above — the difference reaches the context-loss rule. */
@@ -229,12 +239,18 @@ export const EMPTY_ANSWER = 'the model returned an empty answer';
  * this seam does not recognise is `nothing` and never arrives here at all. (Raised on the plan
  * round as a possible tool-call misread, and rejected for that reason.)</p>
  *
- * <p>`usage` is carried through when the vendor sent it and dropped when the turn failed, because
- * `failure` has nowhere to put it. A turn that answered nothing still cost tokens; that they are
- * lost from the ledger is a known and accepted cost of the union's shape.</p>
+ * <p><b>`usage` is carried on BOTH arms, and that is the point rather than a detail.</b> The first
+ * version of this function dropped it on the empty arm, because `failure` had nowhere to put it —
+ * which meant a thinking-tier model that burned its entire budget and returned nothing was billed by
+ * the vendor and written into the ledger as free. That is the most expensive turn a person can have
+ * and the one they are hunting for. The union carries it now, `cliChatSession` holds it exactly as it
+ * holds an answer's, and `chatCommand` was already writing the ledger before either branch for this
+ * same reason. (Raised on the code round, and it was right.)</p>
  */
 export function answerOrEmpty(body: string, usage: { usage?: ReportedUsage } = {}): AdapterEvent {
   const said = body.trim();
 
-  return said.length > 0 ? { kind: 'answer', text: said, ...usage } : { kind: 'failure', failure: EMPTY_ANSWER };
+  return said.length > 0
+    ? { kind: 'answer', text: said, ...usage }
+    : { kind: 'failure', failure: EMPTY_ANSWER, ...usage };
 }
