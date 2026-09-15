@@ -228,6 +228,20 @@ interface Thread extends ChatMemory {
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
   /**
+   * Which pair the last turn FAILED under, as `provider/model`, or empty when nothing is retryable.
+   *
+   * <p><b>A retry is the same question to the same model; a re-ask is the same question to a
+   * different one.</b> Those are two features and the difference is the whole of what tells them
+   * apart — so a retry that quietly went to whatever is selected NOW would be a re-ask wearing the
+   * other one's label. Nothing else records it: a failed turn appends no answer, and an answer is the
+   * only message that carries the model that produced it.</p>
+   *
+   * <p>So the pair is written down when the turn fails and compared when the button is drawn. Switch
+   * model after a failure and the retry is withdrawn rather than silently redirected — Re-ask is the
+   * control for that, and it is already on the Send button. (codex, the second code round.)</p>
+   */
+  failedWith: string;
+  /**
    * Which turn of this conversation is running, counted from 1. Never reset.
    *
    * <p>It exists so a STOP can name what it means to stop. The page renders its control against the
@@ -1168,7 +1182,12 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // so this changes no pixel — but it keeps the invariant in one place instead of leaving it to
     // emerge from two, which is what a later reader of the flag would trip over. (gemini, the plan
     // round.)
-    canRetry: running || failure.length === 0 ? false : retryFrom(thread.messages) !== undefined,
+    // AND under the pair it failed under. Switch model after a failure and the retry is withdrawn
+    // rather than silently redirected: a retry is the same question to the same model, and a re-ask
+    // is the same question to a different one — which is already the Send button's other face.
+    canRetry: running || failure.length === 0
+      ? false
+      : thread.failedWith === pairOf(thread) && retryFrom(thread.messages) !== undefined,
     attached: thread?.attached ?? '',
     spend: spendLabel(spendSoFar(thread?.spend ?? [])),
   });
@@ -1833,8 +1852,22 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
  * that decides what a failed turn carries, and two places deciding one thing is one place
  * disagreeing.</p>
  */
+/**
+ * The pair a turn would go to NOW, as `provider/model` — the key a retry is matched against.
+ *
+ * <p>One function because two callers must agree exactly: the failing branch writes it down and the
+ * button is drawn from it. An empty `modelId` means "whatever the row is set to", which is what the
+ * row itself says — the same fallback the ledger uses, and for the same reason.</p>
+ */
+function pairOf(thread: Thread): string {
+  const answering = vendorFor(thread.providerId);
+
+  return `${thread.providerId}/${thread.modelId.length > 0 ? thread.modelId : (answering?.model ?? '')}`;
+}
+
 async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Promise<void> {
-  const again = thread.messages.length === at ? retryFrom(thread.messages) : undefined;
+  const stillTheSame = thread.messages.length === at && thread.failedWith === pairOf(thread);
+  const again = stillTheSame ? retryFrom(thread.messages) : undefined;
   if (again === undefined) {
     // REDRAWN, not merely declined. The page disabled the control the moment it was pressed, so a
     // decline that pushed nothing would leave a dead button on screen for as long as the tab is
@@ -1903,6 +1936,9 @@ async function oneTurn(entry: ChatEntry, text: string, began: number): Promise<v
     },
   }];
   thread.running = true;
+  // Whatever failed before, this turn supersedes it: the failure line is cleared by the push below
+  // and nothing on screen offers a retry of it any more.
+  thread.failedWith = '';
   thread.turn += 1;
   show(entry, true, '');
 
@@ -1989,6 +2025,11 @@ async function oneTurn(entry: ChatEntry, text: string, began: number): Promise<v
     usage: result.usage,
   });
   if (!result.ok) {
+    // WHICH PAIR this failed under, so the retry offered for it goes to the same one. A retry is the
+    // same question to the same model and a re-ask is the same question to a different one; without
+    // this the retry would follow whatever is selected when the button is pressed, which is a re-ask
+    // wearing the other one's label. (codex, the second code round.)
+    thread.failedWith = pairOf(thread);
     // A STOPPED turn is written down before anything is carried, and the order is the whole finding.
     // The question was appended before the turn was sent, so a turn that ends without an answer
     // leaves the transcript ending on a dangling question. Handing THAT to a fresh process gives the
@@ -2840,6 +2881,8 @@ function newConversation(
     carryFrom: CARRY_EVERYTHING,
     sessionFile: '',
     running: false,
+    // A conversation that has said nothing has failed at nothing.
+    failedWith: '',
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
     // can never be mistaken for a turn a stop could name.
     turn: 0,
@@ -3449,6 +3492,9 @@ export function restoreConversation(
     // would be a path to somebody's home directory living in workspace state.
     sessionFile: '',
     running: false,
+    // A restored tab shows no failure — it is live state and is not saved with the conversation — so
+    // there is nothing for a retry to be offered of until the next turn fails.
+    failedWith: '',
     turn: 0,
     generation: 0,
     resetting: false,

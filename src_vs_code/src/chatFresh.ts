@@ -91,6 +91,13 @@ export interface Freshened {
   readonly reopen: boolean;
   /** Whatever was in flight has been ended and waited for, so nothing is running. */
   readonly running: boolean;
+  /**
+   * Nothing has failed in a conversation that has said nothing, so there is no retry to offer.
+   *
+   * <p>Carrying it over would put *Try again* on a new slate for a question the transcript no longer
+   * holds — a press the host would rightly refuse, which to the person looks like a broken button.</p>
+   */
+  readonly failedWith: string;
   /** A new conversation began now; the old one keeps its own beginning in the record it is archived as. */
   readonly createdAt: number;
   readonly usedAt: number;
@@ -116,6 +123,7 @@ export function freshened(saveId: string, now: number): Freshened {
     passage: '',
     reopen: true,
     running: false,
+    failedWith: '',
     createdAt: now,
     usedAt: now,
   };
