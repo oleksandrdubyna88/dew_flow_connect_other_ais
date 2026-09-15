@@ -1,5 +1,5 @@
 import { ReportedUsage, spent } from './chatUsage';
-import { ChatAdapter, NOTHING, parsed, text, count, inside } from './chatAdapter';
+import { ChatAdapter, NOTHING, answerOrEmpty, parsed, text, count, inside } from './chatAdapter';
 
 /**
  * `agy` — a persistent pipe, and the first protocol this feature learned.
@@ -48,7 +48,9 @@ export const agyAdapter: ChatAdapter = {
     const result = (event['result'] ?? {}) as Record<string, unknown>;
     const status = text(result['status']);
     if (status === 'SUCCESS') {
-      return { kind: 'answer', text: text(result['response']).trim(), ...spent(usageOf(result)) };
+      // Through `answerOrEmpty`, because a SUCCESS carrying no response is not an answer — see the
+      // note on it. The ERROR branch below has always said so; this branch says it now too.
+      return answerOrEmpty(text(result['response']), spent(usageOf(result)));
     }
 
     // An ERROR result is an error, not an empty answer: the CLI reports a refused input this way —

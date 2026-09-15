@@ -1,5 +1,5 @@
 import { ReportedUsage, spent } from './chatUsage';
-import { ChatAdapter, NOTHING, parsed, text, count, inside, money } from './chatAdapter';
+import { ChatAdapter, NOTHING, answerOrEmpty, parsed, text, count, inside, money } from './chatAdapter';
 
 /**
  * `claude` — a persistent pipe too, in Anthropic's own stream-json.
@@ -54,7 +54,8 @@ export const claudeAdapter: ChatAdapter = {
       return NOTHING;
     }
     if (event['subtype'] === 'success') {
-      return { kind: 'answer', text: text(event['result']).trim(), ...spent(usageOf(event)) };
+      // A `success` with nothing in it is a turn that said nothing, not an answer of zero length.
+      return answerOrEmpty(text(event['result']), spent(usageOf(event)));
     }
 
     // Every other `result` subtype is a way of not answering — an error, a hit limit, a refusal.

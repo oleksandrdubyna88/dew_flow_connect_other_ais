@@ -208,3 +208,33 @@ export function inside(event: Record<string, unknown>, key: string): Record<stri
 // `spent` used to be here as well as in `cliChatSession.ts`, with the same body and two copies of
 // the same paragraph explaining it. It lives in `chatUsage.ts` now, beside the type it is about, and
 // both adapters import it from there — see the note on it.
+
+/** What a turn that answered with nothing is reported as. */
+export const EMPTY_ANSWER = 'the model returned an empty answer';
+
+/**
+ * A terminal result, as an answer — unless there is no answer in it.
+ *
+ * <p><b>An empty answer is a failure, and the reason is the same one the ERROR branches already
+ * give.</b> "A page showing nothing would look like a model with nothing to say" was written about
+ * a refused input; it is just as true of a turn that succeeded and said nothing. The operator met
+ * the other half on 2026-09-15 — the thinking line ran, stopped, and the page showed neither an
+ * answer nor an error, because `{kind: 'answer', text: ''}` is a perfectly valid answer that renders
+ * as a role label with nothing under it.</p>
+ *
+ * <p>ONE function rather than the same two lines in three adapters, for the reason `spent` is one
+ * function: the day this sentence changes, it changes once. All three vendors reach it from a
+ * TERMINAL event — `agy`'s `result`, `claude`'s `result` subtype, `codex`'s completed
+ * `agent_message` — so an empty body here is the end of a turn, never an intermediate line. A line
+ * this seam does not recognise is `nothing` and never arrives here at all. (Raised on the plan
+ * round as a possible tool-call misread, and rejected for that reason.)</p>
+ *
+ * <p>`usage` is carried through when the vendor sent it and dropped when the turn failed, because
+ * `failure` has nowhere to put it. A turn that answered nothing still cost tokens; that they are
+ * lost from the ledger is a known and accepted cost of the union's shape.</p>
+ */
+export function answerOrEmpty(body: string, usage: { usage?: ReportedUsage } = {}): AdapterEvent {
+  const said = body.trim();
+
+  return said.length > 0 ? { kind: 'answer', text: said, ...usage } : { kind: 'failure', failure: EMPTY_ANSWER };
+}
