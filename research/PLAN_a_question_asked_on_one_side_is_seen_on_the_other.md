@@ -1,17 +1,18 @@
 # PLAN — a question asked on one side is seen on the other
 
-> Status: **built, 2026-09-15, awaiting the one verification only the reporter's machine can give.**
-> The code, the setting, the panel, the help in five languages and the tests have all shipped on this
-> branch; what is NOT done is the last line of the Definition of Done — naming the WSL store in the
-> setting, asking a question from a WSL session and answering it from the Windows window. A test
-> proves the code; only that proves the bug is gone, and until it is run this plan stays in `todo/`.
+> Status: **IMPLEMENTED, 2026-09-15**, with one item of its own Definition of Done still open.
+> The code, the setting, the panel, the help in five languages and the tests have shipped. What has
+> NOT been done is the last line of the DoD: naming the WSL store in the setting on the reporter's
+> own machine, asking a question from a WSL session, and answering it from the Windows window. A
+> test proves the code; only that proves the bug is gone. Recorded here rather than left implied.
+>
 > Scope: the escalation surface —
 > `src_vs_code/src/escalationWatcher.ts`, `escalations.ts`, `dataDir.ts`, the panel's data section,
 > the manifest and the help.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),
-> [PLAN_the_install_asks_where_the_data_lives.md](../research/PLAN_the_install_asks_where_the_data_lives.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),
+> [PLAN_the_install_asks_where_the_data_lives.md](PLAN_the_install_asks_where_the_data_lives.md).
 
 ## The symptom
 
@@ -48,7 +49,7 @@ different disks.
 
 ## What is already decided, and must not be undone
 
-[PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md)
+[PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md)
 put a merge question and answered it: **no merge.** `COAI_DATA_SIDE` exists so two installations can
 share one location without writing the same SQLite file, and its test asserts the
 two-sides-one-database case explicitly.
