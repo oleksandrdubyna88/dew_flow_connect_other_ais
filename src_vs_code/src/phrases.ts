@@ -1,3 +1,4 @@
+import { vendorPalette } from './vendorColour';
 import { NAME_LIMIT, freshId, hasWords, nameFor, rawText, record, text, withId } from './savedRows';
 
 /**
@@ -89,4 +90,30 @@ export { rowById as phraseById } from './savedRows';
  */
 export function freshPhraseRow(taken: readonly { readonly id: string }[]): Phrase {
   return { id: freshId(taken, 'phrase'), name: 'New phrase', text: 'Say something' };
+}
+
+/** The edge a phrase falls back to when nothing has decided one for it. */
+export const PHRASE_FALLBACK_COLOUR = 'var(--vscode-textLink-foreground)';
+
+/**
+ * A colour per phrase, decided over the whole LIST so that two of them cannot collide.
+ *
+ * <p>It delegates to {@link vendorPalette}, which is REUSE rather than convenience: that file spends
+ * thirty lines on why a promise of "no two the same" can only be made over a list and never by
+ * hashing one name at a time, and the argument transfers here unchanged. Writing a second allocator
+ * would be a second implementation of a capability that already exists.</p>
+ *
+ * <p><b>A phrase keeps its colour when another is added beside it.</b> A name's slot comes from a
+ * hash of the name itself and the list only decides who wins a genuine collision — measured over
+ * this allocator: adding a seventh phrase moved none of the first six. That is what makes the same
+ * phrase the same colour in the editor and on its sidebar button, which are separate webviews
+ * refreshed on their own clocks and can be one phrase apart.</p>
+ *
+ * <p>The five anchored VENDOR slots are offered last rather than withheld, so eight phrases get
+ * eight colours and twelve get twelve; the thirteenth repeats, which is that palette's documented
+ * and deliberate end. A phrase id is `phrase-<something>`, so it can never collide with an anchored
+ * vendor name and the two lists cannot interfere.</p>
+ */
+export function phraseColours(ids: readonly string[]): (id: string) => string {
+  return vendorPalette(ids);
 }

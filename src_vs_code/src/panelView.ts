@@ -9,6 +9,7 @@ import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendR
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import type { Phrase } from './phrases';
+import { phraseColours } from './phrases';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -718,8 +719,11 @@ export function hoverFor(phrase: Phrase): string {
  * as broken instead of as empty.</p>
  */
 function phrasesBody(phrases: readonly Phrase[]): string {
+  // The same allocator over the same ids as the editor tab, which is what makes a phrase the same
+  // colour on its button as in its box. Built over the whole LIST, never one button at a time.
+  const colour = phraseColours(phrases.map((phrase) => phrase.id));
   const buttons = phrases
-    .map((phrase) => `<button type="button" class="run phrase" data-command="copyPhrase" data-id="${escapeHtml(phrase.id)}" title="${escapeHtml(hoverFor(phrase))}">${escapeHtml(phrase.name)}</button>`)
+    .map((phrase) => `<button type="button" class="run phrase" data-command="copyPhrase" data-id="${escapeHtml(phrase.id)}" style="border-left-color:${colour(phrase.id)}" title="${escapeHtml(hoverFor(phrase))}">${escapeHtml(phrase.name)}</button>`)
     .join('');
   const list = phrases.length === 0
     ? '<div class="hint">No phrases yet. What you keep here becomes a button — press one and it is on the clipboard, ready to paste.</div>'
@@ -2303,7 +2307,10 @@ const CSS = `
   /* One row of buttons that wraps: a phrase list is a handful of short labels, and a column of them
      would push everything below it off the fold for no gain. */
   .phrases { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-  .phrases .run { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The edge WIDTH is here and the hue is inline, per phrase — the same shape the reviewer cards
+     use, and for the same reason: the colour is decided over the whole list rather than named by a
+     class. Without this rule the inline colour has nothing to paint. */
+  .phrases .run { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--vscode-panel-border); }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
