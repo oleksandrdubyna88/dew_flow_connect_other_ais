@@ -489,11 +489,20 @@ function anOlderServerWouldDiffer(consult: ConsultSettings, caller: string, vend
     && !reproducedByARow(crossing, vendors);
 }
 
-/** Whether a reviewer row of that id would hand an older server the same three fields. */
+/**
+ * Whether a reviewer row of that id would hand an older server the same consultant.
+ *
+ * <p>The three fields it lends, AND that it is switched on — which is not a detail. The refusal for a
+ * DISABLED row ('pick an enabled vendor row') was removed in story B3 and is still there on every
+ * server older than this marker, so a row whose fields match exactly still does not take an older
+ * server to the same place: it takes it to a refusal. Matching is not enough; the row has to be one
+ * that server would actually use. (gemini, B4's code round, twice in two roles.)</p>
+ */
 function reproducedByARow(one: ConsultantDefinition, vendors: readonly Vendor[]): boolean {
   const row = vendors.find((each) => each.id.toLowerCase() === one.vendor.toLowerCase());
 
   return row !== undefined
+    && row.enabled
     && row.runtime === one.runtime
     && row.baseUrl === one.baseUrl
     && row.executablePath === one.executablePath;
