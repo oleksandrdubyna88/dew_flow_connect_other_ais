@@ -1,4 +1,5 @@
-using CoaiMcp.Core.Rounds;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CoaiMcp.Runners.Context;
 
@@ -25,9 +26,9 @@ public sealed record RuleCandidate(string Path, string WithinMount);
 /// <para>A separate type because the order is the whole question. The corpus is larger than the
 /// budget and selection is whole-file, so whatever comes first is what a reviewer is judged against
 /// and whatever comes last is never shown. Leaving that to the alphabet is what starved
-/// <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all four doctrines until
-/// 2026-09-06; leaving it to <see cref="Drawn()"/> fixed the starvation by making the gate unstable
-/// instead, which is its own defect.</para>
+/// <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all three doctrines until
+/// 2026-09-06; leaving it to a per-round SHUFFLE fixed the starvation by making the gate unstable
+/// instead, which was its own defect and is what <see cref="ForBranch"/> replaced on 2026-09-15.</para>
 /// <para>The instruction files and the repository's OWN rules are not ordered here. They come first
 /// and are never dropped — see <c>RuleFiles.Candidates</c> — though they are not free: they are
 /// collected under the same budget, so a large one leaves less for the mount.</para>
@@ -38,37 +39,47 @@ public sealed record RuleOrder
 
     private RuleOrder(Func<IReadOnlyList<RuleCandidate>, IEnumerable<string>> mount) => _mount = mount;
 
-    /// <summary>The deterministic order: the same tree gives the same bundle, every time.</summary>
-    public static RuleOrder Walk { get; } = new(ByTier);
+    /// <summary>The deterministic order with no branch to rotate the tail by.</summary>
+    public static RuleOrder Walk { get; } = ForBranch(string.Empty);
 
     /// <summary>
-    /// The 2026-09-06 draw: a different part of the family rules each round.
+    /// The order for one branch: the tier first, then the rest rotated by the branch.
     /// </summary>
     /// <remarks>
-    /// <para>Measured 2026-09-06: the family set is ~199 KB against an 80 KB budget, and in
-    /// enumeration order the first two files take a quarter of it — so <c>testing.md</c>,
-    /// <c>security.md</c>, <c>reuse-first.md</c> and all four language doctrines were never shown to
-    /// any reviewer, ever. Not because the budget was small: because they were last in line, and the
-    /// line never changed.</para>
-    /// <para>Raising the budget cannot fix that; a different draw each round can. At 80 KB of 199 a
-    /// round sees about two fifths of the family rules, so a given rule is shown roughly every second
-    /// or third round — and across the rounds of one change, with several reviewers each, most of the
-    /// set gets read. That was the operator's call and the right one at the time: a rule shown
-    /// sometimes is infinitely more than a rule shown never.</para>
-    /// <para>Its cost is the reason <see cref="Walk"/> exists. A developer who pushes a fix and runs a
-    /// second round is answered out of a different part of the rule book, which reads as noise — so
-    /// the draw is kept only until every deterministic order is wired in, and then deleted.</para>
+    /// <para><b>What this replaced.</b> Until 2026-09-15 the mount was SHUFFLED, with
+    /// <c>Random.Shared</c>, once per round. That was installed on 2026-09-06 against a measured
+    /// starvation — in plain enumeration order the two longest files took a quarter of the budget and
+    /// <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and every language doctrine reached
+    /// no reviewer at all — and it worked, at the price of a gate whose answer changed between two
+    /// rounds of ONE fix. That price is what the whole plan was opened to stop paying.</para>
+    /// <para><b>Why the branch, and not simply a fixed order.</b> The tier fills the budget: measured
+    /// against the real corpus at 13 files and 78 672 of 80 000 bytes
+    /// (<c>research/RESULTS_rules_selection_budget.md</c>), which leaves the other 24 rules shown to
+    /// nobody, ever, on the path a code round actually takes today. The draw covered them by rotating.
+    /// A BRANCH is what a round is about, and it does not change while a developer fixes what the last
+    /// round found — so rotating the tail by it keeps that coverage and removes the instability.
+    /// Every rule is still read across a team's branches; no branch ever changes its own answer.</para>
+    /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
+    /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
+    /// on one machine — the exact defect this removes, reintroduced by its own fix. This is a pure
+    /// function of (branch, rule name): same inputs, same order, on every machine, in every process,
+    /// for ever. Nothing here reads a clock, a counter or a random source, and anyone holding the
+    /// branch name can reproduce the order exactly.</para>
     /// </remarks>
-    // S2245 wants a cryptographic generator. It is wrong about this call: nothing here guards a
-    // secret, and the draw decides only WHICH rule files a reviewer is shown when they do not all
-    // fit. The seeded overload is the tell — it exists so a test can assert an exact order, which a
-    // cryptographic generator cannot give at all.
-#pragma warning disable S2245 // Random is not used for security here — see above.
-    public static RuleOrder Drawn() => new(candidates => Shuffled(candidates, Random.Shared));
+    public static RuleOrder ForBranch(string branch)
+    {
+        // Trimmed, because the branch arrives as a tool argument and " fix/x " must not be a
+        // different rule order from "fix/x" — that would be this epic's own defect, returned through
+        // the front door. NOT lower-cased: git refs are case-sensitive, so `fix/A` and `fix/a` are two
+        // branches and folding them would be a lie about which change is being reviewed.
+        var key = branch.Trim();
 
-    /// <param name="seed">Fixes the draw, so a test can assert an exact order.</param>
-    public static RuleOrder Drawn(int seed) => new(candidates => Shuffled(candidates, new Random(seed)));
-#pragma warning restore S2245
+        return new(candidates => candidates
+            .OrderBy(candidate => Tier(candidate.WithinMount))
+            .ThenBy(candidate => TailKey(key, candidate.WithinMount), StringComparer.Ordinal)
+            .ThenBy(candidate => candidate.Path, StringComparer.Ordinal)
+            .Select(candidate => candidate.Path));
+    }
 
     /// <summary>
     /// The order for a gate with NO diff: the named tier, and nothing else from the mount.
@@ -140,13 +151,6 @@ public sealed record RuleOrder
     /// <para>The ordinal pass at the end is what keeps the order TOTAL: two paths differing only in
     /// case tie under the first comparer, and a tie is where an order stops being deterministic.</para>
     /// </remarks>
-    private static IEnumerable<string> ByTier(IReadOnlyList<RuleCandidate> candidates) =>
-        candidates
-            .OrderBy(candidate => Tier(candidate.WithinMount))
-            .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(candidate => candidate.Path, StringComparer.Ordinal)
-            .Select(candidate => candidate.Path);
-
     private static int Tier(string withinMount)
     {
         var rank = Array.FindIndex(Tiers, entry => entry.Equals(withinMount, StringComparison.OrdinalIgnoreCase));
@@ -170,6 +174,21 @@ public sealed record RuleOrder
             .OrderBy(candidate => candidate.Path, StringComparer.Ordinal)
             .Select(candidate => candidate.Path);
 
-    private static IEnumerable<string> Shuffled(IReadOnlyList<RuleCandidate> candidates, Random random) =>
-        SeededShuffle.Of([.. candidates.Select(candidate => candidate.Path)], random);
+    /// <summary>
+    /// A rule's place in the tail for one branch: stable, reproducible, and the same everywhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>Hex of the SHA-256 over <c>branch \0 rule</c>, ordered as text. The NUL is what stops
+    /// <c>("fix/a", "b/c.md")</c> and <c>("fix/a\0b", "c.md")</c> hashing alike — and git itself
+    /// forbids NUL and control characters in a ref name, so neither half can carry one.</para>
+    /// <para>EMPTY for a tier rule and for an empty branch, so neither is hashed at all: the tier is
+    /// fixed and must not depend on a branch even in principle, and a caller with no branch —
+    /// <see cref="Walk"/> — gets the plain tier-then-ordinal walk its name promises. Both were code
+    /// round findings: hashing a tier member coupled the fixed half to the rotating one, and a
+    /// hash-ordered <c>Walk</c> was a walk in name only.</para>
+    /// </remarks>
+    private static string TailKey(string branch, string withinMount) =>
+        branch.Length == 0 || Tier(withinMount) < Tiers.Length
+            ? string.Empty
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{branch}\0{withinMount}")));
 }

@@ -159,7 +159,7 @@ public static class RuleFiles
     /// <remarks>
     /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
     /// reviewer: at 40 KB it was 8 files and 19 omitted, and the omitted list included `testing.md`,
-    /// `security.md`, `reuse-first.md`, `git-workflow.md` and all four language doctrines — the rules
+    /// `security.md`, `reuse-first.md`, `git-workflow.md` and all three language doctrines — the rules
     /// most findings are written against. Raised to 80 KB the same day, on the operator's call, and
     /// measured again there: 12 files, 77 KB, 16 omitted. The extra 20 KB buys ONE file, because
     /// `development-workflow.md` (14 KB) and `http-contracts.md` (11 KB) are collected first and take a
@@ -214,7 +214,7 @@ public static class RuleFiles
     };
 
     public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes) =>
-        Collect(repoPath, budgetBytes, RuleOrder.Drawn());
+        Collect(repoPath, budgetBytes, RuleOrder.Walk);
 
     public static RuleBundle Collect(string repoPath, RuleOrder order) =>
         Collect(repoPath, DefaultBudgetBytes, order);

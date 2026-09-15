@@ -1,15 +1,37 @@
 # PLAN — the rules a round shows are drawn at random
 
-> Status: **stories 1.1 and 1.2 IMPLEMENTED 2026-09-15; the rest is plan.** `RuleOrder`, its tier table and
-> `RuleFiles.Collect(repoPath, budgetBytes, order)` have shipped — no production path has changed
-> behaviour yet, because `Drawn()` is still the default. Epics 1 (stories 1.2–1.4), 2, 3 and 4 remain
-> planned. Scope: `src_mcp/runners/Context/RuleFiles.cs`,
-> the three stage entry points in `src_mcp/src/Server/PanelService.cs`, and their tests. The topic
-> vocabulary belongs to `dew_flow_conventions` and ships as its **own pull request** (epic 4, and see
-> *External dependencies*);
-> nothing here edits that submodule beyond a pin.
+> Status: **IMPLEMENTED, 2026-09-15.** Epics 1 and 3 shipped (PRs #264, #270, #285, #287): rule
+> selection is a seam with a written priority, the plan and document gates are judged against named
+> tiers where both previously sent NO rules at all, and `Random.Shared` is gone — two rounds of one fix
+> now show byte-identical rules, which is the defect this plan was opened for. Epics 2 (the resolver)
+> and 4 (symbol triggers) were NOT built; they are extracted into
+> [PLAN_the_resolver_says_what_the_change_selects.md](../todo/PLAN_the_resolver_says_what_the_change_selects.md)
+> and blocked on dependency **E1** in `dew_flow_conventions`.
 >
-> **Boundary with [PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md)** (in progress): that
+> **Three deviations, each forced by something measured rather than argued.**
+> *(1)* Epic 3 was to delete the draw and leave a fixed order. The measurement taken first
+> ([RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md)) showed the tier fills the
+> budget — 13 files, 78 672 of 80 000 bytes, **1 328 spare** — so a fixed order would have shown the
+> other 24 rules to nobody, on the only path a code round takes today. Three plan-round reviewers said
+> so independently. What shipped instead: the tier is fixed and the TAIL rotates by BRANCH, ordered by
+> a SHA-256 of *(branch, rule name)*. A branch does not change while a developer fixes what a round
+> found, so one fix is stable; different branches still read different parts of the corpus.
+> `string.GetHashCode` was refused — .NET randomises it per process, which would have put the defect
+> back inside its own fix.
+> *(2)* Tier entries were to be matched by path SUFFIX. A red test refuted it:
+> `common/legacy/common/security.md` also ends with `/common/security.md`, so one entry pulled in a
+> file nobody meant. Matching is exact, against a mount-relative name carried on each candidate.
+> *(3)* The stage tier was to be a temporary baseline, retired once the resolver landed. It is
+> permanent: `--task plan` selects ~110 KB and the rules all tie on reason strength, so "reason
+> strength then id" would fill the budget alphabetically — the 2026-09-06 starvation in a new alphabet.
+>
+> **One claim in the original text was simply false**: "all four language doctrines" starved. There are
+> three — csharp, rust, typescript. Corrected wherever it had been repeated.
+>
+> Scope as built: `src_mcp/runners/Context/` (`RuleFiles`, `RuleOrder`, `StageRules`), the three stage
+> entry points in `src_mcp/src/Server/PanelService.cs`, and their tests.
+>
+> **Boundary with [PLAN_shared_rules_adoption.md](../todo/PLAN_shared_rules_adoption.md)** (in progress): that
 > plan owns *discovery* — which layout a repository has, which folders are read, how the gate text is
 > distributed. It has already delivered the neutral mount and the rule-directory allowlist. This plan
 > owns *selection*: which of the discovered rules a round actually shows, and why that one. Neither
@@ -20,11 +42,11 @@
 > the accepted ones changed is recorded under *What the plan round changed* below; the epic/story split
 > that followed corrected four more things, under *What the split changed*.
 >
-> Related docs: [PLAN_shared_rules_reach_reviewers.md](../research/PLAN_shared_rules_reach_reviewers.md)
+> Related docs: [PLAN_shared_rules_reach_reviewers.md](PLAN_shared_rules_reach_reviewers.md)
 > (shipped — it made the rules reach a reviewer at all),
-> [PLAN_conventions_is_its_own_role.md](../research/PLAN_conventions_is_its_own_role.md),
-> [architecture.md](../research/architecture.md), [module_runners.md](../research/module_runners.md),
-> [module_server.md](../research/module_server.md).
+> [PLAN_conventions_is_its_own_role.md](PLAN_conventions_is_its_own_role.md),
+> [architecture.md](architecture.md), [module_runners.md](module_runners.md),
+> [module_server.md](module_server.md).
 
 ## The symptom
 
@@ -40,7 +62,7 @@ never touched reads as noise, and noise is what stops a gate being run.
 
 **The draw was a cure, not a disease — but it is not the only cure.** It was installed on 2026-09-06
 against a measured starvation: in stable enumeration order the first two files took a quarter of the
-budget, and `testing.md`, `security.md`, `reuse-first.md` and all four language doctrines were shown to
+budget, and `testing.md`, `security.md`, `reuse-first.md` and all three language doctrines were shown to
 *no reviewer, ever*. Randomness fixed that by giving every rule a chance. **A deterministic priority
 order fixes it too**, and keeps the property the draw destroys — so the draw is replaced, not merely
 deleted, and nothing in this plan leaves an ordering to chance or to the filesystem.
@@ -76,9 +98,11 @@ block they have never had.
 ## What must be true when this is done
 
 1. The same change, reviewed twice **at the same rule-source revision**, shows the **same rules, byte
-   for byte** — with no cache, no session hash and no seeded draw. Selection is a pure function of
-   *(stage, changed paths, symbols in the added lines, rule-source revision)*, and **so is every
-   fallback path**. The revision is part of the input, not an assumption: the plan and document gates
+   for byte** — with no cache, no stored state and no random source. Selection is a pure function of
+   *(stage, branch, changed paths, symbols in the added lines, rule-source revision)*, and **so is
+   every fallback path**. The BRANCH joined that list on 2026-09-15, when epic 3 measured what a purely
+   fixed order costs; it is an input like the others, not a remembered thing, and the same branch
+   always produces the same order on any machine. The revision is part of the input, not an assumption: the plan and document gates
    read rules from the `repoPath` working tree while the code stage reads them from the worktree, and a promoted
    `release` pin changes the corpus under both — so two rounds across such a change are *different*
    inputs and are expected to differ. The tests assert identity within one revision and say so.
@@ -158,7 +182,7 @@ executable; never `dotnet test`.
 `RuleFiles.cs` is already 354 lines, so new behaviour goes in new files (`RuleOrder.cs`,
 `StageRules.cs`, `RuleManifest.cs`, `RuleResolver.cs`) and the discovery walk (`FolderFiles`,
 `NeutralRuleFolders`, `MissingRuleMount`) is not touched - which is what keeps the boundary with
-[PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md) physical rather than merely stated.
+[PLAN_shared_rules_adoption.md](../todo/PLAN_shared_rules_adoption.md) physical rather than merely stated.
 
 ### Epic 1 - selection becomes a seam, and every deterministic order exists before the draw goes
 
@@ -258,10 +282,21 @@ Code: root the round's worktree after population, script from the parent mount,
 **Reviewer looks at:** the sequence `AddAsync` then populate then launch then read; the log line naming
 which mode ran.
 
-### Epic 3 - the draw dies, and nothing replaces it with chance
+### Epic 3 - the draw dies, and nothing replaces it with chance — **IMPLEMENTED 2026-09-15**
 
 *Done when* `Random.Shared` is gone from the selection path, both paths are pinned byte-identical-twice
 at one rule revision, and the measurement is recorded.
+
+**Deviation, and the reason for it.** The plan said delete the draw and leave a fixed order. The
+measurement taken first (`research/RESULTS_rules_selection_budget.md`) showed the tier fills the budget
+— 13 files, 78 672 of 80 000 bytes — so a fixed order would show a fixed set and the other 24 rules to
+nobody, on the only path a code round takes until epic 2 lands. Three reviewers of this epic's plan
+round raised that independently, and the operator chose the third way: the TIER stays fixed and the
+TAIL rotates by BRANCH, ordered by a SHA-256 of *(branch, rule name)*. Two rounds of one fix are
+identical — a branch does not change while a developer fixes what a round found — and different
+branches still read different parts of the corpus, so `AcrossEnoughRounds_EveryFamilyRuleGetsRead`
+survives as `AcrossEnoughBranches_...` with the same assertion. `string.GetHashCode` was rejected: .NET
+randomises it per process, which would have put the defect back inside its own fix.
 
 **3.1 - Delete the draw.** *(Opus - a deletion behind two already-pinned orders.)* `Drawn` goes, `Walk`
 becomes the default, the `S2245` pragma and the draw's remarks go with it. The two shuffle tests are

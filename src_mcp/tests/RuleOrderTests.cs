@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// <para>The family corpus is far larger than the 80 KB a round can carry, and selection is
 /// whole-file — so the ORDER decides what a reviewer is judged against, and what it is never shown.
 /// Measured 2026-09-06: in plain enumeration order the two longest files took a quarter of the
-/// budget, and <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all four language
+/// budget, and <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all three language
 /// doctrines reached no reviewer at all. The draw was installed against that, at the cost of a gate
 /// whose answer changes between two rounds over one fix.</para>
 /// <para>These tests pin the other cure: a priority that is written down, so the same tree gives the
@@ -48,6 +48,9 @@ public sealed class RuleOrderTests : IDisposable
     /// first, and <c>testing.md</c> at 25 KB is the single largest rule in the corpus. A 45 000-byte
     /// budget holds the tiers exactly and refuses the alphabet, which is the whole point.
     /// </remarks>
+    private void WriteMount() =>
+        Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+
     private void WriteFamilyMount()
     {
         Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
@@ -56,6 +59,7 @@ public sealed class RuleOrderTests : IDisposable
         Write(".agents/conventions/common/security.md", Filler("security", 8_500));
         Write(".agents/conventions/common/testing.md", Filler("testing", 25_000));
         Write(".agents/conventions/csharp/doctrine.md", Filler("csharp", 4_600));
+        Write(".agents/conventions/rust/doctrine.md", Filler("rust", 4_450));
         Write(".agents/conventions/typescript/doctrine.md", Filler("typescript", 5_800));
     }
 
@@ -64,7 +68,7 @@ public sealed class RuleOrderTests : IDisposable
     {
         WriteFamilyMount();
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Should().Contain([
             ".agents/conventions/common/testing.md",
@@ -78,16 +82,141 @@ public sealed class RuleOrderTests : IDisposable
         ]);
     }
 
+    /// <summary>
+    /// Twenty rules, one branch, two rounds: the same bundle both times.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect the whole plan was opened for. A developer pushes a fix, runs a second round,
+    /// and is answered out of a different part of the rule book — because the mount was SHUFFLED per
+    /// round. Asserted through the DEFAULT entry point, with no order argument, because the wiring is
+    /// half the claim: an order that is deterministic in isolation proves nothing if `Collect` still
+    /// reaches for the draw.</para>
+    /// <para>Twenty equal-sized files against a budget holding four, so a shuffle is caught with
+    /// probability about 1 − 1/4845 per run.</para>
+    /// </remarks>
+    [Fact]
+    public void TwoRoundsOnOneBranch_ShowByteIdenticalRules()
+    {
+        WriteMount();
+        for (var i = 0; i < 20; i++)
+        {
+            Write($".agents/conventions/common/rule-{i:00}.md", Filler($"rule{i:00}", 10_000));
+        }
+
+        var first = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/the-composer-stays-put"));
+        var second = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/the-composer-stays-put"));
+
+        second.Files.Select(file => file.Path).Should().Equal(first.Files.Select(file => file.Path));
+        second.Omitted.Should().Equal(first.Omitted);
+
+        // And through the DEFAULT overload, which is what a caller that names no order gets. A code
+        // round asked for this: an order deterministic in isolation proves nothing about the wiring,
+        // and a silent return to a per-round draw would leave every assertion above still green.
+        var byDefault = RuleFiles.Collect(_repo, 41_000);
+        RuleFiles.Collect(_repo, 41_000).Files.Select(file => file.Path)
+            .Should().Equal(byDefault.Files.Select(file => file.Path));
+    }
+
+    /// <summary>
+    /// Two branches read different parts of the corpus, so the rules outside the tier are still read.
+    /// </summary>
+    /// <remarks>
+    /// The cost of a FIXED order, measured in `research/RESULTS_rules_selection_budget.md`: the tier
+    /// fills the budget, so the other 24 rules would never be shown to any code round. Ordering the
+    /// tail by the branch keeps the draw's coverage — every rule is read across the team's branches —
+    /// without the draw's instability, because a branch is what a round is about and it does not
+    /// change between the rounds of one fix.
+    /// </remarks>
+    [Fact]
+    public void TwoBranches_SeeDifferentTails_SoTheCorpusIsStillRead()
+    {
+        WriteMount();
+        for (var i = 0; i < 20; i++)
+        {
+            Write($".agents/conventions/common/rule-{i:00}.md", Filler($"rule{i:00}", 10_000));
+        }
+
+        var one = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("fix/one"));
+        var other = RuleFiles.Collect(_repo, 41_000, RuleOrder.ForBranch("feat/another"));
+
+        other.Files.Select(file => file.Path)
+            .Should().NotEqual(one.Files.Select(file => file.Path));
+    }
+
+    /// <summary>
+    /// The tier is the tier on every branch — only the tail rotates.
+    /// </summary>
+    [Fact]
+    public void TheTier_IsTheSameWhateverTheBranch()
+    {
+        WriteFamilyMount();
+
+        var one = RuleFiles.Collect(_repo, 49_000, RuleOrder.ForBranch("fix/one"));
+        var other = RuleFiles.Collect(_repo, 49_000, RuleOrder.ForBranch("feat/another"));
+
+        foreach (var bundle in (RuleBundle[])[one, other])
+        {
+            bundle.Files.Select(file => file.Path).Should().Contain([
+                ".agents/conventions/common/testing.md",
+                ".agents/conventions/common/security.md",
+                ".agents/conventions/csharp/doctrine.md",
+                ".agents/conventions/rust/doctrine.md",
+                ".agents/conventions/typescript/doctrine.md",
+            ]);
+        }
+    }
+
+    /// <summary>
+    /// The tail order is the same on every machine and in every process.
+    /// </summary>
+    /// <remarks>
+    /// This is why the order is a SHA-256 of the branch and the rule name rather than
+    /// <see cref="string.GetHashCode()"/>: .NET randomises string hashing per PROCESS, so a
+    /// GetHashCode-ordered tail would differ between two rounds of one fix on one machine — the exact
+    /// defect this epic removes, reintroduced by the fix for it. The expected sequence is written
+    /// down, so a change of hash cannot pass unnoticed.
+    /// </remarks>
+    [Fact]
+    public void TheTailOrder_IsPinned_SoItCannotDriftBetweenProcesses()
+    {
+        WriteMount();
+        foreach (var name in (string[])["alpha", "beta", "gamma", "delta"])
+        {
+            Write($".agents/conventions/common/{name}.md", Filler(name, 100));
+        }
+
+        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("fix/the-draw-dies")).Files
+            .Select(file => file.Path).ToList();
+
+        // Deliberately NOT alphabetical. The first branch name tried here produced alpha-beta-delta-
+        // gamma, which is exactly the order an implementation that ignored the key would give — a
+        // test that cannot tell the two apart is worth nothing, so the fixture uses a branch whose
+        // order only the hash can produce.
+        paths.Should().Equal([
+            ".agents/conventions/common/alpha.md",
+            ".agents/conventions/common/gamma.md",
+            ".agents/conventions/common/beta.md",
+            ".agents/conventions/common/delta.md",
+        ]);
+    }
+
     [Fact]
     public void TwoWalksOverTheSameTree_ShowByteIdenticalRules()
     {
         WriteFamilyMount();
 
-        var first = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
-        var second = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var first = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
+        var second = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         second.Files.Select(file => file.Path).Should().Equal(first.Files.Select(file => file.Path));
         second.Omitted.Should().Equal(first.Omitted);
+
+        // And through the DEFAULT overload, which is what a caller that names no order gets. A code
+        // round asked for this: an order deterministic in isolation proves nothing about the wiring,
+        // and a silent return to a per-round draw would leave every assertion above still green.
+        var byDefault = RuleFiles.Collect(_repo, 41_000);
+        RuleFiles.Collect(_repo, 41_000).Files.Select(file => file.Path)
+            .Should().Equal(byDefault.Files.Select(file => file.Path));
         second.Bytes.Should().Be(first.Bytes);
     }
 
@@ -98,7 +227,7 @@ public sealed class RuleOrderTests : IDisposable
         Write("AGENTS.md", "How to work in this repository");
         Write(".agents/rules/common/vendor-routing.md", "Which CLI runs which model");
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Take(2).Should().Equal([
             "AGENTS.md", ".agents/rules/common/vendor-routing.md",
@@ -119,7 +248,7 @@ public sealed class RuleOrderTests : IDisposable
         WriteFamilyMount();
         Write(".agents/conventions/common/doctrine.md", Filler("common-doctrine", 30_000));
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Should().Contain([
             ".agents/conventions/common/security.md",
@@ -161,7 +290,7 @@ public sealed class RuleOrderTests : IDisposable
         WriteFamilyMount();
         Write(".agents/conventions/common/a-rule-invented-tomorrow.md", Filler("tomorrow", 200));
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Concat(bundle.Omitted)
             .Should().Contain(".agents/conventions/common/a-rule-invented-tomorrow.md");
