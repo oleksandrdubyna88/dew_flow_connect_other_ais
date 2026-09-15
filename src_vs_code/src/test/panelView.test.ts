@@ -1361,6 +1361,7 @@ test('a STALE catalog is not an answer about roles', () => {
 const where = (over: Partial<DataLocation> = {}): DataLocation => ({
   directory: '/srv/coai/windows',
   side: 'windows',
+  alsoWatched: [],
   ignoredSide: '',
   refusal: '',
   notes: [],
@@ -1375,6 +1376,35 @@ test('the section says which directory THIS WINDOW reads, and names the side', (
   assert.match(html, /Where this window keeps its data/);
   assert.ok(html.includes('/srv/coai/windows'), 'the resolved directory, not the raw variable');
   assert.ok(html.includes('<b>windows</b>'), 'and the side it resolved through');
+});
+
+test('another installation’s directories are named, and a refused one says why', () => {
+  // THE point of putting them on this surface. A directory that cannot be read contributes no
+  // questions and throws nothing, which is indistinguishable from an installation that has asked
+  // nothing — the exact silence this feature exists to end, one level up. A typo has to be visible
+  // somewhere, and the panel is the only somewhere there is. (codex and gemini, the plan round.)
+  const html = panelHtml(state({
+    storage: where({
+      alsoWatched: [
+        { asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' },
+        { asked: '\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp', path: '\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp', refusal: '' },
+        { asked: '/home/jinx/.local/share/coai-mcp', path: '', refusal: 'this looks like a path inside WSL.' },
+      ],
+    }),
+  }), 'n');
+
+  assert.ok(html.includes('Questions from another installation'), 'the extra directories are not introduced');
+  assert.ok(html.includes('wsl.localhost'), 'a watched directory is not named');
+  assert.ok(html.includes('/home/jinx/.local/share/coai-mcp'), 'the refused directory is not named — a typo stays invisible');
+  assert.ok(html.includes('this looks like a path inside WSL.'), 'the refusal gives no reason');
+});
+
+test('with only its own directory there is nothing extra to say', () => {
+  // The default installation, which is most of them: a heading promising other installations when
+  // there are none is furniture.
+  const html = panelHtml(state({ storage: where({ alsoWatched: [{ asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' }] }) }), 'n');
+
+  assert.ok(!html.includes('Questions from another installation'), 'an empty list was introduced anyway');
 });
 
 test('with no side named it says so plainly, rather than showing an empty one', () => {

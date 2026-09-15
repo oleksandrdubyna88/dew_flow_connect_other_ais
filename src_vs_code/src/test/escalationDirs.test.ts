@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { POSIX_ON_WINDOWS, dirKey, usableDirs, watchedDirs } from '../escalationDirs';
+import { POSIX_ON_WINDOWS, answerPaths, dirKey, usableDirs, watchedDirs } from '../escalationDirs';
 
 /**
  * Which directories are watched for questions.
@@ -63,6 +63,39 @@ test('the window’s own directory named again as an extra is not watched twice'
   const dirs = watchedDirs('C:\\Own', ['c:\\own\\'], 'win32');
 
   assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own'], 'the own directory was watched twice');
+});
+
+test('an answer is written beside the question it answers, not in this window’s own directory', () => {
+  // The server that asked polls the directory it wrote in and nowhere else. An answer written here
+  // would leave that round blocked for ever, HAVING BEEN ANSWERED — which is worse than never
+  // answering, because nothing on either side says anything is wrong.
+  const elsewhere = answerPaths('q1', 'file:///c:/Own', 'file:///c:/Wsl');
+
+  assert.strictEqual(elsewhere.dir, 'file:///c:/Wsl/escalations');
+  assert.strictEqual(elsewhere.target, 'file:///c:/Wsl/escalations/q1.answer.json');
+
+  // A question with no `from` is one of this window's own — every question there was before the
+  // setting existed, and the behaviour that must not change.
+  const own = answerPaths('q1', 'file:///c:/Own');
+  assert.strictEqual(own.target, 'file:///c:/Own/escalations/q1.answer.json');
+  assert.strictEqual(answerPaths('q1', 'file:///c:/Own', '   ').target, own.target, 'a blank from moved the answer');
+});
+
+test('the temporary file is in the same directory as the answer — the EXDEV rule', () => {
+  // The write is atomic: temp, then rename. A rename across two filesystems throws EXDEV, so a temp
+  // written in this window's directory and renamed into a WSL or NAS one fails EVERY time and the
+  // answer never lands. Asserted rather than commented. (gemini, the plan round, Blocking.)
+  for (const from of [undefined, 'file:///c:/Wsl', '\\\\wsl.localhost\\Ubuntu\\home\\jinx']) {
+    const paths = answerPaths('q1', 'file:///c:/Own', from);
+    const dirOf = (path: string): string => path.slice(0, path.lastIndexOf('/'));
+
+    assert.strictEqual(
+      dirOf(paths.temp),
+      dirOf(paths.target),
+      `the temp and the answer are on different paths for from=${String(from)} — rename would throw EXDEV`,
+    );
+    assert.strictEqual(paths.temp, `${paths.target}.tmp`, 'the temp is not the answer plus a suffix');
+  }
 });
 
 test('case is folded only where the platform folds it', () => {

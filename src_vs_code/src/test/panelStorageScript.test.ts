@@ -32,6 +32,7 @@ const WHERE: DataLocation = {
   directory: '/srv/coai/windows',
   side: 'windows',
   ignoredSide: '',
+  alsoWatched: [],
   refusal: '',
   notes: [],
   env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },

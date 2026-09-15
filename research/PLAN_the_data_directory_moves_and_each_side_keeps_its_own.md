@@ -52,6 +52,21 @@ willing to edit an MCP client entry by hand.
 What does not exist is a way to set it that is not hand-editing JSON, and an answer to what happens
 when two sides are pointed at one place.
 
+## The boundary with the escalation surface (2026-09-15)
+
+**This plan's ruling is about the STORE. It is not about the questions.** `escalations/` sits inside
+the side partition because it sits inside the data directory, not because anyone decided it should —
+cross-side visibility was never considered when the partition was drawn. The consequence turned up in
+the field: a `call_human` from a Claude Code session inside WSL wrote its question where a
+Windows-hosted window was not watching, and the round blocked on a modal nobody ever saw.
+
+[PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md](../todo/PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md)
+owns that, and it does **not** revisit this one's answer. No database is opened across the boundary; a
+window may be told to watch another installation's `escalations/` directory, and only that. What keeps
+the two compatible: a database has two writers and must not be shared, while an escalation is one JSON
+file written once by the side that asked and answered once by the person at the window — and there is
+one of that person however many sides they run.
+
 ## The merge is not built, and that is the decision
 
 The obvious reading of "point both at the NAS" is that two divergent databases must be reconciled:

@@ -24,6 +24,7 @@ import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } fr
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
+import { type WatchedDir } from './escalationDirs';
 import { roleOnServers } from './serverRoles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
@@ -1228,6 +1229,31 @@ ${storageBlock(state.storage)}`;
  * partial copy, a file in use, a database being written while it is read — and it stays out rather
  * than being done badly.</p>
  */
+/**
+ * The OTHER installations' directories this window answers questions from.
+ *
+ * <p>Rendered at all because the failure it guards against is silence. A directory that cannot be
+ * read contributes no questions and throws nothing — which is indistinguishable from an installation
+ * that has not asked anything, and is exactly the symptom the setting exists to end. A refusal named
+ * here is a thing to correct; a refusal nowhere is the bug again, one level up.</p>
+ *
+ * <p>Nothing at all when the setting is unset, which is every installation that has one side.</p>
+ */
+function watchedElsewhere(dirs: readonly WatchedDir[]): string {
+  const extra = dirs.slice(1);
+  if (extra.length === 0) {
+    return '';
+  }
+  const rows = extra
+    .map((dir) => (dir.refusal.length === 0
+      ? `<div class="status">${escapeHtml(dir.asked)}</div>`
+      : `<div class="stale">${escapeHtml(dir.asked)} — ${escapeHtml(dir.refusal)}</div>`))
+    .join('\n');
+
+  return `<div class="hint">Questions from another installation are also answered here:</div>
+${rows}`;
+}
+
 function storageBlock(storage: DataLocation | undefined): string {
   if (storage === undefined) {
     return '';
@@ -1256,6 +1282,7 @@ function storageBlock(storage: DataLocation | undefined): string {
 ${cameFrom(storage.source)}
 ${side}
 ${notes}
+${watchedElsewhere(storage.alsoWatched)}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
 <button class="link" type="button" data-command="changeDataDirectory">Change where your data lives…</button>
 <button class="link" type="button" data-command="moveDataDirectory">Move what is here to another folder…</button>

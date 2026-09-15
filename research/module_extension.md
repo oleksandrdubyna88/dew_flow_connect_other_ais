@@ -2698,6 +2698,24 @@ flowchart LR
   keeps a status-bar item so a dismissed modal loses nothing, lists open questions at the TOP of the
   rounds view, and writes the answer atomically (temp + rename) because half a file must never
   resolve a question.
+- **…and in the data directories of OTHER installations, when it is told to (2026-09-15).** The server
+  writes the question into the data directory of whichever installation runs the round, so a Claude
+  Code session inside WSL wrote where a Windows-hosted window was not watching and the round blocked on
+  a modal nobody saw — two live stores on one machine, confirmed as a 25.8 MB and an 8.3 MB database
+  written the same day. `coai.alsoWatchDataDirectories` names the others; `escalationDirs.ts` holds the
+  rules a test can reach — which spellings are one place, which paths cannot work here, and where an
+  answer goes — and `EscalationWatcher` is the wiring around them. **Only the question surface is
+  shared**: no database is opened across the boundary, which is what keeps this compatible with the
+  per-side partition's *no merge* ruling.
+  Three things it would have got wrong and now has tests for. The answer goes beside the QUESTION, or
+  the server that asked is left polling a directory nobody wrote to — a round blocked for ever, having
+  been answered. The temporary file is created in that same directory, or `rename` throws `EXDEV`
+  across filesystems and the answer never lands. And a path beginning with `/` named from a Windows
+  window is refused with the shape that works, because `C:\home\…` does not exist and an absent
+  directory that says nothing is the original symptom with extra steps; no distribution is ever
+  guessed. Each directory is read in its own `try`, so a disconnected share cannot take this window's
+  own questions down with it, and the panel names every directory and every refusal — a mistyped path
+  nowhere on screen would be the same silence, one level up.
 - **No account, no sign-in, no cloud service of its own.**
 
 ## Entities

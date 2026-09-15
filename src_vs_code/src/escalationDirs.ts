@@ -98,3 +98,38 @@ export function watchedDirs(own: string, extras: readonly string[], platform: No
 export function usableDirs(dirs: readonly WatchedDir[]): readonly string[] {
   return dirs.filter((dir) => dir.refusal.length === 0).map((dir) => dir.path);
 }
+
+/** Where an answer is written, and the temporary file it is renamed from. */
+export interface AnswerPaths {
+  readonly dir: string;
+  readonly target: string;
+  readonly temp: string;
+}
+
+/**
+ * Where the answer to one question goes — BESIDE the question, never in this window's own directory.
+ *
+ * <p><b>Two rules, both of which have a failure behind them.</b></p>
+ *
+ * <p>The directory is the one the question was READ from. A question can come from another
+ * installation, and the server that asked polls the directory it wrote in and nowhere else — so an
+ * answer written into the answering window's own store leaves that round blocked for ever, having
+ * been answered. A question with no `from` is one of this window's own, which is every question there
+ * was before the setting existed.</p>
+ *
+ * <p>The temporary file is in the SAME directory as the target, and that is not tidiness. The write
+ * is atomic — temp, then rename — and a rename across two filesystems throws `EXDEV: cross-device
+ * link not permitted`. A temp written into this window's directory and renamed into a WSL or a NAS
+ * one fails every single time, and the answer never lands. Pure and tested because the alternative is
+ * a comment, and a comment is what the plan round found this guarantee resting on. (gemini, the plan
+ * round, Blocking.)</p>
+ *
+ * <p>Paths are joined with a forward slash: every caller here is a `Uri`, where that is the
+ * separator, and both Windows and POSIX accept it.</p>
+ */
+export function answerPaths(id: string, own: string, from?: string): AnswerPaths {
+  const root = from === undefined || from.trim().length === 0 ? own : from;
+  const dir = `${root.replace(/\/+$/, '')}/escalations`;
+
+  return { dir, target: `${dir}/${id}.answer.json`, temp: `${dir}/${id}.answer.json.tmp` };
+}
