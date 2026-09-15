@@ -51,7 +51,7 @@ public sealed class RuleFilesTests : IDisposable
         Write(".agents/conventions/.agents/PROJECT.md", "Conventions source obligations");
         Write(".agents/conventions/ENTRY.md", "Source loading procedure");
 
-        var bundle = RuleFiles.Collect(_repo, RuleOrder.Drawn(1));
+        var bundle = RuleFiles.Collect(_repo, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Should().BeEquivalentTo([
             ".agents/PROJECT.md", ".agents/rules/nested/local.md",
@@ -330,12 +330,18 @@ public sealed class RuleFilesTests : IDisposable
         bundle.Omitted.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// One branch, many rounds: the same rules every time.
+    /// </summary>
+    /// <remarks>
+    /// This replaces <c>TwoRoundsSeeTwoDifferentHalvesOfTheFamilyRules</c>, which asserted the
+    /// instability as a FEATURE — correctly, while the draw was the only thing standing between the
+    /// corpus and a starvation. It is the property this epic removes, so its test goes with it, and
+    /// the guarantee it protected is now kept by the branch-rotated tail below.
+    /// </remarks>
     [Fact]
-    public void TwoRoundsSeeTwoDifferentHalvesOfTheFamilyRules()
+    public void ManyRoundsOnOneBranch_ReadTheSameFamilyRules()
     {
-        // The measurement that asked for this: 199 KB of family rules against an 80 KB budget, and in
-        // enumeration order the same twelve files won every time - so testing.md, security.md,
-        // reuse-first.md and all three language doctrines had never been shown to any reviewer.
         Write("CLAUDE.md", Filler("entry", 1_000));
         WriteMount(".claude/rules/shared");
         for (var n = 0; n < 20; n++)
@@ -343,15 +349,30 @@ public sealed class RuleFilesTests : IDisposable
             Write($".claude/rules/shared/common/rule-{n:00}.md", Filler($"rule {n}", 10_000));
         }
 
-        var first = RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(1));
-        var second = RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(2));
+        var rounds = Enumerable.Range(0, 5)
+            .Select(_ => RuleFiles.Collect(_repo, 40_000, RuleOrder.ForBranch("fix/one-fix")).Files
+                .Select(f => f.Path).ToList())
+            .ToList();
 
-        first.Files.Select(f => f.Path).Should().NotBeEquivalentTo(
-            second.Files.Select(f => f.Path), "two rounds that show the same rules leave the rest unread for ever");
+        foreach (var round in rounds)
+        {
+            round.Should().Equal(rounds[0],
+                "a developer who pushes a fix and runs another round must be answered out of the same rule book");
+        }
     }
 
+    /// <summary>
+    /// Across a team's branches, every family rule is still read.
+    /// </summary>
+    /// <remarks>
+    /// This was <c>AcrossEnoughRounds_EveryFamilyRuleGetsRead</c>, and it was the draw's whole
+    /// justification: a rule never drawn is a rule never applied. The draw is gone and the guarantee
+    /// is not — the tail rotates by BRANCH instead of by chance, so the corpus is still covered across
+    /// the work a team does while any one branch sees the same rules every round. Sixty branch names
+    /// rather than sixty seeds; the assertion is unchanged.
+    /// </remarks>
     [Fact]
-    public void AcrossEnoughRounds_EveryFamilyRuleGetsRead()
+    public void AcrossEnoughBranches_EveryFamilyRuleGetsRead()
     {
         Write("CLAUDE.md", Filler("entry", 1_000));
         WriteMount(".claude/rules/shared");
@@ -363,7 +384,7 @@ public sealed class RuleFilesTests : IDisposable
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var round = 0; round < 60; round++)
         {
-            foreach (var file in RuleFiles.Collect(_repo, 40_000, RuleOrder.Drawn(round)).Files)
+            foreach (var file in RuleFiles.Collect(_repo, 40_000, RuleOrder.ForBranch($"fix/branch-{round}")).Files)
             {
                 seen.Add(file.Path);
             }
@@ -371,11 +392,11 @@ public sealed class RuleFilesTests : IDisposable
 
         // Sixty FIXED seeds, so this is a deterministic statement about the draw rather than a
         // coin-flip that fails once a fortnight in somebody else's CI.
-        seen.Should().HaveCount(21, "a rule that is never drawn is a rule that is never applied");
+        seen.Should().HaveCount(21, "a rule no branch ever reaches is a rule that is never applied");
     }
 
     [Fact]
-    public void TheEntryFileAndTheRepositorysOwnRules_AreNeverInTheDraw()
+    public void TheEntryFileAndTheRepositorysOwnRules_AreNeverRotated()
     {
         // They are few, they are the entry points, and they are the rules a diff in THIS repository
         // can break. A round that rolled them out of its own budget would be worse than one that
@@ -390,7 +411,7 @@ public sealed class RuleFilesTests : IDisposable
 
         for (var round = 0; round < 6; round++)
         {
-            var paths = RuleFiles.Collect(_repo, 25_000, RuleOrder.Drawn(round)).Files.Select(f => f.Path);
+            var paths = RuleFiles.Collect(_repo, 25_000, RuleOrder.ForBranch($"fix/branch-{round}")).Files.Select(f => f.Path);
 
             paths.Should().Contain("CLAUDE.md").And.Contain(".claude/rules/common/ours.md");
         }

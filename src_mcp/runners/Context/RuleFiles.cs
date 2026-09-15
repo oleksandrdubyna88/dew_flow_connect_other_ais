@@ -214,7 +214,7 @@ public static class RuleFiles
     };
 
     public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes) =>
-        Collect(repoPath, budgetBytes, RuleOrder.Drawn());
+        Collect(repoPath, budgetBytes, RuleOrder.Walk);
 
     public static RuleBundle Collect(string repoPath, RuleOrder order) =>
         Collect(repoPath, DefaultBudgetBytes, order);

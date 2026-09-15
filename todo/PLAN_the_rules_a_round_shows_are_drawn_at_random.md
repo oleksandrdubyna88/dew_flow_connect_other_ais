@@ -76,9 +76,11 @@ block they have never had.
 ## What must be true when this is done
 
 1. The same change, reviewed twice **at the same rule-source revision**, shows the **same rules, byte
-   for byte** — with no cache, no session hash and no seeded draw. Selection is a pure function of
-   *(stage, changed paths, symbols in the added lines, rule-source revision)*, and **so is every
-   fallback path**. The revision is part of the input, not an assumption: the plan and document gates
+   for byte** — with no cache, no stored state and no random source. Selection is a pure function of
+   *(stage, branch, changed paths, symbols in the added lines, rule-source revision)*, and **so is
+   every fallback path**. The BRANCH joined that list on 2026-09-15, when epic 3 measured what a purely
+   fixed order costs; it is an input like the others, not a remembered thing, and the same branch
+   always produces the same order on any machine. The revision is part of the input, not an assumption: the plan and document gates
    read rules from the `repoPath` working tree while the code stage reads them from the worktree, and a promoted
    `release` pin changes the corpus under both — so two rounds across such a change are *different*
    inputs and are expected to differ. The tests assert identity within one revision and say so.
@@ -258,10 +260,21 @@ Code: root the round's worktree after population, script from the parent mount,
 **Reviewer looks at:** the sequence `AddAsync` then populate then launch then read; the log line naming
 which mode ran.
 
-### Epic 3 - the draw dies, and nothing replaces it with chance
+### Epic 3 - the draw dies, and nothing replaces it with chance — **IMPLEMENTED 2026-09-15**
 
 *Done when* `Random.Shared` is gone from the selection path, both paths are pinned byte-identical-twice
 at one rule revision, and the measurement is recorded.
+
+**Deviation, and the reason for it.** The plan said delete the draw and leave a fixed order. The
+measurement taken first (`research/RESULTS_rules_selection_budget.md`) showed the tier fills the budget
+— 13 files, 78 672 of 80 000 bytes — so a fixed order would show a fixed set and the other 24 rules to
+nobody, on the only path a code round takes until epic 2 lands. Three reviewers of this epic's plan
+round raised that independently, and the operator chose the third way: the TIER stays fixed and the
+TAIL rotates by BRANCH, ordered by a SHA-256 of *(branch, rule name)*. Two rounds of one fix are
+identical — a branch does not change while a developer fixes what a round found — and different
+branches still read different parts of the corpus, so `AcrossEnoughRounds_EveryFamilyRuleGetsRead`
+survives as `AcrossEnoughBranches_...` with the same assertion. `string.GetHashCode` was rejected: .NET
+randomises it per process, which would have put the defect back inside its own fix.
 
 **3.1 - Delete the draw.** *(Opus - a deletion behind two already-pinned orders.)* `Drawn` goes, `Walk`
 becomes the default, the `S2245` pragma and the draw's remarks go with it. The two shuffle tests are

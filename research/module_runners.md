@@ -74,8 +74,15 @@ sequenceDiagram
   applicability belongs to the shared Node resolver.
 
 - **The order the mount is read in is a PARAMETER, and its priority is a table rather than the
-  alphabet.** `RuleOrder` (`Context/RuleOrder.cs`) is what `Collect` is given: `Drawn(seed)` is the
-  2026-09-06 draw and is still the default; `Walk` is deterministic — the language doctrines, then
+  alphabet.** `RuleOrder` (`Context/RuleOrder.cs`) is what `Collect` is given. **Nothing in it is left
+  to chance any more**: `Random.Shared` left the selection path on 2026-09-15, and the code stage is
+  given `ForBranch(branch)` — the tier FIXED, the rest of the mount ordered by a SHA-256 of *(branch,
+  rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
+  opened for, while different branches read different parts of the corpus — the coverage the draw used
+  to buy, kept without the draw. `string.GetHashCode` is unusable here: .NET randomises it per process,
+  so it would differ between two rounds on one machine. Measured basis:
+  [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md). `Walk` is `ForBranch("")` —
+  the language doctrines, then
   `security.md`, `testing.md`, `reuse-first.md`, `coding-style.md`, `knowledge-base.md`, then ordinal
   path. The corpus is larger than the budget and selection is whole-file, so whatever sorts first is
   what a reviewer is judged against: plain alphabetical order let `development-workflow.md` (14 KB)

@@ -543,7 +543,11 @@ public sealed partial class PanelService
                 // them a reviewer can call a change well written by its own standards while it
                 // breaks four rules the project enforces on its humans — and its silence reads as
                 // approval, because a reviewer cannot flag what it was never told.
-                var rules = RuleFiles.Collect(workingDir);
+                // Ordered FOR THIS BRANCH. The tier fills the budget, so a fixed order would show a
+                // fixed set and the rest of the corpus to nobody; rotating the tail by the branch
+                // keeps every rule reachable across a team's work while this branch's own answer
+                // never changes between the rounds of one fix — which is the whole point.
+                var rules = RuleFiles.Collect(workingDir, RuleOrder.ForBranch(branch));
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     RulesSection(rules) +
