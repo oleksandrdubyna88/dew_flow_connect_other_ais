@@ -9,7 +9,13 @@ namespace CoaiMcp.Runners.Context;
 /// under a mount. It is what a stage tier names a rule by, and it travels with the file so coverage
 /// can be counted from what a reviewer was SHOWN rather than from what the tree happened to contain.
 /// </param>
-public sealed record RuleFile(string Path, string Text, string WithinMount = "");
+/// <remarks>
+/// <c>WithinMount</c> is REQUIRED, and was briefly optional. A default would let a caller build
+/// <c>new RuleFile(path, text)</c>, have it render into the prompt, and have <c>MatchedCount</c> then
+/// see an empty name and report NONE — a bundle telling a reviewer it was shown no tier rules while
+/// showing them. An invariant with a default is an invariant with a way around it. (codex, code round.)
+/// </remarks>
+public sealed record RuleFile(string Path, string Text, string WithinMount);
 
 /// <summary>
 /// The project's own written conventions, as a block a reviewer can be judged against.

@@ -1703,7 +1703,7 @@ public sealed partial class PanelService
 
     private static string RulesSection(RuleBundle rules, string coverage = "") =>
         rules.HasRules
-            ? $"## The rules this project has written down\n\n{RulesAreCriteria}{coverage}{rules.Render()}\n"
+            ? $"## The rules this project has written down\n\n{RulesAreCriteria}{coverage}{rules.Render()}\n\n"
             : "## The rules this project has written down\n\n" + coverage + "This repository has none " +
               "(no CLAUDE.md, AGENTS.md, GEMINI.md or .claude/rules). Do not invent a standard: " +
               "a conventions finding needs a rule to quote.\n\n";
