@@ -352,11 +352,24 @@ ${body}
   const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '')
     + '|' + (el.dataset.caller || '');
   const posted = new Map();
+  // What each control last held that was a REAL value. A sentinel is a request, not a choice, so the
+  // control goes straight back to this when one is picked: nothing is written, so no repaint is
+  // coming, and a cancelled prompt would leave a dropdown sitting on an option that is not a vendor.
+  // (gemini, C6's plan round — \`__other__\` has had the same hole since it shipped.)
+  const real = new Map();
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
     if (value === '__other__') {
       // Not a model — a request to type one; the input box comes from the provider side.
+      el.value = real.get(el) || '';
       vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
+      return;
+    }
+    if (value === '__endpoint__') {
+      // Not a vendor — a request for one. An id keys the vault entry, so nothing may be stored until
+      // the host has asked for a name and a base URL; the caller says whose row is waiting for it.
+      el.value = real.get(el) || '';
+      vscode.postMessage({ type: 'command', command: 'customConsultant', id: el.dataset.caller });
       return;
     }
     // \`change\` compares with the value the control had when it gained FOCUS, not with the value
@@ -364,6 +377,7 @@ ${body}
     if (posted.get(el) === value) {
       return;
     }
+    real.set(el, value);
     posted.set(el, value);
     vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
                          vendor: el.dataset.vendor, role: el.dataset.role,
@@ -400,6 +414,9 @@ ${body}
   };
 
   for (const el of document.querySelectorAll('[data-setting]')) {
+    // Seeded from the page, because the first sentinel a person picks comes before any save: without
+    // this the dropdown would fall back to blank instead of to the vendor it was showing.
+    real.set(el, el.type === 'checkbox' ? el.checked : el.value);
     el.addEventListener('change', () => {
       forget();
       save(el);
@@ -2439,6 +2456,10 @@ export const PANEL_COMMANDS = [
   'fixWslNetwork',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
+  // And by the consultant's vendor picker, for the same reason: "another endpoint" is a request for
+  // a name and a base URL, and an id keys the vault entry, so nothing may be stored before there is
+  // one. Carries the CALLER as its id — four rows share the control.
+  'customConsultant',
   // Team servers. Each is a button in the section above, and the provider's switch is checked for
   // exhaustiveness — a command added here without a case is a COMPILE error, not a dead button.
   'addTeamServer',

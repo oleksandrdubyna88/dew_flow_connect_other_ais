@@ -10,7 +10,7 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
-import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
+import { DEFAULT_VENDORS, Vendor, normaliseId, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
@@ -263,6 +263,94 @@ export function consultantRecordUpdate(
   return key === 'consultVendor'
     ? vendorChosen(current, caller, String(value).trim(), vendors)
     : fieldEdited(current, caller, CONSULTANT_FIELDS[key], String(value).trim(), vendors);
+}
+
+/**
+ * An endpoint of the consultant's own: the name and the URL a person typed, as THAT caller's definition.
+ *
+ * <p>Story C6, and the last entry the picker was missing. What the catalogue's blank preset IS is the
+ * `codex` runtime at an endpoint, so that is what is stored — with the minted id as the vendor, which
+ * is what keys the vault entry and the usage ledger. Nothing is appended to the reviewer rows: the
+ * ruling is three independent sets of settings, and a consultant that added itself to somebody's
+ * reviewers would be the coupling this plan removed, re-entering by the only door left open. Two
+ * callers may hold the same id at the same URL, and that is one vault key used twice — the point of
+ * having a name. (gemini, C6's plan round, on where the definition lands.)</p>
+ *
+ * <p>The id is normalised the way *Add a reviewer* normalises it, because the two flows must mint the
+ * SAME id from the same words or one credential ends up under two keys. A name that normalises to
+ * nothing writes nothing: there is no vault entry to key and nothing to show, so refusing is the only
+ * honest outcome. So does a caller kind this build does not have — the same guard, and the same
+ * reason, as `consultantRecordUpdate`'s.</p>
+ */
+export function consultantEndpointWrite(
+  current: Readonly<Record<string, unknown>>,
+  caller: string,
+  name: string,
+  baseUrl: string,
+): Record<string, unknown> {
+  const id = normaliseId(name);
+  if (id.length === 0 || !CALLER_KINDS.some((one) => one.id === caller)) {
+    return { ...current };
+  }
+
+  return merged(
+    current,
+    caller,
+    { kind: 'definition', vendor: id, runtime: 'codex', model: '', baseUrl: baseUrl.trim(), executablePath: '' },
+    undefined,
+  );
+}
+
+/**
+ * What two boxes MEAN once they are closed — and what a dismissal of either means, which is nothing.
+ *
+ * <p>Its own function because it is the only part of the flow that can be tested: the boxes
+ * themselves are `vscode.window.showInputBox`, and a host is not something this suite has. A
+ * dismissed box is `undefined` and a name that normalises to nothing keys no vault entry, so both
+ * answer "no endpoint" and the caller writes nothing at all. The second box is the one worth naming:
+ * a person who typed a name and then changed their mind has given no more consent than one who
+ * closed the first, and an endpoint minted from a name alone would have no URL to reach.
+ * (local, C6's plan round.)</p>
+ */
+export function endpointAnswer(
+  name: string | undefined,
+  baseUrl: string | undefined,
+): { readonly id: string; readonly baseUrl: string } | undefined {
+  const id = normaliseId(name ?? '');
+
+  return name === undefined || baseUrl === undefined || id.length === 0
+    ? undefined
+    : { id, baseUrl: baseUrl.trim() };
+}
+
+/**
+ * Whether a name is already spoken for at a DIFFERENT endpoint — said while it is being typed.
+ *
+ * <p>One id is one vault key and one credential, so two endpoints under one name would send a key to
+ * whichever of them answered. The check spans the reviewer ROWS and the other callers' consultants,
+ * because both key the vault the same way; the same URL under the same name is not a conflict at all,
+ * it is the same service named once. Returns the sentence to show, or empty for "go ahead" — a
+ * validator's shape, so `showInputBox` can refuse while the box is open rather than after it closes.
+ * (gemini, C6's plan round.)</p>
+ */
+export function endpointConflict(
+  name: string,
+  baseUrl: string,
+  vendors: readonly Vendor[],
+  consultants: Readonly<Record<string, unknown>>,
+): string {
+  const id = normaliseId(name);
+  const wanted = baseUrl.trim();
+  const rows = vendors.map((one) => ({ id: one.id, baseUrl: one.baseUrl, what: 'a reviewer' }));
+  const theirs = Object.values(consultants)
+    .map((one) => consultantChoiceFrom(one))
+    .map((one) => ({ id: one.vendor, baseUrl: one.baseUrl, what: "another caller's consultant" }));
+  const clash = [...rows, ...theirs].find((one) => one.id.toLowerCase() === id.toLowerCase() && one.baseUrl !== wanted);
+
+  return clash === undefined
+    ? ''
+    : `'${id}' is already ${clash.what}${clash.baseUrl.length > 0 ? ` at ${clash.baseUrl}` : ''}`
+      + ' — one name is one key in the vault, so pick another name or use that endpoint';
 }
 
 /**

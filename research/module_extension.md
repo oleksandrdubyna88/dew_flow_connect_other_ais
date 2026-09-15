@@ -2353,6 +2353,38 @@ first was being said to both), `keptModel` (a saved model the list does not hold
 dropping — one catalogue read the same way twice means both halves travel, not just the name). `row()` now
 renders and decides nothing, and each of the three is asserted as a value rather than as page text.
 
+**The last entry the picker was missing — an endpoint of your own (2026-09-15, story C6).** C5 offered
+every catalogue preset except the blank one, and said why: an id keys the vault entry and the usage ledger,
+so an option whose stored value is `''` is one a person can see and cannot choose. C6 is the flow that
+mints the id, and it is *Add a reviewer*'s flow, not a second one. `consultableVendors()` now returns that
+preset separately as `custom` — not in `offered` because its value is not storable, not in `refused` because
+it is not a vendor somebody configured and cannot use. It is a REQUEST, carried by the sentinel
+`CUSTOM_ENDPOINT` (`'__endpoint__'`).
+
+The page's script recognises the sentinel and posts `{ type: 'command', command: 'customConsultant', id:
+<caller> }` instead of a setting write, which is the shape `__other__` has used for a model since it
+shipped. Two things had to be true for that to be safe. The caller travels, because four rows share one
+control and a command without it would configure whichever row the document holds first. And the select
+goes BACK: nothing is written, so no repaint is coming, and a cancelled prompt would leave a dropdown
+sitting on an option that is not a vendor — a `real` map seeded from the page holds each control's last
+genuine value, which fixes the same hole `__other__` has always had.
+
+`askCustomEndpoint` is the two input boxes, extracted out of `addVendor` so both flows mint the SAME id
+from the same words; two copies would drift on validation first, and two spellings of one name are two
+vault keys and a credential that is only there half the time. `customEndpointIsOneFlow.test.ts` counts the
+boxes rather than checking they are present, because a structural test that only sees the new call survives
+a second copy pasted beside it. The name box refuses a name that normalises to nothing; the URL box refuses
+one another row already holds AT A DIFFERENT ENDPOINT — `endpointConflict` spans the reviewer rows and the
+other callers' consultants, because both key the vault by id, and returns a sentence so the refusal happens
+while the box is open. The same URL under the same name is not a clash; it is one service named once.
+
+`consultantEndpointWrite` puts the definition in THAT CALLER's consultant record — the `codex` runtime at
+the URL typed, under the minted id — and appends nothing to the reviewer rows. A consultant that added
+itself to somebody's reviewers would be the coupling this whole plan removed, coming back through the last
+door left open. `endpointAnswer` is the only part of the two-box flow a test can reach, and it is where a
+dismissal means nothing: the second box as much as the first, because a person who typed a name and then
+changed their mind consented to no more than one who closed the first.
+
 **Two catalogue tests were rewritten to derive from `VENDOR_PRESETS`** rather than name its contents.
 `common/testing.md` names both failure directions of a hand-copied list, and the second one applied here:
 `['codex', 'antigravity', 'claude', 'deepseek', 'openrouter', 'local']` would go red the day a vendor is

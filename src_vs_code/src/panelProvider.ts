@@ -60,7 +60,10 @@ import {
 } from './modelPrices';
 import {
   ConfigReader,
+  consultantEndpointWrite,
   consultantRecordUpdate,
+  endpointAnswer,
+  endpointConflict,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,
@@ -1520,6 +1523,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.customModel(id);
         }
         break;
+      case 'customConsultant':
+        if (id !== undefined) {
+          await this.customConsultant(id);
+        }
+        break;
       case 'installVendorCli':
         if (id !== undefined) {
           await this.installVendorCli(id);
@@ -2341,28 +2349,76 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     let vendor: Vendor = { ...picked.preset! };
     if (vendor.id.length === 0) {
-      const name = await vscode.window.showInputBox({
-        title: 'Add a reviewer',
-        prompt: 'A short name — it identifies the vendor and names its key in the vault entry',
-        placeHolder: 'mistral',
-        validateInput: (v) => (normaliseId(v).length === 0 ? 'A name is needed' : undefined),
-      });
-      if (name === undefined) {
+      const own = await this.askCustomEndpoint('Add a reviewer');
+      if (own === undefined) {
         return;
       }
-      const baseUrl = await vscode.window.showInputBox({
-        title: `Add ${normaliseId(name)}`,
-        prompt: 'Its OpenAI-compatible base URL',
-        placeHolder: 'https://api.example.com/v1',
-        validateInput: (v) => (v.trim().startsWith('http') ? undefined : 'A base URL is needed'),
-      });
-      if (baseUrl === undefined) {
-        return;
-      }
-      vendor = { ...vendor, id: normaliseId(name), baseUrl: baseUrl.trim() };
+      vendor = { ...vendor, id: own.id, baseUrl: own.baseUrl };
     }
 
     await this.saveVendor(vendor);
+  }
+
+  /**
+   * A name and a base URL, asked once for both the reviewer list and the consultant.
+   *
+   * <p>ONE function because the two flows must mint the same id from the same words: the id keys the
+   * vault entry, and two spellings of one name are two keys and a credential that is only there
+   * half the time. It lived inline in {@link addVendor} until story C6 needed the same two boxes for
+   * the consultant, and a second copy would have drifted on validation first.</p>
+   *
+   * <p>The name box refuses a name that normalises to nothing, and refuses one another row already
+   * holds AT A DIFFERENT ENDPOINT — said while the box is open rather than after it closes, which is
+   * why the check is a validator and `endpointConflict` returns a sentence. The same endpoint under
+   * the same name is not a clash: it is one service named once. Dismissing either box returns
+   * `undefined` and nothing anywhere is written. (gemini, C6's plan round.)</p>
+   */
+  private async askCustomEndpoint(title: string): Promise<{ id: string; baseUrl: string } | undefined> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const rows = vendorsFrom(this.read(config)('vendors'));
+    const consultants = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
+    const name = await vscode.window.showInputBox({
+      title,
+      prompt: 'A short name — it identifies the vendor and names its key in the vault entry',
+      placeHolder: 'mistral',
+      validateInput: (v) => (normaliseId(v).length === 0 ? 'A name is needed' : undefined),
+    });
+    if (name === undefined) {
+      return undefined;
+    }
+
+    const baseUrl = await vscode.window.showInputBox({
+      title: `${title}: ${normaliseId(name)}`,
+      prompt: 'Its OpenAI-compatible base URL',
+      placeHolder: 'https://api.example.com/v1',
+      validateInput: (v) => (v.trim().startsWith('http')
+        ? (endpointConflict(name, v, rows, consultants) || undefined)
+        : 'A base URL is needed'),
+    });
+
+    return endpointAnswer(name, baseUrl);
+  }
+
+  /**
+   * "Another OpenAI-compatible endpoint", chosen in one caller's consultant row.
+   *
+   * <p>The picker posted a COMMAND rather than a setting, because the option it carries has no id
+   * and an id is what keys the vault entry — so the name is asked for FIRST and the write happens
+   * once, with everything it needs. The definition lands in that caller's consultant record and
+   * nowhere else: it is not appended to the reviewer rows, because three independent sets of
+   * settings is the whole ruling, and a consultant that added itself to somebody's reviewers would
+   * be the coupling this plan removed coming back through the last open door. (gemini, C6's plan
+   * round, on where the definition lands.)</p>
+   */
+  private async customConsultant(caller: string): Promise<void> {
+    const own = await this.askCustomEndpoint('A consultant of your own');
+    if (own === undefined) {
+      return; // dismissed at either box — the row keeps the vendor it had
+    }
+
+    const config = vscode.workspace.getConfiguration('coai');
+    const current = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
+    await this.save(config, 'consultants', consultantEndpointWrite(current, caller, own.id, own.baseUrl));
   }
 
   /** One place a new reviewer is written, so both routes refuse a duplicate the same way. */
