@@ -66,11 +66,24 @@ sequenceDiagram
   `.agents/PROJECT.md`, nested `.agents/rules` and the common/C#/Rust/TypeScript directories
   of `.agents/conventions`. Mount research, tools and its own PROJECT/ENTRY are excluded.
   Project/local sources precede shared bodies under the existing whole-file budget and
-  shuffle policy. A declared neutral mount without canonical rule bodies is reported in
+  the mount order `Collect` is handed. A declared neutral mount without canonical rule bodies is
+  reported in
   `MissingMounts`, even if a `.git` marker exists. Claude/Cursor legacy folders remain supported.
   The rule folders are enumerated once per collection; missing-mount detection reuses that
   list instead of scanning the same folders again. This collector samples review context;
   applicability belongs to the shared Node resolver.
+
+- **The order the mount is read in is a PARAMETER, and its priority is a table rather than the
+  alphabet.** `RuleOrder` (`Context/RuleOrder.cs`) is what `Collect` is given: `Drawn(seed)` is the
+  2026-09-06 draw and is still the default; `Walk` is deterministic — the language doctrines, then
+  `security.md`, `testing.md`, `reuse-first.md`, `coding-style.md`, `knowledge-base.md`, then ordinal
+  path. The corpus is larger than the budget and selection is whole-file, so whatever sorts first is
+  what a reviewer is judged against: plain alphabetical order let `development-workflow.md` (14 KB)
+  and `http-contracts.md` (11 KB) take a quarter of the budget and pushed `testing.md` out entirely,
+  which is the starvation the draw was installed against. Tiers are matched by path SUFFIX so one
+  entry serves every mount layout, and an unmatched name falls through to ordinal order rather than
+  being dropped. The instruction files and the repository's own rules are outside the order — they
+  lead, and they always fit. Plan: [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md).
 
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
   moving branch would be six different inputs to one comparison.

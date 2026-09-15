@@ -159,11 +159,17 @@ public static class RuleFiles
         AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System,
     };
 
-    /// <param name="seed">
-    /// Fixes the draw, for a test. Left alone in production, so two rounds see two different halves
-    /// of the family rules.
+    public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes) =>
+        Collect(repoPath, budgetBytes, RuleOrder.Drawn(null));
+
+    public static RuleBundle Collect(string repoPath, RuleOrder order) =>
+        Collect(repoPath, DefaultBudgetBytes, order);
+
+    /// <param name="order">
+    /// Which of the MOUNTED rules the budget reaches first. A parameter rather than a constant
+    /// because it is the whole question — see <see cref="RuleOrder"/>.
     /// </param>
-    public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes, int? seed = null)
+    public static RuleBundle Collect(string repoPath, int budgetBytes, RuleOrder order)
     {
         if (!Directory.Exists(repoPath))
         {
@@ -176,7 +182,7 @@ public static class RuleFiles
         var omitted = new List<string>();
         var used = 0;
 
-        foreach (var relative in Candidates(folders, mounts, seed))
+        foreach (var relative in Candidates(folders, mounts, order))
         {
             var full = Path.Combine(repoPath, relative.Replace('/', Path.DirectorySeparatorChar));
             if (Read(full) is not { } text)
@@ -209,7 +215,7 @@ public static class RuleFiles
     /// repository can break come first; the family's are the same in six checkouts.
     /// </remarks>
     private static IEnumerable<string> Candidates(
-        IReadOnlyList<string> folders, IReadOnlyList<SubmoduleMount> mounts, int? seed)
+        IReadOnlyList<string> folders, IReadOnlyList<SubmoduleMount> mounts, RuleOrder order)
     {
         foreach (var file in InstructionFiles)
         {
@@ -221,42 +227,11 @@ public static class RuleFiles
             yield return path;
         }
 
-        foreach (var path in Shuffled(folders.Where(p => UnderAnyMount(p, mounts)).ToList(), seed))
+        foreach (var path in order.Mount([.. folders.Where(p => UnderAnyMount(p, mounts))]))
         {
             yield return path;
         }
     }
-
-    /// <summary>
-    /// The mounted family rules, in a different order every round.
-    /// </summary>
-    /// <remarks>
-    /// <para>Measured 2026-09-06: the family set is ~199 KB against an 80 KB budget, and in
-    /// enumeration order the first two files take a quarter of it — so `testing.md`, `security.md`,
-    /// `reuse-first.md` and all four language doctrines were never shown to any reviewer, ever. Not
-    /// because the budget was small: because they were last in line, and the line never changed.</para>
-    /// <para>Raising the budget cannot fix that; a different draw each round can. At 80 KB of 199 a
-    /// round sees about two fifths of the family rules, so a given rule is shown roughly every second
-    /// or third round — and across the rounds of one change, with several reviewers each, most of the
-    /// set gets read. The operator's call, and the right one: a rule shown sometimes is infinitely
-    /// more than a rule shown never.</para>
-    /// <para>What is NOT shuffled: the instruction files and the repository's OWN rules. They are few,
-    /// they are the entry points, and they are the rules a diff in this repository can break — they
-    /// come first and they always fit.</para>
-    /// <para>The omitted list still names everything that did not fit, so a round says which rules it
-    /// did not see rather than implying it saw them all.</para>
-    /// </remarks>
-    // CA1859: the array IS the concrete type the caller foreaches over, and returning it as one
-    // costs nothing here.
-    // S2245 wants a cryptographic generator. It is wrong about this call: nothing here guards a
-    // secret, and the draw decides only WHICH rule files a reviewer is shown when they do not all
-    // fit. The `seed` parameter is the tell — it exists so a test can assert an exact order, which
-    // a cryptographic generator cannot give at all. Swapping it would break the tests and protect
-    // nothing.
-#pragma warning disable S2245 // Random is not used for security here — see above.
-    private static string[] Shuffled(IReadOnlyList<string> paths, int? seed) =>
-        [.. SeededShuffle.Of(paths, seed is { } fixed_ ? new Random(fixed_) : Random.Shared)];
-#pragma warning restore S2245
 
     /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
     private static IReadOnlyList<string> FolderFiles(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
