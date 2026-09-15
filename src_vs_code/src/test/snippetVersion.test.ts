@@ -245,6 +245,34 @@ test('a paste without the consultant half is older, whatever its gate version sa
  * them being wrong.</p>
  */
 function ruleBody(text: string): string {
+  let rest = leadingMetadataGone(text);
+  // Leading HTML comments are delivery metadata like the frontmatter. The conventions release of
+  // 2026-09-15 armed an ownership check whose `owns:` lines say which product names a shared rule
+  // may use; they are addressed to a linter, and nobody pasting this into a CLAUDE.md wants them.
+  // The marker is a comment too, so the walk stops at it rather than eating it.
+  //
+  // `scripts/prepare-gate.mjs` OWNS this definition and `prepareGate.test.mjs` pins it — this is a
+  // second implementation because the generator is an ESM `.mjs` outside `rootDir` while these
+  // tests compile to CommonJS inside it, so importing the real one is a build-configuration change
+  // rather than an import. The two are held together by the test below: if they ever disagree about
+  // what a body is, the mounted rules stop matching the generated delivery and it goes red — which
+  // is precisely how the ownership markers announced themselves.
+  while (rest.startsWith('<!--') && !/^<!-- coai-[a-z-]+ v\d+ -->/.test(rest)) {
+    const closed = rest.indexOf('-->');
+    if (closed === -1) {
+      break;
+    }
+    const next = rest.slice(closed + 3).replace(/^[ \t]*\n/, '');
+    if (next.length === rest.length) {
+      break;
+    }
+    rest = next;
+  }
+
+  return rest;
+}
+
+function leadingMetadataGone(text: string): string {
   if (!text.startsWith('---\n')) {
     return text;
   }

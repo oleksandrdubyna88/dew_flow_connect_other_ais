@@ -15,6 +15,30 @@ test('only leading metadata is removed and a later delimiter remains in the gate
   assert.throws(() => gateBody('---\nid: common.gate\n---\nempty'), /missing canonical/);
 });
 
+test('the ownership markers a rule carries are metadata too, and never reach the paste', () => {
+  // The conventions release of 2026-09-15 armed an ownership check, and its `owns:` lines sit
+  // between the frontmatter and the snippet marker. They are delivery metadata exactly as the
+  // frontmatter is — they say which product names a shared rule is allowed to use — and pasting
+  // them into somebody's CLAUDE.md would ship a lint annotation as an instruction. Until this they
+  // were not stripped, so the body no longer STARTED with the marker and the whole build stopped
+  // with `missing canonical marker`.
+  const body = '<!-- coai-snippet v5 -->\n## Multi-model review gate (ConnectOtherAIs)\n\nFirst.\n';
+  const owns = "<!-- owns: coai — the MCP server's own name -->\n<!-- owns: ConnectOtherAIs — the product -->\n";
+  const commentary = '<!-- A token is matched EXACTLY, so one name does not cover another. -->\n';
+
+  assert.equal(gateBody('---\nid: common.gate\n---\n' + owns + body), body);
+  assert.equal(gateBody('---\nid: common.gate\n---\n' + commentary + owns + body), body);
+  assert.equal(gateBody(('---\nid: common.gate\n---\n' + owns + body).replaceAll('\n', '\r\n')), body);
+
+  // A comment INSIDE the instruction body is the author's and stays: only what precedes the marker
+  // is metadata, so this must not become a licence to strip comments generally.
+  const withInner = '<!-- coai-snippet v5 -->\n## Multi-model review gate (ConnectOtherAIs)\n\n<!-- keep me -->\nFirst.\n';
+  assert.equal(gateBody('---\nid: common.gate\n---\n' + withInner), withInner);
+
+  // And leading comments that never reach a marker are still a refused file, not an empty body.
+  assert.throws(() => gateBody('---\nid: common.gate\n---\n' + owns + 'empty'), /missing canonical/);
+});
+
 test('the real pinned resolver rejects a dirty or wrong mount and leaves no stale build policy', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-pinned-gate-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
