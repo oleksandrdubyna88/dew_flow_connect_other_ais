@@ -15,7 +15,7 @@ namespace CoaiMcp.Runners.Context;
 /// <para>The instruction files and the repository's OWN rules are not ordered here. They come first
 /// and they always fit — see <c>RuleFiles.Candidates</c>.</para>
 /// </remarks>
-public sealed class RuleOrder
+public sealed record RuleOrder
 {
     private readonly Func<IReadOnlyList<string>, IEnumerable<string>> _mount;
 
@@ -41,14 +41,15 @@ public sealed class RuleOrder
     /// second round is answered out of a different part of the rule book, which reads as noise —
     /// so the draw is kept only until every deterministic order is in place, and then deleted.</para>
     /// </remarks>
-    /// <param name="seed">Fixes the draw, for a test. Left alone in production.</param>
     // S2245 wants a cryptographic generator. It is wrong about this call: nothing here guards a
     // secret, and the draw decides only WHICH rule files a reviewer is shown when they do not all
-    // fit. The seed parameter is the tell — it exists so a test can assert an exact order, which a
+    // fit. The seeded overload is the tell — it exists so a test can assert an exact order, which a
     // cryptographic generator cannot give at all.
 #pragma warning disable S2245 // Random is not used for security here — see above.
-    public static RuleOrder Drawn(int? seed) =>
-        new(paths => SeededShuffle.Of(paths, seed is { } fixedSeed ? new Random(fixedSeed) : Random.Shared));
+    public static RuleOrder Drawn() => new(paths => SeededShuffle.Of(paths, Random.Shared));
+
+    /// <param name="seed">Fixes the draw, so a test can assert an exact order.</param>
+    public static RuleOrder Drawn(int seed) => new(paths => SeededShuffle.Of(paths, new Random(seed)));
 #pragma warning restore S2245
 
     /// <summary>Orders the mount's rule paths. Total, and never drops one.</summary>
