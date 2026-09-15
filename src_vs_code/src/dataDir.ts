@@ -438,7 +438,43 @@ export const DATA_TO_MOVE: readonly string[] = [
   'prompts/', 'usage.jsonl',
   'documents/', 'escalations/', 'consultations/', 'callers/',
   'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
+  // The logs, by the operator's decision of 2026-09-15, and `rounds.md`, which a real installation
+  // turned out to be holding. Both had been filed as "written again by itself" and neither is: a new
+  // run writes a new log and says nothing about the runs already recorded, and NOTHING writes
+  // `rounds.md` any more — it is the rounds log as it stood before the database took over, which is
+  // exactly the shape of thing that gets left behind for ever on a machine about to be reformatted.
+  //
+  // `logs/` carries a caveat the fixture states in full: on a side-partitioned installation the
+  // server writes them to the ROOT rather than the side directory, because `SettingsFile.DataDirFrom`
+  // applies no side — so a partitioned move finds nothing here until that defect ships its own fix.
+  'logs/', 'rounds.md',
 ];
+
+/**
+ * What makes a destination REFUSE a move, which is not the same list.
+ *
+ * <p>Moving a thing and being destroyed by a thing are two questions, and `logs/` is where they come
+ * apart: it carries history worth taking, and a destination that already has one loses nothing when
+ * a second installation's logs arrive beside its own — a log file is named for its run and its pid,
+ * so nothing is overwritten. Refusing on it would refuse every folder a server had ever been pointed
+ * at, which after this change is most of the folders anybody would pick.</p>
+ *
+ * <p>Everything else that moves DOES clash: one `coai.db`, one `usage.jsonl`, one `rounds.md`, one
+ * file per session id. A second installation's copy lands on top.</p>
+ *
+ * <p><b>The exclusion depends on a filename shape, so here it is.</b> A log is
+ * `logs/<yyyy-MM-dd>/<app>-<HH-mm-ss>-<pid>.log` — the day, the second and the process id. If that
+ * ever becomes a fixed name (`latest.log`), this exclusion becomes a silent overwrite and `logs/`
+ * belongs back in the list. Two reviewers asked for the assumption to be written down rather than
+ * relied on.</p>
+ *
+ * <p><b>And the residual, stated rather than claimed away.</b> "Overwrites nothing" is stronger than
+ * the facts: two machines writing into one shared folder can produce the same name in the same second
+ * with the same pid. It is unlikely, the loss is one log file, and namespacing every log by machine
+ * is not worth building for it — but it is not impossible, and saying so costs a sentence. (gemini,
+ * plan round.)</p>
+ */
+export const HISTORY_THAT_CLASHES: readonly string[] = DATA_TO_MOVE.filter((entry) => entry !== 'logs/');
 
 /**
  * What to leave behind, with the reason each one is a trap.

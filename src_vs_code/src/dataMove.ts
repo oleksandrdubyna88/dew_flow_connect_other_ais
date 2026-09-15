@@ -1,4 +1,4 @@
-import { DATA_TO_MOVE } from './dataDir';
+import { HISTORY_THAT_CLASHES } from './dataDir';
 
 /**
  * Whether a data directory may be moved, and whether the move that happened worked.
@@ -113,7 +113,7 @@ export function destinationPlaceRefusal(source: string, destination: string, wit
 }
 
 export function destinationRefusal(holds: readonly string[]): string {
-  const clashes = holds.filter((entry) => DATA_TO_MOVE.includes(entry));
+  const clashes = holds.filter((entry) => HISTORY_THAT_CLASHES.includes(entry));
   if (clashes.length === 0) {
     return '';
   }
@@ -159,6 +159,38 @@ export function sourceRefusal(activity: SourceActivity): string {
  * absent sidecar proves nothing either. The defence that actually holds is
  * {@link sourceChangedSince}, read immediately before the delete.</p>
  */
+/**
+ * What a PARTITIONED move is about to leave behind, or empty.
+ *
+ * <p><b>All three vendors of the plan round found this independently, one of them Blocking.</b> The
+ * server writes its logs to the ROOT of a chosen directory and not to the side inside it, because
+ * `SettingsFile.DataDirFrom` applies no side — so a move reading `<root>/<side>` finds no `logs/`
+ * there to take, succeeds, and leaves them on the machine the person is about to reformat.</p>
+ *
+ * <p>The first draft called that a caveat and wrote it in the inventory fixture and a code comment.
+ * Neither is a thing anybody opens while moving their data: at the moment it mattered it was still a
+ * silent omission of the one thing this change was asked for. So it is SAID, where the decision is
+ * made.</p>
+ *
+ * <p><b>Said rather than compensated for.</b> Copying the root's logs into the side directory would
+ * put them where the server will never write again — trading a gap somebody can see for a divergence
+ * nobody can. Where the server writes them is the other half's defect
+ * (`todo/PLAN_the_settings_file_ignores_the_side.md`) and needs a release.</p>
+ *
+ * @param side The side in effect, or empty. No side means the logs are inside the folder being moved.
+ * @param rootLogs Where they actually are — empty when there are none to mention.
+ */
+export function logsLeftBehind(side: string, rootLogs: string): string {
+  if (side.trim().length === 0 || rootLogs.length === 0) {
+    return '';
+  }
+
+  return `Your logs are NOT part of this move. This installation is partitioned as '${side}', and the `
+    + `server writes its logs to ${rootLogs} — outside the folder being copied — so they stay where `
+    + 'they are. Copy that folder yourself if you want them, and keep it if you are about to reformat '
+    + 'this machine.';
+}
+
 export function sourceWarning(activity: SourceActivity): string {
   if (activity.sidecars.length === 0) {
     return '';

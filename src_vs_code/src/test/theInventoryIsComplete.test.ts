@@ -71,6 +71,35 @@ test('every entry says why, because the why is what a person decides on', () => 
   }
 });
 
+test('the logs travel with the history they describe', () => {
+  // Operator's decision, 2026-09-15. A log is the only place some things are written down — each
+  // reviewer's command line, each failure with its reason — and somebody moving to a NAS so their
+  // history survives reinstalling the machine wants that as much as the rounds. It was filed as
+  // "written again by itself", which is true of the NEXT run and no use at all for the ones already
+  // recorded.
+  assert.ok(DATA_TO_MOVE.includes('logs/'));
+});
+
+test('a history from before the database is carried too', () => {
+  // `rounds.md` is what the rounds log WAS until 2026-09-05. Nothing writes it any more, which is
+  // precisely why it would have been left behind for ever on a machine about to be reformatted.
+  assert.ok(DATA_TO_MOVE.includes('rounds.md'));
+});
+
+test('the live engine state and the dead log folder stay behind', () => {
+  // Found by LOOKING at a real installation, not by scanning the source (2026-09-15, against
+  // V:\connectOtherAis and the default directory of a machine in daily use). The scan reads paths
+  // the code composes TODAY; these are composed elsewhere or were composed by a version nobody runs
+  // any more, and a data directory that has been in use for months holds all three.
+  const named = new Map(INVENTORY.map((entry) => [entry.path, entry]));
+
+  for (const path of ['engines/', 'bin/', 'settings.json.bak']) {
+    const entry = named.get(path);
+    assert.ok(entry !== undefined, `${path} is in a real data directory and the inventory omits it`);
+    assert.equal(entry!.move, false, `${path} carries no live history and must not be copied`);
+  }
+});
+
 test('the database brings its write-ahead log with it', () => {
   // Named on its own because it is the one loss that is invisible from both ends: coai.db copies
   // cleanly, the rounds that were committed last are in the sidecar, and nothing reports anything.

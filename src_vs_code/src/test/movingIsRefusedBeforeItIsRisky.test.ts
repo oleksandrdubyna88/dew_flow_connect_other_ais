@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   destinationPlaceRefusal,
   destinationRefusal,
+  logsLeftBehind,
   mayDeleteTheOldCopy,
   sourceChangedSince,
   sourceRefusal,
@@ -50,9 +51,18 @@ test('an empty destination is refused by nothing', () => {
 });
 
 test('a destination holding only things that are not moved is allowed', () => {
-  // `logs/` and `servers/` are written by whatever already ran there. They carry no history and are
-  // not copied, so their presence says nothing about whether this move is safe.
-  assert.equal(destinationRefusal(['logs/', 'servers/']), '');
+  // `servers/` and `worktrees/` are written by whatever already ran there. They carry no history
+  // this move would overwrite, so their presence says nothing about whether it is safe.
+  assert.equal(destinationRefusal(['servers/', 'worktrees/']), '');
+});
+
+test('and a destination that has merely been logged into is allowed too', () => {
+  // `logs/` MOVES as of 2026-09-15 and still does not refuse a destination — the two questions come
+  // apart exactly here. A log file is named for its run and its pid, so a second installation's logs
+  // land beside the first's and overwrite nothing. Refusing on it would refuse every folder a server
+  // has ever been pointed at, which after that change is most of the folders anybody would pick.
+  assert.equal(destinationRefusal(['logs/']), '');
+  assert.notEqual(destinationRefusal(['logs/', 'coai.db']), '', 'the database beside it still refuses');
 });
 
 // ---------- and WHERE it is, which is the one that would have eaten the copy ----------
@@ -119,6 +129,28 @@ test('a source with reviewers still running is refused', () => {
 
 test('a quiet source is refused by nothing', () => {
   assert.equal(sourceRefusal(NOTHING_RUNNING), '');
+});
+
+// ---------- what a partitioned move leaves behind, said out loud ----------
+
+test('a partitioned move says the logs are not coming', () => {
+  // All three vendors of the plan round, independently, one Blocking. The server writes logs to the
+  // ROOT of a chosen folder and not to the side inside it, so a partitioned move finds none to take,
+  // succeeds, and leaves them on the machine somebody is about to reformat. Writing that in the
+  // inventory was not telling anybody: nobody opens a JSON fixture while moving their data.
+  const said = logsLeftBehind('windows-desktop01', 'V:\\connectOtherAis\\logs');
+
+  assert.match(said, /NOT part of this move/u);
+  assert.match(said, /windows-desktop01/u);
+  assert.match(said, /V:\\connectOtherAis\\logs/u, 'and names where they actually are');
+});
+
+test('an unpartitioned move says nothing about logs, because they are in the folder', () => {
+  assert.equal(logsLeftBehind('', 'V:\\connectOtherAis\\logs'), '');
+});
+
+test('and a partitioned installation with no logs at all is not warned about them', () => {
+  assert.equal(logsLeftBehind('windows-desktop01', ''), '');
 });
 
 // ---------- the verification ----------

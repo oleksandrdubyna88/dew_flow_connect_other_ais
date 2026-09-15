@@ -2,8 +2,8 @@ import { hostname } from 'node:os';
 import { resolve, sep } from 'node:path';
 import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
-import { coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, defaultDataDir, directoryFor, serverEnv } from './dataDir';
-import { destinationPlaceRefusal, destinationRefusal, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
+import { chosenRoot, coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, defaultDataDir, directoryFor, serverEnv } from './dataDir';
+import { destinationPlaceRefusal, destinationRefusal, logsLeftBehind, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
 import { serverPath } from './installer';
@@ -437,6 +437,14 @@ export async function moveDataDirectory(
   // it did — and since the sidecars are copied WITH it, the rounds in them travel too. Refusing on
   // one made this feature unreachable for every installation that had ever been killed. (codex.)
   const sidecars = sourceWarning(activity);
+  // The logs of a PARTITIONED installation are in the ROOT, not in the folder being copied, so this
+  // move cannot take them — and it must not let that be discovered afterwards. All three reviewers
+  // of the plan round found it, one rating it Blocking: the logs would stay on the machine somebody
+  // is about to reformat, which is the exact thing they moved their data to avoid.
+  const rootLogs = vscode.Uri.joinPath(vscode.Uri.file(chosenRoot()), 'logs');
+  const stranded = side.length === 0 || !(await exists(rootLogs))
+    ? ''
+    : logsLeftBehind(side, rootLogs.fsPath);
   const go = 'Copy it';
   const confirmed = await vscode.window.showWarningMessage(
     `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${landing.fsPath}?`,
@@ -446,7 +454,8 @@ export async function moveDataDirectory(
         + 'once you have seen your history in the new folder.\n\nOn a network drive this can take '
         + 'minutes: the chat conversations and the sessions are thousands of small files, and the '
         + 'progress names each entry as it starts rather than each file.\n\nWhat is copied: '
-        + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`,
+        + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`
+        + `${stranded.length === 0 ? '' : `\n\n${stranded}`}`,
     },
     go,
   );
