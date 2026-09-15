@@ -2320,6 +2320,20 @@ measured change that file defers. And a sentence under the rows says these are t
 settings — that a vendor shares its NAME, and so its vault key, with the reviewer row of that name, and
 nothing else.
 
+**And the other half of `CannotConsult`, added on this story's plan round.** The picker cannot OFFER a
+runtime that cannot consult — `consultableVendors` filters the catalogue by `CONSULTING_RUNTIMES` — but a
+stored entry can BE one, because rule (a) materialises whatever runtime the reviewer row it names is on,
+`remote` included. That is unchanged and deliberate: materialising is not permitting, and the refusal is
+asked where a consultation is RUN (`ConsultationService.OnTheVendorAsync` calls `ConsultantResolution.For`
+before any launch and answers by name), so a consultation is not routed at a Team server by this or any
+other path. What the section did was stay silent about it: a row pointed at a Team-server reviewer row
+offered a CLI path, and a model list whose stored entry read *"this server does not offer it any more"* —
+three sentences about settings that will never be read, and none about the refusal already waiting. Now
+`foreignRuntime` names the runtime and the allowlist, `placeable` empties the model list and both input
+boxes, and `strandedModel` keeps the stored model on screen, because emptying a list must not take a
+person's saved value with it. The entry itself is untouched, as rule (c) is untouched — the way out is the
+catalogue sitting in the same select.
+
 **Choosing a vendor stores the CATALOGUE entry.** `consultantRecordUpdate` consults the catalogue before
 resolving a bare id: picking `DeepSeek` stores its runtime and its endpoint, where before it stored a name
 that resolved to the unavailable state — an entry the section offered and could not keep. It also ends the

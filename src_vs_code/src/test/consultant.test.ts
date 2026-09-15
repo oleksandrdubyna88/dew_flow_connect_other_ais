@@ -697,6 +697,35 @@ test('the section says what this build cannot consult through, rather than offer
   assert.ok(!plain.hints.some((hint) => /custom endpoint/.test(hint)), 'and a plain codex consultant must not');
 });
 
+test('a consultant materialised from a Team-server row says the build cannot consult there', () => {
+  // The other half of CannotConsult, and the half the section was silent about. Rule (a) hands back
+  // whatever runtime the row is on, `remote` included — materialising is not permitting — and the
+  // server refuses it at the launch: `ConsultationService.OnTheVendorAsync` asks
+  // `ConsultantResolution.For` before anything runs and answers by name, so nothing is ever routed at
+  // a Team server. What a person saw was a row offering a CLI path, and a model list telling them
+  // their model is one "this server does not offer any more" — three sentences about settings that
+  // will never be read, and none about the refusal that is actually coming.
+  const view = viewOf(legacy('acme-codex'), [{ ...vendor('acme-codex', 'remote'), model: 'gpt-5' }]);
+
+  assert.equal(view.runtime, 'remote', 'the entry still resolves to the row it names — the rule is unchanged');
+  assert.ok(view.hints.some((hint) => /cannot hold a consultation/.test(hint) && /remote/.test(hint)),
+    'the row has to name the runtime the server will refuse it for');
+  assert.ok(view.hints.some((hint) => CONSULTING_RUNTIMES.every((one) => hint.includes(one))),
+    'and which runtimes can, because that is the sentence a person acts on');
+  assert.deepEqual(view.models, [], 'a runtime that will never be asked has no models to offer');
+  assert.deepEqual([view.takesBaseUrl, view.takesExecutablePath], [false, false],
+    'and no settings of its own, because nothing here will be launched');
+});
+
+test('the model a refused consultant is on is still on screen — kept, never dropped under the person', () => {
+  const html = consultantBody(
+    { ...DEFAULT_CONSULT, byCaller: { ...DEFAULT_CONSULT.byCaller, claude: resolvedDefinition('acme-codex', 'remote', 'gpt-5') } },
+    {},
+  );
+
+  assert.ok(html.includes('gpt-5'), 'emptying the list must not take the stored model off the screen with it');
+});
+
 test('a caller pointed at its own vendor is told what to think, and no other caller is', () => {
   assert.ok(viewOf(definition('claude', 'claude'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
   assert.ok(!viewOf(definition('codex', 'codex'), [], 'claude').hints.some((hint) => /blind spot/.test(hint)));
