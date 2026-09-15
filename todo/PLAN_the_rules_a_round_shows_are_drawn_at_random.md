@@ -1,6 +1,9 @@
 # PLAN — the rules a round shows are drawn at random
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners/Context/RuleFiles.cs`,
+> Status: **story 1.1 IMPLEMENTED 2026-09-15; the rest is plan.** `RuleOrder`, its tier table and
+> `RuleFiles.Collect(repoPath, budgetBytes, order)` have shipped — no production path has changed
+> behaviour yet, because `Drawn()` is still the default. Epics 1 (stories 1.2–1.4), 2, 3 and 4 remain
+> planned. Scope: `src_mcp/runners/Context/RuleFiles.cs`,
 > the three stage entry points in `src_mcp/src/Server/PanelService.cs`, and their tests. The topic
 > vocabulary belongs to `dew_flow_conventions` and ships as its **own pull request** (epic 4, and see
 > *External dependencies*);
@@ -286,7 +289,9 @@ deliberately rather than as a side effect. Informed by story 3.2's measurement.
 
 The gate's reviewers changed the plan's shape in four places, not merely its wording:
 
-- **Epic 4 was conditional and is now unconditional.** Three reviewers independently attacked the same
+- **The draw's removal — epic 3 after the split renumbered it — was conditional and is now
+  unconditional.** (Epic 4, the symbol triggers, stays conditional on E1 and E2; only the measured
+  payload-fit precondition is gone.) Three reviewers independently attacked the same
   sentence — "remove the draw only once a measured round shows the payload fits" — and codex put it
   best: that gates the plan's one guarantee on a condition the arithmetic says will not arrive, since
   62 KB of the budget goes to three rules before anything else is selected. A deterministic overflow
