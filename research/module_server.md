@@ -334,6 +334,21 @@ consultation has no role.
 
 ## Flow of one stage
 
+**All three stages are judged against written rules.** The code stage collects from the round's
+WORKTREE, so it sees them as of the commit under review. The plan and document stages have no commit
+and no checkout — `NeedsWorktree: false`, an empty scratch directory, because an agentic CLI handed one
+goes exploring and that cost a ten-minute plan round — so they collect from `repoPath`'s working tree,
+which is the honest input when the plan under review describes work about to happen in it. Collecting
+from `workingDir` there would gather nothing *while looking like it worked*.
+
+They differ in WHAT they collect: the code stage takes the mount's rules in `RuleOrder`'s default
+order, while the plan and document stages take a named tier (`StageRules.Plan` / `StageRules.Document`)
+through `RuleOrder.Staged`, which filters. Each tiered prompt opens with a coverage sentence — *all N*,
+*M of N*, or **NONE** — because this gate reviews OTHER repositories, and one pinned to an older
+conventions revision carries only part of a tier. Without it, a round judged against none of its rules
+reads exactly like one judged against all of them, and a reviewer's silence about a rule it never saw
+looks like compliance. The count comes from `RuleBundle.FromMount`, computed where the mounts are known.
+
 `RunStageAsync`: load session → `RoundMachine.Begin*` (refusal = the answer) → resolve SHA → ONE
 worktree lease → build work (schema file, role prompt + contract + context; repair prompt = same +
 "ONLY the JSON") → `BoundedScheduler` → merge → `GateRule` → `RoundMachine.CompleteRound` → persist

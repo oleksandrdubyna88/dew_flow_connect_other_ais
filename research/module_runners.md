@@ -93,12 +93,18 @@ sequenceDiagram
   entry would pull in a file nobody meant and spend the budget of the rule it was impersonating —
   caught by a red test rather than in production.
 
-- **The tiers a gate with NO diff will be judged against exist as data; no stage reads them yet.**
+- **`RuleBundle.FromMount` is what makes tier coverage countable.** It carries the mount-relative names
+  the mount holds (`common/security.md`, not the repository-relative path), computed in `RuleFiles`
+  where the mounts are known — deriving it from a path suffix in a caller would repeat the mistake a
+  code round already caught in the tier matching itself. `PanelService` counts a tier against it to
+  tell a reviewer *all N*, *M of N* or **NONE**.
+
+- **The tiers a gate with NO diff is judged against, wired into both stages.**
   `StageRules.Plan` and `StageRules.Document` (`Context/StageRules.cs`) are ordered lists, and
   `RuleOrder.Staged(tier)` is the one order that FILTERS — a plan or document round has no change to
   select from, so the mount's other rules are not lower priority, they are not what the stage is judged
-  against. **Both gates still send no rules at all**: the wiring is stories 1.3 and 1.4 of the plan, and
-  `Drawn()` remains what `Collect` uses by default. When a tier matches nothing the mount contributes
+  against. The CODE stage is untouched: it still collects every rule in `RuleOrder`'s default order, and
+  `Drawn()` remains that default until epic 3. When a tier matches nothing the mount contributes
   nothing, deliberately and without a fallback — falling back to `Walk` would hand a plan reviewer the
   code rules the tier exists to exclude — and the reviewer still sees this repository's own rules,
   which are outside every order. Every entry is checked against the corpus this repository PINS by
