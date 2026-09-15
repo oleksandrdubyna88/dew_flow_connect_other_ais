@@ -1365,6 +1365,7 @@ const where = (over: Partial<DataLocation> = {}): DataLocation => ({
   refusal: '',
   notes: [],
   env: { COAI_DATA_DIR: '/srv/coai', COAI_DATA_SIDE: 'windows' },
+  source: 'environment',
   ...over,
 });
 

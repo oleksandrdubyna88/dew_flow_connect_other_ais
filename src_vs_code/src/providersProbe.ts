@@ -1,5 +1,6 @@
 import { parseProviders, ProvidersAnswer } from './providers';
 import { capture } from './versionProbe';
+import { serverEnv } from './dataDir';
 
 /**
  * Asking the server what it makes of the configured reviewers.
@@ -38,7 +39,11 @@ export async function readProviders(executable: string): Promise<ProvidersAnswer
     return { reported: {}, asked: false, answered: false };
   }
 
-  const { code, output } = await capture(executable, ['--providers'], false, CAP_MS);
+  // With the data directory this window chose. `--providers` answers out of the settings file, and
+  // that file lives inside that directory: asked without it, a window pointed at a NAS reports the
+  // reviewers configured in the DEFAULT directory — a list that does not look wrong, and is not
+  // theirs.
+  const { code, output } = await capture(executable, ['--providers'], false, CAP_MS, undefined, serverEnv());
   if (code !== 0) {
     return { reported: {}, asked: true, answered: false };
   }

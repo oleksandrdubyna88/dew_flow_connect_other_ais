@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
+import { ALWAYS_PER_SIDE, ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
 import { declaresSetting, refusalNotice, settingRefusal, type RefusalSentences, type SettingRefusal } from './settingRefused';
-import { sideConfigReader, writeOverlay } from './sideSettings';
+import { readOverlay, sideConfigReader, writeOverlay } from './sideSettings';
+import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
 
 /**
@@ -74,13 +75,40 @@ export async function saveSetting(
   key: string,
   value: unknown,
 ): Promise<void> {
-  if (config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key)) {
+  // `ALWAYS_PER_SIDE` ignores the switch on purpose — see its own remark. A data directory written
+  // to the shared layer would be handed to the other side of this machine, where the same string
+  // names a path that does not exist.
+  const perSide = config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key);
+  if (perSide || ALWAYS_PER_SIDE.includes(key)) {
     await writeOverlay(context.globalState, thisSide(context.globalStorageUri), key, value);
 
     return;
   }
 
   await config.update(key, value, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * Tell `dataDir.ts` what this window read, so every path it answers is this side's (issue #115).
+ *
+ * <p><b>Called FIRST in `activate`</b>, before anything resolves a path — the escalation watcher and
+ * the chat store are both constructed from one — and again whenever the configuration changes. A
+ * window that read the settings late would spend the first moments of its life reading the default
+ * directory and writing a Team-server token into it.</p>
+ *
+ * <p>Both layers, separately, because the panel says which one answered: the overlay is what THIS
+ * side chose and the configuration is what every side shares. Reading only the effective value would
+ * lose exactly the distinction a person needs when a path from the other side of the machine turns
+ * up in their window.</p>
+ */
+export function storageReadsThisSide(context: vscode.ExtensionContext): void {
+  const config = vscode.workspace.getConfiguration('coai');
+  const overlay = readOverlay(context.globalState, thisSide(context.globalStorageUri));
+
+  useStorageSettings(
+    storageChoiceFrom((section) => overlay[section]),
+    storageChoiceFrom((section) => config.get(section)),
+  );
 }
 
 /** The label of the one action that cures a stale window, and the words VS Code knows it by. */

@@ -19,20 +19,20 @@ const DATABASE_FILE = 'coai.db';
  * fixture covers only the filename half.</p>
  */
 export function coaiDataDir(): string {
-  const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
-  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
+  const chosen = currentChoice();
 
   // Whitespace is not a configured directory, and the server agrees: its own check is `Length > 0`
   // on a trimmed value, so `COAI_DATA_DIR=' '` must mean "unset" on both sides or the extension
-  // writes the token somewhere the server never looks. Raised on the code round.
-  if (configured.length === 0) {
-    return `${localAppData}/coai-mcp`;
+  // writes the token somewhere the server never looks. Raised on the code round. `chooseStorage`
+  // trims every layer for the same reason.
+  if (chosen.directory.length === 0) {
+    return defaultDataDir();
   }
 
   // ABSOLUTE, the way `Path.GetFullPath` makes it absolute there. A relative COAI_DATA_DIR resolved
   // against the extension host's working directory and against the server's would be two different
   // places, and the symptom is a sign-in that silently is not there.
-  const root = resolve(configured);
+  const root = resolve(chosen.directory);
 
   // A chosen directory can be PARTITIONED per side, so two installations — Windows and WSL — can be
   // pointed at one NAS without writing the same SQLite file (issue #115). The rule is the server's,
@@ -42,9 +42,7 @@ export function coaiDataDir(): string {
   // The side is a NAME, never derived, and that is why the two halves can agree at all: deriving it
   // would mean computing one string twice, here from `os.hostname()` and there from
   // `Environment.MachineName`, which differ in case and in whether they carry a domain.
-  const asked = (process.env['COAI_DATA_SIDE'] ?? '').trim().toLowerCase();
-
-  if (asked.length === 0) {
+  if (chosen.side.length === 0) {
     return root;
   }
 
@@ -53,9 +51,9 @@ export function coaiDataDir(): string {
   // `COAI_DATA_SIDE=wsl/node1` is a plausible thing to type, it fails the grammar, and falling back
   // would put this installation and every other one on the root's single database. The server
   // refuses to start on it; this half refuses to guess a path for it.
-  if (!isSafeSide(asked)) {
+  if (!isSafeSide(chosen.side)) {
     throw new Error(
-      `COAI_DATA_SIDE='${asked}' is not a usable directory name. A side may contain ${SIDE_GRAMMAR}.`);
+      `COAI_DATA_SIDE='${chosen.side}' is not a usable directory name. A side may contain ${SIDE_GRAMMAR}.`);
   }
 
   // `join`, not string concatenation: `resolve` gives a NATIVE root (C:\srv\coai on Windows) and a
@@ -63,15 +61,183 @@ export function coaiDataDir(): string {
   // Path.Combine, never writes. Both resolve to the same directory, so nothing was broken — but the
   // two halves printed different strings for one place, which is precisely what the shared vectors
   // exist to catch and what the panel now puts on screen. (codex, code round.)
-  return join(root, asked);
+  return join(root, chosen.side);
+}
+
+/** `%LOCALAPPDATA%\coai-mcp`, or its equivalent — what `PanelSettings.DefaultDataDir` answers. */
+function defaultDataDir(): string {
+  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
+
+  return `${localAppData}/coai-mcp`;
 }
 
 /** The side-name grammar, spelled exactly as `PanelSettings.IsSafeSide` spells it in C#. */
 const SIDE_GRAMMAR = 'lower-case letters, digits, dot, dash and underscore';
 
-/** The name this window's side was given, lower-cased — empty when none was asked for. */
+/**
+ * The side this window was GIVEN, lower-cased — empty when none was asked for anywhere.
+ *
+ * <p>The name asked for, not the one in effect, and the difference matters to its one caller: the
+ * panel names it while reporting that it could not work out where the data lives. A side asked for
+ * while no directory is named partitions nothing — but it is still what somebody typed, and a
+ * diagnostic that omits it is a diagnostic missing the thing to correct.</p>
+ */
 export function dataSideName(): string {
-  return (process.env['COAI_DATA_SIDE'] ?? '').trim().toLowerCase();
+  const chosen = currentChoice();
+
+  return chosen.side.length > 0 ? chosen.side : chosen.ignoredSide;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Which layer answers "where does the data live"
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A directory and the side that partitions it, as one layer named them.
+ *
+ * <p>Empty strings mean "this layer names nothing", never "the default" — which layer the default
+ * comes from is {@link chooseStorage}'s answer, not a layer's.</p>
+ */
+export interface StorageChoice {
+  readonly directory: string;
+  readonly side: string;
+}
+
+/** A layer that names nothing. */
+export const NOTHING_CHOSEN: StorageChoice = { directory: '', side: '' };
+
+/** Which layer answered, so a person can be told rather than left to deduce it. */
+export type StorageSource = 'environment' | 'this side' | 'shared setting' | 'default';
+
+/** What the layers between them decided, before the side is applied to the path. */
+export interface ChosenStorage extends StorageChoice {
+  /** A side named in a layer that named no directory, so it partitions nothing. */
+  readonly ignoredSide: string;
+  readonly source: StorageSource;
+}
+
+/**
+ * Which layer names the directory this window uses.
+ *
+ * <p><b>The environment first</b>, because a window launched from a shell that exports
+ * `COAI_DATA_DIR` should agree with a server launched from that same shell — and because it is the
+ * server's own precedence, where a variable beats the settings file key by key.</p>
+ *
+ * <p><b>Then this side's own choice, then the shared setting.</b> `Z:\coai` and `/mnt/z/coai` are
+ * one NAS and not one string, so a value shared by every window of a profile is wrong on at least
+ * one side of a machine that has two; the shared layer is the fallback for a side that has never
+ * chosen, not the place a choice belongs.</p>
+ *
+ * <p><b>The pair travels together.</b> Whichever layer names the DIRECTORY names the side as well: a
+ * side partitions a particular directory, and composing one layer's root with another's side builds
+ * a path nobody configured. That path then exists, is empty, and says nothing about why.</p>
+ */
+export function chooseStorage(
+  environment: StorageChoice,
+  thisSide: StorageChoice,
+  shared: StorageChoice,
+): ChosenStorage {
+  const layers: readonly (readonly [StorageSource, StorageChoice])[] = [
+    ['environment', environment],
+    ['this side', thisSide],
+    ['shared setting', shared],
+  ];
+
+  for (const [source, layer] of layers) {
+    const directory = layer.directory.trim();
+    if (directory.length > 0) {
+      return { directory, side: sideNameIn(layer), ignoredSide: '', source };
+    }
+  }
+
+  // Nobody named a directory, so nobody's side partitions anything. Naming the side that was asked
+  // for anyway is the difference between "you have no side" and "you set one and it is doing
+  // nothing", and only the second sentence tells somebody what to change.
+  const named = layers.map(([, layer]) => sideNameIn(layer)).find((side) => side.length > 0) ?? '';
+
+  return { directory: '', side: '', ignoredSide: named, source: 'default' };
+}
+
+/** A layer's side, in the shape the server compares: trimmed and lower-cased. */
+function sideNameIn(layer: StorageChoice): string {
+  return layer.side.trim().toLowerCase();
+}
+
+/** The two variables, as this process has them. */
+function environmentChoice(): StorageChoice {
+  return { directory: process.env['COAI_DATA_DIR'] ?? '', side: process.env['COAI_DATA_SIDE'] ?? '' };
+}
+
+/**
+ * One settings layer, read through whatever answers for it.
+ *
+ * <p>Anything that is not a string is nothing: a number, an array or a `null` left by a hand-edited
+ * `settings.json` must not become part of a path. The reader is a parameter so this stays free of
+ * `vscode` — the panel and the webview page both compile against this module.</p>
+ */
+export function storageChoiceFrom(read: (section: string) => unknown): StorageChoice {
+  const text = (section: string): string => {
+    const value = read(section);
+
+    return typeof value === 'string' ? value : '';
+  };
+
+  return { directory: text('dataDirectory'), side: text('dataSide') };
+}
+
+/**
+ * The two settings layers this window read for itself.
+ *
+ * <p>Module state, deliberately, and with the same justification as `reloadOffered` in
+ * `sideConfig.ts`: the alternative is a parameter on `coaiDataDir()`, which has fifteen call sites
+ * across four modules, and a parameter fifteen callers must remember is a directory fourteen of them
+ * will eventually get right. There is ONE answer to "where does this window keep its data"; this is
+ * where it is kept.</p>
+ *
+ * <p>Reading a setting needs `vscode`, which this module must not import — the panel and the page
+ * both compile against it. So the host reads the two layers and installs them here, once, at
+ * activation and again whenever the configuration changes.</p>
+ */
+let installed: { readonly thisSide: StorageChoice; readonly shared: StorageChoice } = {
+  thisSide: NOTHING_CHOSEN,
+  shared: NOTHING_CHOSEN,
+};
+
+/**
+ * Install what this window read. Called at activation BEFORE anything resolves a path — the chat
+ * store is constructed from one — and again on every configuration change.
+ */
+export function useStorageSettings(thisSide: StorageChoice, shared: StorageChoice): void {
+  installed = { thisSide, shared };
+}
+
+/** Every layer, in order. */
+function currentChoice(): ChosenStorage {
+  return chooseStorage(environmentChoice(), installed.thisSide, installed.shared);
+}
+
+/**
+ * What a client entry needs in its `env` so the server it spawns reads what this window reads.
+ *
+ * <p>The ROOT and the side, never the resolved path: handing `<root>/<side>` as `COAI_DATA_DIR`
+ * while also naming the side resolves to `<root>/<side>/<side>` on the server. Five reviewers
+ * reached that by different routes on the predecessor's code round.</p>
+ *
+ * <p>Empty when there is nothing to say — the default directory needs no variable, and a refused
+ * side has no configuration worth offering — and the side key is omitted rather than pasted empty,
+ * because a key that means nothing invites the question of what it is for. This is also what the
+ * install flow puts in the block it copies, and what every spawned read of the database is given.</p>
+ */
+export function serverEnv(): Readonly<Record<string, string>> {
+  const chosen = currentChoice();
+  if (chosen.directory.length === 0 || (chosen.side.length > 0 && !isSafeSide(chosen.side))) {
+    return {};
+  }
+
+  return {
+    COAI_DATA_DIR: resolve(chosen.directory),
+    ...(chosen.side.length === 0 ? {} : { COAI_DATA_SIDE: chosen.side }),
+  };
 }
 
 /**
@@ -95,20 +261,21 @@ export function dataSideName(): string {
  *   which is why `PanelSettings.StorageNotes` takes its environment the same way.
  */
 export function whereData(exists: (path: string) => boolean): DataLocation {
-  const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
-  const named = dataSideName();
+  const chosen = currentChoice();
 
   // A side that cannot be used is reported, never guessed at. The server REFUSES TO START on this,
-  // so a panel that threw here would hide the one sentence that explains why nothing works.
-  if (configured.length > 0 && named.length > 0 && !isSafeSide(named)) {
+  // so a panel that threw here would hide the one sentence that explains why nothing works. It is
+  // refused wherever it was named: a setting can hold `wsl/node1` exactly as a variable can.
+  if (chosen.directory.length > 0 && chosen.side.length > 0 && !isSafeSide(chosen.side)) {
     return {
       directory: '',
-      side: named,
+      side: chosen.side,
       ignoredSide: '',
-      refusal: `COAI_DATA_SIDE='${named}' is not a usable directory name, so the server refuses to `
+      refusal: `COAI_DATA_SIDE='${chosen.side}' is not a usable directory name, so the server refuses to `
         + `start. A side may contain ${SIDE_GRAMMAR}.`,
       notes: [],
       env: {},
+      source: chosen.source,
     };
   }
 
@@ -119,18 +286,19 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
   // section exists to state — "this window keeps its database apart" — and it would then be handed
   // to a paste block as though it meant something. Named separately so the panel can say what is
   // actually true: you set a side, and nothing is using it. (gemini, code round.)
-  if (configured.length === 0) {
+  if (chosen.directory.length === 0) {
     return {
       directory,
       side: '',
-      ignoredSide: named,
+      ignoredSide: chosen.ignoredSide,
       refusal: '',
       notes: [],
       env: {},
+      source: chosen.source,
     };
   }
 
-  const root = resolve(configured);
+  const root = resolve(chosen.directory);
   const notes: string[] = [];
 
   if (directory !== root && exists(join(root, DATABASE_FILE))) {
@@ -148,15 +316,16 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
 
   return {
     directory,
-    side: named,
+    side: chosen.side,
     ignoredSide: '',
     refusal: '',
     notes,
-    // Built from the ENVIRONMENT, which is where these values came from — never taken back out of
-    // the rendered path. Five reviewers reached the same conclusion by different routes: slicing a
-    // side name off the end of a resolved directory is arithmetic that is wrong the moment a side
-    // maps to anything but `<root>/<side>`, and silently wrong on a drive root.
-    env: { COAI_DATA_DIR: root, COAI_DATA_SIDE: named },
+    // Built from the LAYER that named them — never taken back out of the rendered path. Five
+    // reviewers reached the same conclusion by different routes: slicing a side name off the end of
+    // a resolved directory is arithmetic that is wrong the moment a side maps to anything but
+    // `<root>/<side>`, and silently wrong on a drive root.
+    env: serverEnv(),
+    source: chosen.source,
   };
 }
 
@@ -182,10 +351,20 @@ export interface DataLocation {
    * What a client entry needs so its server reads the same directory this window does.
    *
    * <p>Empty when there is nothing to say: the default directory needs no variable, and a refused
-   * side has no configuration worth offering. `COAI_DATA_SIDE` is present whenever a side is,
-   * including none — the key is omitted by the caller rather than carrying an empty value.</p>
+   * side has no configuration worth offering. `COAI_DATA_SIDE` is present only when a side is in
+   * effect — a key pasted empty means nothing and invites the question of what it is for.</p>
    */
   readonly env: Readonly<Record<string, string>>;
+  /**
+   * Which layer answered — the environment, this side's own choice, the shared setting, or nothing
+   * at all.
+   *
+   * <p>A person whose panel and server disagree is entitled to read why rather than deduce it. It
+   * is also the one thing that separates "I chose this" from "another side chose it and this window
+   * inherited the string", which on a NAS reached from two mounts is the difference between a path
+   * that exists and one that does not.</p>
+   */
+  readonly source: StorageSource;
 }
 
 /**

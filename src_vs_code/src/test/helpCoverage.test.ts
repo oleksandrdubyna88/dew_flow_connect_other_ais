@@ -129,6 +129,10 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.consultCallsPerSession': 'calls per session',
   'coai.consultIdleMinutes': 'close an idle consultation after, minutes',
   'coai.consultEnabled': 'let a stuck ai consult another vendor',
+  // The storage pair (issue #115). Their article is the one a person reaches for after reinstalling
+  // an operating system, which is the moment these two settings exist for.
+  'coai.dataDirectory': 'where your data lives',
+  'coai.dataSide': 'a name for this installation',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

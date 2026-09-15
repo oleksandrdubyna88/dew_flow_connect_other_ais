@@ -45,7 +45,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey, serverRun } from './roundsDbRead';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -447,7 +447,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       server.fsPath,
       keys,
       keysFileIn(this.context.globalStorageUri.fsPath),
-      (args, capMs) => capture(server.fsPath, [...args], false, capMs, stop),
+      // Through `serverRun`, not `capture` directly: that is the door that carries the data
+      // directory this window chose, and a batch read that skipped it would export the rounds of a
+      // different directory from the one the list beside it is showing.
+      serverRun(server.fsPath, stop),
       readFindings,
       stop);
   }
@@ -2637,6 +2640,9 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
       refusal: `This window could not work out where its data lives: ${asText(error)}`,
       notes: [],
       env: {},
+      // Nothing resolved, so no layer answered. Naming one here would be this surface guessing about
+      // the very question it has just failed to answer.
+      source: 'default',
     };
   }
 }
