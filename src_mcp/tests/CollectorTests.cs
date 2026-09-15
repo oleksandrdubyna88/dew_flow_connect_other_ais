@@ -1,0 +1,346 @@
+using CoaiMcp.Core.Collecting;
+using CoaiMcp.Normalizer;
+using CoaiMcp.Runners.Collecting;
+using CoaiMcp.Runners.Processes;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// Finding the commit that fixed a defect, against real git.
+/// </summary>
+/// <remarks>
+/// <para><b>A real repository, not a fake.</b> Every failure this guards against is git's — a commit
+/// no ref reaches, a file that moved, a history that was rewritten under the finding. A fake git
+/// would assert what we BELIEVE about those, which is exactly the thing measurement kept correcting:
+/// the guard was written as equality once and inverted the whole feature, and the orphan rate came
+/// back 90.7 % against a branch that happened to be behind.</para>
+/// <para>The fixture builds an orphan the way real ones are made — commit on a branch, squash it onto
+/// main, delete the branch — rather than by asserting that some sha is unreachable.</para>
+/// </remarks>
+public sealed class CollectorTests : IAsyncLifetime
+{
+    private readonly ProcessLauncher _launcher = new();
+    private string _repo = string.Empty;
+    private Collector _collector = null!;
+
+    /// <summary>The defective method, and the same method fixed — one lock apart.</summary>
+    private const string Racy = """
+        using System.Collections.Generic;
+
+        public sealed class Totals
+        {
+            private readonly Dictionary<string, int> _items = new();
+
+            public int GetOrAdd(string key, int value)
+            {
+                if (!_items.ContainsKey(key))
+                {
+                    _items.Add(key, value);
+                }
+
+                return _items[key];
+            }
+        }
+        """;
+
+    private const string Fixed = """
+        using System.Collections.Generic;
+
+        public sealed class Totals
+        {
+            private readonly Dictionary<string, int> _items = new();
+
+            public int GetOrAdd(string key, int value)
+            {
+                lock (_items)
+                {
+                    if (!_items.ContainsKey(key))
+                    {
+                        _items.Add(key, value);
+                    }
+
+                    return _items[key];
+                }
+            }
+        }
+        """;
+
+    /// <summary>The same method, renamed variables and reformatted — and NOT fixed.</summary>
+    private const string Renamed = """
+        using System.Collections.Generic;
+
+        public sealed class Totals
+        {
+            private readonly Dictionary<string, int> _totals = new();
+
+            public int GetOrAdd(string invoice, int amount)
+            {
+                if (!_totals.ContainsKey(invoice))
+                {
+                    _totals.Add(invoice, amount);
+                }
+
+                return _totals[invoice];
+            }
+        }
+        """;
+
+    public async ValueTask InitializeAsync()
+    {
+        _repo = Directory.CreateTempSubdirectory("coai-collect-").FullName;
+        _collector = new Collector(new GitHistory(_launcher), new TreeSitterNormalizer());
+        await Git("init", "-b", "main");
+        await Write("Totals.cs", Racy);
+        await Commit("the defect");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Task.CompletedTask;
+        try
+        {
+            Directory.Delete(_repo, recursive: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    [Fact]
+    public async Task TheCommitThatChangedTheMethod_IsTheFix()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        var fix = await Head();
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Collected);
+        outcome.FixSha.Should().Be(fix);
+        outcome.SymbolName.Should().Be("GetOrAdd");
+        outcome.SkeletonBefore.Should().NotBe(outcome.SkeletonAfter);
+        outcome.SkeletonAfter.Should().Contain("lock");
+    }
+
+    /// <summary>
+    /// A commit that touches the file without touching the method is walked PAST.
+    /// </summary>
+    /// <remarks>
+    /// Raised independently by two reviewers on the plan round. Stopping at the first commit that
+    /// changes the FILE files the candidate as unchanged while the real fix sits one commit later —
+    /// and a file where one method is fixed and another is tidied in separate commits is the ordinary
+    /// shape of a day's work, not a corner case.
+    /// </remarks>
+    [Fact]
+    public async Task ACommitThatTouchesTheFileButNotTheMethod_IsNotTheFix()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Racy.Replace("public sealed class Totals", "// a note\npublic sealed class Totals", StringComparison.Ordinal));
+        await Commit("an unrelated edit in the same file");
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        var fix = await Head();
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Collected);
+        outcome.FixSha.Should().Be(fix, "the first commit moved the method but did not change it");
+    }
+
+    /// <summary>
+    /// A rename and a reformat are not a fix, however different the text is.
+    /// </summary>
+    /// <remarks>
+    /// The skeletons are compared rather than the source, so a commit that renames every local and
+    /// re-indents the body reads as unchanged — which it is. Treating the first textual difference as
+    /// the fix would file a variable rename as a defect's cure, with a commit sha to prove it.
+    /// (Plan round, codex.)
+    /// </remarks>
+    [Fact]
+    public async Task ARenameIsNotAFix()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Renamed);
+        await Commit("tidy the names");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.MethodUnchanged);
+    }
+
+    /// <summary>
+    /// A squash-merged, branch-deleted commit is still collectable when its session has a later round.
+    /// </summary>
+    /// <remarks>
+    /// <para>THE finding of the plan round, and it decides the shape of the pipeline: 55.7 % of real
+    /// candidates are orphaned this way, and 99.6 % of their objects survive. Guarding on ref
+    /// reachability before looking for a bounded interval would discard every one of them without
+    /// trying — most of the corpus, thrown away by the order of two checks.</para>
+    /// <para>The orphan is made the way real ones are: a branch, a squash onto main, a delete.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AnOrphanedCommitIsStillWalked_WhenTheSessionHasALaterRound()
+    {
+        await Git("checkout", "-b", "feature");
+        // A commit OF ITS OWN first, or `broken` is the commit main already has and nothing is
+        // orphaned by deleting the branch — which is what the fixture assertion below caught.
+        await Write("Totals.cs", Racy.Replace("int value)", "int value) // round one", StringComparison.Ordinal));
+        await Commit("the round the reviewers read");
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        var later = await Head();
+
+        await Git("checkout", "main");
+        await Git("merge", "--squash", "feature");
+        await Git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "squashed");
+        await Git("branch", "-D", "feature");
+
+        // The branch is gone and nothing reaches either commit any more.
+        var reachable = await _launcher.RunAsync(new ProcessRequest(
+            "git", ["for-each-ref", "--format=%(refname)", "--contains", broken], _repo));
+        reachable.StdOut.Trim().Should().BeEmpty("the fixture must actually produce an orphan");
+
+        var outcome = await _collector.CollectAsync(
+            new Candidate(_repo, "feature", broken, "Totals.cs", 10, LaterSha: later));
+
+        outcome.State.Should().Be(CollectState.Collected, "the objects survive, so the interval is walkable");
+        outcome.FixSha.Should().Be(later);
+    }
+
+    /// <summary>With no later round and nothing reaching it, an orphan is a skip that says so.</summary>
+    [Fact]
+    public async Task AnOrphanWithNoLaterRound_IsSkippedAsOrphaned()
+    {
+        await Git("checkout", "-b", "feature");
+        await Write("Totals.cs", Racy.Replace("int value)", "int value) // round one", StringComparison.Ordinal));
+        await Commit("the round the reviewers read");
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        await Git("checkout", "main");
+        await Git("branch", "-D", "feature");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "feature", broken, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.HeadShaOrphaned);
+    }
+
+    /// <summary>
+    /// The guard is reachability, and a test that would fail if it were written as equality.
+    /// </summary>
+    /// <remarks>
+    /// `head_sha` is the BROKEN state, so by collect time HEAD has necessarily moved past it. A guard
+    /// written as `HEAD == head_sha` skips precisely the findings that were fixed — it inverts the
+    /// feature — and it was written that way once. HEAD is three commits ahead here, and the
+    /// candidate must still collect.
+    /// </remarks>
+    [Fact]
+    public async Task TheGuardIsReachability_NotEquality()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+        await Write("unrelated.md", "# later work");
+        await Commit("something else");
+        await Write("unrelated.md", "# later work, again");
+        await Commit("something else again");
+
+        (await Head()).Should().NotBe(broken, "HEAD has moved on, which is the normal case");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Collected, "an equality guard would have skipped this");
+    }
+
+    [Fact]
+    public async Task ACommitThisRepositoryHasNeverHeardOf_IsUnreachable()
+    {
+        var outcome = await _collector.CollectAsync(
+            new Candidate(_repo, "main", "0123456789abcdef0123456789abcdef01234567", "Totals.cs", 10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.HeadShaUnreachable);
+    }
+
+    [Fact]
+    public async Task ALanguageWeDoNotRead_IsSkippedBeforeAnyWalk()
+    {
+        var broken = await Head();
+        await Write("notes.md", "# hello");
+        await Commit("a note");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "notes.md", 1));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.LanguageUnsupported);
+    }
+
+    [Fact]
+    public async Task ALineInsideNoFunction_IsSkipped()
+    {
+        var broken = await Head();
+        await Write("Totals.cs", Fixed);
+        await Commit("hold the lock");
+
+        var outcome = await _collector.CollectAsync(new Candidate(_repo, "main", broken, "Totals.cs", 1));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.SymbolNotResolved);
+    }
+
+    [Fact]
+    public async Task AScratchDirectoryIsRefusedBeforeGitIsAskedAnything()
+    {
+        var outcome = await _collector.CollectAsync(new Candidate(
+            @"C:\Users\someone\AppData\Local\Temp\claude\d--rsd-Thing\abc\scratchpad\wt",
+            "main",
+            "0123456789abcdef0123456789abcdef01234567",
+            "Totals.cs",
+            10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.RepoPathTransient);
+    }
+
+    [Fact]
+    public async Task APathThatIsNotARepository_IsSkipped()
+    {
+        var outcome = await _collector.CollectAsync(new Candidate(
+            Path.Combine(Path.GetTempPath(), $"not-a-repo-{Guid.NewGuid():N}"),
+            "main",
+            "0123456789abcdef0123456789abcdef01234567",
+            "Totals.cs",
+            10));
+
+        outcome.State.Should().Be(CollectState.Skipped);
+        outcome.Reason.Should().Be(SkipReason.RepoPathMissing);
+    }
+
+    private async Task<string> Head()
+    {
+        var result = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo));
+        result.ExitCode.Should().Be(0, result.StdErr);
+
+        return result.StdOut.Trim();
+    }
+
+    private async Task Write(string name, string text) =>
+        await File.WriteAllTextAsync(Path.Combine(_repo, name), text);
+
+    private async Task Commit(string message)
+    {
+        await Git("add", ".");
+        await Git("-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-m", message);
+    }
+
+    private async Task Git(params string[] args)
+    {
+        var result = await _launcher.RunAsync(new ProcessRequest("git", args, _repo));
+        result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
+    }
+}

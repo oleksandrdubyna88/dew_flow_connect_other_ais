@@ -23,7 +23,18 @@ public enum SourceLanguage
 /// <param name="StartLine">1-based and inclusive, as a finding's line is.</param>
 /// <param name="EndLine">1-based and inclusive.</param>
 /// <param name="Source">The function's own text, which is what gets normalised.</param>
-public sealed record EnclosingSymbol(string Kind, int StartLine, int EndLine, string Source);
+/// <param name="Name">
+/// What the function is called, or empty when the grammar gives it no name (a lambda).
+/// </param>
+/// <remarks>
+/// <para><b>The name is why a fix can be found at all.</b> A finding's line is a coordinate in ONE
+/// commit, and the commit that fixes it has almost always moved the method — an import added above
+/// it, a comment removed, another method grown. Looking at the fix commit by the original line finds
+/// an unrelated symbol or nothing at all. The collector locates the method at `head_sha` by line,
+/// takes its NAME, and finds it again at every later commit by that. (Plan round, gemini.)</para>
+/// </remarks>
+public sealed record EnclosingSymbol(
+    string Kind, int StartLine, int EndLine, string Source, string Name = "");
 
 /// <summary>
 /// Reads a method out of a file, and rewrites it so nothing of this project is left in it.
@@ -59,6 +70,16 @@ public interface IAstNormalizer
     /// back to source until this.
     /// </returns>
     EnclosingSymbol? Locate(SourceLanguage language, string source, int line);
+
+    /// <summary>The function of this NAME, wherever it has moved to.</summary>
+    /// <remarks>
+    /// The other half of <see cref="Locate"/>, and the one that makes a walk possible: the collector
+    /// finds a method at the commit the reviewers read, by line, and then has to find the same method
+    /// in every later commit — where the line has moved. Nothing but the name survives that.
+    /// <para>Returns nothing when the name is not there any more, which is a real answer: a method
+    /// that was renamed or deleted between the defect and the fix cannot be compared with itself.</para>
+    /// </remarks>
+    EnclosingSymbol? LocateNamed(SourceLanguage language, string source, string name);
 
     /// <summary>
     /// Rewrites a method so that nothing of this project is left in it.

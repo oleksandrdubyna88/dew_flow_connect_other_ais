@@ -27,7 +27,14 @@ public sealed record BugCandidate(
     string CollectState,
     string CollectRunId,
     string CollectReason,
-    string FixSha);
+    string FixSha,
+    /// <summary>The commit of the NEXT code round in the same session, or empty.</summary>
+    /// <remarks>
+    /// By construction that is the state AFTER this round's fixes — the gate's own loop guarantees
+    /// it — so it bounds the search for the fix to one interval instead of a whole branch. 37 % of
+    /// measured candidates have one, and for an orphaned commit it is the only interval there is.
+    /// </remarks>
+    string LaterSha = "");
 
 /// <summary>How many findings each step of the filter leaves standing.</summary>
 /// <remarks>
@@ -140,7 +147,11 @@ public static class BugsQuery
     private const string SqlUnhandled = """
         SELECT f.id, f.file, f.line, f.severity, f.category, f.title, f.why, f.fix,
                f.collect_state, f.collect_run_id, f.collect_reason, f.fix_sha,
-               r.head_sha, r.stage, r.number, r.session_id, s.repo_path, s.branch
+               r.head_sha, r.stage, r.number, r.session_id, s.repo_path, s.branch,
+               COALESCE((SELECT later.head_sha FROM rounds later
+                         WHERE later.session_id = r.session_id AND later.stage = r.stage
+                           AND later.number > r.number AND later.head_sha != ''
+                         ORDER BY later.number LIMIT 1), '') AS later_sha
         FROM findings f
             JOIN rounds r ON r.id = f.round_id
             JOIN sessions s ON s.id = r.session_id
@@ -156,7 +167,11 @@ public static class BugsQuery
     private const string SqlEverything = """
         SELECT f.id, f.file, f.line, f.severity, f.category, f.title, f.why, f.fix,
                f.collect_state, f.collect_run_id, f.collect_reason, f.fix_sha,
-               r.head_sha, r.stage, r.number, r.session_id, s.repo_path, s.branch
+               r.head_sha, r.stage, r.number, r.session_id, s.repo_path, s.branch,
+               COALESCE((SELECT later.head_sha FROM rounds later
+                         WHERE later.session_id = r.session_id AND later.stage = r.stage
+                           AND later.number > r.number AND later.head_sha != ''
+                         ORDER BY later.number LIMIT 1), '') AS later_sha
         FROM findings f
             JOIN rounds r ON r.id = f.round_id
             JOIN sessions s ON s.id = r.session_id
@@ -257,7 +272,8 @@ public static class BugsQuery
             CollectState: Text(rows, "collect_state"),
             CollectRunId: Text(rows, "collect_run_id"),
             CollectReason: Text(rows, "collect_reason"),
-            FixSha: Text(rows, "fix_sha"));
+            FixSha: Text(rows, "fix_sha"),
+            LaterSha: Text(rows, "later_sha"));
 
     /// <summary>A SUM over no rows is NULL in SQLite, and no findings is nought rather than absent.</summary>
     private static int Count(SqliteDataReader rows, string column)

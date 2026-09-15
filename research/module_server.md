@@ -1016,6 +1016,44 @@ batch of fifty where two failed to resolve is a successful batch.
 
 Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 2.
 
+### The collector finds the fix (`--collect-bugs`, 2026-09-15)
+
+`coai-mcp --collect-bugs` decides what became of every unprocessed candidate and writes it to the
+four `findings` columns story 1 added: **collected** with a `fix_sha`, **skipped** with a reason, or
+**failed**. `Collector` in `CoaiMcp.Runners` makes the decision; `CollectRun` loads candidates,
+stamps a run id and persists each outcome as it is decided.
+
+**`skipped` and `failed` are not the same thing**, and keeping them apart is why there are three
+states. Skipped means the DATA cannot support a case — a language nobody parses, a commit no ref
+reaches. Failed means OUR CODE did not do its job: git timed out, a skeleton came back with a name in
+it. Folding the second into the first is how an infrastructure failure hides for a month as a
+slightly worse skip rate, so every git invocation reports whether it RAN separately from what it
+said, and a timeout is never a skip.
+
+**The order of the stages is the design, and it is the plan round's doing.** A bounded interval is
+looked for BEFORE the commit's reachability from any ref is judged. 55.7 % of measured candidates are
+orphaned by squash-merge and 99.6 % of their objects survive, so a session whose next round exists is
+still walkable — guarding on reachability first would discard most of the corpus without ever trying.
+
+**The walk is by NAME and compares SKELETONS.** A finding's line is a coordinate in one commit, and
+the commit that fixes it has almost always moved the method, so `IAstNormalizer.LocateNamed` finds it
+again by name. Every commit that touches the file is examined, not the first — a commit that tidies
+another method in the same file would otherwise end the walk one commit short of the fix. And the
+comparison is of normalised skeletons, so a rename or a reformat reads as unchanged: treating the
+first textual difference as the fix would file a variable rename as a defect's cure, with a commit
+sha to prove it.
+
+**The guard is reachability, never equality.** `head_sha` is the BROKEN state, so by collect time HEAD
+has necessarily moved past it; `HEAD == head_sha` skips precisely the findings that were fixed. It was
+written that way once and inverted the whole feature, and `TheGuardIsReachability_NotEquality` fails
+if it ever is again.
+
+Tested against real git — a real squash-merge, a real deleted branch, a real orphan — because every
+failure this guards against is git's, and a fake git would assert what we believe about git rather
+than git.
+
+Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 3.
+
 ## What a round can be asked afterwards (2026-09-08)
 
 Two lines and one directory, added because a round that answered nothing could not be questioned:

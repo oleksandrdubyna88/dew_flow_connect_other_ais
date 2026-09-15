@@ -291,6 +291,32 @@ public sealed class RoundsDb : IDisposable
         write.ExecuteNonQuery();
     }
 
+    /// <summary>What a collector run made of one candidate.</summary>
+    /// <remarks>
+    /// <para>All four columns in ONE statement, keyed by the finding's own id. A run that wrote the
+    /// state and then died before the reason would leave a row saying it was skipped and refusing to
+    /// say why — and the next run would pass over it, because the state is no longer empty. Written
+    /// once, after every piece of evidence is in hand. (Plan round, codex.)</para>
+    /// <para>The id, not the ordinal: a candidate is identified here by the row it came from, and
+    /// `BugsQuery` hands that id over for exactly this.</para>
+    /// </remarks>
+    public void RecordCollect(long findingId, string state, string reason, string fixSha, string runId)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE findings
+               SET collect_state = $state, collect_reason = $reason,
+                   fix_sha = $fix, collect_run_id = $run
+             WHERE id = $id
+            """;
+        Bind(write, "$state", state);
+        Bind(write, "$reason", reason);
+        Bind(write, "$fix", fixSha);
+        Bind(write, "$run", runId);
+        Bind(write, "$id", findingId);
+        write.ExecuteNonQuery();
+    }
+
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>
     /// <remarks>
     /// Each decision carries the finding NUMBER it was made by (see <see cref="DecisionAt"/>). This
