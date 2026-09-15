@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml, PanelState, roundsBody } from '../panelView';
+import { panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -75,9 +75,13 @@ test('a running round is shown whole — its reviewers are the point', () => {
 
   assert.ok(html.includes('SCOPE — the thing being reviewed'));
   assert.ok(html.includes('class="badge running"'));
-  // Two lines each since #132: the identity, then the status in its own div under it.
-  assert.ok(html.includes('codex</span>/Architecture<div class="said">done'), 'the reviewer rows are there without a click');
-  assert.ok(html.includes('local</span>/SecurityReliability<div class="said">running'));
+  // Two lines each since #132: the identity, then the status in its own div under it. The status
+  // line leads with its mark since #286 — the identity half is what these two are about, so they
+  // assert it up to the mark and leave the mark itself to the tests below.
+  assert.ok(html.includes('codex</span>/Architecture<div class="said">'), 'the reviewer rows are there without a click');
+  assert.ok(html.includes('>done (1 finding, 30 s)<'), 'the finished reviewer no longer says what it found');
+  assert.ok(html.includes('local</span>/SecurityReliability<div class="said">'));
+  assert.ok(html.includes('>running<'), 'the running reviewer no longer says so');
 });
 
 /**
@@ -97,9 +101,111 @@ test('a reviewer is two lines — what it is, then what it said', () => {
   const row = /<div class="reviewer">[\s\S]*?<\/div><\/div>/.exec(html);
   assert.ok(row, `one .reviewer element holds both lines: ${html}`);
   assert.ok(row[0].includes('Qwen3.5-35B-A3B-Q5_vk128:latest'), 'the model is on the identity line');
-  assert.match(row[0], /<div class="said">done \(3 findings, 30 s\)<\/div>/, 'and the status is a line of its own inside it');
+  assert.match(
+    row[0],
+    /<div class="said"><span class="mark mark-done" aria-hidden="true">✓<\/span>done \(3 findings, 30 s\)<\/div>/u,
+    'and the status is a line of its own inside it, led by its mark',
+  );
   assert.ok(!/<div class="said">[\s\S]*Architecture/.test(row[0]), 'the role stays on the first line');
   assert.equal((row[0].match(/<div class="reviewer">/g) ?? []).length, 1, 'one row per reviewer, not two siblings');
+});
+
+// ---------- the status carries a mark you can see without reading (issue #286) ----------
+//
+// Six reviewers are six near-identical grey 11px lines differing in one word somewhere in the
+// middle, so "what is happening" has to be READ. Each known status now leads its line with a
+// coloured glyph.
+//
+// These call `statusMark` rather than searching the page for a class, and that is the point: the
+// helper is a BRANCH, and a substring assertion over generated markup cannot tell a branch that
+// returned the wrong glyph from one that returned the right one — the page contains a glyph either
+// way. The mapping is asserted per status, exactly, because a set-of-four-distinct-classes
+// assertion passes when running shows the queued ellipsis and queued shows the running arrow.
+// (codex and gemini, the plan round, independently.)
+
+test('each status a reviewer can be in carries its own mark, and the right one', () => {
+  const expected: readonly (readonly [string, string, string])[] = [
+    ['done', 'mark-done', '✓'],
+    ['running', 'mark-running', '⟳'],
+    ['queued', 'mark-queued', '…'],
+    ['failed', 'mark-failed', '✗'],
+  ];
+
+  for (const [status, className, glyph] of expected) {
+    const mark = statusMark(status);
+
+    assert.ok(mark.includes(`class="mark ${className}"`), `${status} is not marked ${className}: ${mark}`);
+    assert.ok(mark.includes(glyph), `${status} does not show ${glyph}, so its mark says something else: ${mark}`);
+  }
+
+  // And no two of them are the same mark, which the loop above cannot see on its own.
+  const marks = expected.map(([status]) => statusMark(status));
+  assert.equal(new Set(marks).size, marks.length, `two statuses share a mark: ${marks.join(' | ')}`);
+});
+
+test('a status nobody taught the panel gets a space, not a guess', () => {
+  const mark = statusMark('thinking');
+
+  // The column is still held — a row one glyph-width to the left of every other row is the ragged
+  // edge this whole change is against.
+  assert.ok(mark.includes('class="mark"'), 'an unknown status gets nothing at all, so its line starts further left');
+  assert.ok(!/mark-\w/.test(mark), `an unknown status was given a meaning: ${mark}`);
+  assert.ok(!/[✓⟳…✗]/u.test(mark), `a glyph was invented for a word the panel has not seen: ${mark}`);
+});
+
+test('a mark is never asked to render a value that is not a status', () => {
+  // A hand-edited or foreign session file reaches the renderer as-is; this panel has been blanked
+  // once already by a status that was not a string.
+  for (const odd of ['', '   ', 'DONE', 'done ']) {
+    assert.doesNotThrow(() => statusMark(odd), `statusMark threw on ${JSON.stringify(odd)}`);
+  }
+
+  assert.ok(!/mark-\w/.test(statusMark('')), 'an empty status was given a mark');
+});
+
+test('the mark is hidden from a screen reader, because the word is right there', () => {
+  assert.ok(statusMark('done').includes('aria-hidden="true"'), 'the glyph is read out beside the word it duplicates');
+});
+
+test('each mark wears the colour its status means, from a theme variable', () => {
+  // The exact mapping, not "some charts variable": an implementation that painted done red and
+  // failed green would pass a test that only looked for the prefix, and would ship inverted status
+  // indicators under a green suite. (codex and gemini, the plan round.)
+  const css = panelHtml(state([]), 'n0nce', NOW).split('<style>')[1]!.split('</style>')[0]!;
+
+  const expected: readonly (readonly [string, string])[] = [
+    ['mark-done', 'green'],
+    ['mark-running', 'blue'],
+    ['mark-queued', 'yellow'],
+    ['mark-failed', 'red'],
+  ];
+
+  for (const [className, chart] of expected) {
+    assert.match(
+      css,
+      new RegExp(`\\.${className} \\{ color: var\\(--vscode-charts-${chart}\\)`),
+      `${className} is not ${chart}, so the colour says something other than the word beside it`,
+    );
+  }
+
+  // Without a width the empty mark holds no column, and without a margin the glyph touches the word.
+  assert.match(css, /\.reviewer \.said \.mark \{[^}]*width: 1\.1em/, 'an unmarked row starts further left than a marked one');
+  assert.match(css, /\.reviewer \.said \.mark \{[^}]*margin-right/, 'the glyph is flush against the first letter of the word');
+});
+
+test('the sentence a reviewer says is unchanged by the mark', () => {
+  // The regression guard the plan round asked for. An implementer who made `said` detail-only
+  // BECAUSE the status is drawn separately would still pass the sidebar tests above, while the
+  // rounds-log page — the other consumer of these rows — silently lost the word.
+  const html = roundsBody([session([round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 3, note: '', seconds: 30, model: '' },
+      { provider: 'codex', role: 'Conventions', status: 'queued', findings: 0, note: '2 ahead on this engine', seconds: 0, model: '' },
+    ],
+  })])], NOW);
+
+  assert.ok(html.includes('>done (3 findings, 30 s)<'), 'the finished reviewer lost its sentence');
+  assert.ok(html.includes('>queued (2 ahead on this engine)<'), 'the queued reviewer lost the note that says how long');
 });
 
 test('a reviewer with no status gets no second line at all', () => {

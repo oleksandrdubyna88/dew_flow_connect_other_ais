@@ -2081,6 +2081,45 @@ export function roundKey(round: RoundRecord & { branch: string }): string {
   return `${round.branch}|${round.stage}|${round.number}|${round.startedUtc}`;
 }
 
+/**
+ * The mark that leads a reviewer's status line — a glyph for a status we know, a held space for one
+ * we do not.
+ *
+ * <p>Exported because it is a BRANCH, and a branch is tested by calling it. A substring assertion
+ * over the generated page cannot tell a branch that returned the wrong glyph from one that returned
+ * the right one: the page contains a glyph either way, and running/queued swapped would be green.</p>
+ *
+ * <p><b>An unrecognised status gets an EMPTY mark, not nothing.</b> The vocabulary is the server's —
+ * `ReviewerState.status` is a free string, not a union — so inventing a glyph for a word we have not
+ * seen would be a guess rendered as a fact. But returning nothing would start that row's text a
+ * glyph-width to the left of every other row, and a ragged column is the "hard to read" this whole
+ * change is against. The span holds the column; the meaning is left alone.</p>
+ *
+ * <p>Every glyph here already ships in this product — the tick and the cross on the rounds-log page,
+ * the circular arrow on the vendor cards' run and update buttons, the ellipsis throughout the prose —
+ * so none of them is a new font risk on a machine this has not been tried on.</p>
+ */
+export function statusMark(status: string): string {
+  const glyph = MARKS[status];
+
+  return glyph === undefined
+    ? '<span class="mark" aria-hidden="true"></span>'
+    : `<span class="mark mark-${status}" aria-hidden="true">${glyph}</span>`;
+}
+
+/**
+ * The four statuses the sidebar can mark. Anything else is the server's word and stays unmarked.
+ *
+ * <p>Colour is never the only signal — the word is written beside the glyph in every case, which is
+ * the same rule the role tones are held to.</p>
+ */
+const MARKS: Readonly<Record<string, string>> = {
+  done: '✓',
+  running: '⟳',
+  queued: '…',
+  failed: '✗',
+};
+
 /** One running round, whole: what it is, how far it has got, and every reviewer's line. */
 function roundCard(round: RoundRecord & { branch: string }, nowMs: number, colour: VendorPalette): string {
   // Only the vendor's WORD carries the colour; the rest of the row is exactly as it was. Both
@@ -2093,7 +2132,7 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number, colou
     .map((row) =>
       `<div class="reviewer"><span class="who" style="color:${colour(row.provider)}">`
       + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}`
-      + `${row.said.length > 0 ? `<div class="said">${escapeHtml(row.said)}</div>` : ''}</div>`)
+      + `${row.said.length > 0 ? `<div class="said">${statusMark(row.status)}${escapeHtml(row.said)}</div>` : ''}</div>`)
     .join('\n');
   const took = elapsed(round, nowMs);
   // WHAT is being reviewed leads the line; the branch and the round number follow it.
@@ -2370,6 +2409,18 @@ const CSS = `
      about five spaces in from the card edge and a long model id no longer decides where the line
      breaks. A margin rather than spaces: this is not a monospace surface. */
   .reviewer .said { margin-left: 16px; }
+  /* The mark leads the status line. inline-block with a FIXED WIDTH is what holds the column when
+     there is no glyph — an unrecognised status gets an empty mark rather than nothing, so its words
+     still start where every other row's words start. The margin is what keeps the glyph off the
+     first letter; without it the line reads as one run. */
+  .reviewer .said .mark { display: inline-block; width: 1.1em; margin-right: 2px; }
+  .reviewer .said .mark-done { color: var(--vscode-charts-green); }
+  /* Blue, not green, and not by accident: done is green because the operator named it, and two
+     meanings on one colour in one column is the thing this change is against. Blue is also what the
+     rounds-log page's running badge already uses. */
+  .reviewer .said .mark-running { color: var(--vscode-charts-blue); }
+  .reviewer .said .mark-queued { color: var(--vscode-charts-yellow); }
+  .reviewer .said .mark-failed { color: var(--vscode-charts-red); }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
   /* The editor's own error colour, so it reads as a problem in every theme rather than in one. */

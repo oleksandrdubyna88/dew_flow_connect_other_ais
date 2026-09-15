@@ -526,8 +526,11 @@ test('a running round shows its status, its reviewers and what it has cost', () 
   // The vendor's word now carries its own colour, so the row is a span plus the rest of the
   // sentence. Same content, and the assertion now also says where the colour stops — and since
   // #132 the status is a second line inside the same row, so the sentence breaks after the model.
+  // …and since #286 the status line leads with the mark for that status, so the sentence a person
+  // reads is the same and the glyph sits in front of it.
   assert.ok(html.includes(
-    `<span class="who" style="color:${DEFAULT_COLOUR('codex')}">codex</span>/Architecture<div class="said">done (2 findings)</div>`));
+    `<span class="who" style="color:${DEFAULT_COLOUR('codex')}">codex</span>/Architecture`
+    + '<div class="said"><span class="mark mark-done" aria-hidden="true">✓</span>done (2 findings)</div>'));
   assert.ok(html.includes('5.3k in / 260 out'));
   assert.ok(html.includes('no cost reported'));
 });

@@ -8,6 +8,50 @@
 > this file's own preference, and the reason is written there rather than left as a version bump
 > somebody finds later.
 
+### A reviewer's status carries a mark you can see without reading (2026-09-15)
+
+Six reviewers in a running round were six near-identical grey 11px lines differing in one word
+somewhere in the middle, so *what is happening* had to be read rather than seen (issue #286). Each
+status the sidebar recognises now leads its line with a coloured glyph: **done ✓ green**,
+**running ⟳ blue**, **queued … yellow**, **failed ✗ red**.
+
+**The status was not separable where the line is drawn, and that is why this was not a CSS change.**
+`restOf` welds the status and its detail into one string — `said` is `"done (3 findings, 30 s)"` —
+and `panelView` escaped and printed the whole thing. `ReviewerRow` gained a `status` field carrying
+the normalised word alone. **`said` is deliberately unchanged**: the rounds-log page reads these same
+rows, and splitting the word out of the sentence would have changed what it shows for no reason
+anybody asked for. A test asserts the sentence per status for exactly that reason.
+
+**`statusMark` is exported so the tests CALL it.** It is a branch, and a substring assertion over the
+generated page cannot tell a branch that returned the wrong glyph from one that returned the right
+one — the page contains a glyph either way, and running/queued swapped would be green. Three
+reviewers converged on this in the plan round, along with the point that a
+"four distinct classes" assertion passes when the mapping is inverted; the mapping is now asserted
+per status, glyph and colour variable both.
+
+**An unrecognised status gets an EMPTY mark, not nothing.** `ReviewerState.status` is a free string
+the server writes, not a union, so inventing a glyph for an unseen word would be a guess rendered as
+a fact. But returning nothing would start that row's text a glyph-width left of every other row, and
+a ragged column is the same *hard to read* the issue is about. `.mark` is `inline-block` with a fixed
+width: the column is held, the meaning is not guessed.
+
+**Blue for running, and the divergence this does not widen.** The rounds-log page's running badge is
+blue; the sidebar's round-level badge is green. Since `done` had to be green — the operator named it
+— a green `running` would put two meanings on one colour in one column. Blue agrees with the log
+page. `.badge.running` keeps its green: re-colouring the round-level badge is a different decision
+about a different thing.
+
+Every glyph already shipped here before this change — ✓ and ✗ on the rounds-log page, ⟳ on the
+vendor cards' run and update buttons, … throughout the prose — so none of them was a new font risk
+on a machine this has not been tried on, which is the thing that would otherwise have needed
+checking and cannot be checked from here.
+
+**What the existing suite caught**, worth keeping because it is not obvious: a CSS comment is inlined
+into the page, so the words in one are page content. A comment written as *"a status the panel does
+not know…"* put the phrase **does not know** into the HTML, and
+`panelServerPromptAgreement.test.ts` asserts that phrase is ABSENT when the server agrees about
+roles. The comment was reworded. A comment in this stylesheet is not a private note.
+
 ### The catalogue is offered whole, and says "Claude Code" (2026-09-15)
 
 **Add a reviewer** hid its Claude entry two ways at once, and either alone reads as *the catalogue

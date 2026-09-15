@@ -10,6 +10,12 @@ It wraps now — and so does the code passage attached to a question.
 A fenced code block inside an answer, and a wide table, still scroll in their own boxes as they
 did: a long line of code is not something you want broken in the middle, and that was already a
 decision here rather than an accident.
+**You can see what each reviewer is doing without reading the column** (#286). A running round's
+reviewers were a stack of near-identical grey lines that differed in one word somewhere in the
+middle. Each status now leads its line with a mark: a **green ✓** for done, a **blue ⟳** for
+running, a **yellow …** for queued and a **red ✗** for failed. The word is still written beside it —
+the mark is an addition, never a replacement — and a status this panel has not been taught gets a
+blank space rather than an invented icon, so the column stays straight.
 
 **Add a reviewer offers the whole catalogue, and the Claude entry is called Claude Code.** Two
 separate things used to hide it, and either one on its own reads as *this product has no Claude
