@@ -125,7 +125,7 @@ import { join } from 'node:path';
 import { asText } from './asText';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
-import { watchedDirs } from './escalationDirs';
+import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
@@ -2704,9 +2704,11 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
     // the panel is the one surface where a mistyped path can be seen at all — a directory that cannot
     // be read contributes no questions and throws nothing, which is the silence this feature exists
     // to end, and would be the silence again one level up.
+    const resolved = whereData((path) => present.has(path));
+
     return {
-      ...whereData((path) => present.has(path)),
-      alsoWatched: watchedDirs(coaiDataDir(), alsoWatchDataDirectories(), process.platform),
+      ...resolved,
+      alsoWatched: await probeWatched(resolved.directory.length > 0 ? resolved.directory : coaiDataDir()),
     };
   } catch (error) {
     return {
@@ -2729,6 +2731,31 @@ function probePaths(): readonly string[] {
   const root = chosenRoot();
 
   return [join(root, 'coai.db'), coaiDataDir()];
+}
+
+/**
+ * The watched directories, each PROBED, so the panel says what is really being read.
+ *
+ * <p>`watchedDirs` refuses what cannot work on this host — a POSIX path named from a Windows window.
+ * A path that is merely absent, unmounted or permission-refused passes that and then contributes no
+ * questions and throws nothing, which is indistinguishable from an installation that has asked
+ * nothing. That is the exact silence `coai.alsoWatchDataDirectories` exists to end, so leaving it off
+ * this surface would be the same bug one level up. (codex and gemini, the code round.)</p>
+ *
+ * <p>Probed off the event loop, for the reason every other probe in this file is: the use case is a
+ * NAS, and a synchronous check against a disconnected share hangs the extension host. The window's
+ * OWN directory is not probed here — `whereData` has already answered for it.</p>
+ */
+async function probeWatched(own: string): Promise<readonly WatchedDir[]> {
+  const asked = watchedDirs(own, alsoWatchDataDirectories(), process.platform);
+
+  return Promise.all(asked.map(async (dir, at) => (
+    at === 0 || dir.refusal.length > 0 || await reachable(dir.path)
+      ? dir
+      : {
+        ...dir,
+        refusal: 'this window cannot read that folder — check the path, and that the machine or share holding it is up',
+      })));
 }
 
 /** Whether a path is there, without ever throwing and without blocking the host. */
