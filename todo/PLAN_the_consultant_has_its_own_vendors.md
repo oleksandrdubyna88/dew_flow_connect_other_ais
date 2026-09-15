@@ -234,12 +234,14 @@ Discharges 2, 8, and the server halves of 4 and 7.
 has since been redefined onto a DIFFERENT runtime — beyond the spec, which said only to take the
 endpoint and CLI path from a current definition with that id. Borrowing them across a runtime change
 would hand the codex adapter a Claude binary, which `vendor-routing.md` says is invisible in the
-output; the refusal names both runtimes. (ii) The two halves classify an UNRECOGNISED runtime spelling
-differently: the panel reads `runtime: "Codex"` as a legacy reference and resolves it by id, while the
-server treats any non-empty runtime as a definition and refuses one outside the allowlist, by name.
-Fail-closed on the wire is deliberate, and the manifest enum now marks that spelling invalid in the
-settings editor, so a person editing by hand is told twice — but it IS a panel-versus-server
-difference and is written here rather than left to be discovered.
+output; the refusal names both runtimes. (ii) **Closed by B3's own plan round, which both reviewers
+raised independently.** The halves used to classify a runtime spelling differently — the panel read
+`runtime: "Codex"` as a legacy reference and resolved it by id, while the server treated any non-empty
+runtime as a definition and refused one outside the allowlist. One file, two answers. Both now match
+WITHOUT case and answer in the allowlist's own spelling, so one name reaches the wire, `NameOf` and
+every adapter. What remains asymmetric, deliberately, is a runtime name this build has never heard of:
+the panel reads it as an older entry and resolves by id — how an extension meets a runtime a NEWER one
+wrote — while the server refuses it, being the half that would launch it.
 
 **B4 · The wire carries the definition — measured against the old server first** — *Fable*.
 The measurement comes BEFORE the projection is removed: build the last released `mcp-v*` tag in a
