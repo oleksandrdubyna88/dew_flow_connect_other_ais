@@ -289,6 +289,15 @@ function startingChoice(current: Readonly<Record<string, unknown>>, caller: stri
  * fresh bare reference and re-resolved it, handing the reviewer row's model and endpoint back over
  * whatever the person had set. The consultant is not a reference to that row any more, so nothing may
  * be re-lent to it. (codex, A2's code round.)</p>
+ *
+ * <p><b>That guard is for a DEFINITION, and narrowing it to one is this story's code round.</b> A
+ * stored entry can be a bare REFERENCE whose id the catalogue also offers: `deepseek` names no
+ * runtime and needs no reviewer row, so without one it resolves to UNAVAILABLE while the picker
+ * offers it two lines below as a working choice. Keeping the reference because the id matched meant
+ * a person clicked the vendor their own row was already showing them and nothing happened — same
+ * reference in, same unplaceable row back. There is nothing of theirs to protect in a reference: it
+ * holds no model they chose, no endpoint and no CLI path. So a re-selection MATERIALISES it, which
+ * is what picking a catalogue entry has meant since C5. (codex, this story's code round.)</p>
  */
 function vendorChosen(
   current: Readonly<Record<string, unknown>>,
@@ -301,7 +310,7 @@ function vendorChosen(
     return { ...current };
   }
 
-  return id === starting.vendor
+  return id === starting.vendor && starting.runtime !== ''
     ? merged(current, caller, resolveConsultant(starting, vendors), current[caller])
     : merged(current, caller, chosen(id, vendors), undefined);
 }

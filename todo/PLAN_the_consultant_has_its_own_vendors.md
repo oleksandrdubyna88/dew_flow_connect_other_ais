@@ -359,3 +359,12 @@ the OLD server runs while the projection still stands.
 - Team-server consultants, and any `providers` reporting of consultant definitions.
 - A write-back of migrated entries on read — reading must not write.
 - Retiring the existing source-text assertions in `consultant.test.ts`.
+- **One shared, versioned capability contract for what a runtime can consult with** — raised by
+  `codex` on C5's code round, and rejected for this plan rather than on its merits. Today
+  `CONSULTING_RUNTIMES` is a documented MIRROR of `ConsultantResolution.Consulting`, and it has to be
+  a mirror rather than something fetched: the panel must draw the picker on a machine where the
+  server is not installed yet. The drift the finding names is real — teach the `codex` runtime custom
+  endpoints on one half only and the two halves disagree about the same row — and is held today by an
+  agreement test over the two lists plus B4's measurement across a version boundary. If that stops
+  being enough, the shape to reach for is a contract the server SERVES and the extension falls back
+  from, not a third copy of the list.
