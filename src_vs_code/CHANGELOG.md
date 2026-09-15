@@ -43,6 +43,27 @@ and `/mnt/z/coai` in a WSL one, so one shared value would be wrong in one of the
 audit-log article is corrected in all five as well — it had said since 2026-09-06 that logs live
 beside the installed binary, when they moved under the data folder.
 
+**What the review round changed, and it is worth knowing about.** Four things, each of which would
+have been a quiet way to lose data:
+
+- **Changing or moving the folder now hands you the updated config block and says to paste it.**
+  Three reviewers found the same trap independently: the panel follows your choice at once, and the
+  MCP client goes on starting its server with the entry it was given months ago — so the server
+  keeps writing to the old folder while the screen says otherwise. After a move that is worse than
+  confusing, because deleting the old folder then deletes something still being written to. The
+  delete now says so before it asks.
+- **The old folder is read once more, immediately before it is deleted**, and compared with what the
+  move recorded. This extension cannot stop the server your client starts, and cannot see one
+  attached — so a round appended after the copy used to be deleted in silence. Now it refuses.
+- **A write-ahead log beside the database no longer refuses the move.** It made the feature
+  unreachable for exactly the installations most likely to want it — one unclean stop leaves a
+  sidecar behind for good — and it contradicted the copy, which takes both sidecars precisely
+  because they carry committed rounds. It is said instead of enforced.
+- **The install asks the folder it is actually going to use.** It probed the folder you picked while
+  the installation would use the side directory inside it, so "this already holds a database" could
+  be true of one and false of the other. The side is settled first now, and you are shown what was
+  found and asked to confirm before anything is saved.
+
 ## Extension 0.43.1 — 2026-09-14
 
 **The ⋯ menu now names the version of what it will actually give you: *Copy the CLAUDE.md snippet

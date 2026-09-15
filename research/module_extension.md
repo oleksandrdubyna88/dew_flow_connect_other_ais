@@ -1888,6 +1888,31 @@ history, the entire chat half of the product, the audit records and the rounds s
 `shared/data-inventory.json` now names every entry with its fate, and a suite scans BOTH halves'
 sources for paths composed under the data directory and fails on one the fixture has never heard of.
 
+**What the gate's plan round corrected**, and every one of them is a way to lose data quietly:
+
+- **The re-paste gap**, raised by three reviewers independently and the most important finding of the
+  round. A changed or moved folder takes effect in this window at once while the MCP client keeps
+  starting its server with the entry it already has — so the server writes to the OLD folder. After a
+  move the delete would then destroy a directory something is still writing to. `tellClientsToCatchUp`
+  puts the replacement block on the clipboard at the moment it becomes necessary and says what happens
+  if it is not pasted; the delete's confirmation says it too. The decision not to write another
+  program's config file stands — this makes it survivable instead.
+- **The source is read once more immediately before the delete** (`sourceChangedSince`) and compared
+  with the fingerprint the move recorded. The extension cannot stop the client's server and cannot
+  detect one attached, because the server opens the database per write and closes it; a round appended
+  between the copy and the delete was therefore lost in silence. A record from an older build carries
+  no fingerprint, and "cannot compare" refuses rather than proceeding.
+- **A WAL sidecar warns instead of refusing.** Refusing made the feature unreachable for every
+  installation that had ever been killed — nothing removes a sidecar by itself — and contradicted the
+  inventory, which copies both sidecars precisely because they carry committed rounds.
+- **The install probes `<root>/<side>`, not the root.** `directoryFor` is the one rule both it and
+  `coaiDataDir` apply, so "this folder already holds a database" is now a statement about the directory
+  that will actually be used. What was found is shown, and confirmed, before anything is saved.
+- **The probe is bounded** (`withinReason`, 8 s): a disconnected share does not reject, it waits, and
+  an install with no bound looked like a dialog that had stopped.
+- **A failed copy says the destination is partially written**, because the next attempt refuses a
+  folder holding any part of a history, and somebody who is not told meets a refusal they cannot clear.
+
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
 
 | Record | Scope | What it is |
