@@ -941,18 +941,32 @@ test('a scripted run can still be handed environment variables', () => {
   assert.equal(parsed.mcpServers.coai.env?.['COAI_ON_EXHAUSTED'], 'good_enough');
 });
 
-test('and the extension passes it nothing — the call site, not just the default', () => {
+test('and the extension passes it nothing but the one thing that cannot live in the file', () => {
   // The first version of this guard asserted the FUNCTION's default and let the call site do as it
   // pleased: putting the env back in extension.ts left every test green. The call site lives behind
   // `vscode`, which this suite cannot import, so the source is what it reads — and it asserts it
   // FOUND the calls, because a structural test that matches nothing passes for ever.
+  //
+  // `serverEnv()` is the ONE argument this allows, and the exception is the rule's own reasoning
+  // rather than a hole in it. The rule is that a pasted key freezes a setting the settings FILE
+  // could otherwise change live. `COAI_DATA_DIR` and `COAI_DATA_SIDE` can never be in that file:
+  // the file lives inside the directory they select, so it cannot be found until they are known.
+  // A client entry is the only place they can reach a server, which is why the block carries them
+  // and carries nothing else. What `serverEnv()` may contain is asserted as BEHAVIOUR, not as text,
+  // in `theDirectoryAPersonChose.test.ts` — "a server is handed the two keys, and only those two".
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
-  const calls = [...source.matchAll(/mcpServerBlock\(([^)]*)\)/g)].map((m) => m[1]!.trim());
+  // One level of nesting, so `mcpServerBlock(target.fsPath, serverEnv())` is read whole. The older
+  // pattern stopped at the first `)` and would have reported the argument list as `…, serverEnv(`.
+  const calls = [...source.matchAll(/mcpServerBlock\(((?:[^()]|\([^()]*\))*)\)/gu)].map((m) => m[1]!.trim());
 
   assert.ok(calls.length >= 2, `expected the two clipboard writes, found ${calls.length}`);
   for (const args of calls) {
-    assert.doesNotMatch(args, /,/,
-      `mcpServerBlock(${args}) passes an env: every key in it freezes that setting for the client`);
+    assert.match(
+      args,
+      /^[A-Za-z_$][\w$.]*(?:,\s*serverEnv\(\))?$/u,
+      `mcpServerBlock(${args}) passes something other than serverEnv(): every other key in there `
+      + 'freezes that setting for this client, silently, which is what this block was trimmed to end',
+    );
   }
 });
 

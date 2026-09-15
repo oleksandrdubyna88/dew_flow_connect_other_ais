@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
+import { hostname } from 'node:os';
 import * as vscode from 'vscode';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { openPhrases } from './phrasesPanel';
@@ -27,12 +28,13 @@ import { startHousekeeping } from './chatStoreHousekeeping';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
-import { coaiDataDir } from './dataDir';
+import { coaiDataDir, DATABASE_FILE, serverEnv } from './dataDir';
+import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
+import { installedVersion, installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
@@ -48,7 +50,7 @@ import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor, storageReadsThisSide } from './sideConfig';
+import { readerFor, reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -799,11 +801,20 @@ async function installServer(context: vscode.ExtensionContext): Promise<void> {
 
 async function install(context: vscode.ExtensionContext): Promise<void> {
   try {
+    // Asked BEFORE the download, because `installLatest` writes this side's record at the end of it
+    // and the question is "has this side ever installed", not "did that just succeed".
+    const firstTime = installedVersion(context.globalState, context.globalStorageUri) === undefined;
     const target = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
       () => installLatest(context.globalStorageUri, context.globalState),
     );
-    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath));
+    if (firstTime) {
+      await askWhereDataLives(context);
+    }
+    // The block carries the two variables — the ONE configuration a client entry must hold, because
+    // the settings file that carries everything else lives inside the directory they select. See
+    // `serverEnv`, and the guard in `install.test.ts` that allows these two keys and no others.
+    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, serverEnv()));
     const targets = clientTargetsLine(CLIENT_TARGETS);
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
@@ -812,6 +823,142 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
     void vscode.window.showErrorMessage(
       hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
     );
+  }
+}
+
+/**
+ * The one question this product asks at install time: where should its data live?
+ *
+ * <p><b>Asked once per side of a machine, and asked HERE</b>, because installing is the moment a
+ * person is already configuring this product and already has a paste to make. Anywhere later is a
+ * setting nobody knows to look for, and the cost of not asking is paid silently: a default folder
+ * lives on the system drive, and a system drive is the thing that gets reformatted.</p>
+ *
+ * <p><b>A folder that already holds a history is ADOPTED.</b> That is the whole point — it is how a
+ * reinstalled machine picks its own rounds back up — and it is the exact opposite of the rule a MOVE
+ * must follow, where a non-empty destination is refused because copying over it destroys what is
+ * there. Both rules are about the same folder and neither may be phrased as "the destination is
+ * checked". See `dataChoice.ts`, which holds the sentences.</p>
+ *
+ * <p>Answering nothing keeps the default, on purpose: a dismissed dialog must leave an installation
+ * that works, not one that is half-configured.</p>
+ */
+async function askWhereDataLives(context: vscode.ExtensionContext): Promise<void> {
+  const DEFAULT = 'Keep it in the default folder';
+  const CHOOSE = 'Choose a folder…';
+  const answer = await vscode.window.showQuickPick([DEFAULT, CHOOSE], {
+    title: 'Where should ConnectOtherAIs keep its data?',
+    placeHolder: `${coaiDataDir()} — rounds, sessions, chats and spending`,
+    ignoreFocusOut: true,
+  });
+  if (answer !== CHOOSE) {
+    return;
+  }
+
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: 'Keep my data here',
+    title: 'A folder that survives reinstalling this machine — a network drive or a NAS',
+  });
+  const folder = picked?.[0];
+  if (folder === undefined) {
+    return;
+  }
+
+  const found = await whatIsIn(folder);
+  const side = await askForSideName(found);
+  if (side === undefined) {
+    return;
+  }
+
+  const config = vscode.workspace.getConfiguration('coai');
+  try {
+    await saveSetting(context, config, 'dataDirectory', folder.fsPath);
+    await saveSetting(context, config, 'dataSide', side);
+  } catch (error) {
+    // The choice did not land, so nothing may claim it did — and the block copied next must carry
+    // what is actually in effect rather than what was asked for.
+    reportRefusal(context, 'dataDirectory', error);
+
+    return;
+  }
+
+  // In effect for THIS window immediately: the block about to be copied is built from it, and so is
+  // every path the panel resolves from here on.
+  storageReadsThisSide(context);
+  void vscode.window.showInformationMessage(adoptionSentence(folder.fsPath, found));
+}
+
+/**
+ * The side name, offered rather than demanded — and validated the way the server validates it.
+ *
+ * <p>`undefined` means the person backed out, which abandons the whole choice; an empty string is an
+ * answer, and it means the folder is not divided.</p>
+ */
+async function askForSideName(found: FolderReport): Promise<string | undefined> {
+  const offered = defaultSideName({
+    remoteName: vscode.env.remoteName ?? '',
+    distro: process.env['WSL_DISTRO_NAME'] ?? '',
+    hostname: hostname(),
+    platform: process.platform,
+  });
+  const sharing = found.sides.length > 0
+    ? ` Already in this folder: ${found.sides.join(', ')}.`
+    : '';
+
+  return vscode.window.showInputBox({
+    title: 'A name for this installation inside that folder',
+    value: found.hasDatabase ? '' : offered,
+    prompt: 'Two installations sharing one folder each keep their own database under their own name.'
+      + ` Leave it empty if only this one uses the folder.${sharing}`,
+    ignoreFocusOut: true,
+    validateInput: (typed) => {
+      const refusal = sideRefusal(typed);
+
+      return refusal.length === 0 ? undefined : refusal;
+    },
+  });
+}
+
+/**
+ * What a chosen folder already holds, read without blocking the host.
+ *
+ * <p>Asynchronously and through `vscode.workspace.fs`, because the folder this is for is a NAS: a
+ * synchronous probe of a disconnected share hangs the extension host, which is the predecessor's
+ * finding and the reason the panel's own probes were made async.</p>
+ *
+ * <p>A folder that cannot be read at all reports as empty. It is the honest reading — nothing was
+ * found — and the sentence it produces tells somebody to check the path, which is what to do.</p>
+ */
+async function whatIsIn(folder: vscode.Uri): Promise<FolderReport> {
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(folder);
+    const inside = await Promise.all(entries.map(async ([name, kind]) => ({
+      name,
+      isDirectory: kind === vscode.FileType.Directory,
+      hasDatabase: kind === vscode.FileType.Directory
+        && await exists(vscode.Uri.joinPath(folder, name, DATABASE_FILE)),
+    })));
+
+    return {
+      hasDatabase: entries.some(([name, kind]) => name === DATABASE_FILE && kind === vscode.FileType.File),
+      sides: sidesIn(inside),
+    };
+  } catch {
+    return { hasDatabase: false, sides: [] };
+  }
+}
+
+/** Whether a path is there, as a question rather than an exception. */
+async function exists(path: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(path);
+
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -826,7 +973,9 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
   // that did not exist and called it installed. `stat` answers it; asking for the full status would
   // launch a `--version` process to learn something the stat already knew.
   const installed = await serverExists(context.globalStorageUri);
-  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath));
+  // The same block the install flow copies, carrying the same two variables: a person who comes back
+  // to the ⋯ menu after choosing a directory must not be handed an entry that ignores the choice.
+  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, serverEnv()));
   void vscode.window.showInformationMessage(
     installed
       ? 'The MCP config block is on your clipboard — paste it into your client and restart it.'

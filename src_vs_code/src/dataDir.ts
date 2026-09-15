@@ -1,7 +1,12 @@
 import { join, resolve } from 'node:path';
 
-/** The server's own name for it (`RoundsDb.FileName`), and the file a person would move. */
-const DATABASE_FILE = 'coai.db';
+/**
+ * The server's own name for it (`RoundsDb.FileName`), and the file a person would move.
+ *
+ * <p>Exported because "does this folder already hold a history" is the question the install flow
+ * asks of a folder somebody picked, and asking it needs this name rather than a second copy of it.</p>
+ */
+export const DATABASE_FILE = 'coai.db';
 
 /**
  * Where `coai-mcp` keeps its state, and the ONE answer to that question.
@@ -51,7 +56,7 @@ export function coaiDataDir(): string {
   // `COAI_DATA_SIDE=wsl/node1` is a plausible thing to type, it fails the grammar, and falling back
   // would put this installation and every other one on the root's single database. The server
   // refuses to start on it; this half refuses to guess a path for it.
-  if (!isSafeSide(chosen.side)) {
+  if (!usableSideName(chosen.side)) {
     throw new Error(
       `COAI_DATA_SIDE='${chosen.side}' is not a usable directory name. A side may contain ${SIDE_GRAMMAR}.`);
   }
@@ -72,7 +77,7 @@ function defaultDataDir(): string {
 }
 
 /** The side-name grammar, spelled exactly as `PanelSettings.IsSafeSide` spells it in C#. */
-const SIDE_GRAMMAR = 'lower-case letters, digits, dot, dash and underscore';
+export const SIDE_GRAMMAR = 'lower-case letters, digits, dot, dash and underscore';
 
 /**
  * The side this window was GIVEN, lower-cased — empty when none was asked for anywhere.
@@ -230,7 +235,7 @@ function currentChoice(): ChosenStorage {
  */
 export function serverEnv(): Readonly<Record<string, string>> {
   const chosen = currentChoice();
-  if (chosen.directory.length === 0 || (chosen.side.length > 0 && !isSafeSide(chosen.side))) {
+  if (chosen.directory.length === 0 || (chosen.side.length > 0 && !usableSideName(chosen.side))) {
     return {};
   }
 
@@ -266,7 +271,7 @@ export function whereData(exists: (path: string) => boolean): DataLocation {
   // A side that cannot be used is reported, never guessed at. The server REFUSES TO START on this,
   // so a panel that threw here would hide the one sentence that explains why nothing works. It is
   // refused wherever it was named: a setting can hold `wsl/node1` exactly as a variable can.
-  if (chosen.directory.length > 0 && chosen.side.length > 0 && !isSafeSide(chosen.side)) {
+  if (chosen.directory.length > 0 && chosen.side.length > 0 && !usableSideName(chosen.side)) {
     return {
       directory: '',
       side: chosen.side,
@@ -396,7 +401,10 @@ export const DATA_TO_LEAVE: readonly string[] = ['worktrees/', 'servers/'];
  * sides of one installation, and the symptom is a token written where the server does not read it.
  * Four reviewers found that independently. A rule simple enough to write twice without drifting is
  * the point.</p>
+ *
+ * <p>Exported because the install flow OFFERS a side name and must not offer one the server would
+ * refuse — one rule, asked by whoever needs it, rather than a second copy in the asking.</p>
  */
-function isSafeSide(side: string): boolean {
+export function usableSideName(side: string): boolean {
   return side !== '.' && side !== '..' && /^[a-z0-9._-]+$/u.test(side);
 }

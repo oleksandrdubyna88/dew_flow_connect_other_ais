@@ -59,9 +59,14 @@ test('the phrases tab writes through the ONE door, and no longer has a bare conf
 });
 
 test('every host that saves a setting reports the refusal, because saveSetting no longer swallows it', () => {
-  // The enumeration `saveSetting`'s doc makes, asserted rather than promised: if a fourth caller
-  // appears without a report, this goes red and names it.
-  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts'];
+  // The enumeration `saveSetting`'s doc makes, asserted rather than promised: a caller that appears
+  // without a report turns this red and names it.
+  //
+  // `extension.ts` is the fourth, and it takes the panel's shape — catch locally, report, and return
+  // without going on. That last part is the whole reason it is not the other shape: the block it
+  // would otherwise copy next is built from the choice, so a refusal it walked past would put a
+  // directory in somebody's client entry that this window is not using.
+  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'extension.ts'];
   for (const file of callers) {
     assert.match(
       source(file),

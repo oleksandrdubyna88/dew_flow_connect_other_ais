@@ -65,9 +65,13 @@ export function readerFor(
  *       chain has a `.catch` that calls its `report`. The repaint is in a `.then` BEFORE that catch,
  *       never a `finally`, so a rejected write skips the repaint — which is the whole repair.</li>
  *   <li><b>`phrasesPanel.apply`</b> — the same, reporting into the page's banner instead.</li>
+ *   <li><b>`extension.askWhereDataLives`</b> — the panel's shape, and it also RETURNS rather than
+ *       continuing: the next thing that flow does is copy a client-entry block built from the
+ *       choice, so a refusal walked past would hand somebody a directory this window is not
+ *       using.</li>
  * </ul>
  *
- * <p>A fourth caller must pick one of those two shapes. There is no third.</p>
+ * <p>A fifth caller must pick one of those two shapes. There is no third.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,
