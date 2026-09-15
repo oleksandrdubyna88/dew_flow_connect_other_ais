@@ -14,6 +14,7 @@
 
 import {
   CALLER_KINDS,
+  CONSULTING_RUNTIMES,
   ConsultSettings,
   ConsultantPreset,
   consultableVendors,
@@ -125,6 +126,7 @@ function placed(
   state: ConsultantViewState,
 ): ConsultantRowView {
   const known = catalogue.some((preset) => preset.id === one.vendor);
+  const placeable = CONSULTING_RUNTIMES.includes(one.runtime);
 
   return {
     caller,
@@ -135,9 +137,9 @@ function placed(
     baseUrl: one.baseUrl,
     executablePath: one.executablePath,
     options: known ? offeredOptions(catalogue) : [ownOption(one), ...offeredOptions(catalogue)],
-    models: modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []),
-    takesBaseUrl: one.runtime === 'codex' || one.runtime === 'local',
-    takesExecutablePath: one.runtime !== 'local',
+    models: placeable ? modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []) : [],
+    takesBaseUrl: placeable && (one.runtime === 'codex' || one.runtime === 'local'),
+    takesExecutablePath: placeable && one.runtime !== 'local',
     hints: hintsFor(caller.id, one),
   };
 }
@@ -213,7 +215,30 @@ function hintsFor(
     ? 'this build cannot hold a consultation through a custom endpoint on the Codex CLI — the server refuses it by name. The setting is kept; it will run when that runtime learns to.'
     : '';
 
-  return [own, endpoint].filter((hint) => hint.length > 0);
+  return [own, foreignRuntime(one.runtime), endpoint].filter((hint) => hint.length > 0);
+}
+
+/**
+ * The other half of `CannotConsult`, said where the entry is chosen rather than when it fails.
+ *
+ * <p>The picker cannot offer one of these — `consultableVendors` filters the catalogue by
+ * {@link CONSULTING_RUNTIMES} — but a stored entry can BE one, because rule (a) materialises
+ * whatever runtime the reviewer row it names is on, `remote` included. Materialising is not
+ * permitting and never was: `ConsultationService.OnTheVendorAsync` asks `ConsultantResolution.For`
+ * before anything is launched and refuses by name, so a consultation is not routed at a Team server
+ * by this or any other path. What was missing is that the SECTION said nothing — the row offered a
+ * CLI path and a model list, and a person read three sentences about settings that will never be
+ * read and none about the refusal already waiting for them. (This story's plan round, `codex`.)</p>
+ *
+ * <p>The entry itself is untouched, as rule (c) is untouched: a stored choice is never rewritten
+ * under the person, because the id keys their vault entry. It is named, and the way out is the
+ * catalogue sitting in the same select.</p>
+ */
+function foreignRuntime(runtime: Runtime): string {
+  return CONSULTING_RUNTIMES.includes(runtime)
+    ? ''
+    : `this build cannot hold a consultation on '${runtime}' — the server refuses it by name. `
+      + `Consultants run on: ${CONSULTING_RUNTIMES.join(', ')}. The setting is kept; pick one of those above to use it.`;
 }
 
 /** One caller's row: which vendor answers it, on which model, and with what of its own. */
