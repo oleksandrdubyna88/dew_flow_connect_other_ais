@@ -132,6 +132,13 @@ internal static class Program
         /// the answers are bigger, and the cost here is the process rather than the parse.</para>
         /// </remarks>
         Normalize,
+
+        /// <summary>Decide what became of every unprocessed candidate, and write it down.</summary>
+        /// <remarks>
+        /// The half that makes the rest real: a classifier that never persists leaves every
+        /// candidate unprocessed in the shipped product however well it classifies.
+        /// </remarks>
+        Collect,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -151,6 +158,7 @@ internal static class Program
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
                 "--normalize" => Startup.Normalize,
+                "--collect-bugs" => Startup.Collect,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -194,6 +202,9 @@ internal static class Program
 
             case Startup.Normalize:
                 return NormalizeJson(args);
+
+            case Startup.Collect:
+                return await CollectBugsAsync(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -340,6 +351,35 @@ internal static class Program
     /// located: that is an ANSWER, carried per item as a skip, and a batch of fifty where two failed
     /// to resolve is a successful batch.</para>
     /// </remarks>
+    /// <summary>One collector pass over the unprocessed candidates.</summary>
+    /// <remarks>
+    /// Opens the database for WRITING, which is the point: this is the one mode that DECIDES things
+    /// rather than reporting them. 74 (EX_IOERR) when it cannot be opened, because an empty summary
+    /// and a success would read as "there was nothing to collect".
+    /// </remarks>
+    internal static async Task<int> CollectBugsAsync(string[] args)
+    {
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; no candidate can be collected from it");
+            return 74; // EX_IOERR
+        }
+
+        var run = new Collecting.CollectRun(
+            new Runners.Collecting.Collector(
+                new Runners.Collecting.GitHistory(new ProcessLauncher()),
+                new Normalizer.TreeSitterNormalizer()),
+            TimeProvider.System);
+
+        var summary = await run.RunAsync(settings.DataDir, db, Limit(args, Store.BugsQuery.DefaultLimit));
+        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+            summary, Server.ServerJsonContext.Default.CollectSummary));
+
+        return 0;
+    }
+
     internal static int NormalizeJson(string[] args)
     {
         var flags = Flags(args);
@@ -1006,6 +1046,8 @@ internal static class Program
         reads no source files itself; each request carries the text. Exits 66 when the request cannot
         be read and 73 when the answers cannot be written; a method it could not locate is an answer,
         not a failure.
+        `--collect-bugs [--limit 200]` decides what became of every unprocessed candidate — the fix
+        commit, or the reason there is none — and writes it to the findings rows. Prints the funnel.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
         Configure it in your client as:

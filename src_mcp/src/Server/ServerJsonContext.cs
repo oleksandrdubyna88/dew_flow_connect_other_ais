@@ -182,4 +182,5 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Store.BugCorpus))]
 [JsonSerializable(typeof(Normalising.NormalizeRequest))]
 [JsonSerializable(typeof(Normalising.NormalizeResult))]
+[JsonSerializable(typeof(Collecting.CollectSummary))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

@@ -143,7 +143,59 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
             {
                 // Back to 1-based, which is how a finding names a line and how a person reads one.
                 return new EnclosingSymbol(
-                    node.Type, node.StartPosition.Row + 1, node.EndPosition.Row + 1, node.Text);
+                    node.Type,
+                    node.StartPosition.Row + 1,
+                    node.EndPosition.Row + 1,
+                    node.Text,
+                    NameOf(node));
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>What a function node calls itself, or empty for one that has no name.</summary>
+    private static string NameOf(Node node) =>
+        node.GetChildForField("name") is { } named ? named.Text : string.Empty;
+
+    public EnclosingSymbol? LocateNamed(SourceLanguage language, string source, string name)
+    {
+        if (Grammar(language) is not { } grammar || name.Length == 0)
+        {
+            return null;
+        }
+
+        using var parsed = new Language(grammar.Library, grammar.Function);
+        using var parser = new Parser(parsed);
+        using var tree = parser.Parse(source);
+
+        return tree is null ? null : Named(tree.RootNode, FunctionKinds(language), name);
+    }
+
+    /// <summary>The first function of this name, anywhere in the tree.</summary>
+    /// <remarks>
+    /// FIRST rather than only: an overload set shares a name, and picking the first is a deliberate
+    /// approximation the collector can live with — a finding whose method has overloads compares the
+    /// wrong one at worst, and the skeleton comparison that follows will then read as unchanged and
+    /// skip it. Wrong-but-skipped is the safe direction; wrong-but-collected is not.
+    /// </remarks>
+    private static EnclosingSymbol? Named(Node node, string[] kinds, string name)
+    {
+        foreach (var child in node.Children)
+        {
+            if (kinds.Contains(child.Type) && NameOf(child) == name)
+            {
+                return new EnclosingSymbol(
+                    child.Type,
+                    child.StartPosition.Row + 1,
+                    child.EndPosition.Row + 1,
+                    child.Text,
+                    name);
+            }
+
+            if (Named(child, kinds, name) is { } found)
+            {
+                return found;
             }
         }
 
