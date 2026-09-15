@@ -713,12 +713,14 @@
                 "type": "string",
                 "enum": [
                   "codex",
+                  "gemini",
                   "claude",
                   "antigravity",
                   "local",
+                  "remote",
                   ""
                 ],
-                "description": "Which CLI answers. Absent — or empty, which the reader treats the same way — means this entry is an older one that names a reviewer row instead, and it is read as that row's runtime, or, where no row has the name, as the runtime the name itself is."
+                "description": "Which CLI answers. Absent — or empty, which the reader treats the same way — means this entry is an older one that names a reviewer row instead, and it is read as that row's runtime, or, where no row has the name, as the runtime the name itself is. Every runtime is listed because a row lending its runtime lends whatever it is on: `gemini` and `remote` can be STORED here and are then refused by name when a consultation is asked for, which is a different thing from being invalid in your settings file."
               },
               "model": {
                 "type": "string",

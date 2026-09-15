@@ -1,6 +1,7 @@
 # PLAN — the consultant has its own vendors
 
-> Status: **plan only, nothing implemented yet, 2026-09-14.** Reviewed by the gate the same day —
+> Status: **EPIC A IMPLEMENTED 2026-09-15 (stories A1 and A2, PR #262); epics B and C remain
+> planned.** Written 2026-09-14 and reviewed by the gate the same day —
 > verdict `good_enough`, 3 of 3 reviewers, 13 gating findings against a threshold of 6; twelve
 > accepted and folded in below, two rejected with reasons (see *What the plan round changed*).
 > Scope: the Consultant section of the panel (`consultantView.ts`, `consultSettings.ts`,

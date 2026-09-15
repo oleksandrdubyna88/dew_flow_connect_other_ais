@@ -5,6 +5,7 @@ import path from 'node:path';
 import { DEFAULTS, envBlock, settingsFrom } from '../settingsShape';
 import { CALLER_KINDS, CONSULTING_RUNTIMES, DEFAULT_CONSULT } from '../consultSettings';
 import { vendorsFrom } from '../vendors';
+import { RUNTIMES } from '../models';
 import { CONSULT_PROMPT_PATH } from '../consultPrompt';
 import { RUNNING_STATUSES } from '../consultations';
 import { ROLES } from '../prompts';
@@ -213,7 +214,7 @@ test('a pristine panel writes no consult key either', () => {
  * that is missing, so a renamed `contributes` section is a red test that says which section rather
  * than an undefined that reads as "the default changed". (codex, A2's code round.)</p>
  */
-function declaredDefault(setting: string): unknown {
+function declaredProperty(setting: string, ...rest: readonly string[]): unknown {
   const manifest: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
   const step = (value: unknown, key: string): unknown => {
     assert.ok(typeof value === 'object' && value !== null && key in value, `the manifest has no ${key}`);
@@ -221,8 +222,33 @@ function declaredDefault(setting: string): unknown {
     return (value as Record<string, unknown>)[key];
   };
 
-  return step(step(step(step(step(manifest, 'contributes'), 'configuration'), 'properties'), setting), 'default');
+  return ['contributes', 'configuration', 'properties', setting, ...rest].reduce(step, manifest);
 }
+
+function declaredDefault(setting: string): unknown {
+  return declaredProperty(setting, 'default');
+}
+
+/**
+ * Every runtime a consultant row can HOLD is a runtime the settings editor accepts.
+ *
+ * <p>The enum was written from the four runtimes that may CONSULT, which is a different question from
+ * what may be stored. Rule (a) of `resolveConsultant` lends a reviewer row's runtime whatever it is —
+ * materialising is not permitting — so a legacy entry naming a retired `gemini` row, or a Team-server
+ * `remote` one, materialises into a stored `runtime` this build then refuses BY NAME when a
+ * consultation is asked for. Refused at the consultation is right; marked invalid in a person's own
+ * settings file is not. Derived from `RUNTIMES` so a seventh runtime cannot be added to the product
+ * and forgotten here. (CodeRabbit, on PR #262.)</p>
+ */
+test('the settings editor accepts every runtime a consultant row can hold', () => {
+  const declared = declaredProperty('coai.consultants', 'additionalProperties', 'properties', 'runtime', 'enum');
+
+  assert.deepStrictEqual(
+    [...(declared as string[])].sort(),
+    [...RUNTIMES, ''].sort(),
+    'a runtime the reader accepts is flagged as invalid by the manifest, or one it cannot hold is offered',
+  );
+});
 
 test('the manifest ships the same four consultant pairs as the code', () => {
   assert.deepStrictEqual(
