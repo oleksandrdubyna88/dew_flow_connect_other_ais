@@ -15,10 +15,14 @@ import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from
 import {
   CALLER_KINDS,
   ConsultantChoice,
+  ConsultantDefinition,
   ConsultSettings,
   DEFAULT_CONSULT,
+  ResolvedConsultant,
+  consultantChoiceFrom,
   consultSettingsFrom,
   CONSULT_SETTINGS,
+  resolveConsultant,
   sameCallers,
 } from './consultSettings';
 
@@ -203,30 +207,112 @@ export function settingWrite(message: SettingMessage): SettingWrite | undefined 
   return { kind: 'plain', key, value };
 }
 
+/** The fields a control in the section edits in place. The vendor takes its own path: it re-resolves. */
+type ConsultantField = 'model' | 'baseUrl' | 'executablePath';
+
+/** Which field each control's setting key changes — one map, so an unknown key writes nothing. */
+const CONSULTANT_FIELDS: Readonly<Record<string, ConsultantField>> = {
+  consultModel: 'model',
+  consultBaseUrl: 'baseUrl',
+  consultExecutablePath: 'executablePath',
+};
+
 /**
- * One caller's consultant, merged into whatever the stored map already holds.
+ * One caller's consultant, merged into whatever the stored map already holds — as a DEFINITION.
  *
  * <p>Merged rather than replaced, exactly as a role record is: writing what Claude Code asks must
  * not drop the other three callers, and the stored object is what every other row reads on the next
- * repaint. The two keys a row can change are the vendor and the model, and a vendor change CLEARS
- * the model — a model named for one vendor is not a model the next one offers, and leaving it would
- * strand a pair nobody chose.</p>
+ * repaint. It merges into the RAW `coai.consultants` object, so a caller kind this build has no name
+ * for survives the write — a newer panel may know more of them, which is why the server's own
+ * `Merge` keeps them too.</p>
+ *
+ * <p><b>What changed on 2026-09-14 (story A2 of `PLAN_the_consultant_has_its_own_vendors`): the
+ * write stops storing a REFERENCE.</b> It used to put back `{vendor, model}`, where the vendor was a
+ * reviewer row's id and everything else — the runtime, the endpoint, the CLI path, and the model when
+ * none was named — was borrowed from that row on every read. Story A1 made the READ resolve that,
+ * which fixed a consultant dying with a reviewer it never chose; but the file itself still held the
+ * reference, so the consultant went on following the row. Here the first edit in the section writes
+ * what will actually run: {@link resolveConsultant} against the rows this side can see, stored whole.
+ * After it, the two settings are genuinely independent — editing the reviewer row moves the reviewer
+ * and leaves the consultant where the person put it.</p>
+ *
+ * <p>A vendor change still CLEARS the model before resolving — a model named for one vendor is not a
+ * model the next one offers — and what lands is then the model the new vendor will really use: its
+ * row's, where a row lends one, and otherwise none. An id that is blank or only spaces is REFUSED:
+ * it keys no vault entry and names no runtime, so the map comes back untouched rather than holding a
+ * row nothing can run. An entry the rule cannot place stays a bare reference and gains no invented
+ * runtime — only its model is editable, because guessing the rest would send a working tree to a
+ * vendor nobody chose.</p>
  */
 export function consultantRecordUpdate(
   current: Readonly<Record<string, unknown>>,
   caller: string,
   key: string,
   value: unknown,
+  vendors: readonly Vendor[],
 ): Record<string, unknown> {
-  const row = { ...(current[caller] as Record<string, unknown> | undefined ?? {}) };
+  const typed = String(value).trim();
   if (key === 'consultVendor') {
-    row['vendor'] = String(value);
-    row['model'] = '';
-  } else {
-    row['model'] = String(value);
+    return typed.length === 0
+      ? { ...current }
+      : merged(current, caller, resolveConsultant(bareReference(typed), vendors));
   }
+  const field = CONSULTANT_FIELDS[key];
 
-  return { ...current, [caller]: row };
+  return field === undefined
+    ? { ...current }
+    : merged(current, caller, edited(resolveConsultant(consultantChoiceFrom(current[caller]), vendors), field, typed));
+}
+
+/** A vendor id with nothing else claimed — what a person picking from the list has actually said. */
+function bareReference(vendor: string): ConsultantChoice {
+  return { vendor, runtime: '', model: '', baseUrl: '', executablePath: '' };
+}
+
+function merged(
+  current: Readonly<Record<string, unknown>>,
+  caller: string,
+  one: ResolvedConsultant,
+): Record<string, unknown> {
+  return { ...current, [caller]: storedShape(one) };
+}
+
+/**
+ * What a resolved consultant looks like in `settings.json`.
+ *
+ * <p>An endpoint and a CLI path are written only when they hold something: absent and empty mean the
+ * same thing to every reader of this setting — the CLI's own endpoint, and whatever is on PATH — and
+ * a file a person edits by hand is worth keeping readable. The runtime is always written, because it
+ * is the one field that tells a definition from the legacy reference this used to store.</p>
+ */
+function storedShape(one: ResolvedConsultant): Record<string, unknown> {
+  return one.kind === 'unavailable'
+    ? { vendor: one.vendor, model: one.model }
+    : {
+      vendor: one.vendor,
+      runtime: one.runtime,
+      model: one.model,
+      ...(one.baseUrl.length > 0 ? { baseUrl: one.baseUrl } : {}),
+      ...(one.executablePath.length > 0 ? { executablePath: one.executablePath } : {}),
+    };
+}
+
+/** One field replaced. An unplaceable entry admits only its model — nothing else has a meaning yet. */
+function edited(one: ResolvedConsultant, field: ConsultantField, value: string): ResolvedConsultant {
+  return one.kind === 'definition'
+    ? editedDefinition(one, field, value)
+    : field === 'model' ? { ...one, model: value } : one;
+}
+
+function editedDefinition(one: ConsultantDefinition, field: ConsultantField, value: string): ResolvedConsultant {
+  return {
+    kind: 'definition',
+    vendor: one.vendor,
+    runtime: one.runtime,
+    model: field === 'model' ? value : one.model,
+    baseUrl: field === 'baseUrl' ? value : one.baseUrl,
+    executablePath: field === 'executablePath' ? value : one.executablePath,
+  };
 }
 
 /**

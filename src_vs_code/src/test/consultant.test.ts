@@ -601,14 +601,85 @@ test('writing one caller keeps the other three, and a new vendor clears the mode
     codex: { vendor: 'claude', model: 'opus' },
   };
 
-  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'antigravity');
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'antigravity', []);
 
-  assert.deepEqual(changed['claude'], { vendor: 'antigravity', model: '' },
+  assert.deepEqual(changed['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: '' },
     'a model named for one vendor is not a model the next one offers');
   assert.deepEqual(changed['codex'], stored['codex'], 'the callers nobody touched must survive the write');
 
-  const model = consultantRecordUpdate(changed, 'claude', 'consultModel', 'gemini-3.7-flash-high');
-  assert.deepEqual(model['claude'], { vendor: 'antigravity', model: 'gemini-3.7-flash-high' });
+  const model = consultantRecordUpdate(changed, 'claude', 'consultModel', 'gemini-3.7-flash-high', []);
+  assert.deepEqual(model['claude'], { vendor: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high' });
+});
+
+/**
+ * The write half of story A2: what is STORED stops being a reference to somebody's reviewer.
+ *
+ * <p>Story A1 made a legacy entry resolve on READ, which fixed the symptom with no write at all. It
+ * left the file itself still holding `{vendor, model}` — so the consultant went on following a
+ * reviewer row until somebody touched the section. These tests pin the other half: the first edit
+ * writes what will actually run.</p>
+ */
+test('changing a model writes the caller\u0027s whole definition, not a bare reference', () => {
+  const stored = { claude: { vendor: 'codex', model: '' } };
+  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna', executablePath: 'C:/codex.cmd' }];
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'gpt-6-astra', rows);
+
+  assert.deepEqual(
+    changed['claude'],
+    { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', executablePath: 'C:/codex.cmd' },
+    'the edit must materialise the runtime and the CLI path the entry was borrowing, not write a reference again');
+});
+
+test('choosing a vendor writes the model that vendor will actually use', () => {
+  const stored = { claude: { vendor: 'antigravity', model: 'gemini-3.7' } };
+  const rows = [{ ...vendor('codex'), model: 'gpt-5.6-luna' }];
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'codex', rows);
+
+  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' },
+    'the row lends its model to a consultant that names no model of its own, so that is what is stored');
+});
+
+test('an empty vendor id is never written', () => {
+  const stored = { claude: { vendor: 'codex', model: 'gpt-5.6-luna' } };
+
+  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultVendor', '   ', []), stored,
+    'a blank id keys no vault entry and names no runtime; the map must come back untouched');
+});
+
+test('a base URL the person typed replaces the endpoint, never the model', () => {
+  const stored = { claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat' } };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultBaseUrl', 'https://api.deepseek.com/v1', []);
+
+  assert.deepEqual(
+    changed['claude'],
+    { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+    'the model must survive an endpoint edit');
+});
+
+/**
+ * A guard rather than a reproduction: both hold at HEAD, and they are here because the change above
+ * is exactly the kind that would break them silently — rebuilding the row from `CALLER_KINDS`, or
+ * inventing a runtime for an entry the rule could not place.
+ */
+test('a caller kind this build does not know survives a write', () => {
+  const stored = { claude: { vendor: 'codex', model: '' }, futureKind: { vendor: 'x', model: 'y' } };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'opus', []);
+
+  assert.deepEqual(changed['futureKind'], { vendor: 'x', model: 'y' },
+    'a newer panel may know more caller kinds than this one, and the server keeps them for that reason');
+});
+
+test('editing the model of an entry this build cannot place invents no runtime', () => {
+  const stored = { claude: { vendor: 'retired-vendor', model: '' } };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'something', []);
+
+  assert.deepEqual(changed['claude'], { vendor: 'retired-vendor', model: 'something' },
+    'an unplaceable entry is shown back exactly as stored; guessing a runtime would send the tree somewhere nobody chose');
 });
 
 test('an emptied prompt box removes the override rather than writing a prompt that says nothing', () => {

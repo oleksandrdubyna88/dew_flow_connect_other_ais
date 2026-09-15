@@ -707,11 +707,29 @@
             "properties": {
               "vendor": {
                 "type": "string",
-                "description": "The id of a configured vendor row. It must be a row that can hold a conversation: codex, claude, antigravity or a local engine."
+                "description": "The consultant's name. It keys the vault entry its key is stored under and the usage ledger, so two callers naming the same endpoint should share it."
+              },
+              "runtime": {
+                "type": "string",
+                "enum": [
+                  "codex",
+                  "claude",
+                  "antigravity",
+                  "local"
+                ],
+                "description": "Which CLI answers. Absent means this entry is an older one that names a reviewer row instead, and it is read as that row's runtime — or, where no row has the name, as the runtime the name itself is."
               },
               "model": {
                 "type": "string",
-                "description": "Empty uses the model that row is already set to."
+                "description": "Empty uses that runtime's own default."
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "An OpenAI-compatible endpoint, for a consultant riding the Codex CLI. Empty uses the CLI's own."
+              },
+              "executablePath": {
+                "type": "string",
+                "description": "Where that CLI is. Empty looks it up on PATH."
               }
             }
           }

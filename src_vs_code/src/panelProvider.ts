@@ -1308,7 +1308,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // drop whatever that side had already chosen. Written and read by the same rule.
         // (CodeRabbit, on the pull request.)
         const current = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
-        await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value));
+        // The rows go in because the WRITE resolves too: what is stored stops being a reference to a
+        // reviewer row the moment a person edits the section, so the definition being written has to
+        // be worked out from the rows this side can see — the same reader, on the same config, as the
+        // line above.
+        const rows = vendorsFrom(this.read(config)('vendors'));
+        await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows));
         return;
       }
       case 'plain':
