@@ -246,8 +246,16 @@ const CHOICE_SHAPE: Readonly<Record<keyof ConsultantChoice, true>> = {
  */
 export const CHOICE_FIELDS: readonly (keyof ConsultantChoice)[] = Object.keys(CHOICE_SHAPE).filter(isChoiceField);
 
-function isChoiceField(name: string): name is keyof ConsultantChoice {
-  return name in CHOICE_SHAPE;
+/**
+ * Whether a name is one of the fields a choice has — the ONE answer to that question.
+ *
+ * <p>Exported because the write path asks it too, of the keys a stored row holds, to tell the fields
+ * it manages from a field a newer panel wrote that it must not delete. A second spelling there would
+ * be a second list to keep level with this type, which is the whole defect {@link CHOICE_SHAPE}
+ * exists to close.</p>
+ */
+export function isChoiceField(name: string): name is keyof ConsultantChoice {
+  return Object.hasOwn(CHOICE_SHAPE, name);
 }
 
 /**
