@@ -213,12 +213,12 @@ to specificity. This is the same thing `chatPage.test.ts:1263-1272` already does
 
 ## Definition of Done
 
-- [ ] The three tests were written first and watched RED, naming the real symptom.
-- [ ] `.msg .what` and `.passage` wrap; `.msg .what pre` still scrolls.
-- [ ] Whole suite green, with the observed numbers reported.
-- [ ] `research/module_extension.md` and `CHANGELOG.md` updated.
-- [ ] `plan-lifecycle.mjs` and `pin-check.mjs` clean.
-- [ ] `todo/README.md` carries this plan's row, in the same commit as this file.
+- [x] All three assertions were watched RED first, naming the real symptoms — and the third for a reason the plan did not predict: the rule it asserts did not exist yet.
+- [x] `.msg .what` and `.passage` wrap; `.msg .what pre, .msg .what table` explicitly do not, and both keep their own horizontal scroll.
+- [x] Whole suite green: 2947 tests, 2946 pass, 1 skipped, 0 fail.
+- [x] `research/module_extension.md`, `research/module_tests.md` and `CHANGELOG.md` updated.
+- [x] `plan-lifecycle.mjs` and `pin-check.mjs` clean.
+- [x] Indexed — the `todo/README.md` row while it was open, and the `research/README.md` row on promotion.
 
 ## Acceptance — the gate on both sides
 

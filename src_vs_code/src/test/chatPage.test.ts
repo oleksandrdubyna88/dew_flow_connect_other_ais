@@ -1363,11 +1363,16 @@ test('the captured passage wraps too', () => {
 });
 
 test('the boxes that scroll on purpose do not inherit the wrap', () => {
-  // A REGRESSION GUARD, green before this change and after it. `overflow-wrap` is inherited, and two
-  // boxes inside `.msg .what` scroll deliberately: `pre`, whose comment says "a long line of code
-  // must not widen the page", and `table`, which is `display: block; overflow-x: auto` and whose
-  // CELLS do wrap. Without the exclusion, a long token in a cell would re-flow the columns and
-  // quietly remove the scroll the rule exists for. (codex, the plan round.)
+  // HALF new rule, half regression guard — and the halves behaved differently when this was first
+  // run, which is why it is worth saying rather than labelling. The exclusion it asserts is NEW
+  // code, so the first assertion went red with "there is no rule for .msg .what pre, .msg .what
+  // table". The rest was green before this change and exists to go red if a later one undoes it.
+  //
+  // `overflow-wrap` is inherited, and two boxes inside `.msg .what` scroll deliberately: `pre`,
+  // whose comment says "a long line of code must not widen the page", and `table`, which is
+  // `display: block; overflow-x: auto` and whose CELLS do wrap. Without the exclusion a long token
+  // in a cell would re-flow the columns and quietly remove the scroll the rule exists for.
+  // (codex, the plan round.)
   const css = chatPageHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
 
   assert.match(
@@ -1376,14 +1381,25 @@ test('the boxes that scroll on purpose do not inherit the wrap', () => {
     'the code block and the table now inherit the wrap, so their own horizontal scroll is gone',
   );
 
-  // Both halves. A `pre` keeping `overflow-x: auto` while its `white-space` became `pre-wrap` would
-  // wrap its lines with every other assertion here still green.
-  assert.match(ruleFor(css, '.msg .what pre'), /overflow-x: auto/, 'the code block stopped scrolling in its own box');
+  // The WHOLE condition for each box, not just the override. Asserting only `overflow-wrap: normal`
+  // leaves this green if somebody deletes the scrolling that makes the override worth having — and
+  // then the exclusion protects a box that no longer scrolls. (codex, the code round.)
+  const code = ruleFor(css, '.msg .what pre');
+  assert.match(code, /overflow-x: auto/, 'the code block stopped scrolling in its own box');
+  assert.match(
+    code,
+    /white-space: pre;/,
+    'the code block no longer states that it does not wrap, so it is back to relying on a UA default',
+  );
   assert.doesNotMatch(
-    ruleFor(css, '.msg .what pre'),
+    code,
     /white-space: pre-wrap/,
     'the code block wraps its lines now, which is the decision this box was built to hold',
   );
+
+  const table = ruleFor(css, '.msg .what table');
+  assert.match(table, /display: block/, 'the table is no longer a block, so overflow-x cannot apply to it at all');
+  assert.match(table, /overflow-x: auto/, 'the table stopped scrolling, and a wide one now widens the conversation');
 });
 
 test('a link posts to the host and never navigates the page itself', () => {
