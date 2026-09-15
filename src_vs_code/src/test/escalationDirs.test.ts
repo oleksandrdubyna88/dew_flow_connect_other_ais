@@ -65,6 +65,20 @@ test('the window’s own directory named again as an extra is not watched twice'
   assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own'], 'the own directory was watched twice');
 });
 
+test('a root written with a trailing separator does not compose a mixed-separator path', () => {
+  // Callers pass native filesystem paths, so `C:\coai\` trimmed of forward slashes only would give
+  // `C:\coai\/escalations` — the same mixed-separator string the first round removed elsewhere.
+  for (const root of ['C:\\coai\\', 'C:\\coai', 'C:\\coai//', '/srv/coai/', '/srv/coai']) {
+    const paths = answerPaths('q1', root);
+
+    assert.ok(paths, `a plain id was refused for root ${root}`);
+    assert.doesNotMatch(paths.dir, /[\\/]{2,}escalations|\\\/|\/\\/u, `mixed or doubled separators for ${root}: ${paths.dir}`);
+    assert.match(paths.dir, /escalations$/u, `the escalations directory was lost for ${root}`);
+  }
+  assert.strictEqual(answerPaths('q1', 'C:\\coai\\')?.dir, answerPaths('q1', 'C:\\coai')?.dir,
+    'a trailing separator made a second directory');
+});
+
 test('an answer is written beside the question it answers, not in this window’s own directory', () => {
   // The server that asked polls the directory it wrote in and nowhere else. An answer written here
   // would leave that round blocked for ever, HAVING BEEN ANSWERED — which is worse than never
