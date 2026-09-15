@@ -1,6 +1,6 @@
 # PLAN — the gate's own findings become a corpus of real defects
 
-> Status: **stories 0 and 1 shipped; 2–6 are open.** `rounds.base_ref` went first (PR #268)
+> Status: **stories 0, 1 and 2 shipped; 3–6 are open.** `rounds.base_ref` went first (PR #268)
 > because every round that ran without it lost that half permanently, and the read side followed
 > (PR #272). Story 2 is blocked on one package approval — see *The parser* below.
 > Scope: a new `Bugz` panel section, a `coai-normalize` sidecar, a `coai-bugs` ingest server, and
@@ -124,6 +124,16 @@ The three conditions, which are part of the story's Definition of Done:
    download, and a step in the publish rather than a note for later. *(`tsx` is excluded by that
    list. It is consistent with the measurement — no `.tsx` appeared among the 462 candidates — and it
    is one line to add the day one does.)*
+**All three were met, 2026-09-15.** The pin and its reason are in `Directory.Packages.props`; the
+publish keeps four native libraries and deletes twenty-seven, checked from both directions by the
+release Package step against `shared/kept-grammars.txt`; and `OnlyTheNormalizerNamesTreeSitter`
+holds the seam, unchanged even after `coai-mcp` gained a reference to the implementing project.
+
+**And the sidecar was cancelled while they were being met.** The reason for a separate binary was
+Roslyn under `PublishAot`; tree-sitter reaches its grammars by P/Invoke, which Native AOT carries
+without complaint — measured, zero IL warnings — so `coai-mcp --normalize` costs no second release
+line and no second download. The grammars ride beside the binary exactly as `e_sqlite3` does.
+
 3. **The library sits behind `IAstNormalizer`.** Nothing outside the implementing project sees
    `TreeSitter`, a `Language`, a node or a P/Invoke. The interface belongs in `CoaiMcp.Core`, which is
    pure and already knows nothing of IO; the implementation and the whole native dependency live in
@@ -239,7 +249,7 @@ schema — retrofitting it after the index is live means re-auditing everything 
 |---|---|---|
 | 0 | `rounds.base_ref` | **Shipped, PR #268.** |
 | 1 | `BugsQuery` + `coai-mcp --bugs-json` | **Shipped, PR #272.** Beside `RoundsQuery`; the panel owns no SQLite. It brought the four `findings` columns of the contract below with it, as migration step 6. |
-| 2 | `coai-normalize` — .NET + tree-sitter | Symbol resolution *and* normalisation. Blocked on the package approval above. The property test is the deliverable. |
+| 2 | The normalizer — .NET + tree-sitter | **Shipped, PRs #283 and #296.** Symbol resolution, normalisation, and the zero-knowledge property test. It is a MODE of `coai-mcp` rather than the `coai-normalize` sidecar this table first named — see below. |
 | 3 | The bounded walk + drop-with-reason | Small, because bounded. |
 | 4 | The `Bugz` panel section | See below. |
 | 5 | The review page | First multi-select in this codebase. |
