@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 /// <para>The family corpus is far larger than the 80 KB a round can carry, and selection is
 /// whole-file — so the ORDER decides what a reviewer is judged against, and what it is never shown.
 /// Measured 2026-09-06: in plain enumeration order the two longest files took a quarter of the
-/// budget, and <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all four language
+/// budget, and <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all three language
 /// doctrines reached no reviewer at all. The draw was installed against that, at the cost of a gate
 /// whose answer changes between two rounds over one fix.</para>
 /// <para>These tests pin the other cure: a priority that is written down, so the same tree gives the
@@ -59,6 +59,7 @@ public sealed class RuleOrderTests : IDisposable
         Write(".agents/conventions/common/security.md", Filler("security", 8_500));
         Write(".agents/conventions/common/testing.md", Filler("testing", 25_000));
         Write(".agents/conventions/csharp/doctrine.md", Filler("csharp", 4_600));
+        Write(".agents/conventions/rust/doctrine.md", Filler("rust", 4_450));
         Write(".agents/conventions/typescript/doctrine.md", Filler("typescript", 5_800));
     }
 
@@ -67,7 +68,7 @@ public sealed class RuleOrderTests : IDisposable
     {
         WriteFamilyMount();
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Should().Contain([
             ".agents/conventions/common/testing.md",
@@ -107,6 +108,13 @@ public sealed class RuleOrderTests : IDisposable
 
         second.Files.Select(file => file.Path).Should().Equal(first.Files.Select(file => file.Path));
         second.Omitted.Should().Equal(first.Omitted);
+
+        // And through the DEFAULT overload, which is what a caller that names no order gets. A code
+        // round asked for this: an order deterministic in isolation proves nothing about the wiring,
+        // and a silent return to a per-round draw would leave every assertion above still green.
+        var byDefault = RuleFiles.Collect(_repo, 41_000);
+        RuleFiles.Collect(_repo, 41_000).Files.Select(file => file.Path)
+            .Should().Equal(byDefault.Files.Select(file => file.Path));
     }
 
     /// <summary>
@@ -143,8 +151,8 @@ public sealed class RuleOrderTests : IDisposable
     {
         WriteFamilyMount();
 
-        var one = RuleFiles.Collect(_repo, 45_000, RuleOrder.ForBranch("fix/one"));
-        var other = RuleFiles.Collect(_repo, 45_000, RuleOrder.ForBranch("feat/another"));
+        var one = RuleFiles.Collect(_repo, 49_000, RuleOrder.ForBranch("fix/one"));
+        var other = RuleFiles.Collect(_repo, 49_000, RuleOrder.ForBranch("feat/another"));
 
         foreach (var bundle in (RuleBundle[])[one, other])
         {
@@ -152,6 +160,7 @@ public sealed class RuleOrderTests : IDisposable
                 ".agents/conventions/common/testing.md",
                 ".agents/conventions/common/security.md",
                 ".agents/conventions/csharp/doctrine.md",
+                ".agents/conventions/rust/doctrine.md",
                 ".agents/conventions/typescript/doctrine.md",
             ]);
         }
@@ -196,11 +205,18 @@ public sealed class RuleOrderTests : IDisposable
     {
         WriteFamilyMount();
 
-        var first = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
-        var second = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var first = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
+        var second = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         second.Files.Select(file => file.Path).Should().Equal(first.Files.Select(file => file.Path));
         second.Omitted.Should().Equal(first.Omitted);
+
+        // And through the DEFAULT overload, which is what a caller that names no order gets. A code
+        // round asked for this: an order deterministic in isolation proves nothing about the wiring,
+        // and a silent return to a per-round draw would leave every assertion above still green.
+        var byDefault = RuleFiles.Collect(_repo, 41_000);
+        RuleFiles.Collect(_repo, 41_000).Files.Select(file => file.Path)
+            .Should().Equal(byDefault.Files.Select(file => file.Path));
         second.Bytes.Should().Be(first.Bytes);
     }
 
@@ -211,7 +227,7 @@ public sealed class RuleOrderTests : IDisposable
         Write("AGENTS.md", "How to work in this repository");
         Write(".agents/rules/common/vendor-routing.md", "Which CLI runs which model");
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Take(2).Should().Equal([
             "AGENTS.md", ".agents/rules/common/vendor-routing.md",
@@ -232,7 +248,7 @@ public sealed class RuleOrderTests : IDisposable
         WriteFamilyMount();
         Write(".agents/conventions/common/doctrine.md", Filler("common-doctrine", 30_000));
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Should().Contain([
             ".agents/conventions/common/security.md",
@@ -274,7 +290,7 @@ public sealed class RuleOrderTests : IDisposable
         WriteFamilyMount();
         Write(".agents/conventions/common/a-rule-invented-tomorrow.md", Filler("tomorrow", 200));
 
-        var bundle = RuleFiles.Collect(_repo, 45_000, RuleOrder.Walk);
+        var bundle = RuleFiles.Collect(_repo, 49_000, RuleOrder.Walk);
 
         bundle.Files.Select(file => file.Path).Concat(bundle.Omitted)
             .Should().Contain(".agents/conventions/common/a-rule-invented-tomorrow.md");

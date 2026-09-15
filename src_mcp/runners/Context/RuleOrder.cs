@@ -66,12 +66,20 @@ public sealed record RuleOrder
     /// for ever. Nothing here reads a clock, a counter or a random source, and anyone holding the
     /// branch name can reproduce the order exactly.</para>
     /// </remarks>
-    public static RuleOrder ForBranch(string branch) =>
-        new(candidates => candidates
+    public static RuleOrder ForBranch(string branch)
+    {
+        // Trimmed, because the branch arrives as a tool argument and " fix/x " must not be a
+        // different rule order from "fix/x" — that would be this epic's own defect, returned through
+        // the front door. NOT lower-cased: git refs are case-sensitive, so `fix/A` and `fix/a` are two
+        // branches and folding them would be a lie about which change is being reviewed.
+        var key = branch.Trim();
+
+        return new(candidates => candidates
             .OrderBy(candidate => Tier(candidate.WithinMount))
-            .ThenBy(candidate => TailKey(branch, candidate.WithinMount), StringComparer.Ordinal)
+            .ThenBy(candidate => TailKey(key, candidate.WithinMount), StringComparer.Ordinal)
             .ThenBy(candidate => candidate.Path, StringComparer.Ordinal)
             .Select(candidate => candidate.Path));
+    }
 
     /// <summary>
     /// The order for a gate with NO diff: the named tier, and nothing else from the mount.
@@ -170,11 +178,17 @@ public sealed record RuleOrder
     /// A rule's place in the tail for one branch: stable, reproducible, and the same everywhere.
     /// </summary>
     /// <remarks>
-    /// Hex of the SHA-256 over <c>branch \0 rule</c>, ordered as text. The NUL is what stops
-    /// <c>("fix/a", "b/c.md")</c> and <c>("fix/a\0b", "c.md")</c> hashing alike — neither pair exists
-    /// today, and a separator that cannot occur in either half costs nothing to add now rather than
-    /// to discover later.
+    /// <para>Hex of the SHA-256 over <c>branch \0 rule</c>, ordered as text. The NUL is what stops
+    /// <c>("fix/a", "b/c.md")</c> and <c>("fix/a\0b", "c.md")</c> hashing alike — and git itself
+    /// forbids NUL and control characters in a ref name, so neither half can carry one.</para>
+    /// <para>EMPTY for a tier rule and for an empty branch, so neither is hashed at all: the tier is
+    /// fixed and must not depend on a branch even in principle, and a caller with no branch —
+    /// <see cref="Walk"/> — gets the plain tier-then-ordinal walk its name promises. Both were code
+    /// round findings: hashing a tier member coupled the fixed half to the rotating one, and a
+    /// hash-ordered <c>Walk</c> was a walk in name only.</para>
     /// </remarks>
     private static string TailKey(string branch, string withinMount) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{branch}\0{withinMount}")));
+        branch.Length == 0 || Tier(withinMount) < Tiers.Length
+            ? string.Empty
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{branch}\0{withinMount}")));
 }

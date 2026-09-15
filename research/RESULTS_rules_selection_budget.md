@@ -1,9 +1,29 @@
 # RESULTS — what a round's 80 KB of rules actually holds
 
-> Measured 2026-09-15 on `dew_flow_connect_other_ais`, conventions pin `126f58d7` (the release tip of
-> that day). Evidence for epic 3 of
+> **Subject:** this repository at `c6ff353f`, conventions pin `126f58d7` (that day's release tip).
+> **Harness:** a byte-count over the mounted corpus applying `RuleOrder`'s documented order, run from
+> the repository root; the same order is asserted by `src_mcp/tests/RuleOrderTests.cs`, and the file
+> sizes come from `find .agents/conventions/{common,csharp,rust,typescript} -name '*.md' | xargs wc -c`.
+> **Date:** 2026-09-15. **Pinned:** budget 80 000 bytes (`RuleFiles.DefaultBudgetBytes`), whole-file
+> selection, no resolver (it cannot run — see condition 2).
+>
+> Evidence for epic 3 of
 > [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
 > — whether the draw can be deleted — and the input the rule-modularization follow-up needs.
+
+## The prediction, written before the run
+
+Epic 3 could only delete the draw if the deterministic order showed the rules the draw was installed to
+rescue. **Predicted:** the tier would cover `testing.md`, `security.md`, `reuse-first.md` and the
+language doctrines within the budget, and `development-workflow.md` and `http-contracts.md` — the two
+that caused the 2026-09-06 starvation by sorting first — would fall outside it. **No prediction was
+made about how much budget would be left**, and that is where the surprise came from.
+
+**Observed against predicted:** the covering half held exactly. The unpredicted part decided the epic:
+the tier consumes 63 486 of the 80 000 bytes and the whole shown set 78 672, leaving **1 328 bytes** —
+so a fixed order has no room for anything beyond the tier, and the other 24 rules would reach no code
+round at all. That is not what "delete the draw" was expected to mean, and it is why the tail now
+rotates by branch instead.
 
 ## The corpus against the budget
 
@@ -63,8 +83,12 @@ gets the eight rules above. The rest are ordered by a SHA-256 of *(branch, rule 
 
 - two rounds of one fix show **identical** rules, which is the defect the plan was opened for, because
   a branch is what a round is about and it does not change while a developer fixes what a round found;
-- different branches read different parts of the corpus, so every rule is still reached across a
-  team's work — the draw's one real virtue, kept without the draw;
+- different branches read different parts of the corpus, so the tail is still reached — **measured on
+  a twenty-rule fixture over sixty branch names**, where every rule appeared
+  (`AcrossEnoughBranches_EveryFamilyRuleGetsRead`). That is what the measurement licenses. It does NOT
+  establish that this repository's real 24-rule tail is covered by the branch names a team actually
+  uses: nobody has measured a real branch population, and a team working on three long-lived branches
+  would read three tails and no more;
 - nothing consults a clock, a counter or a random source, and anyone holding the branch name can
   reproduce the order exactly. `string.GetHashCode` would NOT do: .NET randomises it per process, which
   would have reintroduced the very defect inside its own fix.
@@ -85,6 +109,15 @@ Three things still bear on the budget:
 3. **`testing.md` alone is 25 082 bytes — 31 % of the budget.** Splitting the rules over 15 KB is what
    would make room for more of the corpus without touching the order. That follow-up's case rests on
    this table.
+
+## What this does not settle
+
+- Whether a real team's branch names cover the real tail. The rotation is measured on a synthetic
+  fixture; the population of branches a team actually opens is not measured here.
+- Whether the tier is the RIGHT eight. It is the eight most findings are written against, chosen by
+  reading the corpus, not by counting findings — the defect corpus that would let somebody count is
+  itself an open plan (`todo/PLAN_a_corpus_of_real_defects.md`).
+- Anything about the resolver's selection, which has never run here.
 
 ## Three doctrines, not four
 
