@@ -19,6 +19,7 @@ import {
   rowsAfterMain,
   presetById,
   reaskFrom,
+  retryFrom,
 } from '../chatPresets';
 
 /**
@@ -164,6 +165,45 @@ test('a re-ask keeps the question, drops the answer, and keeps everything before
 test('there is nothing to re-ask while the same model is chosen', () => {
   // Pressing Enter on an empty box with the model unchanged does what it always did: nothing.
   assert.strictEqual(reaskFrom(CONVERSATION, 'antigravity'), undefined);
+});
+
+/**
+ * `retryFrom` — what a failed turn sends again, and the reason it is a pair rather than a string.
+ *
+ * <p>A turn that failed leaves the transcript ending on its own question, because `oneTurn` appends
+ * the question before it sends and the failing branch leaves it there. So the retry has to hand back
+ * BOTH halves: the question to ask, and the transcript without it — the caller re-asks through the
+ * ordinary turn path, which appends the question itself, and a retry that did not remove it first
+ * would print the same question twice.</p>
+ */
+const FAILED = [
+  { role: 'you' as const, text: 'first question' },
+  { role: 'model' as const, text: 'first answer', model: { id: 'antigravity' } },
+  { role: 'you' as const, text: 'the question that failed' },
+];
+
+test('a retry sends the question that failed, and the transcript it comes back to does not repeat it', () => {
+  const again = retryFrom(FAILED);
+
+  assert.strictEqual(again?.question, 'the question that failed');
+  assert.deepStrictEqual(
+    again?.said.map((message) => message.text),
+    ['first question', 'first answer'],
+    'the question is still in the transcript the retry hands back, so asking it again would show it twice',
+  );
+});
+
+test('there is nothing to retry when the last thing said was an answer', () => {
+  // A turn that was STOPPED writes a line of its own into the transcript, and a turn that answered
+  // obviously did — in both cases the tail is no longer a question nobody answered. Offering the
+  // button there would be offering a press that re-asks something already dealt with.
+  assert.strictEqual(retryFrom(CONVERSATION), undefined);
+  assert.strictEqual(retryFrom([]), undefined, 'an empty conversation offered a retry');
+  assert.strictEqual(
+    retryFrom([{ role: 'you' as const, text: '   ' }]),
+    undefined,
+    'a question of nothing but whitespace was offered as retryable',
+  );
 });
 
 test('there is nothing to re-ask before an answer exists', () => {

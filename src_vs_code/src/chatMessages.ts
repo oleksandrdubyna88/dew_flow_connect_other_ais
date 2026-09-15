@@ -101,6 +101,15 @@ export type ChatCommand =
   /** A picture pasted into the composer, as the data URL the page read out of the clipboard. */
   | { readonly kind: 'attach'; readonly dataUrl: string }
   | { readonly kind: 'unattach' }
+  /**
+   * Send the failed question again, unchanged, to the same model.
+   *
+   * <p>It carries nothing, for the reason `reask` carries nothing: the host holds the transcript and
+   * decides what "the question that failed" is — `retryFrom` defines it as the trailing message, and
+   * only while that message is one of the person's own. A page naming the question would be naming a
+   * message it has only a rendering of.</p>
+   */
+  | { readonly kind: 'retry' }
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
   | { readonly kind: 'pageError'; readonly message: string }
@@ -348,6 +357,8 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     }
     case 'unattach':
       return { kind: 'unattach' };
+    case 'retry':
+      return { kind: 'retry' };
     case 'restart':
       return { kind: 'restart' };
     case 'useLocal':

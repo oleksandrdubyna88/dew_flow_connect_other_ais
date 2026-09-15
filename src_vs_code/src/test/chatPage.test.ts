@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { ChatMessage } from '../chatPage';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
-import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
+import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -32,6 +32,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     models: MODELS,
     providers: [],
     reask: '',
+    canRetry: false,
     attached: '',
     spend: '',
     promptPresets: [],
@@ -2533,4 +2534,82 @@ test('a turn in flight locks the box, the send AND the clear', () => {
   assert.match(locked, /id="clear"[^>]*disabled/, 'the clear stayed live while a turn was running');
   assert.match(locked, /id="send"[^>]*disabled/);
   assert.doesNotMatch(chatPageHtml(state({ running: false }), 'n0nce'), /id="clear"[^>]*disabled/);
+});
+
+test('an error is shown where a person waiting for an answer is already looking', () => {
+  const html = chatPageHtml(state({ failure: 'the model returned an empty answer' }), 'n0nce');
+
+  // It was pinned ABOVE the transcript, under the passage - and writing it counts as something
+  // arriving, so the same push scrolled the reader to the newest message and carried them away from
+  // the thing it had just told them. The thinking line is where they were already looking.
+  // (The operator, 2026-09-15, having watched it happen.)
+  const messages = html.indexOf('id="messages"');
+  const thinking = html.indexOf('id="thinking"');
+  const failure = html.indexOf('id="failure"');
+
+  assert.ok(messages > 0 && thinking > 0 && failure > 0, 'a region stopped being rendered at all');
+  assert.ok(messages < thinking, 'the thinking line is no longer directly under the conversation');
+  assert.ok(thinking < failure, 'the failure is still above the conversation, where the scroll leaves it');
+});
+
+test('a failure offers the one thing worth pressing, and only when there is something behind it', () => {
+  const offered = chatFailureHtml('the model returned an empty answer', true);
+  const bare = chatFailureHtml('the model returned an empty answer', false);
+
+  assert.match(offered, /data-retry/, 'a failure with its question still behind it offers nothing to press');
+  assert.match(offered, /Try again/, 'the control does not say what pressing it does');
+  assert.match(offered, /the model returned an empty answer/, 'the failure stopped saying what went wrong');
+
+  // A control that promises what it has not got is the rule this repository wrote down when a round
+  // with nothing to open was made a line rather than a disclosure. The host is the only half that
+  // can see whether the question is still there to send.
+  assert.doesNotMatch(bare, /data-retry/, 'a failure with nothing behind it offered a button anyway');
+  assert.match(bare, /the model returned an empty answer/, 'a failure without a retry stopped being readable');
+
+  assert.strictEqual(chatFailureHtml('', true), '', 'an empty failure drew a box around nothing');
+});
+
+/** A retry control as the page sees one: a click on the region, with the control as its target. */
+function pressRetry(page: RunningPage, control: { disabled: boolean }): void {
+  page.fire('failure', 'click', { target: { closest: () => control } });
+}
+
+test('pressing Try again sends one retry, and cannot send a second', () => {
+  const page = runChatPage({ failure: 'the model returned an empty answer', canRetry: true });
+  const control = { disabled: false };
+
+  pressRetry(page, control);
+  pressRetry(page, control);
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'retry'),
+    [{ type: 'command', command: 'retry' }],
+    'a second press sent a second retry — two turns down a pipe that carries one',
+  );
+  assert.strictEqual(control.disabled, true, 'the control stayed pressable after being pressed');
+});
+
+test('the retry control is still live after its region has been rewritten under it', () => {
+  // THE regression this shape exists for. The failure region's contents are replaced on every push,
+  // and a note or a page-level error wipes them entirely — so a listener bound to the button itself
+  // would be dead from the first rewrite onwards, which is the state `#failure` was already in: it
+  // is the one pushed region with no re-wiring call after its write. The listener is on the
+  // container, which stays for the life of the tab.
+  const page = runChatPage({ failure: 'the model returned an empty answer', canRetry: true });
+
+  // A page error wipes the region, then a later failure fills it again.
+  page.deliver({ type: 'state', failureHtml: '' });
+  page.deliver({
+    type: 'state',
+    failureHtml: '<div class="failure"><span class="said">and again</span>'
+      + '<button type="button" class="retry" data-retry>Try again</button></div>',
+  });
+
+  pressRetry(page, { disabled: false });
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'retry'),
+    [{ type: 'command', command: 'retry' }],
+    'the control went dead when its region was rewritten',
+  );
 });

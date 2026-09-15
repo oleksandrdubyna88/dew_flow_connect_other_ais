@@ -16,6 +16,7 @@ import {
   mainPrompt,
   presetInForce,
   reaskFrom,
+  retryFrom,
 } from './chatPresets';
 import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened, sameSlate } from './chatFresh';
 import { ChatTabMemory, reloadedNote } from './chatTabs';
@@ -1159,6 +1160,10 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // Who would answer a re-ask. Empty while a turn runs: the button is locked anyway, and offering
     // to re-ask something that is still being answered is offering a question nobody asked yet.
     reask: running || thread === undefined ? '' : reaskLabel(thread),
+    // Whether the failure on screen still has its question behind it. False while a turn runs, for
+    // the reason the re-ask above is empty then: the composer is locked, and sending again something
+    // that is still being answered is a second turn down a pipe that carries one.
+    canRetry: running || thread === undefined ? false : retryFrom(thread.messages) !== undefined,
     attached: thread?.attached ?? '',
     spend: spendLabel(spendSoFar(thread?.spend ?? [])),
   });
@@ -1794,6 +1799,37 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
   // A re-ask is a switch by another name — the same question, a different model — so the mark
   // applies to it exactly as it applies to one.
   thread.carry = carriedFrom(again.said, thread.carryFrom);
+  await oneTurn(entry, again.question, thread.generation);
+}
+
+/**
+ * Send the question that failed again, unchanged, to the same model.
+ *
+ * <p>Distinct from a re-ask, which is the same question put to a DIFFERENT model and therefore drops
+ * an answer nobody wanted. A retry has no answer to drop: the turn produced none, which is why there
+ * is a failure line to press the button in.</p>
+ *
+ * <p><b>The question leaves the transcript first, and that is the whole trap.</b> `oneTurn` appends
+ * the question before it sends, and its failing branch leaves it there — so re-asking without
+ * removing it would print the same question twice, with the second copy carried into the next
+ * request as though the person had asked it again. Sliced off the thread's own messages rather than
+ * taken from `retryFrom`'s `said`, so every message keeps the fields it had.</p>
+ *
+ * <p><b>`thread.carry` is left exactly as the failure left it.</b> The failing branch does not clear
+ * it, deliberately, with a comment saying why: <em>the retry — the same question, one keypress
+ * later</em>. This is that keypress. Recomputing the carry here would make this the second place
+ * that decides what a failed turn carries, and two places deciding one thing is one place
+ * disagreeing.</p>
+ */
+async function oneRetry(entry: ChatEntry, thread: Thread): Promise<void> {
+  const again = retryFrom(thread.messages);
+  if (again === undefined) {
+    return;
+  }
+  thread.messages = thread.messages.slice(0, -1);
+  // Clamped for the reason the re-ask above clamps it: a stored mark past the end would point at an
+  // unrelated message as soon as the conversation grew again.
+  thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
   await oneTurn(entry, again.question, thread.generation);
 }
 
@@ -2724,6 +2760,8 @@ function newConversation(
       modelPresets: savedModels(config),
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
+      // Nor anything to send again: nothing has failed yet, and the failure line is empty.
+      canRetry: false,
       attached: '',
       spend: '',
       providerId: ready.providerId,
@@ -3054,6 +3092,13 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           void oneReask(entry, thread);
         }
       },
+      onRetry: (id) => {
+        const thread = threads.get(id);
+        const entry = panels.entryOf(id);
+        if (thread !== undefined && entry !== undefined) {
+          void oneRetry(entry, thread);
+        }
+      },
       onRestart: (id) => {
         // *New chat*: the capped notice's button since the cap existed, and D2's header button. One
         // implementation for both, because they are the same gesture with the same words.
@@ -3244,6 +3289,9 @@ function restoredPage(
       providers: ready.ok ? ready.providers : [],
       ...presets,
       reask: '',
+      // A restored tab shows no failure — the failure line is live state and is not saved with the
+      // conversation — so it has nothing to offer a retry of until the next turn fails.
+      canRetry: false,
       attached: '',
       spend: '',
       // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
