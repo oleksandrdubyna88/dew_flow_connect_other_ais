@@ -435,14 +435,31 @@ export const CONSULTANT_DEFINITION_SINCE = '0.23.0';
  * reviewer row instead of the definition the section draws — or nothing.
  *
  * <p>Nothing unless the server is KNOWN and strictly older — the rule its three siblings apply
- * (`conventionsSkew`, `roleSwitchSkew`, `customRolesSkew` in `panelView.ts`). Nothing unless some
- * caller's STORED entry is a definition: a legacy entry, customised or not, means the reviewer row on
- * both halves, so there is nothing an older server gets wrong about it, and a pristine map crosses as
- * nothing at all. Pure, with the version as an argument, so every branch is a unit test rather than a
- * paint; the caller is `panelView.ts`, which puts it in the section it is about.</p>
+ * (`conventionsSkew`, `roleSwitchSkew`, `customRolesSkew` in `panelView.ts`). Pure, with the version
+ * as an argument, so every branch is a unit test rather than a paint; the caller is `panelView.ts`,
+ * which puts it in the section it is about.</p>
+ *
+ * <p><b>The gate is what an older server would ANSWER DIFFERENTLY — not what is stored, and not
+ * merely what crosses.</b> Two corrections, both from B4's plan round, and the second came out of
+ * fixing the first. Asking whether the STORED entry is a definition is wrong because `envBlock` emits
+ * the RESOLVED one: a legacy reference the reader turned into a definition crosses AS one, and an
+ * upgraded install nobody has edited since is exactly that case — the people an older server
+ * mishandles would have been the people the note never appeared for. But asking merely whether a
+ * definition crosses over-warns, and the measurement says why: an older server resolves the id
+ * through the reviewer rows, so where the definition CAME FROM a row that still holds those values it
+ * reaches the same runtime, endpoint and CLI path, and gets nothing wrong. What it cannot reproduce
+ * is a definition no row backs — it refuses that outright as "not configured" — or one whose fields
+ * have since diverged from the row of the same name. Those are the cases, and they are the ones the
+ * sentence below describes. (gemini, B4's plan round, on both counts.)</p>
  */
-export function consultantSkewNote(installedServerVersion: string, consult: ConsultSettings): string {
-  const affected = CALLER_KINDS.filter(({ id }) => isStoredDefinition(consult.stored[id])).map(({ label }) => label);
+export function consultantSkewNote(
+  installedServerVersion: string,
+  consult: ConsultSettings,
+  vendors: readonly Vendor[],
+): string {
+  const affected = CALLER_KINDS
+    .filter(({ id }) => anOlderServerWouldDiffer(consult, id, vendors))
+    .map(({ label }) => label);
   if (installedServerVersion.length === 0 || affected.length === 0 || !olderThanMarker(installedServerVersion)) {
     return '';
   }
@@ -454,9 +471,32 @@ export function consultantSkewNote(installedServerVersion: string, consult: Cons
     + `${CONSULTANT_DEFINITION_SINCE} or later — the MCP server section below.`;
 }
 
-/** A stored entry that says which CLI answers — the one kind an older server reads wrongly. */
-function isStoredDefinition(choice: ConsultantChoice | undefined): boolean {
-  return choice !== undefined && choice.runtime !== '';
+/**
+ * Whether an older server's answer for this caller differs from what the section means.
+ *
+ * <p>Three conditions, in the order they cost nothing to ask. EMITTED at all — a pristine caller
+ * sends no key, so there is nothing for an older server to read wrongly. Crossing as a DEFINITION —
+ * an unavailable entry travels raw and is refused by name on every version alike. And not
+ * REPRODUCIBLE from the reviewer rows, which is the one the measurement taught: an older server has
+ * no rule for an id that is itself a runtime, so it resolves through the rows or refuses, and where
+ * the definition came from a row that still holds those values it reaches exactly the same place.</p>
+ */
+function anOlderServerWouldDiffer(consult: ConsultSettings, caller: string, vendors: readonly Vendor[]): boolean {
+  const crossing = consult.byCaller[caller];
+
+  return !sameChoice(consult.stored[caller], DEFAULT_CONSULT.stored[caller])
+    && crossing?.kind === 'definition'
+    && !reproducedByARow(crossing, vendors);
+}
+
+/** Whether a reviewer row of that id would hand an older server the same three fields. */
+function reproducedByARow(one: ConsultantDefinition, vendors: readonly Vendor[]): boolean {
+  const row = vendors.find((each) => each.id.toLowerCase() === one.vendor.toLowerCase());
+
+  return row !== undefined
+    && row.runtime === one.runtime
+    && row.baseUrl === one.baseUrl
+    && row.executablePath === one.executablePath;
 }
 
 function olderThanMarker(version: string): boolean {

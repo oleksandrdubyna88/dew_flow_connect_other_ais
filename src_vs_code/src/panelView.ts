@@ -1493,7 +1493,10 @@ function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
  * section's: `consultantBody` takes the settings and the rows and knows nothing about a binary.</p>
  */
 function consultantSkew(state: PanelState): string {
-  const note = consultantSkewNote(state.server.version, state.settings.consult);
+  // The rows go in because the note's question is what an OLDER server would answer, and an older
+  // server answers through them: a definition a row still backs reaches the same place on both
+  // halves, and only one nothing backs is mishandled. (gemini, B4's plan round.)
+  const note = consultantSkewNote(state.server.version, state.settings.consult, state.vendors);
 
   return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
 }
