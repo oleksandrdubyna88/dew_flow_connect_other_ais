@@ -27,6 +27,13 @@ import { parseUsage, priceOfLine, UsageEntry, Window } from './usage';
 import { stat } from 'node:fs/promises';
 import { ChatTurnRecord } from './chatUsage';
 import { chatUsagePath, readChatUsage } from './chatUsageFile';
+import {
+  badEndpoint,
+  consultantEndpointWrite,
+  consultantRecordUpdate,
+  endpointAnswer,
+  endpointConflict,
+} from './consultantWrite';
 import { ChatDoorRecord } from './chatDoors';
 import { chatDoorsPath, readChatDoors } from './chatDoorsFile';
 import {
@@ -60,11 +67,6 @@ import {
 } from './modelPrices';
 import {
   ConfigReader,
-  badEndpoint,
-  consultantEndpointWrite,
-  consultantRecordUpdate,
-  endpointAnswer,
-  endpointConflict,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,

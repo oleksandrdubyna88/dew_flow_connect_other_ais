@@ -2723,6 +2723,7 @@ flowchart LR
 | Module | Role |
 |---|---|
 | `settingsShape.ts` | config → validated `CoaiSettings`; `envBlock`; the defaults pinned to the master plan's table |
+| `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
 | `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the Server section states |
 | `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, and `serverOnThisSide` — `stat` every call, the `--version` probe cached against `mtime`+`size` |
 | `versionProbe.ts` | one `askVersion`, 8-second cap, stdout only — used for the vendor CLIs and for the server binary |
