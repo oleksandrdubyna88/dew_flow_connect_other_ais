@@ -62,11 +62,11 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // The enumeration `saveSetting`'s doc makes, asserted rather than promised: a caller that appears
   // without a report turns this red and names it.
   //
-  // `extension.ts` is the fourth, and it takes the panel's shape — catch locally, report, and return
-  // without going on. That last part is the whole reason it is not the other shape: the block it
-  // would otherwise copy next is built from the choice, so a refusal it walked past would put a
-  // directory in somebody's client entry that this window is not using.
-  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'extension.ts'];
+  // `dataCommands.ts` is the fourth, and it takes the panel's shape — catch locally, report, and
+  // RETURN without going on. That last part is the whole reason it is not the other shape: what the
+  // flow does next is copy a client-entry block built from the choice, so a refusal it walked past
+  // would put a directory in somebody's config that this window is not using.
+  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'dataCommands.ts'];
   for (const file of callers) {
     assert.match(
       source(file),

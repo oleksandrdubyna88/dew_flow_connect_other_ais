@@ -1575,6 +1575,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // that drift.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.changeDataDirectory);
         break;
+      case 'moveDataDirectory':
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.moveDataDirectory);
+        break;
       case 'copyPhrase':
         await this.copyPhrase(id);
         break;

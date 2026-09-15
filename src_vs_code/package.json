@@ -163,6 +163,16 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.moveDataDirectory",
+        "title": "Move your data to another folder",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.deleteOldDataFolder",
+        "title": "Delete the old data folder",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.help",
         "title": "Help",
         "category": "ConnectOtherAIs",
