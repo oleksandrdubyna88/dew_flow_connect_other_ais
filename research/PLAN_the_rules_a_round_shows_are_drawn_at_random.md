@@ -48,7 +48,11 @@
 > [architecture.md](architecture.md), [module_runners.md](module_runners.md),
 > [module_server.md](module_server.md).
 
-## The symptom
+## The symptom, as it was until 2026-09-15
+
+> Everything in this section and the next describes the defect this plan REMOVED. It is kept in
+> the present tense as it was written, because the reasoning only reads correctly that way — but
+> nothing here is true of the system today. What is true is in the status line above.
 
 A developer pushes a fix, runs a second code round, and gets findings from a different part of the
 rule book than round 1 — because the rules a round shows are **drawn at random**, and the second draw
@@ -83,7 +87,7 @@ The adoption canary has moved this ground since the draw was written:
   tracking the conventions **`release`** branch. That is the precondition the shared resolver refuses
   without, and it is already satisfied.
 
-## The second symptom: two of the three gates get no rules at all
+## The second symptom, also past: two of the three gates got no rules at all
 
 Only the code stage is given the rules ([PanelService.cs:531](../src_mcp/src/Server/PanelService.cs#L531)).
 
@@ -184,7 +188,7 @@ executable; never `dotnet test`.
 `NeutralRuleFolders`, `MissingRuleMount`) is not touched - which is what keeps the boundary with
 [PLAN_shared_rules_adoption.md](../todo/PLAN_shared_rules_adoption.md) physical rather than merely stated.
 
-### Epic 1 - selection becomes a seam, and every deterministic order exists before the draw goes
+### Epic 1 - selection becomes a seam, and every deterministic order exists before the draw goes — **IMPLEMENTED 2026-09-15**
 
 *Done when* `Collect` takes an explicit candidate order; the walk has a pinned priority that shows the
 doctrines under a tight budget; the plan and document gates carry a rules bundle from an ordered stage
@@ -239,48 +243,18 @@ the document is outside the repository.
 `ADocumentOutsideTheRepository_StillGetsTheStaticDocumentTier`.
 **Reviewer looks at:** no root escape on the out-of-repo path; the purpose still leads the prompt.
 
-### Epic 2 - the resolver says what the change selects, and every way it can fail lands on the walk
+### Epic 2 - the resolver says what the change selects — **NOT BUILT, extracted**
 
-*Done when* a manifest drives selection on the document and plan stages; the code stage asks in its
-final shape and falls back with the reason logged and named in the prompt; omissions and missing mounts
-survive both paths.
+Its build order moved to
+[PLAN_the_resolver_says_what_the_change_selects.md](../todo/PLAN_the_resolver_says_what_the_change_selects.md)
+on 2026-09-15, as epic A. It is not reproduced here: this file records the system as it IS, and a
+story-by-story specification for work nobody has started is an instruction sitting in a document
+filed as documentation — somebody would build from whichever copy they opened first.
 
-**2.1 - `RuleManifest`: parse, batch, merge.** *(Opus - pure functions with exhaustive tests.)* A
-`RuleSelection` union of `Resolved(manifest)` and `Unavailable(reason)` - no nulls, no flags.
-**RED:** `MoreChangedFilesThanTheResolverTakes_AreBatched_NotDropped`,
-`MalformedOrPartialJson_IsNotASelection`, `TwoBatchesNamingOneRule_MergeItsReasons`.
-**Reviewer looks at:** unknown JSON fields tolerated - the manifest carries `instructions`,
-`taskVocabulary` and `version` this code does not model.
-
-**2.2 - `RuleResolver`: the launch, and the one fallback boundary.** *(Fable - it executes a script from
-the repository under review with the server's privileges, kills a process tree on timeout, and confines
-reads to one root; being wrong here is a security defect, not a quality one.)* Not launched at all when
-the mount's script is absent, so a legacy repository costs no process start.
-**RED:** `AMissingNode_AThrownLaunch_ATimeout_ABadExitAndMalformedJson_AllFallBack` - five launchers,
-one assertion shape - with `TheResolverIsLaunchedFromTheRootItReads_AndNowhereElse` and
-`ARepositoryWithoutTheMount_IsNotAskedAtAll`.
-**Reviewer looks at:** the trust boundary - WHICH mounts may have their script run, decided and written
-down; the timeout with a tree kill; that no exception type escapes the boundary.
-
-**2.3 - `Collect` from a manifest: canonical order, reasons in the prompt, omissions that survive.**
-*(Fable - this is the overflow policy, which is the plan's one guarantee, plus root containment of every
-manifest path.)* Order: instruction files, own rules, manifest rules carrying a `path:` reason, the
-stage tier, then the rest by id. A `source` outside the root makes the whole selection `Unavailable`
-rather than a bundle with a hole in it.
-**RED:** `AManifestNamingAnUnreadableFile_FallsBack_RatherThanSendingAPartialBundle`,
-`AnOverBudgetManifest_NamesEveryOmittedRule`, `AnEmptyMount_FallsBackAndNamesTheMount`,
-`TheManifestsSelection_IsTheBundle_InCanonicalOrder`, `EachSelectedRule_SaysWhyItIsInThePrompt`.
-**Reviewer looks at:** a partial bundle impossible by construction; the tie-break chain exactly as
-documented; nothing enumerating the filesystem on this path.
-
-**2.4 - Three stages ask; one of them falls back on purpose today.** *(Opus - the decisions are made.)*
-Document: root `repoPath`, `--task docs --file <its own path>`. Plan: root `repoPath`, `--task plan`.
-Code: root the round's worktree after population, script from the parent mount,
-`--task implement --file <every changed path>` - written in its final shape, falling back until E1.
-**RED:** `TheCodeStage_AsksWithTheWorktreeAsRoot_AndTheParentsScript`,
-`AResolverThatIsDown_StillGivesEveryStageItsRules`.
-**Reviewer looks at:** the sequence `AddAsync` then populate then launch then read; the log line naming
-which mode ran.
+**Why it was not built with the rest:** the shared resolver cannot run against a round's checkout.
+A fresh submodule has no `node_modules`, and the parent's script refuses a sibling worktree
+(`rule-cli.mjs:84`). Both measured 2026-09-15; the fix belongs to `dew_flow_conventions` and is
+tracked as dependency E1 in the extracted plan.
 
 ### Epic 3 - the draw dies, and nothing replaces it with chance — **IMPLEMENTED 2026-09-15**
 
@@ -309,25 +283,11 @@ a 40 000-byte budget, collected twice, failing today with `Expected second.Files
 `research/RESULTS_rules_selection_budget.md`: bytes selected, rules omitted and the mode per stage, from
 the log lines rather than from arithmetic, as the evidence the modularization follow-up needs.
 
-### Epic 4 - symbol triggers widen the selection through the vocabulary that exists (CONDITIONAL, severable)
+### Epic 4 - symbol triggers widen the selection — **NOT BUILT, extracted**
 
-*Done when* a deterministic token-to-task table over the diff's ADDED lines adds tasks to the code
-stage's launch, a token in a removed line selects nothing, and the prompt says which symbol selected a
-rule.
-
-**Decision rule, taken at 3.2 rather than now:** epic 4's effect on the code gate is invisible until E1
-ships, and its `topics:` half needs E2. If `release` carries neither by the time 3.2 lands, this epic is
-extracted into its own `todo/` plan at promotion instead of being built blind.
-
-**4.1 - `AddedLines` and `SymbolTriggers`.** *(Opus.)* Triggers map to the **existing** task vocabulary -
-`HttpClient` to `http`, `ILogger`/`Serilog` to `logging`, `DbContext`/`Migration` to `storage`,
-`.razor`/`StateHasChanged` to `ui`, `PackageReference` to `dependencies` - because E2 does not exist and
-an unknown key throws.
-**RED:** `ATokenInAnAddedLine_SelectsItsTask` / `ATokenInARemovedLine_DoesNot`.
-
-**4.2 - The code stage passes them.** *(Opus.)* Derived tasks deduplicated and sorted so the argv is
-byte-stable; the reason renders as `task:http <- HttpClient added in src/X.cs`.
-**RED:** `ARuleSelectedByASymbol_SaysWhichSymbol`.
+Moved to the same plan as epic B, and conditional on a second dependency: `rule-catalog.mjs:83`
+THROWS on an unknown metadata key, so a `topics:` vocabulary added before its consumers can read it
+does not degrade — it takes the resolver down for all six repositories that mount the rules.
 
 ### Follow-up, not in this build order
 
