@@ -205,13 +205,28 @@ test('a pristine panel writes no consult key either', () => {
  * consultant. This family has already paid for a decision living in three places and being updated in
  * two. (codex, A2's plan round.)</p>
  */
-test('the manifest ships the same four consultant pairs as the code', () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
-    contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
+/**
+ * The manifest's declared default for one setting, read without telling the compiler to stop looking.
+ *
+ * <p>An `as` on `JSON.parse` would compile for ever against a manifest that had moved underneath it —
+ * the shape would be asserted, never checked. This walks the three steps and FAILS NAMING the one
+ * that is missing, so a renamed `contributes` section is a red test that says which section rather
+ * than an undefined that reads as "the default changed". (codex, A2's code round.)</p>
+ */
+function declaredDefault(setting: string): unknown {
+  const manifest: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
+  const step = (value: unknown, key: string): unknown => {
+    assert.ok(typeof value === 'object' && value !== null && key in value, `the manifest has no ${key}`);
+
+    return (value as Record<string, unknown>)[key];
   };
 
+  return step(step(step(step(step(manifest, 'contributes'), 'configuration'), 'properties'), setting), 'default');
+}
+
+test('the manifest ships the same four consultant pairs as the code', () => {
   assert.deepStrictEqual(
-    manifest.contributes.configuration.properties['coai.consultants']?.default,
+    declaredDefault('coai.consultants'),
     Object.fromEntries(CALLER_KINDS.map(({ id }) => [id, {
       vendor: DEFAULT_CONSULT.stored[id]!.vendor,
       model: DEFAULT_CONSULT.stored[id]!.model,
