@@ -1,15 +1,47 @@
 # PLAN — the install asks where the data lives, and the panel can move it there
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/` (`dataDir.ts`,
-> `installer.ts`, `extension.ts`, `mcpBlock.ts`, `panelView.ts`, `panelProvider.ts`,
-> `processLauncher.ts`, `roundsDbRead.ts`, `settingsShape.ts`, `sideConfig.ts`, `sideSettings.ts`),
-> `src_vs_code/package.json`, a new `shared/data-inventory.json` read by both language suites, and the
-> help content in five languages.
+> Status: **IMPLEMENTED, 2026-09-15.** The first install on a side asks where the data should live, a
+> folder that already holds a history is adopted, the block copied to the clipboard carries the two
+> variables, the panel can change the folder or move what is in it, and the move copies, verifies and
+> then unlocks a separate delete. Extension 0.44.0. Still owed: the `coai` plan and code rounds, and
+> one real run on a machine with a NAS — a tail, because every refusal and every count below is
+> asserted, and what a live run adds is the one thing a test cannot have, which is a real SMB share.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_server.md](../research/module_server.md),
-> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),
-> [PLAN_the_panel_shows_where_the_data_lives.md](../research/PLAN_the_panel_shows_where_the_data_lives.md).
+> **What shipped differently from the plan below, and why:**
+>
+> 1. **`readSessions` was FIXED here rather than deferred.** The plan listed it as an independent
+>    defect for its own document. It stopped being independent: it resolved the directory from
+>    `process.env`, which a choice living in a SETTING is invisible to, so this feature would have made
+>    it permanently wrong rather than merely wrong on partitioned installs. `panelProvider`'s storage
+>    probes had the same defect and the same cure. A test now refuses any second answer to "where does
+>    the data live" outside `dataDir.ts`.
+> 2. **The extracted tail is one plan, not two**, for the same reason:
+>    [PLAN_the_settings_file_ignores_the_side.md](../todo/PLAN_the_settings_file_ignores_the_side.md),
+>    which is the server's half and needs a server release.
+> 3. **`ALWAYS_PER_SIDE` turned out to need only the WRITE path**, not the read. The plan assumed both;
+>    the two layers are read separately anyway — the overlay and the shared value — because the panel
+>    says which one answered, so the reader needed no exception at all.
+> 4. **The delete is command-palette only.** The plan implied a panel control gated on the move record,
+>    which would have meant carrying that record through `PanelState`. The move's own success
+>    notification names the command at the one moment it becomes relevant, which is where the
+>    discoverability actually matters; a permanently visible *Delete…* is not obviously wanted.
+> 5. **The guard that had to be amended taught something.** `wslNetwork.test.ts`'s call-graph guard
+>    matched the whole file, so a docblock in another module that NAMED `writeWslconfig` — to say its
+>    own call graph is guarded the same way — was reported as a new caller. Both guards now read code
+>    rather than prose. That one stands between a refactor and a global networking file rewritten with
+>    nobody's consent, so it was worth sharpening rather than working around.
+> 6. **The inventory's RED run wrote its own evidence**: the failure named the twelve entries the
+>    shipped list was losing. Nothing had to be argued.
+>
+> Scope as built: `src_vs_code/src/` (`dataDir.ts`, `dataChoice.ts`, `dataMove.ts`, `dataCommands.ts`,
+> `extension.ts`, `mcpBlock.ts`, `panelView.ts`, `panelProvider.ts`, `processLauncher.ts`,
+> `versionProbe.ts`, `roundsDbRead.ts`, `settingsShape.ts`, `sideConfig.ts`), `package.json`,
+> `shared/data-inventory.json`, the help content in five languages, and `sonarcloud.yml`.
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [module_server.md](module_server.md),
+> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md),
+> [PLAN_the_panel_shows_where_the_data_lives.md](PLAN_the_panel_shows_where_the_data_lives.md).
 >
 > This is the third and last part of issue [#115](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/115).
 > The first shipped the resolution rule, the second made it visible; both left the acting half out on

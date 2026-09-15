@@ -117,9 +117,9 @@ import {
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { asText } from './asText';
-import { coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
+import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import {
   executableFor,
@@ -2634,7 +2634,9 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
     // gemini. A probe that throws is a probe that answered "not there", which is the honest reading
     // of a permission error on a path we are only describing.
     const present = new Set<string>();
-    const configured = (process.env['COAI_DATA_DIR'] ?? '').trim();
+    // The chosen ROOT, from whichever layer named it — never the variable, which stopped being the
+    // whole answer when a directory could be chosen in a setting.
+    const configured = chosenRoot();
     for (const path of configured.length === 0 ? [] : probePaths()) {
       if (await reachable(path)) {
         present.add(path);
@@ -2659,7 +2661,7 @@ async function whereThisWindowKeepsItsData(): Promise<DataLocation> {
 
 /** The two paths the notes ask about — the shared root's database, and this side's directory. */
 function probePaths(): readonly string[] {
-  const root = resolve((process.env['COAI_DATA_DIR'] ?? '').trim());
+  const root = chosenRoot();
 
   return [join(root, 'coai.db'), coaiDataDir()];
 }
