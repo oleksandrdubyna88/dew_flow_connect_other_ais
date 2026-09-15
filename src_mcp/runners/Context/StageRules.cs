@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace CoaiMcp.Runners.Context;
 
 /// <summary>
@@ -28,21 +30,28 @@ public static class StageRules
     /// The plan gate: what makes a PLAN good, in the order they are worth spending budget on.
     /// </summary>
     /// <remarks>
-    /// <c>security.md</c> leads for the reason it leads in <see cref="RuleOrder"/>'s walk — a missed
-    /// security finding is the most expensive thing this gate can fail to say, and it is small. Then
-    /// the three a plan is most often wrong about: building what already exists, filing the plan
-    /// where it cannot be found, and a test plan that proves nothing. <c>development-workflow.md</c>
-    /// is last because it is 14 KB and the most likely to be cut; <c>git-workflow.md</c> is absent
-    /// because a plan round reviews a document, not a commit.
+    /// <para><c>security.md</c> leads for the reason it leads in <see cref="RuleOrder"/>'s walk — a
+    /// missed security finding is the most expensive thing this gate can fail to say, and it is small.
+    /// Then the three a plan is most often wrong about: building what already exists, filing the plan
+    /// where it cannot be found, and documenting a system as it is not.</para>
+    /// <para>The four small ones come before the two large. <c>knowledge-base.md</c> (3.6 KB) precedes
+    /// <c>testing.md</c> (25 KB) because a plan is a DOCUMENT and the rule about documents decides more
+    /// of its review than the rule about a test harness; put the other way round, 25 KB spent first can
+    /// push a 3.6 KB rule that certainly applies off the end of the budget.
+    /// <c>development-workflow.md</c> (14 KB) is last for the same arithmetic, and
+    /// <c>git-workflow.md</c> is absent because a plan round reviews a document, not a commit.</para>
+    /// <para><c>reliability.md</c> was proposed for this tier by a code round and is deliberately NOT
+    /// here: <c>planning-docs.md</c> itself draws the line — "reliability.md § <i>Everything that grows
+    /// has an owner</i> governs the CODE. This governs [the plan]".</para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> Plan =
+    public static readonly ImmutableArray<string> Plan =
     [
         "common/security.md",
         "common/reuse-first.md",
         "common/planning-docs.md",
-        "common/testing.md",
-        "common/coding-style.md",
         "common/knowledge-base.md",
+        "common/coding-style.md",
+        "common/testing.md",
         "common/development-workflow.md",
     ];
 
@@ -50,7 +59,7 @@ public static class StageRules
     /// The document gate: what makes a DOCUMENT right — where it lives, what it must carry, and how
     /// a reviewer is meant to read one.
     /// </summary>
-    public static readonly IReadOnlyList<string> Document =
+    public static readonly ImmutableArray<string> Document =
     [
         "common/knowledge-base.md",
         "common/planning-docs.md",

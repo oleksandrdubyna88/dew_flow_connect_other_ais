@@ -93,13 +93,16 @@ sequenceDiagram
   entry would pull in a file nobody meant and spend the budget of the rule it was impersonating —
   caught by a red test rather than in production.
 
-- **A gate with NO diff is judged against a NAMED tier.** `StageRules.Plan` and `StageRules.Document`
-  (`Context/StageRules.cs`) are ordered lists, and `RuleOrder.Staged(tier)` is the one order that
-  FILTERS: a plan or document round has no change to select from, so the mount's other rules are not
-  lower priority — they are not what the stage is judged against. A tier that matches nothing means the
-  mount contributes nothing, and the reviewer still sees this repository's own rules. Every entry is
-  checked against the corpus this repository PINS, by
-  `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount`, which reads the real mount —
+- **The tiers a gate with NO diff will be judged against exist as data; no stage reads them yet.**
+  `StageRules.Plan` and `StageRules.Document` (`Context/StageRules.cs`) are ordered lists, and
+  `RuleOrder.Staged(tier)` is the one order that FILTERS — a plan or document round has no change to
+  select from, so the mount's other rules are not lower priority, they are not what the stage is judged
+  against. **Both gates still send no rules at all**: the wiring is stories 1.3 and 1.4 of the plan, and
+  `Drawn()` remains what `Collect` uses by default. When a tier matches nothing the mount contributes
+  nothing, deliberately and without a fallback — falling back to `Walk` would hand a plan reviewer the
+  code rules the tier exists to exclude — and the reviewer still sees this repository's own rules,
+  which are outside every order. Every entry is checked against the corpus this repository PINS by
+  `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount`, which reads the real mount:
   a fixture that writes every name it then asserts proves only that the fixture and the table agree.
 
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
