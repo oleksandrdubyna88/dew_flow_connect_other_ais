@@ -983,6 +983,39 @@ an old schema is nought candidates, which reads as *no material* rather than *wr
 Plan: `todo/PLAN_a_corpus_of_real_defects.md`, which carries the funnel measurement in full and the
 five stories after this one.
 
+### The normalizer is a MODE, not a sidecar (`--normalize`, 2026-09-15)
+
+`coai-mcp --normalize --in <requests.json> --out <answers.json>` reads a method out of source and
+rewrites it so nothing of this project is left in it. It reads no files itself — each request carries
+the text, because only the caller knows which commit it wants, and half of those are commits no
+branch can reach any more.
+
+**It was planned as a separate binary and is not one.** The reason for a sidecar was Roslyn under
+`PublishAot`; tree-sitter reaches its grammars by P/Invoke, which Native AOT carries without
+complaint — measured, zero IL warnings — so a second binary would have bought a second release line
+and nothing else. The grammars ride beside the binary exactly as `e_sqlite3` does, and for exactly
+the same reason: a companion executable is one somebody eventually copies without.
+
+**The publish keeps four native libraries and deletes twenty-seven.** The binding ships 28+ grammars
+and this product parses three: left alone that is 69 MB of a 177 MB publish, per RID, on a file people
+download. `DropGrammarsNobodyParses` in `CoaiMcp.csproj` deletes the rest after publish, taking it to
+116 MB. The names come from `shared/kept-grammars.txt`, which is read by three things that must not
+disagree — the target, `KeptGrammarsTests`, and the release workflow.
+
+**Both directions of that are checked, because both fail silently.** A missing grammar is a
+`DllNotFoundException` on somebody else's machine — this repository shipped exactly that once, when
+`mcp-v0.18.1` went out without `e_sqlite3`. An EXTRA grammar means the pruning stopped running, and
+nobody would notice except by the download growing 60 MB. The release Package step counts the
+tree-sitter entries in the ARCHIVE against the line count of `kept-grammars.txt`, so neither can pass
+unnoticed.
+
+Exit codes: **66** (EX_NOINPUT) for a request file that is missing or will not parse — the caller wrote
+it — and **73** (EX_CANTCREAT) for answers that could not be written, which is a disk rather than a
+request. A method that could not be located is neither: it is an ANSWER carrying a skip reason, and a
+batch of fifty where two failed to resolve is a successful batch.
+
+Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 2.
+
 ## What a round can be asked afterwards (2026-09-08)
 
 Two lines and one directory, added because a round that answered nothing could not be questioned:

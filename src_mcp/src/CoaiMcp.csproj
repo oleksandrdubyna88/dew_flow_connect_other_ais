@@ -28,6 +28,11 @@
   <ItemGroup>
     <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
     <ProjectReference Include="..\runners\CoaiMcp.Runners.csproj" />
+    <!-- The normalizer, as a MODE rather than a second binary. The release publishes one file per
+         platform, and a companion executable beside it is one somebody eventually copies without.
+         Its native grammars ride along exactly as e_sqlite3 already does — and the publish drops the
+         ones no language here parses; see the pruning target below. -->
+    <ProjectReference Include="..\normalizer\CoaiMcp.Normalizer.csproj" />
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
@@ -47,5 +52,49 @@
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <KeptGrammarsFile>$(MSBuildThisFileDirectory)..\..\shared\kept-grammars.txt</KeptGrammarsFile>
+  </PropertyGroup>
+
+  <!--
+    The binding ships 28+ grammars and this product parses three. Left alone that is 69 MB of a
+    170 MB publish, per RID, on a file people download — Haskell, Verilog, Agda and twenty-five more
+    that nothing here will ever hand to a parser.
+
+    AFTER publish rather than by filtering the publish list: the native assets arrive through the
+    package's own runtime-targets machinery, and deleting what landed is a rule anybody can read and
+    verify against a directory listing, where a Remove over ResolvedFileToPublish is a rule you have
+    to reason about. The release smoke checks the archive, which is where being wrong would matter.
+
+    The names come from shared/kept-grammars.txt so that this target and the test that guards it
+    cannot disagree. Both prefixes are covered because the platforms disagree: `tree-sitter-c-sharp.dll`
+    on Windows, `libtree-sitter-c-sharp.so` on Linux.
+  -->
+  <Target Name="DropGrammarsNobodyParses" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <ReadLinesFromFile File="$(KeptGrammarsFile)">
+      <Output TaskParameter="Lines" ItemName="_KeptGrammarLine" />
+    </ReadLinesFromFile>
+
+    <ItemGroup>
+      <!-- The file carries its own explanation; the names are the lines that are not comments. -->
+      <_KeptGrammar Include="@(_KeptGrammarLine)"
+                    Condition="'%(Identity)' != '' AND !$([System.String]::Copy('%(Identity)').StartsWith('#'))" />
+
+      <!-- Both spellings, because the platforms disagree about the `lib` prefix. -->
+      <_KeepThese Include="@(_KeptGrammar);@(_KeptGrammar->'lib%(Identity)')" />
+
+      <!-- Every grammar that landed, less the ones to keep. `MatchOnMetadata` compares the two
+           lists by FILENAME, which is the only thing they have in common — one side is a full path
+           under the publish directory and the other is a bare name out of a text file. Rebuilding
+           paths from names was the first attempt and it silently deleted nothing. -->
+      <_GrammarToDelete Include="$(PublishDir)tree-sitter*.*;$(PublishDir)libtree-sitter*.*" />
+      <_GrammarToDelete Remove="@(_KeepThese)" MatchOnMetadata="Filename" />
+    </ItemGroup>
+
+    <Message Importance="high"
+             Text="coai-mcp: keeping @(_KeptGrammar->Count()) grammar(s), dropping @(_GrammarToDelete->Count())." />
+    <Delete Files="@(_GrammarToDelete)" />
+  </Target>
 
 </Project>

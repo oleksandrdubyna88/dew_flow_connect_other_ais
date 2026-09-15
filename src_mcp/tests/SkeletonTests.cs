@@ -154,6 +154,52 @@ public sealed class SkeletonTests
         skeleton.Should().Contain("await").And.Contain("fetch").And.Contain("then").And.Contain("filter");
     }
 
+    /// <summary>A TYPE is not a string literal, however the grammar spells it.</summary>
+    /// <remarks>
+    /// tree-sitter names an anonymous token by its own text, so the TypeScript type keyword `string`
+    /// is a node whose KIND is "string" — and a literal check written as `kind.Contains("string")`
+    /// rewrote it as `""`. `Promise<string[]>` normalised to `Promise<""[]>`, losing exactly the
+    /// runtime type the skeleton exists to keep. Found by running the published binary.
+    /// </remarks>
+    [Fact]
+    public void ATypeKeywordSurvives_EvenWhenTheGrammarNamesItAfterAString()
+    {
+        const string source = """
+            async function load(customerId: string): Promise<string[]> {
+              return [customerId];
+            }
+            """;
+
+        var skeleton = _normalizer.Normalise(SourceLanguage.TypeScript, source);
+
+        skeleton.Should().Contain("string", "the TYPE is runtime information the corpus needs");
+        skeleton.Should().NotContain("customerId").And.NotContain("load");
+    }
+
+    /// <summary>A JavaScript parameter is renamed even when it is spelled like a runtime member.</summary>
+    /// <remarks>
+    /// JavaScript hangs parameter identifiers straight off `formal_parameters` with no field, so they
+    /// looked like references rather than declarations — and `function tally(entries)` kept `entries`,
+    /// because `entries` is also `Object.entries`. A parameter named after a runtime member is
+    /// precisely what the declaration check exists for. Found by running the published binary.
+    /// </remarks>
+    [Fact]
+    public void AJavaScriptParameterNamedAfterARuntimeMember_IsStillRenamed()
+    {
+        const string source = """
+            function tally(entries, size) {
+              return entries.reduce((sum, entry) => sum + entry.amountDue, 0);
+            }
+            """;
+
+        var skeleton = _normalizer.Normalise(SourceLanguage.JavaScript, source);
+
+        skeleton.Should().NotMatchRegex(@"entries", "it is a parameter WE named, not Object.entries");
+        skeleton.Should().NotMatchRegex(@"size");
+        skeleton.Should().NotContain("amountDue").And.NotContain("tally");
+        skeleton.Should().Contain("reduce", "and the runtime member it calls is still runtime");
+    }
+
     /// <summary>
     /// The whitelist check passes on a real skeleton, and names the leak when one is planted.
     /// </summary>

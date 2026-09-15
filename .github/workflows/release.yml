@@ -277,6 +277,15 @@ jobs:
             exit 1
           fi
           cp "$NATIVE" "$NAME/"
+          # The tree-sitter grammars, which `--normalize` reaches by P/Invoke exactly as the database
+          # reaches e_sqlite3 — and with exactly the same failure when they are absent. The publish
+          # has already dropped the twenty-seven languages nothing here parses; these are what is left.
+          if [ "$(ls out/*tree-sitter* 2>/dev/null | wc -l)" -eq 0 ]; then
+            echo "no tree-sitter grammars in the publish output — --normalize would throw DllNotFoundException"
+            ls -la out
+            exit 1
+          fi
+          cp out/*tree-sitter* "$NAME/"
           if [[ "${{ matrix.rid }}" == win-* ]]; then
             cp out/coai-mcp.exe "$NAME/"
             7z a "$NAME.zip" "$NAME" > /dev/null
@@ -303,6 +312,20 @@ jobs:
           # RIDs - a release blocked at its last step. The review gate raised it; a test holds it now.
           if ! printf '%s' "$LISTING" | tr '\134' '/' | grep -Eq "(^|[[:space:]/])$NAME/[^/]*e_sqlite3"; then
             echo "the archive does not carry the SQLite library beside the binary — the shipped server could not open its own database"
+            printf '%s' "$LISTING"
+            exit 1
+          fi
+          # The grammars, counted rather than named, against the ONE list the publish prunes by. Both
+          # directions fail silently otherwise: a missing grammar is a DllNotFoundException on somebody
+          # else's machine, and an extra one means `DropGrammarsNobodyParses` stopped running and
+          # nobody would notice except by the download growing 60 MB. A count tied to the file cannot
+          # drift the way a hand-written list of names here would.
+          EXPECTED=$(grep -cvE '^[[:space:]]*(#|$)' shared/kept-grammars.txt)
+          SHIPPED=$(printf '%s' "$LISTING" | tr '\134' '/' \
+            | grep -Eo "$NAME/[^/[:space:]]*tree-sitter[^/[:space:]]*" | sort -u | wc -l)
+          if [ "$SHIPPED" -ne "$EXPECTED" ]; then
+            echo "the archive carries $SHIPPED tree-sitter librar(ies) beside the binary, and shared/kept-grammars.txt names $EXPECTED"
+            echo "fewer means --normalize throws DllNotFoundException; more means the publish stopped pruning"
             printf '%s' "$LISTING"
             exit 1
           fi

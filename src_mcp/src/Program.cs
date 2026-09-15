@@ -118,6 +118,20 @@ internal static class Program
         /// server has opened the database with a build that has them.</para>
         /// </remarks>
         Bugs,
+
+        /// <summary>
+        /// Read methods out of source and rewrite them so nothing of this project is left in them.
+        /// </summary>
+        /// <remarks>
+        /// <para>A MODE rather than the sidecar it was first planned as. The release publishes one
+        /// file per platform, and a companion executable beside it is one somebody eventually copies
+        /// without — the reasoning that already made <see cref="AskLocal"/> a mode. tree-sitter
+        /// reaches its grammars by P/Invoke, which Native AOT carries without complaint, so a second
+        /// binary would have bought a second release line and nothing else.</para>
+        /// <para>Files in, files out, and batched: a method's source is too big for an argument and
+        /// the answers are bigger, and the cost here is the process rather than the parse.</para>
+        /// </remarks>
+        Normalize,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -136,6 +150,7 @@ internal static class Program
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
+                "--normalize" => Startup.Normalize,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -176,6 +191,9 @@ internal static class Program
 
             case Startup.Bugs:
                 return BugsJson(args);
+
+            case Startup.Normalize:
+                return NormalizeJson(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -308,6 +326,59 @@ internal static class Program
     /// <para>74 (EX_IOERR) for a database that would not be read, as <c>--log --paged</c> answers:
     /// an empty corpus and a success would read as "no material", which is the one wrong answer.</para>
     /// </remarks>
+    /// <summary>
+    /// Read methods out of source and rewrite them, a batch at a time.
+    /// </summary>
+    /// <remarks>
+    /// <para>Files in, files out: a method's source will not fit in an argument on Windows and the
+    /// answers are larger than the asks. <c>--ask-local</c> already takes its prompt from a file for
+    /// the same reason, and this follows it rather than inventing a second convention.</para>
+    /// <para>Exit codes say which thing went wrong, because they ask for different actions. <b>66</b>
+    /// (EX_NOINPUT) is a request file that is missing or will not parse — the caller wrote it, so the
+    /// caller can fix it. <b>73</b> (EX_CANTCREAT) is an answer file that could not be written, which
+    /// is a disk rather than a request. Nothing here exits non-zero because a method could not be
+    /// located: that is an ANSWER, carried per item as a skip, and a batch of fifty where two failed
+    /// to resolve is a successful batch.</para>
+    /// </remarks>
+    internal static int NormalizeJson(string[] args)
+    {
+        var flags = Flags(args);
+        if (!flags.TryGetValue("--in", out var input) || !flags.TryGetValue("--out", out var output))
+        {
+            Note("--normalize needs --in <requests.json> and --out <answers.json>");
+            return 64; // EX_USAGE
+        }
+
+        Normalising.NormalizeRequest? request;
+        try
+        {
+            request = System.Text.Json.JsonSerializer.Deserialize(
+                File.ReadAllText(input), Server.ServerJsonContext.Default.NormalizeRequest);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            Note($"--normalize could not read the request at '{input}': {e.Message}");
+            return 66; // EX_NOINPUT
+        }
+
+        var answer = new Normalising.NormalizeMode(new Normalizer.TreeSitterNormalizer())
+            .Run(request ?? new Normalising.NormalizeRequest());
+
+        try
+        {
+            File.WriteAllText(
+                output,
+                System.Text.Json.JsonSerializer.Serialize(answer, Server.ServerJsonContext.Default.NormalizeResult));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Note($"--normalize could not write the answers to '{output}': {e.Message}");
+            return 73; // EX_CANTCREAT
+        }
+
+        return 0;
+    }
+
     internal static int BugsJson(string[] args)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
@@ -942,6 +1013,11 @@ internal static class Program
         `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
         exits 69 when the database has never heard of that round, which is not the same as finding
         nothing.
+        `--normalize --in <requests.json> --out <answers.json>` reads methods out of source and
+        rewrites them so nothing of the project is left in them — the corpus collector's parser. It
+        reads no source files itself; each request carries the text. Exits 66 when the request cannot
+        be read and 73 when the answers cannot be written; a method it could not locate is an answer,
+        not a failure.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
         Configure it in your client as:

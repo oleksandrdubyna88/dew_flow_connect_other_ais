@@ -179,8 +179,15 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
             return string.Empty;
         }
 
+        // TWO passes, and the first one is not an optimisation. A name this method declares is ours
+        // everywhere in it, including where the runtime happens to use the same word — and which
+        // occurrence the walker meets first is a fact about tree order, not about the code. Gathering
+        // the declared names before rewriting anything makes the answer independent of both.
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        CollectDeclared(root, declared);
+
         var rewrites = new List<Rewrite>();
-        Collect(root, new Placeholders(RuntimeVocabulary.For(language)), rewrites);
+        Collect(root, new Placeholders(RuntimeVocabulary.For(language), declared), rewrites);
         var skeleton = Rewriting.Apply(text, rewrites);
 
         return wrapped ? Unwrap(skeleton) : skeleton;
@@ -214,6 +221,20 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
         return string.Join('\n', lines);
     }
 
+    /// <summary>The first pass: every name this code declares, before anything is rewritten.</summary>
+    private static void CollectDeclared(Node node, HashSet<string> declared)
+    {
+        foreach (var child in node.Children)
+        {
+            if (!child.Children.Any() && NamesSomething(child.Type) && Placeholders.IsDeclaredName(child))
+            {
+                declared.Add(child.Text);
+            }
+
+            CollectDeclared(child, declared);
+        }
+    }
+
     /// <summary>Walks the tree once, deciding what each leaf becomes.</summary>
     /// <remarks>
     /// Leaves only: a comment, a literal and an identifier are all leaves, and replacing a parent
@@ -237,6 +258,17 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     private static string? Replacement(Node node, Placeholders placeholders)
     {
         var kind = node.Type;
+
+        // An ANONYMOUS token is the language's own syntax, and tree-sitter names it by its own text:
+        // the TypeScript type keyword `string` is a node whose kind IS "string". Without this guard
+        // the literal check below rewrote a TYPE as `""`, so `Promise<string[]>` normalised to
+        // `Promise<""[]>` and the skeleton lost the runtime type it exists to keep. Caught by running
+        // the published binary, which is the only place all three grammars meet at once.
+        if (kind == node.Text)
+        {
+            return null;
+        }
+
         if (kind.Contains("comment", StringComparison.Ordinal))
         {
             // Comments say the most of all: a ticket number, a customer, a person's name.
