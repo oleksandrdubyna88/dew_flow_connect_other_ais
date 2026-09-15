@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fileTargetOf, renderAnswer } from '../renderAnswer';
+import { answerBlocks, fileTargetOf, renderAnswer, signatureOf } from '../renderAnswer';
 
 /**
  * The renderer, and the file that is its safety.
@@ -27,6 +27,10 @@ import { fileTargetOf, renderAnswer } from '../renderAnswer';
 const ALLOWED = new Set([
   'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'pre', 'code', 'blockquote', 'hr',
   'strong', 'em', 'del', 'br', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  // The twenty-fifth, and the only one the renderer emits on its OWN behalf rather than because a
+  // model wrote something. Model text cannot become one — a raw html token is escaped and shown, so
+  // it has no `<` left — and the shape of every emitted button is pinned by its own test below.
+  'button',
 ]);
 
 function tagsIn(html: string): string[] {
@@ -282,3 +286,140 @@ function escaped(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+/**
+ * THE BLOCKS OF AN ANSWER, and the controls drawn for them.
+ *
+ * <p>One walk numbers them and draws them, and `answerBlocks` returns what that same walk recorded —
+ * so these tests are about one function seen from two sides, never about two lists agreeing.</p>
+ */
+
+const FENCE = '```';
+
+/** Every `data-block` ordinal in the output, in the order the rows appear. */
+function ordinals(html: string): number[] {
+  return [...html.matchAll(/data-block="(\d+)"/g)].map((match) => Number(match[1]));
+}
+
+/** Every copy-row label, in the order the rows appear. */
+function labels(html: string): string[] {
+  return [...html.matchAll(/class="copy blockCopy"[^>]*>([^<]*)</g)].map((match) => match[1] ?? '');
+}
+
+test('a renderer not told which message it draws puts no control on anything', () => {
+  const html = renderAnswer([FENCE, 'x', FENCE].join('\n'));
+
+  // The whole reason `at` is optional. A default of 0 would have put live rows under every fence on
+  // the page before anything existed to act on them — a control that does nothing.
+  assert.doesNotMatch(html, /blockRow/, 'a row was drawn for a message the renderer was not told about');
+  assert.match(html, /<pre><code>x<\/code><\/pre>/, 'the block itself changed when no row was asked for');
+});
+
+test('the first block of an answer is numbered zero', () => {
+  // `push` returns the new LENGTH, and using it would number the first block 1 — every button would
+  // then copy the block after its own and the last would resolve to nothing. (gemini, the plan round.)
+  const html = renderAnswer([FENCE, 'only', FENCE].join('\n'), 7);
+
+  assert.deepEqual(ordinals(html), [0], 'the first block is not block 0');
+  assert.match(html, /data-at="7"/, 'the row does not name the message it belongs to');
+});
+
+test('a fenced block and a blockquote each get their own copy row underneath it', () => {
+  const html = renderAnswer([FENCE, 'code', FENCE, '', '> quoted'].join('\n'), 0);
+
+  assert.deepEqual(ordinals(html), [0, 1], 'the two blocks are not numbered in order');
+  assert.ok(html.indexOf('</pre>') < html.indexOf('data-block="0"'), 'the fence row is not under the fence');
+  assert.ok(html.indexOf('</blockquote>') < html.indexOf('data-block="1"'), 'the quote row is not under the quote');
+});
+
+test('a fence inside a list item is a block like any other', () => {
+  const html = renderAnswer(['- item:', '', `  ${FENCE}ts`, '  const x = 1;', `  ${FENCE}`].join('\n'), 0);
+
+  // The one shape that proves the drawn walk numbers things, rather than a re-lex of the top level:
+  // a top-level token scan sees no fence here at all, and 1 of 39 real stored answers has exactly this.
+  assert.deepEqual(ordinals(html), [0], 'a fence inside a list item was not given a control');
+});
+
+test('a quote containing a fence gives two controls, the inner one numbered first', () => {
+  const html = renderAnswer(['> quoted', `> ${FENCE}js`, '> inner()', `> ${FENCE}`].join('\n'), 0);
+
+  // Assigned on the way OUT, so the numbers run in the order the rows appear rather than against it.
+  // The two overlap ON PURPOSE: the inner control copies the code, the outer copies the whole quote,
+  // fence lines included — which is what marked's blockquote `text` contains.
+  assert.deepEqual(ordinals(html), [0, 1], 'the inner block is not numbered before the quote around it');
+  const said = answerBlocks(['> quoted', `> ${FENCE}js`, '> inner()', `> ${FENCE}`].join('\n'));
+  assert.equal(said[0]?.text, 'inner()', 'the inner control does not copy the code');
+  assert.equal(said[1]?.text, ['quoted', `${FENCE}js`, 'inner()', FENCE].join('\n'), 'the quote does not copy whole');
+});
+
+test('a block the renderer will not draw gets no control and consumes no ordinal', () => {
+  // MAX_DEPTH is 8 and the cut-off is `depth > MAX_DEPTH`, so this fixture has to genuinely cross it:
+  // a quote AT the limit is still drawn and still earns a row. A fixture that stops short passes
+  // without ever reaching the branch it names.
+  const deep = `${'> '.repeat(11)}too deep`;
+  const html = renderAnswer([FENCE, 'shallow', FENCE, '', deep].join('\n'), 0);
+  const drawn = ordinals(html);
+
+  assert.ok(drawn.includes(0), 'the shallow block lost its control');
+  assert.deepEqual(drawn, [...new Set(drawn)], 'an ordinal was handed out twice');
+  assert.equal(answerBlocks([FENCE, 'shallow', FENCE, '', deep].join('\n')).length, drawn.length,
+    'the recorded blocks and the drawn controls are different lists');
+});
+
+test('a block tagged reply says so on its button, and changes nothing else about the block', () => {
+  const reply = renderAnswer([`${FENCE}reply`, 'send this', FENCE].join('\n'), 0);
+  const text = renderAnswer([`${FENCE}text`, 'send this', FENCE].join('\n'), 0);
+
+  assert.deepEqual(labels(reply), ['Copy the reply prompt'], 'a reply block does not say what it is');
+  assert.deepEqual(labels(text), ['Copy block'], 'an ordinary block does not read Copy block');
+  // Compared against another TAGGED fence, never a bare one: a bare fence emits no class at all, so
+  // "byte-identical to a plain fence" was false and the obvious way to make it true is to strip the
+  // class from every tagged fence in the product.
+  // The signature is normalised away with them: the two fixtures are different STRINGS, so signing
+  // the same would be the defect. What this pins is that nothing ELSE about the block moves.
+  const shape = (html: string, lang: string, label: string): string => html
+    .replace(`language-${lang}`, 'LANG')
+    .replace(label, 'LABEL')
+    .replace(/data-sig="[^"]*"/, 'data-sig="SIG"');
+  assert.equal(
+    shape(reply, 'reply', 'Copy the reply prompt'),
+    shape(text, 'text', 'Copy block'),
+    'a reply block differs from an ordinary one by more than its class and its label',
+  );
+});
+
+test('the blocks a walk records are the blocks it drew', () => {
+  const markdown = [FENCE + 'reply', 'send this', FENCE, '', '> quoted'].join('\n');
+  const said = answerBlocks(markdown);
+
+  assert.deepEqual(said.map((one) => one.kind), ['code', 'quote'], 'the kinds are not what was written');
+  assert.deepEqual(said.map((one) => one.reply), [true, false], 'the reply tag was not recorded');
+  assert.deepEqual(said.map((one) => one.text), ['send this', 'quoted'], 'a block does not carry its own text');
+});
+
+test('an answer rewritten to a different text of the same shape signs differently', () => {
+  // The guard against a message rewritten in place: a range check cannot see it, because the block
+  // COUNT is unchanged. Two reviewers raised it independently on the plan round.
+  const one = signatureOf([FENCE, 'first', FENCE].join('\n'));
+  const two = signatureOf([FENCE, 'other', FENCE].join('\n'));
+
+  assert.notEqual(one, two, 'two different answers of the same shape sign the same');
+  assert.equal(one, signatureOf([FENCE, 'first', FENCE].join('\n')), 'the same answer signs differently twice');
+  assert.match(one, /^[0-9a-z-]{1,24}$/, 'the signature is not a short attribute-safe token');
+});
+
+test('every button the renderer emits is one of its own, and the scan still finds one', () => {
+  const html = renderAnswer([FENCE, 'x', FENCE].join('\n'), 3);
+  const buttons = html.match(/<button[^>]*>/g) ?? [];
+
+  // The companion assertion, without which this scan could quietly start matching nothing after a
+  // reformat and pass for ever.
+  assert.equal(buttons.length, 1, 'the scan for emitted buttons found none — it is no longer a control');
+  for (const one of buttons) {
+    assert.match(
+      one,
+      /^<button type="button" class="copy blockCopy" data-block="\d+" data-at="\d+" data-sig="[0-9a-z-]+">$/,
+      `a button reached the page in a shape nothing vouches for: ${one}`,
+    );
+  }
+});

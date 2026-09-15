@@ -385,6 +385,53 @@ asserts on the TAG NAMES that came out, against the allow-list, rather than on w
 — which would flag escaped text that merely mentions one, and would miss a hostile tag nobody
 thought of.
 
+### Every block of an answer can be taken on its own (2026-09-15)
+
+An answer often ends with a suggested **reply prompt** — the words to send onward — and the only way
+to copy it was the control that copies the WHOLE answer. What looked like the grey block's own footer
+never was: `.afterRow` is the per-MESSAGE pair, repeated under every answer since an answer can be a
+page and a half, and it lands under the last block by position. So people copied a page and a half
+and deleted all but ten lines of it.
+
+`renderAnswer` now draws a copy row under **every fenced block and every blockquote it emits**, and
+the product reserves one fence tag: a block opened ```` ```reply ```` reads *Copy the reply prompt*
+instead of *Copy block*.
+
+**The product owns the MARKER and never asks for it.** Nothing was added to the outgoing turn —
+`chatPrompt.ts` composes the same four things it always did. What makes a model write the tag is the
+person's own prompt, and the reason for that split is measured rather than preferred: across the 22
+stored conversations the heading a model put above such a block had **fourteen** spellings, **4 of
+20** used a blockquote and no fence at all, and ```` ```text ```` already marked both a reply prompt
+(14×) and an ordinary block (2×). A detector built on any of that is wrong about a fifth of the time
+while looking certain.
+
+**The walk that DRAWS is the walk that NUMBERS, and that is the whole design.** A control names its
+block by an ordinal; the host resolves that ordinal through `answerBlocks`. Two enumerators would
+have been the failure `testing.md` names — both suites green, the button copying the wrong text — and
+it is not hypothetical: a top-level scan of the markdown and what the renderer actually emits already
+disagree on **1 of 39** stored answers, over a fence inside a list item. So one pass appends to a list
+and emits the row with `blocks.length - 1`, and `answerBlocks` returns what that pass recorded.
+`MAX_DEPTH` is the same hazard from the other end — a block past depth 8 is drawn as text, so it is
+not a block, earns no row and consumes no ordinal.
+
+Three details that had to be decided rather than discovered:
+
+- **`at` is optional.** A renderer not told which message it is drawing emits no controls at all.
+  With a `0` default, the renderer alone would have put live rows under every fence before anything
+  existed to act on them.
+- **A quote is numbered on the way OUT**, after what it contains, so the ordinals run in the order the
+  rows appear. A quote holding a fence therefore gives two overlapping controls on purpose: the inner
+  copies the code, the outer copies the quote whole — marked keeps the fence lines in a blockquote's
+  own `text`.
+- **`data-sig`** is a short signature of the markdown the row was drawn from, which the host
+  recomputes before resolving an ordinal. Messages are only appended to today, so a rewrite in place
+  cannot happen — but a position outlives the text under it, and a range check cannot see a rewrite
+  that keeps the same number of blocks.
+
+`button` is now the twenty-fifth tag the renderer may emit, and the only one that is ours rather than
+the model's. Model text cannot become one — a raw html token is escaped and shown — and the shape of
+every emitted button is pinned by its own test, with a companion asserting that scan still finds one.
+
 ### The chat page's layout: one scrolling region, a pinned footer (2026-09-09)
 
 `chatPage.ts` renders four children of `body` and nothing else at the top level: `<header>` with the
