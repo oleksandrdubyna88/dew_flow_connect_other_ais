@@ -312,3 +312,24 @@ export function keysFileIn(folder: string): WithKeysFile {
 export function serverRun(executable: string, stop?: () => boolean): Run {
   return (args, capMs) => capture(executable, [...args], false, capMs, stop, serverEnv());
 }
+
+/**
+ * The same spawn, asked about a directory this window is NOT pointed at.
+ *
+ * <p>The one legitimate reason to want that, and it has one caller: verifying a move. The copy has
+ * to be read back from where it landed BEFORE this window is pointed there, because pointing first
+ * would show an empty history for as long as the copy took and for ever if it failed.</p>
+ *
+ * <p>It is named differently from {@link serverRun} rather than being a parameter on it, so that the
+ * default door cannot quietly become the wrong-directory one. `theMoveReadsTheRightDirectory.test.ts`
+ * asserts this function's only caller in `src/` — the same guard `writeWslconfig` carries, for the
+ * same reason: a second caller must be a deliberate decision.</p>
+ *
+ * <p>The directory is passed RESOLVED and with no side, which is what makes it unambiguous: a path
+ * that already includes its side resolves to itself when no side is named, so there is no way to
+ * apply one twice.</p>
+ */
+export function serverRunAt(executable: string, resolvedDirectory: string): Run {
+  return (args, capMs) =>
+    capture(executable, [...args], false, capMs, undefined, { COAI_DATA_DIR: resolvedDirectory });
+}

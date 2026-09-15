@@ -1236,7 +1236,8 @@ ${cameFrom(storage.source)}
 ${side}
 ${notes}
 <div class="hint">That is what <b>this window</b> reads. The server your assistant talks to reads whatever its own MCP client entry gives it — if the rounds list here is empty while your assistant says it is reviewing, the two have come apart.</div>
-<button class="link" type="button" data-command="changeDataDirectory">Change where data is kept…</button>
+<button class="link" type="button" data-command="changeDataDirectory">Change where your data lives…</button>
+<button class="link" type="button" data-command="moveDataDirectory">Move what is here to another folder…</button>
 ${pointAServerHere(storage)}
 ${movingHint(storage)}`;
 }
@@ -2456,6 +2457,9 @@ export const PANEL_COMMANDS = [
   // Where the data is kept. It runs the same question the first install on a side asks, so there is
   // one flow rather than two ways of answering it differently (issue #115).
   'changeDataDirectory',
+  // And moving what the old folder already holds, which is a different job with the opposite
+  // refusal: a move wants an EMPTY destination where the change above wants a full one.
+  'moveDataDirectory',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -2474,6 +2478,7 @@ export const VSCODE_COMMAND_FOR = {
   editRoles: 'coai.editRoles',
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
+  moveDataDirectory: 'coai.moveDataDirectory',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {

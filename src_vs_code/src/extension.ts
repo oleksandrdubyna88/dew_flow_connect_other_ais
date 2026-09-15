@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
-import { hostname } from 'node:os';
 import * as vscode from 'vscode';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
+import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
 import { ChatPanels } from './chatPanels';
@@ -28,8 +28,7 @@ import { startHousekeeping } from './chatStoreHousekeeping';
 import { ImportReport, describe as describeImport, importLegacyTabs, importSucceeded } from './chatStoreImport';
 import { RestoreDeps, restoreAfterReload } from './chatRestorePanel';
 import { openLedger, reconcile } from './chatOrphans';
-import { coaiDataDir, DATABASE_FILE, serverEnv } from './dataDir';
-import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
+import { coaiDataDir, serverEnv } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
@@ -45,12 +44,14 @@ import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from
 import { ExportableRow } from './roundsCsv';
 import { writeFileAtomically } from './atomicFile';
 import { DbLog } from './roundsDb';
+import { readLog, serverRunAt } from './roundsDbRead';
+import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor, reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
+import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -368,6 +369,17 @@ export function activate(context: vscode.ExtensionContext): void {
     // of asking it would be two ways of answering it differently.
     vscode.commands.registerCommand('coai.changeDataDirectory', async () => {
       await askWhereDataLives(context);
+      await panel.render();
+    }),
+    vscode.commands.registerCommand('coai.moveDataDirectory', async () => {
+      // The counter is passed IN rather than reached for, because it is the one part of a move that
+      // needs a process: rounds are counted in SQL by the server binary, and counting them at the
+      // DESTINATION means running that binary against a directory this window is not pointed at yet.
+      await moveDataDirectory(context, (directory) => countStorage(context, directory));
+      await panel.render();
+    }),
+    vscode.commands.registerCommand('coai.deleteOldDataFolder', async () => {
+      await deleteTheOldDataFolder(context);
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.help', showHelp),
@@ -832,141 +844,6 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
   }
 }
 
-/**
- * The one question this product asks at install time: where should its data live?
- *
- * <p><b>Asked once per side of a machine, and asked HERE</b>, because installing is the moment a
- * person is already configuring this product and already has a paste to make. Anywhere later is a
- * setting nobody knows to look for, and the cost of not asking is paid silently: a default folder
- * lives on the system drive, and a system drive is the thing that gets reformatted.</p>
- *
- * <p><b>A folder that already holds a history is ADOPTED.</b> That is the whole point — it is how a
- * reinstalled machine picks its own rounds back up — and it is the exact opposite of the rule a MOVE
- * must follow, where a non-empty destination is refused because copying over it destroys what is
- * there. Both rules are about the same folder and neither may be phrased as "the destination is
- * checked". See `dataChoice.ts`, which holds the sentences.</p>
- *
- * <p>Answering nothing keeps the default, on purpose: a dismissed dialog must leave an installation
- * that works, not one that is half-configured.</p>
- */
-async function askWhereDataLives(context: vscode.ExtensionContext): Promise<void> {
-  const DEFAULT = 'Keep it in the default folder';
-  const CHOOSE = 'Choose a folder…';
-  const answer = await vscode.window.showQuickPick([DEFAULT, CHOOSE], {
-    title: 'Where should ConnectOtherAIs keep its data?',
-    placeHolder: `${coaiDataDir()} — rounds, sessions, chats and spending`,
-    ignoreFocusOut: true,
-  });
-  if (answer !== CHOOSE) {
-    return;
-  }
-
-  const picked = await vscode.window.showOpenDialog({
-    canSelectFolders: true,
-    canSelectFiles: false,
-    canSelectMany: false,
-    openLabel: 'Keep my data here',
-    title: 'A folder that survives reinstalling this machine — a network drive or a NAS',
-  });
-  const folder = picked?.[0];
-  if (folder === undefined) {
-    return;
-  }
-
-  const found = await whatIsIn(folder);
-  const side = await askForSideName(found);
-  if (side === undefined) {
-    return;
-  }
-
-  const config = vscode.workspace.getConfiguration('coai');
-  try {
-    await saveSetting(context, config, 'dataDirectory', folder.fsPath);
-    await saveSetting(context, config, 'dataSide', side);
-  } catch (error) {
-    // The choice did not land, so nothing may claim it did — and the block copied next must carry
-    // what is actually in effect rather than what was asked for.
-    reportRefusal(context, 'dataDirectory', error);
-
-    return;
-  }
-
-  // In effect for THIS window immediately: the block about to be copied is built from it, and so is
-  // every path the panel resolves from here on.
-  storageReadsThisSide(context);
-  void vscode.window.showInformationMessage(adoptionSentence(folder.fsPath, found));
-}
-
-/**
- * The side name, offered rather than demanded — and validated the way the server validates it.
- *
- * <p>`undefined` means the person backed out, which abandons the whole choice; an empty string is an
- * answer, and it means the folder is not divided.</p>
- */
-async function askForSideName(found: FolderReport): Promise<string | undefined> {
-  const offered = defaultSideName({
-    remoteName: vscode.env.remoteName ?? '',
-    distro: process.env['WSL_DISTRO_NAME'] ?? '',
-    hostname: hostname(),
-    platform: process.platform,
-  });
-  const sharing = found.sides.length > 0
-    ? ` Already in this folder: ${found.sides.join(', ')}.`
-    : '';
-
-  return vscode.window.showInputBox({
-    title: 'A name for this installation inside that folder',
-    value: found.hasDatabase ? '' : offered,
-    prompt: 'Two installations sharing one folder each keep their own database under their own name.'
-      + ` Leave it empty if only this one uses the folder.${sharing}`,
-    ignoreFocusOut: true,
-    validateInput: (typed) => {
-      const refusal = sideRefusal(typed);
-
-      return refusal.length === 0 ? undefined : refusal;
-    },
-  });
-}
-
-/**
- * What a chosen folder already holds, read without blocking the host.
- *
- * <p>Asynchronously and through `vscode.workspace.fs`, because the folder this is for is a NAS: a
- * synchronous probe of a disconnected share hangs the extension host, which is the predecessor's
- * finding and the reason the panel's own probes were made async.</p>
- *
- * <p>A folder that cannot be read at all reports as empty. It is the honest reading — nothing was
- * found — and the sentence it produces tells somebody to check the path, which is what to do.</p>
- */
-async function whatIsIn(folder: vscode.Uri): Promise<FolderReport> {
-  try {
-    const entries = await vscode.workspace.fs.readDirectory(folder);
-    const inside = await Promise.all(entries.map(async ([name, kind]) => ({
-      name,
-      isDirectory: kind === vscode.FileType.Directory,
-      hasDatabase: kind === vscode.FileType.Directory
-        && await exists(vscode.Uri.joinPath(folder, name, DATABASE_FILE)),
-    })));
-
-    return {
-      hasDatabase: entries.some(([name, kind]) => name === DATABASE_FILE && kind === vscode.FileType.File),
-      sides: sidesIn(inside),
-    };
-  } catch {
-    return { hasDatabase: false, sides: [] };
-  }
-}
-
-/** Whether a path is there, as a question rather than an exception. */
-async function exists(path: vscode.Uri): Promise<boolean> {
-  try {
-    await vscode.workspace.fs.stat(path);
-
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
@@ -1155,6 +1032,58 @@ async function runExport(
       };
     });
   });
+}
+
+/**
+ * What a data directory holds, counted — the before and after of a move.
+ *
+ * <p>Three counts, because they fail differently: the database is one file and nearly always
+ * arrives whole, the sessions are a hundred small ones and are exactly what a partial copy loses,
+ * and the ledger is a single growing file. `verificationFailure` compares them; this only counts.</p>
+ *
+ * <p>The rounds are counted by the SERVER, in SQL, because there is no SQLite in this extension —
+ * which is also why this needs the binary and a directory to point it at. The other two are files,
+ * and are read wherever they are.</p>
+ */
+async function countStorage(
+  context: vscode.ExtensionContext,
+  resolvedDirectory: string,
+): Promise<StorageFingerprint> {
+  const server = serverPath(context.globalStorageUri);
+  const root = vscode.Uri.file(resolvedDirectory);
+
+  // `limit: 1` because only the TOTALS are wanted, and they are counted in SQL rather than over the
+  // page that comes back — asking for two hundred rounds to count them would be reading a history
+  // to learn how long it is.
+  const log = server === undefined
+    ? undefined
+    : await readLog(server.fsPath, { limit: 1 }, serverRunAt(server.fsPath, resolvedDirectory));
+
+  return {
+    rounds: log?.totals.rounds ?? 0,
+    sessions: await countIn(vscode.Uri.joinPath(root, 'sessions'), '.json'),
+    usageLines: await countLines(vscode.Uri.joinPath(root, 'usage.jsonl')),
+  };
+}
+
+/** How many files of a kind a directory holds. A directory that is not there holds none. */
+async function countIn(directory: vscode.Uri, extension: string): Promise<number> {
+  try {
+    return (await vscode.workspace.fs.readDirectory(directory))
+      .filter(([name, kind]) => kind === vscode.FileType.File && name.endsWith(extension)).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** How many non-empty lines a file holds. A file that is not there holds none. */
+async function countLines(file: vscode.Uri): Promise<number> {
+  try {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(file))
+      .split('\n').filter((line) => line.trim().length > 0).length;
+  } catch {
+    return 0;
+  }
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

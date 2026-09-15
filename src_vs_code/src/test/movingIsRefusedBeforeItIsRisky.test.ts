@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  destinationRefusal,
+  mayDeleteTheOldCopy,
+  sourceRefusal,
+  verificationFailure,
+} from '../dataMove';
+
+/**
+ * Moving a data directory that already has things in it.
+ *
+ * <p><b>The rule here is the OPPOSITE of the install flow's, about the same folder.</b> Adopting a
+ * folder means reading a history that is already there, so a non-empty folder is the good case.
+ * Moving means writing where nothing is, so a non-empty destination is refused — copying a database
+ * over a side's own history destroys it, and destroys it before the "check your history" step could
+ * notice. Neither rule may be phrased as "the destination is checked"; each says which direction it
+ * is about.</p>
+ *
+ * <p><b>And the source has to be quiet.</b> The journal mode is WAL, so a database being written
+ * while it is read copies as a file that is missing its newest transactions — the rounds committed
+ * last, which are the ones somebody would look for first. The extension cannot stop the server (the
+ * MCP client owns that process), so what it can do is refuse while the evidence says something is
+ * running, and say what to stop.</p>
+ */
+
+const NOTHING_RUNNING = { sidecars: [] as string[], livePids: 0 };
+
+// ---------- the destination ----------
+
+test('a destination holding a database is refused, and the sentence says why', () => {
+  const refusal = destinationRefusal(['coai.db']);
+
+  assert.match(refusal, /coai\.db/u);
+  assert.match(refusal, /histor/u, 'the reason is a history, not a file');
+});
+
+test('a destination holding any part of a history is refused, not just the database', () => {
+  // `sessions/` without `coai.db` is a half-moved directory from somebody's earlier attempt, and
+  // copying into it merges two histories into one that belongs to neither.
+  assert.notEqual(destinationRefusal(['sessions/']), '');
+  assert.notEqual(destinationRefusal(['chat-conversations/']), '');
+});
+
+test('an empty destination is refused by nothing', () => {
+  assert.equal(destinationRefusal([]), '');
+});
+
+test('a destination holding only things that are not moved is allowed', () => {
+  // `logs/` and `servers/` are written by whatever already ran there. They carry no history and are
+  // not copied, so their presence says nothing about whether this move is safe.
+  assert.equal(destinationRefusal(['logs/', 'servers/']), '');
+});
+
+// ---------- the source ----------
+
+test('a source with a write-ahead log beside its database is refused', () => {
+  const refusal = sourceRefusal({ sidecars: ['coai.db-wal'], livePids: 0 });
+
+  assert.match(refusal, /coai\.db-wal/u);
+  assert.match(refusal, /stop|restart|running/iu, 'and it says what to do about it');
+});
+
+test('a source with reviewers still running is refused', () => {
+  const refusal = sourceRefusal({ sidecars: [], livePids: 2 });
+
+  assert.notEqual(refusal, '');
+  assert.match(refusal, /2/u, 'how many, so a person can tell whether it is theirs');
+});
+
+test('a quiet source is refused by nothing', () => {
+  assert.equal(sourceRefusal(NOTHING_RUNNING), '');
+});
+
+// ---------- the verification ----------
+
+const BEFORE = { rounds: 1284, sessions: 96, usageLines: 5120 };
+
+test('a move that carried everything verifies', () => {
+  assert.equal(verificationFailure(BEFORE, { ...BEFORE }), '');
+});
+
+test('a destination that reads back fewer rounds fails, naming both numbers', () => {
+  const failure = verificationFailure(BEFORE, { ...BEFORE, rounds: 1200 });
+
+  assert.match(failure, /1284/u);
+  assert.match(failure, /1200/u);
+});
+
+test('a destination that reads back fewer sessions fails even though the database matched', () => {
+  // The database is one file and the sessions are ninety-six, so a partial copy is far likelier to
+  // lose the second. A verification that only counted rounds would call that move a success.
+  assert.notEqual(verificationFailure(BEFORE, { ...BEFORE, sessions: 90 }), '');
+});
+
+test('a destination that reads back MORE than the source fails too', () => {
+  // More means the destination was not what this move put there — a folder that already held a
+  // history the refusal above should have caught, or two moves racing. Either way, not verified.
+  assert.notEqual(verificationFailure(BEFORE, { ...BEFORE, rounds: 1300 }), '');
+});
+
+// ---------- and only then the delete ----------
+
+test('nothing may be deleted before a move has been verified', () => {
+  assert.equal(mayDeleteTheOldCopy(undefined), false, 'no move has happened in this installation');
+  assert.equal(
+    mayDeleteTheOldCopy({ from: 'C:\\old', to: 'Z:\\coai', verified: false }),
+    false,
+    'a copy that did not verify is a copy that may have lost something');
+});
+
+test('a verified move may have its old copy deleted', () => {
+  assert.equal(mayDeleteTheOldCopy({ from: 'C:\\old', to: 'Z:\\coai', verified: true }), true);
+});
+
+test('a move whose old and new directory are the same may not delete anything', () => {
+  // The one that would delete the live directory. It cannot arise from the flow, and it is exactly
+  // the sort of thing a record left by an older build could say.
+  assert.equal(mayDeleteTheOldCopy({ from: 'Z:\\coai', to: 'Z:\\coai', verified: true }), false);
+});

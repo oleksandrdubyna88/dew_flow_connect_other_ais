@@ -207,8 +207,18 @@ test('the config writer is reachable only from the panel command, never from act
   const callers = readdirSync(dir)
     .filter((f) => f.endsWith('.ts'))
     .filter((f) => f !== 'wslNetwork.ts')
-    .filter((f) => readFileSync(join(dir, f), 'utf8').includes('writeWslconfig'));
+    // A CALL, and in code rather than in prose. Matching the whole file reported a new caller the
+    // day a docblock in another module named this function — to explain that its own call graph is
+    // guarded the same way. A test a comment can turn red is one people learn to edit around, and
+    // this one is worth keeping sharp: it is the only thing standing between a refactor and a global
+    // networking file rewritten with nobody's consent.
+    .filter((f) => /(?:^|[^\w.])writeWslconfig\(/mu.test(withoutComments(readFileSync(join(dir, f), 'utf8'))));
 
   assert.deepEqual(callers, ['panelProvider.ts'],
     'only the panel command may write .wslconfig; a new caller must be a deliberate decision');
 });
+
+/** Source with its comments removed, so a call graph is read from calls. */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
+}
