@@ -1,7 +1,8 @@
 # PLAN — the gate's own findings become a corpus of real defects
 
-> Status: **plan only, nothing implemented yet.** One piece has shipped ahead of it:
-> `rounds.base_ref` (PR #268), because every round that ran without it lost that half permanently.
+> Status: **stories 0 and 1 shipped; 2–6 are open.** `rounds.base_ref` went first (PR #268)
+> because every round that ran without it lost that half permanently, and the read side followed
+> (PR #272). Story 2 is blocked on one package approval — see *The parser* below.
 > Scope: a new `Bugz` panel section, a `coai-normalize` sidecar, a `coai-bugs` ingest server, and
 > four columns on `findings`.
 >
@@ -61,26 +62,54 @@ files, **97 files carrying more than one**, led by `panelProvider.ts` (16), `cha
 |---|---|---|
 | Ingest server | **A standalone AOT binary**, not an endpoint on `coai-server` | Anyone should be able to contribute, not only people with a Team server. `coai-server` is behind Entra and a domain allow-list, which is load-bearing there and wrong here. |
 | Symbol resolution | **Mechanically, from `file:line`** | `Finding` (`src_mcp/core/Findings/Finding.cs:54`) has no symbol field. Resolving it works retroactively on everything already stored and needs no prompt or schema change. |
-| Normalizer | **A separate non-AOT sidecar** | Roslyn under `PublishAot` with `-warnaserror` is a risk nobody needs to take. |
+| Normalizer | **A separate non-AOT .NET sidecar**, parsing with tree-sitter | Roslyn under `PublishAot` with `-warnaserror` is a risk nobody needs to take — and Roslyn reads only C#, which is 189 of the 462 candidates. |
 | Languages | **C#, TypeScript, JavaScript** first | Covers 93 % of the measured corpus (`.ts` 234, `.cs` 189, `.mjs` 38, `.cjs` 1). |
 | Corpus | **Accepted coai findings only**, filtered hard | Every entry has a human decision behind it. |
 | Missing fix commit | **Drop the finding**, with the reason recorded | |
 | Who collects | **A human presses a button** | |
 | Identity | **Hand-issued API keys. No personal data at all.** | |
 
-### Revision this forces: tree-sitter, not Roslyn
+### The parser: tree-sitter, inside .NET
 
-"Any language later" and Roslyn are incompatible, and the sidecar has two jobs — resolve the
-enclosing symbol at `file:line`, and normalise it — which tree-sitter does for both with one API.
-What is needed is **syntax, not semantics**: renaming identifiers and stripping literals needs node
-kinds, never type resolution.
+Roslyn reads C# and nothing else, and C# is 189 of the 462 candidates. The sidecar has two jobs —
+resolve the enclosing symbol at `file:line`, and normalise it — and tree-sitter does both for every
+language with one API. What is needed is **syntax, not semantics**: renaming identifiers and
+stripping literals needs node kinds, never type resolution, which is the whole reason a parser
+without a semantic model is enough.
 
-That makes the sidecar **Rust + tree-sitter**. `dew_flow_sidecar_rust` is the house precedent for its
-shape and CI, though not for distribution (it is `publish = false`, built on the machine that runs
-it). Four grammars for the first three languages: `c-sharp`, `javascript`, `typescript`, `tsx`. Per
-language it needs a config table — which node kinds are a function, which identifier kinds may be
-renamed — not per-language code. **`.mjs` and `.cjs` must map to the JavaScript grammar**: they are
-39 candidates, 8 % of the corpus, and exactly what a naive `.js` check drops.
+**It stays a .NET sidecar.** A Rust host was proposed and rejected on 2026-09-15: a third language
+and a third release line, in a family that is C# and TypeScript everywhere, is a permanent cost
+against a one-time build problem — and the build problem turned out not to exist.
+
+**Spiked before it was written into this plan**, on win-x64 and linux-x64:
+
+- The native grammars are **prebuilt and shipped per RID** by the binding package — `win-x64`,
+  `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, and two more. No C compiler, no
+  cross-compilation, nothing to link. `dotnet publish -c Release -r <rid> --self-contained` carried
+  them for both targets with **zero errors and zero warnings**.
+- Both jobs work. Line 9 of a C# fixture resolves to `<method_declaration>` spanning 7..15 with six
+  distinct identifiers; the TypeScript and JavaScript fixtures resolve to `<function_declaration>`
+  with ten and nine. A line inside no function at all returns nothing, which is the
+  `symbol_not_resolved` path arriving on its own.
+- **Payload is the one cost.** The package bundles 28 grammars: 69 MB of the 152 MB self-contained
+  publish, where the four we need are 9 MB. Pruning the unused ones is a publish step, and worth
+  taking — a sidecar people download should not carry Haskell and Verilog.
+- **The per-language table holds a LIBRARY and an ENTRY POINT, not one name.** The binding's
+  one-argument constructor derives both from a single string, which cannot express C#: the library is
+  `tree-sitter-c-sharp`, the entry point `tree_sitter_c_sharp`. The two-argument constructor does.
+  This is exactly the sort of thing that looks like a typo six months later.
+
+Four grammars cover the first three languages: `c-sharp`, `javascript`, `typescript`, `tsx`. Per
+language the table says which node kinds are a function and which identifier kinds may be renamed —
+data, not code. **`.mjs` and `.cjs` must map to the JavaScript grammar**: they are 39 candidates,
+8 % of the corpus, and exactly what a naive `.js` check drops.
+
+**Open, and blocking story 2: the binding package needs operator approval.** `TreeSitter.DotNet` is
+**MIT**, 205 k downloads, six releases from 2025-05-04 to 2026-01-22 — fresh by the twelve-month bar
+— but it is published by one person (Marius Greuel), and
+`.agents/conventions/csharp/nuget-packages.md` says an individual's package is *always* asked about
+first, however popular. The fallback if it is refused is **Option D**: Roslyn for `.cs`, the
+TypeScript compiler API for `.ts`/`.js`, two normalizers and two property tests.
 
 ## The collector contract
 
@@ -190,8 +219,8 @@ schema — retrofitting it after the index is live means re-auditing everything 
 | # | Story | Notes |
 |---|---|---|
 | 0 | `rounds.base_ref` | **Shipped, PR #268.** |
-| 1 | `BugsQuery` + `coai-mcp --bugs-json` | Beside `RoundsQuery`; the panel owns no SQLite. **Deliverable is the count.** |
-| 2 | `coai-normalize` — Rust + tree-sitter | Symbol resolution *and* normalisation. The property test is the deliverable. |
+| 1 | `BugsQuery` + `coai-mcp --bugs-json` | **Shipped, PR #272.** Beside `RoundsQuery`; the panel owns no SQLite. It brought the four `findings` columns of the contract below with it, as migration step 6. |
+| 2 | `coai-normalize` — .NET + tree-sitter | Symbol resolution *and* normalisation. Blocked on the package approval above. The property test is the deliverable. |
 | 3 | The bounded walk + drop-with-reason | Small, because bounded. |
 | 4 | The `Bugz` panel section | See below. |
 | 5 | The review page | First multi-select in this codebase. |
