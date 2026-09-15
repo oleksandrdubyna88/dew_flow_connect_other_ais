@@ -80,10 +80,27 @@ sequenceDiagram
   path. The corpus is larger than the budget and selection is whole-file, so whatever sorts first is
   what a reviewer is judged against: plain alphabetical order let `development-workflow.md` (14 KB)
   and `http-contracts.md` (11 KB) take a quarter of the budget and pushed `testing.md` out entirely,
-  which is the starvation the draw was installed against. Tiers are matched by path SUFFIX so one
-  entry serves every mount layout, and an unmatched name falls through to ordinal order rather than
-  being dropped. The instruction files and the repository's own rules are outside the order — they
-  lead, and they always fit. Plan: [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md).
+  which is the starvation the draw was installed against. An unmatched name falls through to ordinal
+  order rather than being dropped. The instruction files and the repository's own rules are outside the
+  order — they lead and are never dropped, though they are NOT free: they are collected under the same
+  budget, so a large one leaves less for the mount.
+  Plan: [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md).
+
+- **A tier entry names ONE rule, by its mount-relative path.** `RuleCandidate` carries both the
+  repository-relative path and the path within the mount, and the prefix is stripped in `RuleFiles`,
+  where the mounts are known. Suffix matching was tried first and is wrong: a
+  `.agents/conventions/common/legacy/common/security.md` also ends with `/common/security.md`, so one
+  entry would pull in a file nobody meant and spend the budget of the rule it was impersonating —
+  caught by a red test rather than in production.
+
+- **A gate with NO diff is judged against a NAMED tier.** `StageRules.Plan` and `StageRules.Document`
+  (`Context/StageRules.cs`) are ordered lists, and `RuleOrder.Staged(tier)` is the one order that
+  FILTERS: a plan or document round has no change to select from, so the mount's other rules are not
+  lower priority — they are not what the stage is judged against. A tier that matches nothing means the
+  mount contributes nothing, and the reviewer still sees this repository's own rules. Every entry is
+  checked against the corpus this repository PINS, by
+  `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount`, which reads the real mount —
+  a fixture that writes every name it then asserts proves only that the fixture and the table agree.
 
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
   moving branch would be six different inputs to one comparison.

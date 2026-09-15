@@ -1,6 +1,6 @@
 # PLAN — the rules a round shows are drawn at random
 
-> Status: **story 1.1 IMPLEMENTED 2026-09-15; the rest is plan.** `RuleOrder`, its tier table and
+> Status: **stories 1.1 and 1.2 IMPLEMENTED 2026-09-15; the rest is plan.** `RuleOrder`, its tier table and
 > `RuleFiles.Collect(repoPath, budgetBytes, order)` have shipped — no production path has changed
 > behaviour yet, because `Drawn()` is still the default. Epics 1 (stories 1.2–1.4), 2, 3 and 4 remain
 > planned. Scope: `src_mcp/runners/Context/RuleFiles.cs`,
@@ -105,10 +105,14 @@ block they have never had.
   other than the one that produced it, and a read that escapes the root is refused.
 - **The resolver cannot serve the code stage yet, and this is settled by reading rather than by an
   experiment.** Two independent refusals, both verified 2026-09-15:
-  1. `SubmodulePopulator` fills a worktree mount with `git submodule update --init`. `node_modules/` is
-     git-ignored in `dew_flow_conventions`, and `tools/lib/rule-catalog.mjs` imports `yaml` and
-     `picomatch` - ESM ignores `NODE_PATH`, so the worktree's own copy of the script dies with
-     `ERR_MODULE_NOT_FOUND` before it reaches any git check.
+  1. **A populated mount is not a callable resolver, and this is not about worktrees.** `node_modules/`
+     is git-ignored in `dew_flow_conventions` and `tools/lib/rule-catalog.mjs` imports `yaml` and
+     `picomatch`, so ANY fresh checkout of the submodule - `SubmodulePopulator`'s and an ordinary
+     `git submodule update --init` alike - dies with `Cannot find package 'yaml'` before it reaches a
+     single git check. Measured both ways on 2026-09-15. CI is unaffected (`ci.yml` installs the
+     shared instruction dependencies), but `coai-mcp` runs where nobody may have. Epic 2 therefore
+     PROBES rather than assumes, and its log names `npm ci --ignore-scripts` as the resolver's own
+     error does.
   2. Running the PARENT checkout's script against `--repo <worktree>` is refused by `revision()`
      (`rule-cli.mjs:84`): `realpath(<repo>/.agents/conventions) !== realpath(installedRoot)` ->
      *"Run this repository's own mounted resolver"*.
@@ -175,9 +179,16 @@ budget, `order: RuleOrder.Walk` built first as the plain alphabetical walk, so i
 **Reviewer looks at:** that the default path is unchanged; the tier table's names and rationale; that
 `Walk` is total - an unknown name falls through, nothing is dropped.
 
-**1.2 - `StageRules`: the plan and document tiers, as data.** *(Opus - a list and its test; the policy
-is judged by reading it.)* Ordered path-suffix lists, keyed by suffix (`common/reuse-first.md`) so one
-key works whether it is filtering a walk or ordering a manifest.
+**1.2 - `StageRules`: the plan and document tiers, as data.** **IMPLEMENTED 2026-09-15.** Ordered
+lists of MOUNT-RELATIVE paths, matched exactly, so one entry names one rule whether it is filtering a
+walk or ordering a manifest. Deviation from the plan: the entries were to be matched by path SUFFIX,
+and that is wrong - `common/legacy/common/security.md` also ends with `/common/security.md`, so one
+entry could pull in a file nobody meant and spend the budget of the rule it impersonated.
+`RuleCandidate` now carries the mount-relative name, stripped in `RuleFiles` where the mounts are
+known. `security.md` also leads the plan tier rather than sitting fourth, for the reason it leads the
+walk. `rule-ownership.md` is deliberately absent: its frontmatter scopes it to shared-RULE files, so
+the resolver may select it in epic 2 when the document under review IS a rule, but it is not what a
+document round here is always judged against.
 **RED:** `APlanRound_GetsTheHighLevelRules_AndNotTheBuildRecipes`, with `dotnet-build`, `nuget-packages`
 and `logging-serilog` present in the mount and absent from the result.
 **Reviewer looks at:** the lists themselves - is `git-workflow` rightly absent from the plan tier, is
