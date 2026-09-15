@@ -78,6 +78,12 @@ test('the two capped actions are read', () => {
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useLocal' }), { kind: 'useLocal' });
 });
 
+test('a retry is read, because a command this file does not know is silently nothing', () => {
+  // The whole reason this module is unit-tested: an unrecognised command is `ignore` by design, so a
+  // button wired everywhere EXCEPT here ships green and does nothing when somebody presses it.
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'retry' }), { kind: 'retry' });
+});
+
 test('a page that trapped an error tells the host what it was', () => {
   assert.deepStrictEqual(
     chatCommandOf({ type: 'pageError', message: 'x is not defined' }),

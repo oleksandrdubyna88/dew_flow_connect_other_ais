@@ -13,6 +13,14 @@ all of them — an answer with no words in it is a failure, and it says so.
 returns nothing is billed for every token of it, and it was the one kind of turn the spending view
 recorded as free.
 
+**An error appears where you are already looking, and offers to try again.** It used to be drawn at
+the very top of the conversation, under the passage — and because writing it counts as something
+arriving, the same update scrolled you down to the newest message and left the error a screen or more
+above you. It now sits under the conversation, where the *Thinking…* line was a moment earlier, and
+carries a **Try again** button that sends the same question to the same model. The button appears
+only when the question is genuinely still there to send, and one press is one turn however many times
+you click it.
+
 ## Extension 0.44.0 — 2026-09-15
 
 **Installing the MCP server for the first time now asks where your data should live.** Keep the

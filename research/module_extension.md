@@ -1527,6 +1527,40 @@ and written into the ledger as free, exactly the turn somebody hunting waste is 
 failing arm carries usage now, `CliChatSession` holds it as it holds an answer's, and `chatCommand`
 was already writing the ledger before either branch for this same reason.
 
+### The failure is under the conversation, and it offers a retry (2026-09-15)
+
+The scrolling region's order is `passage → messages → thinking → failure → capped`. It used to be
+`passage → failure → messages → thinking → capped`, which put the failure at the TOP — and writing a
+region sets `wrote`, so the same push that drew the error ran the follow rule and carried the reader
+down to the newest message. The page reliably scrolled away from the thing it had just said. The
+thinking line is where somebody waiting for an answer is already looking, so the failure replaces it
+in place.
+
+`chatFailureHtml` is the region's builder, and it exists because this markup was written twice — in
+`regionsOf` for the first render and in `pushChatState` for every push, the same expression in two
+files. It was the only pushed region without a builder, so a button added to one copy would have
+shipped on one path and not the other.
+
+**`canRetry` is the host's answer.** Only the host can see whether the transcript still ends on the
+question that failed; `retryFrom` defines that as the TRAILING message, and only while it is one of
+the person's own. A stopped turn writes its own line after the question, an answer that arrived
+replaces the case entirely, and in both the tail is no longer a question nobody answered — so no
+button is drawn. A control that promises what it has not got is the rule this repository wrote down
+when a round with nothing to open was made a line rather than a disclosure.
+
+**The listener is delegated to `#failure`, not bound to the button.** The region's contents are
+replaced on every push, and both the note branch and the `window.onerror` trap wipe them entirely;
+`#failure` is the one pushed region with no re-wiring call after its write, so a bound listener would
+have been dead from the first rewrite. The container outlives every rewrite. The press disables its
+own control before posting, for the reason the composer locks itself on send rather than waiting for
+the host: the gap between the post and the state coming back is exactly the width of a second click.
+
+**The retry drops the trailing question before re-asking.** `oneTurn` appends the question before it
+sends and its failing branch leaves it there, so re-asking without removing it would print the same
+question twice and carry the duplicate into the next request. `thread.carry` is NOT recomputed: the
+failing branch preserves it deliberately, commented *the retry — the same question, one keypress
+later*, and `oneRetry` is that keypress.
+
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

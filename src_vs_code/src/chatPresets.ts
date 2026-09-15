@@ -268,6 +268,42 @@ export function reaskFrom(
   };
 }
 
+/**
+ * The question a failed turn would send again, and the transcript without it.
+ *
+ * <p><b>"The last question" is defined here and nowhere else, which is the point of the function.</b>
+ * A plan reviewer asked what a retry would resend if the transcript moved underneath it, and the
+ * honest answer is that a retry must not go hunting: it takes the TRAILING message and only when that
+ * message is one of the person's own. A turn that failed leaves the transcript ending on its
+ * question — `oneTurn` appends it before sending and the failing branch leaves it there — so that
+ * trailing `you` IS the failed question, and if anything has been appended after it (a stopped turn's
+ * line, an answer that arrived late, a carry) the tail is no longer a question nobody answered and
+ * there is nothing here to retry.</p>
+ *
+ * <p>`said` is the transcript WITHOUT that question, because the caller re-asks through the ordinary
+ * turn path, which appends the question itself. Handing back both halves is what stops a retry
+ * printing the question twice — the trap the plan named and the reason this returns a pair rather
+ * than a string.</p>
+ *
+ * <p>Beside `reaskFrom` because the two read the same transcript for almost the same thing and a
+ * reader comparing them should not have to open two files. Neither of them is really about presets;
+ * that this file holds them is inherited, not chosen.</p>
+ */
+export function retryFrom(
+  messages: readonly { readonly role: 'you' | 'model'; readonly text: string }[],
+): { readonly said: readonly { readonly role: 'you' | 'model'; readonly text: string }[]; readonly question: string } | undefined {
+  const last = messages.length - 1;
+  const question = messages[last];
+  if (question?.role !== 'you' || question.text.trim().length === 0) {
+    return undefined;
+  }
+
+  return {
+    said: messages.slice(0, last).map((message) => ({ role: message.role, text: message.text })),
+    question: question.text,
+  };
+}
+
 
 
 export function freshPromptRow(taken: readonly { readonly id: string }[]): SavedRow {

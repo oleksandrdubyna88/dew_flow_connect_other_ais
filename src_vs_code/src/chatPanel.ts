@@ -8,6 +8,7 @@ import {
   ChatPageState,
   TurnMarks,
   chatCappedHtml,
+  chatFailureHtml,
   chatMessagesHtml,
   chatPageHtml,
   chatPickerHtml,
@@ -89,6 +90,8 @@ export interface ChatPanelHooks {
   readonly onStop: (id: object, turn: number) => void;
   /** VS Code closed the tab — the registry must forget it and end its session. */
   readonly onClosed: (id: object) => void;
+  /** Send the question that failed again, unchanged, to the same model. */
+  readonly onRetry: (id: object) => void;
   /** Start again with the same passage. */
   readonly onRestart: (id: object) => void;
   /** Ask the model that is chosen NOW the question the last answer was given to. */
@@ -131,6 +134,8 @@ export interface ChatPushState {
   readonly providers: readonly ChatProvider[];
   /** Who would answer a re-ask, or empty when there is nothing to re-ask. */
   readonly reask: string;
+  /** The failed turn can be sent again — the host's answer, never the page's. */
+  readonly canRetry: boolean;
   /** The picture waiting to go with the next question, as a data URL, or empty. */
   readonly attached: string;
   /** What this conversation has cost so far, as a line, or empty. */
@@ -352,6 +357,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       hooks.onUnattach(id);
 
       return;
+    case 'retry':
+      hooks.onRetry(id);
+
+      return;
     case 'restart':
       hooks.onRestart(id);
 
@@ -414,7 +423,9 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     capped: state.capped,
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
     cappedHtml: chatCappedHtml(state.capped),
-    failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
+    // THE SAME BUILDER the first render uses. This expression lived here and in `regionsOf`, and a
+    // retry button added to one of them would have shipped on one of the two paths.
+    failureHtml: chatFailureHtml(state.failure, state.canRetry),
     pickerHtml: chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId),
     // The ROWS as well as the picker. They were drawn once, when the page was built, so pressing a
     // prompt changed the words in the box and left every button looking exactly as it had — and a row

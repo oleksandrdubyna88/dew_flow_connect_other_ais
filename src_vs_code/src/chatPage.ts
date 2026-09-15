@@ -114,6 +114,18 @@ export interface ChatPageState {
    */
   readonly reask: string;
   /**
+   * A failed turn can be sent again, unchanged.
+   *
+   * <p><b>The HOST decides, for the same reason it decides `reask`:</b> only it can see whether the
+   * transcript still ends on the question that failed. A page that offered the button whenever a
+   * failure was on screen would offer it after a stopped turn, after a page-level error, and after a
+   * failure whose question has already been carried away — three presses that could do nothing.</p>
+   *
+   * <p>It is false while a turn runs. The composer is locked then anyway, and a retry of something
+   * still being answered is a second turn down a pipe that carries one.</p>
+   */
+  readonly canRetry: boolean;
+  /**
    * The picture waiting to go with the next question, as a data URL — or empty when there is none.
    *
    * <p>A data URL because the page cannot read a file: `localResourceRoots` is empty and the CSP
@@ -536,6 +548,34 @@ export function chatCappedHtml(capped: boolean): string {
     + '<button type="button" id="useLocal">Continue with a local model</button></div>';
 }
 
+/**
+ * What went wrong, and the one thing worth pressing about it.
+ *
+ * <p><b>A builder at all, because this markup used to be written twice</b> — once in `regionsOf` for
+ * the first render and once in `pushChatState` for every push, the same expression in two files. It
+ * was the only pushed region without one while `chatMessagesHtml`, `chatPickerHtml`, `chatCappedHtml`
+ * and `chatStatusHtml` all had theirs, and a button added to one copy would have shipped on one of
+ * the two paths — visible after a failure arrived, missing when a tab was reopened, or the reverse.</p>
+ *
+ * <p><b>`canRetry` is the HOST's answer, not the page's.</b> Only the host can see whether the
+ * transcript still ends on the question that failed, and a control that promises something it has not
+ * got is worse than no control — the rule this repository wrote down when a round with nothing to open
+ * was made a line rather than a disclosure. So the button appears when the host says a retry is
+ * available, and a failure with no retry behind it is still a failure worth reading.</p>
+ */
+export function chatFailureHtml(failure: string, canRetry: boolean): string {
+  if (failure.length === 0) {
+    return '';
+  }
+  // `data-retry` rather than an id, because the listener is DELEGATED to `#failure` - the container
+  // survives every rewrite of its own contents, so the control is live after the first failure, the
+  // fifth, and the one that follows a page error which wiped the region. An id would work equally
+  // well for the query; the attribute is what the delegated handler matches on.
+  const again = canRetry ? '<button type="button" class="retry" data-retry>Try again</button>' : '';
+
+  return `<div class="failure"><span class="said">${escapeHtml(failure)}</span>${again}</div>`;
+}
+
 /** The page's own styles. Its own function so the document below stays readable. */
 /**
  * A colour rule per model the page knows about, from the palette every other surface uses.
@@ -699,7 +739,14 @@ function chatStyle(
   #stop { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0 0 0 4px; cursor: pointer; text-decoration: underline; }
   #stop[disabled] { opacity: .5; cursor: default; text-decoration: none; }
   .queued { opacity: .8; font-size: .9em; }
-  .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; }
+  .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; display: flex; gap: 12px; align-items: flex-start; }
+  /* The sentence takes the room and the control keeps its own: a long vendor error - and they are
+  long, "UNAVAILABLE (code 503): No capacity available for model ..." - must wrap against the button
+  rather than squeeze it to nothing or push it off the edge. */
+  .failure .said { flex: 1 1 auto; min-width: 0; }
+  .retry { flex: 0 0 auto; font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .retry:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
+  .retry[disabled] { opacity: .6; cursor: default; }
   .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
   .capped p { margin: 0 0 8px; }
   #presets { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; }
@@ -824,7 +871,7 @@ function regionsOf(state: ChatPageState): Regions {
     messages: chatMessagesHtml(state.messages, state.marks, state.carryFrom, state.running),
     thinking: chatStatusHtml(state.running, 0, state.turn),
     capped: chatCappedHtml(state.capped),
-    failure: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
+    failure: chatFailureHtml(state.failure, state.canRetry),
   };
 }
 
@@ -847,9 +894,14 @@ ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" ar
 </section>` : ''}
 <main id="scroll">
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
-<div id="failure">${regions.failure}</div>
 <div id="messages">${regions.messages}</div>
 <div id="thinking">${regions.thinking}</div>
+<!-- BELOW the conversation, beside the thinking line it replaces. It used to sit directly under the
+     passage, at the top of the scrolling region - and writing it counts as something arriving, so
+     the very same push scrolled the reader down to the newest message and left the error a screen
+     or more above them. A turn that failed says so where a person waiting for it was already
+     looking. (The operator, 2026-09-15, having watched a 503 scroll itself out of sight.) -->
+<div id="failure">${regions.failure}</div>
 <div id="capped">${regions.capped}</div>
 </main>
 <footer id="composer">
@@ -1492,6 +1544,28 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // durable while the next handover quietly carries everything above it.
         vscode.postMessage({ type: 'carryFrom', at: Number(acted.dataset.cut) });
       }
+    });
+  }
+  // Delegated on the REGION, for the reason the rows below are: a push replaces what is inside it
+  // whenever the failure changes, and a note or a page-level error can wipe it entirely. The
+  // container itself stays for the life of the tab, so one listener here is live for the first
+  // failure, the fifth, and the one that follows a wipe - where a listener bound to the button would
+  // have died with the first rewrite. The failure region is the one pushed region with no re-wiring
+  // call after its write, which is exactly the trap this shape steps over.
+  const failureBox = document.getElementById('failure');
+  if (failureBox) {
+    failureBox.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') { return; }
+      const pressed = target.closest('[data-retry]');
+      if (!pressed) { return; }
+      // Disabled HERE, not when the host gets round to saying so. Between the post and the state that
+      // comes back there is a window the width of a second click, and two turns down a pipe that
+      // carries one is the defect the composer's own lock was added for. The next push rebuilds this
+      // region from the host's state, so nothing has to enable it again.
+      if (pressed.disabled) { return; }
+      pressed.disabled = true;
+      vscode.postMessage({ type: 'command', command: 'retry' });
     });
   }
   // Delegated on the row, because a push replaces both rows whenever the saved lists change.
