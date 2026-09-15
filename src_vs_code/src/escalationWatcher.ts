@@ -68,11 +68,6 @@ export class EscalationWatcher {
     this.disposables.push(this.statusItem);
   }
 
-  /** What the panel names: each directory asked for, and the reason one cannot be watched. */
-  get watchedDirectories(): readonly WatchedDir[] {
-    return this.asked;
-  }
-
   /** Everything currently unanswered — the rounds view renders these. */
   get openQuestions(): readonly Escalation[] {
     return this.open;

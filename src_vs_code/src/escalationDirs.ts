@@ -126,8 +126,10 @@ export interface AnswerPaths {
  * a comment, and a comment is what the plan round found this guarantee resting on. (gemini, the plan
  * round, Blocking.)</p>
  *
- * <p>Paths are joined with a forward slash: every caller here is a `Uri`, where that is the
- * separator, and both Windows and POSIX accept it.</p>
+ * <p>Callers pass NATIVE filesystem paths — `Uri.fsPath` on both sides since the first code round —
+ * and the parts are joined with a forward slash, which Windows accepts and POSIX requires. A trailing
+ * separator of either kind is trimmed first, or a root written `C:\coai\` composes a mixed-separator
+ * string.</p>
  */
 export function answerPaths(id: string, own: string, from?: string): AnswerPaths | undefined {
   // THE ID IS NOT OURS. It is read out of a JSON file written by another process, and it is about to
@@ -140,7 +142,11 @@ export function answerPaths(id: string, own: string, from?: string): AnswerPaths
     return undefined;
   }
   const root = from === undefined || from.trim().length === 0 ? own : from;
-  const dir = `${root.replace(/\/+$/, '')}/escalations`;
+  // BOTH separators, the way `dirKey` strips both. Callers pass native filesystem paths, so a root
+  // written `C:\coai\` trimmed of forward slashes only would compose `C:\coai\/escalations` — the
+  // same mixed-separator string the first code round removed elsewhere. A forward slash joins them
+  // because Windows accepts one and every POSIX path uses it. (gemini, the second code round.)
+  const dir = `${root.trim().replace(/[\\/]+$/, '')}/escalations`;
 
   return { dir, target: `${dir}/${id}.answer.json`, temp: `${dir}/${id}.answer.json.tmp` };
 }

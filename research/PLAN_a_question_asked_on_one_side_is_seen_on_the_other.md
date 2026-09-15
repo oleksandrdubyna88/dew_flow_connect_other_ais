@@ -190,6 +190,25 @@ message must name the real symptom.
   without its four translations is a STALE translation, which `bodyFor` cannot see. Same commit.
 - `research/module_extension.md` updated, and the boundary named in the older plan.
 
+## The open tail — one owner for the watched list
+
+**Two code paths compute the same list, and the code round was right to say so.** `EscalationWatcher`
+reads the setting, canonicalises it and subscribes to changes; `panelProvider` then reads the setting
+again, calls `watchedDirs` again, and probes each directory itself. `DataLocation` carries
+`alsoWatched` as the transport, which is why `whereData` — a pure storage function that cannot read a
+setting — returns an empty array on every path for the panel to overwrite, and why six unrelated test
+fixtures had to gain the field.
+
+The dead getter that claimed the watcher owned this has been removed rather than left to mislead. What
+has NOT been done is the consolidation: one watched-directory model owning the setting, the
+canonicalisation and the probe, read by both the watcher and the panel, with `alsoWatched` off
+`DataLocation` and on the panel's own state instead. Two reviewers asked for it independently (codex
+and gemini, the second code round) and they are right; it is a refactor of panel-state plumbing rather
+than a defect anyone can hit, so it is written down here instead of begun at the end of a story.
+
+What it costs while it stands: the panel's probe and the watcher's list can drift apart if one of the
+two rules is changed and the other is not — a maintenance hazard, not a wrong answer today.
+
 ## Definition of Done
 
 - [ ] RED observed and reported for every behavioural test, with the real symptom in the message
