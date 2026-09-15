@@ -1551,7 +1551,13 @@ test('the list of what to move is a list, not a sentence sixteen items long', ()
   // It was four items in a comma sentence, and it is sixteen now. The same prose would be a
   // paragraph nobody finishes, in a sidebar whose width is somebody else's choice.
   const html = panelHtml(state({ storage: where() }), 'n');
-  const section = html.slice(html.indexOf('Moving what is already there'));
+  const at = html.indexOf('Moving to another folder');
+  // Never an unchecked `slice(indexOf(...))`: a heading that has been reworded gives -1, which
+  // slices the LAST CHARACTER of the page and then fails complaining about a missing entry rather
+  // than a missing section. This file's own idiom, and it is what this test cost when the advice was
+  // reworded to say which direction the copy goes in.
+  assert.ok(at >= 0, 'the moving advice has been renamed, and this test is now asserting nothing');
+  const section = html.slice(at);
 
   for (const name of DATA_TO_MOVE) {
     assert.ok(section.includes(escapeHtml(name)), `${name} is not named where a person would copy it`);

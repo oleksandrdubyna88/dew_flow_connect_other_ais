@@ -31,6 +31,16 @@ export interface StorageFingerprint {
   /** Lines of the spending ledger. */
   readonly usageLines: number;
   /**
+   * Whether the counts above were actually READ.
+   *
+   * <p><b>Without this, two failures verify each other.</b> `readLog` turns an unreadable database
+   * into an empty log and the filesystem helpers turn every error into a zero — so a source that
+   * could not be read and a destination that could not be read produce identical all-zero
+   * fingerprints, `verificationFailure` finds no difference, and the move is recorded as verified.
+   * The delete is then offered for a directory nothing ever successfully read. (CodeRabbit, Major.)</p>
+   */
+  readonly read: boolean;
+  /**
    * How many entries each moved DIRECTORY holds, by name.
    *
    * <p>Three counts could not see an edited prompt, a replaced picture or an audit record — they
@@ -175,6 +185,11 @@ export function sourceWarning(activity: SourceActivity): string {
  * nobody checked.</p>
  */
 export function sourceChangedSince(record: MoveRecord, now: StorageFingerprint): string {
+  if (!now.read) {
+    return `${record.from} could not be read, so there is no way to tell whether anything has been `
+      + 'written to it since it was copied. It has not been deleted.';
+  }
+
   if (record.held === undefined) {
     return `${record.from} was moved by an older version of this extension, which did not record what `
       + 'it held. There is nothing to compare it against, so it is not deleted — remove it yourself '
@@ -226,6 +241,13 @@ function differences(before: StorageFingerprint, after: StorageFingerprint): str
  * racing. "At least as many" would pass both.</p>
  */
 export function verificationFailure(before: StorageFingerprint, after: StorageFingerprint): string {
+  // A count nobody could read is not a count. Two of them agreeing at zero is the one way this
+  // function can call a move verified without anything having been verified at all.
+  if (!before.read || !after.read) {
+    return `${before.read ? 'The new folder' : 'The old folder'} could not be read back, so this move `
+      + 'has not been checked. Nothing has been deleted, and the old folder is exactly as it was.';
+  }
+
   const said = differences(before, after);
 
   return said.length === 0
