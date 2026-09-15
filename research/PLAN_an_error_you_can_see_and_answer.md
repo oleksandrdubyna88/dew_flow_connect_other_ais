@@ -286,6 +286,20 @@ recording as the thing that made the feature work at all: the operator's long qu
 one wrapped paragraph, and a newline-only rule would have folded a forty-line paste while leaving a
 four-hundred-word one alone.
 
+**The fold's label counts in the unit that made the question long.** Not in the plan, and caught on
+story D's plan round as Blocking: a question of three lines and six hundred characters is folded for
+its length, and a label chosen by "does it have more than one line" would have read *Show all 3 lines*
+— offering to reveal fewer lines than the fold already shows.
+
+**The open tail — two known limits, both argued and left.** Collapsing a question ABOVE where somebody
+is reading pulls the text below it upward, because pressing the control deliberately does not scroll.
+Anchoring the pressed control's viewport position would fix it and would also add a second writer of
+`scrollTop`, which the four-rule scroll contract exists to forbid; three reviewers raised the family of
+concern and none of them named that cost. It wants its own change, with the contract amended on
+purpose rather than by a hunk. And two identical long questions share a fold key and therefore fold
+together — the same text twice, folded the same way, which is defensible and was chosen; a reviewer
+would prefer a content hash plus an occurrence index, which is the fix if it ever bites.
+
 **Not done, and deliberate.** A failure and its retry are live state and are not saved with the
 conversation, so a restored tab shows neither — named in the code at the `restoredPage` call site and
 raised as a Minor on the code round. Persisting it means deciding how long a retry stays offered across

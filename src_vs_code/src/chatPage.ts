@@ -388,14 +388,16 @@ export function foldKey(text: string): string {
  * What the control offers to show, naming how much is hidden.
  *
  * <p>A cut that looks whole is worse than no cut — the rule the rounds log's own truncation notice
- * was written for. So it counts, and it counts the thing the message actually has: a pasted document
- * is measured in lines, and a single wrapped paragraph has one line and is measured in characters
- * instead. Saying "1 line" about four hundred words would be a number that misleads.</p>
+ * was written for. So it counts, and it counts in the unit that made the question LONG rather than
+ * the one it happens to have. That distinction is not pedantry: a question of three lines and six
+ * hundred characters is folded because of its length, and "Show all 3 lines" would offer to reveal
+ * fewer lines than the fold already shows — a number that reads as nonsense on a message that is
+ * visibly cut. Lines when the line arm fired, characters otherwise. (gemini, the plan round.)</p>
  */
 export function foldLabel(text: string): string {
   const lines = text.split('\n').length;
 
-  return lines > 1 ? `Show all ${lines} lines` : `Show all ${text.length} characters`;
+  return lines > COLLAPSE_AFTER_LINES ? `Show all ${lines} lines` : `Show all ${text.length} characters`;
 }
 
 /** The messages region on its own, so the host can push it without re-rendering the page. */
