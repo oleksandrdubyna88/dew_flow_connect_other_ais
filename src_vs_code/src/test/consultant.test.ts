@@ -722,6 +722,62 @@ test('a consultant\u0027s own endpoint survives an edit to its model', () => {
 });
 
 /**
+ * The three the code round found, and one it asked to be pinned.
+ *
+ * <p>All four are about the row a write STARTS from: an absent one, an unchanged one, and one
+ * carrying more than this build knows. Each was observed failing for its own symptom.</p>
+ */
+test('a first edit on a caller nobody has configured materialises that caller\u0027s shipped default', () => {
+  // A side that holds a value for one caller and nothing for the other is ordinary: the panel writes
+  // the caller somebody edited, so a workspace overlay holds exactly the rows that were touched there.
+  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '' } };
+
+  const changed = consultantRecordUpdate(stored, 'codex', 'consultModel', 'opus', []);
+
+  assert.deepEqual(changed['codex'], { vendor: 'claude', runtime: 'claude', model: 'opus' },
+    'an absent row means the shipped pair, exactly as the READER reads it — starting from a blank vendor stores one the next read throws away, and the person\u0027s edit with it');
+});
+
+test('choosing the vendor that is already chosen keeps the consultant\u0027s own model and endpoint', () => {
+  const stored = {
+    claude: { vendor: 'deepseek', runtime: 'codex', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+  };
+  const rows = [{ ...vendor('deepseek'), model: 'deepseek-reasoner', baseUrl: 'https://api.deepseek.com/BETA' }];
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultVendor', 'deepseek', rows);
+
+  assert.deepEqual(changed['claude'], stored['claude'],
+    'clearing the model is for a vendor CHANGE; re-sending the vendor already chosen must not hand the row\u0027s values back over the person\u0027s own');
+});
+
+test('a field this build does not know inside a caller\u0027s row survives an edit beside it', () => {
+  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '', region: 'eu-west' } };
+
+  const changed = consultantRecordUpdate(stored, 'claude', 'consultModel', 'gpt-6-astra', []);
+
+  assert.deepEqual(changed['claude'], { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra', region: 'eu-west' },
+    'a newer panel may hold fields inside a row as well as caller kinds beside it — an edit to one field must not delete the rest');
+});
+
+test('a caller kind this build does not have is not written at all', () => {
+  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: '' } };
+
+  assert.deepEqual(consultantRecordUpdate(stored, '__proto__', 'consultModel', 'x', []), stored,
+    'the caller comes from a webview message, and the only ones this build emits are its own four');
+  assert.deepEqual(consultantRecordUpdate(stored, 'not-a-caller', 'consultVendor', 'codex', []), stored);
+});
+
+test('a CLI path replaces the path, never the model, and an unknown key writes nothing', () => {
+  const stored = { claude: { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' } };
+
+  assert.deepEqual(
+    consultantRecordUpdate(stored, 'claude', 'consultExecutablePath', 'D:/tools/codex.cmd', [])['claude'],
+    { vendor: 'codex', runtime: 'codex', model: 'gpt-5.6-luna', executablePath: 'D:/tools/codex.cmd' });
+  assert.deepEqual(consultantRecordUpdate(stored, 'claude', 'consultSomethingElse', 'x', []), stored,
+    'a key this map does not name must write nothing — it used to land in the model');
+});
+
+/**
  * What the ROWS argument decides — and what this cannot prove.
  *
  * <p>It proves the function materialises from the rows it is HANDED, so handing it the wrong side's

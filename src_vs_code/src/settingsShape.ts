@@ -14,6 +14,7 @@ import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
+  CHOICE_FIELDS,
   ConsultantChoice,
   ConsultantDefinition,
   ConsultSettings,
@@ -251,17 +252,74 @@ export function consultantRecordUpdate(
   value: unknown,
   vendors: readonly Vendor[],
 ): Record<string, unknown> {
-  const typed = String(value).trim();
-  if (key === 'consultVendor') {
-    return typed.length === 0
-      ? { ...current }
-      : merged(current, caller, resolveConsultant(bareReference(typed), vendors));
+  // The caller arrives in a webview message, and the only kinds this build emits are its own four.
+  // An id it does not know is refused rather than indexed with: `__proto__` through `current[caller]`
+  // reads Object.prototype and would write a key nobody asked for. (gemini, A2's code round.)
+  if (!CALLER_KINDS.some((one) => one.id === caller)) {
+    return { ...current };
   }
-  const field = CONSULTANT_FIELDS[key];
 
+  return key === 'consultVendor'
+    ? vendorChosen(current, caller, String(value).trim(), vendors)
+    : fieldEdited(current, caller, CONSULTANT_FIELDS[key], String(value).trim(), vendors);
+}
+
+/**
+ * The row a write starts FROM — and an absent one means the caller's shipped pair, not a blank.
+ *
+ * <p>The reader's own rule, mirrored: `callers` reads a row with no vendor as `DEFAULT_CONSULT.stored`
+ * for that kind, because a caller nobody has configured is one running the shipped default. Starting
+ * from a blank instead resolved to UNAVAILABLE and stored `{vendor: '', model: …}` — which the very
+ * next read threw away, taking the person's edit with it. A side that holds a row for one caller and
+ * nothing for another is ordinary: the panel writes the caller somebody edited, so a workspace
+ * overlay holds exactly the rows touched there. (gemini, A2's code round, twice.)</p>
+ */
+function startingChoice(current: Readonly<Record<string, unknown>>, caller: string): ConsultantChoice {
+  const stored = consultantChoiceFrom(current[caller]);
+
+  return stored.vendor.length > 0 ? stored : DEFAULT_CONSULT.stored[caller]!;
+}
+
+/**
+ * A vendor arriving from the picker — a CHANGE clears the model, the same choice again changes nothing.
+ *
+ * <p>Clearing is for a change: a model named for one vendor is not a model the next one offers. Sent
+ * the vendor already chosen — a re-selection, or a message delivered twice — the old code built a
+ * fresh bare reference and re-resolved it, handing the reviewer row's model and endpoint back over
+ * whatever the person had set. The consultant is not a reference to that row any more, so nothing may
+ * be re-lent to it. (codex, A2's code round.)</p>
+ */
+function vendorChosen(
+  current: Readonly<Record<string, unknown>>,
+  caller: string,
+  id: string,
+  vendors: readonly Vendor[],
+): Record<string, unknown> {
+  const starting = startingChoice(current, caller);
+  if (id.length === 0) {
+    return { ...current };
+  }
+
+  return id === starting.vendor
+    ? merged(current, caller, resolveConsultant(starting, vendors), current[caller])
+    : merged(current, caller, resolveConsultant(bareReference(id), vendors), undefined);
+}
+
+function fieldEdited(
+  current: Readonly<Record<string, unknown>>,
+  caller: string,
+  field: ConsultantField | undefined,
+  value: string,
+  vendors: readonly Vendor[],
+): Record<string, unknown> {
   return field === undefined
     ? { ...current }
-    : merged(current, caller, edited(resolveConsultant(consultantChoiceFrom(current[caller]), vendors), field, typed));
+    : merged(
+      current,
+      caller,
+      edited(resolveConsultant(startingChoice(current, caller), vendors), field, value),
+      current[caller],
+    );
 }
 
 /** A vendor id with nothing else claimed — what a person picking from the list has actually said. */
@@ -269,12 +327,32 @@ function bareReference(vendor: string): ConsultantChoice {
   return { vendor, runtime: '', model: '', baseUrl: '', executablePath: '' };
 }
 
+/**
+ * The caller's row, replaced by what the rule answered — with anything this build cannot name kept.
+ *
+ * <p>`keep` is the row as stored, and it is passed for an edit to one FIELD and withheld for a vendor
+ * CHANGE. The outer map already survives a caller kind this build has no name for; a field inside a
+ * row deserves the same, because a newer panel may hold one and an edit beside it must not delete it.
+ * A vendor change is a fresh start, so anything the old vendor had goes with it — otherwise DeepSeek's
+ * endpoint would still be sitting under a Claude consultant. (codex, A2's code round.)</p>
+ */
 function merged(
   current: Readonly<Record<string, unknown>>,
   caller: string,
   one: ResolvedConsultant,
+  keep: unknown,
 ): Record<string, unknown> {
-  return { ...current, [caller]: storedShape(one) };
+  return { ...current, [caller]: { ...unnamedFields(keep), ...storedShape(one) } };
+}
+
+function unnamedFields(row: unknown): Record<string, unknown> {
+  const stored = typeof row === 'object' && row !== null && !Array.isArray(row) ? row as Record<string, unknown> : {};
+
+  return Object.fromEntries(Object.entries(stored).filter(([key]) => !isNamedField(key)));
+}
+
+function isNamedField(key: string): boolean {
+  return CHOICE_FIELDS.some((one) => one === key);
 }
 
 /**
