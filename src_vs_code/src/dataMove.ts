@@ -180,8 +180,21 @@ export function sourceRefusal(activity: SourceActivity): string {
  * @param side The side in effect, or empty. No side means the logs are inside the folder being moved.
  * @param rootLogs Where they actually are — empty when there are none to mention.
  */
-export function logsLeftBehind(side: string, rootLogs: string): string {
-  if (side.trim().length === 0 || rootLogs.length === 0) {
+export function logsStrandedInTheRoot(side: string, rootLogs: string, source: StorageFingerprint): string {
+  // Decided from what the SOURCE actually holds, never from a probe of the root. The probe had three
+  // defects between them worth more than it was: `chosenRoot()` is EMPTY on a default directory, so
+  // a side configured there — a machine about to be reformatted — got no warning at all; `exists()`
+  // answers 'no' for a permission error exactly as for absence, so an unreadable root silently
+  // suppressed it; and it ran when the modal opened, which is a wait of unbounded length on a share.
+  //
+  // Reading the fingerprint instead removes all three AND self-corrects: when the server's own fix
+  // puts logs inside the side directory, the source will hold them, this returns nothing, and
+  // nobody has to remember to edit it. (gemini and codex, code round.)
+  if (side.trim().length === 0 || rootLogs.trim().length === 0) {
+    return '';
+  }
+
+  if ((source.entries?.['logs/'] ?? 0) > 0) {
     return '';
   }
 
@@ -239,26 +252,41 @@ export function sourceChangedSince(record: MoveRecord, now: StorageFingerprint):
 
 /** The counts that differ, as a person reads them — or empty when none do. */
 function differences(before: StorageFingerprint, after: StorageFingerprint): string {
-  const counted: (readonly [string, number, number])[] = [
-    ['rounds', before.rounds, after.rounds],
-    ['sessions', before.sessions, after.sessions],
-    ['ledger lines', before.usageLines, after.usageLines],
-  ];
+  const wrong: string[] = [];
+  const exactly = (what: string, from: number, to: number): void => {
+    if (from !== to) {
+      wrong.push(`${what}: ${from} before, ${to} after`);
+    }
+  };
+
+  exactly('rounds', before.rounds, after.rounds);
+  exactly('sessions', before.sessions, after.sessions);
+  exactly('ledger lines', before.usageLines, after.usageLines);
 
   // Compared only when BOTH sides have them. One side without is a comparison that cannot be made,
   // and reporting "0 before, 40 after" for a record that simply predates this field would refuse
   // every move made by an older build.
   if (before.entries !== undefined && after.entries !== undefined) {
-    const named = new Set([...Object.keys(before.entries), ...Object.keys(after.entries)]);
-    for (const name of [...named].sort((a, b) => a.localeCompare(b))) {
-      counted.push([name, before.entries[name] ?? 0, after.entries[name] ?? 0]);
+    const named = [...new Set([...Object.keys(before.entries), ...Object.keys(after.entries)])];
+    for (const name of named.sort((a, b) => a.localeCompare(b))) {
+      const from = before.entries[name] ?? 0;
+      const to = after.entries[name] ?? 0;
+
+      if (HISTORY_THAT_CLASHES.includes(name)) {
+        exactly(name, from, to);
+      } else if (to < from) {
+        // An entry that may legitimately MERGE is held to "at least as many" rather than equal.
+        // `logs/` is the one, because a destination is ALLOWED to hold logs already — so the copy
+        // adds to them and the count is higher by whatever was there. Demanding equality made every
+        // move into such a folder fail its own verification, never repoint and never unlock the
+        // delete: a bug this change introduced by permitting that destination in the first place.
+        // (gemini, code round.) Fewer still fails, so a partial copy is caught exactly as before.
+        wrong.push(`${name}: ${from} before, only ${to} after`);
+      }
     }
   }
 
-  return counted
-    .filter(([, from, to]) => from !== to)
-    .map(([what, from, to]) => `${what}: ${from} before, ${to} after`)
-    .join('; ');
+  return wrong.join('; ');
 }
 
 /**
