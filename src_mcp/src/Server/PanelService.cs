@@ -459,7 +459,10 @@ public sealed partial class PanelService
 
                 return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork(
-                        roles, workingDir, RulesSection(rules) + $"## The plan under review\n\n{planText}", round,
+                        roles, workingDir,
+                        RulesSection(rules, TierCoverage(rules, StageRules.Plan))
+                            + $"## The plan under review\n\n{planText}",
+                        round,
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
@@ -892,7 +895,7 @@ public sealed partial class PanelService
     /// </remarks>
     private static string DocumentContext(string purposeText, DocumentOutcome.Ready document, RuleBundle rules) =>
         $"## What this document is for\n\n{purposeText}\n\n"
-        + RulesSection(rules)
+        + RulesSection(rules, TierCoverage(rules, StageRules.Document))
         + $"## The document under review — {document.Name}\n\n{document.Text}";
 
     /// <summary>
@@ -1684,10 +1687,36 @@ public sealed partial class PanelService
     private static int TierMatched(RuleBundle rules, IReadOnlyList<string> tier) =>
         tier.Count(entry => rules.FromMount.Contains(entry, StringComparer.OrdinalIgnoreCase));
 
-    private static string RulesSection(RuleBundle rules) =>
+    /// <summary>
+    /// The sentence telling a reviewer how much of its tier this repository actually had.
+    /// </summary>
+    /// <remarks>
+    /// In the PROMPT, not only the log. A number a person must go and find in a log cannot prevent the
+    /// failure it exists for — a round judged against NONE of its rules reads exactly like one judged
+    /// against all of them, and the REVIEWER is who needs to know which it was. Three sentences,
+    /// because the three cases mean different things, and the last must never be read as compliance.
+    /// </remarks>
+    private static string TierCoverage(RuleBundle rules, IReadOnlyList<string> tier)
+    {
+        var matched = TierMatched(rules, tier);
+
+        if (matched == tier.Count)
+        {
+            return $"> All {tier.Count} of the rules this stage is judged against are in this tree.\n\n";
+        }
+
+        return matched == 0
+            ? $"> **NONE of the {tier.Count} rules this stage is judged against are in this "
+              + "repository** — it pins a different revision of the shared rules, or none at all. Do "
+              + "not read their absence as compliance; say that they were missing.\n\n"
+            : $"> {matched} of the {tier.Count} rules this stage is judged against are in this tree; "
+              + "the rest are not. Do not read their absence as compliance.\n\n";
+    }
+
+    private static string RulesSection(RuleBundle rules, string coverage = "") =>
         rules.HasRules
-            ? $"## The rules this project has written down\n\n{rules.Render()}\n"
-            : "## The rules this project has written down\n\nThis repository has none " +
+            ? $"## The rules this project has written down\n\n{coverage}{rules.Render()}\n"
+            : "## The rules this project has written down\n\n" + coverage + "This repository has none " +
               "(no CLAUDE.md, AGENTS.md, GEMINI.md or .claude/rules). Do not invent a standard: " +
               "a conventions finding needs a rule to quote.\n\n";
 
