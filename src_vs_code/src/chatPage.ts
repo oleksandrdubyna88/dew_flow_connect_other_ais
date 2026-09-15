@@ -822,7 +822,7 @@ function chatStyle(
   .askedAt { min-width: 4em; text-align: center; }
   .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
   h1 { font-size: 1.2em; margin: 0; }
-  .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
+  .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; overflow-wrap: anywhere; opacity: .85; }
   /* A reading measure. A line that spans a wide tab is a line whose side says nothing, and the
      sides are how the two speakers are told apart at a glance. */
   .msg { margin: 0 0 18px; max-width: 46rem; }
@@ -841,7 +841,15 @@ function chatStyle(
      a seam between the two rather than a brighter page. (gemini, the plan round.) */
   /* By NAME, not by inheritance: this rule sets a colour of its own, so the tone has to reach it
      through the property or the answers — the text somebody is actually reading — ignore it. */
-  .msg .what { color: var(--coai-read); line-height: 1.55; }
+  /* anywhere, not break-word. Both break inside a word that will not fit; only anywhere also lets
+     the box's own min-content width shrink, so a run with no spaces in it — a path, a URL, a stack
+     frame — cannot hold the box open wherever something sizes to its content. Nothing between
+     #scroll and .msg does that today, but the sidebar already settled on anywhere for this exact
+     symptom (panelView.ts, .round .line) and matching it costs nothing. Without either, pre-wrap
+     wraps at spaces only, the bubble overflows, and since body cannot scroll while #scroll sets
+     only overflow-y, the computed overflow-x becomes auto and the whole conversation slides
+     sideways. (No backticks in here: this stylesheet is a template literal, and one would end it.) */
+  .msg .what { color: var(--coai-read); line-height: 1.55; overflow-wrap: anywhere; }
   /* FIVE LINES of a long question, at the line-height directly above. DERIVED from
   COLLAPSE_AFTER_LINES rather than written out, so the host's decision boundary and the visual clamp
   cannot drift apart — a clamp showing six lines of something the host called long would fold a
@@ -869,6 +877,13 @@ function chatStyle(
   .msg .what code { font-family: var(--vscode-editor-font-family, monospace); font-size: .92em; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.18)); border-radius: 3px; padding: 0 .3em; }
   /* Its own box, and it scrolls inside it: a long line of code must not widen the page. */
   .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
+  /* The wrap above is INHERITED, and these two are the boxes it must not reach. The pre would be
+     safe by accident — white-space: pre leaves overflow-wrap nothing to act on — and safe by
+     accident stops being safe the day somebody makes it pre-wrap. The table is the real one: it is
+     display: block with overflow-x: auto and its CELLS do wrap, so inheriting the wrap would break
+     a long token in a cell, re-flow the columns, and quietly remove the horizontal scroll this rule
+     was written for. Declared rather than reasoned about, and asserted. */
+  .msg .what pre, .msg .what table { overflow-wrap: normal; }
   .msg .what pre code { background: none; padding: 0; }
   /* The control for ONE block, under the block it belongs to. Right-aligned and pulled up against
      it, so it reads as that block's footer rather than as the start of what follows — the same
