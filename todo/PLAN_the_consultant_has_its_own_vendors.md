@@ -230,6 +230,16 @@ RED: `AConsultantDefinedWithoutAReviewerRow_StillResolves`;
 `ALegacyReferenceToASwitchedOffRow_ConsultsAnyway`;
 `AResumedConsultation_StaysOnTheVendorItOpenedOn_WhenThePanelMoved`.
 Discharges 2, 8, and the server halves of 4 and 7.
+**Two deviations, decided while building it.** (i) A resumed consultation is refused when its vendor id
+has since been redefined onto a DIFFERENT runtime — beyond the spec, which said only to take the
+endpoint and CLI path from a current definition with that id. Borrowing them across a runtime change
+would hand the codex adapter a Claude binary, which `vendor-routing.md` says is invisible in the
+output; the refusal names both runtimes. (ii) The two halves classify an UNRECOGNISED runtime spelling
+differently: the panel reads `runtime: "Codex"` as a legacy reference and resolves it by id, while the
+server treats any non-empty runtime as a definition and refuses one outside the allowlist, by name.
+Fail-closed on the wire is deliberate, and the manifest enum now marks that spelling invalid in the
+settings editor, so a person editing by hand is told twice — but it IS a panel-versus-server
+difference and is written here rather than left to be discovered.
 
 **B4 · The wire carries the definition — measured against the old server first** — *Fable*.
 The measurement comes BEFORE the projection is removed: build the last released `mcp-v*` tag in a

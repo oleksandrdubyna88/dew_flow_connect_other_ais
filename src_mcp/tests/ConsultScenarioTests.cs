@@ -80,21 +80,66 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
     }
 
-    private PanelService Service(int turns = 5, int callsPerSession = 10, bool enabled = true) => new(
+    /// <param name="providers">The REVIEWER rows — by default the one codex row the legacy-shaped shipped map borrows from.</param>
+    /// <param name="consultants">The caller map — by default the shipped one, four legacy references.</param>
+    private PanelService Service(
+        int turns = 5,
+        int callsPerSession = 10,
+        bool enabled = true,
+        IReadOnlyList<ProviderSettings>? providers = null,
+        IReadOnlyDictionary<string, ConsultantChoice>? consultants = null) => new(
         new PanelSettings
         {
-            Providers = [new("codex") { ExecutablePath = FakeCliExe }],
+            Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
             Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
             DataDir = _data,
             ReviewerTimeout = TimeSpan.FromSeconds(30),
             ConsultTurns = turns,
             ConsultCallsPerSession = callsPerSession,
             ConsultEnabled = enabled,
+            Consultants = consultants ?? ConsultantRouting.Shipped,
         },
         VaultKeys.None("no vault in tests"),
         default,
         _launcher,
         Logger.None);
+
+    private static readonly string[] CallerVariables =
+        ["COAI_CALLER_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID", "GEMINI_CLI_SESSION_ID"];
+
+    /// <summary>
+    /// Pins WHICH vendor is calling for one test, and puts the process environment back afterwards.
+    /// </summary>
+    /// <remarks>
+    /// The service reads the caller kind from the process environment, and this suite runs under
+    /// whatever launched it: a Claude Code session exports <c>CLAUDE_CODE_SESSION_ID</c> to every
+    /// child, so a test that assumed the kind was <c>other</c> would pass in one terminal and fail in
+    /// another. Every vendor variable is cleared and exactly one is set; the caller's id follows from
+    /// the same variable, so a consultation opened and resumed inside one test has one owner.
+    /// </remarks>
+    private static IDisposable CallingAs(string variable)
+    {
+        var saved = CallerVariables.Select(name => (name, Environment.GetEnvironmentVariable(name))).ToList();
+        foreach (var name in CallerVariables)
+        {
+            Environment.SetEnvironmentVariable(name, null);
+        }
+
+        Environment.SetEnvironmentVariable(variable, "consult-scenario");
+
+        return new RestoredEnvironment(saved);
+    }
+
+    private sealed record RestoredEnvironment(IReadOnlyList<(string Name, string? Value)> Saved) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var (name, value) in Saved)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+    }
 
     private async Task<JsonElement> Consult(PanelService service, string problem, string id = "", string files = "[]") =>
         JsonDocument.Parse(await service.ConsultAsync(_repo, problem, files, id, TestContext.Current.CancellationToken)).RootElement;
@@ -506,6 +551,165 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         // The tree is DIRTY here on purpose — the uncommitted change is what a consultation sends —
         // so the guarantee is that a refusal left it exactly as it was, not that it is clean.
         (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");
+    }
+
+    // ---------- the consultant has its own vendors (PLAN_the_consultant_has_its_own_vendors, story B3) ----------
+
+    /// <summary>
+    /// A consultant that carries its own definition needs no reviewer row at all.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of the plan: until this story the server looked the consultant's id up in the
+    /// REVIEWER catalogue and refused "not configured" when it was absent — so a reviewer removed took
+    /// the consultant with it. A definition says which CLI answers and where it is; nothing about the
+    /// reviewers is read.
+    /// </remarks>
+    [Fact]
+    public async Task AConsultantDefinedWithoutAReviewerRow_StillResolves()
+    {
+        using var calling = CallingAs("CODEX_SESSION_ID");
+        var service = Service(
+            providers: [],
+            consultants: new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Codex] = new("codex", Runtime: "codex", ExecutablePath: FakeCliExe),
+            });
+
+        var reply = await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+
+        reply.TryGetProperty("error", out _).Should().BeFalse(reply.ToString());
+        Advise(reply).Should().Contain(Advice);
+        var record = new ConsultationStore(_data).All().Single();
+        record.Vendor.Should().Be("codex");
+        record.Runtime.Should().Be("codex");
+    }
+
+    /// <summary>
+    /// A definition on a runtime the consultant may not run on is refused by name — caller kind,
+    /// vendor, runtime and the allowlist — and nothing is built or launched for it.
+    /// </summary>
+    /// <remarks>
+    /// The security half of the story. Excluding Team servers from the panel's picker does not
+    /// exclude <c>remote</c> from the WIRE: a hand-edited or stale settings file can name it, and a
+    /// working tree must never be routed at a Team server by a consultation. The refusal has to come
+    /// from the guard on the definition — which knows the caller — and not from the adapter factory
+    /// after a provider row was already built for it, whose sentence knows no caller.
+    /// </remarks>
+    [Fact]
+    public async Task ADefinitionOnTheRemoteRuntime_IsRefusedByName_BeforeAnyProviderIsBuilt()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var before = await Status();
+        var service = Service(
+            providers: [],
+            consultants: new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Claude] = new("remsoftdev-codex", Runtime: "remote", BaseUrl: "https://coai.example.test"),
+            });
+
+        var refusal = Refusal(await Consult(service, "The parser returns 3 where 4 is expected."));
+
+        refusal.Should().Contain("'claude' caller", "the guard knows who is calling; the adapter factory's refusal does not")
+            .And.Contain("remsoftdev-codex")
+            .And.Contain("'remote'")
+            .And.Contain("codex, claude, antigravity, local", "the allowlist is named so the cure is on screen")
+            .And.Contain("Consultant section");
+        new ConsultationStore(_data).All().Should().BeEmpty("nothing was built, so nothing was recorded");
+        (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");
+    }
+
+    /// <summary>
+    /// A legacy reference to a reviewer row somebody switched OFF still consults.
+    /// </summary>
+    /// <remarks>
+    /// A reviewer switched off is a fact about REVIEWS, and it was taking the consultant down with it —
+    /// the opening symptom of the plan. Rule (a) of the one resolution rule materialises the row's
+    /// runtime, model, endpoint and CLI path whether the row is enabled or not; whether the row may
+    /// review is not the question being asked.
+    /// </remarks>
+    [Fact]
+    public async Task ALegacyReferenceToASwitchedOffRow_ConsultsAnyway()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var service = Service(providers: [new("codex") { ExecutablePath = FakeCliExe, Enabled = false }]);
+
+        var reply = await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+
+        reply.TryGetProperty("error", out _).Should().BeFalse(reply.ToString());
+        Advise(reply).Should().Contain(Advice);
+    }
+
+    /// <summary>
+    /// A legacy reference — no runtime — still resolves through the reviewer rows, and takes the
+    /// row's model where the entry names none.
+    /// </summary>
+    /// <remarks>
+    /// The dual read the plan round required: a settings file written before definitions existed
+    /// carries a bare reference and must not need a rewrite. This is rule (a) on an enabled row —
+    /// the semantics the entry always had, materialised — and it is the guard that the change did
+    /// not break what already worked.
+    /// </remarks>
+    [Fact]
+    public async Task ALegacyReferenceWithNoRuntime_StillResolvesThroughTheReviewerRows()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var service = Service(providers: [new("codex") { ExecutablePath = FakeCliExe, Model = "gpt-5.6-luna" }]);
+
+        var reply = await Consult(service, "The parser returns 3 where 4 is expected, after two fix attempts.");
+
+        reply.TryGetProperty("error", out _).Should().BeFalse(reply.ToString());
+        var record = new ConsultationStore(_data).All().Single();
+        record.Vendor.Should().Be("codex");
+        record.Model.Should().Be("gpt-5.6-luna", "rule (a) materialises the row's model where the entry names none");
+        record.Runtime.Should().Be("codex");
+    }
+
+    /// <summary>
+    /// A resumed consultation stays on the vendor, model and runtime frozen on its record — even
+    /// after the panel moved this caller's consultant elsewhere and removed the reviewer row it
+    /// opened on.
+    /// </summary>
+    /// <remarks>
+    /// The record claims the three are frozen, and a settings change between turns must not hand a
+    /// conversation opened on one vendor to another — or hand one vendor's handle to a different CLI.
+    /// What the record does NOT hold is the endpoint and the CLI path, so those come from whatever
+    /// describes that vendor id today: a current definition under ANY caller kind first, then the
+    /// legacy path. Here the codex reviewer row is gone, Claude Code's consultant is now a definition
+    /// on claude, and the only place <c>codex</c> is still described is Codex's own consultant.
+    /// </remarks>
+    [Fact]
+    public async Task AResumedConsultation_StaysOnTheVendorItOpenedOn_WhenThePanelMoved()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var opened = await Consult(Service(), "the count is 3 and should be 4");
+        var id = opened.GetProperty("consultationId").GetString()!;
+
+        var moved = Service(
+            providers: [],
+            consultants: new Dictionary<string, ConsultantChoice>
+            {
+                [CallerIdentity.Claude] = new("claude", Runtime: "claude", ExecutablePath: FakeCliExe),
+                [CallerIdentity.Codex] = new("codex", Runtime: "codex", ExecutablePath: FakeCliExe),
+            });
+        var recorded = Directory.CreateTempSubdirectory("coai-consult-moved-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", recorded);
+        try
+        {
+            var second = await Consult(moved, "I ran your check: with two fields it prints 3, at Parser.cs:1", id);
+
+            second.TryGetProperty("error", out _).Should().BeFalse(second.ToString());
+            second.GetProperty("turnIndex").GetInt32().Should().Be(2);
+            var argv = File.ReadAllText(Directory.EnumerateFiles(recorded, "*.argv").Single()).Split('\0');
+            argv.Should().ContainInOrder(["exec", "resume", "0198f2c1-first"], "the codex CLI's resume shape, not claude's --resume");
+            var record = new ConsultationStore(_data).All().Single();
+            record.Vendor.Should().Be("codex");
+            record.Runtime.Should().Be("codex");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(recorded, recursive: true);
+        }
     }
 
     private async Task<string> Status()

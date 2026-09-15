@@ -85,4 +85,20 @@ public sealed class ConsultSettingsTests
         silly.ConsultCallsPerSession.Should().Be(10);
         silly.ConsultIdle.Should().Be(TimeSpan.FromMinutes(15));
     }
+
+    /// <summary>
+    /// A consultant DEFINITION on the wire reaches the settings whole, and the callers it does not
+    /// name keep their shipped, legacy-shaped pair.
+    /// </summary>
+    [Fact]
+    public void ADefinitionOnTheWire_ReachesTheSettingsWhole()
+    {
+        var settings = From(("COAI_CONSULTANTS",
+            """{"codex":{"vendor":"claude","runtime":"claude","model":"claude-opus-4-1","baseUrl":"","executablePath":"/usr/local/bin/claude"}}"""));
+
+        settings.Consultants[CallerIdentity.Codex]
+            .Should().Be(new ConsultantChoice("claude", "claude-opus-4-1", "claude", "", "/usr/local/bin/claude"));
+        settings.Consultants[CallerIdentity.Claude].Should().Be(ConsultantRouting.Shipped[CallerIdentity.Claude]);
+        settings.ConsultantsUnreadable.Should().BeFalse();
+    }
 }

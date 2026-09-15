@@ -243,19 +243,35 @@ public sealed class ConsultationService(
             return Error(refusal);
         }
 
-        // A RESUMED consultation runs on the vendor and model FROZEN on its record, never on what the
-        // panel says now: the record claims they are frozen, and a settings change between turns would
-        // otherwise hand a conversation opened on one model to another — or hand one vendor's handle
-        // to a different vendor entirely. (codex, code round.)
-        var choice = record is null
-            ? ConsultantRouting.For(settings.Consultants, caller.Kind)
-            : new ConsultantChoice(record.Vendor, record.Model);
-        var row = settings.Providers.FirstOrDefault(p => string.Equals(p.Provider, choice.Vendor, StringComparison.OrdinalIgnoreCase));
-        if (row is null || !row.Enabled)
-        {
-            return Error(NoSuchVendor(choice.Vendor, caller.Kind, row is null, record?.Id));
-        }
+        // A NEW consultation runs on what the caller's entry RESOLVES to — a definition of its own, or
+        // a legacy reference read through the reviewer rows. A RESUMED one runs on the vendor, model
+        // and runtime FROZEN on its record, never on what the panel says now: the record claims they
+        // are frozen, and a settings change between turns would otherwise hand a conversation opened
+        // on one model to another — or hand one vendor's handle to a different vendor entirely.
+        // (codex, code round.) Both are ONE rule, `ConsultantResolver`, mirrored from the panel's
+        // `resolveConsultant`; the reviewer catalogue is read on the legacy path only, and every way
+        // the rule can refuse is a sentence that names the cure.
+        var resolved = record is null
+            ? ConsultantResolver.Resolve(ConsultantRouting.For(settings.Consultants, caller.Kind), caller.Kind, settings.Providers)
+            : ConsultantResolver.Resumed(record, settings.Consultants, settings.Providers);
 
+        return resolved switch
+        {
+            ResolvedConsultant.Unavailable no => Error(no.Why),
+            ResolvedConsultant.Definition definition => await OnTheVendorAsync(definition.Vendor, caller, record, repo, problem, files, ct),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+    }
+
+    /// <summary>The checks that need the vendor row — adapter, schema, the cap — and then the launch.</summary>
+    /// <remarks>
+    /// Its own method since story B3, because <see cref="UnderTheLockAsync"/> was deciding six things
+    /// at once and the resolution rule made it seven. Everything here reads the row the resolver built
+    /// and nothing about how it was built: the same checks for a definition, a legacy reference and a
+    /// resumed record.
+    /// </remarks>
+    private async Task<string> OnTheVendorAsync(ProviderSettings row, Caller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, CancellationToken ct)
+    {
         var runtime = ConsultantResolution.For(row.Identity());
         if (runtime is null)
         {
@@ -272,11 +288,11 @@ public sealed class ConsultationService(
 
         // THE CALL IS COUNTED LAST, immediately before a consultant is launched, and that ordering is
         // the whole point: it used to be taken at the top of `WithConsultantAsync`, so every refusal
-        // below — a lock somebody else held, an id belonging to another checkout, a vendor row
-        // switched off, a missing runtime, an absent answer schema — spent one of the caller's calls
-        // without a consultant ever running. `ConsultCallCounter` has no refund, so the cap could be
-        // exhausted entirely on refusals. Counting here means the number measures what it is named
-        // after: consultations. (CodeRabbit, on the pull request.)
+        // before this line — a lock somebody else held, an id belonging to another checkout, an entry
+        // that resolves to nothing, a missing runtime, an absent answer schema — spent one of the
+        // caller's calls without a consultant ever running. `ConsultCallCounter` has no refund, so the
+        // cap could be exhausted entirely on refusals. Counting here means the number measures what
+        // it is named after: consultations. (CodeRabbit, on the pull request.)
         var counted = _counter.TryTake(caller.Id, settings.ConsultCallsPerSession, DateTime.UtcNow);
         if (!counted.Allowed)
         {
@@ -284,29 +300,14 @@ public sealed class ConsultationService(
                          + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person");
         }
 
-        var model = choice.Model.Length > 0 ? choice.Model : row.Model;
-        var consultant = new Consultant(runtime, row, model, caller with { CounterNote = counted.Note });
+        // The model is already MATERIALISED on the row — the definition's own, the reviewer row's where
+        // a legacy reference names none, the record's frozen one on a follow-up — so nothing is decided
+        // about it here. The line that used to fall back to the CURRENT row's model on a resumed
+        // consultation is the leak the record's "frozen" claim never allowed.
+        var consultant = new Consultant(runtime, row, row.Model, caller with { CounterNote = counted.Note });
 
         return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, DateTime.UtcNow, ct), repo, problem, files, ct);
     }
-
-    /// <summary>
-    /// Why this vendor cannot be consulted — and the sentence differs for a NEW consultation.
-    /// </summary>
-    /// <remarks>
-    /// A new one is a configuration problem the caller can fix by choosing another row. A RESUMED one
-    /// cannot be fixed at all: a consultation stays on the vendor it started with, so the cure is to
-    /// start a new one. Pure, and lifted out of a method that was deciding six things at once.
-    /// (CodeRabbit, on the pull request.)
-    /// </remarks>
-    private static string NoSuchVendor(string vendor, string callerKind, bool absent, string? resuming) =>
-        resuming is null
-            ? $"the consultant for a '{callerKind}' caller is the vendor '{vendor}', which is "
-              + (absent ? "not configured" : "switched off")
-              + " — pick an enabled vendor row for this caller in the Consultant section of the ConnectOtherAIs panel (COAI_CONSULTANTS)"
-            : $"consultation {resuming} was opened on the vendor '{vendor}', which is no longer "
-              + (absent ? "configured" : "enabled")
-              + " — a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation";
 
     private (ConsultationRecord? Record, string? Refusal) Existing(string consultationId, string caller, string repo, string problem)
     {

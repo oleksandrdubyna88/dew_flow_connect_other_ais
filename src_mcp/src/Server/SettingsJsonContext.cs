@@ -39,9 +39,34 @@ internal sealed record VendorDto(
     /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
     string? RemoteVendor = null);
 
-/// <summary>One entry of `COAI_CONSULTANTS`: which vendor row consults for one caller kind, and on which model.</summary>
-/// <param name="Model">Empty means the vendor row's own model — the ordinary case configures nothing here.</param>
-internal sealed record ConsultantDto(string? Vendor, string? Model = null);
+/// <summary>
+/// One entry of `COAI_CONSULTANTS`: what consults for one caller kind — a DEFINITION, or a legacy
+/// reference to a reviewer row by id.
+/// </summary>
+/// <param name="Vendor">The id: what names the vault entry, the usage ledger and every refusal.</param>
+/// <param name="Model">Empty means the runtime's own default — for a legacy reference, the reviewer row's model.</param>
+/// <param name="Runtime">
+/// Which CLI answers. Present makes the entry a definition; ABSENT makes it a legacy reference, which
+/// <see cref="ConsultantResolver"/> resolves through the reviewer rows exactly as the server always did.
+/// </param>
+/// <param name="BaseUrl">For a vendor riding the codex CLI. Empty = the CLI's own endpoint.</param>
+/// <param name="ExecutablePath">Where the CLI is. Empty = look it up on PATH.</param>
+/// <remarks>
+/// <para>Three fields more since 2026-09-15 (<c>PLAN_the_consultant_has_its_own_vendors</c>, story B3),
+/// and every one of them NULLABLE — by the family's doctrine, not by taste. A deserializer does not run
+/// initializers, so a field the client omitted arrives as null whatever the declaration says; this
+/// family paid for that twice on one day, in two repositories, each found by an <c>.http</c> suite and
+/// invisible to every green unit test because every fixture sent the field. The wire is exactly where
+/// absence is legitimate here: a settings file written before these fields existed carries none of
+/// them, and that file must keep working with no rewrite. <c>ConsultantRouting.Merge</c> is the one
+/// place each null becomes an empty string, so nothing past it ever meets one.</para>
+/// </remarks>
+internal sealed record ConsultantDto(
+    string? Vendor,
+    string? Model = null,
+    string? Runtime = null,
+    string? BaseUrl = null,
+    string? ExecutablePath = null);
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]
