@@ -941,6 +941,48 @@ always answered.
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
+### The findings as a corpus (`--bugs-json`, 2026-09-15)
+
+`Store/BugsQuery` reads the same table as a **sibling** of `RoundsQuery`, not a method on it: that
+reader answers *what happened in this round*, this one answers *which defects are worth keeping*, and
+the second question filters on things the first has no opinion about. Reached through
+`coai-mcp --bugs-json [--limit 200] [--all]`, because the panel owns no SQLite.
+
+An accepted finding is by definition a defect somebody confirmed — the blind-spot corpus this
+database was built for on 2026-09-05 — and nothing read it back that way until this. Six conditions
+narrow it: a **code** round (a plan round's remarks are prose about a document and carry no file), a
+resolution of **accept** (a rejection is a disagreement; an undecided finding is neither yet),
+**gating** severity (a Nit accepted to be agreeable teaches nothing), a **runtime** category
+(Architecture, Ux and Convention are judgements about shape), a **file and line** (or it cannot be
+read back out of git), and **`collect_state = ''`**.
+
+Measured over a live database on 2026-09-15 before any of it was written: **8 687 findings narrowing
+to 462 usable candidates**, across 115 stories and 15 repositories. The file-and-line step costs
+nothing — every runtime finding measured had both — and it is kept as a guard rather than dropped.
+
+**The funnel is the shape, not a total.** `BugFunnel` carries the count after each step *and* every
+step before it, because a flat "30 % were not collectable" lets the step that drops an unparsed
+language mask the step that drops the fixes nobody can find, and the second is the one with a
+decision attached to it. The last number is exactly the candidate list before any limit, which a
+test holds (`TheFunnelCountsEachStep_AndItsLastStepIsTheListItself`) — the two SQL texts are written
+out rather than composed from a shared array of predicates, on the precedent SonarCloud set for
+`RoundsQuery`'s paired statements, so the test is what stops them drifting.
+
+**`collect_state` is text, and that is the load-bearing choice.** A flag says only "looked at", so the
+first run would consume every finding it saw and a second run — better prompt, wider language set,
+repaired walk — could never reach them. `''`/`collected`/`skipped`/`failed` plus `collect_reason`
+keep a skip distinguishable from a success *and* say why, which is what makes a skip rate a
+measurement. `--all` shows the handled ones too.
+
+**It is the one read-only mode that migrates first.** `BugsQuery` never writes — a reader that writes
+is not a reader — but it is the first caller to want the collector's columns, and a person may run
+`--bugs-json` before the server has ever opened the file with a build that has them. The mode opens
+`RoundsDb` once (idempotent through `user_version`) and then reads. Without that the honest answer to
+an old schema is nought candidates, which reads as *no material* rather than *wrong schema*.
+
+Plan: `todo/PLAN_a_corpus_of_real_defects.md`, which carries the funnel measurement in full and the
+five stories after this one.
+
 ## What a round can be asked afterwards (2026-09-08)
 
 Two lines and one directory, added because a round that answered nothing could not be questioned:

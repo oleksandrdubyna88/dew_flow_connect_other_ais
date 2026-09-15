@@ -21,6 +21,7 @@ namespace CoaiMcp.Tests;
 /// declared every selected round empty. An unknown <c>args[0]</c> exits 64, which is the only code
 /// meaning "this binary is too old" and the only one the client falls back on.</para>
 /// </remarks>
+[Collection("console-out")]
 public sealed class ABatchFindingsReadTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-many-" + Guid.NewGuid().ToString("N")[..8]);
