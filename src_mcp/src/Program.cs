@@ -822,8 +822,9 @@ internal static class Program
         same document.
         A `call_human` verdict is an enforced stop, not advice: `review_plan` and `review_code` REFUSE
         while it stands, and recording decisions does not reopen them. Call `ask_human`; the person's
-        answer decides. Only they can pass `humanDecision: "proceed"` to `resolve`, and it is
-        refused while rounds remain — so you cannot grant yourself the override.
+        answer decides. Only they can pass `humanDecision: "proceed"` to `resolve`, and it applies
+        ONLY after a call_human verdict: sent at any other time it is refused, because until then
+        the gate decides — so you cannot grant yourself the override.
         `consult` is for when YOU are stuck: an independent model, chosen by the configured route and
         usually another vendor's, reads this checkout read-only with its uncommitted diff and answers
         advice, not orders — verify it, then report back on the same consultationId. The person can

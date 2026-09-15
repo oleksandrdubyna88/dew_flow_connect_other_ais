@@ -23,11 +23,17 @@ namespace CoaiMcp.Tests;
 /// <item>that <c>call_human</c> is an ENFORCED stop — <c>review_plan</c> and <c>review_code</c> refuse
 /// while it stands, and recording decisions does not clear it.</item>
 /// </list>
-/// <para>Each assertion below is checked against the machine rather than against the prose: the
-/// refusal is <see cref="CoaiMcp.Core.Rounds.RoundMachine"/>'s <c>HumanGate</c> guard at all three
-/// round entries, and the gate survives <c>resolve</c> unless a person passes
-/// <c>humanDecision: "proceed"</c>. A sentence in the instructions that the server does not implement
-/// would be worse than no sentence at all.</para>
+/// <para><b>These cases read the STRING. The behaviour it promises is asserted elsewhere, and that is
+/// deliberate</b> — <see cref="HumanGateHoldsTests"/> drives the refusal at both round entries, that
+/// <c>resolve</c> does not clear the gate, and that only a person's decision does;
+/// <see cref="RoundMachineTests"/> owns the override rule, including the sharp half of it (an
+/// exhausted escalate stage has no rounds left either, so "no rounds" is not "a person was asked").
+/// Writing those again here would be a second implementation of a guarantee that already has one.</para>
+/// <para>A sentence on a shipping surface that the machine does not implement is worse than no
+/// sentence, so each claim was read against the machine before it was written down. That caught one:
+/// the draft said the override is "refused while rounds remain", which is the rule the code USED to
+/// have and corrected — and the shipped <c>resolve</c> tool description still carried it. Both say the
+/// real rule now: the override applies only after a <c>call_human</c> verdict.</para>
 /// </remarks>
 public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
 {
@@ -57,8 +63,9 @@ public sealed class TheServerSaysWhatOnlyTheRuleSaidTests
     [Fact]
     public void OnlyAPersonClearsTheGate() =>
         Instructions.Should().Contain("humanDecision: \"proceed\"")
-            .And.Contain("refused while rounds remain",
-                "an AI that could grant itself the override is an AI the stop does not stop");
+            .And.Contain("ONLY after a call_human verdict",
+                "an AI that could grant itself the override is an AI the stop does not stop — and the "
+                + "rule is what the override would CHANGE, not how many rounds are left");
 
     [Fact]
     public void TheProtocolIsStillThereForACallerThatHasNoRuleFile() =>

@@ -184,7 +184,8 @@ internal static class Tools
                     After a call_human verdict ONLY: when the PERSON has explicitly decided to
                     proceed despite the open findings, pass humanDecision: "proceed" — it advances
                     the stage and is recorded as their override. Never pass it on your own
-                    judgement; it is refused while rounds remain.
+                    judgement; it applies only after that verdict and is refused at any other
+                    time, because until then the gate decides.
                     """,
                 ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = false,
             });
