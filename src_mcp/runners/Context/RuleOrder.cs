@@ -25,7 +25,7 @@ public sealed record RuleCandidate(string Path, string WithinMount);
 /// <para>A separate type because the order is the whole question. The corpus is larger than the
 /// budget and selection is whole-file, so whatever comes first is what a reviewer is judged against
 /// and whatever comes last is never shown. Leaving that to the alphabet is what starved
-/// <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all four doctrines until
+/// <c>testing.md</c>, <c>security.md</c>, <c>reuse-first.md</c> and all three doctrines until
 /// 2026-09-06; leaving it to <see cref="Drawn()"/> fixed the starvation by making the gate unstable
 /// instead, which is its own defect.</para>
 /// <para>The instruction files and the repository's OWN rules are not ordered here. They come first
@@ -47,7 +47,7 @@ public sealed record RuleOrder
     /// <remarks>
     /// <para>Measured 2026-09-06: the family set is ~199 KB against an 80 KB budget, and in
     /// enumeration order the first two files take a quarter of it — so <c>testing.md</c>,
-    /// <c>security.md</c>, <c>reuse-first.md</c> and all four language doctrines were never shown to
+    /// <c>security.md</c>, <c>reuse-first.md</c> and all three language doctrines were never shown to
     /// any reviewer, ever. Not because the budget was small: because they were last in line, and the
     /// line never changed.</para>
     /// <para>Raising the budget cannot fix that; a different draw each round can. At 80 KB of 199 a

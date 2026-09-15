@@ -314,7 +314,7 @@ public sealed class RuleFilesTests : IDisposable
     {
         // Measured on this repository on 2026-09-06: at the old 40 KB the bundle was 8 files with 19
         // omitted, and the omissions were the rules findings are actually written against - testing,
-        // security, reuse-first, git-workflow, and all four language doctrines. The default is a
+        // security, reuse-first, git-workflow, and all three language doctrines. The default is a
         // budget rather than a promise (the family set is ~199 KB, and what does not fit is NAMED),
         // but it must at least fit the shape of a real family repository rather than a third of it.
         // Seven rules of 10 KB plus the entry file is 75 KB - inside 80, outside 60.
@@ -335,7 +335,7 @@ public sealed class RuleFilesTests : IDisposable
     {
         // The measurement that asked for this: 199 KB of family rules against an 80 KB budget, and in
         // enumeration order the same twelve files won every time - so testing.md, security.md,
-        // reuse-first.md and all four language doctrines had never been shown to any reviewer.
+        // reuse-first.md and all three language doctrines had never been shown to any reviewer.
         Write("CLAUDE.md", Filler("entry", 1_000));
         WriteMount(".claude/rules/shared");
         for (var n = 0; n < 20; n++)

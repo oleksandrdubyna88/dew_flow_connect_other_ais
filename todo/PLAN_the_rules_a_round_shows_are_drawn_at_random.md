@@ -40,7 +40,7 @@ never touched reads as noise, and noise is what stops a gate being run.
 
 **The draw was a cure, not a disease — but it is not the only cure.** It was installed on 2026-09-06
 against a measured starvation: in stable enumeration order the first two files took a quarter of the
-budget, and `testing.md`, `security.md`, `reuse-first.md` and all four language doctrines were shown to
+budget, and `testing.md`, `security.md`, `reuse-first.md` and all three language doctrines were shown to
 *no reviewer, ever*. Randomness fixed that by giving every rule a chance. **A deterministic priority
 order fixes it too**, and keeps the property the draw destroys — so the draw is replaced, not merely
 deleted, and nothing in this plan leaves an ordering to chance or to the filesystem.
