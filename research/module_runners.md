@@ -91,7 +91,7 @@ sequenceDiagram
   order rather than being dropped. The instruction files and the repository's own rules are outside the
   order — they lead and are never dropped, though they are NOT free: they are collected under the same
   budget, so a large one leaves less for the mount.
-  Plan: [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md).
+  Plan: [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md).
 
 - **A tier entry names ONE rule, by its mount-relative path.** `RuleCandidate` carries both the
   repository-relative path and the path within the mount, and the prefix is stripped in `RuleFiles`,

@@ -8,7 +8,7 @@
 > selection, no resolver (it cannot run — see condition 2).
 >
 > Evidence for epic 3 of
-> [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](../todo/PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
+> [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
 > — whether the draw can be deleted — and the input the rule-modularization follow-up needs.
 
 ## The prediction, written before the run
