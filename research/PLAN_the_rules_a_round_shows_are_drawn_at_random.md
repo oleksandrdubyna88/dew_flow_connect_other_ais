@@ -48,6 +48,23 @@
 > [architecture.md](architecture.md), [module_runners.md](module_runners.md),
 > [module_server.md](module_server.md).
 
+## Boundary with the plan extracted from this one
+
+Written on both sides, as `planning-docs.md` requires; the same table is in
+[PLAN_the_resolver_says_what_the_change_selects.md](../todo/PLAN_the_resolver_says_what_the_change_selects.md).
+
+| Item | Built by | The other plan's part | Order |
+|---|---|---|---|
+| Deterministic order, tier table, `RuleOrder` seam | **This plan** (epic 1, shipped) | the resolver plan consumes it as its fallback | this first |
+| Stage tiers for the plan and document gates | **This plan** (epic 1, shipped) | untouched there; that plan changes the CODE stage only | this first |
+| Removal of the random draw | **This plan** (epic 3, shipped) | that plan must not reintroduce a non-deterministic order | this first |
+| Resolver manifest, batching, the fallback boundary | **The resolver plan** (epic A) | this plan records the order it falls back TO | after E1 for benefit; buildable before |
+| `topics:` vocabulary + symbol triggers | **The resolver plan** (epic B) | the BM25/embedding rejection recorded here stands there | after E2 |
+| Rule modularization (splitting >15 KB rules) | **Neither** — a follow-up in `dew_flow_conventions` | both cite the same measurement for it | independent |
+
+Disjoint: this plan owns *how the mount is ordered when nothing selects*; the resolver plan owns
+*what selects*.
+
 ## The symptom, as it was until 2026-09-15
 
 > Everything in this section and the next describes the defect this plan REMOVED. It is kept in
