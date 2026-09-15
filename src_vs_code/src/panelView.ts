@@ -1305,7 +1305,8 @@ function movingHint(storage: DataLocation): string {
   const move = DATA_TO_MOVE.map((name) => `<li><code>${escapeHtml(name)}</code></li>`).join('');
   const leave = DATA_TO_LEAVE.map((name) => `<code>${escapeHtml(name)}</code>`).join(' and ');
 
-  return `<div class="hint"><b>Moving what is already there.</b> Stop the server first — your MCP client restarting it is what releases the database — then COPY all of this into ${escapeHtml(storage.directory)}:</div>
+  return `<div class="hint"><b>Moving to another folder.</b> <b>Move what is here to another folder…</b> above does all of this for you: it refuses a folder that already holds a history, copies, reads the new one back and compares it with this one, and deletes nothing.</div>
+<div class="hint">By hand instead: Stop the server first — your MCP client restarting it is what releases the database — then COPY all of this OUT of ${escapeHtml(storage.directory)} and into the folder you are moving to:</div>
 <ul class="inventory">${move}</ul>
 <div class="hint">Start it again and check that the rounds list here still shows your history before deleting anything from the old place. <b>Only into an empty one:</b> if there is already a <code>coai.db</code> where you are copying to, that side has its own history and copying over it destroys that history — back it up and decide which one you are keeping first. Leave ${leave} behind: the first is scratch, pruned on every <code>open</code>, and the second holds sign-ins that belong to the side that made them.</div>`;
 }

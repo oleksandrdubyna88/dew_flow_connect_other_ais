@@ -20,9 +20,10 @@ line saying whether the folder came from this window's environment, from a choic
 of the machine, from the setting every side shares, or from nothing at all. The last three are
 different problems and used to look identical.
 
-**Moving copies, checks, and deletes nothing.** It refuses while reviewers are still running or a
-write-ahead log is sitting beside the database — both mean something has it open and your newest
-rounds are not in the file yet. It refuses a folder that already holds a history of its own. Then it
+**Moving copies, checks, and deletes nothing.** It refuses while reviewers are still running, and
+warns — rather than refusing — when a write-ahead log is sitting beside the database: that means
+something has it open or was stopped while it did, and those files travel with it. It refuses a
+folder that already holds a history of its own. Then it
 copies, reads the new folder back, and compares the rounds, the sessions and the ledger with the old
 one. **Delete the old data folder** is a separate command and stays refused until a move has checked
 out.

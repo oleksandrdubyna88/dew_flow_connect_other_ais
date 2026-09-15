@@ -123,7 +123,7 @@ test('a quiet source is refused by nothing', () => {
 
 // ---------- the verification ----------
 
-const BEFORE = { rounds: 1284, sessions: 96, usageLines: 5120 };
+const BEFORE = { rounds: 1284, sessions: 96, usageLines: 5120, read: true };
 
 test('a move that carried everything verifies', () => {
   assert.equal(verificationFailure(BEFORE, { ...BEFORE }), '');
@@ -217,4 +217,38 @@ test('a move whose old and new directory are the same may not delete anything', 
   // The one that would delete the live directory. It cannot arise from the flow, and it is exactly
   // the sort of thing a record left by an older build could say.
   assert.equal(mayDeleteTheOldCopy({ from: 'Z:\\coai', to: 'Z:\\coai', verified: true }), false);
+});
+
+// ---------- and a count nobody could read is not a count ----------
+
+test('two unreadable directories do not verify each other', () => {
+  // CodeRabbit, Major, and it is the one way this could call a move verified with nothing verified:
+  // `readLog` turns an unreadable database into an empty log and the filesystem helpers turn every
+  // error into a zero, so a source and a destination that both failed produce identical all-zero
+  // fingerprints — no difference, move verified, delete offered.
+  const nothing = { rounds: 0, sessions: 0, usageLines: 0, read: false };
+
+  assert.notEqual(verificationFailure(nothing, { ...nothing }), '');
+});
+
+test('a destination that could not be read is not a verified destination', () => {
+  const failure = verificationFailure(BEFORE, { rounds: 0, sessions: 0, usageLines: 0, read: false });
+
+  assert.match(failure, /new folder could not be read/u);
+});
+
+test('and a source that cannot be read is never deleted', () => {
+  const blind = sourceChangedSince(
+    { from: 'C:\old', to: 'Z:\coai', verified: true, held: BEFORE },
+    { rounds: 0, sessions: 0, usageLines: 0, read: false });
+
+  assert.match(blind, /could not be read/u);
+  assert.match(blind, /has not been deleted/u);
+});
+
+test('a genuinely empty directory still verifies against an empty one', () => {
+  // The difference this whole field exists to make: zero that was READ is a real answer.
+  const empty = { rounds: 0, sessions: 0, usageLines: 0, read: true };
+
+  assert.equal(verificationFailure(empty, { ...empty }), '');
 });

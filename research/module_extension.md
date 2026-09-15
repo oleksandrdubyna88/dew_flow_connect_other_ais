@@ -1874,9 +1874,10 @@ call is amended rather than dropped: it allows `serverEnv()` and nothing else, a
 the rule's own — a pasted key freezes a setting the settings FILE could otherwise change live, and
 these two can never be in that file, because the file lives inside the directory they select.
 
-**The move copies, verifies, and deletes nothing.** It refuses while reviewers are running or a
-write-ahead log sits beside the database; it refuses a destination holding any part of a history; it
-fingerprints rounds, sessions and ledger lines, copies, reads the new folder back and compares. Only
+**The move copies, verifies, and deletes nothing.** It refuses while reviewers are running, and WARNS
+about a write-ahead log beside the database rather than refusing it (see the correction below); it
+refuses a destination holding any part of a history; it fingerprints rounds, sessions, ledger lines
+and the entry count of every moved directory, copies, reads the new folder back and compares. Only
 a verified move unlocks *Delete the old data folder*, a separate command reading a record in
 `globalState` — so the gate survives the window reload somebody does while going away to check their
 history.

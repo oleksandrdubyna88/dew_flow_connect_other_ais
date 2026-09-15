@@ -132,6 +132,31 @@ export async function askWhereDataLives(
   return saved;
 }
 
+/**
+ * Offer the reload that makes the rest of this window agree with the new folder.
+ *
+ * <p>Offered rather than performed: a reload closes every editor's unsaved state and a chat in
+ * flight, and this is not the extension's decision to take. The sentence says what is stale and what
+ * is not, so declining is an informed choice rather than a shrug — the panel and the server are
+ * already correct; it is the watchers and the chat store that hold the old path.</p>
+ */
+async function offerAReload(directory: string): Promise<void> {
+  const RELOAD = 'Reload Window';
+  const choice = await vscode.window.showInformationMessage(
+    `Reload this window so everything in it reads ${directory}?`,
+    {
+      modal: false,
+      detail: 'The panel and the config block are already correct. The escalation watcher, the '
+        + 'consultation watcher and the chat store were built when this window opened and still hold '
+        + 'the old folder, so questions and chats would be read from there until a reload.',
+    },
+    RELOAD,
+  );
+  if (choice === RELOAD) {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+  }
+}
+
 /** What a chooser did, so its caller can tell "nothing to do" from "it did not work". */
 export type ChoiceOutcome = 'saved' | 'unchanged' | 'refused';
 
@@ -195,6 +220,14 @@ async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory:
 
     return;
   }
+
+  // The window itself has to catch up too, and it cannot do so in place. The two watchers, the
+  // panel and the chat store were all constructed at activation from the directory of the moment;
+  // `storageReadsThisSide` moves what the RESOLVER answers, not what those instances already hold,
+  // so they go on watching and writing the old folder. Rebuilding them one by one would be four
+  // lifetimes to get right for a thing that happens once; a reload is honest and complete.
+  // (CodeRabbit, Major.)
+  void offerAReload(directory);
 
   await vscode.env.clipboard.writeText(mcpServerBlock(server.fsPath, serverEnv()));
   void vscode.window.showWarningMessage(
@@ -406,7 +439,7 @@ export async function moveDataDirectory(
   const sidecars = sourceWarning(activity);
   const go = 'Copy it';
   const confirmed = await vscode.window.showWarningMessage(
-    `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${destination.fsPath}?`,
+    `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${landing.fsPath}?`,
     {
       modal: true,
       detail: `Nothing is deleted. ${from} is left exactly as it is, and you can delete it yourself `
@@ -522,33 +555,37 @@ export async function deleteTheOldDataFolder(
 
   const old = record!.from;
 
-  // READ AGAIN, right now. The extension cannot stop the MCP client's server and cannot detect one
-  // attached — the server opens the database per write and closes it, so an idle-looking folder
-  // proves nothing. A move can therefore copy, verify, and then have a round appended to the SOURCE
-  // before anybody presses this. Reading it once more turns that silent loss into a refusal, and it
-  // is the only defence available here. (codex and gemini, plan round.)
-  const moved = sourceChangedSince(record!, await countAt(old));
-  if (moved.length > 0) {
-    void vscode.window.showWarningMessage(moved);
-
-    return;
-  }
-
   const go = 'Delete it';
   const confirmed = await vscode.window.showWarningMessage(
     `Delete ${old}?`,
     {
       modal: true,
-      detail: `Its contents were copied to ${record!.to}, read back the same, and nothing has written `
-        + 'to it since.\n\nBefore you press this: every MCP client must already have been given the '
-        + 'new block and restarted. A client still configured for this folder will recreate it and '
-        + 'write there, and you will be reading one history while it writes another.\n\nThis cannot '
-        + 'be undone, and it is the last copy of anything the move did not take — the sign-in tokens '
-        + 'and the scratch worktrees are deliberately not copied.',
+      detail: `Its contents were copied to ${record!.to} and read back the same.\n\nBefore you press `
+        + 'this: every MCP client must already have been given the new block and restarted. A client '
+        + 'still configured for this folder will recreate it and write there, and you will be reading '
+        + 'one history while it writes another.\n\nWhat is checked is that nothing has been ADDED to '
+        + 'or removed from the old folder since the copy. A file edited in place is not something '
+        + 'this can see.\n\nThis cannot be undone, and it is the last copy of anything the move did '
+        + 'not take — the sign-in tokens and the scratch worktrees are deliberately not copied.',
     },
     go,
   );
   if (confirmed !== go) {
+    return;
+  }
+
+  // READ AGAIN, and AFTER the confirmation rather than before it. The extension cannot stop the MCP
+  // client's server and cannot detect one attached — the server opens the database per write and
+  // closes it, so an idle-looking folder proves nothing. A move can copy, verify, and then have a
+  // round appended to the SOURCE before anybody presses this; reading it once more turns that silent
+  // loss into a refusal. (codex and gemini, plan round.)
+  //
+  // The modal is a wait of unbounded length, and a write arriving DURING it used to pass a check
+  // made before it opened. The last thing before the delete is the read. (CodeRabbit, Minor.)
+  const moved = sourceChangedSince(record!, await countAt(old));
+  if (moved.length > 0) {
+    void vscode.window.showWarningMessage(moved);
+
     return;
   }
 

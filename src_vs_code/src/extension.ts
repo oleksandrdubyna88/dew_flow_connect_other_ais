@@ -1071,6 +1071,11 @@ async function countStorage(
     : await readLog(server.fsPath, { limit: 1 }, serverRunAt(server.fsPath, resolvedDirectory));
 
   return {
+    // `log.read` is the server saying it ANSWERED, as opposed to `readLog` turning a spawn that
+    // failed into an empty log. Without carrying it, a source and a destination that both failed to
+    // read produce identical all-zero counts, verify each other, and offer a delete for a directory
+    // nothing ever read. (CodeRabbit, Major.)
+    read: log?.read === true,
     rounds: log?.totals.rounds ?? 0,
     sessions: await countIn(vscode.Uri.joinPath(root, 'sessions'), '.json'),
     usageLines: await countLines(vscode.Uri.joinPath(root, 'usage.jsonl')),
