@@ -66,9 +66,37 @@ function ruleBody(source, name, marker) {
   if (!text.startsWith('---\n')) { throw new Error(`${name}: leading metadata is required`); }
   const end = text.indexOf('\n---\n', 4);
   if (end < 0) { throw new Error(`${name}: unterminated leading metadata`); }
-  const body = text.slice(end + 5);
+  const body = withoutLeadingComments(text.slice(end + 5), marker);
   if (!marker.test(body)) { throw new Error(`${name}: missing canonical marker`); }
   return body;
+}
+
+/**
+ * Delivery metadata written as HTML comments, dropped the way the frontmatter is.
+ *
+ * <p>The conventions release of 2026-09-15 armed an ownership check, and its `owns:` lines sit
+ * between the frontmatter and the snippet marker. They are metadata by the same test the
+ * frontmatter passes: they say which product names a shared rule is allowed to use, they are
+ * addressed to a linter, and a person pasting this into their CLAUDE.md wants none of them. Until
+ * this the body no longer STARTED with the marker, so the whole build stopped with
+ * `missing canonical marker`.</p>
+ *
+ * <p>Only what comes BEFORE the marker is taken, and the marker itself is never eaten — it is an
+ * HTML comment too. A comment inside the instruction body is the rule author's, means something to
+ * the reader, and stays verbatim; this is the same line the file already draws for a `---` that
+ * appears legitimately in the prose.</p>
+ */
+function withoutLeadingComments(body, marker) {
+  let rest = body;
+  while (rest.startsWith('<!--') && !marker.test(rest)) {
+    const closed = rest.indexOf('-->');
+    if (closed < 0) { break; }
+    const next = rest.slice(closed + 3).replace(/^[ \t]*\n/, '');
+    if (next.length === rest.length) { break; }
+    rest = next;
+  }
+
+  return rest;
 }
 
 /** The consultant block, verbatim. Ours, so there is no frontmatter to strip. */
