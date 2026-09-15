@@ -60,7 +60,7 @@ cross-side visibility was never considered when the partition was drawn. The con
 the field: a `call_human` from a Claude Code session inside WSL wrote its question where a
 Windows-hosted window was not watching, and the round blocked on a modal nobody ever saw.
 
-[PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md](../todo/PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md)
+[PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md](PLAN_a_question_asked_on_one_side_is_seen_on_the_other.md)
 owns that, and it does **not** revisit this one's answer. No database is opened across the boundary; a
 window may be told to watch another installation's `escalations/` directory, and only that. What keeps
 the two compatible: a database has two writers and must not be shared, while an escalation is one JSON
