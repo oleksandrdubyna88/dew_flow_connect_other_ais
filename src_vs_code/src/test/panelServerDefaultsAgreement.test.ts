@@ -280,3 +280,57 @@ test('a pristine consultant map writes no key after it resolves against customis
     [],
     'a panel nobody configured wrote a consult key, so the two halves disagree about what the default is');
 });
+
+/**
+ * The wire entry's keys are the DTO's parameters — read from the C#, since story B4 put the
+ * definition on the wire.
+ *
+ * <p>Two implementations of one wire shape, held level the way the rest of this file holds them: by
+ * reading the other half's source rather than retyping its names. The failure this guards is the one
+ * B4 measured against the released server — `System.Text.Json` SKIPS a member the DTO does not
+ * declare, silently, so a key spelled `baseURL` here would be a definition whose endpoint never
+ * arrives, and the consultation would run on the CLI's own endpoint with nothing anywhere saying so.
+ * The comparison is on the LIST, order included: `envBlock` writes the keys in the DTO's declared
+ * order, and a list is what makes a swapped or missing name a red test that says which.</p>
+ */
+const consultantDto = /record ConsultantDto\(([\s\S]*?)\);/.exec(
+  fs.readFileSync(mcp('src', 'Server', 'SettingsJsonContext.cs'), 'utf8'),
+);
+
+/** `string? Vendor,` / `string? Model = null` -> `vendor`, `model`: the wire spelling of each parameter. */
+function dtoWireNames(): readonly string[] {
+  assert.ok(consultantDto, 'ConsultantDto is not in the shape this test reads');
+
+  return [...consultantDto[1]!.matchAll(/string\?\s+([A-Za-z]+)/g)]
+    .map((one) => one[1]!)
+    .map((name) => name.charAt(0).toLowerCase() + name.slice(1));
+}
+
+test("a definition on the wire carries exactly the DTO's properties, in the DTO's order", () => {
+  // A stored DEFINITION, so nothing is borrowed from a row and every one of the five fields is the
+  // entry's own — the shape a person's first edit in the section writes since story A2.
+  const stored: Record<string, unknown> = {
+    consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus', baseUrl: '', executablePath: '/opt/claude' } },
+  };
+  const wire = envBlock(settingsFrom((section) => stored[section]))['COAI_CONSULTANTS'];
+
+  assert.ok(wire !== undefined, 'the premise: a definition is on the wire');
+  assert.deepStrictEqual(
+    Object.keys((JSON.parse(wire) as Record<string, object>)['claude']!),
+    dtoWireNames(),
+    "the panel writes a key the server's DTO does not declare — System.Text.Json would drop it silently",
+  );
+});
+
+test('an unavailable entry on the wire names only DTO properties too, and never the runtime', () => {
+  // The raw shape is a SUBSET, and `runtime` must not be in it: rule (c) is the server refusing by
+  // name, and a runtime the panel invented would turn the refusal into a launch.
+  const stored: Record<string, unknown> = { consultants: { other: { vendor: 'mistral', model: 'large' } } };
+  const wire = envBlock(settingsFrom((section) => stored[section]))['COAI_CONSULTANTS'];
+
+  assert.ok(wire !== undefined, 'the premise: the entry is on the wire');
+  const keys = Object.keys((JSON.parse(wire) as Record<string, object>)['other']!);
+  assert.ok(keys.every((key) => dtoWireNames().includes(key)), `a key the DTO does not declare: ${keys.join(', ')}`);
+  assert.ok(!keys.includes('runtime'), 'an unavailable entry travelled with a runtime');
+  assert.deepStrictEqual(keys.sort(), ['model', 'vendor']);
+});

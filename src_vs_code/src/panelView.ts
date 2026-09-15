@@ -12,6 +12,7 @@ import type { Phrase } from './phrases';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
+import { consultantSkewNote } from './consultSettings';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
@@ -311,6 +312,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     // another vendor about a passage, here an AI asks one about the tree it is stuck in.
     section('consultant', 'Consultant', open,
       `<div id="live-consultations">${consultationsBody(state.consultations ?? [], nowMs)}</div>`
+      + consultantSkew(state)
       + consultantBody(state.settings.consult, {
         vendors: state.vendors,
         codexModels: state.codexModels,
@@ -1473,6 +1475,27 @@ function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
     + `read roles you added, so ${escapeHtml(own.join(', '))} will not run — whatever these boxes `
     + `say. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} or later — the <b>MCP server</b> section `
     + `below.</div>`;
+}
+
+/**
+ * Said out loud while the installed server would consult through the reviewer row instead of the
+ * definition the Consultant section draws.
+ *
+ * <p>The fourth skew of this shape, and it fails the way {@link roleSwitchSkew} does — BACKWARDS:
+ * the section shows a consultant's own endpoint and CLI path while an older server runs the
+ * reviewer's, and a consultant defined with no reviewer row is drawn as one and refused as "not
+ * configured". Measured against the released server on 2026-09-15, story B4 of
+ * `PLAN_the_consultant_has_its_own_vendors`; `research/module_server.md` has the replies verbatim.
+ * The SENTENCE is `consultantSkewNote`'s — pure, with the version as an argument, tested where it
+ * lives — and this only puts it in the section it is about, in the class its three siblings use, so a
+ * person reads one kind of warning for one kind of problem. It is rendered in `panelView.ts` rather
+ * than in `consultantView.ts` because the installed server is the PANEL's knowledge, not the
+ * section's: `consultantBody` takes the settings and the rows and knows nothing about a binary.</p>
+ */
+function consultantSkew(state: PanelState): string {
+  const note = consultantSkewNote(state.server.version, state.settings.consult);
+
+  return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`;
 }
 
 /** Which of the three things this tick can be is what its tooltip has to explain. */

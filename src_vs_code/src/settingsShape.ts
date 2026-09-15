@@ -24,7 +24,7 @@ import {
   CONSULT_SETTINGS,
   isChoiceField,
   resolveConsultant,
-  sameCallers,
+  sameChoice,
 } from './consultSettings';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
@@ -606,18 +606,29 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   // on read, so a pristine map comes back as four definitions carrying the reviewer rows' values —
   // compared with the shipped pairs those are "different", and every untouched install would write
   // this key while the server, with no key, resolves the same absence to the same consultant.
-  if (!sameCallers(settings.consult.stored, DEFAULT_CONSULT.stored)) {
+  //
+  // What CROSSES is the resolved entry — since story B4 of PLAN_the_consultant_has_its_own_vendors
+  // measured a definition against the last released server (mcp-v0.22.0, 2026-09-15). That server's
+  // DTO is `(Vendor, Model)`: `System.Text.Json` skips the three members it does not declare, and it
+  // consulted through the reviewer row with the same id — that row's runtime, endpoint and CLI path,
+  // with the entry's model — exactly as it did for the legacy pair, and refused a definition whose id
+  // had no row as "not configured". The definition's own three fields are dropped without a word, so
+  // `consultantSkewNote` says so in the section while such a server is installed, and
+  // `research/module_server.md` holds the replies verbatim.
+  //
+  // PER CALLER: only an entry that differs from its shipped pair travels. Every caller used to
+  // travel as a legacy pair whenever one differed, which cost nothing — the server resolved a shipped
+  // pair to what it would have chosen with no key. A resolved DEFINITION is not that: it would
+  // freeze this panel's reading of a caller nobody configured, so an untouched caller stays off the
+  // wire and the server resolves its own absence, which `ConsultantRouting.For` does for a kind the
+  // map lacks. A map with nothing to say emits no key, as before.
+  const crossing = callersOnTheWire(settings.consult);
+  if (crossing.length > 0) {
     // One JSON key rather than four scalars, for the reason `COAI_VENDORS` already carries: a
     // compound value needs a structured encoding, and four key spellings is four chances for the two
     // halves to disagree about one of them.
-    //
-    // TEMPORARY — story B4 of PLAN_the_consultant_has_its_own_vendors removes this projection. Each
-    // entry is projected explicitly back to the `{vendor, model}` pair the server reads today, from
-    // the STORED side, so the bytes are identical to what this line emitted before a legacy entry
-    // resolved on read: resolution can change a model (rule (a) materialises the row's), and nothing
-    // may cross this seam before B4 has measured a definition against an OLD server half.
     env['COAI_CONSULTANTS'] = JSON.stringify(Object.fromEntries(
-      CALLER_KINDS.map(({ id }) => [id, legacyPair(settings.consult.stored[id])])));
+      crossing.map((id) => [id, wireEntry(settings.consult.byCaller[id]!)])));
   }
   if (settings.consult.turns !== DEFAULT_CONSULT.turns) {
     env['COAI_CONSULT_TURNS'] = String(settings.consult.turns);
@@ -655,13 +666,34 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
 }
 
 /**
- * TEMPORARY, removed by story B4 of PLAN_the_consultant_has_its_own_vendors: the `{vendor, model}`
- * pair `COAI_CONSULTANTS` has always carried, in that key order, so the wire stays byte-identical to
- * what it was before a legacy entry resolved on read. The three fields a definition adds do not
- * cross here until the old server half has been measured receiving them.
+ * The callers whose STORED entry differs from the shipped pair — the ones `COAI_CONSULTANTS` carries.
+ *
+ * <p>Per caller through {@link sameChoice}, the same comparison `sameCallers` makes for the whole map,
+ * so "differs" means one thing on both sides of the key. A stored DEFINITION always differs — its
+ * runtime is set and a shipped pair's is not — so a caller a person has edited always travels.</p>
  */
-function legacyPair(choice: ConsultantChoice): { readonly vendor: string; readonly model: string } {
-  return { vendor: choice.vendor, model: choice.model };
+function callersOnTheWire(consult: ConsultSettings): readonly string[] {
+  return CALLER_KINDS
+    .filter(({ id }) => !sameChoice(consult.stored[id], DEFAULT_CONSULT.stored[id]))
+    .map(({ id }) => id);
+}
+
+/**
+ * One caller's entry as the server's `ConsultantDto` reads it — a definition whole, an unavailable
+ * entry raw.
+ *
+ * <p>In the DTO's DECLARED order, legacy pair first: `panelServerDefaultsAgreement` reads that order
+ * off the C# and holds this level with it, and a reader older than the three new fields meets the two
+ * it knows where it always met them. All five are written for a definition, empty strings included —
+ * this is the wire, not the file a person edits (`storedShape` drops empties there), and `vendorsEnv`
+ * writes `COAI_VENDORS` the same way. An UNAVAILABLE entry travels as `{vendor, model}` with NO
+ * runtime, so the server's rule (c) refuses it by name: a runtime invented here would be a definition
+ * the server builds a provider for, sending a working tree to a vendor nobody chose.</p>
+ */
+function wireEntry(one: ResolvedConsultant): Record<string, string> {
+  return one.kind === 'unavailable'
+    ? { vendor: one.vendor, model: one.model }
+    : { vendor: one.vendor, model: one.model, runtime: one.runtime, baseUrl: one.baseUrl, executablePath: one.executablePath };
 }
 
 function asString(value: unknown): string {

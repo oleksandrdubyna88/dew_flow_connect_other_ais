@@ -544,6 +544,64 @@ if (!String(consulted.advice).includes('token stream')) {
   consultFail(`the row reached the log without its advice: ${JSON.stringify(consulted).slice(0, 400)}`);
 }
 
+// ----------------------------------------------------------------------------------------------
+// The FOURTH leg: the DEFINITION crosses — a consultant with NO reviewer row answers.
+//
+// Story B4 of PLAN_the_consultant_has_its_own_vendors. Before it `COAI_CONSULTANTS` carried
+// `{vendor, model}` and the server looked the vendor up among the REVIEWER rows, so a consultant
+// nobody had a row for was refused "not configured" — the second leg above leans on exactly that
+// refusal. A DEFINITION carries its own runtime and CLI path, and a server that reads them needs no
+// row at all. So: no reviewer row under this id, a definition naming the stand-in CLI, and a
+// consultation that ANSWERS. Three ways this fails, and each is a sentence the refusal names: the
+// writer drops the three fields (the server says "not configured"); the server does not read them
+// (the same sentence — which is what the released mcp-v0.22.0 answers, measured 2026-09-15, and what
+// this leg says with `COAI_MCP_DLL` pointed at that build); or the two halves spell a key differently
+// (System.Text.Json skips a member it does not declare, silently, and the launch goes to PATH).
+//
+// The advice text is this leg's own, not the third leg's: an assertion on "token stream" here would
+// pass on the third leg's answer if the two consultations were ever confused.
+
+const DEFINED = 'a-consultant-with-no-reviewer-row';
+writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
+  {
+    ...DEFAULTS,
+    consult: consultFrom({ other: { vendor: DEFINED, runtime: 'codex', model: 'gpt-5.6-luna', baseUrl: '', executablePath: cli } }),
+  },
+  vendorsFrom([row]),
+  '9.9.9',
+), 'utf8');
+
+const defined = serverSession({
+  FAKECLI_MODE: 'vendor',
+  FAKECLI_STDOUT: `${JSON.stringify({ type: 'thread.started', thread_id: '0199-seam-defined' })}\n`,
+  FAKECLI_OUTFILE_TEXT: 'The definition crossed: this answer came through the CLI path the entry itself named.',
+});
+try {
+  await defined.ready;
+} catch (e) {
+  defined.end();
+  consultFail(`the binary never finished the MCP handshake for the definition leg: ${e.message}`);
+}
+
+let throughDefinition;
+try {
+  throughDefinition = answerOf(await defined.consult(repoPath));
+} catch (e) {
+  defined.end();
+  consultFail(`the binary could not answer a consult call on a definition: ${e.message}`);
+}
+defined.end();
+
+if (typeof throughDefinition.consultationId !== 'string' || throughDefinition.consultationId.length === 0) {
+  consultFail(`the definition did not cross the seam — the server could not consult through a consultant with no reviewer row. It answered: ${
+    JSON.stringify(throughDefinition).slice(0, 400)}`);
+}
+// The positive half: the answer came through the CLI path the DEFINITION named. A consultationId
+// alone would pass for a server that resolved the id some other way.
+if (!String(throughDefinition.advice).includes('The definition crossed')) {
+  consultFail(`the consultation opened, but not through the definition's own CLI path: ${JSON.stringify(throughDefinition).slice(0, 400)}`);
+}
+
 rmSync(repoPath, { recursive: true, force: true });
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
@@ -551,4 +609,5 @@ console.log(`seam: its note was "${reported.note}"`);
 console.log(`seam: the consultant map crossed too — "${String(routed.error).slice(0, 120)}…"`);
 console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}…"`);
 console.log(`seam: and a consultation the binary RAN was read back out of --log — "${String(consulted.advice).slice(0, 60)}…"`);
+console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
 console.log(`seam: asked ${binary}`);

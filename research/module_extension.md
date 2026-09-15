@@ -2006,10 +2006,47 @@ on the runtime each id names, borrowing nothing — which is also, pinned by a t
 install reads, since the shipped `codex` reviewer row carries nothing a bare runtime would not.
 `panelServerDefaultsAgreement.test.ts` pins the default comparison from the reader's direction, because
 its older `envBlock(DEFAULTS)` assertion never passes through the reader and stayed green with the
-comparison on the wrong side. Until story B4 has measured a definition against an OLD server half,
-`envBlock` projects the STORED entry back to `{vendor, model}` through an explicitly temporary
-`legacyPair`, so the wire is byte-identical to before — a legacy `codex` entry whose row is on
-`gpt-5.6-luna` now READS as `gpt-5.6-luna` and still SENDS `""`.
+comparison on the wrong side.
+
+**The wire carries the definition** (2026-09-15, story B4 — after the measurement against the released
+server that `module_server.md` records under the same heading). `envBlock` no longer projects an entry
+back to `{vendor, model}`; the temporary `legacyPair` is gone. What crosses is the RESOLVED entry
+(`byCaller`), **per caller**: only a caller whose STORED entry differs from its shipped pair travels
+(`sameChoice`, exported for exactly this — the same comparison `sameCallers` makes for the whole map, so
+"differs" means one thing on both sides of the key), and a pristine map still emits no key. Every caller
+used to travel whenever one differed, as a legacy pair the server resolved to what it would have chosen
+anyway; a resolved definition is not that — it would freeze this panel's reading of a caller nobody
+configured — so an untouched caller stays off the wire and `ConsultantRouting.For` resolves its absence
+on the server. A definition travels WHOLE — `vendor, model, runtime, baseUrl, executablePath`, in the C#
+DTO's declared order with the legacy pair first, empty strings included (this is the wire, not the file
+a person edits: `storedShape` drops empties there, `vendorsEnv` writes `COAI_VENDORS` the same way) — and
+`panelServerDefaultsAgreement` reads the DTO's parameter list out of `SettingsJsonContext.cs` and holds
+the keys level with it, order included, because `System.Text.Json` SKIPS a member the DTO does not
+declare and a misspelled key would be an endpoint that never arrives. An UNAVAILABLE entry travels RAW,
+`{vendor, model}` with no runtime, so the server's rule (c) refuses it by name; a runtime invented here
+would be a definition the server builds a provider for. So the legacy `codex` entry whose row is on
+`gpt-5.6-luna` now reads as `gpt-5.6-luna` AND sends it — inside a definition.
+
+**The skew note.** `CONSULTANT_DEFINITION_SINCE = '0.23.0'` in `consultSettings.ts` is the fourth
+marker of the `ROLE_SWITCH_SINCE` shape — the next `mcp-v*` release, because a server's version is
+stamped from its tag and B3 is the first server change since 0.22.0; set too low it would stay silent
+on a server that drops the definition, so whoever cuts the release keeps it level with the tag. The pure
+`consultantSkewNote(installedServerVersion, consult)` returns a sentence only when the server is KNOWN
+and strictly older AND some caller's STORED entry is a definition — a legacy entry, customised or not,
+means the reviewer row on both halves, so there is nothing an older server gets wrong about it, and a
+pristine map crosses as nothing. The sentence names the installed version, the callers affected (by
+label — "the consultant for Claude Code and Codex"), what will actually run (the reviewer row with the
+same vendor id — its runtime, endpoint and CLI path, with the model chosen here), that a consultant
+whose id names no reviewer row is refused as not configured, and the version to update to. That is
+what was MEASURED, not inferred: on `mcp-v0.22.0` a definition ran through the row with the entry's
+model, launch for launch as the legacy pair did, and a definition with no row was refused "not
+configured" — both fail BACKWARDS against what the section shows, which is what the note is for.
+`panelView.ts` renders it (`consultantSkew`) in the Consultant section, in the `stale` class its three
+siblings use, rather than inside `consultantBody`, because the installed server is the panel's
+knowledge and the section body knows nothing about a binary. Tested where each half lives: the sentence
+and its silences in `consultant.test.ts`, its arrival in the section — and only in the section, and only
+when due — in `panelView.test.ts`, with the versions DERIVED from the marker so the tests cannot drift
+when it moves.
 
 **A fourth `SettingWrite` kind arrived with it.** The four rows share two setting names and are told
 apart by `data-caller`, exactly as the round budgets are told apart by `data-role`; travelling in the
