@@ -507,7 +507,7 @@ test("an older server is called out while some caller's STORED entry is a defini
   const settings = consultSettingsFrom(reader({
     consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus', executablePath: '/opt/claude' } },
   }));
-  const note = consultantSkewNote(OLDER, settings);
+  const note = consultantSkewNote(OLDER, settings, []);
 
   assert.ok(note.includes(OLDER), `the installed version is not named: ${note}`);
   assert.ok(note.includes(CONSULTANT_DEFINITION_SINCE), `the version to update to is not named: ${note}`);
@@ -515,18 +515,44 @@ test("an older server is called out while some caller's STORED entry is a defini
   assert.ok(note.includes('reviewer row'), `what will actually run is not said: ${note}`);
 });
 
-test('the note names every affected caller and no other', () => {
+test('a legacy entry that crosses as a definition is called out too — the gate is the WIRE, not the file', () => {
+  // The hole B4's plan round found. `envBlock` emits the RESOLVED entry, so a legacy reference the
+  // reader turned into a definition crosses AS one — and an upgraded install whose settings.json has
+  // not been edited since is exactly that case. Gating the note on the STORED shape left the person
+  // who never touched the section, which is most of them, warned about nothing.
+  // `claude` names no reviewer row here, so the reader resolves it by rule (b) — a definition on the
+  // claude runtime backed by nothing. An older server has no rule (b): it looks the id up in the
+  // reviewer rows and refuses. A real difference, and the file still holds the legacy shape.
+  const settings = consultSettingsFrom(reader({
+    consultants: { claude: { vendor: 'claude', model: 'opus' } },
+    vendors: [],
+  }));
+
+  assert.equal(settings.stored['claude']!.runtime, '', 'the premise: the file still holds a legacy reference');
+  assert.equal(settings.byCaller['claude']!.kind, 'definition', 'the premise: it resolves into one');
+  assert.match(consultantSkewNote(OLDER, settings, []), /Claude Code/,
+    'what an older server mishandles is what CROSSES, and a definition backed by no row crossed');
+});
+
+test('the note names the callers an older server would answer differently, and no other', () => {
+  // One reviewer row, `codex`, plain. Against it:
+  //   claude  — a definition on an id NO row backs: an older server refuses it. NAMED.
+  //   gemini  — a definition the codex row reproduces exactly: the same place on both halves. Silent.
+  //   codex   — a customised LEGACY entry resolved FROM that row: the same place again. Silent.
+  const rows = [{ id: 'codex', runtime: 'codex', model: 'gpt-5.6-luna' }];
   const settings = consultSettingsFrom(reader({
     consultants: {
-      claude: { vendor: 'claude', runtime: 'claude', model: 'opus' },
-      gemini: { vendor: 'codex', runtime: 'codex', model: '' },
-      codex: { vendor: 'codex', model: '' }, // customised, but a LEGACY entry — the row on both halves
+      claude: { vendor: 'anthropic-direct', runtime: 'claude', model: 'opus' },
+      gemini: { vendor: 'codex', runtime: 'codex', model: 'gpt-6-astra' },
+      codex: { vendor: 'codex', model: '' },
     },
+    vendors: rows,
   }));
-  const note = consultantSkewNote(OLDER, settings);
+  const note = consultantSkewNote(OLDER, settings, vendorsFrom(rows));
 
-  assert.ok(note.includes('Claude Code') && note.includes('Gemini'), `both defined callers are not named: ${note}`);
-  assert.ok(!note.includes('Codex'), `a caller with a legacy entry was named: ${note}`);
+  assert.ok(note.includes('Claude Code'), `the caller no row backs is not named: ${note}`);
+  assert.ok(!note.includes('Gemini'), `a definition the row reproduces was named: ${note}`);
+  assert.ok(!note.includes('Codex'), `a legacy entry resolved from that row was named: ${note}`);
 });
 
 test('the note is silent for a server that reads the definition, a later one, and one nobody has installed', () => {
@@ -534,9 +560,9 @@ test('the note is silent for a server that reads the definition, a later one, an
     consultants: { claude: { vendor: 'claude', runtime: 'claude', model: 'opus' } },
   }));
 
-  assert.equal(consultantSkewNote(CONSULTANT_DEFINITION_SINCE, settings), '', 'the one that reads it says nothing');
-  assert.equal(consultantSkewNote('9.0.0', settings), '', 'nor does a later one');
-  assert.equal(consultantSkewNote('', settings), '', 'a server nobody has installed is not behind');
+  assert.equal(consultantSkewNote(CONSULTANT_DEFINITION_SINCE, settings, []), '', 'the one that reads it says nothing');
+  assert.equal(consultantSkewNote('9.0.0', settings, []), '', 'nor does a later one');
+  assert.equal(consultantSkewNote('', settings, []), '', 'a server nobody has installed is not behind');
 });
 
 test('the note is silent when nothing on the wire is a definition — a legacy entry means the row on both halves', () => {
@@ -544,8 +570,8 @@ test('the note is silent when nothing on the wire is a definition — a legacy e
   // nothing it gets wrong. A pristine map crosses as nothing at all.
   const legacyOnly = consultSettingsFrom(reader({ consultants: { codex: { vendor: 'codex', model: 'gpt-5.5' } }, vendors: [LUNA_ROW] }));
 
-  assert.equal(consultantSkewNote(OLDER, legacyOnly), '');
-  assert.equal(consultantSkewNote(OLDER, DEFAULT_CONSULT), '');
+  assert.equal(consultantSkewNote(OLDER, legacyOnly, vendorsFrom([LUNA_ROW])), '');
+  assert.equal(consultantSkewNote(OLDER, DEFAULT_CONSULT, []), '');
 });
 
 // ---------------------------------------------------------------------------------------------

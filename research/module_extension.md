@@ -2031,10 +2031,20 @@ would be a definition the server builds a provider for. So the legacy `codex` en
 marker of the `ROLE_SWITCH_SINCE` shape — the next `mcp-v*` release, because a server's version is
 stamped from its tag and B3 is the first server change since 0.22.0; set too low it would stay silent
 on a server that drops the definition, so whoever cuts the release keeps it level with the tag. The pure
-`consultantSkewNote(installedServerVersion, consult)` returns a sentence only when the server is KNOWN
-and strictly older AND some caller's STORED entry is a definition — a legacy entry, customised or not,
-means the reviewer row on both halves, so there is nothing an older server gets wrong about it, and a
-pristine map crosses as nothing. The sentence names the installed version, the callers affected (by
+`consultantSkewNote(installedServerVersion, consult, vendors)` returns a sentence only when the server
+is KNOWN and strictly older AND some caller reaches it as something it would answer DIFFERENTLY. That
+condition took two corrections, both from B4's plan round, and the second came out of fixing the first.
+Asking whether a caller's STORED entry is a definition is wrong, because `envBlock` emits the RESOLVED
+one: a legacy reference the reader turned into a definition crosses AS one, and an upgraded install
+nobody has edited since is exactly that case — the people an older server mishandles would have been
+the people the note never appeared for. But asking merely whether a definition crosses OVER-warns, and
+the measurement says why: an older server resolves the id through the REVIEWER ROWS, so a definition
+that came from a row still holding those values reaches the same runtime, endpoint and CLI path and
+gets nothing wrong. What it cannot reproduce is a definition no row backs — refused outright as "not
+configured", because it has no rule for an id that is itself a runtime — or one whose fields have
+diverged from the row of the same name. That is why the rows are an argument: the question is what the
+OTHER half would do, and the other half answers through them. A pristine caller sends no key and is
+silent either way. The sentence names the installed version, the callers affected (by
 label — "the consultant for Claude Code and Codex"), what will actually run (the reviewer row with the
 same vendor id — its runtime, endpoint and CLI path, with the model chosen here), that a consultant
 whose id names no reviewer row is refused as not configured, and the version to update to. That is
