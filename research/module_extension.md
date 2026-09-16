@@ -28,12 +28,20 @@ predicted the opposite of all three:
 | claim | measured |
 |---|---|
 | "only 7 hues are available, so 8 phrases collide" | 8 ids → **8 distinct colours**; 12 → **12**; the 13th repeats, which is that palette's documented end. The five anchored vendor slots are offered LAST, not withheld. |
-| "adding a phrase re-sorts the list and shuffles the colours" | adding a 7th moved **0 of 6**; adding a late-sorting id moved **0**. A name's slot comes from a hash of the name itself; the list only decides who wins a genuine collision. |
+| "adding a phrase re-sorts the list and shuffles the colours" | adding a 7th moved **0 of 6** — but that was true of THOSE six, not in general, and the code round was right to ask again. Searching for a colliding pair finds one at once: with a list of two, adding `phrase-11` moves `phrase-2`. See the limit below. |
 | "the add flow builds rows client-side, so new ones render unlabelled" | `phrasesPage.ts` contains no `createElement`, `innerHTML` or `appendChild` at all; Add posts to the host, which rewrites `panel.webview.html` — a new row is rendered by `phraseRow` like every other. |
 
-That first property is what makes the cross-surface promise hold even though the editor and the
-sidebar are separate webviews refreshed on their own clocks and can be one phrase apart. There is a
-test for exactly that case.
+**The cross-surface promise holds because both surfaces read ONE saved list**, not because the
+allocator is subset-stable — it is not. A phrase whose preferred slot collides with a newly added
+one loses the slot to whichever id sorts earlier, so while one webview is stale the two can disagree.
+
+That limit is **pinned by a test that names the exact pair**, and it was left rather than fixed
+because both ways out are worse and both were measured: a per-id hash is subset-stable but gives
+three phrases only **two** distinct colours and twelve only **six**, destroying the "different
+colours" half of the issue to protect the "same colour" half; and a canonical shared list is not
+available to two independently refreshed webviews. Subset-stability and no-repeats cannot both hold
+in general — this is graph colouring. What is traded away is a transient that additionally requires
+a hash collision.
 
 The labels are `<label for=…>` paired with control ids (`phrase-name-<id>`, `phrase-text-<id>`) —
 **Name** and **What it copies**. The `for`/`id` pairing is what makes them labels rather than

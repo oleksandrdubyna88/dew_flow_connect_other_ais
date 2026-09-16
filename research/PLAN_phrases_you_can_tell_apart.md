@@ -23,15 +23,34 @@
 >    `createElement`, `innerHTML` or `appendChild` at all, and the host rewrites the whole document.
 >    Had any been true, the design would have had to change; taking them on trust would have meant
 >    writing a second allocator this repository already argues against.
-> 2. **The half of that finding which was right became a test.** The editor and the sidebar build
->    allocators from their own state and are separate webviews on their own clocks, so they can be
->    one phrase apart — there is now a test that renders them exactly that way and asserts the
->    shared phrase's colour is unchanged.
+> 2. **The half of that finding which was right became a test — and the CODE round then showed the
+>    measurement behind it had been too narrow.** The plan round's *"adding a phrase reshuffles the
+>    colours"* was checked with ids that happen not to collide, so it read as refuted. The code round
+>    asked again, and a search for a colliding pair found one immediately: **with a list of two,
+>    adding `phrase-11` moves `phrase-2`.** Two ids whose preferred slot is the same resolve it by
+>    list order, so a list that gains the earlier-sorting one takes the slot from the later. The
+>    earlier claim was true of its sequence and not general — saying *"0 of 6 moved"* without saying
+>    *"for these six"* is exactly the conclusion-wider-than-its-conditions this family has a rule
+>    about, and it is recorded here rather than quietly corrected.
+>
+>    **It is pinned as a test rather than fixed, and both ways out were measured before deciding
+>    that.** A per-id hash is subset-stable but gives THREE phrases only TWO distinct colours and
+>    twelve only six — it destroys the *different colours* the issue asked for in order to protect
+>    the *same colour* it also asked for. A canonical list shared by both surfaces is not available:
+>    they are separate webviews refreshed on their own clocks. Subset-stability and no-repeats
+>    cannot both hold in general — this is graph colouring, and something has to give. What gives is
+>    a TRANSIENT: both surfaces read one saved list, so they disagree only while one is stale, and
+>    only then if a collision exists.
 > 3. **The multi-phrase assertion was added** (codex, the plan round): three ids and one cross-surface
 >    phrase would have stayed green for a page that painted every row the same fallback, which is the
 >    reported defect. An eight-phrase render now asserts every row's colour is distinct.
 > 4. **`PHRASE_FALLBACK_COLOUR` was extracted** so the stylesheet's fallback and the module that
 >    decides colours name one value rather than two copies of a token.
+>
+> **The known limit, not a defect that was missed:** a phrase CAN change colour when a colliding
+> neighbour is added, and the two surfaces can therefore disagree for as long as one of them is
+> stale. Pinned by a test that names the exact pair, with the reasoning above. Worth re-opening only
+> if somebody reports the button and the box disagreeing in practice.
 >
 > **Checked, and not done:** that any of it is visible. There is no layout engine in this suite, so a
 > label hidden by CSS or an edge of zero width would not be caught here — the `for`/`id` pairing,
@@ -194,7 +213,9 @@ Homes: `src_vs_code/src/test/phrasesPage.test.ts` and `src_vs_code/src/test/phra
 - [x] Every entry has its own colour — asserted over eight rows, not three; the same phrase is the same colour in both surfaces, including when they are one phrase apart.
 - [x] Both edit-form controls carry a label whose `for` names a control `id` that exists.
 - [x] No id, name, text or hook changed; the empty state is unchanged.
-- [x] Whole suite green: 2964 tests, 2963 pass, 1 skipped, 0 fail.
+- [x] Whole suite green: **2971 tests, 2970 pass, 1 skipped, 0 fail** — observed on the rebased
+      branch. (The 2964 recorded mid-work was before this branch was rebased onto four other merges;
+      the code round was right to call the stale number a defect in the file.)
 - [x] `research/module_extension.md`, `research/module_tests.md` and `CHANGELOG.md` updated.
 - [x] `plan-lifecycle.mjs` and `pin-check.mjs` clean, run before the `git mv` and again before the final commit.
 - [x] Indexed — the `research/README.md` row on promotion.
