@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
-import { AskedSet, humanSaid, lastAsked, titleFrom } from './claudeQuestion';
+import { AskedSet, SessionNames, collectNames, humanSaid, lastAsked } from './claudeQuestion';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -112,6 +112,35 @@ export function namesTheSame(title: string, looking: string): boolean {
   return prefix.length > 0 && title.startsWith(prefix);
 }
 
+/**
+ * Which of these answer to this name — the ones that answer to it NOW, or else the ones that used to.
+ *
+ * <p>Two tiers, and the order is the whole point. A session answers to every name it has carried,
+ * because Claude Code puts an old title back minutes after a person types a new one — but a flat set
+ * would let a conversation that was *Refactor X* last week outrank the one called that today, and
+ * the person is looking at the second. So: anything currently wearing the name answers; only when
+ * nothing does are former names consulted. (gemini, the plan round.)</p>
+ *
+ * <p>Ambiguity INSIDE a tier is not resolved here and must not be — two sessions wearing one name is
+ * the refusal this module exists to make, and a tie-break invented at this level would be a guess
+ * wearing a rule's clothes. The caller counts what comes back.</p>
+ *
+ * <p>Generic over the item so both readers use it: the Asked button holds files, *Take the question*
+ * holds sessions with their questions, and the rule must not be written twice.</p>
+ */
+export function namedAmong<T>(
+  items: readonly T[],
+  namesOf: (item: T) => SessionNames,
+  looking: string,
+): readonly T[] {
+  const now = items.filter((item) => namesTheSame(namesOf(item).current, looking));
+  if (now.length > 0) {
+    return now;
+  }
+
+  return items.filter((item) => namesOf(item).former.some((name) => namesTheSame(name, looking)));
+}
+
 /** One session file, and the question waiting in it. */
 export interface WaitingSession {
   readonly file: string;
@@ -149,9 +178,14 @@ export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Wa
   //
   // The shortened-title rule applies here as it does for the Asked button: a tab's name is what
   // Claude Code put on its panel, and for a long conversation that is not what it wrote to the file.
+  //
+  // ONE RULE, shared with the Asked button rather than copied beside it. This reader had its own
+  // copy and its own single title, so a conversation renamed by hand was invisible to *Take the
+  // question* for exactly the reason it was invisible to Asked — which is the drift the comment on
+  // `oneAnswerFrom` was left behind by.
   const named = looking.length === 0
     ? waiting
-    : waiting.filter((one) => namesTheSame(one.asked.title, looking));
+    : namedAmong(waiting, (one) => one.asked.names, looking);
   if (named.length === 1) {
     return { kind: 'one', session: named[0]! };
   }
@@ -388,12 +422,14 @@ export async function sessionFileIn(
  * called it seconds of a blocked extension host.</p>
  */
 async function theOneCalled(files: readonly string[], looking: string, whereabouts: string): Promise<Found> {
-  const matched: string[] = [];
+  const named: { readonly file: string; readonly names: SessionNames }[] = [];
   for (const file of files) {
-    if (namesTheSame(await titleOf(file), looking)) {
-      matched.push(file);
-    }
+    // Every name, then the tiers — never "the first file whose current name matches", which would
+    // let the order a directory happens to list in decide between a session called this today and
+    // one that was called this a week ago.
+    named.push({ file, names: await namesOf(file) });
   }
+  const matched = namedAmong(named, (one) => one.names, looking).map((one) => one.file);
   if (matched.length > 1) {
     return {
       kind: 'several',
@@ -465,19 +501,23 @@ async function eachLine(file: string, take: (line: string) => boolean): Promise<
   }
 }
 
-/** What a session calls itself — the LAST title, as the tab shows the newest. */
-async function titleOf(file: string): Promise<string> {
-  let title = '';
+/**
+ * Every name a session has worn, in ONE streaming pass — the same pass the last title cost.
+ *
+ * <p>It used to keep the last `ai-title` and nothing else, which is how a conversation the operator
+ * had renamed by hand was reported as not existing while it sat in the editor group beside the
+ * refusal. {@link SessionNames} carries the measurement and the two writers that make "the last
+ * title" the wrong question.</p>
+ */
+export async function namesOf(file: string): Promise<SessionNames> {
+  const names = collectNames();
   await eachLine(file, (line) => {
-    const named = titleFrom(line);
-    if (named.length > 0) {
-      title = named;
-    }
+    names.take(line);
 
     return true;
   });
 
-  return title;
+  return names.names();
 }
 
 /**

@@ -1518,6 +1518,27 @@ conversation, and that string is exactly what VS Code puts on the tab. Measured 
 session before it was built. So two sessions waiting in one folder are no longer a flat refusal: the
 one whose title matches the active tab wins, and a title matching neither or both still refuses.
 
+**A session wears MORE THAN ONE name, and until 2026-09-16 this read one of them.** There is a second
+row — `{"type":"custom-title","customTitle":"…","sessionId":"…"}` — which is what the tab wears when a
+person renames a conversation by hand, and also what Claude Code derives from the first prompt for a
+conversation the model has not titled yet. The word `custom-title` appeared nowhere in this
+repository, so those conversations were reported as not existing. The operator found it with the
+session open in the editor group beside the refusal: *«сесия точно есть»*. Measured on their machine
+the same evening, 101 sessions and 1.2 GB — **four** carry a custom title and no `ai-title` at all,
+five carry both with the last of each disagreeing, five carry neither, and not one of the 162 distinct
+titles is claimed by two sessions.
+
+**Nor is the LAST title the answer.** Their second observation — *«я переименовал вручную, оно
+изменило, а потом через пару минут вернуло старые названия»* — is in the file: the rename spells
+`sessionId` before `customTitle` and the rows around it spell it after, so a second writer re-asserts
+the old title minutes later. `namesOf(file)` therefore returns `SessionNames {current, former}`: every
+name the file has carried, with the last of them told apart from the rest. `namedAmong` matches in two
+tiers — a session wearing the name NOW answers first, and former names answer only when nothing
+currently wears it, or a conversation the person has moved on from would outrank the one in front of
+them. Ambiguity inside a tier is the same refusal it always was. **One rule, two readers**: the Asked
+button and *Take the question* share `namedAmong` and one `collectNames()` accumulator, because a copy
+of this rule beside the other is how it was wrong in two places at once.
+
 **And the tab can read that session back.** The symptom was *"когда окно долго работает (4 ч и более)
 начальный вопрос исчезает, и мне приходится спрашивать клод над чем ты работаешь"*. **Asked**, in the
 header beside the steppers, opens the pinned region above the conversation and shows what the PERSON

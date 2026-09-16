@@ -43,17 +43,84 @@ export interface AskedSet {
   /** When it was asked, as the file recorded it. */
   readonly at: string;
   /**
-   * What this session is CALLED — and what its tab is called, which is the same string.
-   *
-   * <p>Claude Code writes `{"type":"ai-title","aiTitle":"…","sessionId":"…"}` into the session as it
-   * names the conversation, and that title is what VS Code shows on the tab. Measured against a live
-   * session: the tab reading *Подключение к scoreMeter DB* has a row saying exactly that.</p>
+   * What this session is CALLED — every name it has worn, because it wears more than one.
    *
    * <p>It is the only honest join between a TAB and a SESSION on this machine — there is no window
    * id to ask for — so it is what lets two sessions waiting in one folder be told apart instead of
-   * refused. Empty when the session has no title row yet, which a short one does not.</p>
+   * refused. See {@link SessionNames} for why one string was not enough.</p>
    */
-  readonly title: string;
+  readonly names: SessionNames;
+}
+
+/**
+ * The names a session has worn, with the one it wears NOW told apart from the ones it used to.
+ *
+ * <p><b>Claude Code writes two kinds of title row and this build read one.</b> `ai-title` is what
+ * the model named the conversation; `custom-title` is what is on the tab when a person renamed it by
+ * hand — and the word `custom-title` appeared nowhere in this repository. Measured on the operator's
+ * own machine, 101 sessions and 1.2 GB: **four** carry a custom title and no `ai-title` at all, five
+ * carry both with the last of each disagreeing, five carry neither, and not one of the 162 distinct
+ * titles is claimed by two sessions. They reported it with the session open in the editor group
+ * beside the refusal — *«сесия точно есть»*.</p>
+ *
+ * <p><b>And the last row is not the answer either.</b> Their words: *«я переименовал вручную, оно
+ * изменило, а потом через пару минут вернуло старые названия»*. Their file says so — the rename
+ * spells `sessionId` before `customTitle` and the rows around it spell it after, so a second writer
+ * re-asserts the old title minutes later. A session must therefore answer to every name it has
+ * carried.</p>
+ *
+ * <p><b>Why {@link current} is kept apart.</b> Answering to any former name lets a conversation the
+ * person has moved on from outrank the one in front of them: A was once *Refactor X*, B is called
+ * that today, and a flat set hands over whichever was listed first — or refuses both. So the current
+ * name answers first and former names only when nothing currently wears the name. (gemini, the plan
+ * round.)</p>
+ */
+export interface SessionNames {
+  /** The name of the LAST title row of either kind, which is what the tab wears. Empty for neither. */
+  readonly current: string;
+  /** Every other distinct name the file has carried, first seen first, without {@link current}. */
+  readonly former: readonly string[];
+}
+
+/** A session that has never named itself. Its tab is named from the first prompt, and that is written nowhere. */
+export const NO_NAMES: SessionNames = { current: '', former: [] };
+
+/**
+ * One accumulator, fed a line at a time, that both readers of a session's name use.
+ *
+ * <p>The Asked button and *Take the question* each had their own copy of "what is this session
+ * called", and a copy is how this was wrong in two places at once before — `claudeSessions.ts` still
+ * carries the comment from the last time they drifted. There is one rule now, and it is here because
+ * this module is the one that knows what a row looks like.</p>
+ */
+export interface NameCollector {
+  take(line: string): void;
+  names(): SessionNames;
+}
+
+export function collectNames(): NameCollector {
+  const seen: string[] = [];
+
+  return {
+    take(line: string): void {
+      const named = titleFrom(line) || customTitleFrom(line);
+      if (named.length === 0) {
+        return;
+      }
+      // Kept in FIRST-SEEN order with the last occurrence deciding nothing but `current`: a title
+      // re-asserted on every turn would otherwise crowd the list it shares with the real names.
+      const already = seen.indexOf(named);
+      if (already >= 0) {
+        seen.splice(already, 1);
+      }
+      seen.push(named);
+    },
+    names(): SessionNames {
+      const current = seen[seen.length - 1] ?? '';
+
+      return { current, former: seen.slice(0, -1) };
+    },
+  };
 }
 
 /** Anything, narrowed to an object, or nothing. */
@@ -135,14 +202,18 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
   const asked: { id: string; questions: readonly AskedQuestion[]; sessionId: string; at: string }[] = [];
   const answered = new Set<string>();
   let unreadable = false;
-  // The LAST one: Claude Code refines the title as the conversation goes on, and the tab shows the
-  // newest. An older row would name the tab as it was called an hour ago.
-  let title = '';
+  // EVERY name, not the last one. Claude Code refines the title as the conversation goes on and a
+  // person renames it over the top of that, and a second writer puts the old one back minutes later
+  // — so which name is on the tab at the moment somebody presses a button is not a question this can
+  // answer. It answers with all of them instead. The collector is shared with the Asked button's
+  // reader, because two copies of this rule is how it was wrong in two places at once.
+  const names = collectNames();
 
   for (const line of lines) {
     if (line.trim().length === 0) {
       continue;
     }
+    names.take(line);
     let row: Record<string, unknown> | undefined;
     try {
       row = record(JSON.parse(line));
@@ -154,8 +225,8 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
     if (row === undefined) {
       continue;
     }
-    if (row['type'] === 'ai-title' && text(row['aiTitle']).length > 0) {
-      title = text(row['aiTitle']);
+    if (row['type'] === 'ai-title' || row['type'] === 'custom-title') {
+      // Already taken by the collector above, and a title row carries no blocks.
       continue;
     }
     for (const block of blocksOf(row)) {
@@ -189,7 +260,7 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
   }
 
   return {
-    asked: asked.map((one) => ({ ...one, answered: answered.has(one.id), title })),
+    asked: asked.map((one) => ({ ...one, answered: answered.has(one.id), names: names.names() })),
     unreadable,
   };
 }
@@ -279,6 +350,29 @@ export function titleFrom(line: string): string {
     const row = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
 
     return row.type === 'ai-title' && typeof row.aiTitle === 'string' ? row.aiTitle : '';
+  } catch {
+    // A half-written line names nothing.
+    return '';
+  }
+}
+
+/**
+ * The title a session was GIVEN in one line, or empty — the row a hand-renamed tab wears.
+ *
+ * <p>`{"type":"custom-title","customTitle":"…","sessionId":"…"}`, off the operator's own files. It
+ * carries a name a person typed, and also the one Claude Code derives from the first prompt for a
+ * conversation the model has not titled yet — which is why a session can have this and no
+ * `ai-title` at all. Same guard as {@link titleFrom}: the cheap string test before the parse,
+ * because this runs on every line of files that are tens of megabytes.</p>
+ */
+export function customTitleFrom(line: string): string {
+  if (!line.includes('"custom-title"')) {
+    return '';
+  }
+  try {
+    const row = JSON.parse(line) as { type?: unknown; customTitle?: unknown };
+
+    return row.type === 'custom-title' && typeof row.customTitle === 'string' ? row.customTitle : '';
   } catch {
     // A half-written line names nothing.
     return '';
