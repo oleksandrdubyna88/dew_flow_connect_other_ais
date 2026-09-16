@@ -46,6 +46,10 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
+import { PROBE_FILE, parseProbe, writeProbe } from './claudeProbeFile';
+import { PROBE_CAP_MS, probeClaudeModels, probeToKeep } from './claudeProbe';
+import { ProbeResult, stillGood } from './claudeModels';
+import { writeFileAtomically } from './atomicFile';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
@@ -142,8 +146,10 @@ import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } f
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
+import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import {
   executableFor,
+  executableForRuntime,
   VendorInstall,
   vendorInstall,
   vendorTerminal,
@@ -176,6 +182,11 @@ const TEAM_SERVER_FRESH_MS = 60 * 1000;
  */
 const MINT_BACKOFF_MS = 10 * 60 * 1000;
 
+/** Is this caller's consultant a DEFINITION on that runtime? An unplaceable entry is on none. */
+function onRuntime(one: ResolvedConsultant | undefined, runtime: string): boolean {
+  return one !== undefined && one.kind === 'definition' && one.runtime === runtime;
+}
+
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
 
@@ -203,6 +214,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private agyModels: ModelChoice[] = [];
   private agyCheckedAt = 0;
+  /**
+   * Which Claude families this machine can actually reach, as the CLI itself last answered.
+   *
+   * <p>Undefined is "nobody has asked", which is a different sentence from "none of them" — the
+   * dropdown draws the whole curated list either way and only the LABELS differ, because a
+   * discovery that could not run must never subtract from what a person could already choose.</p>
+   */
+  private claudeProbe: ProbeResult | undefined = undefined;
+  /** Whether the answer on disk has been read yet. Read once, then this process owns it. */
+  private claudeProbeRead = false;
+  /** One probe at a time. Four billed requests do not need a second copy racing them. */
+  private claudeProbeInFlight = false;
+  /** True from the moment a probe starts until it lands, so the sections can say so. */
+  private askingClaude = false;
+  /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
+  private consultEngines: Record<string, LocalEngine> = {};
+  private consultEngineAt: Record<string, number> = {};
   /** What the last repaint was drawn from, so only a real change to the controls repaints. */
   private paintedKey = '';
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
@@ -626,6 +654,145 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return this.providersCache;
   }
 
+  /**
+   * What the Claude CLI last answered about the families it reaches — the last answer, never a wait.
+   *
+   * <p>Shaped exactly like {@link providerHealth} above, and for the same reason: this costs four
+   * billed requests and tens of seconds, so a render starts it and never awaits it. The freshness
+   * check is what stops the loop — the repaint this triggers finds the answer good and starts
+   * nothing.</p>
+   *
+   * <p>Only when something on this machine would actually USE a Claude model. Probing for a runtime
+   * nobody has configured would be this extension spending a person's allowance on a dropdown they
+   * are never going to open.</p>
+   */
+  private claudeProbeAnswer(vendors: readonly Vendor[], consult: ConsultSettings): ProbeResult | undefined {
+    const wanted = vendors.some((v) => v.runtime === 'claude')
+      || CALLER_KINDS.some(({ id }) => onRuntime(consult.byCaller[id], 'claude'));
+    if (wanted) {
+      void this.refreshClaudeProbe(vendors);
+    }
+
+    return this.claudeProbe;
+  }
+
+  /**
+   * One probe at a time, a repaint when it lands, and a *looking* state for as long as it runs.
+   *
+   * <p>The freshness question is asked against the CLI's OWN version, which is itself a process
+   * spawn — so it is asked here rather than in the render, and a machine with no Claude CLI answers
+   * an empty version and is never probed at all.</p>
+   */
+  private async refreshClaudeProbe(vendors: readonly Vendor[]): Promise<void> {
+    if (this.claudeProbeInFlight) {
+      return;
+    }
+    this.claudeProbeInFlight = true;
+    try {
+      if (!this.claudeProbeRead) {
+        this.claudeProbeRead = true;
+        this.claudeProbe = await this.readClaudeProbe();
+      }
+      const executable = executableForRuntime('claude', vendors);
+      const cliVersion = await askVersion(executable);
+      if (cliVersion.length === 0 || stillGood(this.claudeProbe, cliVersion, Date.now())) {
+        return;
+      }
+
+      // SAID before it is started. The alternative is tens of seconds of a dropdown that looks
+      // finished, which is exactly how a person chooses from a list that was about to change.
+      this.askingClaude = true;
+      await this.render();
+      const found = await probeClaudeModels({
+        run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS),
+        cliVersion: async () => cliVersion,
+        now: () => Date.now(),
+      });
+      // A run that learned nothing keeps the previous answer: an account whose allowance is spent
+      // is a state this installation is really in, and it must not empty anybody's dropdown.
+      this.claudeProbe = probeToKeep(found, this.claudeProbe);
+      if (found !== undefined) {
+        await this.keepClaudeProbe(found);
+      }
+    } finally {
+      this.claudeProbeInFlight = false;
+      this.askingClaude = false;
+      // Whatever happened, the panel stops saying it is looking. Cleared here rather than at
+      // the end, because a throw here would otherwise leave that sentence on screen for good.
+      await this.render();
+    }
+  }
+
+  /** The answer this machine kept, or nothing at all — an unreadable file is not an answer. */
+  private async readClaudeProbe(): Promise<ProbeResult | undefined> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, PROBE_FILE));
+
+      return parseProbe(new TextDecoder().decode(bytes));
+    } catch {
+      return undefined; // never asked here, or the data directory has moved
+    }
+  }
+
+  /**
+   * Keep it for the week.
+   *
+   * <p>Atomically, like every other writer here: a window killed mid-write would otherwise leave a
+   * truncated file that the next launch reads as no answer, which costs four requests in silence.
+   * A disk that refuses is not worth a message — the answer is still live in this process, and the
+   * only cost is asking again next week.</p>
+   */
+  private async keepClaudeProbe(probe: ProbeResult): Promise<void> {
+    try {
+      await vscode.workspace.fs.createDirectory(this.dataDir);
+      await writeFileAtomically(vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath, writeProbe(probe));
+    } catch {
+      // Nothing to do and nothing to say: the list on screen is correct either way.
+    }
+  }
+
+  /**
+   * The engines behind the CONSULTANT rows, keyed by the endpoint each row stores.
+   *
+   * <p>Not `localEngines` above, and the key is the difference: that map is per reviewer ROW, and
+   * since story C5 the consultant section holds no reviewer rows at all. Two callers pointing at one
+   * engine share its answer; one pointing elsewhere gets its own, which is the defect the reviewer
+   * map was itself split to fix one surface over.</p>
+   *
+   * <p>No in-flight endpoint check is needed here, unlike the reviewer path: the key IS the
+   * endpoint, so an answer for one a person has since retyped is simply never looked up.</p>
+   */
+  private async probeConsultEngines(consult: ConsultSettings): Promise<Record<string, LocalEngine>> {
+    const A_MINUTE = 60 * 1000;
+    const wanted = [...new Set(
+      CALLER_KINDS
+        .map(({ id }) => consult.byCaller[id])
+        .filter((one) => onRuntime(one, 'local'))
+        .map((one) => (one as Extract<ResolvedConsultant, { kind: 'definition' }>).baseUrl),
+    )];
+    this.windowsSideThisPass = undefined;
+    for (const endpoint of wanted) {
+      const cached = this.consultEngines[endpoint];
+      // An answer that found NOTHING is not kept, exactly as the reviewer probe does not keep one:
+      // somebody who starts Ollama after opening the panel must not wait out a TTL to be believed.
+      const fresh = Date.now() - (this.consultEngineAt[endpoint] ?? 0) < A_MINUTE && (cached?.reachable ?? false);
+      if (!fresh) {
+        this.consultEngineAt[endpoint] = Date.now();
+        // eslint-disable-next-line no-await-in-loop -- one engine at a time, like the reviewer pass.
+        this.consultEngines[endpoint] = endpoint.length > 0
+          ? await probeEngine(openAiBaseOf(endpoint))
+          : await discoverEngine(undefined, undefined, () => this.windowsSideOnce());
+      }
+    }
+    this.windowsSideThisPass = undefined;
+
+    return Object.fromEntries(wanted.flatMap((e) => {
+      const engine = this.consultEngines[e];
+
+      return engine === undefined ? [] : [[e, engine] as const];
+    }));
+  }
+
   /** One probe at a time, and a repaint when it lands rather than a wait while it runs. */
   private async refreshProviders(executable: string): Promise<void> {
     if (this.providersInFlight) {
@@ -683,6 +850,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       vendors,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
+      // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
+      // would be a panel that hangs for half a minute the first time it is opened on a new machine.
+      claudeProbe: this.claudeProbeAnswer(vendors, settings.consult),
+      askingClaude: this.askingClaude,
       server: this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published)),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
@@ -700,6 +871,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       consultPrompt: await this.readConsultPrompt(),
       consultations: this.consultations?.running ?? [],
       localEngines: await this.probeLocalEngines(vendors),
+      // The consultant's own engines, keyed by ENDPOINT: since story C5 the section holds no
+      // reviewer rows, so there is none to borrow one from, and a row whose endpoint nobody probed
+      // had its saved model labelled gone by something that had never looked.
+      consultEngines: await this.probeConsultEngines(settings.consult),
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
       bugz: await this.bugz(),

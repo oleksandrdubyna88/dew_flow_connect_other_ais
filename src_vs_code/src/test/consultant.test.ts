@@ -19,7 +19,16 @@ import {
   vaultKeyNote,
 } from '../consultSettings';
 import { consultPromptWrite } from '../consultPrompt';
-import { CALLER_NEUTRAL, ConsultantRowView, callerColour, consultantBody, consultantRowView } from '../consultantView';
+import {
+  CALLER_NEUTRAL,
+  ConsultantRowView,
+  ConsultantViewState,
+  callerColour,
+  consultantBody,
+  consultantRowView,
+} from '../consultantView';
+import { ASKING_CLAUDE } from '../claudeModels';
+import { LocalEngine, OLLAMA_PROBE, openAiBaseOf } from '../localEngines';
 import { vendorPalette } from '../vendorColour';
 import {
   badEndpoint,
@@ -1397,4 +1406,82 @@ test('the rows still do what they did, and still say what they said', () => {
   // would otherwise pass every assertion above. (codex, the plan round.)
   const hints = (text: string): readonly string[] => text.split('<div class="hint">').slice(1).map((part) => part.split('</div>')[0] ?? '');
   assert.deepEqual(hints(framed), hints(plain), 'the guidance under the rows changed');
+});
+
+// ---------------------------------------------------------------------------------------------
+// What the row ASKED before it drew a list (issue #301)
+
+/** One caller's row against a given panel state, so a test can hand it what was discovered. */
+function viewWith(stored: ConsultantChoice, state: ConsultantViewState, caller = 'claude'): ConsultantRowView {
+  const settings = {
+    ...DEFAULT_CONSULT,
+    byCaller: { ...DEFAULT_CONSULT.byCaller, [caller]: resolveConsultant(stored, []) },
+  };
+
+  return consultantRowView({ id: caller, label: 'Claude Code' }, settings, state);
+}
+
+/**
+ * An engine that answered, at one endpoint.
+ *
+ * <p>Keyed by the ENDPOINT the row stores rather than by a reviewer row: since story C5 the section
+ * holds no reviewer rows, so there is nothing to borrow an engine from, and two callers pointing at
+ * one engine share its answer.</p>
+ */
+function engineAt(models: readonly string[]): LocalEngine {
+  return {
+    kind: 'ollama',
+    probeUrl: OLLAMA_PROBE,
+    apiBaseUrl: openAiBaseOf(OLLAMA_PROBE),
+    reachable: true,
+    status: '0.33.2',
+    models: models.map((id) => ({ id, detail: '' })),
+  };
+}
+
+test("a local consultant's dropdown offers what the engine at ITS endpoint answered", () => {
+  const view = viewWith(
+    definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:11434'),
+    { localEngines: { 'http://127.0.0.1:11434': engineAt(['qwen3-coder:30b', 'gpt-oss:20b']) } },
+  );
+
+  assert.deepEqual(view.models.map((m) => m.id), ['qwen3-coder:30b', 'gpt-oss:20b'],
+    'the dropdown was empty: nothing passed the engine, so the list had nothing in it');
+  assert.equal(view.keptModel, '', 'the saved model is in the list, so nothing has to be carried beside it');
+});
+
+test('a local consultant nobody asked an engine for is NOT told its model is gone', () => {
+  // No engine for this endpoint. Not probed yet is a different sentence from "it refused", and it
+  // was the false one that shipped: a saved model was labelled gone by something that never looked.
+  const view = viewWith(definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:11434'), {});
+  const said = view.models.find((m) => m.id === 'qwen3-coder:30b')?.label ?? '';
+
+  assert.ok(said.includes('has not been asked yet'), `an unprobed endpoint says so; it said "${said}"`);
+  assert.ok(!said.includes('NOT on this engine any more'),
+    'nothing asked the engine, so nothing may claim the model left it');
+});
+
+test('an engine at ANOTHER endpoint is not this row\'s answer', () => {
+  const view = viewWith(
+    definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:8000'),
+    { localEngines: { 'http://127.0.0.1:11434': engineAt(['gpt-oss:20b']) } },
+  );
+
+  assert.ok(!view.models.some((m) => m.id === 'gpt-oss:20b'),
+    'a second local consultant on another port would show the first one\'s models');
+});
+
+test('a consultant on Claude says it is being asked while the probe runs', () => {
+  const asking = viewWith(definition('claude', 'claude'), { askingClaude: true });
+  const quiet = viewWith(definition('claude', 'claude'), {});
+
+  assert.equal(asking.modelNote, ASKING_CLAUDE, 'seconds of real requests, and silence reads as an empty list');
+  assert.equal(quiet.modelNote, '', 'nothing is running, so the row says nothing');
+});
+
+test('a consultant on another runtime says nothing about a Claude probe', () => {
+  assert.equal(
+    viewWith(definition('codex', 'codex'), { askingClaude: true }).modelNote, '',
+    'the probe asks the Claude CLI; a codex row is not waiting for it',
+  );
 });

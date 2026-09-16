@@ -135,3 +135,35 @@ test('models for a local runtime come from the engine, not from a shipped list',
 test('the provenance line names the engine', () => {
   assert.match(modelsProvenance('local', [], ENGINE), /ollama/);
 });
+
+test('a local model that was never asked about is not called gone', () => {
+  // THREE STATES, and the middle one was the bug. "NOT on this engine any more" is a claim about an
+  // engine that ANSWERED — and the consultant section passed no engine at all, so a saved model was
+  // being called gone by something that had never asked. (issue #301.)
+  const neverAsked = modelsFor('local', [], 'qwen3.5:latest', undefined);
+  assert.equal(neverAsked.length, 1, 'the saved model must survive a list nobody filled');
+  assert.match(neverAsked[0]!.label, /has not been asked yet/, `it claimed knowledge it has not got: ${neverAsked[0]!.label}`);
+  assert.doesNotMatch(neverAsked[0]!.label, /NOT on this engine/);
+});
+
+test('a local engine that refused says so, rather than blaming the model', () => {
+  const refused = modelsFor('local', [], 'qwen3.5:latest', {
+    kind: 'ollama', probeUrl: 'http://127.0.0.1:11434', apiBaseUrl: 'http://127.0.0.1:11434/v1',
+    reachable: false, status: 'connection refused', models: [],
+  });
+
+  assert.equal(refused.length, 1);
+  assert.match(refused[0]!.label, /did not answer/, `a stopped engine read as a missing model: ${refused[0]!.label}`);
+});
+
+test('an engine that answered and does not list it still says the model is gone', () => {
+  // The original behaviour, which was right for the case it was written for and must not be lost.
+  const answered = modelsFor('local', [], 'qwen3.5:latest', {
+    kind: 'ollama', probeUrl: 'http://127.0.0.1:11434', apiBaseUrl: 'http://127.0.0.1:11434/v1',
+    reachable: true, status: '0.5.1', models: [{ id: 'llama3:latest', detail: '8B' }],
+  });
+
+  assert.equal(answered.length, 2, 'the saved model is kept beside what the engine does list');
+  assert.match(answered[0]!.label, /NOT on this engine any more/);
+  assert.equal(answered[1]!.id, 'llama3:latest');
+});

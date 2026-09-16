@@ -1799,6 +1799,70 @@ it lived in the file that renders the panel, so anything else needing the same a
 webview renderer to get it. It now sits beside `modelsFor`, which consumes what it returns, and
 beside `RemoteProvenance`, which was already declared there.
 
+## The Claude list is ASKED, not listed (2026-09-16, issue #301)
+
+Four of the panel's five model sources were discovered by asking the machine — a local engine's
+`/v1/models`, the codex CLI's cache, `agy models`, a Team server's allowlist — and the fifth, Claude,
+was a hand-written array. The symptom was the one a hand-written array always eventually produces:
+**`fable` was reachable on this machine and absent from the dropdown**, and had been since the family
+shipped. The caption underneath made it worse by stating as fact something nobody had checked —
+*aliases the Claude CLI resolves to the latest of each family*.
+
+**`/v1/models` cannot be called from here, and that was measured rather than assumed.** No Anthropic
+key exists anywhere this extension can read: not in the settings, not in the vault entries opened to
+it, not in the environment of the host. The CLI holds its own credential and does not hand it out.
+So the question "which models does this account reach" has exactly one answerable form here: ask the
+CLI to answer with each one.
+
+**The naive form of that does not work either, and this is the whole design.** `claude --model fable`
+on a CLI that has never heard of `fable` exits **0** and answers from the DEFAULT model. An exit code
+therefore proves nothing, and a probe built on one would have reported every candidate available,
+which is worse than the hand-written array it replaced. What does answer is
+`--output-format json`: the reply carries a `modelUsage` object keyed by the model that actually ran.
+
+So the probe asks, reads that key, and keeps a candidate only when the family it asked for is the
+family that answered:
+
+| module | job |
+|---|---|
+| `claudeModels.ts` | the pure half: `familyOf`, `answeredAsAsked`, `modelThatAnswered`, `stillGood`, `claudeModels`, `claudeNote` |
+| `claudeProbe.ts` | the run: one small request per candidate, SEQUENTIALLY, through `versionProbe.ts`'s `capture` |
+| `claudeProbeFile.ts` | `claude-models.json` in the data directory — parsed entry by entry, written atomically |
+
+**A discovery that cannot run never subtracts.** The three ways the probe fails are all states this
+installation is really in: an allowance that is spent (issue #165 measured four reviewers meeting
+exactly that), a CLI that is not installed, and a first run. In every one of them the curated list is
+still offered in full — `fable` included, which is why that fix shipped on its own line and does not
+depend on the probe. What changes is the LABEL: a verified entry names the concrete id the CLI
+resolved (`sonnet — claude-sonnet-5`), an unverified one says *not asked yet*. Offering an
+unverified `fable` unlabelled would mean a round reviewed by whatever the default is, with nothing
+on screen saying so.
+
+**It is cached for a week and keyed to the CLI's own version.** Four billed requests per machine per
+week rather than four per repaint. A different CLI version invalidates the answer outright: a new
+build may reach a family the old one could not, and inheriting the old answer is how a model stays
+invisible for a week after it arrives.
+
+**The panel says it is looking.** `refreshClaudeProbe` is shaped exactly like `refreshProviders`
+beside it — a render STARTS it and never awaits it, and the freshness check is what stops the loop.
+It sets `askingClaude`, repaints, runs, and clears the flag in a `finally`, so a throw cannot leave
+that sentence on screen for good. Both surfaces that draw a Claude model list wear the same mark from
+`lookingSpinner.ts`: a turning ring beside the caption, hidden from assistive technology because the
+sentence beside it already says what is happening.
+
+**And the consultant's local dropdown finally asks an engine.** `consultantView.ts` passed
+`undefined` as `modelsFor`'s `localEngine`, so a local consultant's list was empty and a model
+already saved was labelled **"NOT on this engine any more"** — false, and alarming, because nothing
+had asked. The panel now probes the consultant's endpoints too, in a SECOND map keyed by
+**endpoint** rather than by vendor id: since story C5 the consultant section holds no reviewer rows,
+so there is none to borrow an engine from, and handing it the reviewer-keyed map would have been a
+lookup that could never hit. `modelsFor` gained a third local state to go with it — *the engine has
+not been asked yet*, which is a different sentence from *this engine did not answer*.
+
+> **The open tail is the API.** When a vendor key is configured somewhere this extension can read it,
+> `/v1/models` becomes the better candidate source and the CLI probe becomes the confirmation step
+> rather than the discovery one. Nothing here has such a key today.
+
 > The two SELECTS are not here yet. `chatPickerHtml` lives in `chatPage.ts` and the panel's control
 > in `panelView.ts`, both owned by other lanes; the `coai.chatProvider` setting ships with the UI
 > that reads it, since a setting drags a manifest entry, a help article and four translations behind

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal } from '../vendorTerminal';
+import { keyVariable, OFFICIAL_SOURCES, vendorInstall, vendorTerminal , executableForRuntime } from '../vendorTerminal';
 import { Vendor } from '../vendors';
 
 const vendor = (over: Partial<Vendor> = {}): Vendor => ({
@@ -167,3 +167,27 @@ test('the install prerequisite is the one for THIS operating system', () => {
 });
 
 
+
+/** A reviewer row, with only the fields this question reads set to anything. */
+const ROW = {
+  id: '', runtime: 'codex' as const, model: '', baseUrl: '', executablePath: '',
+  enabled: true, plan: true, code: true, pricePerMillionIn: 0, pricePerMillionOut: 0,
+};
+
+test('the probe asks the CLI a person pointed at, not the one on PATH', () => {
+  const rows = [
+    { ...ROW, id: 'codex', runtime: 'codex' as const, executablePath: 'C:/tools/codex.cmd' },
+    { ...ROW, id: 'claude', runtime: 'claude' as const, executablePath: 'C:/tools/claude.cmd' },
+  ];
+
+  assert.equal(executableForRuntime('claude', rows), 'C:/tools/claude.cmd',
+    'the whole point of that field is that PATH could not answer');
+  assert.equal(executableForRuntime('claude', []), 'claude', 'with no row, the runtime is its own name');
+  assert.equal(executableForRuntime('antigravity', rows), 'agy', 'and each runtime its own binary');
+});
+
+test('a row that set no path does not shadow the name', () => {
+  const rows = [{ ...ROW, id: 'claude', runtime: 'claude' as const, executablePath: '' }];
+
+  assert.equal(executableForRuntime('claude', rows), 'claude');
+});

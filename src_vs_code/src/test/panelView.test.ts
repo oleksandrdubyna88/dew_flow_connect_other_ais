@@ -409,7 +409,11 @@ test('claude is offered as a reviewer preset', () => {
     'n',
   );
   assert.ok(claude.includes('value="haiku"'));
-  assert.ok(claude.includes('aliases the Claude CLI resolves'));
+  // The caption no longer STATES that the CLI resolves each alias to the latest of its family.
+  // Nothing here had asked it, and the claim was false on this machine: `fable` was reachable and
+  // missing from the list, and an alias this CLI does not know exits 0 answering from the default.
+  assert.ok(claude.includes('the Claude CLI has not been asked yet'),
+    'an unasked dropdown says so rather than stating a resolution as fact');
 });
 
 test('what changes is open; what is set once is folded away', () => {

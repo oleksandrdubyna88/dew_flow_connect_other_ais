@@ -214,7 +214,7 @@ test('no other runtime lost its caption to the remote arm', () => {
   const captions: [Vendor['runtime'], string][] = [
     ['codex', 'codex · the Codex CLI has cached no model list yet — type a model, or run codex once.'],
     ['gemini', 'gemini · a curated list — the Gemini CLI publishes none. Any other model can be typed in.'],
-    ['claude', 'claude · aliases the Claude CLI resolves to the latest of each family. Any exact id can be typed in.'],
+    ['claude', 'claude · a curated list — the Claude CLI has not been asked yet. Any exact id can be typed in.'],
     ['antigravity', 'antigravity · a list from when this was written — `agy` did not answer, so it may be behind. Any id can be typed in.'],
     ['local', 'local · no engine probed yet.'],
   ];

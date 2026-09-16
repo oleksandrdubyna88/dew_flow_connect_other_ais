@@ -1,14 +1,14 @@
 # PLAN — the models are asked, rather than listed
 
-> Status: **plan only, nothing implemented yet, 2026-09-16.** Scope: `src_vs_code/src/models.ts`,
+> Status: **IMPLEMENTED, 2026-09-16.** Scope: `src_vs_code/src/models.ts`,
 > `panelProvider.ts`, `consultantView.ts` and a new probe module — the Claude model list, and the
 > consultant's local-model dropdown.
 >
 > Issue: [#301](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/301).
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_the_consultant_has_its_own_vendors.md](../research/PLAN_the_consultant_has_its_own_vendors.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_the_consultant_has_its_own_vendors.md](PLAN_the_consultant_has_its_own_vendors.md).
 >
-> Touches, but does not discharge, [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) — see
+> Touches, but does not discharge, [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) — see
 > *What this does not do*.
 
 ## The three asks, and what is measured about each
@@ -121,7 +121,7 @@ never subtract from what the person could already choose.**
 
 ## What this does NOT do
 
-- **It does not rework every probe's progress reporting.** [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md)
+- **It does not rework every probe's progress reporting.** [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md)
   owns that, and it is about the local-engine probes as much as this one. What ships here is the
   saying-so for THIS probe; that plan stays open and this change makes its case stronger, since a
   model probe is seconds rather than milliseconds.
@@ -129,15 +129,51 @@ never subtract from what the person could already choose.**
   vendor key is configured the API becomes the better candidate source, and that is the open tail.
 - **It does not touch codex, antigravity, local or remote discovery.** Those already ask.
 
+## What shipped, and where it differs from this plan
+
+Built on `feat/the-models-are-asked-rather-than-listed`; documented in
+[module_extension.md](module_extension.md) (*The Claude list is ASKED, not listed*) and
+[module_tests.md](module_tests.md) (what the probe is deliberately NOT tested against).
+
+| planned | shipped | why the difference |
+|---|---|---|
+| `claudeModels.ts` holds the probe | it holds only the DECISIONS; `claudeProbe.ts` runs it and `claudeProbeFile.ts` keeps it | three jobs, three units — the pure half is then testable without a seam, and the run has one |
+| the panel says it is looking | it says it AND wears a turning ring, from `lookingSpinner.ts` | the operator asked for a spinner; two surfaces draw the same list, so one module rather than two copies |
+| the consultant gets `localEngines` | it gets `consultEngines`, a SECOND map keyed by ENDPOINT | the existing map is keyed by vendor id, and since story C5 the section holds no reviewer rows — the planned wiring would have been a lookup that could never hit |
+| — | the caption under the Claude dropdown was rewritten | it STATED that the CLI resolves each alias to the latest of its family. Nothing had asked it, and it was false here. Two tests pinned that sentence and were updated with the reason |
+| — | `executableForRuntime` added to `vendorTerminal.ts` | the probe has a runtime and rows, not a row; a person who set a CLI path because PATH could not answer must not have it ignored for this one question |
+| — | `modelsFor` gained a third local state | *the engine has not been asked yet* is a different sentence from *this engine did not answer*, and the consultant is the caller that can be in the first one |
+
+**The other side ships on its own clock, and this is what that means here**
+([development-workflow.md](../.agents/conventions/common/development-workflow.md), *A caller must be
+able to tell "the other side is older" from "there is nothing here"*). The peer is the Claude CLI on
+the person's machine, and it is updated by them, not by us:
+
+| the CLI is | the probe answers | what a person sees |
+|---|---|---|
+| newer than this build — a family we do not list | nothing about it | the curated list, every entry offered; the open tail is a catalogue read from the CLI itself |
+| as expected | each candidate verified against `modelUsage` | `sonnet — claude-sonnet-5`: the concrete id that answered |
+| older — a candidate it has never heard of | that candidate UNVERIFIED, never absent | `fable — not asked yet`, still offered, so no discovery has taken a choice away |
+| not installed, or its allowance spent | the previous answer, kept | the list it had, unchanged; a failure never empties a dropdown |
+| a DIFFERENT version from the cached answer | the cache is refused outright and re-asked | at most one repaint saying it is looking |
+
+The last row is the handshake this boundary has: the CLI's own `--version` is part of the record, so
+an answer is never inherited across a binary that may reach different families.
+
+**Open tail.** `/v1/models` is still the better candidate source the day a vendor key exists
+somewhere this extension can read — measured today, none does. And
+[PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) stays open: what shipped here is
+the saying-so for THIS probe, not for the local-engine probes it also covers.
+
 ## Definition of Done
 
-- [ ] A RED test observed failing before each half, naming the real symptom.
-- [ ] Inverting the asked-vs-answered comparison reddens the bogus-candidate test.
-- [ ] A probe that cannot run leaves the list no shorter than the curated one — asserted, not argued.
-- [ ] `fable` is offered whether or not the probe ran.
-- [ ] The panel says it is looking while the probe runs.
-- [ ] A local consultant's model dropdown asks the engine instead of claiming a saved model is gone.
-- [ ] Whole extension suite green from a cleaned `out/`; `plan-lifecycle.mjs` clean.
-- [ ] `research/module_extension.md` and `research/module_tests.md` updated, the second naming what the
+- [x] A RED test observed failing before each half, naming the real symptom.
+- [x] Inverting the asked-vs-answered comparison reddens the bogus-candidate test.
+- [x] A probe that cannot run leaves the list no shorter than the curated one — asserted, not argued.
+- [x] `fable` is offered whether or not the probe ran.
+- [x] The panel says it is looking while the probe runs.
+- [x] A local consultant's model dropdown asks the engine instead of claiming a saved model is gone.
+- [x] Whole extension suite green from a cleaned `out/`; `plan-lifecycle.mjs` clean.
+- [x] `research/module_extension.md` and `research/module_tests.md` updated, the second naming what the
       probe is NOT tested against and why.
-- [ ] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
+- [x] Promoted to `research/` with `IMPLEMENTED 2026-09-16` and its deviations; both READMEs updated.

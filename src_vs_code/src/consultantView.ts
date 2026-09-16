@@ -20,7 +20,10 @@ import {
   consultableVendors,
   sameVendorNote,
 } from './consultSettings';
+import { ProbeResult, claudeNote } from './claudeModels';
 import { escapeHtml } from './escapeHtml';
+import { LOOKING } from './lookingSpinner';
+import type { LocalEngine } from './localEngines';
 import { ModelChoice, Runtime, modelsFor } from './models';
 import { VendorPalette } from './vendorColour';
 
@@ -29,6 +32,19 @@ export interface ConsultantViewState {
   /** Models the codex CLI reported, if it has been asked. Empty is normal and not an error. */
   readonly codexModels?: readonly ModelChoice[];
   readonly agyModels?: readonly ModelChoice[];
+  /** What the Claude CLI answered when last asked which families it reaches. */
+  readonly claudeProbe?: ProbeResult | undefined;
+  /** True while that answer is being refreshed \u2014 seconds of real requests, so a row says so. */
+  readonly askingClaude?: boolean | undefined;
+  /**
+   * The local engines the panel has probed, by the endpoint they answer on.
+   *
+   * <p>Keyed by endpoint rather than by reviewer row, and that is forced rather than chosen: since
+   * story C5 the consultant section holds no reviewer rows at all, so there is no row to borrow an
+   * engine from. Absent is a real state and NOT the same as an engine that refused â€” a dropdown
+   * that has never asked must not call a saved model gone.</p>
+   */
+  readonly localEngines?: Readonly<Record<string, LocalEngine>> | undefined;
   /** The prompt override as it is ON DISK, or empty for "the one this build ships with". */
   readonly consultPrompt?: string | undefined;
   /**
@@ -134,6 +150,8 @@ export interface ConsultantRowView {
    * already offers it, so nothing is ever shown twice.</p>
    */
   readonly keptModel: string;
+  /** What the row has to say about its own list right now, or nothing when it has nothing. */
+  readonly modelNote: string;
   /** Which of the consultant's own settings this runtime actually has. */
   readonly takesBaseUrl: boolean;
   readonly takesExecutablePath: boolean;
@@ -211,7 +229,13 @@ function placed(
 ): ConsultantRowView {
   const known = picker.offered.some((preset) => preset.id === one.vendor);
   const placeable = CONSULTING_RUNTIMES.includes(one.runtime);
-  const models = placeable ? modelsFor(one.runtime, state.codexModels ?? [], one.model, undefined, state.agyModels ?? []) : [];
+  // THE ENGINE, when one has been probed for this endpoint. Nothing was passed here at all, so a
+  // local consultant had an empty dropdown and its saved model was labelled gone by something that
+  // had never asked an engine. (issue #301.)
+  const engine = one.runtime === 'local' ? (state.localEngines ?? {})[one.baseUrl] : undefined;
+  const models = placeable
+    ? modelsFor(one.runtime, state.codexModels ?? [], one.model, engine, state.agyModels ?? [], [], state.claudeProbe)
+    : [];
 
   return {
     caller,
@@ -226,6 +250,7 @@ function placed(
     models,
     modelPlaceholder: placeable ? RUNTIME_DEFAULT : NO_MODEL,
     keptModel: kept(one.model, models),
+    modelNote: claudeNote(one.runtime, state.askingClaude ?? false),
     takesBaseUrl: placeable && (one.runtime === 'codex' || one.runtime === 'local'),
     takesExecutablePath: placeable && one.runtime !== 'local',
     hints: hintsFor(caller.id, one),
@@ -275,6 +300,7 @@ function unplaceable(
     models: [],
     modelPlaceholder: NO_MODEL,
     keptModel: model,
+    modelNote: '',
     takesBaseUrl: false,
     takesExecutablePath: false,
     hints: why.length === 0 ? [] : [why],
@@ -383,6 +409,7 @@ ${view.keptModel.length === 0 ? '' : option(view.keptModel, `${view.keptModel} â
   </select>
 ${view.takesBaseUrl ? field(caller, 'consultBaseUrl', 'Endpoint', view.baseUrl, 'https://api.example.com/v1') : ''}
 ${view.takesExecutablePath ? field(caller, 'consultExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}
+${view.modelNote.length === 0 ? '' : `  <div class="hint">${LOOKING}${escapeHtml(view.modelNote)}</div>`}
 ${view.hints.map((hint) => `  <div class="hint">${escapeHtml(hint)}</div>`).join('\n')}
 </div>`;
 }
