@@ -1309,3 +1309,48 @@ test('every release line drafts first and is published by the one script that co
     3,
     'and each is published by the one script that checks every asset arrived first');
 });
+
+test('the bugs deploy wrapper cannot be redirected off https, and says so literally', () => {
+  // It downloads a BINARY the host then runs as a service, with `-L`. Without the scheme pinned,
+  // a redirect to plain http is followed silently — and the checksum does not save it, because the
+  // checksum arrives over the same hijacked connection.
+  //
+  // This asserts the flags are written LITERALLY, which is not pedantry: an earlier version moved
+  // them into a shell variable to avoid repeating the literal, and SonarCloud raised the
+  // vulnerability again on both calls — a scheme pinned through `$HTTPS_ONLY` is invisible to
+  // anything reading the command. One function, literal flags inside it, is what satisfies both.
+  const wrapper = deployScript('bugs/deploy-cmd.sh');
+
+  assert.match(
+    wrapper,
+    /curl .*--proto '=https' --proto-redir '=https' --tlsv1\.2/u,
+    'the scheme must be pinned on the command itself, not through a variable',
+  );
+  assert.ok(
+    !/curl -fsSL \$[A-Z_]+/u.test(wrapper),
+    'no curl in this wrapper may take its safety flags from a variable',
+  );
+  // Every FOLLOWING call goes through the one function, so a second raw download cannot be added.
+  // Scoped to `-L`, because the wrapper's other curl is the loopback health probe — plain http to
+  // 127.0.0.1, no redirects, and pinning a scheme on it would be theatre.
+  const following = [...wrapper.matchAll(/curl [^\n]*-fsSL/gu)];
+  assert.equal(
+    following.length,
+    1,
+    'exactly one redirect-following curl, and it is the one inside fetch_https',
+  );
+});
+
+test('the bugs deploy wrapper verifies what it downloaded before unpacking it', () => {
+  // A download this host did not check is a download somebody else could have chosen.
+  const wrapper = deployScript('bugs/deploy-cmd.sh');
+
+  assert.match(wrapper, /sha256sum -c/, 'the archive is checked against its published checksum');
+  // Against `--from`, not against the first mention of `release.sh`: the rollback branch invokes
+  // that script much earlier and downloads nothing, so anchoring on the name would compare the
+  // checksum to a line that has no archive in front of it.
+  assert.ok(
+    wrapper.indexOf('sha256sum -c') < wrapper.lastIndexOf('--from'),
+    'and it is checked BEFORE the archive is handed to the release script',
+  );
+});
