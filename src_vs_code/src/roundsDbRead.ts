@@ -1,4 +1,5 @@
 import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
+import { ReviewPair } from './bugzReviewPage';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
@@ -353,4 +354,64 @@ export async function readBugs(
   const { code, output } = await run(['--bugs-json'], CAP_MS);
 
   return code === EX_USAGE ? EMPTY_CORPUS : parseBugs(output);
+}
+
+/**
+ * The collected pairs, as the server has them.
+ *
+ * <p>An empty list on anything going wrong, and that is right HERE where it would be wrong for
+ * findings: a page with no rows says "nothing has been collected yet", which is the honest reading
+ * of both an empty corpus and a server that could not answer. There is no claim in it.</p>
+ */
+export async function readPairs(
+  executable: string,
+  run: Run = serverRun(executable),
+): Promise<readonly ReviewPair[]> {
+  const { code, output } = await run(['--pairs-json'], CAP_MS);
+  if (code !== 0) {
+    return [];
+  }
+
+  try {
+    const raw = JSON.parse(output) as { items?: readonly ReviewPair[] };
+
+    return Array.isArray(raw?.items) ? raw.items : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Writes a batch of decisions, and answers how many rows were actually decided.
+ *
+ * <p><b>A file in, not one spawn per decision.</b> A review of two hundred pairs is two hundred
+ * process launches otherwise — the shape `--findings-many` exists to have ended — and the same
+ * `keysFileIn` helper writes it, so the leak behaviour is the one already reasoned about there.</p>
+ *
+ * <p>The COUNT, not a boolean: a caller that sent fifty and hears "forty-nine" has learned
+ * something, and the page says so rather than redrawing as though everything landed.</p>
+ */
+export async function writeKeep(
+  executable: string,
+  ids: readonly number[],
+  keep: number,
+  withFile: WithKeysFile,
+  run: Run = serverRun(executable),
+): Promise<number> {
+  const asked = JSON.stringify({ items: ids.map((findingId) => ({ findingId, keep })) });
+
+  return withFile(asked, async (file) => {
+    const { code, output } = await run(['--pairs-keep', '--in', file], CAP_MS);
+    if (code !== 0) {
+      return 0;
+    }
+
+    try {
+      const raw = JSON.parse(output) as { decided?: number };
+
+      return typeof raw?.decided === 'number' ? raw.decided : 0;
+    } catch {
+      return 0;
+    }
+  });
 }
