@@ -88,74 +88,94 @@ file to EOF for its last title. Resolving by session id instead is one `stat`.
    perfectly well and nothing was called that, and a narrowed pick in a multi-root window stops
    rendering an empty list.
 
-## Build order
+## The gate's plan round, 2026-09-16
 
-### Story 1 — every name a session ever had *(pure, `claudeSessions.ts` + `claudeQuestion.ts`)*
+Three reviewers, sixteen findings, verdict `good_enough` with the rounds exhausted. **Thirteen were
+accepted and are requirements below**; three were rejected with reasons recorded in the session:
+the atomicity of a plan promotion's `git mv` (not a property of this feature — `plan-lifecycle.mjs`
+already fails CI on a half-filed plan); what the tab displays if the conversation is renamed *after*
+it is pinned (a coai conversation's title has never mirrored Claude Code's, and after A2 the join is
+an id, so a later rename means nothing); and a precedence rule between `ai-title` and
+`custom-title` for MATCHING (there is none to have — a session answers to both, and picking one
+would re-create the defect being fixed).
 
-- `customTitleFrom(line)` beside `titleFrom(line)` in `claudeQuestion.ts`, same shape, same guard.
-- `titleOf(file)` becomes `namesOf(file): Promise<readonly string[]>` — every `ai-title` and every
-  `custom-title` the file carries, in order, deduplicated, empties dropped. One pass, so the read
-  costs what it costs today.
-- `namesTheSame(title, looking)` is unchanged; `theOneCalled` (`:390`) matches a file when **any** of
-  its names is the same name. The `several` refusal keeps its wording and its precedence.
-- `AskedSet.title: string` becomes `AskedSet.names: readonly string[]`, filled from both row types in
-  `lastAsked`; `waitingIn` (`:140`) matches on the set. The field's doc comment carries the measured
-  reason, because it is the paragraph that made the single string look sufficient.
+The two that changed the design rather than adding to it:
 
-**Refused alternative, recorded here so it is not re-proposed:** deriving the title Claude Code shows
-for a session that has **no** title row (it is the first prompt, cut at 200 characters, with the
-slash-command envelope unwrapped — measured on `942e84d6`). It is another program's undocumented
-derivation, and a decoder that drifts binds a tab to the wrong conversation silently. Those five
-sessions are the picker's job, not a guess's.
+- **A current name beats a former one** (gemini). Matching any historical name lets a session that
+  *used* to be called *Refactor X* outrank the one called that today. So: a session whose LATEST
+  name matches answers first; former names answer only when no session currently bears the name.
+  Ambiguity inside a tier is refused exactly as it is now.
+- **The five titleless sessions would render as blank rows** (codex) — and they are the picker's
+  whole reason to exist. The enumerating pass already parses every line, so it keeps the first thing
+  the person said and labels the row with it. That is a LABEL, not a match: the refused alternative
+  below is about matching, and it stays refused.
 
-### Story 2 — identity before the name *(`claudeSessions.ts` + `chatCommand.ts`)*
+## Build order — three epics, eight stories
 
-- `sessionFileOf(home, cwd, caseBlind, sessionId): Promise<Found>` — `projectsRoot` + `projectDirIn`
-  + `<sessionId>.jsonl`, `access`-checked, returning the same `Found` union with its own refusal when
-  the file is not there. No transcript is read.
-- `resolveAndPin` tries the id from `thread.source` first and falls back to the name walk. The path is
-  still never persisted — it is recomputed from an id that already lives in the store, which is the
-  rule `chatCommand.ts:3517-3519` states and this keeps.
-- A resolution that succeeds on the Asked path now writes `source`/`workspace` and queues the save,
-  as `pinSession` does. Today it does not, so the same walk is repeated after every reload.
+Each story is reviewed by the gate on its own diff (`review_code`), resolved, documented, tested and
+committed before the next one starts. Epic A alone fixes the operator's bug and could ship by itself.
 
-### Story 3 — the sessions can be listed *(pure)*
+### EPIC A — the tab finds its session
 
-- `sessionsIn(home, cwd, caseBlind): Promise<readonly SessionCard[] | ReadFailure>`, where a card is
-  `{file, sessionId, names, at}`. `sessionFiles` already computes the `mtime` at `:199-205` and throws
-  it away at `:208`; `theOneCalled` already builds the candidate list at `:390-396` and drops it.
-  This is an extraction of code that runs today, per the widen-then-extract order in `reuse-first.md`.
-- A new pure module decides the rows — title, a *when* like the conversation picker's *"just now" /
-  "yesterday"*, the id as the tie-break for two sessions of one name — and the widget builds none of
-  its own, which is the shape `conversationPicker.ts` established and
-  `conversationPickerWiring.test.ts:127-136` enforces.
+- **A1 — a renamed conversation is found under both its names, and a current name beats a former one.**
+  `customTitleFrom` beside `titleFrom`; one `NameCollector` both readers feed, so they cannot drift;
+  `titleOf` becomes `namesOf(file): Promise<SessionNames>` with `{current, former}`; `namedAmong`
+  carries the two-tier rule and is used by `theOneCalled` **and** `waitingIn`, which is how *Take the
+  question* stops having its own copy of the rule. `AskedSet.title` becomes `AskedSet.names`.
+- **A2 — a pinned conversation finds its file by id, reads no transcript, and never trusts a stored
+  path.** `sessionFileOf(home, cwd, caseBlind, sessionId)`: the id must match the UUID shape
+  (`isSessionId`, exported from `chatSource.ts` so it is stated once) **and** the resolved path must
+  stay beneath the project directory before anything is touched. `access` only, never a read.
+  `resolveAndPin` takes the thread: id first, the name walk when there is no id or its file is gone,
+  and one `adoptFound` helper both it and `pinSession` call. Only `source` + `workspace` reach the
+  record; the path stays in memory and is recomputed.
+- **A3 — the lookup names its budget.** `ScanBudget {most, withinMs}` with numbers measured here,
+  on **both** readers — `waitingQuestion` is the one that reads each file WHOLE (`:547`), so it needs
+  it more than the Asked button does. A cut that found nothing says so and never reports silence:
+  *"Only the newest 250 of 1 010 sessions in … were read in 10 s, and none of them is called X."*
 
-### Story 4 — the refusal has a door, and the choice is kept *(`chatPage.ts` + `chatCommand.ts`)*
+### EPIC B — the refusal has a door
 
-- The Asked region gains one button, rendered **only** for the two refusals a choice can answer
-  (nothing of that name, several of that name). Pressing it posts a new page→host message; the host
-  opens a native QuickPick with `matchOnDescription`/`matchOnDetail` and `value` pre-filled with the
-  name that was looked for — de-ellipsised, since a tab's name is what VS Code truncated.
-- No new command in `package.json`: the door is where the dead end is, and a manifest command would
-  pull in a help article and five translations (`helpCoverage.test.ts:95-112`) for a control that is
-  only ever reachable from one sentence.
-- Choosing a session pins it **durably**: `thread.sessionFile`, then `source` + `workspace` through
-  the existing pair-writer, then `keepQueued` — the operator's decision of 2026-09-16, taken over a
-  once-only reveal, so a reload never asks twice. This is the first deliberate re-origin of a
-  conversation after creation (`chatSource.ts:60-64` warns that stored sources are otherwise never
-  repaired); it is a person's explicit choice, and the QuickPick's title says which tab it binds.
+- **B1 — the sessions of a folder can be listed, every one with a label, and the list says when it
+  was cut.** `sessionsIn` → `SessionList {cards, cut}`, keeping the `mtime` `sessionFiles` already
+  computes and drops; `SessionCard` carries `names`, `sessionId`, `at` and `opening` (the first thing
+  the person said, cut short) so a titleless session has a label. The reading half moves to
+  `claudeSessionFiles.ts` — `claudeSessions.ts` passes 800 lines otherwise. A fourth `Found` kind,
+  `unmatched`, tells "the folder answered and nothing is called this" from "there was nowhere to
+  look", and `oneAnswerFrom`'s precedence becomes several > said > unmatched > none. Rows are decided
+  in a pure `sessionPicker.ts`: label, age, folder, the id's first eight characters as the tie-break,
+  former names in the detail so typing an old name still finds it, a notice row for a folder that
+  would not answer and one for a list that was cut. `sessionPrefill` returns the de-ellipsised name
+  **only when it would leave rows standing** — a prefill that filters everything away is worse than
+  none.
+- **B2 — a refusal that a choice can answer offers the choice, and the choice is never guessed.**
+  The `asked` message gains `door: 'choose' | 'none'`; the Asked region gains one button, unhidden
+  only for `several` and `unmatched`. `createQuickPick` (not `showQuickPick`, which has no `value`
+  to prefill), `matchOnDescription`/`matchOnDetail`, the title naming the conversation. A row whose
+  file has gone since the listing is refused at the press and removed; Escape writes nothing and
+  leaves the refusal and its door on screen; a notice row cannot be chosen.
+- **B3 — a chosen session is kept, said honestly when it is not, and found again after a reload.**
+  `adoptFound` with the folder the card came from — `reorigin` files a claude source under the first
+  root, which is why `pinSession` bypasses it. `keepAwaited` returns the write's real outcome, so a
+  store that was busy is reported as *not yet written* instead of looking kept. The end-to-end
+  scenario test: the shipped page, the press, the choice, the save, a second store reading it back,
+  the id resolving to the file — and the record containing no path under the home directory.
 
-### Story 5 — the two wrong sentences *(`chatGoto.ts` + `conversationChoice.ts` + `conversationPicker.ts`)*
+### EPIC C — the two wrong sentences
 
-- A folder that answered and matched nothing currently becomes
-  `{kind:'unreadable', reason:'this tab’s Claude sessions could not be read'}` (`chatGoto.ts:279`) and
-  is rendered as *"the folder did not answer just now"* (`conversationChoice.ts:97-98`). It answered.
-  A fifth `Narrowing` member with its own sentence; both switches are exhaustive by name, so the
-  compiler enumerates the work.
-- `pickerRows` filters on `one.workspace === input.workspace` (`conversationPicker.ts:153`) against the
-  window's **first** root, so a narrowed pick for a tab under a second root renders empty — and the
-  globe that would widen it is suppressed for narrowed lists (`conversationPickerCommand.ts:251`).
-  Compare with the `sameRoot` rule that exists for exactly this (`chatSource.ts:140`).
+- **C1 — a folder that answered and matched nothing says so, not that it could not be read.**
+  `GotoAsked` gains the fact that separates a failed walk from an answered one (today `ambiguous`
+  folds both), `Narrowing` gains a fifth member, and `narrowedTitle` gains its sentence.
+- **C2 — a narrowed pick shows the rows it was given, under whichever root they are filed.**
+  A narrowed list is an answer `goto` already chose, so it is not filtered by the window's first
+  workspace — which also empties a `cross root` pick today, a second site of the same defect.
+
+**Refused alternative, recorded so it is not re-proposed:** deriving the title Claude Code shows for a
+session that has **no** title row (it is the first prompt, cut at 200 characters, with the
+slash-command envelope unwrapped — measured on `942e84d6`) and MATCHING on it. It is another
+program's undocumented derivation, and a decoder that drifts binds a tab to the wrong conversation
+silently. B1 labels such a session with what was said in it; a label is shown to a person who then
+chooses, which is the opposite of a silent guess.
 
 ## Test plan
 
