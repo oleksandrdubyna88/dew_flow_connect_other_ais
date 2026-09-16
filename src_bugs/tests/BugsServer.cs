@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace CoaiBugs.Tests;
 
@@ -52,6 +55,75 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
 
     /// <summary>What the corpus holds right now, read straight from the file.</summary>
     public Corpus Reading() => Corpus.Open(Path.Combine(DataDir, "coai-bugs.db"));
+
+    /// <summary>
+    /// Every line the running server logged, so a test can assert on what it SAID.
+    /// </summary>
+    /// <remarks>
+    /// <para>The edge warning has no other observable: it changes no status code, no body and no
+    /// row — deliberately, because refusing the request would break a deployment over a header the
+    /// contributor did not send. The log IS the behaviour, so the log is what a test at the right
+    /// layer has to read.</para>
+    /// <para>The server clears its own providers and installs Serilog before this fixture gets a
+    /// say, so the capture is added in <c>ConfigureWebHost</c> — which runs after that and before
+    /// the host is built, and is therefore the one thing a factory CAN inject into this server.</para>
+    /// </remarks>
+    public IReadOnlyList<string> Said
+    {
+        get
+        {
+            lock (_said)
+            {
+                return [.. _said.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries)];
+            }
+        }
+    }
+
+    private readonly StringWriter _said = new();
+
+    /// <summary>
+    /// Adds a logging provider AFTER the server has cleared its own and installed Serilog.
+    /// </summary>
+    /// <remarks>
+    /// The class note above says configuration must go through process environment variables because
+    /// `Program` reads them before `Build()`. Logging providers are the exception and for the
+    /// opposite reason: they are resolved when the host is built, which is after this runs, so a
+    /// provider added here survives the `ClearProviders()` the server does on its way there.
+    /// </remarks>
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureLogging(logging => logging.AddProvider(new Capture(_said)));
+
+    /// <summary>A provider that keeps every line, because the log IS the behaviour under test.</summary>
+    private sealed class Capture(StringWriter said) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => new Line(said);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Line(StringWriter said) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                var line = formatter(state, exception);
+                lock (said)
+                {
+                    said.WriteLine(line);
+                }
+            }
+        }
+    }
 
     private void Set(string name, string? value)
     {
