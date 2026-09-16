@@ -1775,19 +1775,60 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // half a second left of.
   var copiedMarks = {};
   var copySeq = 0;
+  var marksHeld = 0;
+  // WHICH CONTROL, and against WHICH TEXT. The signature is in the key because an answer arriving
+  // between the press and the write resolving shifts what a position means; without it a tick would
+  // land on somebody else's answer. A control drawn without one can never be matched, and saying so
+  // by returning nothing is better than a key ending in the word undefined, which would match the
+  // next control that also lacks one.
   function copyKeyOf(at, block, sig) {
-    return String(at) + ':' + (block === undefined || block === null ? '' : String(block)) + ':' + String(sig);
+    if (at === undefined || at === null || typeof sig !== 'string' || sig.length === 0) { return ''; }
+
+    return String(at) + ':' + (block === undefined || block === null ? '' : String(block)) + ':' + sig;
   }
-  function paintCopied() {
+  function paintCopied(force) {
+    // NOTHING IS MARKED is the overwhelmingly common case, and this runs on every state push — a
+    // streaming answer pushes many. Only a push that has to CLEAR something needs the walk then.
+    if (!force && marksHeld === 0) { return; }
     var controls = document.querySelectorAll('.copy');
     for (var index = 0; index < controls.length; index += 1) {
       var one = controls[index];
       var held = one.dataset || {};
       var at = held.copy === undefined ? held.at : held.copy;
-      var wanted = copiedMarks[copyKeyOf(at, held.block, held.sig)] !== undefined;
-      if (wanted) { one.dataset.copied = '1'; }
-      else if (held.copied !== undefined) { delete one.dataset.copied; }
+      var key = copyKeyOf(at, held.block, held.sig);
+      var wanted = key.length > 0 && copiedMarks[key] !== undefined;
+      if (wanted) {
+        one.dataset.copied = '1';
+        // SAID, not only drawn. The tick is generated content on ::after, which a screen reader is
+        // not obliged to announce — so the control's accessible NAME carries it too, and changes on
+        // the element the person has just activated, which is where it is announced.
+        one.setAttribute('aria-label', (one.textContent || '') + ' — copied');
+      } else if (held.copied !== undefined) {
+        delete one.dataset.copied;
+        one.removeAttribute('aria-label');
+      }
     }
+  }
+  /**
+   * A PRESS TAKES THE TICK OFF, and only an acknowledgement puts it back.
+   *
+   * <p>Press a control that is already ticked and have the clipboard refuse the second copy: no
+   * acknowledgement arrives, the first press's tick is still there, and the person reads it as
+   * confirmation of the copy that did not happen — then pastes what was on the clipboard before.</p>
+   */
+  function forgetCopied(at, block, sig) {
+    var key = copyKeyOf(at, block, sig);
+    if (key.length === 0 || copiedMarks[key] === undefined) { return; }
+    delete copiedMarks[key];
+    marksHeld = countMarks();
+    paintCopied(true);
+  }
+  /** How many marks are outstanding, so the common push can skip the walk entirely. */
+  function countMarks() {
+    var held = 0;
+    for (var key in copiedMarks) { if (copiedMarks[key] !== undefined) { held += 1; } }
+
+    return held;
   }
   const messagesRegion = document.getElementById('messages');
   if (messagesRegion) {
@@ -1809,6 +1850,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // The signature travels so the host can echo it back with its acknowledgement and the tick
         // can be matched to the control that was drawn for this text. Nothing is marked here: the
         // press is not the event worth showing, the clipboard write resolving is.
+        forgetCopied(acted.dataset.copy, undefined, acted.dataset.sig);
         vscode.postMessage({
           type: 'command', command: 'copyAnswer',
           index: Number(acted.dataset.copy), sig: acted.dataset.sig,
@@ -1822,6 +1864,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // A POSITION and a signature, never the text. The host reads the block out of the markdown it
         // holds, through the same walk that drew this control — so the page cannot decide what lands
         // on the clipboard, and a stale button is refused rather than obeyed.
+        forgetCopied(acted.dataset.at, acted.dataset.block, acted.dataset.sig);
         vscode.postMessage({
           type: 'command', command: 'copyBlock',
           index: Number(acted.dataset.at), block: Number(acted.dataset.block),
@@ -1910,16 +1953,19 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // second one would never arrive.
     if (data.type === 'copied') {
       var landed = copyKeyOf(data.index, data.block, data.sig);
+      if (landed.length === 0) { return; }
       copySeq += 1;
       var mine = copySeq;
       copiedMarks[landed] = mine;
-      paintCopied();
+      marksHeld = countMarks();
+      paintCopied(true);
       setTimeout(function () {
         // A LATER PRESS OWNS IT NOW. Clearing on a stale generation is what made the tick vanish
         // early when somebody copied the same block twice in quick succession.
         if (copiedMarks[landed] !== mine) { return; }
         delete copiedMarks[landed];
-        paintCopied();
+        marksHeld = countMarks();
+        paintCopied(true);
       }, ${COPIED_FOR_MS});
 
       return;
@@ -1976,6 +2022,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // the line that carries sentences — and the one thing only it does: clears the quotation this tab
     // was opened about. The state push below does not mention that region, so nothing else could.
     if (data.type === 'fresh') {
+      // THE MARKS BELONG TO THE OLD CONVERSATION. A key is a position, a block and a signature of
+      // the text — none of which name the conversation — so a slate that brings up another thread
+      // holding the same answer at the same position within the second would repaint a tick on a
+      // control nobody pressed. (codex, the code round.)
+      copiedMarks = {};
+      marksHeld = 0;
+      // AND REPAINTED, not only forgotten. The controls on screen are still the old ones until the
+      // state push that follows, and one wearing a tick keeps wearing it if nothing takes it off.
+      paintCopied(true);
       if (typeof data.id === 'string' && data.id.length > 0) {
         // MERGED INTO A NEW OBJECT, not written into the one the host handed back: the state is
         // somebody else's value and the rule here is that nothing is mutated in place. Merged rather

@@ -2926,6 +2926,13 @@ function newConversation(
  * close, the day one of them changes.</p>
  */
 function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPanel>[2] {
+  // ONE sentence-teller for this whole object. Three reviewers found the acknowledgement path's
+  // empty catch, and `coding-style.md` is explicit that an error is never silently swallowed; a
+  // second inline `showWarningMessage` beside the first is how one of them ends up without the
+  // other's wording.
+  const warn = (message: string): void => {
+    void vscode.window.showWarningMessage(message);
+  };
   // ONE copier for both controls on an answer, so the whole and the part cannot disagree about what
   // happens when the clipboard refuses — and so two quick presses land in the order they were made.
   // Everything it knows about `vscode` is these two functions; the decisions are in `answerCopy.ts`,
@@ -3189,7 +3196,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       },
       onUseLocal: () => undefined,
       onPageError: (_id, message) => {
-        void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
+        warn(`The chat page reported: ${message}`);
       },
       onOpenFile: (id, requested, line) => {
         void openWorkspaceFile(id, requested, line, (message) => {
@@ -3208,13 +3215,13 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const decision: CopyDecision = said === undefined || said.role !== 'model'
           ? { kind: 'refused', said: 'That answer is not on this page any more.' }
           : answerToCopy(said.text);
-        tellThePage(panels, id, index, undefined, sig, answerCopier.copy(() => decision));
+        tellThePage(warn, panels, id, index, undefined, sig, answerCopier.copy(() => decision));
       },
       onCopyBlock: (id, index, block, sig) => {
         // The SAME markdown the page was drawn from, walked by the SAME function that numbered the
         // control. Nothing the page sent becomes text: it named a position and echoed a signature,
         // and both are checked here against what this host holds.
-        tellThePage(panels, id, index, block, sig, answerCopier.copy(() => {
+        tellThePage(warn, panels, id, index, block, sig, answerCopier.copy(() => {
           const said = threads.get(id)?.messages[index];
 
           return said === undefined || said.role !== 'model'
@@ -3244,6 +3251,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
  * itself the same way.</p>
  */
 function tellThePage(
+  said: (message: string) => void,
   panels: ChatPanels,
   id: object,
   index: number,
@@ -3262,8 +3270,13 @@ function tellThePage(
     if (entry !== undefined) {
       pushChatCopied(entry, landed.index, landed.block, landed.sig);
     }
-  }).catch(() => {
-    // The person has the sentence; a tab that could not be told is not worth a second failure.
+  }).catch((reason: unknown) => {
+    // NAMED, not swallowed. The person already has the sentence `copyText.ts` put in the status bar,
+    // so this is not a second thing to tell them about the copy — it is the extension saying that its
+    // own acknowledgement path failed, which is otherwise invisible: the control simply never ticks
+    // and nothing anywhere says why. (Three reviewers, the code round; `coding-style.md` forbids a
+    // silently swallowed error.)
+    said(`The copy could not be acknowledged on the page: ${reason instanceof Error ? reason.message : String(reason)}`);
   });
 }
 
