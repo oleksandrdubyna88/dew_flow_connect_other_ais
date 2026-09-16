@@ -352,11 +352,15 @@ test('a tab that found its file keeps reading it after Claude renames the conver
       const found = await sessionFileIn(home, 'D:\\work\\app', true, 'The name it had');
       assert.strictEqual(found.kind, 'one', 'the tab could not find its own session while its name matched');
 
-      // Four hours later, Claude has renamed the conversation. Searching by the old name finds
-      // nothing at all — and the pinned file still answers.
+      // Four hours later, Claude has renamed the conversation, and the pinned file still answers.
       writeFileSync(file, `${titled('The name it had')}\n${said('over what was this window')}\n${titled('What it became')}\n`, 'utf8');
 
-      assert.strictEqual((await promptsInSession(home, 'D:\\work\\app', true, 'The name it had')).kind, 'none');
+      // This line used to assert `none` — searching by the old name found nothing at all, and the
+      // pin was the only thing standing between the person and that refusal. It is `one` now: a
+      // session answers to every name it has worn, so the name the tab captured still reaches it.
+      // The pin is what makes the answer independent of ALL of them, which is why both are asserted.
+      assert.strictEqual((await promptsInSession(home, 'D:\\work\\app', true, 'The name it had')).kind, 'said',
+        'a name the session used to wear no longer reaches it');
       const still = await promptsFrom(found.kind === 'one' ? found.file : '');
       assert.deepStrictEqual(still.kind === 'said' ? still.said : [], ['over what was this window']);
     } finally {
@@ -566,5 +570,131 @@ test('the page can say WHICH half of the instruction left the box, and nothing e
       { kind: 'ignore' },
       `${String(bad)} was accepted as half of an instruction`,
     );
+  }
+});
+
+/**
+ * A conversation Claude Code names TWICE — and this build could only read one of the names.
+ *
+ * <p>The operator, with the session open in the editor group beside the refusal: *«сесия точно
+ * есть»*. It was. Claude Code writes `{"type":"custom-title","customTitle":"…"}` as well as
+ * `ai-title`, and `custom-title` is what a hand-renamed tab wears; the word appeared nowhere in this
+ * repository. Measured on their own machine the same evening, over 101 sessions and 1.2 GB: four
+ * carry a custom title and no ai-title at all, five carry both and the last of each disagree, and
+ * not one of 162 distinct titles is claimed by two sessions.</p>
+ *
+ * <p>The second half is theirs too — *«я переименовал вручную, оно изменило, а потом через пару
+ * минут вернуло старые названия»*. Their file says so: the rename at line 1281 spells `sessionId`
+ * before `customTitle` and the rows around it spell it after, so a second writer re-asserts the old
+ * title minutes later. A conversation must therefore answer to the name it wears now AND the ones it
+ * used to — with the CURRENT name winning, or a session that used to be called something outranks
+ * the one called that today. (gemini, the plan round.)</p>
+ */
+
+const renamed = (name: string): string =>
+  JSON.stringify({ type: 'custom-title', sessionId: 's', customTitle: name });
+
+test('a conversation renamed by hand is found under the name it now wears', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'one.jsonl'),
+      `${titled('Bug detection pipeline')}\n${renamed('coai 7 issues')}\n${said('мой вопрос')}\n`,
+      'utf8',
+    );
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'coai 7 issues');
+
+    assert.strictEqual(found.kind, 'one',
+      'the session the person renamed by hand was reported as not existing');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a conversation renamed and then reverted is found under BOTH names', async () => {
+  // The three rows off the operator's own file, in their order. Whichever name is on the tab at the
+  // moment the button is pressed, it is one of these two — and "the last title" answers neither
+  // reliably, because the writer that re-asserts the old one runs on every turn.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'one.jsonl'),
+      `${renamed('/feature-dev:feature-dev выбери 7 самых простых')}\n`
+      + `${renamed('coai 7 issues')}\n`
+      + `${renamed('/feature-dev:feature-dev выбери 7 самых простых')}\n${said('мой вопрос')}\n`,
+      'utf8',
+    );
+
+    const byTheNew = await sessionFileIn(home, 'D:\\work\\app', true, 'coai 7 issues');
+    const byTheOld = await sessionFileIn(home, 'D:\\work\\app', true, '/feature-dev:feature-dev выбери 7 самых простых');
+
+    assert.strictEqual(byTheNew.kind, 'one', 'the name the person gave it found nothing');
+    assert.strictEqual(byTheOld.kind, 'one', 'the name Claude Code put back found nothing');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session named only by hand — no ai-title anywhere in it — is found', async () => {
+  // Four of the operator's 101 sessions are this, and they were invisible: `titleOf` answered with
+  // an empty string and the refusal said no session was called that.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${renamed('роль 2 еррор')}\n${said('что не так')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'роль 2 еррор');
+    assert.strictEqual(found.kind, 'one', 'a session with no ai-title could not be found at all');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['что не так']);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session CURRENTLY called this beats one that was once called this', async () => {
+  // The cost of matching every name a session ever had, and the rule that pays it: a conversation
+  // the person has moved on from must not outrank the one they are looking at. Refusing both would
+  // be worse — it would make a reused name permanently unanswerable.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'past.jsonl'), `${renamed('Refactor X')}\n${renamed('Something else')}\n${said('the old one')}\n`, 'utf8');
+    writeFileSync(join(dir, 'now.jsonl'), `${renamed('Refactor X')}\n${said('the one in front of them')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'Refactor X');
+    assert.strictEqual(found.kind, 'one', 'a name worn by one session today was reported as ambiguous');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['the one in front of them'],
+      'the tab was handed the session that USED to wear this name');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('two sessions that BOTH once wore this name are still a refusal, never a pick', async () => {
+  // The rule this loosening could have broken. Neither wears it now, both wore it once, and there is
+  // nothing to choose between them — so nothing is chosen.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${renamed('Shared')}\n${renamed('One')}\n${said('the first')}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${renamed('Shared')}\n${renamed('Two')}\n${said('the second')}\n`, 'utf8');
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Shared');
+
+    assert.strictEqual(answer.kind, 'several', 'a name two sessions once wore was handed to one of them');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });
