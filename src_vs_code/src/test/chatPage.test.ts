@@ -423,6 +423,22 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   const { withoutResizeObserver, ...state_ } = over;
   const html = chatPageHtml(state(state_), 'n0nce');
   const body = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
+  // THE DOCUMENT, NOT ITS SOURCE. The page embeds its own regions into the script as JSON, so a
+  // search over the whole file finds every control TWICE — once as an element and once as a string
+  // the script will write later. Only what a browser would have parsed into the DOM counts.
+  //
+  // Cut on the two exact delimiters the line above already splits on, never with a regex over
+  // `<script …>`: that shape IS a broken sanitiser (it misses `<SCRIPT>`, and a `</script` inside a
+  // string leaves the rest behind), CodeQL says so, and the next reader would reasonably take it for
+  // one. The page has exactly one script, which is asserted rather than assumed.
+  const opens = html.indexOf('<script nonce="n0nce">');
+  const closes = html.indexOf('</script>', opens);
+  assert.ok(opens >= 0 && closes > opens, 'the page ships no script to separate from its markup');
+  assert.equal(
+    html.indexOf('<script', closes), -1,
+    'the page has grown a second script, so the markup below is no longer the whole of it',
+  );
+  const drawn = html.slice(0, opens) + html.slice(closes + '</script>'.length);
   const seen: Record<string, Fake> = {};
   const posted: Array<Record<string, unknown>> = [];
   const pending: Array<() => void> = [];
@@ -497,10 +513,6 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       );
     }
     const region = seen['messages'];
-    // THE DOCUMENT, NOT ITS SOURCE. The page embeds its own regions into the script as JSON, so a
-    // match over the whole file finds every control twice — once as an element and once as a string
-    // the script will write later. Only what a browser would have parsed into the DOM counts.
-    const drawn = html.replace(/<script[\s\S]*?<\/script>/g, '');
     const markup = rule.region && region !== undefined && region.innerHTML.length > 0 ? region.innerHTML : drawn;
     const memo = (found[selector] ??= new Map());
     if (lastMarkup[selector] !== markup) {
