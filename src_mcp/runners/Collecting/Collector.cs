@@ -16,6 +16,20 @@ public sealed record Candidate(
     int Line,
     string LaterSha = "");
 
+/// <summary>Deciding what became of one candidate — the seam a run is driven through.</summary>
+/// <remarks>
+/// One method, because there is one question. It exists for the reason every other seam in this
+/// repository exists (<c>IProcessLauncher</c>, <c>IAstNormalizer</c>): the paths worth testing here
+/// are the ones where the work FAILS, and a run whose collector cannot be made to throw has a
+/// `finally` nothing can prove. The testing rule says to make a defect testable rather than to skip
+/// it, and this is the cheapest way to do that without a second implementation of anything.
+/// </remarks>
+public interface ICollector
+{
+    /// <summary>What became of this candidate.</summary>
+    Task<CollectOutcome> CollectAsync(Candidate candidate, CancellationToken ct = default);
+}
+
 /// <summary>
 /// Decides what became of one candidate: the fix, a reason it could not be found, or a failure.
 /// </summary>
@@ -29,7 +43,7 @@ public sealed record Candidate(
 /// somebody's repository, and filing it as one is how an infrastructure problem hides for a month in
 /// the skip rate.</para>
 /// </remarks>
-public sealed class Collector(GitHistory git, IAstNormalizer normalizer)
+public sealed class Collector(GitHistory git, IAstNormalizer normalizer) : ICollector
 {
     /// <summary>How far a walk will follow a file's history before giving up.</summary>
     /// <remarks>

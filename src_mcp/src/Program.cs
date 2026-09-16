@@ -377,16 +377,51 @@ internal static class Program
             // hung one.
             Console.Error);
 
-        var summary = await run.RunAsync(
-            settings.DataDir,
-            db,
-            Limit(args, Store.BugsQuery.DefaultLimit),
-            all: Array.IndexOf(args, "--all") >= 0);
+        // Before anything is started: a run whose window closed stopped saying it was alive, and
+        // until it is ended the panel reads it as in flight for ever. Only a STALE one is taken —
+        // the heartbeat is what separates an abandoned run from one happening in another process
+        // right now, which a check on `finished_utc` alone would have killed. (Plan round, gemini.)
+        var ended = db.SweepStaleCollectRuns(StaleAfter);
+        if (ended > 0)
+        {
+            Note($"ended {ended} run(s) that stopped reporting; their claimed findings keep their outcomes");
+        }
+
+        var flags = Flags(args);
+        flags.TryGetValue("--model", out var model);
+
+        Collecting.CollectSummary summary;
+        try
+        {
+            summary = await run.RunAsync(
+                settings.DataDir,
+                db,
+                Limit(args, Store.BugsQuery.DefaultLimit),
+                all: Array.IndexOf(args, "--all") >= 0,
+                model: model ?? string.Empty);
+        }
+        catch (ArgumentException e)
+        {
+            // A named model that may not be shown un-anonymised finding text. EX_USAGE, because the
+            // person asked for something the tool will not do — not a failure of the tool.
+            Note(e.Message);
+            return 64; // EX_USAGE
+        }
+
         Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
             summary, Server.ServerJsonContext.Default.CollectSummary));
 
         return 0;
     }
+
+    /// <summary>How long a run may go without saying it is alive before it is presumed gone.</summary>
+    /// <remarks>
+    /// Thirty minutes, and the number is `chatStoreSweep`'s rather than a new one, for its reason: it
+    /// is thirty beats wide, so a sleeping laptop, a host paused under a debugger and a window that
+    /// has just reloaded are all still believed. The cost is that a killed run reads as in flight for
+    /// half an hour, which nobody can see.
+    /// </remarks>
+    private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(30);
 
     internal static int NormalizeJson(string[] args)
     {
@@ -1054,7 +1089,7 @@ internal static class Program
         reads no source files itself; each request carries the text. Exits 66 when the request cannot
         be read and 73 when the answers cannot be written; a method it could not locate is an answer,
         not a failure.
-        `--collect-bugs [--limit 200] [--all]` decides what became of every unprocessed candidate — the fix
+        `--collect-bugs [--limit 200] [--all] [--model local/<name>]` decides what became of every unprocessed candidate — the fix
         commit, or the reason there is none — and writes it to the findings rows. Prints the funnel on
         stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
