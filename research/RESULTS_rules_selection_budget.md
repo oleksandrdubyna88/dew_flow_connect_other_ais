@@ -83,12 +83,10 @@ gets the eight rules above. The rest are ordered by a SHA-256 of *(branch, rule 
 
 - two rounds of one fix show **identical** rules, which is the defect the plan was opened for, because
   a branch is what a round is about and it does not change while a developer fixes what a round found;
-- different branches read different parts of the corpus, so the tail is still reached — **measured on
-  a twenty-rule fixture over sixty branch names**, where every rule appeared
-  (`AcrossEnoughBranches_EveryFamilyRuleGetsRead`). That is what the measurement licenses. It does NOT
-  establish that this repository's real 24-rule tail is covered by the branch names a team actually
-  uses: nobody has measured a real branch population, and a team working on three long-lived branches
-  would read three tails and no more;
+- different branches read different parts of the corpus **as a mechanism** — measured on a twenty-rule
+  fixture over sixty branch names, where every rule appeared
+  (`AcrossEnoughBranches_EveryFamilyRuleGetsRead`). **In THIS repository it currently reaches nothing;
+  see the correction below.**
 - nothing consults a clock, a counter or a random source, and anyone holding the branch name can
   reproduce the order exactly. `string.GetHashCode` would NOT do: .NET randomises it per process, which
   would have reintroduced the very defect inside its own fix.
@@ -109,6 +107,35 @@ Three things still bear on the budget:
 3. **`testing.md` alone is 25 082 bytes — 31 % of the budget.** Splitting the rules over 15 KB is what
    would make room for more of the corpus without touching the order. That follow-up's case rests on
    this table.
+
+## CORRECTION, 2026-09-16 — the rotated tail is inert here
+
+Measured at conventions pin `5126421b`, after the rotation shipped:
+
+| | bytes |
+|---|---|
+| base (instruction files + this repository's own rules) + all 8 tier rules | **78 855** |
+| budget | 80 000 |
+| **left for the rotated tail** | **1 145** |
+| smallest rule outside the tier (`common/durable-status.md`) | **2 247** |
+| **tail rules that fit** | **0 of 24** |
+
+`RuleFiles.Collect` skips an oversized file and keeps walking, so it tries every one of the 24 and omits
+all of them. **The branch rotation therefore orders a queue nothing is ever taken from.** The mechanism
+is sound and the tests above are honest about their fixture; the claim that it preserves coverage *in
+this repository* was not, and is withdrawn here.
+
+What this means for the argument that produced it: three plan-round reviewers said a fixed order would
+take 24 rules from "shown every second or third round" to "never". The rotation was the answer to that
+objection, and at this corpus size **it does not answer it** — those 24 rules are not shown. The
+reviewers were right and the remedy did not reach the problem.
+
+What actually would: **rule modularization** (splitting the rules over 15 KB — `testing.md` alone is
+25 082 bytes, 31 % of the budget) or **targeted selection** (the resolver, blocked on E1). Both are
+already recorded as the follow-ups; this measurement is the strongest case yet for the first of them.
+
+`StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` pins the fact and fails — as
+news, not as a defect — the day the tail becomes reachable.
 
 ## What this does not settle
 

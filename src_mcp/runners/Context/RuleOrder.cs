@@ -57,8 +57,16 @@ public sealed record RuleOrder
     /// (<c>research/RESULTS_rules_selection_budget.md</c>), which leaves the other 24 rules shown to
     /// nobody, ever, on the path a code round actually takes today. The draw covered them by rotating.
     /// A BRANCH is what a round is about, and it does not change while a developer fixes what the last
-    /// round found — so rotating the tail by it keeps that coverage and removes the instability.
-    /// Every rule is still read across a team's branches; no branch ever changes its own answer.</para>
+    /// round found — so rotating the tail by it removes the instability without giving up the draw's
+    /// coverage in principle.</para>
+    /// <para><b>In principle, and measured: in THIS repository the rotation currently reaches nothing.</b>
+    /// The base and the tier spend about 78 900 of the 80 000-byte budget, leaving ~1 100, and the
+    /// smallest rule outside the tier is 2 247 bytes — so every one of the 24 is skipped as oversized
+    /// and the tail is a queue nothing is taken from. The order is correct and costs nothing; it simply
+    /// has no room to act yet. What would give it room is rule modularization or the resolver, both
+    /// recorded as follow-ups. `research/RESULTS_rules_selection_budget.md` carries the numbers and
+    /// `StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` fails the day this
+    /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
     /// on one machine — the exact defect this removes, reintroduced by its own fix. This is a pure
