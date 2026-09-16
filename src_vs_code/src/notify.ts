@@ -136,13 +136,20 @@ export async function notifyThen(
  * invocations too"*, and that was the blocking finding on its own plan round. A question the person
  * walks away from is a fact worth having.</p>
  *
+ * <p>With no `action` it is still the right door for a caller that must not carry on until the
+ * message has been seen — several do, and the wait is the behaviour, not an accident. In that case
+ * no second record is written: "dismissed" for a toast with no button on it is a fact about VS
+ * Code's timer rather than about the person.</p>
+ *
  * <p><b>Never call this while holding a lock.</b> It waits for a human.</p>
  */
 export async function notifyAndAsk(notice: Notice): Promise<string | undefined> {
   const asked = noticeRecord(notice, RUN, process.pid, new Date());
   await write(asked);
   const chosen = await show(notice);
-  await write(answered(asked, chosen));
+  if (notice.action !== undefined || notice.modal === true) {
+    await write(answered(asked, chosen));
+  }
 
   return chosen;
 }

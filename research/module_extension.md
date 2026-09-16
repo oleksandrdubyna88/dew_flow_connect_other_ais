@@ -47,8 +47,15 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. Four sites routed so far (the three bare failures in
-`extension.ts` and `reportStandDown`); the constant stands at **105**.
+test that matches nothing passes for ever. **Sixteen sites routed so far** — the three bare failures
+in `extension.ts`, `reportStandDown`, the installer's companions, both conversation refusals, the
+three Bugz decision failures, both settings refusals in `sideConfig` and all four escalation
+messages — and the constant stands at **93**.
+
+A wiring test moved with them and got stronger rather than looser: `chatGotoWiring` used to assert
+that the moved-conversation path contains `showWarningMessage(`, which says nothing about WHICH
+message it is. It now names the `code`, so an edit that quietly turns that arm into some other
+notification is red.
 
 Four decisions worth knowing before changing any of it:
 

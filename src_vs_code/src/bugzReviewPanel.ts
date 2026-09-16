@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import * as vscode from 'vscode';
 
+import { asText } from './asText';
+import { notifyAndAsk } from './notify';
 import { KeepWrite, PairsRead } from './roundsDbRead';
 
 import { reviewPageHtml } from './bugzReviewPage';
@@ -93,17 +95,42 @@ export class BugzReviewPanel {
       if (!written.ok) {
         // A FAILURE, not "none of them existed". The two send a person to different places, and
         // saying the wrong one sends them to collect again for nothing. (Code round, codex.)
-        await vscode.window.showErrorMessage(`The decision could not be saved: ${written.why}`);
+        // Awaited, as it was: the redraw below must not race the message. `notifyAndAsk` is the
+        // door that waits; with no button on it, no answer record is written.
+        await notifyAndAsk({
+          as: 'error',
+          class: 'failure',
+          source: 'bugzReview',
+          code: 'bugz-decision-not-saved',
+          title: `The decision could not be saved: ${written.why}`,
+          detail: written.why,
+        });
       } else if (written.decided !== ids.length) {
-        await vscode.window.showWarningMessage(
-          `${written.decided} of ${ids.length} decisions were written. The rest name pairs this `
-          + 'database does not have — collect again and they will come back.');
+        await notifyAndAsk({
+          as: 'warning',
+          class: 'failure',
+          source: 'bugzReview',
+          code: 'bugz-decisions-partly-written',
+          title: `${written.decided} of ${ids.length} decisions were written. The rest name pairs this `
+            + 'database does not have — collect again and they will come back.',
+          detail: `${written.decided} of ${ids.length}`,
+        });
       }
 
       await this.draw();
       await this.hooks.changed();
     }).catch(async (error_: unknown) => {
-      await vscode.window.showErrorMessage(`The decision could not be saved: ${String(error_)}`);
+      // The same CODE as the refusal above, deliberately: one condition, reached two ways. The key
+      // is what a repeat is counted on, and "the decision could not be saved" is one thing however
+      // it arrived.
+      await notifyAndAsk({
+        as: 'error',
+        class: 'failure',
+        source: 'bugzReview',
+        code: 'bugz-decision-not-saved',
+        title: `The decision could not be saved: ${asText(error_)}`,
+        detail: asText(error_),
+      });
       await this.draw();
     });
   }

@@ -245,8 +245,15 @@ test('a record that moved says so AND opens the list, rather than stopping', () 
   const bind = command.slice(command.indexOf('async function bind('), command.indexOf('function bindingTo('));
   const missing = bind.slice(bind.indexOf('if (record === undefined)'));
 
-  assert.match(missing.slice(0, 400), /showWarningMessage\(/u, 'a conversation that moved says nothing');
-  assert.match(missing.slice(0, 400), /show\(\);/u, 'a conversation that moved leaves the person with nowhere to go');
+  // The window grew from 400 to 800 when this went through the notifications funnel — a routed
+  // call is longer than a bare one. The assertions got STRONGER rather than looser in the same
+  // change: naming the `code` means a later edit that silently turns this into some other message
+  // is red here, which `showWarningMessage(` alone could never have caught.
+  const said = missing.slice(0, 800);
+
+  assert.match(said, /notify\(\{/u, 'a conversation that moved says nothing');
+  assert.match(said, /code: 'conversation-moved-under-us'/u, 'and it no longer says WHICH thing it is');
+  assert.match(said, /show\(\);/u, 'a conversation that moved leaves the person with nowhere to go');
 });
 
 test('a walk of the session directory that FAILED is not read as “no sessions”', () => {

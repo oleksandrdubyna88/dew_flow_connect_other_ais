@@ -14,6 +14,7 @@ import { ConversationIndex } from './chatStoreCache';
 import { ChatStoreFile } from './chatStoreFile';
 import { ConversationRecord } from './chatStore';
 import { Narrowed, switchConversations } from './conversationPickerCommand';
+import { notify } from './notify';
 import { narrowedTitle, stillListing } from './conversationChoice';
 
 /**
@@ -144,7 +145,13 @@ async function arrive(
     case 'building':
       // The list is not read yet, so this cannot say whether the tab has a conversation — and
       // guessing would offer to create a second one for a tab that already has one.
-      void vscode.window.showInformationMessage(stillListing(offer));
+      void notify({
+        as: 'information',
+        class: 'refusal',
+        source: 'goToConversation',
+        code: 'conversation-index-still-building',
+        title: stillListing(offer),
+      });
 
       return;
     default: {
@@ -181,9 +188,14 @@ async function bind(
   const record = seen.kind === 'record' ? seen.record : undefined;
   const tab = record === undefined ? undefined : bindingTo(panels, asked, key)(record);
   if (record === undefined) {
-    void vscode.window.showWarningMessage(
-      `“${answer.meta.title}” is not where it was a moment ago — another window may have changed it.`,
-    );
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'goToConversation',
+      code: 'conversation-moved-under-us',
+      subject: answer.meta.id,
+      title: `“${answer.meta.title}” is not where it was a moment ago — another window may have changed it.`,
+    });
     show();
 
     return;
