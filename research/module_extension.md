@@ -713,7 +713,22 @@ control"* is true because it marked no control at all. It now serves selectors *
 table and **throws** on one it has not been taught, the same rule `cssRules.ts` follows by answering
 `undefined` rather than guessing. Making it refuse immediately found that `button[data-zoom]` and
 `button[data-tone]` had both been answered with `[]` since they shipped, so neither stepper's wiring
-had ever been exercised by anything.
+had ever been exercised by anything. Three more followed from the same refusal: the fake
+`acquireVsCodeApi()` had no `getState`, so the whole `fresh` path threw the first time a test
+delivered one and had therefore never run; a match over the page's own SOURCE finds every control
+twice, because the page embeds its regions into the script as JSON, so only what a browser would
+parse into the DOM counts; and an answer carries its *Copy answer* control **twice**, in the `who`
+row above it and the `afterRow` below, which share one key and so tick together — right, since they
+are one action on one thing.
+
+Three details the code round added to the acknowledgement itself. A press **takes the tick off**
+before it posts, because pressing a ticked control again and having the clipboard refuse would
+otherwise leave the first press's tick standing as confirmation of a copy that did not happen. A
+slate (`fresh`) clears the marks **and repaints**, since a key is a position, a block and a signature
+of the text — none of which names the conversation — and the controls on screen are still the old
+ones until the next push. And `paintCopied` skips its walk entirely when nothing is marked, which is
+the common case on a streaming push. The tick is also **announced**: `::after` is generated content
+that a screen reader is not obliged to read, so the marked control's accessible name carries it too.
 
 **The decision lives in `answerCopy.ts`, not in the hook.** `conversationHooks` closes over `vscode`
 and nothing in this repository imports it, so a rule written there is a rule no test can reach — the

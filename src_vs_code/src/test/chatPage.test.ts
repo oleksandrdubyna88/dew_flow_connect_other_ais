@@ -333,8 +333,11 @@ interface Fake {
   listeners: Record<string, Array<(event: unknown) => void>>;
   addEventListener(type: string, fn: (event: unknown) => void): void;
   focus(): void;
-  getAttribute(): null;
-  setAttribute(): void;
+  /** What the page has actually set, because a no-op setter makes an aria assertion meaningless. */
+  attributes: Record<string, string>;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
   querySelectorAll(): never[];
 }
 
@@ -355,13 +358,14 @@ function fake(): Fake {
       this.reparse?.(value);
       this.onWrite?.(value);
     },
-    textContent: '', hidden: false, value: '', disabled: false, focused: 0, dataset: {},
+    textContent: '', hidden: false, value: '', disabled: false, focused: 0, dataset: {}, attributes: {},
     scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: emptyStyle(), listeners: {},
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
     reparse: undefined,
     focus() { this.focused += 1; },
-    getAttribute: () => null,
-    setAttribute() { /* the page sets none */ },
+    getAttribute(name: string) { return this.attributes[name] ?? null; },
+    setAttribute(name: string, value: string) { this.attributes[name] = value; },
+    removeAttribute(name: string) { delete this.attributes[name]; },
     querySelectorAll: () => [],
   };
 }
@@ -493,7 +497,11 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       );
     }
     const region = seen['messages'];
-    const markup = rule.region && region !== undefined && region.innerHTML.length > 0 ? region.innerHTML : html;
+    // THE DOCUMENT, NOT ITS SOURCE. The page embeds its own regions into the script as JSON, so a
+    // match over the whole file finds every control twice — once as an element and once as a string
+    // the script will write later. Only what a browser would have parsed into the DOM counts.
+    const drawn = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    const markup = rule.region && region !== undefined && region.innerHTML.length > 0 ? region.innerHTML : drawn;
     const memo = (found[selector] ??= new Map());
     if (lastMarkup[selector] !== markup) {
       memo.clear();
@@ -570,6 +578,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   // COLLECTED, not run. A tick that clears itself after a second would otherwise make every test
   // that presses a copy control wait a real second, or race it. The test says when the second is up.
   const later: Array<() => void> = [];
+  const held: Record<string, unknown> = {};
   new Function(
     'document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', 'FileReader', 'setTimeout',
     body,
@@ -578,7 +587,14 @@ function runChatPage(over: RunOptions = {}): RunningPage {
     window_,
     // `setState` as well as `postMessage`: the page tells VS Code which conversation it is the
     // moment it loads, so a fake without it is a fake the real page cannot run against.
-    () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message), setState: () => undefined }),
+    // `getState` as well: the page reads the stored object back before merging into it, and a fake
+    // without it made the whole `fresh` path throw the first time a test delivered one — which is to
+    // say that path had never been run.
+    () => ({
+      postMessage: (message: Record<string, unknown>) => posted.push(message),
+      setState: () => undefined,
+      getState: () => held,
+    }),
     (fn: () => void) => { pending.push(fn); },
     withoutResizeObserver === true ? undefined : FakeResizeObserver,
     FakeFileReader,
@@ -2982,11 +2998,15 @@ test('the harness serves the copy controls the page really rendered, and refuses
   const page = runChatPage({ messages: ANSWERED });
   const controls = page.copyControls();
 
-  assert.ok(controls.length >= 2, `an answer with a fenced block has an answer control and a block control, got ${controls.length}`);
-  assert.ok(
-    controls.some((one) => one.dataset['block'] !== undefined),
-    'no block control was served, so nothing below tests the control the issue is about',
-  );
+  // THE COMPOSITION, not a count — a count says nothing about what is missing. An answer carries a
+  // *Copy answer* control TWICE, in the `who` row above it and in the `afterRow` below, which is what
+  // asking for an exact number turned up: they share one key, so acknowledging either ticks both,
+  // and that is right, since they are one action on one thing.
+  const blocks = controls.filter((one) => one.dataset['block'] !== undefined);
+  const answers = controls.filter((one) => one.dataset['copy'] !== undefined);
+  assert.equal(blocks.length, 1, 'the one fenced block did not get exactly one block control');
+  assert.equal(answers.length, 2, 'the answer is not offered above and below, as this page draws it');
+  assert.equal(controls.length, blocks.length + answers.length, 'a copy control was served that is neither');
   assert.ok(
     controls.every((one) => (one.dataset['sig'] ?? '').length > 0),
     'a copy control carries no signature, so an acknowledgement cannot be matched to the text it was drawn for',
@@ -3120,5 +3140,72 @@ test('a copy that did not land is acknowledged with nothing', () => {
   assert.equal(
     acknowledgement({ copied: false, said: 'The block could not be copied.' }, where), undefined,
     'a refused clipboard would still tick the control, and the person pastes what was there before',
+  );
+});
+
+test('a tick is announced as well as drawn, so it is not only a colour on a generated box', () => {
+  // ::after content is generated content, which a screen reader is not obliged to announce. The
+  // accessible NAME carries it too, and changes on the element the person has just activated.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+  assert.match(
+    block.attributes['aria-label'] ?? '',
+    /copied/i,
+    'the tick is visible only, so a screen reader is told nothing about a copy that landed',
+  );
+
+  page.secondPasses();
+  assert.equal(
+    block.attributes['aria-label'], undefined,
+    'the control keeps saying it was copied after the tick has gone',
+  );
+});
+
+test('pressing a control that is already ticked takes the tick off until the copy lands again', () => {
+  // Press, land, press again within the second, and have the clipboard refuse: no acknowledgement
+  // arrives. If the first press's tick were still there the person would read it as confirmation of
+  // the copy that did not happen, and paste what was on the clipboard before.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+  assert.deepEqual(marked(page), [keyOf(block)], 'the first copy never showed');
+
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { ...block.dataset } }) } });
+
+  assert.deepEqual(
+    marked(page), [],
+    'a second press kept the first press tick, so a refused copy reads as a successful one',
+  );
+});
+
+test('a new conversation does not inherit the tick of the one it replaced', () => {
+  // A key is a position, a block and a signature of the text — none of which names the conversation.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+  page.deliver({ type: 'fresh', id: 'another-conversation' });
+  page.deliver({ type: 'state', messagesHtml: chatMessagesHtml(ANSWERED) });
+
+  assert.deepEqual(
+    marked(page), [],
+    'a slate carried the old conversation tick onto an answer nobody copied here',
+  );
+});
+
+test('an acknowledgement naming no signature is ignored rather than keyed on the word undefined', () => {
+  const page = runChatPage({ messages: ANSWERED });
+
+  page.deliver({ type: 'copied', index: 0, block: 0 });
+
+  assert.deepEqual(
+    marked(page), [],
+    'a coordinate with no signature was accepted, so two unsignable controls would share one key',
   );
 });
