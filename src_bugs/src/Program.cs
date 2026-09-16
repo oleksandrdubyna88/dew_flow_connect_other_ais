@@ -256,9 +256,18 @@ internal sealed class Program
         ["--urls", "--environment", "--contentRoot", "--applicationName"];
 
     /// <summary>The first argument that names nothing, or empty when they all name something.</summary>
-    private static string Unknown(string[] args)
+    internal static string Unknown(string[] args)
     {
         if (args.Length == 0 || !args[0].StartsWith("--", StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        // An admin mode is KNOWN here too, even though `Main` takes it first. It is safe only
+        // because of that order, and an order is an invisible dependency: moving these two checks
+        // would make `--issue-key` exit 64 and tell every caller this binary is too old for a mode
+        // it has. A test asked for this and it was right to.
+        if (Admin.Knows(args))
         {
             return string.Empty;
         }
@@ -365,7 +374,7 @@ internal sealed class Program
     /// correct the list on a running deployment without waiting for a release; the embedded copy is
     /// what every ordinary start uses.</para>
     /// </remarks>
-    private static string Keywords()
+    internal static string Keywords()
     {
         if (Environment.GetEnvironmentVariable("COAI_BUGS_KEYWORDS") is { Length: > 0 } file)
         {

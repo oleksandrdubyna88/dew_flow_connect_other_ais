@@ -110,9 +110,15 @@ ARCHIVE="coai-bugs-$WHAT-$RID.tar.gz"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-curl -fsSL --max-time 120 -o "$WORK/$ARCHIVE" "$RELEASES/bugs-v$WHAT/$ARCHIVE" \
+# `--proto '=https'` and `--proto-redir '=https'`, because `-L` follows redirects and this is
+# downloading a BINARY this host is about to execute as a service. Without them a redirect to
+# plain http is followed silently, and the checksum below does not save it: the checksum comes
+# down the same hijacked connection. SonarCloud S6506 flagged both lines and was right.
+curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 \
+  --max-time 120 -o "$WORK/$ARCHIVE" "$RELEASES/bugs-v$WHAT/$ARCHIVE" \
   || refuse "no $ARCHIVE in release bugs-v$WHAT"
-curl -fsSL --max-time 30 -o "$WORK/$ARCHIVE.sha256" "$RELEASES/bugs-v$WHAT/$ARCHIVE.sha256" \
+curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 \
+  --max-time 30 -o "$WORK/$ARCHIVE.sha256" "$RELEASES/bugs-v$WHAT/$ARCHIVE.sha256" \
   || refuse "no checksum for $ARCHIVE"
 
 # VERIFIED before anything is unpacked. A download this host did not check is a download somebody
