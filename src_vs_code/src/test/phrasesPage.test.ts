@@ -151,7 +151,9 @@ test('every phrase on the page wears its own colour', () => {
 test('the frame is still a frame, whatever colour its edge is', () => {
   // The hue is inline; the BORDER is in the stylesheet. Without the rule the inline colour paints
   // nothing and the rows go back to being flat boxes — which is what was reported.
-  const css = html().split('<style>')[1]!.split('</style>')[0]!;
+  // Whitespace-normalised: the assertions below are about DECLARATIONS, and a reformat of the
+  // stylesheet's indentation is not a change to any of them. (local, the code round.)
+  const css = html().split('<style>')[1]!.split('</style>')[0]!.replace(/\s+/gu, ' ');
   const rule = css.split('.phrase {')[1]?.split('}')[0] ?? '';
 
   assert.ok(rule.length > 0, 'the .phrase rule is gone, so the rows are unframed whatever colour they carry');

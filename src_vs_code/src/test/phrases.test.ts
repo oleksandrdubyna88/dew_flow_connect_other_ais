@@ -178,3 +178,27 @@ test('a dozen phrases still get a dozen colours', () => {
 
   assert.equal(new Set(many.map(colour)).size, 12, 'the palette ran out before twelve phrases');
 });
+
+test('a colliding neighbour CAN move a phrase, and that is the price of no repeats', () => {
+  // Found by the code round, and it is real: with a list of two, adding `phrase-11` moves
+  // `phrase-2`. The earlier "adding a seventh moved none of six" was true of that sequence and not
+  // general — two ids whose preferred slot is the same one resolve it by list order, so a list that
+  // gains the earlier-sorting one takes the slot from the later.
+  //
+  // It is pinned here rather than fixed because the two ways out are worse, and both were measured:
+  // a per-id hash is subset-stable but gives THREE phrases only TWO distinct colours and twelve
+  // only six — it destroys the "different colours" the issue asked for in order to protect the
+  // "same colour" it also asked for. Subset-stability and no-repeats cannot both hold in general;
+  // this is graph colouring, and something has to give. What gives is a transient: both surfaces
+  // read ONE saved list, so they disagree only while one of them is stale.
+  const before = phraseColours(['phrase-1', 'phrase-2']);
+  const after = phraseColours(['phrase-1', 'phrase-2', 'phrase-11']);
+
+  assert.notEqual(after('phrase-2'), before('phrase-2'),
+    'this case stopped colliding — if the allocator changed, the limit documented beside it is now wrong');
+  assert.equal(after('phrase-1'), before('phrase-1'), 'a phrase that does not collide must not move');
+
+  // And the property that makes it tolerable: over ONE list, every phrase still has its own colour.
+  const ids = ['phrase-1', 'phrase-2', 'phrase-11'];
+  assert.equal(new Set(ids.map(after)).size, ids.length, 'the list lost its no-repeat promise');
+});

@@ -174,7 +174,7 @@ test('a phrase keeps its colour when the two surfaces are one phrase apart', () 
 });
 
 test('a phrase button is a frame with an edge, not a bare button', () => {
-  const css = panelHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+  const css = panelHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!.replace(/\s+/gu, ' ');
   const rule = css.split('.phrases .run {')[1]?.split('}')[0] ?? '';
 
   assert.ok(rule.length > 0, 'the .phrases .run rule is gone');
