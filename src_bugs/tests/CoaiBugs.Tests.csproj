@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiBugs.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- xUnit v3 on the native Microsoft Testing Platform: this builds into a self-contained runner
+         executable and is RUN, never `dotnet test` — there is no VSTest testhost here. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\CoaiBugs.csproj" />
+    <ProjectReference Include="..\..\src_mcp\normalizer\CoaiMcp.Normalizer.csproj" />
+  </ItemGroup>
+
+</Project>

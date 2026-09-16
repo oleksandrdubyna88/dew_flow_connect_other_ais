@@ -435,6 +435,66 @@ public sealed class RoundsDb : IDisposable
         return pairs;
     }
 
+    /// <summary>The kept pairs nobody has sent yet, and nobody has been refused for.</summary>
+    /// <remarks>
+    /// Three conditions and each is a decision: <c>keep = 1</c> because a person said yes, no
+    /// <c>sent_utc</c> because sending twice is waste, and no <c>send_refusal</c> because a pair the
+    /// server would not take is a defect in our normaliser and retrying it blindly hides that.
+    /// </remarks>
+    public IReadOnlyList<StoredPair> Sendable(int limit)
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = """
+            SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
+                   p.keep, f.severity, f.category, f.title
+              FROM collect_pairs p JOIN findings f ON f.id = p.finding_id
+             WHERE p.keep = 1 AND p.sent_utc = '' AND p.send_refusal = ''
+             ORDER BY p.written_utc, p.finding_id
+             LIMIT $limit
+            """;
+        Bind(read, "$limit", limit);
+        using var rows = read.ExecuteReader();
+        var pairs = new List<StoredPair>();
+        while (rows.Read())
+        {
+            pairs.Add(new StoredPair(
+                rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                rows.GetString(4), rows.GetInt32(5), rows.GetString(6), rows.GetString(7),
+                rows.GetString(8)));
+        }
+
+        return pairs;
+    }
+
+    /// <summary>Marks a pair the server acknowledged.</summary>
+    /// <remarks>
+    /// Called ONLY on an acknowledgement — accepted or already held — never when the batch left.
+    /// A pair marked before the server answered is a pair the client would skip for ever.
+    /// </remarks>
+    public void Sent(long findingId)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = "UPDATE collect_pairs SET sent_utc = $now WHERE finding_id = $id";
+        Bind(write, "$now", Now());
+        Bind(write, "$id", findingId);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>Marks a pair the server would not take, and why.</summary>
+    /// <remarks>
+    /// Not retried: the refusal is about the pair itself, so sending it again produces the same
+    /// answer. The reason is kept because it names a defect in OUR normaliser, and a later run with a
+    /// repaired one can clear the column.
+    /// </remarks>
+    public void Refused(long findingId, string why)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = "UPDATE collect_pairs SET send_refusal = $why WHERE finding_id = $id";
+        Bind(write, "$why", why);
+        Bind(write, "$id", findingId);
+        write.ExecuteNonQuery();
+    }
+
     /// <summary>Records what a person decided about a batch of pairs.</summary>
     /// <remarks>
     /// One transaction for the batch, because a review is a batch: two hundred decisions arriving as

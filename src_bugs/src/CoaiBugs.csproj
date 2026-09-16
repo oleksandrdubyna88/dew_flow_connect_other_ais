@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <AssemblyName>coai-bugs</AssemblyName>
+    <RootNamespace>CoaiBugs</RootNamespace>
+    <!-- The release tag names this; a local build says so rather than claiming 1.0.0. -->
+    <Version>0.0.0</Version>
+    <!-- Native AOT, as `coai-mcp` and `coai-server` are: the trim and AOT analyzers then run on
+         every ordinary build, so an incompatible pattern is a compile error rather than a discovery
+         on a release runner. -->
+    <PublishAot>true</PublishAot>
+    <StripSymbols>true</StripSymbols>
+    <!-- An accidental reflective serialization call is a compile error, not a runtime surprise. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- IL2104 comes from Serilog CORE's internals (reflection inside `@` destructuring, which no
+         call site here uses). A library-internal warning we cannot fix; scoped here, never
+         solution-wide. Same exemption, same reason, as `coai-server`. -->
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- .Core plus the bundle, the pair this repository pins for the reason written beside them:
+         the all-in-one package carries a SQLitePCLRaw with a high advisory, and this tree builds
+         warnings-as-errors on those. -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The core, for `Alphabet` and `RuntimeVocabulary`.
+
+         A plan reviewer asked for the vocabulary to travel as a shared FILE, on the premise that
+         this binary cannot reference that assembly. It can — `coai-server` already references
+         `CoaiMcp.Runners` — and a project reference is strictly stronger than a file plus two parity
+         tests, because the compiler enforces it and there is only ever one list.
+
+         The KEYWORDS are the case where the reviewer's instinct was right: those come from
+         tree-sitter, and this server must not ship 60 MB of native grammars to ask a parser for a
+         word list. They travel as `shared/skeleton-keywords.txt`, pinned by a test. -->
+    <ProjectReference Include="..\..\src_mcp\core\CoaiMcp.Core.csproj" />
+    <ProjectReference Include="..\..\src_mcp\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

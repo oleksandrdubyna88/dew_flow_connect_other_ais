@@ -54,6 +54,9 @@ internal static class Program
         /// </remarks>
         Version,
 
+        /// <summary>Sends the pairs a person kept. The only mode that leaves this machine.</summary>
+        UploadPairs,
+
         /// <summary>The collected pairs, for the review page to render.</summary>
         Pairs,
 
@@ -167,6 +170,7 @@ internal static class Program
                 "--collect-bugs" => Startup.Collect,
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
+                "--upload-pairs" => Startup.UploadPairs,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -219,6 +223,9 @@ internal static class Program
 
             case Startup.PairsKeep:
                 return PairsKeep(args);
+
+            case Startup.UploadPairs:
+                return await UploadPairsAsync(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -574,6 +581,71 @@ internal static class Program
 
         return asked;
     }
+    /// <summary>Sends the kept pairs to an ingest server.</summary>
+    /// <remarks>
+    /// <para><b>The key is NEVER an argument.</b> An argument is in process listings and in shell
+    /// history, which this family's secret rule forbids outright. It comes from `COAI_BUGS_KEY`, or
+    /// from a file named by `--key-file` — a path is not a secret. (Plan round, codex.)</para>
+    /// <para><b>And nothing is marked until the server answers.</b> A pair recorded as sent before
+    /// the acknowledgement is a pair this client skips for ever.</para>
+    /// </remarks>
+    internal static async Task<int> UploadPairsAsync(string[] args)
+    {
+        var flags = Flags(args);
+        if (!flags.TryGetValue("--server", out var where) || !Uri.TryCreate(where, UriKind.Absolute, out var server))
+        {
+            Note("--upload-pairs needs --server <https://host>");
+            return 65; // EX_DATAERR
+        }
+
+        // Loopback may be plain http for a person trying it out; anything else must be TLS, because
+        // a bearer key over plain http is a key an observer keeps. (Plan round, codex.)
+        if (server.Scheme != Uri.UriSchemeHttps && !server.IsLoopback)
+        {
+            Note($"{server} is not https; a key sent over plain http is a key somebody else has");
+            return 65; // EX_DATAERR
+        }
+
+        var key = Key(flags);
+        if (key.Length == 0)
+        {
+            Note("no key: set COAI_BUGS_KEY, or pass --key-file <path>. Never --key, because an "
+                 + "argument is in process listings and shell history.");
+            return 65; // EX_DATAERR
+        }
+
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; there is nothing to send from it");
+            return 74; // EX_IOERR
+        }
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        var run = new Collecting.UploadRun(http, Console.Error);
+        var summary = await run.RunAsync(
+            db, server, key, Limit(args, Collecting.UploadRun.PerBatch));
+
+        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+            summary, Server.ServerJsonContext.Default.UploadSummary));
+
+        // A transport failure is 69: nothing is wrong with the request, and the caller should try
+        // again rather than change anything.
+        return summary.Trouble.Length > 0 ? 69 : 0; // EX_UNAVAILABLE
+    }
+
+    /// <summary>The key, from the environment or a file. Never from argv.</summary>
+    private static string Key(IReadOnlyDictionary<string, string> flags)
+    {
+        if (flags.TryGetValue("--key-file", out var file) && File.Exists(file))
+        {
+            return File.ReadAllText(file).Trim();
+        }
+
+        return (Environment.GetEnvironmentVariable("COAI_BUGS_KEY") ?? string.Empty).Trim();
+    }
+
     internal static int NormalizeJson(string[] args)
     {
         var flags = Flags(args);

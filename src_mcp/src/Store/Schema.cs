@@ -31,7 +31,7 @@ internal static class Schema
     internal static readonly string[] Steps =
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
-        TheRunsThemselves, ThePairsThemselves,
+        TheRunsThemselves, ThePairsThemselves, WhatWasSent,
     ];
 
     internal const string Tables = """
@@ -318,5 +318,21 @@ internal static class Schema
         );
 
         CREATE INDEX IF NOT EXISTS ix_collect_pairs_keep ON collect_pairs(keep);
+        """;
+
+    /// <summary>What has already been sent, so a second run does not send it again.</summary>
+    /// <remarks>
+    /// <para><b>Marked on the ACKNOWLEDGEMENT, never on the batch leaving.</b> A pair recorded as
+    /// sent before the server answered is a pair lost in silence — the client would skip it for ever
+    /// and nobody would know. A kill between the request and the reply must leave it to be retried,
+    /// which is what an empty <c>sent_utc</c> means. (Plan round, codex and the local reviewer.)</para>
+    /// <para><b>And a REFUSAL is its own column.</b> A pair the server would not take is a defect in
+    /// our normaliser, not a transport failure: retrying it changes nothing and hides it. Keeping the
+    /// reason means a person can see what leaked, and a later run with a repaired normaliser can
+    /// clear the column and try again.</para>
+    /// </remarks>
+    internal const string WhatWasSent = """
+        ALTER TABLE collect_pairs ADD COLUMN sent_utc     TEXT NOT NULL DEFAULT '';
+        ALTER TABLE collect_pairs ADD COLUMN send_refusal TEXT NOT NULL DEFAULT '';
         """;
 }
