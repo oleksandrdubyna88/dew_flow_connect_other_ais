@@ -5957,12 +5957,15 @@ words — correct, and unnoticeable. `.phrases .run[data-said="1"]` keys on the 
 writes, so nothing in the script changed and there is no second name for one state. What the rule
 does is drop the blue fill for that second, and the reason is measured rather than tasteful: against
 VS Code's own registry defaults, `charts.green` on `button.background` is **2.48:1** dark and
-**1.46:1** light — a colour nobody sees, which is what was being complained about — while on
-`editor.background` the same token gives **9.04 / 4.33 / 11.52 / 9.31** across the default dark,
+**1.46:1** light — a colour nobody sees, which is what was being complained about — while on the ground this
+panel actually stands on it gives **9.74 / 4.07 / 11.52 / 9.31** across the default dark,
 default light and two high-contrast themes. `testing.iconPassed` is the semantically apter token and
 was measured too: it defines one pale green for BOTH modes and lands at **2.00:1** on white, so the
-house token stays. The light theme's 4.33:1 is AA-large rather than AA-normal and is this token's own
-ceiling against its own ground; the three `charts.green`-on-background controls already in this panel
+house token stays. The background is `transparent` rather than a colour of its own: this panel is a SIDEBAR view
+whose body is already transparent, so the ground is `sideBar.background` — `#181818` where the
+editor is `#1F1F1F` — and naming `editor.background` painted a lighter rectangle onto it for
+exactly one second. The code round caught that. The light theme's 4.07:1 is AA-large rather than
+AA-normal and is this token's own ceiling against its own ground; the three `charts.green`-on-background controls already in this panel
 sit at exactly the same ratio.
 
 The rule's specificity `(0,3,1)` beats `button:hover` at `(0,1,1)` — deliberate, because the mouse is
