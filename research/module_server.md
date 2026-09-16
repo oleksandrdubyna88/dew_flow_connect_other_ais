@@ -2205,6 +2205,24 @@ and `--promote` moves one across in a single transaction, so an interrupted prom
 where it started. Nothing automatic and no timer — the whole reason quarantine exists is that a
 machine cannot tell a real skeleton from a crafted one.
 
+`--issue-key`, `--revoke`, `--promote` and `--waiting` are named ONCE, in `Admin.Modes`, and
+`Program` asks `Admin.Knows` rather than repeating them. They were two hand-maintained lists: a mode
+added to one and not the other either starts Kestrel instead of running the one-shot, or falls
+through the dispatch switch's default and silently runs `--waiting`. Both failures are silent, which
+is what makes a duplicated list worse than a long one.
+
+**And an argument that names no mode exits 64.** This binary had no such branch at all, so
+`coai-bugs --rotate-the-moon` started a web server and listened for ever — the half of the exit-code
+rule that lets a caller detect an old binary was simply absent. `--urls`, `--environment`,
+`--contentRoot` and `--applicationName` are named as the host's own; everything else beginning with
+`--` is refused. A scenario over the real executable found this, four minutes and fifty-seven
+seconds in.
+
+**`Corpus.Keep` derives the entry id rather than taking one.** It was a parameter, and a parameter
+is a way for an importer or a replay to store the same three fields under two different ids — which
+is precisely the idempotency this table exists to have. Identity belongs to the boundary that
+persists it, so `Keep` computes it and answers the id it used.
+
 ### The client half
 
 `coai-mcp --upload-pairs --server <https://host>` sends pairs whose `keep = 1` and which have no
