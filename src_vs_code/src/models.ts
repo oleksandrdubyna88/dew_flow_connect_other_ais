@@ -1,4 +1,5 @@
 import { engineNote, LocalEngine } from './localEngines';
+import { ASKING_CLAUDE, ProbeResult, claudeModels } from './claudeModels';
 import { canonicalTeamServerUrl } from './teamServers';
 import { TeamServerState } from './teamServerView';
 import { Vendor } from './vendors';
@@ -85,13 +86,19 @@ export const CURATED_GEMINI_MODELS: readonly ModelChoice[] = [
  * own dropdown.
  */
 /**
- * Claude's models, curated: the CLI resolves an alias to the latest of that family, which is what
- * anyone picking from a list actually wants.
+ * Claude's FAMILIES. An alias resolves to the latest of its family, which is what anyone picking
+ * from a list actually wants — and `claudeModels.ts` asks the CLI which one that turned out to be.
+ *
+ * <p><b>This is a candidate list now, not an answer.</b> It was three entries resting on a theory
+ * that holds only while a family gains versions; it broke the moment a NEW family appeared. Fable
+ * was missing from the picker while the CLI had been resolving it to `claude-fable-5-1` all along
+ * (issue #301, measured 2026-09-16). Adding a family here is what makes it asked about.</p>
  */
 export const CURATED_CLAUDE_MODELS: readonly ModelChoice[] = [
   { id: 'haiku', label: 'Haiku — fastest, cheapest' },
   { id: 'sonnet', label: 'Sonnet — the balanced one' },
   { id: 'opus', label: 'Opus — the strongest' },
+  { id: 'fable', label: 'Fable — the newest family' },
 ];
 
 export function modelsFor(
@@ -101,6 +108,8 @@ export function modelsFor(
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
   allowedRemote: readonly string[] = [],
+  /** What the CLI answered when it was last asked which Claude families it reaches. */
+  claudeProbe?: ProbeResult,
 ): ModelChoice[] {
   // A Team server's allowlist is as authoritative as an installed-model list, and for the same
   // reason: it is what this server will actually accept THIS minute. So the dropdown is discovered,
@@ -129,15 +138,27 @@ export function modelsFor(
     // shown as though it were still installed. Dropping it would silently switch the reviewer to
     // another model; showing it plainly would let a round be sent for a model that will 404. Raised
     // by this product's own gate on the plan for this feature.
-    return current.length > 0 && !found.some((m) => m.id === current)
-      ? [{ id: current, label: `${current} — NOT on this engine any more` }, ...found]
-      : found;
+    //
+    // THREE STATES, not two, and the third is the one that was wrong. "Not on this engine any more"
+    // is a claim about an engine that ANSWERED — and the consultant section passed no engine at all,
+    // so a saved model was being called gone by something that had never asked. An engine nobody
+    // asked, and an engine that refused, each say so instead. (codex, the plan round for #301.)
+    if (current.length === 0 || found.some((m) => m.id === current)) {
+      return found;
+    }
+    const why = localEngine === undefined
+      ? 'the engine has not been asked yet'
+      : localEngine.reachable
+        ? 'NOT on this engine any more'
+        : 'this engine did not answer';
+
+    return [{ id: current, label: `${current} — ${why}` }, ...found];
   }
   const base =
     runtime === 'codex'
       ? [...discoveredCodex]
       : runtime === 'claude'
-        ? [...CURATED_CLAUDE_MODELS]
+        ? claudeModels(claudeProbe, CURATED_CLAUDE_MODELS)
         : runtime === 'antigravity'
           ? [...(discoveredAgy.length > 0 ? discoveredAgy : ANTIGRAVITY_MODELS)]
           : [...CURATED_GEMINI_MODELS];
@@ -245,6 +266,8 @@ export function modelsProvenance(
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
   remote: RemoteProvenance = NO_REMOTE_CATALOG,
+  claudeProbe?: ProbeResult,
+  askingClaude = false,
 ): string {
   // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
   // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
@@ -267,7 +290,20 @@ export function modelsProvenance(
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';
   }
   if (runtime === 'claude') {
-    return 'aliases the Claude CLI resolves to the latest of each family. Any exact id can be typed in.';
+    // The sentence this used to carry was a CLAIM — that the CLI resolves each alias to the latest
+    // of its family — made by a build that had never asked it. It was also wrong here: `fable` was
+    // reachable and absent from the list, and an alias this CLI does not know exits 0 and answers
+    // from the DEFAULT model, so the claim cannot fail loudly either. Now the caption says which of
+    // the three states it is in, and only the third states anything as fact.
+    if (askingClaude) {
+      return ASKING_CLAUDE;
+    }
+    const answered = (claudeProbe?.models ?? []).filter((m) => m.verified).length;
+    if (answered === 0) {
+      return 'a curated list — the Claude CLI has not been asked yet. Any exact id can be typed in.';
+    }
+
+    return `${answered} families the Claude CLI answered as themselves, asked ${(claudeProbe?.checkedUtc ?? '').slice(0, 10)}. Any exact id can be typed in.`;
   }
   if (runtime === 'antigravity') {
     // The truth about where the list came from, which this line used to state wrongly: it claimed

@@ -407,6 +407,16 @@ The most valuable section, and the first one people drop.
   and the `pre` keeps `overflow-x: auto` without gaining `white-space: pre-wrap`. A test that
   inserted a long string and asserted "no overflow" against the shim would assert something the shim
   decided, and would look like evidence while proving less than the declaration does.
+- **The Claude model probe is never driven against the real CLI.** Each candidate costs a billed
+  request against somebody's subscription, so a suite that ran it would fail on an account whose
+  allowance is spent and would spend one that is not. What is tested is every decision around it,
+  against **recorded** answers taken by hand on 2026-09-16: the `modelUsage` parse, the
+  asked-vs-answered comparison, the week-and-version freshness rule, the file round trip, and the
+  rule that a run which learned nothing keeps the previous answer. What is therefore NOT proven is
+  that today's CLI still answers in that shape — if Anthropic changes `--output-format json`, this
+  suite stays green and every candidate quietly becomes unverified. The failure mode is the safe one
+  by construction (unverified never subtracts from the curated list), which is why this limit is
+  written down rather than closed.
 - **One platform per run.** The suites run on the CI matrix; the AOT publish covers six RIDs and the
   release smoke exercises the binary on every RID whose machine can execute it — but `osx-x64` is
   cross-built on an arm64 runner and is not executed there.

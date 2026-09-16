@@ -100,6 +100,21 @@ const SELF_UPDATE: Record<string, string> = {
  * a runtime this build KNOWS must be in the table above, because the chain this replaced quietly
  * opened codex for `antigravity` and the sign-in button started a different vendor's CLI.</p>
  */
+/**
+ * The binary that answers for a RUNTIME, with no row in hand.
+ *
+ * <p>{@link executableFor} answers for a ROW, which is what every button here has. The Claude model
+ * probe has a runtime and a list of rows instead: it asks the CLI itself, and a person who had to
+ * set a path because PATH could not answer must not have that path ignored for this one question.
+ * A row that sets one wins; otherwise the runtime's own name, exactly as a row with no path gets.</p>
+ */
+export function executableForRuntime(runtime: string, vendors: readonly Vendor[]): string {
+  const said = vendors.find((v) => v.runtime === runtime && v.executablePath.length > 0);
+
+  return said === undefined ? (EXECUTABLE[runtime] ?? 'codex') : said.executablePath;
+
+}
+
 export function executableFor(vendor: Vendor): string {
   return vendor.executablePath.length > 0
     ? vendor.executablePath

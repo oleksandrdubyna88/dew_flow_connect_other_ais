@@ -8,6 +8,7 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
+import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -34,6 +35,7 @@ import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile,
 import { vendorPalette, VendorPalette } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
+import { ProbeResult, claudeNote } from './claudeModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody, mayRank } from './bugzView';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -106,6 +108,10 @@ export interface PanelState {
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
   readonly agyModels: readonly ModelChoice[];
+  /** What the Claude CLI last answered about the families it reaches, if it has been asked. */
+  readonly claudeProbe?: ProbeResult | undefined;
+  /** True while that answer is being refreshed — seconds of real requests, so it is said. */
+  readonly askingClaude?: boolean;
   /**
    * The server binary on the side this panel is running on — the disk, then the binary's own
    * `--version`, then this side's record. Never a record made on another side.
@@ -165,6 +171,14 @@ export interface PanelState {
    * not have. Found by Claude Sonnet 5, 2026-09-02.</p>
    */
   readonly localEngines: Readonly<Record<string, LocalEngine>>;
+  /**
+   * The engines behind the CONSULTANT rows, keyed by the ENDPOINT each row stores.
+   *
+   * <p>A second map rather than the one above, because the two are keyed by different things and
+   * the section they serve holds no reviewer rows: since story C5 a consultant is a definition with
+   * its own endpoint, and two callers pointing at one engine share its answer.</p>
+   */
+  readonly consultEngines?: Readonly<Record<string, LocalEngine>> | undefined;
   /**
    * What the corpus holds and what the last collector run made of it.
    *
@@ -335,6 +349,13 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
       + consultantBody(state.settings.consult, {
         codexModels: state.codexModels,
         agyModels: state.agyModels,
+        claudeProbe: state.claudeProbe,
+        askingClaude: state.askingClaude,
+        // The engines, so a LOCAL consultant has a dropdown that asked one. It used to pass
+        // nothing, and a saved model was then labelled gone by something that had never looked.
+        // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
+        // answer a row that holds no reviewer.
+        localEngines: state.consultEngines,
         consultPrompt: state.consultPrompt,
         // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
         // caller wears the colour its vendor has on its card and in a running round. Passed even
@@ -828,6 +849,8 @@ function reviewersBody(state: PanelState): string {
     colour: colour(v.id),
     codexModels: state.codexModels,
     agyModels: state.agyModels,
+    claudeProbe: state.claudeProbe,
+    askingClaude: state.askingClaude,
     cli: state.cliStatus[v.id] ?? UNKNOWN_CLI,
     price: state.modelPrices[v.model],
     localEngine: state.localEngines[v.id],
@@ -894,6 +917,10 @@ function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>
  * legible, and an analyser was right to say so.</p>
  */
 interface CardContext {
+  /** What the Claude CLI answered about its families, so this card offers facts. */
+  readonly claudeProbe?: ProbeResult | undefined;
+  /** True while the Claude probe runs, so the caption under its dropdown says so. */
+  readonly askingClaude?: boolean | undefined;
   readonly codexModels: readonly ModelChoice[];
   readonly agyModels: readonly ModelChoice[];
   readonly cli: CliStatus;
@@ -976,14 +1003,18 @@ function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean
 }
 
 function vendorCard(vendor: Vendor, context: CardContext): string {
-  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour } = context;
+  const {
+    codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude,
+  } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
   // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
   // its CLI runs there, and its price is the company's subscription rather than this person's. Three
   // fields that could only be filled in wrongly.
   const remote = vendor.runtime === 'remote';
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models);
+  const models = modelsFor(
+    vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
+  );
   const endpoint = endpointField(vendor, id, local, remote);
   // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
   // after the out one (issue #124). They used to sit in a row of their own directly under the model,
@@ -1035,7 +1066,9 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     <select data-setting="model" data-vendor="${id}" title="${escapeHtml(local ? HELP.localModel : HELP.vendorModel)}">
       ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
     </select>
-    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels, allowedRemote))}</div>
+    <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
+      vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false,
+    ))}</div>
   </div>
   ${stages}${endpoint}${executable}${prices}${documentRow}
 </div>`;
@@ -2582,6 +2615,7 @@ ${ROLE_TONE_CSS}
   .subject { font-weight: 600; margin: 6px 0 1px; }
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
+${LOOKING_CSS}
 `;
 
 /**
