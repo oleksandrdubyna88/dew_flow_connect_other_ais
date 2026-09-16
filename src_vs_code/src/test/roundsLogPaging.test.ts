@@ -65,7 +65,8 @@ interface Stub {
   indeterminate: boolean;
   readonly heard: Record<string, (event?: unknown) => void>;
   addEventListener(kind: string, listener: (event?: unknown) => void): void;
-  getAttribute(): null;
+  /** Answered for controls served by SELECTOR, which have no id to be found by. */
+  getAttribute(asked: string): string | null;
   setAttribute(): void;
   querySelectorAll(): [];
 }
@@ -94,7 +95,7 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
       innerHTML: '', textContent: '', hidden: false, disabled: false, value: '', className: '',
       checked: false, indeterminate: false, heard,
       addEventListener(kind, listener) { heard[kind] = listener; },
-      getAttribute: () => null,
+      getAttribute: (): string | null => null,
       setAttribute: () => undefined,
       querySelectorAll: () => [],
     };
@@ -103,12 +104,47 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
     return fresh;
   };
 
+  // CONTROLS THAT HAVE NO ID, served from the markup the page really rendered — and the selector is
+  // served BY NAME, with anything unknown a throw rather than an empty list. Answering [] for every
+  // selector is how a test passes against a page that found nothing: the loop runs zero times and
+  // "the filter did not travel" is true because no filter was ever wired. That is precisely what had
+  // happened here — `[data-filter]` had never been served, so the facet handlers had never run in
+  // any test on this page.
+  const byAttribute = (attribute: string, tag = '[a-z]+'): Stub[] => {
+    // A SPACE before the attribute, and the escape is DOUBLED because this is a template literal:
+    // a single `\s` in one is just the letter s, and a single `\b` is the BACKSPACE character. Both
+    // spellings were written here first, and both made the pattern match nothing at all — which
+    // looks exactly like a page that renders no filters.
+    const pattern = new RegExp(`<${tag}[^>]*\\s${attribute}="([^"]*)"[^>]*>`, 'g');
+
+    return [...html.matchAll(pattern)].map((found) => {
+      const key = `${attribute}:${found[1]}`;
+      const stub = at(key);
+      stub.getAttribute = (asked: string) => (asked === attribute ? found[1] ?? null : null);
+
+      return stub;
+    });
+  };
+  const serve = (selector: string): Stub[] => {
+    if (selector === '[data-filter]') { return byAttribute('data-filter'); }
+    if (selector === '[data-tab]') { return byAttribute('data-tab'); }
+    if (selector === 'th[data-sort]') { return byAttribute('data-sort', 'th'); }
+    const one = /^\[data-filter="([\w-]+)"\]$/.exec(selector);
+    if (one !== null) { return byAttribute('data-filter').filter((s) => s.getAttribute('data-filter') === one[1]); }
+
+    throw new Error(
+      `the page asked for ${JSON.stringify(selector)}, which this harness does not model — answering [] `
+      + 'would let a test pass while the page found nothing. Teach the harness that selector.',
+    );
+  };
+
   const clicks: ((event: unknown) => void)[] = [];
   const messages: ((event: unknown) => void)[] = [];
   const posted: unknown[] = [];
   const document_ = {
     getElementById: at,
-    querySelectorAll: () => [],
+    querySelectorAll: (selector: string) => serve(selector),
+    querySelector: (selector: string) => serve(selector)[0] ?? null,
     addEventListener(kind: string, listener: (event: unknown) => void) {
       if (kind === 'click') {
         clicks.push(listener);
@@ -748,11 +784,31 @@ test('a conversation is not offered an export, and is not counted as a round on 
 test('the two views name the same column differently, and neither header is built by script', () => {
   const html = roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS);
   const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+  // THE HEADERS AS CELLS, keyed by the column they sort — not a search of the page for a word.
+  // A substring can be found anywhere, including in a tooltip or a comment; a cell is the thing a
+  // person reads. (The code round asked for this.)
+  const cells = new Map(
+    [...head.matchAll(/<th\s[^>]*data-sort="([^"]+)"[^>]*>([\s\S]*?)<\/th>/g)]
+      .map((found) => [found[1] ?? '', found[2] ?? '']),
+  );
+  // A PARSE THAT FOUND NOTHING MUST NOT READ AS A PAGE THAT HAS NOTHING. This pattern was written
+  // three times before it worked — a heredoc turned its `\b` into an actual BACKSPACE character, and
+  // an empty Map then made every negative assertion below true for the wrong reason.
+  assert.ok(cells.size > 10, `the header did not parse into cells, so nothing below is asked: ${cells.size}`);
 
-  assert.ok(head.includes('>Round</span>') && head.includes('>Turn</span>'), 'a round’s Round is a conversation’s Turn');
-  assert.ok(head.includes('>Reviewers</span>') && head.includes('>Who answered</span>'), 'and its Reviewers is the one model that answered');
-  assert.ok(!head.includes('>Kind<'), 'the Kind column is still there, so the table is still one list with a label');
+  assert.ok(!cells.has('kind'), 'the Kind column is back, so the table is one list with a label again');
+  assert.equal(
+    cells.get('number'),
+    '<span class="asRound">Round</span><span class="asTurn">Turn</span>'.replace('asTurn', 'asChat'),
+    'a round’s Round is not offered as a conversation’s Turn',
+  );
+  assert.equal(
+    cells.get('answered'),
+    '<span class="asRound">Reviewers</span><span class="asChat">Who answered</span>',
+    'a round’s Reviewers is not offered as the one model that answered',
+  );
 
+  // WHICH of the two a view shows is the stylesheet's, so the header needs no script to relabel.
   const css = stylesheet(html);
   const hides = (klass: string, within: string): boolean => css.some(
     (rule) => /display:\s*none/.test(rule.body)
@@ -761,4 +817,54 @@ test('the two views name the same column differently, and neither header is buil
   );
   assert.ok(hides('asChat', 'view-rounds'), 'the rounds view shows both labels at once');
   assert.ok(hides('asRound', 'view-conversations'), 'the conversations view shows both labels at once');
+});
+
+test('a filter a conversation cannot answer does not travel into its view', () => {
+  // The shared table's one real trap, and six reviewers found it. `chatRows` leaves repository,
+  // branch, stage and verdict empty on purpose, so a value chosen while looking at rounds matches no
+  // conversation at all — and the control that did it is hidden in that view, so nothing on screen
+  // would say why the tab was empty.
+  //
+  // The event carries the STUB as its target, not a literal with a value on it: the handler reads
+  // `event.target.getAttribute('data-filter')` to know WHICH facet moved, and a target without one
+  // wires nothing. The first version of this test did that, and passed with the fix deleted.
+  const page = open([
+    row({ key: 'r1', stage: 'code review' }),
+    row({ key: 'r2', stage: 'plan review' }),
+    row({ key: 'r3', stage: 'plan review' }),
+    chat({ key: 'chat:a' }),
+  ]);
+  const stage = page.at('data-filter:stage');
+  stage.value = 'code review';
+  stage.heard['change']?.({ target: stage });
+  assert.match(
+    page.at('pageinfo').textContent, /rows 1–1 of 1 /,
+    'the stage filter did not narrow the rounds view, so nothing below is being tested',
+  );
+
+  toTab(page, 'conversations');
+
+  assert.match(
+    page.at('pageinfo').textContent, /rows 1–1 of 1/,
+    'a stage chosen over rounds emptied the conversations tab, with the control that did it hidden',
+  );
+  assert.equal(stage.value, '', 'the hidden control still shows a choice that is no longer applied');
+});
+
+test('the facets a conversation cannot answer are off the screen in its view', () => {
+  const css = stylesheet(roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS));
+  const inChat: readonly Element[] = [{ tag: 'section', classes: ['view-conversations'], attrs: { id: 'tab-rounds' } }];
+  const hidden = (facet: string): boolean => css.some(
+    (rule) => /display:\s*none/.test(rule.body)
+      && couldMatch(rule.selector, { tag: 'label', classes: ['facet', `facet-${facet}`], attrs: {} }, inChat) === true,
+  );
+
+  for (const facet of ['repoPath', 'branch', 'stage', 'verdict']) {
+    assert.ok(hidden(facet), `the conversations view still offers the ${facet} filter, which matches no conversation`);
+  }
+
+  // The two a conversation CAN answer stay: it has an outcome and a vendor.
+  for (const facet of ['status', 'vendor']) {
+    assert.ok(!hidden(facet), `the conversations view hid the ${facet} filter, which it can answer`);
+  }
 });

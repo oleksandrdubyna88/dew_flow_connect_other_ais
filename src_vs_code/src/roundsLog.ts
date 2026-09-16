@@ -933,6 +933,21 @@ const COLUMNS: ReadonlyArray<{
 
 type Facet = 'kind' | 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
 
+/**
+ * The facets a CONVERSATION has no answer for.
+ *
+ * <p>`chatRows` sets `repoPath`, `branch`, `stage` and `verdict` to the empty string on purpose — a
+ * conversation has none of them, and filling them would make it read as a kind of review round. So
+ * choosing any value of one in the conversations view matched nothing and emptied the tab, and a
+ * value chosen in the ROUNDS view survived the switch and emptied it before it was even opened.
+ * Six reviewers found it independently; it is the one thing the plan's shared-table shape got
+ * wrong.</p>
+ *
+ * <p>Named once, and read by three places: the markup that classes each control, the stylesheet that
+ * hides them, and the tab handler that clears them.</p>
+ */
+export const ROUND_ONLY_FACETS: readonly Facet[] = ['repoPath', 'branch', 'stage', 'verdict'];
+
 const FACETS: ReadonlyArray<{ key: Facet; label: string }> = [
   { key: 'repoPath', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
@@ -1160,7 +1175,8 @@ export function roundsLogHtml(
         + '</th>'))
     .join('');
   const filters = FACETS
-    .map((f) => `<label>${f.label} <select data-filter="${f.key}"><option value="">any</option>${facetOptions(rows, f.key)}</select></label>`)
+    .map((f) => `<label class="facet facet-${f.key}">${f.label} `
+      + `<select data-filter="${f.key}"><option value="">any</option>${facetOptions(rows, f.key)}</select></label>`)
     .join('\n      ');
 
   return `<!DOCTYPE html>
@@ -1192,8 +1208,8 @@ export function roundsLogHtml(
      to tell these three from the text beside them (issue #126). */
   /* A CONTROL THAT CANNOT BE PRESSED MUST NOT LOOK PRESSABLE. The pager's buttons were disabled
      correctly from the day they shipped and nothing said so: there was no :disabled rule at all, so
-     a dead "Older" kept the filled colour and the hand cursor, and «кнопки активны, а при нажатии
-     ничего не происходит» is what that reads as (issue #297).
+     a dead "Older" kept the filled colour and the hand cursor, and "the buttons are active and
+     pressing them does nothing" is what that reads as (issue #297).
 
      The hover selectors are REWRITTEN rather than joined by a :not(:disabled) sibling, and that is
      the point rather than a tidiness: a browser matches :hover on a disabled element and suppresses
@@ -1315,6 +1331,8 @@ export function roundsLogHtml(
   .view-conversations .col-repoName, .view-conversations .col-branch, .view-conversations .col-stage,
   .view-conversations .col-verdict, .view-conversations .col-gating, .view-conversations .col-findings,
   .view-conversations .col-pick, .view-conversations .col-actions,
+  .view-conversations .facet-repoPath, .view-conversations .facet-branch,
+  .view-conversations .facet-stage, .view-conversations .facet-verdict,
   .view-conversations #exportpicked, .view-conversations #clearpicked,
   .view-conversations #recorded { display: none; }
 </style>
@@ -1407,6 +1425,7 @@ export function roundsLogHtml(
   // column is added. Adding the Kind column is exactly that day.
   var COLUMN_COUNT = ${COLUMNS.length};
   var inView = ${inView.toString()};
+  var ROUND_ONLY_FACETS = ${jsonForScript(ROUND_ONLY_FACETS)};
   // What SQL counted over the WHOLE table, which is a different number from the length of what was
   // sent. The operator asked for this in as many words: «суммы - скл счиатть (сколько всего и тд.)».
   var TOTALS = ${jsonForScript(totals)};
@@ -1672,6 +1691,18 @@ export function roundsLogHtml(
       if (asTable && which !== state.view) {
         table.className = which === 'conversations' ? 'view-conversations' : 'view-rounds';
         state.view = which;
+        // AND THE FILTERS THE NEW VIEW CANNOT ANSWER GO WITH IT. A conversation has no repository,
+        // branch, stage or verdict, so a value chosen while looking at rounds matches none of them
+        // and empties the tab the moment it opens — with the control that did it hidden, so nothing
+        // on screen says why. Cleared in the state AND on the select, or the box goes on showing a
+        // choice that is no longer being applied.
+        if (which === 'conversations') {
+          for (var f = 0; f < ROUND_ONLY_FACETS.length; f++) {
+            delete state.filters[ROUND_ONLY_FACETS[f]];
+            var box = document.querySelector('[data-filter="' + ROUND_ONLY_FACETS[f] + '"]');
+            if (box) { box.value = ''; }
+          }
+        }
         // The same rule every other filter change follows: a page number belongs to a list, and this
         // is a different list.
         firstPage();
@@ -1827,6 +1858,11 @@ export function roundsLogHtml(
   var pickAll = document.getElementById('pickall');
   if (pickAll) {
     pickAll.addEventListener('click', function () {
+      // HIDDEN IS NOT DISABLED. The conversations view takes the tick column off the screen with
+      // CSS, and an element that is not displayed can still be reached by a keyboard, an assistive
+      // technology or another extension — which would select rows the export cannot write, to be
+      // found later on a view where the button is back. (gemini, the code round.)
+      if (state.view === 'conversations') { return; }
       // Every MATCHING round, across every page — a person ticking the top box means the list they
       // have filtered to, not the twenty rows they can see. Untick clears only those same rows, so
       // a selection made under another filter is not silently thrown away.
