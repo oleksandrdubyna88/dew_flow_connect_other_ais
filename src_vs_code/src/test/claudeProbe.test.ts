@@ -66,15 +66,17 @@ test('a real family is confirmed, and carries the model that answered', async ()
   assert.equal(found.cliVersion, '2.1.0', 'the answer must name the binary that gave it');
 });
 
-test('a CLI that cannot be started ends the run, and answers nothing at all', async () => {
-  // `capture` reports -1 for a throw, a spawn error, a timeout and an unreadable exit alike. Three
-  // more of the same failure teaches nothing and costs three more launches.
+test('one candidate that could not be started costs its own candidate and nothing else', async () => {
+  // `capture` reports -1 for a throw, a spawn error, a timeout and an unreadable exit alike, so this
+  // cannot tell an absent binary from one request that hung. It used to treat both as the first and
+  // abandon the run — which meant a transient hiccup on the FIRST candidate left every other family
+  // unasked for a week. Only a CLI that fails to run twice running is given up on. (Code round.)
   const fake = cli({ haiku: -1, sonnet: 'claude-sonnet-5' });
 
   const found = await probeClaudeModels(fake, ['haiku', 'sonnet']);
 
-  assert.equal(found, undefined, 'a run that learned nothing must not be written down as an answer');
-  assert.equal(fake.asked.length, 1, 'it kept asking after the CLI had already failed to start');
+  assert.equal(fake.asked.length, 2, 'the candidate after a failure was never asked');
+  assert.deepEqual(found?.models.map((m) => m.asked), ['sonnet'], 'and what DID answer is the answer');
 });
 
 test('a CLI with no version is not asked anything', async () => {
@@ -97,5 +99,78 @@ test('a run that failed keeps the answer that was already held', async () => {
   assert.equal(probeToKeep(undefined, undefined), undefined);
 
   const fresh: ProbeResult = { ...held, checkedUtc: '2026-09-17T10:00:00.000Z' };
-  assert.equal(probeToKeep(fresh, held), fresh, 'a successful run must replace what it supersedes');
+  // deepEqual rather than equal: a run that reached every candidate it held supersedes it entirely,
+  // but the merge builds the answer rather than handing back the object it was given.
+  assert.deepEqual(probeToKeep(fresh, held), fresh, 'a successful run must replace what it supersedes');
+});
+
+// ---------------------------------------------------------------------------------------------
+// What a run that could NOT ask everything is allowed to do to what is already known
+// (the code round: codex SecurityReliability + UxDxPerformance, gemini SecurityReliability)
+
+const HELD: ProbeResult = {
+  cliVersion: '2.1.0',
+  checkedUtc: '2026-09-15T10:00:00.000Z',
+  models: [
+    { asked: 'haiku', answered: 'claude-haiku-4-5', verified: true },
+    { asked: 'sonnet', answered: 'claude-sonnet-5', verified: true },
+    { asked: 'opus', answered: 'claude-opus-5', verified: true },
+    { asked: 'fable', answered: 'claude-fable-5-1', verified: true },
+  ],
+};
+
+test('one candidate that cannot be asked does not abandon the ones after it', async () => {
+  // A timeout and a CLI that will not start both answer -1, and they are not the same event: a
+  // transient hiccup on 'haiku' must not leave sonnet, opus and fable unasked for a week.
+  const fake = cli({ haiku: -1, sonnet: 'claude-sonnet-5', opus: 'claude-opus-5', fable: 'claude-fable-5-1' });
+  const found = await probeClaudeModels(fake);
+
+  assert.deepEqual(fake.asked.map((args) => args[args.indexOf('--model') + 1]),
+    ['haiku', 'sonnet', 'opus', 'fable'], 'every candidate is still asked');
+  assert.equal(found?.models.filter((m) => m.verified).length, 3, 'the three that answered are verified');
+});
+
+test('a CLI that will not start at all is given up on, not asked four times', async () => {
+  const fake = cli({ haiku: -1, sonnet: -1, opus: -1, fable: -1 });
+
+  assert.equal(await probeClaudeModels(fake), undefined, 'nothing was learned, so there is no answer');
+  assert.ok(fake.asked.length < 4, `it kept asking a CLI that never ran: ${fake.asked.length} times`);
+});
+
+test('a partial run MERGES into what was known, and never subtracts from it', () => {
+  const partial: ProbeResult = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [{ asked: 'haiku', answered: 'claude-haiku-4-5', verified: true }],
+  };
+  const kept = probeToKeep(partial, HELD);
+
+  assert.equal(kept?.models.length, 4, 'three verified families were dropped by a run that never asked them');
+  assert.equal(kept?.models.find((m) => m.asked === 'opus')?.verified, true,
+    'opus was confirmed yesterday and this run did not reach it');
+  assert.equal(kept?.checkedUtc, '2026-09-16T10:00:00.000Z', 'but what WAS asked is the newer answer');
+});
+
+test('a merge only carries forward an answer from the SAME CLI', () => {
+  const newer: ProbeResult = {
+    cliVersion: '2.2.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [{ asked: 'haiku', answered: 'claude-haiku-4-5', verified: true }],
+  };
+  const kept = probeToKeep(newer, HELD);
+
+  assert.deepEqual(kept?.models.map((m) => m.asked), ['haiku'],
+    'a new binary may reach different families, so nothing is inherited across one');
+});
+
+test('the probe stops when whoever asked for it has gone away', async () => {
+  let gone = false;
+  const fake = cli({ haiku: 'claude-haiku-4-5', sonnet: 'claude-sonnet-5' });
+  const watched: ProbePorts = {
+    ...fake,
+    run: (args) => { gone = true; return fake.run(args); },
+  };
+
+  const found = await probeClaudeModels(watched, undefined, () => gone);
+  assert.equal(found?.models.length, 1, 'four candidates are up to a hundred seconds of billed requests');
 });

@@ -1,5 +1,6 @@
 import { ChatModelChoice } from './chatPage';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
+import type { ProbeResult } from './claudeModels';
 import { LocalEngine } from './localEngines';
 import { allowedModelsFor, ModelChoice, modelsFor } from './models';
 import { REMOTE_TURNS } from './remoteAsk';
@@ -245,6 +246,15 @@ export interface ChatProviderList {
 export interface ChatCatalog {
   readonly discoveredCodex: readonly ModelChoice[];
   readonly discoveredAgy: readonly ModelChoice[];
+  /**
+   * What the Claude CLI answered about the families it reaches, when the panel has asked it.
+   *
+   * <p>Here because a chat's Claude list is the SAME list the panel's dropdown draws, and a decision
+   * applied at some of its sites is the defect this family keeps writing: without it the picker
+   * offered every curated alias as though each had been confirmed, one surface away from the panel
+   * saying which had. (Code round, local Architecture.)</p>
+   */
+  readonly claudeProbe?: ProbeResult | undefined;
   readonly localEngine?: LocalEngine | undefined;
   readonly teamServers: readonly TeamServerState[];
 }
@@ -290,6 +300,7 @@ export function chatProvidersFrom(
       catalog.localEngine,
       catalog.discoveredAgy,
       allowedModelsFor(vendor, catalog.teamServers).models,
+      catalog.claudeProbe,
     ).filter((model) => routableOn(vendor.runtime, model.id)),
   }));
   const refused = enabled.filter((vendor) => !canChat(vendor)).map((vendor): RefusedModel => ({
@@ -544,6 +555,7 @@ export function chatProvidersFromPresets(
         catalog.localEngine,
         catalog.discoveredAgy,
         allowedModelsFor(spec, catalog.teamServers).models,
+        catalog.claudeProbe,
       ).filter((model) => routableOn(preset.runtime, model.id)),
     };
   });

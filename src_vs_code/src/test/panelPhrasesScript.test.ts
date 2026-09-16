@@ -275,3 +275,30 @@ test('the acknowledgement stands on the panel ground, in the theme green, with n
     'the copied state names a background instead of standing on the panel ground, so it is a patch of another shade',
   );
 });
+
+// ---------------------------------------------------------------------------------------------
+// The mark a section wears while a probe is out (issue #301, the code round asked for this)
+
+test('the looking mark is one rule in the panel stylesheet, and it turns', () => {
+  // A STRUCTURAL assertion, which is the kind this page allows: the stylesheet is parsed as data and
+  // the rule is looked up, rather than the page's text being searched for a string.
+  const rules = stylesheet(panelHtml(state(), 'n0nce'));
+  const looking = rules.filter((one) => one.selector === '.looking');
+
+  assert.equal(looking.length, 1,
+    'the panel dims the loser when a class is defined twice, and a spinner is the worst thing to lose');
+  assert.match(looking[0]!.body, /animation:\s*looking-turn/, 'the ring does not turn');
+  assert.match(looking[0]!.body, /border-radius:\s*50%/, 'a square is not a ring');
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(looking[0]!.body),
+    `a colour of ours instead of the theme: ${looking[0]!.body}`);
+});
+
+test('the stylesheet is still one parsable whole, at-rules and all', () => {
+  // `stylesheet` asserts every byte was consumed, so this fails rather than silently skipping if the
+  // spinner's nested @keyframes-inside-@media confuses the parser — which is the shape that carries
+  // the reduced-motion preference without defining .looking a second time.
+  const rules = stylesheet(panelHtml(state(), 'n0nce'));
+
+  assert.ok(rules.length > 50, `the stylesheet parsed to ${rules.length} rules, which is not this page`);
+  assert.equal(rules.filter((one) => one.selector.includes('@')).length, 0, 'an at-rule leaked out as a selector');
+});

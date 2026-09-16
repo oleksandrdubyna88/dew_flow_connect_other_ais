@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { capture } from '../versionProbe';
 import { test } from 'node:test';
 import { tmpdir } from 'node:os';
 import { ProcessHandle, launch, workingDirectory } from '../processLauncher';
@@ -342,4 +343,20 @@ test('a launch given no variables changes nothing about the child', async () => 
   }
 
   assert.equal(said, 'inherited by default');
+});
+
+test('a captured child is told at once that no input is coming', async () => {
+  // MEASURED, by the live contract check for issue #301: the Claude CLI prints "no stdin data
+  // received in 3s, proceeding without it" and waits those three seconds — on every candidate, so
+  // twelve seconds of a probe spent waiting for a pipe `capture` was never going to write to.
+  // `capture` has no way to send anything, so an open input is a promise it cannot keep.
+  const said = await capture(
+    NODE,
+    ['-e', 'process.stdin.on("end", () => process.stdout.write("eof")); process.stdin.resume();'],
+    false,
+    5_000,
+  );
+
+  assert.equal(said.code, 0, 'the child waited for an input that never ended, and was killed at the cap');
+  assert.equal(said.output, 'eof', 'the child was never told the input was over');
 });

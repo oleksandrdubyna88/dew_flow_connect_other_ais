@@ -1,5 +1,7 @@
 import { Catalog } from './teamServerApi';
 import { ChatCatalog } from './chatModels';
+import type { ProbeResult } from './claudeModels';
+import { parseProbe } from './claudeProbeFile';
 import { ModelChoice } from './models';
 import { TeamServerState } from './teamServerView';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
@@ -33,6 +35,8 @@ export interface Discovery {
   readonly agy: readonly ModelChoice[];
   /** The last catalog each Team server answered with, by server id, WITH the address it came from. */
   readonly catalogs: Readonly<Record<string, StoredCatalog>>;
+  /** What the Claude CLI answered, so a chat's Claude list says what the panel's says. */
+  readonly claude?: ProbeResult | undefined;
 }
 
 /**
@@ -57,7 +61,7 @@ export type StoredCatalog = Catalog & {
   readonly stale: boolean;
 };
 
-export const EMPTY_DISCOVERY: Discovery = { codex: [], agy: [], catalogs: {} };
+export const EMPTY_DISCOVERY: Discovery = { codex: [], agy: [], catalogs: {}, claude: undefined };
 
 /** A record, or nothing — a stored value can be a string, a number or a null. */
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -130,7 +134,13 @@ export function discoveryFrom(saved: unknown): Discovery {
     }),
   );
 
-  return { codex: choices(one['codex']), agy: choices(one['agy']), catalogs };
+  // Read back through the probe file's own parser, which rebuilds every entry rather than trusting
+  // it — this store outlives the version that wrote it, exactly like the catalogs above.
+  const claude = typeof one['claude'] === 'object' && one['claude'] !== null
+    ? parseProbe(JSON.stringify(one['claude']))
+    : undefined;
+
+  return { codex: choices(one['codex']), agy: choices(one['agy']), catalogs, claude };
 }
 
 /**
@@ -162,6 +172,7 @@ export function catalogUsing(discovery: Discovery, servers: readonly TeamServer[
   return {
     discoveredCodex: discovery.codex,
     discoveredAgy: discovery.agy,
+    claudeProbe: discovery.claude,
     localEngine: undefined,
     teamServers: servers.map((server): TeamServerState => ({
       server,
