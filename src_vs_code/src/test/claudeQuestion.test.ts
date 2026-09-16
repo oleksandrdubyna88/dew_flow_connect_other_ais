@@ -175,7 +175,7 @@ test('the directory is matched case-insensitively, because its case is not ours 
 
 const session = (file: string, answered: boolean, at = '2026-09-11T18:00:00.000Z', title = ''): WaitingSession => ({
   file,
-  asked: { id: file, questions: ONE, answered, sessionId: file, at, names: { current: title, former: [] } },
+  asked: { id: file, questions: ONE, answered, sessionId: file, at, names: { latest: title, former: [] } },
 });
 
 test('one session waiting is the answer; two is a refusal, never a pick', () => {
@@ -454,9 +454,9 @@ test('the title is read off the session, and the newest one wins', () => {
   const titled = (name: string): string => JSON.stringify({ type: 'ai-title', aiTitle: name, sessionId: 's' });
   const found = asked([titled('First guess'), asks('a', ONE), titled('What it is really about')]);
 
-  assert.strictEqual(found?.names.current, 'What it is really about', 'an older title named the tab');
+  assert.strictEqual(found?.names.latest, 'What it is really about', 'an older title named the tab');
   assert.deepStrictEqual(found?.names.former, ['First guess'], 'the name it used to wear was thrown away');
-  assert.strictEqual(asked([asks('a', ONE)])?.names.current, '', 'a session with no title row invented one');
+  assert.strictEqual(asked([asks('a', ONE)])?.names.latest, '', 'a session with no title row invented one');
 });
 
 test('a question in a conversation renamed by hand is still this tab’s question', () => {
@@ -467,7 +467,7 @@ test('a question in a conversation renamed by hand is still this tab’s questio
     JSON.stringify({ type: 'custom-title', sessionId: 's', customTitle: name });
   const found = asked([renamed('/feature-dev long derived title'), asks('a', ONE), renamed('coai 7 issues')]);
 
-  assert.strictEqual(found?.names.current, 'coai 7 issues', 'the name the person typed was not read at all');
+  assert.strictEqual(found?.names.latest, 'coai 7 issues', 'the name the person typed was not read at all');
   assert.strictEqual(
     waitingIn([{ file: 'a', asked: found! }], 'coai 7 issues').kind,
     'one',

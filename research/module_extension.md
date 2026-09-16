@@ -1531,13 +1531,21 @@ titles is claimed by two sessions.
 **Nor is the LAST title the answer.** Their second observation — *«я переименовал вручную, оно
 изменило, а потом через пару минут вернуло старые названия»* — is in the file: the rename spells
 `sessionId` before `customTitle` and the rows around it spell it after, so a second writer re-asserts
-the old title minutes later. `namesOf(file)` therefore returns `SessionNames {current, former}`: every
+the old title minutes later. `namesOf(file)` therefore returns `SessionNames {latest, former}`: every
 name the file has carried, with the last of them told apart from the rest. `namedAmong` matches in two
-tiers — a session wearing the name NOW answers first, and former names answer only when nothing
-currently wears it, or a conversation the person has moved on from would outrank the one in front of
-them. Ambiguity inside a tier is the same refusal it always was. **One rule, two readers**: the Asked
-button and *Take the question* share `namedAmong` and one `collectNames()` accumulator, because a copy
-of this rule beside the other is how it was wrong in two places at once.
+tiers — a session whose LATEST name is the one looked for answers first, and earlier names answer only
+when nothing has it as its latest, or a conversation the person has moved on from would outrank the
+one in front of them. Inside a tier, a WHOLE name answers before one that merely starts the same way,
+since a truncated tab is a prefix of everything that begins with it. Ambiguity that survives both
+rules is the refusal it always was. **One rule, two readers**: the Asked button and *Take the question*
+share `namedAmong` and one `collectNames()` accumulator, because a copy of this rule beside the other
+is how it was wrong in two places at once.
+
+`latest` is deliberately not called *current*: it is the last title row, not a fact about the tab, and
+the stale writer can leave a session's real name in the second tier. Where that happens beside a
+namesake the pair is REFUSED rather than picked between — the safe direction — and the session id and
+the picker are what recover from it. (codex, the code round, against a comment that claimed the last
+row was authoritative.)
 
 **And the tab can read that session back.** The symptom was *"когда окно долго работает (4 ч и более)
 начальный вопрос исчезает, и мне приходится спрашивать клод над чем ты работаешь"*. **Asked**, in the
