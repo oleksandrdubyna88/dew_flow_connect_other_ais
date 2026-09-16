@@ -50,7 +50,8 @@ export const undecided = (pairs: readonly ReviewPair[]): number =>
   pairs.filter((p) => p.keep === UNDECIDED).length;
 
 const escape = (text: string): string =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
 function row(pair: ReviewPair): string {
   return `<tr class="pair" data-row="${pair.findingId}">
@@ -63,6 +64,35 @@ function row(pair: ReviewPair): string {
   <td class="code"><pre>${escape(pair.skeletonBefore)}</pre></td>
   <td class="code"><pre>${escape(pair.skeletonAfter)}</pre></td>
 </tr>`;
+}
+
+
+/**
+ * The three things this page can be showing, as one decision rather than a nested ternary.
+ *
+ * <p>They are genuinely three: a read that FAILED, a corpus that is empty, and rows. The first two
+ * send a person to different places — press Collect, or find out why the server would not answer —
+ * and collapsing them is the defect four reviewers found in the first version.</p>
+ */
+function body(pairs: readonly ReviewPair[], rows: string, trouble: string): string {
+  if (trouble.length > 0) {
+    return `<p class="empty" id="trouble">The pairs could not be read: ${escape(trouble)}</p>`;
+  }
+
+  if (pairs.length === 0) {
+    return '<p class="empty" id="nothing">Nothing has been collected yet.'
+      + ' Press Collect in the Bugz section of the panel.</p>';
+  }
+
+  return `<table>
+<thead><tr>
+  <th class="pick"><input type="checkbox" id="pickall" title="Select every pair"></th>
+  <th>Method</th><th>Before</th><th>After</th>
+</tr></thead>
+<tbody>
+${rows}
+</tbody>
+</table>`;
 }
 
 /**
@@ -133,19 +163,7 @@ export function reviewPageHtml(
   <button type="button" class="quiet" id="clear">Clear selection</button>
   <span class="hint" id="picked"></span>
 </div>
-${trouble.length > 0
-    ? `<p class="empty" id="trouble">The pairs could not be read: ${escape(trouble)}</p>`
-    : pairs.length === 0
-    ? '<p class="empty" id="nothing">Nothing has been collected yet. Press Collect in the Bugz section of the panel.</p>'
-    : `<table>
-<thead><tr>
-  <th class="pick"><input type="checkbox" id="pickall" title="Select every pair"></th>
-  <th>Method</th><th>Before</th><th>After</th>
-</tr></thead>
-<tbody>
-${rows}
-</tbody>
-</table>`}
+${body(pairs, rows, trouble)}
 <script nonce="${nonce}">
 (function () {
   var vscode = acquireVsCodeApi();

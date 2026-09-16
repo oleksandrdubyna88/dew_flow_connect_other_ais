@@ -44,12 +44,9 @@ public static class Ranking
 
         // First mention wins. A model that lists the same id twice has contradicted itself, and the
         // later claim is not more true than the earlier one — but it must not shift the first.
-        foreach (var one in answered)
+        foreach (var one in answered.Where(one => known.Contains(one.FindingId)))
         {
-            if (known.Contains(one.FindingId))
-            {
-                _ = placed.TryAdd(one.FindingId, one.Rank);
-            }
+            _ = placed.TryAdd(one.FindingId, one.Rank);
         }
 
         // The tie-break is the offered order, and it is a STABLE sort over that sequence rather than

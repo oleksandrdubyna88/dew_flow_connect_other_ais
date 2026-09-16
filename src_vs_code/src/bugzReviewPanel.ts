@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import * as vscode from 'vscode';
 
 import { KeepWrite, PairsRead } from './roundsDbRead';
@@ -97,8 +99,8 @@ export class BugzReviewPanel {
 
       await this.draw();
       await this.hooks.changed();
-    }).catch(async (wrong: unknown) => {
-      await vscode.window.showErrorMessage(`The decision could not be saved: ${String(wrong)}`);
+    }).catch(async (error_: unknown) => {
+      await vscode.window.showErrorMessage(`The decision could not be saved: ${String(error_)}`);
       await this.draw();
     });
   }
@@ -124,13 +126,19 @@ export class BugzReviewPanel {
   }
 }
 
-/** One nonce per paint: the CSP admits our one script and nothing else. */
+/**
+ * One nonce per paint: the CSP admits our one script and nothing else.
+ *
+ * <p><b>Cryptographically random, not `Math.random()`.</b> The nonce is the whole of the content
+ * security policy here — a predictable one is a policy an injected script can satisfy, which is
+ * the point of having it. `Math.random()` is seeded per process and its sequence is recoverable
+ * from a few outputs.</p>
+ *
+ * <p>The panel's own `nonce()` (`panelProvider.ts`) still uses `Math.random()`. I copied it here
+ * and a scanner refused the copy; the reuse rule says to write the new one well and SAY what was
+ * found rather than imitate it, so this is the correct one and that one is reported rather than
+ * quietly rewritten in a change about something else.</p>
+ */
 function nonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let i = 0; i < 32; i++) {
-    text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-
-  return text;
+  return randomBytes(24).toString('base64url');
 }
