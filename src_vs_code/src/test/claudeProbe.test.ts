@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PROBE_PROMPT, ProbePorts, askedEverything, probeClaudeModels, probeToKeep } from '../claudeProbe';
+import {
+  PROBE_PROMPT,
+  ProbePorts,
+  askedEverything,
+  probeClaudeModels,
+  probeSucceeded,
+  probeToKeep,
+} from '../claudeProbe';
 import type { ProbeResult } from '../claudeModels';
 
 /**
@@ -260,4 +267,18 @@ test('an answer that did not reach every candidate says so', () => {
   assert.equal(askedEverything(partial), false, 'three of the four candidates were never reached');
   assert.equal(askedEverything(HELD), true, 'and a run that reached them all is complete');
   assert.equal(askedEverything(undefined), false, 'nothing at all is not a complete run');
+});
+
+test('the three ways a run fails all read as a failure, and a good run does not', () => {
+  const spent: ProbeResult = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: HELD.models.map((m) => ({ asked: m.asked, answered: '', verified: false })),
+  };
+  const abandoned: ProbeResult = { ...HELD, models: HELD.models.slice(0, 1) };
+
+  assert.equal(probeSucceeded(undefined), false, 'nothing was learned');
+  assert.equal(probeSucceeded(spent), false, 'every candidate answered and none was confirmed');
+  assert.equal(probeSucceeded(abandoned), false, 'the panel was hidden and the run stopped');
+  assert.equal(probeSucceeded(HELD), true, 'and a run that reached them all and confirmed one did not fail');
 });

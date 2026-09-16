@@ -47,7 +47,7 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { PROBE_FILE, parseProbe, writeProbe } from './claudeProbeFile';
-import { PROBE_CAP_MS, askedEverything, probeClaudeModels, probeToKeep } from './claudeProbe';
+import { PROBE_CAP_MS, probeClaudeModels, probeSucceeded, probeToKeep } from './claudeProbe';
 import { ProbeResult, stillGood } from './claudeModels';
 import { writeFileAtomically } from './atomicFile';
 import { seedIfEmpty } from './sideSettings';
@@ -744,6 +744,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // Whether anything CHANGED, so a no-op run repaints nothing. A repaint that changed nothing was
     // what closed the loop above into an endless one.
     let moved = false;
+    // Both read in the `finally`, which is the only place that sees a THROW as well as a return.
+    // Dating the failure inside the try meant an exception left nothing dated, so the edge trigger
+    // never asked again for the rest of the session — the very hole the dating exists to close.
+    let cliVersion = '';
+    let succeeded = false;
     try {
       if (!this.claudeProbeRead) {
         this.claudeProbeRead = true;
@@ -751,13 +756,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         moved = this.claudeProbe !== undefined;
       }
       const executable = claudeExecutableFor(vendors, consult);
-      const cliVersion = await askVersion(executable);
+      cliVersion = await askVersion(executable);
       // A CLI that will not say its version is not a transient failure — it is not installed at
       // this path — so it is NOT dated for a retry. Re-asking a binary that is not there every ten
       // minutes would be a process spawn a person never asked for, for ever.
       moved = moved || cliVersion !== this.claudeCliVersion;
       this.claudeCliVersion = cliVersion;
       if (cliVersion.length === 0 || stillGood(this.claudeProbe, cliVersion, Date.now())) {
+        // Nothing to do, which is not a failure: an absent CLI must not be re-asked every ten
+        // minutes for ever, and a fresh answer is the answer.
+        succeeded = true;
+
         return;
       }
       moved = true;
@@ -781,19 +790,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // A run that learned nothing keeps the previous answer: an account whose allowance is spent
       // is a state this installation is really in, and it must not empty anybody's dropdown.
       this.claudeProbe = probeToKeep(found, this.claudeProbe);
-      // A run that confirmed NOTHING is a failure, whatever it managed to record: an allowance that
-      // is spent answers every candidate, unverified, and a person must be able to try again after
-      // signing in rather than restarting the editor. So is one that did not reach every candidate —
-      // hiding this view disposes it and stops the probe, and an abandoned run has the same shape as
-      // a finished one.
-      if (found === undefined || !found.models.some((m) => m.verified) || !askedEverything(found)) {
-        this.claudeProbeFailedAt = Date.now();
-      }
+      succeeded = probeSucceeded(found);
       if (this.claudeProbe !== undefined) {
         await this.keepClaudeProbe(this.claudeProbe);
       }
     } finally {
       this.claudeProbeInFlight = false;
+      // A run that did not succeed is dated so it can be tried again shortly — including one that
+      // THREW, which is what a `finally` sees and the try did not. A CLI that could not even say its
+      // version is left alone: it is not installed at that path, and re-asking a binary that is not
+      // there every ten minutes is a process spawn nobody asked for.
+      if (!succeeded && cliVersion.length > 0) {
+        this.claudeProbeFailedAt = Date.now();
+      }
       const wasLooking = this.askingClaude;
       this.askingClaude = false;
       // Whatever happened, the panel stops saying it is looking. Cleared here rather than at the
