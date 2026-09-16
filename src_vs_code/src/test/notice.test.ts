@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { Notice, answered, gapSentence, noticeRecord } from '../notice';
+
+/**
+ * What a notice MEANS, decided without a disk and without `vscode`.
+ *
+ * <p>`notify.ts` imports `vscode` and therefore cannot be imported by any test in this repository,
+ * which is exactly why everything worth asserting lives here — the same split that lets
+ * `chatDoors.ts` be tested while `chatDoorsFile.ts`'s caller is not.</p>
+ */
+
+const NOON = new Date('2026-09-16T12:00:00.000Z');
+
+function notice(over: Partial<Notice> = {}): Notice {
+  return {
+    as: 'warning',
+    class: 'stand-down',
+    source: 'serverSettingsSync',
+    code: 'settings-stood-down',
+    title: 'The server settings were left alone',
+    ...over,
+  };
+}
+
+test('a notice becomes a record carrying the run, the pid and the clock it was given', () => {
+  const record = noticeRecord(notice(), 'a1c9f0', 37308, NOON);
+
+  assert.equal(record.utc, '2026-09-16T12:00:00.000Z');
+  assert.equal(record.run, 'a1c9f0');
+  assert.equal(record.pid, 37308);
+  assert.equal(record.class, 'stand-down');
+  assert.equal(record.code, 'settings-stood-down');
+});
+
+test('only the optional fields that were given reach the record', () => {
+  const bare = noticeRecord(notice(), 'r', 1, NOON);
+  const full = noticeRecord(
+    notice({ detail: 'because 0.47.0 wrote it', cure: 'Reload the window.', action: 'Reload Window' }),
+    'r',
+    1,
+    NOON,
+  );
+
+  assert.equal('detail' in bare, false, 'an absent field must be absent, not an empty string');
+  assert.equal('cure' in bare, false);
+  assert.equal('action' in bare, false);
+  assert.equal(full.detail, 'because 0.47.0 wrote it');
+  assert.equal(full.action, 'Reload Window');
+});
+
+test('an empty string is the same as not saying it', () => {
+  const record = noticeRecord(notice({ detail: '', subject: '' }), 'r', 1, NOON);
+
+  assert.equal('detail' in record, false);
+  assert.equal('subject' in record, false);
+});
+
+test('the answer is a second record, and walking away is an answer', () => {
+  const asked = noticeRecord(notice({ action: 'Reload Window' }), 'r', 1, NOON);
+
+  assert.equal(answered(asked, 'Reload Window').answer, 'Reload Window');
+  assert.equal(answered(asked, undefined).answer, 'dismissed');
+  // The asking is unchanged: nothing in this design is ever updated in place.
+  assert.equal('answer' in asked, false);
+  assert.equal(answered(asked, 'x').code, asked.code);
+});
+
+test('the gap is a state and says nothing when there is no gap', () => {
+  assert.equal(gapSentence(0, '12:00:00'), '');
+  assert.equal(gapSentence(1, '12:00:00'), '1 record could not be written since 12:00:00');
+  assert.equal(gapSentence(7, '12:00:00'), '7 records could not be written since 12:00:00');
+});

@@ -42,7 +42,9 @@ import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
+import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
+import { notify, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRunAt } from './roundsDbRead';
 import { StorageFingerprint } from './dataMove';
@@ -424,7 +426,17 @@ export function activate(context: vscode.ExtensionContext): void {
         // a toast is neither readable nor theirs to act on, and the path rule says so; dropping it
         // altogether would leave a keypress that does nothing and explains nothing. (CodeRabbit.)
         console.error('coai.takeTheQuestion failed', reason);
-        void vscode.window.showWarningMessage('The question could not be taken.');
+        // The short sentence still goes to the person and the detail still goes to the console —
+        // neither changes. What changes is that the detail is also WRITTEN DOWN, so the next
+        // person to ask "why did that key press do nothing" has somewhere to look.
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'takeTheQuestion',
+          code: 'question-not-taken',
+          title: 'The question could not be taken.',
+          detail: asText(reason),
+        });
       });
     }),
     // The same reader, the other verb: ADDED to what the composer already holds rather than put in
@@ -434,7 +446,14 @@ export function activate(context: vscode.ExtensionContext): void {
       noteChatDoor('add');
       takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
         console.error('coai.addTheQuestion failed', reason);
-        void vscode.window.showWarningMessage('The question could not be added.');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'addTheQuestion',
+          code: 'question-not-added',
+          title: 'The question could not be added.',
+          detail: asText(reason),
+        });
       });
     }),
     // The list of conversations — open and closed, this folder or every folder. It opens no chat by
@@ -454,7 +473,14 @@ export function activate(context: vscode.ExtensionContext): void {
       void goToConversation(chatPanels, housekeeping.index, chatStore, context.extensionUri)
         .catch((reason: unknown) => {
           console.error('ConnectOtherAIs: going to a conversation threw', reason);
-          void vscode.window.showWarningMessage('That conversation could not be opened.');
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'goToConversation',
+            code: 'conversation-not-opened',
+            title: 'That conversation could not be opened.',
+            detail: asText(reason),
+          });
         });
     }),
     vscode.commands.registerCommand('coai.switchConversations', () => {
@@ -774,17 +800,28 @@ function extensionVersion(context: vscode.ExtensionContext): string {
  * makes VS Code pick up the extension it has already downloaded.</p>
  */
 function reportStandDown(theirVersion: string): void {
-  void vscode.window
-    .showWarningMessage(
-      `ConnectOtherAIs left the server settings alone: they were written by version ${theirVersion}, `
+  // Through the funnel, and through `notifyThen` rather than `notifyAndAsk`: this is raised from
+  // inside `serverSettingsSync`'s critical section, so waiting here for somebody to press a button
+  // would hold that section for as long as the toast sat on screen and turn every later sync into
+  // a 'busy'. The record lands either way — which is the point, because on 2026-09-16 this exact
+  // warning was shown once, missed, and the machine ran ninety minutes on stale settings.
+  void notifyThen(
+    {
+      as: 'warning',
+      class: 'stand-down',
+      source: 'serverSettingsSync',
+      code: 'settings-stood-down',
+      title: `ConnectOtherAIs left the server settings alone: they were written by version ${theirVersion}, `
         + 'which is newer than the build this window is running. Reload the window to catch up.',
-      'Reload Window',
-    )
-    .then((choice) => {
+      cure: 'Reload this window — it picks up the extension VS Code has already downloaded.',
+      action: 'Reload Window',
+    },
+    (choice) => {
       if (choice === 'Reload Window') {
         void vscode.commands.executeCommand('workbench.action.reloadWindow');
       }
-    });
+    },
+  );
 }
 
 /** The one answer, as the Uri the rest of this file wants. It lives in `dataDir.ts`. */

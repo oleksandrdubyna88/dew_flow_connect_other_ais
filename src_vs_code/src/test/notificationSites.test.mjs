@@ -36,6 +36,31 @@ test('the count is internally consistent, which the hand-written one was not', (
   assert.ok(counted.sites > 0, 'a counter that finds nothing would pass every other assertion here');
 });
 
+/**
+ * The ratchet. 109 call sites cannot be routed through the funnel in one commit, and a whitelist
+ * with a hundred entries in it is a lie dressed as enforcement. So the number is allowed to FALL
+ * and never to rise: a new direct call makes the drift test above red, and lowering this constant
+ * is the only sanctioned way to change it.
+ */
+const MOST_DIRECT_CALLS_ALLOWED = 105;
+
+test('no call site is added outside the funnel — the count only ever falls', () => {
+  const counted = count();
+
+  assert.ok(
+    counted.sites <= MOST_DIRECT_CALLS_ALLOWED,
+    `${counted.sites} direct calls, and the ratchet stands at ${MOST_DIRECT_CALLS_ALLOWED}. `
+    + 'A new message goes through notify() — see notify.ts.',
+  );
+});
+
+test('and the scan still finds a call it is SUPPOSED to find', () => {
+  // The companion `testing.md` asks for beside every prohibition: a scan that matches nothing
+  // passes for ever. The funnel calls the API on purpose, so if this reaches zero the scan has
+  // stopped working rather than the product having stopped showing messages.
+  assert.ok(count().inTheFunnel > 0, 'the scan no longer matches the funnel itself');
+});
+
 test('the per-file breakdown accounts for every site', () => {
   const counted = count();
   const perFile = Object.values(counted.perFile).reduce((total, n) => total + n, 0);
