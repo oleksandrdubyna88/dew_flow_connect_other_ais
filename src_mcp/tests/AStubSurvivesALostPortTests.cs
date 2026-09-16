@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using FluentAssertions;
 using Xunit;
 
@@ -10,21 +11,24 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// <para>The failure being pinned is not hypothetical and not local: it took the linux-x64 leg of the
-/// `mcp-v0.25.0` release matrix on 2026-09-15, which left that release a DRAFT carrying ten assets
+/// mcp-v0.25.0 release matrix on 2026-09-15, which left that release a DRAFT carrying ten assets
 /// instead of twelve. The binaries were correct; a stub could not get a socket.</para>
-/// <para><b>Why the second case is the one with teeth.</b> A retry cannot be proved red by deleting
+/// <para><b>Why the second test is the one with teeth.</b> A retry cannot be proved red by deleting
 /// it — deleting it leaves the OLD code, which is a single attempt, and a single attempt is exactly
-/// what <c>attempts: 1</c> asks for here. So the second test IS the unfixed behaviour, run against
-/// the same lost port, asserting it fails. Run them together and they say: this input broke the
-/// build, and this is the line that stops it doing so again.</para>
+/// what <c>attempts: 1</c> asks for here. So that test IS the unfixed behaviour, run against the same
+/// lost port, asserting it fails. The two together say: this input broke the build, and this is the
+/// line that stops it doing so again.</para>
+/// <para><b>The port is held by an ordinary socket, not by another listener</b>, because that is the
+/// CI case and the two are not the same failure: a socket gives 98 on Linux and 32 on Windows, while
+/// a second HttpListener gives 400 and 183. Holding it the convenient way would have exercised a
+/// collision that CI has never had.</para>
 /// </remarks>
 public sealed class AStubSurvivesALostPortTests
 {
     [Fact]
     public void APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun()
     {
-        using var held = LoopbackStub.Start().Server;
-        var taken = PortOf(held);
+        using var thief = Hold(out var taken);
 
         var (server, prefix) = LoopbackStub.Start(
             new[] { taken }.Concat(LoopbackStub.FreePorts()), LoopbackStub.Attempts);
@@ -41,8 +45,7 @@ public sealed class AStubSurvivesALostPortTests
     [Fact]
     public void WithASingleAttempt_WhichIsWhatTheStubHadBefore_TheSameLostPortFailsTheRun()
     {
-        using var held = LoopbackStub.Start().Server;
-        var taken = PortOf(held);
+        using var thief = Hold(out var taken);
 
         var failure = Record.Exception(() => LoopbackStub.Start([taken], attempts: 1));
 
@@ -60,11 +63,8 @@ public sealed class AStubSurvivesALostPortTests
     [Fact]
     public void EveryCandidateTaken_SaysItIsTheMachineAndNotTheRace()
     {
-        using var first = LoopbackStub.Start().Server;
-        using var second = LoopbackStub.Start().Server;
-
         var failure = Record.Exception(
-            () => LoopbackStub.Start([PortOf(first), PortOf(second)], attempts: 2));
+            () => LoopbackStub.Start([1, 2], attempts: 2, bind: _ => throw Taken(98)));
 
         failure.Should().BeOfType<InvalidOperationException>()
             .Which.Message
@@ -74,6 +74,85 @@ public sealed class AStubSurvivesALostPortTests
                 "and the reader is told which of the two cures to reach for");
     }
 
-    private static int PortOf(HttpListener listener) =>
-        new Uri(listener.Prefixes.Single()).Port;
+    /// <summary>
+    /// Every spelling of "that address is taken" this family's six release legs can produce.
+    /// </summary>
+    /// <remarks>
+    /// 32/183 and 98/400 were measured on this machine, on Windows and under WSL, with the port held
+    /// by a socket and by a second listener. 48 and 10048 were not — there is no macOS here — and are
+    /// carried because they are unambiguous spellings of the same condition. A code missing from the
+    /// set turns a lost port into a hard failure on that platform only, which is exactly the shape of
+    /// the bug this file exists for, so each one is pinned rather than trusted.
+    /// </remarks>
+    [Theory]
+    [InlineData(32)]
+    [InlineData(48)]
+    [InlineData(98)]
+    [InlineData(183)]
+    [InlineData(400)]
+    [InlineData(10048)]
+    public void EveryMeasuredSpellingOfATakenPort_CostsTheCandidateAndNotTheRun(int code)
+    {
+        var calls = 0;
+
+        var (server, _) = LoopbackStub.Start(
+            LoopbackStub.FreePorts(),
+            LoopbackStub.Attempts,
+            prefix => ++calls == 1 ? throw Taken(code) : Really(prefix));
+
+        using var _unused = server;
+        calls.Should().Be(2, $"error {code} means the port is gone, so the next candidate is taken");
+        server.IsListening.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AFailureThatIsNotATakenPort_ArrivesAsItselfAndIsNotRetried()
+    {
+        var calls = 0;
+
+        // 5 is ERROR_ACCESS_DENIED: a prefix this process may not register. Retrying it nine more
+        // times cannot help, and reporting it as ports being taken sends the reader hunting for a
+        // contention problem that is not there.
+        var failure = Record.Exception(() => LoopbackStub.Start(
+            LoopbackStub.FreePorts(),
+            LoopbackStub.Attempts,
+            _ =>
+            {
+                calls++;
+
+                throw Taken(5);
+            }));
+
+        calls.Should().Be(1, "a failure a retry cannot fix is not retried");
+        failure.Should().BeOfType<HttpListenerException>(
+            "and it arrives as itself rather than wrapped in a sentence about ports")
+            .Which.ErrorCode.Should().Be(5);
+    }
+
+    /// <summary>
+    /// A port held by an ordinary socket — the CI case, not a second listener.
+    /// </summary>
+    /// <remarks>
+    /// It binds port 0 and KEEPS it, rather than asking for a free port and then racing to take it.
+    /// Doing it the other way would have put the bug under test into the test that proves it fixed.
+    /// </remarks>
+    private static TcpListener Hold(out int port)
+    {
+        var thief = new TcpListener(IPAddress.Loopback, 0);
+        thief.Start();
+        port = ((IPEndPoint)thief.LocalEndpoint).Port;
+
+        return thief;
+    }
+
+    private static HttpListenerException Taken(int code) => new(code);
+
+    private static HttpListener Really(string prefix)
+    {
+        var server = new HttpListener();
+        server.Prefixes.Add(prefix);
+        server.Start();
+
+        return server;
+    }
 }
