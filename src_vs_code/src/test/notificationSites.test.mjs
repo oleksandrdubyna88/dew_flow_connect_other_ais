@@ -42,7 +42,7 @@ test('the count is internally consistent, which the hand-written one was not', (
  * and never to rise: a new direct call makes the drift test above red, and lowering this constant
  * is the only sanctioned way to change it.
  */
-const MOST_DIRECT_CALLS_ALLOWED = 105;
+const MOST_DIRECT_CALLS_ALLOWED = 93;
 
 test('no call site is added outside the funnel — the count only ever falls', () => {
   const counted = count();

@@ -21,6 +21,7 @@ import {
   serverStatus,
   versionFromTag,
 } from './coaiInstall';
+import { notify } from './notify';
 import { askVersion } from './versionProbe';
 
 /**
@@ -325,9 +326,17 @@ async function placeCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiR
   // The rest stay best-effort, and are NAMED. A companion nobody hears about is a feature that
   // quietly is not there, which is the shape of the defect this whole change exists to undo.
   if (failed.length > 0) {
-    void vscode.window.showWarningMessage(
-      `coai-mcp is installed, but ${failed.map((one) => one.name).join(', ')} could not be copied `
-      + `beside it (${failed[0]!.why}). The server runs; anything that needed those files will not.`);
+    void notify({
+      as: 'warning',
+      class: 'failure',
+      source: 'installer',
+      code: 'companions-not-copied',
+      title: `coai-mcp is installed, but ${failed.map((one) => one.name).join(', ')} could not be copied `
+        + `beside it (${failed[0]!.why}). The server runs; anything that needed those files will not.`,
+      // Every one of them, not only the first: the toast names the first because a toast has room
+      // for one, and the ledger is where the rest stop being lost.
+      detail: failed.map((one) => `${one.name}: ${one.why}`).join('\n'),
+    });
   }
 }
 

@@ -8,6 +8,7 @@ import {
   statusBarText,
 } from './escalations';
 import { WatchedDir, answerPaths, usableDirs, watchedDirs } from './escalationDirs';
+import { notify, notifyAndAsk } from './notify';
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -158,11 +159,18 @@ export class EscalationWatcher {
 
   /** The modal. Dismissing it is safe: the status bar and the rounds view still hold the question. */
   private async prompt(escalation: Escalation): Promise<void> {
-    const answer = await vscode.window.showWarningMessage(
-      modalText(escalation),
-      { modal: true },
-      'Answer…',
-    );
+    const answer = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'escalationWatcher',
+      code: 'a-review-is-waiting',
+      subject: escalation.id,
+      modal: true,
+      title: modalText(escalation),
+      action: 'Answer…',
+      branch: escalation.branch,
+      repo: escalation.repoPath,
+    });
     if (answer !== 'Answer…') {
       return;
     }
@@ -220,9 +228,15 @@ export class EscalationWatcher {
     if (paths === undefined) {
       // An id that is not a name cannot become a path. It arrived in a file this window did not
       // write, and answering it would mean writing wherever that file asked us to.
-      void vscode.window.showErrorMessage(
-        `That question's id is not a name this window can write a file for: ${escalation.id}`,
-      );
+      void notify({
+        as: 'error',
+        class: 'refusal',
+        source: 'escalationWatcher',
+        code: 'question-id-is-not-a-filename',
+        subject: escalation.id,
+        title: `That question's id is not a name this window can write a file for: ${escalation.id}`,
+        cure: 'The file was written by something else; this window will not write wherever it asks.',
+      });
 
       return;
     }
@@ -239,9 +253,14 @@ export class EscalationWatcher {
       // between the two is exactly where the other window answers. (codex and local, the plan round.)
       const already = await this.answered(target);
       if (already) {
-        void vscode.window.showInformationMessage(
-          'That question has already been answered — in another window, or by somebody else on this one.',
-        );
+        void notify({
+          as: 'information',
+          class: 'refusal',
+          source: 'escalationWatcher',
+          code: 'question-already-answered',
+          subject: escalation.id,
+          title: 'That question has already been answered — in another window, or by somebody else on this one.',
+        });
         await this.refresh();
 
         return;
@@ -253,9 +272,16 @@ export class EscalationWatcher {
       // and the answer being typed, and an answer that silently failed to land looks exactly like one
       // that did — while the round it was for blocks. The question stays open so it can be tried
       // again. (codex and local, the plan round.)
-      void vscode.window.showErrorMessage(
-        `The answer could not be written to ${dir.fsPath} — the question is still open. ${asText(reason)}`,
-      );
+      void notify({
+        as: 'error',
+        class: 'failure',
+        source: 'escalationWatcher',
+        code: 'answer-not-written',
+        subject: escalation.id,
+        title: `The answer could not be written to ${dir.fsPath} — the question is still open. ${asText(reason)}`,
+        cure: 'The question stays open, so it can be answered again once the folder is writable.',
+        detail: asText(reason),
+      });
 
       return;
     }

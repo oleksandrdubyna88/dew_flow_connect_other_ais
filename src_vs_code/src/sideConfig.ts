@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 import { ALWAYS_PER_SIDE, ConfigReader, OVERLAID_SETTINGS } from './settingsShape';
 import { declaresSetting, refusalNotice, settingRefusal, type RefusalSentences, type SettingRefusal } from './settingRefused';
 import { readOverlay, sideConfigReader, writeOverlay } from './sideSettings';
+import { asText } from './asText';
 import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
+import { notify, notifyThen } from './notify';
 
 /**
  * The ONE construction of this side's settings reader.
@@ -180,16 +182,33 @@ export function reportRefusal(
 ): void {
   const notice = refusalNotice(refusalFor(context, key, error), sentences, reloadOffered);
   console.error(`[coai] coai.${key} was not saved`, error);
+  // The SETTING is the subject, not the code: one call site, one condition, many keys. Without it
+  // a refusal to save `coai.roles` and a refusal to save `coai.vendors` would share a counter and
+  // recovering one would clear the other.
+  const common = {
+    as: 'error',
+    class: 'failure',
+    source: 'settings',
+    code: 'setting-not-saved',
+    subject: key,
+    detail: asText(error),
+  } as const;
+
   if (!notice.withAction) {
-    void vscode.window.showErrorMessage(notice.text);
+    void notify({ ...common, title: notice.text });
 
     return;
   }
 
   reloadOffered = true;
-  void vscode.window.showErrorMessage(notice.text, RELOAD).then((choice) => {
-    if (choice === RELOAD) {
-      void vscode.commands.executeCommand('workbench.action.reloadWindow');
-    }
-  });
+  // `notifyThen`, not `notifyAndAsk`: a caller saving a setting must not be held until somebody
+  // presses a button, and several of them are inside work that has to finish.
+  void notifyThen(
+    { ...common, title: notice.text, cure: 'Reload this window.', action: RELOAD },
+    (choice) => {
+      if (choice === RELOAD) {
+        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    },
+  );
 }
