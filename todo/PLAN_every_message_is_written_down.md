@@ -321,9 +321,12 @@ additive (the `vendor?` precedent):
   sites" as the defect this family keeps repeating. It reuses `CREDENTIAL_WORDS`
   (`consultantWrite.ts:233`), this repository's already-reviewed credential word list, and
   `displayable()` (`serverSettingsSync.ts:268`) for making foreign text fit. Patterns are bounded and
-  non-backtracking; `title` is capped at ~200 chars and `detail` at ~4 KB with an explicit
-  `…(truncated)`, because `detail` can carry an HTTP body or a megabyte stack and a regex over that is
-  a hung extension host.
+  non-backtracking; `detail` is capped at 4 KB and `title` at **1000** with an explicit
+  `…(truncated)`. `detail` can carry an HTTP body or a megabyte stack, and a regex over that is a hung
+  extension host rather than a slow function. **The title bound is 1000 where this plan first said
+  200 — changed while building S2**: a title is the text the person was actually shown, several
+  existing messages run past two hundred characters, and a ledger that truncates the message it
+  claims to have recorded is not more honest for having a smaller number in it.
 - **Both files join `DATA_TO_MOVE`** ([dataDir.ts:450](../src_vs_code/src/dataDir.ts)) and
   `shared/data-inventory.json`; a test already enforces the pair. Records written *during* a
   data-directory move strand in the old folder — pre-existing for `chat-usage.jsonl`, likelier here,
