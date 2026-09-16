@@ -38,7 +38,7 @@ import { CONSULTANT_RULE } from './generated/consultantRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = 'f3553414521aa3a5';
+export const SNIPPET_BODY_SHA = '5e630da7220cede4';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.

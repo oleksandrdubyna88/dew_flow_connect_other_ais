@@ -2613,7 +2613,9 @@ one of the 24 rule bodies the conventions repository hashes against its migratio
 `<!-- coai-snippet v5 -->` cannot be raised: the gate half is frozen at v5 and will be until that
 inventory retires. A change that arrives as a whole new half therefore brings a marker of its own —
 `coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since
-by a change to its own rule (v3, v2 and v2 as of 2026-09-16) — and `snippetStatus` compares a pasted
+by a change to its own rule (v3, v2 and v2 as of 2026-09-16 — `KNOWN_HALVES` in
+`claudeSnippet.ts` is the live answer, and these numbers are a record of one day rather than a
+claim about today) — and `snippetStatus` compares a pasted
 copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
 which is what lets a copy made before a half existed be recognised at all.
 
@@ -2637,7 +2639,9 @@ left open, and the operator reported it twice.
 `ARTEFACT_VERSION` is the answer: an ordinal for the composed paste, introduced at 6 because the menu
 had been showing 5 for the whole artefact and the next one was 6 — and moved on every change to the
 paste since, to 9 on 2026-09-16 (see *A finding that changes everything is the fifth reason to ask*
-below). It numbers a different thing from `SNIPPET_VERSION`, which stays 5 and stays the gate rule's
+below). That number is a dated record too; `ARTEFACT_VERSION` itself is what the menu, the panel
+note and the notification all read, and the value to check against. It numbers a different thing
+from `SNIPPET_VERSION`, which stays 5 and stays the gate rule's
 own marker. Three sentences read it — the
 menu title, the panel's stale-copy note, and the notification after the click — and two tests keep it
 honest: `snippetVersion.test.ts`'s hash guard fails on any change to the artefact text and names the
