@@ -1582,6 +1582,17 @@ no folder starts and therefore where Claude Code ran. Reading every project on t
 was tried first and was worse than the bug it fixed: 77 directories and a gigabyte of transcript,
 read to compare titles, while the region sat on *Reading the session…*.
 
+**The walk names its budget (2026-09-16).** `SCAN_BUDGET` is 250 sessions or ten seconds, whichever
+comes first — roughly 2.5× the largest real folder here and 2× its measured time, so an ordinary
+machine meets neither. Files are taken newest first, so what is read is the part of the folder being
+worked in. **A cut is never reported as an absence**: the Asked button says *"Only the newest 250 of
+1 010 sessions in … were read, and none of them is called X"*, and *Take the question* — the reader
+that holds each file WHOLE in memory, and therefore needs the bound more — answers `failed` naming
+the cut rather than "nothing is waiting", which would be this module claiming something it did not
+look at. What the budget does NOT bound is one pathological file: the deadline is checked between
+files, because the largest session here is 21 MB and streams in about a tenth of a second, and a
+per-line clock costs more than it saves. Said out loud rather than assumed away.
+
 **A tab pins its FILE, not the name that found it.** Claude Code refines a conversation's
 `ai-title` as it goes on and the tab follows it, so a name captured when the chat opened stops
 matching hours later — which is precisely the window this button exists for. `pinSession` resolves

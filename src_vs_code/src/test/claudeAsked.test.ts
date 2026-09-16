@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -873,3 +873,87 @@ test('an id whose file is gone says so, and the name is still there to fall back
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+/**
+ * THE BUDGET. What a folder ten times this one costs, and what is said when it is not all read.
+ *
+ * <p>The operator's own folder is 101 sessions and 1.2 GB, and reading every title in it takes 5.2 s
+ * warm. Nothing bounded that. A folder ten times the size is a minute behind a button, and the
+ * sentence at the end of it would have been "no session is called that" — which would not be true,
+ * because most of them were never looked at. (local and gemini, the plan round, on a plan that
+ * created something that grows and did not name its budget.)</p>
+ *
+ * <p>The clock is INJECTED. A test that waits ten seconds to prove a ten-second deadline is a test
+ * nobody runs twice.</p>
+ */
+
+const manySessions = (dir: string, howMany: number, named: (n: number) => string): void => {
+  for (let n = 0; n < howMany; n += 1) {
+    writeFileSync(join(dir, `s${n}.jsonl`), `${titled(named(n))}\n${said(`in ${n}`)}\n`, 'utf8');
+    // Newest first is what the reader trusts: give each file a distinct, decreasing age.
+    const when = new Date(Date.now() - n * 60_000);
+    utimesSync(join(dir, `s${n}.jsonl`), when, when);
+  }
+};
+
+test('a folder larger than the budget is read newest-first, and the cut is NAMED', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 5, (n) => (n === 4 ? 'The oldest' : `Session ${n}`));
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The oldest', { most: 3, withinMs: 10_000 });
+
+    assert.strictEqual(answer.kind, 'none', 'a session outside the budget was found, so nothing was bounded');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /newest 3 of 5/u,
+      'the refusal claims no session is called that, without saying that most were never read');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a match INSIDE the budget is still a match', async () => {
+  // The cap must not turn into a refusal of everything. Newest first is what makes this safe: the
+  // conversation somebody is looking at is the one that was written to most recently.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 5, (n) => `Session ${n}`);
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Session 1', { most: 3, withinMs: 10_000 });
+
+    assert.strictEqual(answer.kind, 'one', 'a session well inside the budget was refused');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a walk that runs out of TIME stops, and says that is why', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 5, (n) => (n === 4 ? 'The oldest' : `Session ${n}`));
+
+    // Four seconds per file against a ten-second deadline: three files, then it stops.
+    let clock = 0;
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The oldest', {
+      most: 1_000,
+      withinMs: 10_000,
+      now: () => {
+        clock += 4_000;
+
+        return clock;
+      },
+    });
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /in 10 s|within 10 s/u,
+      'a walk that ran out of time did not say so');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+

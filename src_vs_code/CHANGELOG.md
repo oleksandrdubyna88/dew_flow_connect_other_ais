@@ -1,5 +1,30 @@
 # Changelog
 
+## Extension 0.49.0 — 2026-09-16
+
+**The Asked button finds the session your tab is named after, even after you rename it** (#330).
+A chat tab called *coai 7 issues* was told there was no Claude Code session by that name, with the
+session open in the editor group beside it. Claude Code writes two kinds of title row and this
+extension read one: the row a hand-renamed tab wears — and the row Claude Code derives from your
+first prompt before the model has titled anything — was invisible to it. Measured on the machine it
+was reported from: four of 101 sessions had nothing else to be found by.
+
+It also turned out that the *last* title is not the answer either. Rename a conversation and a
+couple of minutes later the old name comes back, written by something else in Claude Code. So a
+session now answers to **every** name it has worn, with the one it wears now answering first — and
+where a name genuinely belongs to two conversations you still get a refusal rather than somebody
+else's transcript.
+
+**And after a window reload the session is found by its ID, not by its name.** The conversation has
+always known which session it belongs to; nothing used it. Now one directory entry answers instead
+of every transcript in the folder being read for its title — 1.2 GB and 5.2 seconds on that same
+machine. The name is still the fallback for a conversation that never had an id, and for one whose
+session has been deleted.
+
+**A folder too big to read in full says so.** The walk is bounded at 250 sessions or ten seconds,
+whichever comes first, and when it stops early it says how many it read out of how many — instead of
+reporting that nothing is called that, or that nothing is waiting, about sessions it never opened.
+
 ## Extension 0.48.0 — 2026-09-16
 
 **The Bugz section: the gate's own findings become a corpus of real defects.** Every accepted

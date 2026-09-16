@@ -520,3 +520,26 @@ test('with every question settled, the NEWEST of them is the one reported answer
   assert.strictEqual(found.kind === 'asked' ? found.set.id : '', 'b', 'an older settled question was reported');
   assert.strictEqual(found.kind === 'asked' ? found.set.answered : false, true);
 });
+
+test('Take the question does not report silence for sessions it never read', async () => {
+  // The module's own rule, applied to the budget: reporting "nothing is waiting" about a folder that
+  // was cut short is this module lying about the world. `waitingQuestion` is also the reader that
+  // holds each file WHOLE in memory, so it needs the bound more than the Asked button does.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    const titled = (name: string): string => JSON.stringify({ type: 'ai-title', aiTitle: name, sessionId: 's' });
+    writeFileSync(join(dir, 'new.jsonl'), `${titled('Nothing waiting here')}\n`, 'utf8');
+    writeFileSync(join(dir, 'old.jsonl'), `${titled('The question')}\n${asks('a', ONE)}\n`, 'utf8');
+    const older = new Date(Date.now() - 60_000);
+    utimesSync(join(dir, 'old.jsonl'), older, older);
+
+    const answer = await waitingQuestion(home, 'D:\\work\\app', true, '', { most: 1, withinMs: 10_000 });
+
+    assert.strictEqual(answer.kind, 'failed', 'a folder that was cut short reported that nothing was waiting in it');
+    assert.match(answer.kind === 'failed' ? answer.refusal : '', /newest 1 of 2/u, 'the cut is not named');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
