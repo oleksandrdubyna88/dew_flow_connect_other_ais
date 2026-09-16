@@ -41,18 +41,24 @@ sentence come out differently two minutes later.
 
 ## Why it happens
 
-`RateLimit.Hopeless` (`ReviewerExecutor.cs:153`) is the whole decision, and it is two words:
+`RateLimit.Hopeless` was the whole decision, and **before this change** it was two words:
 
 ```csharp
+// BEFORE this change. What ships now is `Spent.Any(...)` over three observed phrases — see below.
 public static bool Hopeless(string reason) =>
     Contains(reason, "daily") || Contains(reason, "exhausted");
 ```
 
 Those were the right two words for the case they were written for — gemini's *"You have exhausted
 your daily quota on this model"*, which the remark above them records as having cost a round 157
-seconds instead of 19. The measured codex sentence contains **neither**. So `Hit` classifies it as a
-rate limit (it says *usage limit*, which is in `Phrases`), `Hopeless` says waiting might help, and
-`RunWithLadderAsync` climbs all four rungs.
+seconds instead of 19. The measured codex sentence contained **neither**. So `Hit` classified it as a
+rate limit (it says *usage limit*, which is in `Phrases`), `Hopeless` said waiting might help, and
+`RunWithLadderAsync` climbed all four rungs.
+
+> Every code excerpt in this document is labelled BEFORE or AFTER, and symbols are named rather than
+> line numbers, because a promoted plan is read as a description of the system as it is. Its first
+> version quoted the old `Hopeless` in the present tense with a line number that had already moved.
+> (CodeRabbit, on the pull request.)
 
 ## What separates the two, in the evidence we actually have
 
@@ -93,10 +99,10 @@ What is left is the one sentence that was measured, and the two that were alread
 
 ## The second half: which line is read
 
-`RateLimit.Reason` (`ReviewerExecutor.cs:161`) answers with `lines.FirstOrDefault(Marked)` — the
-FIRST line that mentions a limit — and `Hopeless` is then given only that line
-(`BoundedScheduler.cs:423`). A vendor that prints *"Rate limit reached"* on one line and *"Upgrade to
-Pro"* on another therefore has its terminal fact read as a transient one, and the ladder runs again.
+**Before this change** `RateLimit.Reason` answered with `lines.FirstOrDefault(Marked)` — the FIRST
+line that mentions a limit — and `RunWithLadderAsync` was then given only that line. A vendor that
+prints *"Rate limit reached"* on one line and *"Upgrade to Pro"* on another therefore had its terminal
+fact read as a transient one, and the ladder ran again.
 
 That is not the measured case (codex puts it all on one line), so it is a hole rather than an
 observed defect. Five reviewers asked for the mechanism to be named rather than described, and they
