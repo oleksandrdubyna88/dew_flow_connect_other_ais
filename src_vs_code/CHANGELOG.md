@@ -2,6 +2,15 @@
 
 ## Extension 0.47.0 — 2026-09-15
 
+**A chat row can be cleared from the spending chart, the way a reviewer's always could** (#298).
+The **Reviewers** half of the spending tab has had a ✕ on every card since it shipped; the **Chat**
+half had nothing, so a model you tried once sat in the chart for good. It has one now, and it works
+the same way: it asks first, nothing is deleted from the ledger on disk, and the row comes back by
+itself the next time that model answers.
+
+It clears **one row**, not one vendor — a chat row is a vendor *and* a model, so forgetting
+`codex · gpt-5.4` leaves `codex · gpt-5.5` exactly where it was.
+
 **The Consultant section reads like the Reviewers one** (#291). Each caller — *Claude Code asks…*,
 *Codex asks…*, *Gemini asks…* — is now a framed box with a coloured left edge, and the colour is
 **the one that vendor already wears** on its reviewer card and on its name in a running round, so

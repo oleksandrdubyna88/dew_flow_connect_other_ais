@@ -14,6 +14,8 @@ export interface RoundsLogHooks {
   readonly onUsageWindow: (window: string) => Promise<void>;
   /** ✕ beside a vendor on the spending tab. */
   readonly onForget: (provider: string) => Promise<void>;
+  /** The ✕ beside a CHAT row on the spending tab — a vendor and a model, not a vendor. */
+  readonly onForgetChat: (provider: string, model: string) => Promise<void>;
   /**
    * A row was opened, and wants to know what that round found.
    *
@@ -206,6 +208,9 @@ export class RoundsLogPanel {
     }
     if (command.kind === 'forget') {
       void this.hooks.onForget(command.provider);
+    }
+    if (command.kind === 'forgetChat') {
+      void this.hooks.onForgetChat(command.provider, command.model);
     }
     if (command.kind === 'export') {
       void this.hooks.onExport(command.rows);

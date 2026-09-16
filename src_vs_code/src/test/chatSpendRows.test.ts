@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatDoorRecord } from '../chatDoors';
-import { ChatPriceOf, ChatSpendRow, chatSpend } from '../chatSpendRows';
+import { ChatPriceOf, ChatSpendRow, chatForgetKey, chatSpend, rememberedChat } from '../chatSpendRows';
 import { ChatTurnRecord } from '../chatUsage';
 
 /**
@@ -265,4 +265,67 @@ test('a line written before the field existed is still resolved through the pres
 
   assert.deepStrictEqual(rows.map((row) => row.provider), ['antigravity'],
     'an old line was left under the generated preset id');
+});
+
+// ---------- a chat row can be cleared from the chart (issue #298) ----------
+//
+// The Reviewers half has had a ✕ since the spending tab shipped; the Chat half had nothing, so a row
+// that had served its purpose sat in the chart for ever. The mechanism is the reviewers' one: a
+// WATERMARK applied on READ, never a rewrite, because the writer appends while the panel is open.
+
+test('a record at the mark is forgotten and a later one is kept', () => {
+  const at = '2026-09-16T10:00:00.000Z';
+  const marks = { [chatForgetKey('codex', 'gpt-5.4')]: at };
+  const rows = [
+    { utc: '2026-09-16T09:59:59.999Z', provider: 'codex', model: 'gpt-5.4' },
+    { utc: at, provider: 'codex', model: 'gpt-5.4' },
+    { utc: '2026-09-16T10:00:00.001Z', provider: 'codex', model: 'gpt-5.4' },
+  ];
+
+  const kept = rememberedChat(rows, marks);
+
+  // AT the mark is forgotten, exactly as `remembered()` treats the reviewers' one.
+  assert.deepEqual(kept.map((one) => one.utc), ['2026-09-16T10:00:00.001Z']);
+});
+
+test('forgetting one model leaves the vendor’s other models alone', () => {
+  const marks = { [chatForgetKey('codex', 'gpt-5.4')]: '2026-09-16T10:00:00.000Z' };
+  const rows = [
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'gpt-5.4' },
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'gpt-5.5' },
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'claude', model: 'gpt-5.4' },
+  ];
+
+  const kept = rememberedChat(rows, marks);
+
+  // This is the assertion that fails if the key collapses to the provider, or to the model.
+  assert.deepEqual(
+    kept.map((one) => `${one.provider}/${one.model}`),
+    ['codex/gpt-5.5', 'claude/gpt-5.4'],
+  );
+});
+
+test('what a line wrote down decides its row, not the preset list as it is today', () => {
+  // The rule `chatSpend` already applies, and the filter has to apply the SAME one or a mark keyed
+  // on the row a person can see would miss every line that carries its own vendor — which, since
+  // PR #209, is every recent one. (gemini, the plan round.)
+  const marks = { [chatForgetKey('codex', 'gpt-5.4')]: '2026-09-16T10:00:00.000Z' };
+  const resolver = (): string => 'somebody-else';
+  const rows = [
+    // Carries its own vendor: that wins, so it IS the codex row and is forgotten.
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'preset-abc', model: 'gpt-5.4', vendor: 'codex' },
+    // Carries none: resolved through the list, lands elsewhere, and is kept.
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'preset-abc', model: 'gpt-5.4' },
+  ];
+
+  const kept = rememberedChat(rows, marks, resolver);
+
+  assert.equal(kept.length, 1, 'the written-down vendor was not used to decide the row');
+  assert.equal(kept[0]!.vendor, undefined, 'the wrong one of the two was forgotten');
+});
+
+test('a ledger with nothing forgotten is returned whole', () => {
+  const rows = [{ utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'gpt-5.4' }];
+
+  assert.deepEqual(rememberedChat(rows, {}), rows);
 });

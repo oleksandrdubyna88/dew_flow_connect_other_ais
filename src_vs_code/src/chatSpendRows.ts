@@ -218,7 +218,7 @@ export function chatSpend(
   // another vendor in a ledger that is supposed to be append-only. The resolver is the answer only
   // for lines written before the field existed. (CodeRabbit, PR #209.)
   const bucket = (recorded: string, model: string, written?: string): Bucket => {
-    const provider = written !== undefined && written.length > 0 ? written : vendorOf(recorded);
+    const provider = chatRowProvider(recorded, written, vendorOf);
     const key = keyOf(provider, model);
     const found = buckets.get(key) ?? emptyBucket(provider, model);
     buckets.set(key, found);
@@ -311,4 +311,59 @@ export function chatSpend(
       opened: all.reduce((total, row) => total + row.opened, 0),
     },
   };
+}
+
+/**
+ * Which vendor's row a recorded line belongs in.
+ *
+ * <p><b>What was WRITTEN DOWN wins over what the preset list says today.</b> A preset is a row
+ * somebody edits, so resolving an old line through the list as it is now would move a year of
+ * history to another vendor in a ledger that is supposed to be append-only. The resolver is the
+ * answer only for lines written before the field existed. (CodeRabbit, PR #209.)</p>
+ *
+ * <p>Exported because the CHART and the forget filter must agree about which row a line is in. They
+ * used to be one expression inside `chatSpend`; a second copy in the filter would have keyed marks
+ * by `vendorOf(recorded)` alone and silently missed every line that carries its own `vendor` —
+ * which, after PR #209, is every recent one. (gemini, the plan round, in a sharper form than it was
+ * raised.)</p>
+ */
+export function chatRowProvider(recorded: string, written: string | undefined, vendorOf: ChatVendorOf): string {
+  return written !== undefined && written.length > 0 ? written : vendorOf(recorded);
+}
+
+/** The key one chat row is forgotten under: the vendor-and-model pair the chart groups by. */
+export function chatForgetKey(provider: string, model: string): string {
+  return keyOf(provider, model);
+}
+
+/** The fields the forget filter reads, and the only ones it needs. */
+export interface ForgettableRecord {
+  readonly utc: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly vendor?: string;
+}
+
+/**
+ * The ledger minus what has been forgotten — applied on READ, so no file is ever touched.
+ *
+ * <p>The same shape the reviewers' `remembered()` uses, and for the same reason its docblock gives:
+ * the writer appends while the panel is open, so filtering a file and writing it back would race a
+ * turn finishing mid-write. A record AT the mark is forgotten and one after it is kept, which is
+ * what makes the row come back on its own — there is no state to reset, only an instant the next
+ * line is later than.</p>
+ *
+ * <p>Generic over the record because turns and doors differ in everything except the fields above:
+ * one filter for both, rather than two that can drift.</p>
+ */
+export function rememberedChat<T extends ForgettableRecord>(
+  records: readonly T[],
+  marks: Readonly<Record<string, string>>,
+  vendorOf: ChatVendorOf = (provider) => provider,
+): readonly T[] {
+  return records.filter((one) => {
+    const mark = marks[chatForgetKey(chatRowProvider(one.provider, one.vendor, vendorOf), one.model)];
+
+    return mark === undefined || one.utc > mark;
+  });
 }
