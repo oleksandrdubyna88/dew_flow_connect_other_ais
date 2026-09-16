@@ -38,15 +38,17 @@ import { CONSULTANT_RULE } from './generated/consultantRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '4e23e7a87052fe36';
+export const SNIPPET_BODY_SHA = 'f3553414521aa3a5';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
  *
- * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two differ by one and must not be
- * “tidied” into agreement.</b> That one is the marker inside `coai-review-gate.md` and is frozen at 5
- * by the conventions migration baseline; this one numbers the paste as a whole — gate, document,
- * caller and consultant together — and is free to move when any of them does.</p>
+ * <p><b>A different thing from `SNIPPET_VERSION`, which is why the two disagree — and drift further
+ * apart with every change to the paste — and must not be “tidied” into agreement.</b> That one is the
+ * marker inside `coai-review-gate.md` and is frozen at 5 by the conventions migration baseline; this
+ * one numbers the paste as a whole — gate, document, caller and consultant together — and is free to
+ * move when any of them does. (A docblock here once said they "differ by one", which was true for a
+ * day and false from the next change on; the gap is not a fact about either number.)</p>
  *
  * <p><b>Why it exists.</b> The ⋯ menu said `(v5)` from the day the label was introduced, through three
  * changes to what the clipboard carries: the document half, the caller half, and the consultant half.
@@ -152,7 +154,7 @@ export const CALLER_VERSION = 2;
  * existed carries no consultant marker, and the AI obeying it never calls `consult` — it goes on
  * trying the same fix a third time, which is the whole thing this feature exists to interrupt.</p>
  */
-export const CONSULTANT_VERSION = 1;
+export const CONSULTANT_VERSION = 2;
 
 /**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
