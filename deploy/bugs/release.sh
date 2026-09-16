@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# Release (and roll back) `coai-bugs` on a systemd host.
+#
+# ---------------------------------------------------------------------------
+# ITS OWN SCRIPT, not a parameter on `deploy/systemd-release.sh`, by operator decision: the bugs
+# server is a FULLY INDEPENDENT deployment. Sharing one script would mean one blast radius — a
+# change made for the ingest server could break the Team server's release on a machine where that
+# one is live and this one is not even installed yet.
+#
+# What IS shared is the shape, because the Team server paid for it: an immutable version-addressed
+# directory, `bin` swapped by ONE rename, a trail a second consecutive rollback still reads, the
+# last three retained, and a canary that decides rather than `systemctl is-active`.
+#
+# What is deliberately NOT shared is the canary. The Team server's runs a real review with a
+# session token, which this server has no concept of. Here the canary is the two things that have
+# actually broken a `coai-bugs` build:
+#
+#   * `--waiting` opens the database through the SQLite P/Invoke. That is the call that threw
+#     `DllNotFoundException` when `mcp-v0.18.1` shipped its executable without `e_sqlite3`, and
+#     this server reads its key table on EVERY request — so without it every upload answers 401
+#     and the log says nothing about why.
+#   * `/health` answers only after the embedded keyword list has parsed, because the list is read
+#     before any route is mapped. A published binary that answers it is carrying its own word
+#     list, and nothing short of running it can establish that.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+ROOT=${COAI_BUGS_ROOT:-/opt/coai-bugs}
+RELEASES="$ROOT/releases"
+TRAIL="$RELEASES/.trail"
+LIVE="$ROOT/bin"
+KEEP=4                                  # the current deployment plus the three the rule requires
+SERVICE=coai-bugs
+PORT=${COAI_BUGS_PORT:-8110}
+
+say() { printf '[coai-bugs-release] %s\n' "$*" >&2; }
+die() { say "$*"; exit 1; }
+
+# One deploy at a time. Two racing would interleave a trail write with a symlink swap.
+exec 9>"$ROOT/.release.lock"
+flock -n 9 || die "another release is running"
+
+# ---------------------------------------------------------------------------
+# The canary: what proves this build works, rather than that it started.
+# ---------------------------------------------------------------------------
+canary() {
+    local release=$1
+
+    # 1. The database, through the real binary, on a throwaway directory so a broken build cannot
+    #    touch the live corpus on its way to being rejected.
+    local scratch
+    scratch=$(mktemp -d)
+    # shellcheck disable=SC2064
+    trap "rm -rf '$scratch'" RETURN
+
+    if ! COAI_BUGS_SECRET=canary-not-a-real-secret COAI_BUGS_DATA="$scratch" \
+        "$release/$SERVICE" --waiting >/dev/null 2>&1; then
+        say "the build cannot open a database — check that e_sqlite3 sits beside the binary"
+        return 1
+    fi
+
+    # 2. The keyword list, which only a listening server can prove it has.
+    for attempt in $(seq 1 30); do
+        if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/health" | grep -q ok; then
+            say "canary: the service answers /health and opens its database"
+            return 0
+        fi
+        systemctl is-active --quiet "$SERVICE" || {
+            say "the unit stopped during the canary"
+            journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
+            return 1
+        }
+        sleep 1
+    done
+
+    say "the service never answered /health in 30s"
+    journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
+    return 1
+}
+
+# ONE rename. A `cp` over a running binary is a partially written file somebody executes.
+switch_to() {
+    local release=$1
+    [[ -x "$release/$SERVICE" ]] || { say "no $SERVICE binary in $release"; return 1; }
+
+    ln -sfn "$release" "$LIVE.new"
+    mv -Tf "$LIVE.new" "$LIVE"
+    systemctl restart "$SERVICE" || { say "the unit refused to restart on $release"; return 1; }
+    canary "$release"
+}
+
+rollback() {
+    local previous
+    previous=$(tail -n 2 "$TRAIL" 2>/dev/null | head -n 1 || true)
+    if [[ -z "$previous" || ! -d "$previous" ]]; then
+        say "no earlier deployment to roll back to — stopping $SERVICE rather than leaving a rejected build serving"
+        systemctl stop "$SERVICE" || true
+        return 1
+    fi
+
+    say "rolling back to $previous"
+    # The trail loses its last entry FIRST, so a second consecutive rollback reads correctly.
+    sed -i '$d' "$TRAIL"
+    switch_to "$previous" || say "the rollback to $previous did not start either — $SERVICE is DOWN"
+}
+
+retain() {
+    # Keep the newest $KEEP, remove the rest. The trail is the order, not the mtime: a directory
+    # restored from a backup has a misleading timestamp and the trail does not.
+    local old
+    while read -r old; do
+        [[ -d "$old" ]] && rm -rf "$old"
+    done < <(tac "$TRAIL" 2>/dev/null | tail -n +$((KEEP + 1)) || true)
+    if [[ -f "$TRAIL" ]]; then
+        tail -n "$KEEP" "$TRAIL" > "$TRAIL.tmp" && mv -f "$TRAIL.tmp" "$TRAIL"
+    fi
+}
+
+case "${1:-}" in
+    --rollback) mkdir -p "$RELEASES"; rollback; exit $?;;
+    --list)
+        printf 'live -> %s\n' "$(readlink -f "$LIVE" 2>/dev/null || echo 'nothing')"
+        printf 'retained:\n'; cat "$TRAIL" 2>/dev/null || printf '  (none)\n'
+        exit 0;;
+esac
+
+FROM=""
+if [[ "${1:-}" == "--from" ]]; then
+    FROM=${2:?--from needs a path}
+    shift 2
+fi
+
+VERSION=${1:?usage: release.sh [--from <archive|dir>] <version> | --rollback | --list}
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "'$VERSION' is not a version"
+
+mkdir -p "$RELEASES"
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+RELEASE="$RELEASES/$VERSION-$STAMP"
+mkdir -p "$RELEASE"
+
+if [[ -n "$FROM" ]]; then
+    say "installing $VERSION from $FROM"
+    scratch=$(mktemp -d)
+    if [[ -d "$FROM" ]]; then
+        cp -a "$FROM/." "$scratch/"
+    else
+        tar xzf "$FROM" -C "$scratch"
+    fi
+
+    # The workflow packages `coai-bugs-<version>-<rid>/coai-bugs`, so accept the binary at the top
+    # level or exactly one below it.
+    found="$scratch"
+    [[ -f "$scratch/$SERVICE" ]] || found=$(dirname "$(find "$scratch" -mindepth 2 -maxdepth 2 -name "$SERVICE" -type f | head -1)")
+    [[ -f "$found/$SERVICE" ]] || die "$FROM carries no $SERVICE at its top level or one below it"
+    cp -a "$found/." "$RELEASE/"
+    rm -rf "$scratch"
+else
+    say "building $VERSION from $ROOT/src (this takes several minutes)"
+    dotnet publish "$ROOT/src/src_bugs/src/CoaiBugs.csproj" \
+        -c Release -r linux-x64 -p:Version="$VERSION" -o "$RELEASE" \
+        || die "the publish failed"
+fi
+
+# INSPECTED before it is trusted, because a release that ships without this is the one defect this
+# server cannot report about itself.
+[[ -f "$RELEASE/$SERVICE" ]] || die "$RELEASE carries no $SERVICE"
+ls "$RELEASE"/*e_sqlite3* >/dev/null 2>&1 \
+    || die "$RELEASE carries no e_sqlite3 — every request reads the key table, so this build would answer 401 to everybody"
+chmod +x "$RELEASE/$SERVICE"
+
+PREVIOUS=$(readlink -f "$LIVE" 2>/dev/null || true)
+printf '%s\n' "$RELEASE" >> "$TRAIL"
+
+if switch_to "$RELEASE"; then
+    retain
+    say "live: $VERSION ($RELEASE)"
+    "$RELEASE/$SERVICE" --waiting 2>&1 | tail -1 >&2 || true
+else
+    say "the canary rejected $VERSION"
+    if [[ -n "$PREVIOUS" ]]; then
+        rollback
+    else
+        sed -i '$d' "$TRAIL" 2>/dev/null || true
+        systemctl stop "$SERVICE" || true
+        say "nothing to roll back to; $SERVICE is stopped rather than serving a rejected build"
+    fi
+    exit 1
+fi
