@@ -138,6 +138,72 @@ public sealed class StageRulesTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// How much of the budget is left for the ROTATED TAIL once the tier has taken its share.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A canary, and it is currently red in the honest sense: the answer is zero.</b> Measured
+    /// against the real mounted corpus, 2026-09-16 — the instruction files, this repository's own rules
+    /// and all eight tier rules come to about 78 900 of the 80 000-byte budget, leaving roughly 1 100
+    /// bytes, while the SMALLEST rule outside the tier is <c>common/durable-status.md</c> at 2 247. So
+    /// nothing in the tail fits, `Collect` skips each oversized file and keeps walking, and all 24 are
+    /// omitted every round.</para>
+    /// <para>The branch rotation therefore orders a queue nothing is ever taken from. It is not wrong
+    /// and it costs nothing, but it is INERT at this corpus size — and the claim it was added to
+    /// support, that different branches read different parts of the corpus, is true of the mechanism
+    /// and false of this repository today. This test exists so that stops being invisible: if rule
+    /// modularization or a smaller base ever makes room, it fails and somebody re-reads the record.</para>
+    /// <para>It asserts the FACT, not an aspiration. A failure here is news, not a defect.</para>
+    /// </remarks>
+    [Fact]
+    public void TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud()
+    {
+        if (MountedCorpus() is not { } corpus)
+        {
+            Assert.Skip("the conventions submodule is not populated in this checkout");
+            return;
+        }
+
+        var tier = StageRules.Plan.Concat(StageRules.Document)
+            .Concat((string[])["csharp/doctrine.md", "rust/doctrine.md", "typescript/doctrine.md"])
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var tail = Directory
+            .EnumerateFiles(corpus, "*.md", SearchOption.AllDirectories)
+            .Select(path => (Path: path, Within: Path.GetRelativePath(corpus, path).Replace('\\', '/')))
+            .Where(file => file.Within.Split('/') is [("common" or "csharp" or "rust" or "typescript"), _])
+            .Where(file => !tier.Contains(file.Within, StringComparer.OrdinalIgnoreCase))
+            .Select(file => new FileInfo(file.Path).Length)
+            .ToList();
+
+        var spent = Directory
+            .EnumerateFiles(corpus, "*.md", SearchOption.AllDirectories)
+            .Select(path => (Path: path, Within: Path.GetRelativePath(corpus, path).Replace('\\', '/')))
+            .Where(file => tier.Contains(file.Within, StringComparer.OrdinalIgnoreCase))
+            .Sum(file => new FileInfo(file.Path).Length);
+
+        // The base the tier is added to: the instruction files and this repository's own rules, which
+        // lead every order and are never dropped. Measured, not assumed — they are what makes the
+        // leftover as small as it is.
+        var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
+        string[] leading = ["CLAUDE.md", "AGENTS.md", ".agents/PROJECT.md"];
+        var baseBytes = leading
+            .Select(name => Path.Combine(repoRoot, name.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(File.Exists)
+            .Sum(path => new FileInfo(path).Length)
+            + Directory.EnumerateFiles(Path.Combine(repoRoot, ".agents", "rules"), "*.md", SearchOption.AllDirectories)
+                .Sum(path => new FileInfo(path).Length);
+
+        var leftover = RuleFiles.DefaultBudgetBytes - baseBytes - spent;
+
+        tail.Should().NotBeEmpty("the corpus has rules outside the tier");
+        tail.Min().Should().BeGreaterThan(leftover,
+            $"nothing outside the tier fits: the base and the tier spend {baseBytes + spent} of "
+            + $"{RuleFiles.DefaultBudgetBytes} bytes, leaving {leftover}, and the smallest rule outside "
+            + "the tier is larger than that. WHEN THIS FAILS the rotated tail has stopped being inert "
+            + "— which is good news — and research/RESULTS_rules_selection_budget.md needs re-measuring");
+    }
+
     /// <summary>The mounted conventions of THIS repository, or nothing when it is not populated.</summary>
     private static string? MountedCorpus()
     {
