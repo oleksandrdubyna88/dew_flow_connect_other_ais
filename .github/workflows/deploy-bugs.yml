@@ -1,0 +1,157 @@
+name: deploy the ingest server
+
+# Updates `bugs.remsoft.dev` to a published `bugs-v*` release.
+#
+# ---------------------------------------------------------------------------
+# A FILE OF ITS OWN, and its own secrets, by operator decision: the bugs server is a fully
+# independent deployment. It shares no key, no environment and no script with `deploy-server.yml`
+# — so a mistake in one cannot reach the other, and the ingest server can be redeployed without
+# anybody thinking about whether a review is running on the Team server.
+#
+# ALL SECRETS LIVE IN ACTIONS SECRETS. Nothing here is typed on a host by hand: the SSH key, the
+# host, the user, the known-hosts line and the server's own HMAC secret all come from this
+# repository's secret store, which is the one place they can be rotated without a person opening a
+# terminal. `deploy/bugs/README.md` lists exactly which ones and how to produce each.
+#
+# As with the Team server, this workflow does NOT swap symlinks, keep a trail or decide that a
+# deployment is healthy — `deploy/bugs/release.sh` on the host owns all of that. This file checks
+# the request, puts the PUBLISHED artefact on the host, runs that script, and proves afterwards
+# that the version answering the internet is the one that was asked for.
+#
+# Dispatch rather than `on: release`: cutting a release and choosing to interrupt a live service
+# are the same person's decisions, but they are not the same decision.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The published coai-bugs version to deploy, e.g. 0.1.0'
+        required: true
+        type: string
+
+concurrency:
+  group: coai-bugs-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  HOST_RID: linux-x64
+
+jobs:
+  # OUTSIDE the production environment deliberately: a typo must not spend somebody's approval, and
+  # a version whose release failed halfway must be refused before anything touches the host.
+  preflight:
+    name: the request is answerable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      asset: ${{ steps.check.outputs.asset }}
+    steps:
+      - id: check
+        env:
+          # Through the environment, never interpolated into the script: a `${{ }}` inside `run:` is
+          # substituted before bash sees the text, so a version carrying a quote would be code.
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "'$VERSION' is not a version"; exit 1; }
+
+          TAG="bugs-v$VERSION"
+          ASSET="coai-bugs-$VERSION-${HOST_RID}.tar.gz"
+
+          # The RELEASE must carry the archive this host runs. A `bugs-v*` tag whose matrix failed
+          # leaves a draft with some of its assets, and deploying from one is how a host ends up
+          # running a version that was never published.
+          gh release view "$TAG" --json assets --jq '[.assets[].name]' > assets.json \
+            || { echo "no release $TAG"; exit 1; }
+          grep -q "\"$ASSET\"" assets.json \
+            || { echo "$TAG carries no $ASSET — the release is incomplete"; cat assets.json; exit 1; }
+
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: put it on the host
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    # Someone approves before anything reaches the machine.
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: The key, for this run only
+        env:
+          BUGS_DEPLOY_KEY: ${{ secrets.BUGS_DEPLOY_KEY }}
+          BUGS_DEPLOY_KNOWN_HOSTS: ${{ secrets.BUGS_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for required in BUGS_DEPLOY_KEY BUGS_DEPLOY_KNOWN_HOSTS; do
+            [[ -n "${!required:-}" ]] || { echo "$required is not set in this repository's secrets"; exit 1; }
+          done
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$BUGS_DEPLOY_KEY" > ~/.ssh/id_bugs
+          chmod 600 ~/.ssh/id_bugs
+          # PINNED, never `StrictHostKeyChecking=no`: a deploy that accepts any key is a deploy that
+          # can be pointed at somebody else's machine, carrying this repository's secret with it.
+          printf '%s\n' "$BUGS_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # The server's own secret, delivered from the secret store rather than typed on the box. It
+      # reaches the host over ssh on STDIN — never as an argument, which `ps` and the auth log see.
+      - name: The server's secret, from the secret store
+        env:
+          HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
+          COAI_BUGS_SECRET: ${{ secrets.COAI_BUGS_SECRET }}
+        run: |
+          set -euo pipefail
+          [[ -n "${COAI_BUGS_SECRET:-}" ]] \
+            || { echo "COAI_BUGS_SECRET is not set in this repository's secrets"; exit 1; }
+          # `secret` is the only other thing the forced command answers. It reads one line from
+          # stdin, writes /etc/coai-bugs/env with 0640 root:coai-bugs, and prints nothing back.
+          printf '%s\n' "$COAI_BUGS_SECRET" \
+            | ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
+                  "$USER_NAME@$HOST" secret
+
+      - name: Deploy, and let the host's script decide
+        env:
+          HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER_NAME@$HOST" "deploy $VERSION"
+
+      # The version answering the INTERNET, not the one the script said it installed.
+      - name: What the public endpoint reports
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 5 https://bugs.remsoft.dev/health | grep -q ok; then
+              echo "bugs.remsoft.dev answers /health"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "bugs.remsoft.dev did not answer /health after the deploy"
+          exit 1
+
+      - name: Roll back, and say so
+        if: failure()
+        env:
+          HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          echo "::error::the deploy did not verify; rolling the host back"
+          ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER_NAME@$HOST" "deploy --rollback"

@@ -55,10 +55,13 @@ The two must match. **One A record is the whole prerequisite** — certbot uses 
 the name to resolve to this box and port 80 reachable. No TXT, no CNAME, no wildcard:
 
 ```
-bugs.remsoft.dev.    A    <this host's IPv4>
+bugs.remsoft.dev.    A    82.165.44.219
 ```
 
-Add an `AAAA` too **only if the host really answers on IPv6**, and if you do, read *Verifying the
+**Done on 2026-09-16** — `bugs.remsoft.dev` resolves to 82.165.44.219 on both 1.1.1.1 and
+8.8.8.8, and the name has **no AAAA**, so this host is IPv4-only for the purpose below.
+
+Add an `AAAA` only if the host really answers on IPv6, and if you do, read *Verifying the
 promise* below with that in mind: the checks there look for v6 addresses as well as v4 precisely
 because a v6-only client leaks through a v4-shaped grep.
 
@@ -123,27 +126,86 @@ never arguments, because an argument is in process listings and shell history.
 | `COAI_BUGS_KEYWORDS` | Optional. A file that **replaces** the embedded keyword list, for correcting it without waiting for a release. |
 | `COAI_LOG_LEVEL` | `Information` by default. |
 
-### The environment file
+## All secrets live in Actions Secrets
 
-**Every command below reads the secret from this file.** Nothing ever puts it on a command line:
-`sudo COAI_BUGS_SECRET=… …` places it in `sudo`'s argv, where `ps` and `/proc/<pid>/cmdline` show it
-to any local user and the auth log records it in plaintext.
+**Nothing below is typed on the host by hand.** Operator decision, and it is the right one: a
+secret that exists only in a file on one machine cannot be rotated without somebody opening a
+terminal, and nobody can tell you when it was last changed. Every one of these lives in this
+repository's secret store, and `deploy the ingest server` delivers them.
 
-```bash
-install -d -m 0750 -o root -g coai-bugs /etc/coai-bugs
-umask 077
-cat > /etc/coai-bugs/env <<'ENV'
-COAI_BUGS_SECRET=<32+ random bytes; openssl rand -base64 32>
+| Secret | What it is | How to produce it |
+|---|---|---|
+| `COAI_BUGS_SECRET` | The HMAC secret keys are hashed with. | `openssl rand -base64 32` |
+| `BUGS_DEPLOY_HOST` | The host. | `82.165.44.219` |
+| `BUGS_DEPLOY_USER` | The account the forced-command key belongs to. | `coai-bugs-deploy` |
+| `BUGS_DEPLOY_KEY` | The PRIVATE half of the deploy key. | `ssh-keygen -t ed25519 -f coai-bugs-deploy-ci -C coai-bugs-deploy-ci -N ""` |
+| `BUGS_DEPLOY_KNOWN_HOSTS` | The host’s public key, pinned. | `ssh-keyscan -t ed25519 82.165.44.219` |
+
+**Changing `COAI_BUGS_SECRET` invalidates every issued key**, because the stored hashes were
+computed with the old one. That is a deliberate property — it is the one lever that ends every
+key at once — but it is not a rotation you do casually.
+
+### Why the secret travels on stdin
+
+The workflow pipes it to the forced command, which writes `/etc/coai-bugs/env` itself. It is
+never an argument: `sudo COAI_BUGS_SECRET=… …` puts it in argv, where `ps` and
+`/proc/<pid>/cmdline` show it to any local user and the auth log records it in plaintext. The
+wrapper prints nothing back, because a wrapper that confirmed the value would put it in a CI log.
+
+It writes BOTH values into one file:
+
+```
+COAI_BUGS_SECRET=<from Actions Secrets>
 COAI_BUGS_DATA=/opt/coai-bugs/data
-ENV
-chown root:coai-bugs /etc/coai-bugs/env
-chmod 0640 /etc/coai-bugs/env
 ```
 
-`COAI_BUGS_DATA` lives **in the environment file, not in the unit**, so the daemon and every
-maintenance command below read the same value and therefore the same database. Setting it in one
-place and not the other is how keys get issued into a file the server never opens, and every upload
-is then rejected with a 401 nobody can explain.
+`COAI_BUGS_DATA` lives here rather than in the unit so the daemon and every maintenance command
+read the same value and therefore the same database. Setting it in one place and not the other is
+how keys get issued into a file the server never opens, and every upload is then rejected with a
+401 nobody can explain.
+
+### The deploy key is an update button, not root
+
+On the host, in `~coai-bugs-deploy/.ssh/authorized_keys`:
+
+```
+restrict,command="/opt/coai-bugs/src/deploy/bugs/deploy-cmd.sh" ssh-ed25519 AAAA... coai-bugs-deploy-ci
+```
+
+`restrict` turns off the pty, forwarding and everything else; the forced command means the key
+can run that one file whatever the client asks for. It answers exactly four things —
+`deploy <version>`, `deploy --rollback`, `secret` and `health` — and refuses anything else. A
+leaked key can update or roll back this one service and can do nothing whatsoever besides.
+
+**Its own key, its own user, its own wrapper.** It shares nothing with the Team server’s deploy
+key: this is a fully independent deployment, so a mistake in one cannot reach the other.
+
+### One-time, on the host
+
+```bash
+useradd --system --home /opt/coai-bugs --shell /usr/sbin/nologin coai-bugs
+useradd --create-home --shell /bin/sh coai-bugs-deploy
+install -d -m 0755 -o coai-bugs -g coai-bugs /opt/coai-bugs/data /opt/coai-bugs/releases
+
+# the checkout the wrapper and the release script are read FROM
+git clone --depth 1 -b main https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git \
+  /opt/coai-bugs/src
+chown -R coai-bugs-deploy:coai-bugs-deploy /opt/coai-bugs/src
+
+# the deploy account may restart this one unit and nothing else
+cat > /etc/sudoers.d/coai-bugs-deploy <<'SUDO'
+coai-bugs-deploy ALL=(root) NOPASSWD: /bin/systemctl restart coai-bugs, /bin/systemctl stop coai-bugs, /bin/systemctl is-active coai-bugs
+SUDO
+chmod 0440 /etc/sudoers.d/coai-bugs-deploy
+
+mkdir -p ~coai-bugs-deploy/.ssh && chmod 700 ~coai-bugs-deploy/.ssh
+# paste the authorized_keys line above, with the PUBLIC half of BUGS_DEPLOY_KEY
+chown -R coai-bugs-deploy:coai-bugs-deploy ~coai-bugs-deploy/.ssh
+```
+
+Then install the unit below, and run **Actions → deploy the ingest server** with the version.
+The first run writes the environment file before it installs anything, so the service has its
+secret the first time it starts.
 
 ### The unit
 
@@ -160,7 +222,8 @@ WorkingDirectory=/opt/coai-bugs
 # A leading dash so systemd does not fail before ExecStartPre can say something useful about WHY.
 EnvironmentFile=-/etc/coai-bugs/env
 # The secret must not be world-readable, and a service that starts anyway is a secret that was
-# never secret. This reports the real reason instead of leaving a 0644 file working quietly.
+# never secret. The deploy wrapper writes this file 0640 root:coai-bugs; this is what notices if
+# anything ever changes that.
 ExecStartPre=/bin/sh -c '[ -r /etc/coai-bugs/env ] || { echo "/etc/coai-bugs/env is missing or unreadable"; exit 1; }'
 ExecStartPre=/bin/sh -c '[ "$(stat -c %%a /etc/coai-bugs/env)" = "640" ] || { echo "/etc/coai-bugs/env must be 0640, is $(stat -c %%a /etc/coai-bugs/env)"; exit 1; }'
 Restart=always
@@ -182,28 +245,28 @@ that keeps the promise above.
 
 ### Installing it
 
-```bash
-useradd --system --home /opt/coai-bugs --shell /usr/sbin/nologin coai-bugs
-install -d -m 0755 -o coai-bugs -g coai-bugs /opt/coai-bugs/bin /opt/coai-bugs/data
+**Ordinarily: Actions → deploy the ingest server → Run workflow**, and type the version. That
+path refuses a version whose release is incomplete before an approval is spent, delivers the
+secret, verifies the archive’s checksum on the host, and hands the rest to
+`deploy/bugs/release.sh` — which keeps an immutable release directory per version, swaps `bin`
+with ONE rename, keeps the last three, and rolls itself back when its canary says no.
 
-# from a bugs-v* release: the archive carries the binary, e_sqlite3, DEPLOY.md and the vhost
-curl -fsSLO https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/releases/download/bugs-v<version>/coai-bugs-<version>-linux-x64.tar.gz
-curl -fsSLO https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/releases/download/bugs-v<version>/coai-bugs-<version>-linux-x64.tar.gz.sha256
-sha256sum -c coai-bugs-<version>-linux-x64.tar.gz.sha256
-tar xzf coai-bugs-<version>-linux-x64.tar.gz
-install -m 0755 -o coai-bugs -g coai-bugs coai-bugs-<version>-linux-x64/coai-bugs /opt/coai-bugs/bin/
-install -m 0644 -o coai-bugs -g coai-bugs coai-bugs-<version>-linux-x64/*e_sqlite3* /opt/coai-bugs/bin/
+The canary is the two things that have actually broken a build here: `--waiting` opens the
+database through the SQLite P/Invoke (the call that threw when `mcp-v0.18.1` shipped without
+`e_sqlite3`, and this server reads its key table on EVERY request), and `/health` answers only
+after the embedded keyword list has parsed.
 
-systemctl daemon-reload && systemctl enable --now coai-bugs
-systemctl status coai-bugs --no-pager
-```
+| | |
+|---|---|
+| `release.sh 0.1.0` | build from the checkout, inspect, switch, canary, self-roll-back |
+| `release.sh --from <archive> 0.1.0` | the same, from an artefact CI already built |
+| `release.sh --rollback` | pop one deployment off the trail. No build. Seconds. |
+| `release.sh --list` | what is live and what is retained |
 
-`e_sqlite3` must sit **beside** the binary. Native AOT compiles managed code; the P/Invoke into
-SQLite still resolves at run time through the OS loader, which searches the executable's directory.
-This server reads its key table on every request, so without it every upload answers 401 and the log
-says nothing about why. `mcp-v0.18.1` shipped an executable alone and learned this the expensive way.
-
----
+`e_sqlite3` must sit **beside** the binary, and `release.sh` refuses a release without it.
+Native AOT compiles managed code; the P/Invoke into SQLite still resolves at run time through
+the OS loader, which searches the executable’s directory. `mcp-v0.18.1` shipped an executable
+alone and learned this the expensive way.
 
 ## Issuing and ending keys
 
