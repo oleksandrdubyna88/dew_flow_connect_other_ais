@@ -130,12 +130,7 @@ public sealed class StageRulesTests : IDisposable
     [Fact]
     public void EveryTierEntry_ResolvesInThePinnedConventionsMount()
     {
-        if (MountedCorpus() is not { } corpus)
-        {
-            // Assert.Skip/Fail throw, but are not annotated as such — the return is for the compiler.
-            RequireTheMount("the stage-tier resolution test");
-            return;
-        }
+        var corpus = RequireTheMount("the stage-tier resolution test");
 
         foreach (var entry in StageRules.Plan.Concat(StageRules.Document).Distinct(StringComparer.Ordinal))
         {
@@ -165,15 +160,9 @@ public sealed class StageRulesTests : IDisposable
     /// assertion message carries the re-baselining steps for whoever trips it.</para>
     /// </remarks>
     [Fact]
-    public void TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud()
+    public void TheRotatedTail_CurrentlyFitsAtMostOneRule()
     {
-        if (MountedCorpus() is not { } corpus)
-        {
-            // Assert.Skip/Fail throw, but are not annotated as such — the return is for the compiler.
-            RequireTheMount("the rotated-tail canary");
-            return;
-        }
-
+        var corpus = RequireTheMount("the rotated-tail canary");
         var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
 
         // Through the PRODUCTION collector, not a byte-count beside it. Three reviewers made the same
@@ -303,6 +292,37 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
+    /// An oversized rule is SKIPPED and the walk goes on - so a smaller rule behind it is still shown.
+    /// </summary>
+    /// <remarks>
+    /// <para>The property the canary's conclusion rests on and nothing was proving. It says
+    /// <c>Collect</c> tries all 24 tail rules and omits them; if <c>Collect</c> ever stopped at the
+    /// first file that does not fit instead of skipping it, the canary would still pass with zero tail
+    /// rules and <see cref="GivenRoom_TheCollectorDoesReachPastTheTier"/> would still pass too, because
+    /// its budget is large enough that nothing in it is ever oversized. A code round found that gap.</para>
+    /// <para>It matters beyond the canary: after rule modularization an eligible small rule will sit
+    /// behind a large one in the order, and stop-at-first would make it permanently unreachable while
+    /// every test stayed green. <see cref="RuleOrder.Walk"/> is used so the order is the alphabet and
+    /// the fixture reads as it runs.</para>
+    /// </remarks>
+    [Fact]
+    public void AnOversizedRule_DoesNotStopTheWalk()
+    {
+        WriteMount();
+        Write(".agents/conventions/common/security.md", Filler("security", 1_000));
+        Write(".agents/conventions/common/aaa-oversized.md", Filler("aaa", 40_000));
+        Write(".agents/conventions/common/zzz-small.md", Filler("zzz", 1_000));
+
+        // Room for the tier rule and the small one, nowhere near room for the big one between them.
+        var bundle = RuleFiles.Collect(_repo, 5_000, RuleOrder.Walk);
+
+        bundle.Omitted.Should().Contain(".agents/conventions/common/aaa-oversized.md",
+            "it does not fit, so it is omitted rather than truncated");
+        TailOf(bundle).Should().Contain("common/zzz-small.md",
+            "and the walk continues past it to a rule that does fit");
+    }
+
+    /// <summary>
     /// A missing mount is a developer's offline checkout — and in CI it is a broken job, not a skip.
     /// </summary>
     /// <remarks>
@@ -315,9 +335,14 @@ public sealed class StageRulesTests : IDisposable
     /// silence. So the skip is scoped to a machine that is not CI; where <c>CI</c> is set, the same
     /// condition fails and names the step to run.
     /// </remarks>
-    private static void RequireTheMount(string what)
+    private static string RequireTheMount(string what)
     {
         const string Setup = "git submodule update --init --depth 1 .agents/conventions";
+
+        if (MountedCorpus() is { } corpus)
+        {
+            return corpus;
+        }
 
         if (Environment.GetEnvironmentVariable("CI") is { Length: > 0 } ci
             && !ci.Equals("false", StringComparison.OrdinalIgnoreCase))
@@ -326,6 +351,10 @@ public sealed class StageRulesTests : IDisposable
         }
 
         Assert.Skip($"{what} needs the conventions mount, absent in this checkout: {Setup}");
+
+        // Unreachable: both branches above throw. Assert.Fail and Assert.Skip are not annotated
+        // as such, so the compiler still wants a value.
+        return string.Empty;
     }
 
     /// <summary>A mount-relative rule name as this platform spells a path.</summary>

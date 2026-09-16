@@ -69,7 +69,7 @@ public sealed record RuleOrder
     /// correct and costs nothing, it simply has no room to act yet. What would give it room is
     /// rule modularization or the resolver, both recorded as follow-ups.
     /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
-    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud</c> fails the day this
+    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule</c> fails the day this
     /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
