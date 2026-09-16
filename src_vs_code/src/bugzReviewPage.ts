@@ -65,8 +65,16 @@ function row(pair: ReviewPair): string {
 </tr>`;
 }
 
-/** The page, whole. */
-export function reviewPageHtml(pairs: readonly ReviewPair[], nonce: string): string {
+/**
+ * The page, whole.
+ *
+ * <p>`trouble` is what the server said when it could not answer, and it is NOT the same page as an
+ * empty corpus: "nothing has been collected yet" sends a person to press Collect, while a read that
+ * timed out sends them somewhere else entirely. Four reviewers of the code round found the first
+ * version saying the former for both.</p>
+ */
+export function reviewPageHtml(
+  pairs: readonly ReviewPair[], nonce: string, trouble = ''): string {
   const rows = pairs.map(row).join('\n');
   const waiting = undecided(pairs);
 
@@ -125,8 +133,10 @@ export function reviewPageHtml(pairs: readonly ReviewPair[], nonce: string): str
   <button type="button" class="quiet" id="clear">Clear selection</button>
   <span class="hint" id="picked"></span>
 </div>
-${pairs.length === 0
-    ? '<p class="empty">Nothing has been collected yet. Press Collect in the Bugz section of the panel.</p>'
+${trouble.length > 0
+    ? `<p class="empty" id="trouble">The pairs could not be read: ${escape(trouble)}</p>`
+    : pairs.length === 0
+    ? '<p class="empty" id="nothing">Nothing has been collected yet. Press Collect in the Bugz section of the panel.</p>'
     : `<table>
 <thead><tr>
   <th class="pick"><input type="checkbox" id="pickall" title="Select every pair"></th>

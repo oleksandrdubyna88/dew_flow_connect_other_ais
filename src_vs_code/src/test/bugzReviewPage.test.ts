@@ -85,8 +85,8 @@ interface Page {
  * markup — not from a list the test invented. A fixture handed to the shim would pass with no
  * checkbox on the page at all, which is the mistake the Bugz section test made first.</p>
  */
-function run(pairs: readonly ReviewPair[]): Page {
-  const html = reviewPageHtml(pairs, 'test-nonce');
+function run(pairs: readonly ReviewPair[], trouble = ''): Page {
+  const html = reviewPageHtml(pairs, 'test-nonce', trouble);
   const ids = [...html.matchAll(/data-pick="(\d+)"/g)].map((m) => m[1]!);
   const boxes = ids.map((id) => new Box(id));
   const controls: Record<string, Control> = {
@@ -96,6 +96,13 @@ function run(pairs: readonly ReviewPair[]): Page {
     picked: new Control('picked'),
     pickall: new Control('pickall'),
   };
+  // Only the explanation the page ACTUALLY rendered exists, so a test can ask which one it got
+  // without reading the markup for it.
+  for (const id of ['nothing', 'trouble']) {
+    if (html.includes(`id="${id}"`)) {
+      controls[id] = new Control(id);
+    }
+  }
 
   const posted: Posted[] = [];
   let onClick: ((event: { target: unknown }) => void) | undefined;
@@ -243,9 +250,23 @@ test('what is waiting is what nobody has looked at', () => {
   assert.equal(undecided([pair(1), pair(2, KEPT), pair(3, DROPPED)]), 1);
 });
 
-test('an empty corpus says so rather than showing an empty table', () => {
-  const html = reviewPageHtml([], 'n');
+/**
+ * An empty corpus and a FAILED read are different pages.
+ *
+ * <p>Driven through the shim rather than matched against the markup — a reviewer of the code round
+ * caught me adding a source assertion to the very file whose header explains why they are refused.
+ * What is asserted is what the page OFFERS: no rows to tick in either case, and which of the two
+ * explanations the person is given.</p>
+ */
+test('an empty corpus and a failed read are told apart', () => {
+  const empty = run([]);
+  assert.equal(empty.boxes.length, 0, 'there is nothing to select');
+  assert.ok(empty.controls['nothing'] !== undefined, 'the page says the corpus is empty');
+  assert.ok(empty.controls['trouble'] === undefined);
 
-  assert.match(html, /Nothing has been collected yet/);
-  assert.ok(!html.includes('<tbody>'), 'a header over no rows is not an answer');
+  const failed = run([], 'the server exited 74');
+  assert.equal(failed.boxes.length, 0);
+  assert.ok(failed.controls['trouble'] !== undefined,
+    'a read that failed must not be rendered as a corpus that is empty');
+  assert.ok(failed.controls['nothing'] === undefined);
 });

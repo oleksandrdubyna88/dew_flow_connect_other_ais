@@ -128,6 +128,12 @@ public sealed class ThePairModesTests : IDisposable
     [InlineData("missing-file")]
     [InlineData("not-json")]
     [InlineData("bad-keep")]
+    // `--in ""` reaches File.ReadAllText as an ArgumentException the old filter did not catch, so
+    // the process died with an unhandled exception instead of answering 65. (Code round, two reviewers.)
+    [InlineData("empty-path")]
+    // `{}` deserialized to a null list, became an empty batch, committed nothing and exited 0 — so a
+    // misspelled field looked successfully processed. (Code round, codex.)
+    [InlineData("no-items")]
     public void ABadRequestIs65_Never64(string how)
     {
         Seed();
@@ -141,6 +147,12 @@ public sealed class ThePairModesTests : IDisposable
             case "bad-keep":
                 File.WriteAllText(file, """{"items":[{"findingId":1,"keep":7}]}""");
                 break;
+            case "empty-path":
+                args = ["--pairs-keep", "--in", "   "];
+                break;
+            case "no-items":
+                File.WriteAllText(file, "{}");
+                break;
             default:
                 args = ["--pairs-keep"];
                 break;
@@ -152,6 +164,23 @@ public sealed class ThePairModesTests : IDisposable
     }
 
     /// <summary>A decision outside the three it may be is refused, not written.</summary>
+    /// <summary>An explicitly empty batch is a legitimate no-op, and says so.</summary>
+    /// <remarks>
+    /// The other half of the `no-items` case above: `{"items":[]}` is somebody deciding about nothing,
+    /// which is fine, while `{}` is a document that forgot to say. One is 0 and the other is 65.
+    /// </remarks>
+    [Fact]
+    public void AnEmptyBatchIsAllowed()
+    {
+        Seed();
+        var file = Path.Combine(_dir, "decisions.json");
+        File.WriteAllText(file, """{"items":[]}""");
+
+        Spoken(() => Program.PairsKeep(["--pairs-keep", "--in", file]), out var code);
+
+        code.Should().Be(0, "deciding about nothing is not a malformed request");
+    }
+
     [Fact]
     public void AKeepThatIsNotADecisionIsRefused()
     {

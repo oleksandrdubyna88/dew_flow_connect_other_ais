@@ -475,7 +475,10 @@ internal static class Program
     internal static int PairsKeep(string[] args)
     {
         var flags = Flags(args);
-        if (!flags.TryGetValue("--in", out var input))
+        // Whitespace as well as absent: `--in ""` reaches `File.ReadAllText` as an ArgumentException,
+        // which the filter below does not catch and which would leave the process with an unhandled
+        // exception rather than the 65 this mode promises. (Code round, gemini and codex.)
+        if (!flags.TryGetValue("--in", out var input) || string.IsNullOrWhiteSpace(input))
         {
             Note("--pairs-keep needs --in <decisions.json>");
             return 65; // EX_DATAERR
@@ -488,13 +491,23 @@ internal static class Program
                 File.ReadAllText(input), Server.ServerJsonContext.Default.KeepRequest);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                                      or ArgumentException or NotSupportedException
                                       or System.Text.Json.JsonException)
         {
             Note($"--pairs-keep could not read {input}: {e.Message}");
             return 65; // EX_DATAERR
         }
 
-        var asked = request?.Items ?? [];
+        // A document with NO `items` is a malformed request, not an empty batch. `{}` used to
+        // deserialize to null, become an empty list, commit nothing and exit 0 — so a misspelled or
+        // stale decisions file looked successfully processed. An explicitly empty array is still a
+        // legitimate no-op. (Code round, codex.)
+        if (request?.Items is not { } asked)
+        {
+            Note("--pairs-keep: the document has no `items` list");
+            return 65; // EX_DATAERR
+        }
+
         // Validated because it came from another process: a keep outside the three it may be is a
         // request fault, not a value to write and puzzle over later.
         if (Array.Exists([.. asked], one => !Core.Collecting.Keep.IsDecision(one.Keep)))
