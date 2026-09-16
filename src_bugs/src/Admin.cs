@@ -17,6 +17,21 @@ namespace CoaiBugs;
 /// </remarks>
 internal static class Admin
 {
+    /// <summary>Every one-shot mode this binary answers, in one place.</summary>
+    /// <remarks>
+    /// <b>It was two lists.</b> `Program.Main` decided whether the arguments named an admin mode
+    /// and <see cref="Run"/> decided which one, and the two were maintained by hand — so a new mode
+    /// added to one and not the other either starts Kestrel instead of running the one-shot, or
+    /// falls through this switch's default and silently runs `--waiting`. Both failures are silent,
+    /// which is what makes a duplicated list worse than a long one. (Code round, codex.)
+    /// </remarks>
+    internal static readonly string[] Modes =
+        ["--issue-key", "--revoke", "--promote", "--waiting"];
+
+    /// <summary>Whether these arguments name a mode this binary runs instead of listening.</summary>
+    internal static bool Knows(string[] args) =>
+        args.Length > 0 && Array.IndexOf(Modes, args[0]) >= 0;
+
     internal static int Run(string[] args, string secret, string dataDir)
     {
         if (secret.Length == 0)
@@ -29,12 +44,16 @@ internal static class Admin
         using var corpus = Corpus.Open(Path.Combine(dataDir, "coai-bugs.db"));
         var now = DateTime.UtcNow.ToString("O");
 
+        // Every arm is a mode in `Modes`, and `Knows` is what let this be reached — so the default
+        // is unreachable rather than a silent fallback to `--waiting`.
         return args[0] switch
         {
             "--issue-key" => Issue(corpus, args, secret, now),
             "--revoke" => Revoke(corpus, args, now),
             "--promote" => Promote(corpus, args, now),
-            _ => Waiting(corpus, args),
+            "--waiting" => Waiting(corpus, args),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(args), args[0], $"is in {nameof(Modes)} but has no arm here"),
         };
     }
 

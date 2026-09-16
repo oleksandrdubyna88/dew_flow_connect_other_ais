@@ -137,8 +137,15 @@ public sealed class Corpus : IDisposable
     /// found the same row, from three directions. The check and the insert are now one statement's
     /// worth of truth. (Code round, codex/gemini.)
     /// </remarks>
-    public Kept Keep(string entryId, string language, string before, string after, string keyId, string nowUtc)
+    /// <returns>Whether it was stored, and the id it is stored under.</returns>
+    public (Kept Kept, string EntryId) Keep(
+        string language, string before, string after, string keyId, string nowUtc)
     {
+        // DERIVED HERE, not taken from the caller. It was a parameter, and a parameter is a way for
+        // an importer or a replay to store the same three fields under two different ids — which is
+        // precisely the idempotency this table exists to have. The identity of a pair belongs to the
+        // boundary that persists it. (Code round, codex.)
+        var entryId = IdOf(language, before, after);
         lock (_gate)
         {
             using var transaction = _db.BeginTransaction();
@@ -146,7 +153,7 @@ public sealed class Corpus : IDisposable
             {
                 transaction.Commit();
 
-                return Kept.AlreadyHeld;
+                return (Kept.AlreadyHeld, entryId);
             }
 
             using var write = _db.CreateCommand();
@@ -168,7 +175,7 @@ public sealed class Corpus : IDisposable
             var stored = write.ExecuteNonQuery() == 1;
             transaction.Commit();
 
-            return stored ? Kept.Stored : Kept.AlreadyHeld;
+            return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId);
         }
     }
 

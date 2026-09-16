@@ -304,6 +304,7 @@ reply for it to order.
 | `TheRouteTests` | the REAL server in-process | the AOT JSON binding, the bearer header, the 401, the caps |
 | `OnlyThreeFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing |
 | `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
+| `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code |
 
 **Why an HTTP suite when the decisions are already unit-tested.** `Ingest.Take` is pure and covered;
 the route is not part of it. The one that matters most is the AOT JSON binding — this repository has
@@ -324,6 +325,10 @@ derives, that it reads the words the server writes, that both AOT serializers bi
 documents, and that a queue past the 200-pair cap arrives in full rather than reporting success
 about its first batch. Before it, `UploadRun.RunAsync` had no test at all; only its private mapping
 did, and the catalogue said otherwise.
+
+**And one level below that: two real processes.** `BothHalvesTests` hosts the server's ASSEMBLIES, which cannot see a publish-layout, trimming or embedded-resource defect — and this story's whole reason for existing is a keyword file read from a directory no release has. `TheBuiltBinariesTests` starts the built `coai-bugs` on a real port, mints a key through the real `--issue-key`, uploads through the real `coai-mcp --upload-pairs`, and reads the result back through the real `--waiting`. It is on `COAI_CONTRACT_EXE`, the seam the release workflow already sets, so the same scenario is a fast check here and the release smoke there.
+
+**It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach

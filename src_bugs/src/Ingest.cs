@@ -82,9 +82,13 @@ public static class Ingest
                 + "taken until a person promotes or rejects what is waiting");
         }
 
-        return corpus.Keep(id, name, before, after, keyId, nowUtc) is Kept.Stored
-            ? new UploadResult(id, Took.Accepted, string.Empty)
-            : new UploadResult(id, Took.Duplicate, string.Empty);
+        // The id comes BACK from the store, which derives it: two places computing one identity is
+        // how they come to disagree. This one is still computed above, for the refusals that never
+        // reach the store at all, and the two are asserted equal by `TheIdIsAFunctionOfThePair`.
+        var (kept, stored) = corpus.Keep(name, before, after, keyId, nowUtc);
+
+        return new UploadResult(
+            stored, kept is Kept.Stored ? Took.Accepted : Took.Duplicate, string.Empty);
     }
 
     /// <summary>Why this pair may not be stored, or empty when it may.</summary>
