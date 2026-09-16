@@ -775,6 +775,28 @@ export type Money = (value: number | null | undefined) => string;
 /** Just the cost fields, because these three run in the page against plain row objects. */
 export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'>;
 
+/** Which view a row belongs to. The tabs are the two halves of this one predicate. */
+export type LogView = 'rounds' | 'conversations';
+
+/**
+ * Whether a row belongs in the view being shown.
+ *
+ * <p>It is asked FIRST, before the search, the facets, the sort, the page count and the slice — and
+ * that order is the whole of it. Filtering after the slice would give the Conversations tab one row
+ * out of a page of two hundred rounds with *Older* enabled onto an empty page, while the counts and
+ * the search still spoke for both kinds; a test over a single mixed page would pass while it was
+ * broken. (The plan round.)</p>
+ *
+ * <p>A round is anything that is not a conversation, rather than anything called `review`. Today the
+ * two are the same test — `LogRow.kind` is a closed union of exactly those two, which a test tried to
+ * disprove and could not compile. The negative form is for the day a third kind is added: it lands
+ * with the rounds, where every kind so far has come from, instead of falling out of both views and
+ * off the page.</p>
+ */
+export function inView(row: LogRow, view: LogView): boolean {
+  return view === 'conversations' ? row.kind === 'conversation' : row.kind !== 'conversation';
+}
+
 /** Whether a row survives the selects and the search box. A blank search is no search. */
 export function rowMatches(row: LogRow, filters: LogFilters, search: string): boolean {
   if (filters.kind && row.kind !== filters.kind) {
@@ -876,14 +898,26 @@ export function usageTabHtml(
  * anywhere but here silently stops the detail row spanning the table. The actions column is
  * therefore IN the list and marked unsortable, rather than appended to the header by hand.</p>
  */
-const COLUMNS: ReadonlyArray<{ key: SortKey | 'actions' | 'pick'; label: string; numeric?: boolean; sortable?: boolean }> = [
+/**
+ * The table's columns, for BOTH views.
+ *
+ * <p>`alt` is what the column is called in the conversations view — a round's *Round* is a
+ * conversation's *Turn*, and its *Reviewers* is the one model that answered. Both labels are
+ * rendered and the view hides the wrong one, so the header needs no script to change: a label that
+ * moved would otherwise be a behaviour no stylesheet could be asked about.</p>
+ *
+ * <p><b>`Kind` is gone.</b> It existed to tell a conversation from a round inside one list, and the
+ * view now says that (issue #297).</p>
+ */
+const COLUMNS: ReadonlyArray<{
+  key: SortKey | 'actions' | 'pick'; label: string; alt?: string; numeric?: boolean; sortable?: boolean;
+}> = [
   { key: 'pick', label: '', sortable: false },
   { key: 'startedUtc', label: 'When' },
-  { key: 'kind', label: 'Kind' },
   { key: 'repoName', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
   { key: 'stage', label: 'Stage' },
-  { key: 'number', label: 'Round', numeric: true },
+  { key: 'number', label: 'Round', alt: 'Turn', numeric: true },
   { key: 'subject', label: 'What' },
   { key: 'status', label: 'Status' },
   { key: 'verdict', label: 'Verdict' },
@@ -893,14 +927,13 @@ const COLUMNS: ReadonlyArray<{ key: SortKey | 'actions' | 'pick'; label: string;
   { key: 'tokensIn', label: 'Tokens in', numeric: true },
   { key: 'tokensOut', label: 'Tokens out', numeric: true },
   { key: 'costTotalUsd', label: 'Cost', numeric: true },
-  { key: 'answered', label: 'Reviewers' },
+  { key: 'answered', label: 'Reviewers', alt: 'Who answered' },
   { key: 'actions', label: '', sortable: false },
 ];
 
 type Facet = 'kind' | 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
 
 const FACETS: ReadonlyArray<{ key: Facet; label: string }> = [
-  { key: 'kind', label: 'Kind' },
   { key: 'repoPath', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
   { key: 'stage', label: 'Stage' },
@@ -1118,9 +1151,13 @@ export function roundsLogHtml(
       ? (c.key === 'pick'
         // The box in the HEADER selects every row the filters MATCH, not every row on the page:
         // paging is a window on a list and a person ticking the top box means the list.
-        ? '<th class="pick"><input type="checkbox" id="pickall" title="Select every matching round"></th>'
-        : '<th class="actions"></th>')
-      : `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`))
+        ? '<th class="pick col-pick"><input type="checkbox" id="pickall" title="Select every matching round"></th>'
+        : '<th class="actions col-actions"></th>')
+      : `<th data-sort="${c.key}" class="col-${c.key}${c.numeric ? ' num' : ''}">`
+        + (c.alt === undefined
+          ? c.label
+          : `<span class="asRound">${c.label}</span><span class="asChat">${c.alt}</span>`)
+        + '</th>'))
     .join('');
   const filters = FACETS
     .map((f) => `<label>${f.label} <select data-filter="${f.key}"><option value="">any</option>${facetOptions(rows, f.key)}</select></label>`)
@@ -1153,8 +1190,24 @@ export function roundsLogHtml(
      Answer… — are primary; the pager and the tab strip are navigation and stay quiet. And every
      button answers the pointer: colour alone is one signal, and in a dark theme it was not enough
      to tell these three from the text beside them (issue #126). */
-  button:hover { background: var(--vscode-button-hoverBackground); }
-  button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+  /* A CONTROL THAT CANNOT BE PRESSED MUST NOT LOOK PRESSABLE. The pager's buttons were disabled
+     correctly from the day they shipped and nothing said so: there was no :disabled rule at all, so
+     a dead "Older" kept the filled colour and the hand cursor, and «кнопки активны, а при нажатии
+     ничего не происходит» is what that reads as (issue #297).
+
+     The hover selectors are REWRITTEN rather than joined by a :not(:disabled) sibling, and that is
+     the point rather than a tidiness: a browser matches :hover on a disabled element and suppresses
+     only the pointer events, so a bare button:hover left in the sheet goes on painting the dead
+     control while the guarded rule simply does not apply to it. Adding beside it would have fixed
+     nothing. (The plan round caught this in the plan; the test names both selectors when it regresses.)
+
+     opacity + cursor is this product's own way of drawing a disabled control — six other sites,
+     bugzReviewPage.ts among them with this identical rule.
+
+     No backticks in here: this comment is INSIDE the CSS template literal, and one ends it. */
+  button:disabled, button.secondary:disabled { opacity: .5; cursor: default; }
+  button:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
+  button.secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: .95em; }
   th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top; }
@@ -1246,14 +1299,32 @@ export function roundsLogHtml(
   .broke { color: var(--vscode-charts-orange); }
   .spots { display: flex; flex-wrap: wrap; gap: 18px; }
   .spots table { width: auto; min-width: 260px; }
+  /* ONE TABLE, TWO VIEWS (issue #297). Conversations used to sit in the Rounds list with a Kind
+     column telling them apart; they have a tab now and the column is gone, because the view says it.
+
+     What a conversation has no answer for is HIDDEN rather than shown empty: it has no repository,
+     branch, stage, verdict, or findings, and a row of blanks under those headers reads as a round
+     that lost them. The tick-boxes and both Export controls go too — the export writes a round's
+     findings, and offering it over rows that have none is an invitation to a refusal. So does the
+     footer count, which is about coai.db, and coai.db holds no conversations at all.
+
+     The two labels that differ are both drawn and one is hidden, so the header needs no script.
+
+     No backticks in here: this comment is INSIDE the CSS template literal, and one ends it. */
+  .view-rounds .asChat, .view-conversations .asRound { display: none; }
+  .view-conversations .col-repoName, .view-conversations .col-branch, .view-conversations .col-stage,
+  .view-conversations .col-verdict, .view-conversations .col-gating, .view-conversations .col-findings,
+  .view-conversations .col-pick, .view-conversations .col-actions,
+  .view-conversations #exportpicked, .view-conversations #clearpicked,
+  .view-conversations #recorded { display: none; }
 </style>
 </head>
 <body>
 <h1>Review rounds</h1>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
-<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
-<section id="tab-rounds">
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
+<section id="tab-rounds" class="view-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
       <label>From <input id="from" type="datetime-local" step="60"></label>
@@ -1324,6 +1395,8 @@ export function roundsLogHtml(
 
   var state = {
     sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {}, page: 0,
+    // Which half of the table is on screen. The tab strip sets it; everything downstream reads it.
+    view: 'rounds',
     // Keyed by row key, the way expanded is. A SELECTION is a decision the person made, so a filter
     // that hides a selected row does not unmake it — only the row leaving the loaded set does.
     selected: {},
@@ -1333,6 +1406,7 @@ export function roundsLogHtml(
   // whole table, and a hand-written colspan is a number that silently stops matching the day a
   // column is added. Adding the Kind column is exactly that day.
   var COLUMN_COUNT = ${COLUMNS.length};
+  var inView = ${inView.toString()};
   // What SQL counted over the WHOLE table, which is a different number from the length of what was
   // sent. The operator asked for this in as many words: «суммы - скл счиатть (сколько всего и тд.)».
   var TOTALS = ${jsonForScript(totals)};
@@ -1378,7 +1452,7 @@ export function roundsLogHtml(
   function tookCell(r) {
     var ran = took(r.seconds);
     if (r.decideSeconds === null || r.decideSeconds === undefined) {
-      return '<td class="num">' + ran + '</td>';
+      return '<td class="num col-seconds">' + ran + '</td>';
     }
     // The title says what the second number MEASURES, because a wall clock over a round somebody
     // came back to after lunch counts the lunch, and "deciding" alone would overclaim.
@@ -1387,7 +1461,7 @@ export function roundsLogHtml(
     // (Code round, gemini.)
     var shown = ran || '—';
 
-    return '<td class="num" title="' + esc(shown) + ' the reviewers ran &#183; '
+    return '<td class="num col-seconds" title="' + esc(shown) + ' the reviewers ran &#183; '
       + esc(took(r.decideSeconds)) + ' from the round finishing to its last decision, '
       + 'which counts any time nobody was looking at it">'
       + shown + ' <span class="deciding">&#183; ' + took(r.decideSeconds) + '</span></td>';
@@ -1470,7 +1544,10 @@ export function roundsLogHtml(
     return out + '</div>';
   }
   function render() {
-    var matched = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
+    // THE VIEW FIRST, before the search, the sort, the count and the slice.
+    var matched = ROWS.filter(function (r) {
+      return inView(r, state.view) && rowMatches(r, state.filters, state.search);
+    });
     matched.sort(function (a, b) { return compareRows(a, b, state.sortKey, state.dir); });
     var pages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
     if (state.page > pages - 1) { state.page = pages - 1; }
@@ -1481,30 +1558,29 @@ export function roundsLogHtml(
     for (var i = 0; i < shown.length; i++) {
       var r = shown[i];
       html += '<tr data-key="' + esc(r.key) + '">'
-        + '<td class="pick"><input type="checkbox" data-pick="' + esc(r.key) + '"'
+        + '<td class="pick col-pick"><input type="checkbox" data-pick="' + esc(r.key) + '"'
         // The column header is blank and the round's identity is in other cells, so without this the
         // box is announced as an unlabelled checkbox and a screen-reader user cannot tell which round
         // they are selecting. (CodeRabbit, on the pull request.)
         + ' aria-label="Select ' + esc(r.stage) + ' round ' + esc(String(r.number))
         + (r.repoName ? ' of ' + esc(r.repoName) : '') + '"'
         + (state.selected[r.key] ? ' checked' : '') + '></td>'
-        + '<td>' + when(r.startedUtc || r.completedUtc) + '</td>'
-        + '<td>' + esc(r.kind) + '</td>'
-        + '<td title="' + esc(r.repoPath) + '">' + esc(r.repoName) + '</td>'
-        + '<td title="' + esc(r.branch) + '">' + esc(r.branch) + '</td>'
-        + '<td>' + esc(r.stage) + '</td>'
-        + '<td class="num">' + r.number + '</td>'
-        + '<td class="what" title="' + esc(r.subject) + '">' + esc(r.subject) + '</td>'
-        + '<td>' + badge(r.status) + decided(r) + '</td>'
-        + '<td>' + esc(r.verdict) + '</td>'
-        + '<td class="num">' + r.gating + '</td>'
-        + '<td class="num">' + num(r.findings) + '</td>'
+        + '<td class="col-startedUtc">' + when(r.startedUtc || r.completedUtc) + '</td>'
+        + '<td class="col-repoName" title="' + esc(r.repoPath) + '">' + esc(r.repoName) + '</td>'
+        + '<td class="col-branch" title="' + esc(r.branch) + '">' + esc(r.branch) + '</td>'
+        + '<td class="col-stage">' + esc(r.stage) + '</td>'
+        + '<td class="num col-number">' + r.number + '</td>'
+        + '<td class="what col-subject" title="' + esc(r.subject) + '">' + esc(r.subject) + '</td>'
+        + '<td class="col-status">' + badge(r.status) + decided(r) + '</td>'
+        + '<td class="col-verdict">' + esc(r.verdict) + '</td>'
+        + '<td class="num col-gating">' + r.gating + '</td>'
+        + '<td class="num col-findings">' + num(r.findings) + '</td>'
         + tookCell(r)
-        + '<td class="num">' + num(r.tokensIn) + '</td>'
-        + '<td class="num">' + num(r.tokensOut) + '</td>'
-        + '<td class="num cost" title="' + esc(costTitle(r, money)) + '">' + cost3(r, money) + '</td>'
-        + '<td class="who-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
-        + '<td class="actions"><button type="button" class="link" data-export="' + esc(r.key)
+        + '<td class="num col-tokensIn">' + num(r.tokensIn) + '</td>'
+        + '<td class="num col-tokensOut">' + num(r.tokensOut) + '</td>'
+        + '<td class="num cost col-costTotalUsd" title="' + esc(costTitle(r, money)) + '">' + cost3(r, money) + '</td>'
+        + '<td class="who-answered col-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
+        + '<td class="actions col-actions"><button type="button" class="link" data-export="' + esc(r.key)
         + '" title="Write this round to a CSV file">Export</button></td>'
         + '</tr>';
       if (state.expanded[r.key]) {
@@ -1558,8 +1634,13 @@ export function roundsLogHtml(
     // Says which rows these are, never a bare count that could be read as a count of everything.
     document.getElementById('pageinfo').textContent = matched.length === 0
       ? 'nothing to show'
+      // THE PAGE POSITION IS ALWAYS SAID, one page or ten. It used to appear only past the first
+      // page, and the line directly under this one announces how many rounds the DATABASE holds —
+      // so a person looking at one page of today's rows saw two disabled buttons, no word about
+      // paging, and a count in the thousands. Two true statements that together read as a pager
+      // that does not work, which is what was reported (issue #297).
       : 'rows ' + (from + 1) + '–' + (from + shown.length) + ' of ' + matched.length
-        + (pages > 1 ? ' · page ' + (state.page + 1) + ' of ' + pages : '');
+        + ' · page ' + (state.page + 1) + ' of ' + pages;
     document.getElementById('recorded').textContent = TOTALS.rounds === 0
       ? ''
       : 'The database has ' + TOTALS.rounds + ' rounds and ' + TOTALS.findings + ' findings — '
@@ -1582,7 +1663,20 @@ export function roundsLogHtml(
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
       }
-      document.getElementById('tab-rounds').hidden = which !== 'rounds';
+      // ONE section serves both halves of the table, so it stays on screen for either tab and wears
+      // the view as a class. Everything a conversation has no answer for is hidden by that class,
+      // rather than shown as a row of blanks under a round's headers.
+      var table = document.getElementById('tab-rounds');
+      var asTable = which === 'rounds' || which === 'conversations';
+      table.hidden = !asTable;
+      if (asTable && which !== state.view) {
+        table.className = which === 'conversations' ? 'view-conversations' : 'view-rounds';
+        state.view = which;
+        // The same rule every other filter change follows: a page number belongs to a list, and this
+        // is a different list.
+        firstPage();
+        render();
+      }
       document.getElementById('tab-consultations').hidden = which !== 'consultations';
       document.getElementById('tab-usage').hidden = which !== 'usage';
       document.getElementById('tab-spots').hidden = which !== 'spots';
@@ -1736,7 +1830,9 @@ export function roundsLogHtml(
       // Every MATCHING round, across every page — a person ticking the top box means the list they
       // have filtered to, not the twenty rows they can see. Untick clears only those same rows, so
       // a selection made under another filter is not silently thrown away.
-      var matched = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
+      var matched = ROWS.filter(function (r) {
+        return inView(r, state.view) && rowMatches(r, state.filters, state.search);
+      });
       var everyOne = matched.length > 0 && matched.every(function (r) { return state.selected[r.key]; });
       for (var m = 0; m < matched.length; m++) {
         if (everyOne) { delete state.selected[matched[m].key]; } else { state.selected[matched[m].key] = true; }

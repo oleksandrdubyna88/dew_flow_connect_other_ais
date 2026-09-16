@@ -65,7 +65,13 @@ test('every column that holds DATA is a sort key, and the ones that hold control
   const ths = head.match(/<th\b[^>]*>/g) ?? [];
 
   assert.ok(ths.length >= 15, `fifteen columns, got ${ths.length}`);
-  const controls = ths.filter((th) => th.includes('class="actions"') || th.includes('class="pick"'));
+  // By CLASS TOKEN, not by substring. Every header now also carries a `col-<key>` class so a view
+  // can hide the columns it has no answer for, and `class="actions"` stopped matching
+  // `class="actions col-actions"` — a test that looks for a whole attribute value passes for a
+  // reason that has nothing to do with what it is asserting.
+  const wears = (th: string, name: string): boolean =>
+    (th.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/).includes(name);
+  const controls = ths.filter((th) => wears(th, 'actions') || wears(th, 'pick'));
   assert.equal(controls.length, 2, 'the tick column and the button column, and no others');
   const sortable = ths.filter((th) => !controls.includes(th));
   for (const th of sortable) {
@@ -177,10 +183,27 @@ test('what the three are painted with is the one primary rule, and nothing later
   assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-foreground\)/, 'and the primary foreground with it');
   assert.match(css, /\n\s*button \{[^}]*cursor: pointer/, 'and says it is pressable');
   // Colour is one signal. The pointer and a hover are the two that survive a high-contrast theme.
-  assert.match(css, /\n\s*button:hover \{[^}]*var\(--vscode-button-hoverBackground\)/, 'a button answers the pointer');
-  assert.match(css, /\n\s*button\.secondary:hover \{/, 'and so does a secondary one, in its own tone');
+  // The hover rules are GUARDED, and the guard is the point rather than a detail: a browser matches
+  // :hover on a disabled element and suppresses only the pointer events, so an unguarded
+  // `button:hover` goes on lighting up a control that cannot be pressed (issue #297).
+  assert.match(
+    css, /\n\s*button:hover:not\(:disabled\) \{[^}]*var\(--vscode-button-hoverBackground\)/,
+    'a button that CAN be pressed answers the pointer',
+  );
+  assert.match(
+    css, /\n\s*button\.secondary:hover:not\(:disabled\) \{/,
+    'and so does a secondary one, in its own tone',
+  );
+  assert.match(
+    css, /\n\s*button:disabled, button\.secondary:disabled \{[^}]*cursor: default/,
+    'and one that cannot be pressed says so, instead of keeping the hand cursor',
+  );
 
-  const allowed = new Set(['button', 'button:hover', 'button.secondary', 'button.secondary:hover']);
+  const allowed = new Set([
+    'button', 'button.secondary',
+    'button:hover:not(:disabled)', 'button.secondary:hover:not(:disabled)',
+    'button:disabled, button.secondary:disabled',
+  ]);
   const selectors = [...css.matchAll(/(?:^|\n)\s*([^\s{][^{\r\n]*?)\s*\{/g)].map((m) => m[1]!.trim());
   const aimedAtButtons = selectors.filter((s) => /\bbutton\b|#today|#alldates|#clear/.test(s) && !allowed.has(s));
   assert.deepEqual(aimedAtButtons, [], `only the four known button rules may exist: ${aimedAtButtons.join(' · ')}`);

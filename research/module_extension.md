@@ -4063,6 +4063,58 @@ forget removes it); that `heldElsewhere` dereferences a possibly-absent beat (it
 same line); and a timeout on the forget, which no other store operation has and which applied here
 alone would be the measure-at-some-of-its-sites defect the conventions name.
 
+## The rounds log pages, and keeps conversations apart (2026-09-16, issue #297)
+
+**The pager's buttons were reported as "active, and pressing them does nothing". They were not
+active.** `prev.disabled` and `next.disabled` had been set correctly since the page shipped, four
+tests pressed them and asserted the clamping, and the whole complaint was that NOTHING SAID SO: the
+button stylesheet had no `:disabled` rule at all, so a dead *◀ Newer* kept its filled colour and its
+hand cursor.
+
+**And the hover rules had to be rewritten, not joined.** A browser matches `:hover` on a disabled
+element and suppresses only the pointer events, so adding `button:hover:not(:disabled)` beside the
+existing `button:hover` fixes nothing — the guarded rule simply does not apply to the dead control
+and the unguarded one is left to paint it. The plan round caught this before a line was written;
+`roundsLogPage.test.ts`'s inverted guard, which allows exactly four button selectors and reddens on a
+fifth, is what keeps it caught.
+
+**`#pageinfo` now states the page position at one page as well as at ten.** It used to append *page N
+of M* only past the first page, and the line directly beneath it announces how many rounds the
+DATABASE holds — so a person looking at one page of today's rows saw two disabled buttons, no word
+about paging, and a count in the thousands. Two true statements that together read as a pager that
+does not work.
+
+**Conversations moved out of the Rounds table into a tab of their own** — the operator's ruling, MOVE
+rather than duplicate. One table with two VIEWS, not a second pushed region like *Consultations*: the
+sort, the facets, the search, the date range and the pager this issue is half about are worth exactly
+as much to a conversation as to a round, and they are already written.
+
+`inView(row, view)` is the whole separation, and it is asked **first** — before the search, the
+facets, the sort, the page count and the slice. That order is the design rather than an
+implementation detail: filtering after the slice gives the Conversations tab one row out of a page of
+two hundred rounds with *Older* enabled onto an empty page, while the counts and the search still
+speak for both kinds, and a test over a single mixed page passes while it is broken. Every test of it
+therefore crosses a page boundary.
+
+The `Kind` column and the `Kind` facet are **gone**: they told a conversation from a round inside one
+list, and the tab says that now. What a conversation has no answer for — repository, branch, stage,
+verdict, gating, findings — is hidden by the view rather than shown as a row of blanks under a
+round's headers, and so are the tick-boxes, both Export controls and the database footer, because the
+export writes a round's findings and a conversation has none. The two labels that differ (*Round* /
+*Turn*, *Reviewers* / *Who answered*) are both rendered and one is hidden, so the header needs no
+script to change.
+
+**What the database does not do is move.** A conversation lives in `<dataDir>/chat-usage.jsonl` and
+has no row in `coai.db`; `Schema.cs`'s own argument for giving consultations a table rather than
+making them a kind of round applies here word for word. `readLedger` answers `[]` on `ENOENT`, so an
+installation that has never held a conversation renders an empty table rather than an error.
+
+**Two guards were strengthened by their own failure.** A header test matched `class="actions"` as a
+SUBSTRING and stopped matching the moment every header also carried a `col-…` class — it compares
+class tokens now. And the view's *back to page one* test passed with `firstPage()` deleted, because
+`render`'s clamp pulls an out-of-range page back by itself when the other view holds only one page;
+it is written over two views of two pages each now, and deleting `firstPage()` reddens it.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
