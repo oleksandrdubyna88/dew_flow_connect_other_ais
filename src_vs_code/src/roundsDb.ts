@@ -477,12 +477,23 @@ export interface BugFunnel {
   readonly runtime: number;
   readonly located: number;
   readonly unprocessed: number;
+  /** How many findings have a collected pair, across every run there has ever been. */
+  readonly collected: number;
 }
 
 /** What the corpus has to offer, and what the last run made of it. */
 export interface BugCorpus {
   readonly funnel: BugFunnel;
   readonly lastRun: CollectRun;
+  /**
+   * The vendors THIS server will accept for a ranking pass.
+   *
+   * <p>Read from the server rather than hardcoded beside the picker, because an installed
+   * extension and an installed server can be of different ages — a repository-level check keeps
+   * two source files honest and says nothing about two installed binaries. Empty means the server
+   * is too old to say, and the panel falls back to its own list.</p>
+   */
+  readonly rankingVendors: readonly string[];
   /** Whether the server answered at all. False is "we do not know", never "there is nothing". */
   readonly read: boolean;
 }
@@ -502,14 +513,27 @@ const NO_RUN: CollectRun = {
 };
 
 const NO_FUNNEL: BugFunnel = {
-  all: 0, onCode: 0, accepted: 0, gating: 0, runtime: 0, located: 0, unprocessed: 0,
+  all: 0, onCode: 0, accepted: 0, gating: 0, runtime: 0, located: 0, unprocessed: 0, collected: 0,
 };
 
 /** Nothing known — which the section renders as "not asked yet", not as "no material". */
-export const EMPTY_CORPUS: BugCorpus = { funnel: NO_FUNNEL, lastRun: NO_RUN, read: false };
+export const EMPTY_CORPUS: BugCorpus =
+  { funnel: NO_FUNNEL, lastRun: NO_RUN, rankingVendors: [], read: false };
 
 /** Whether a run is happening — what the Collect button is disabled by. */
-export const isRunning = (run: CollectRun): boolean => run.state === 'running';
+/**
+ * The states that mean nothing more will happen.
+ *
+ * <p>A list of ENDINGS, so a state this build has never heard of reads as still going. An equality
+ * test against `running` would call a later paused-for-approval state FINISHED, re-enable Collect,
+ * and let a second run start beside the first. Waiting too long costs a stale line; declaring a
+ * working run finished costs a duplicate collection.</p>
+ */
+export const FINISHED_STATES: readonly string[] = ['done', 'failed', 'interrupted'];
+
+/** Whether a run is happening — what the Collect button is disabled by. */
+export const isRunning = (run: CollectRun): boolean =>
+  run.id.length > 0 && !FINISHED_STATES.includes(run.state);
 
 /** Whether any run has ever been recorded. */
 export const hasRun = (run: CollectRun): boolean => run.id.length > 0;
@@ -533,6 +557,9 @@ export function parseBugs(text: string): BugCorpus {
       funnel: { ...NO_FUNNEL, ...raw.funnel },
       // An absent `lastRun` is an older server, and it means the same thing an empty id means.
       lastRun: { ...NO_RUN, ...(raw.lastRun ?? {}) },
+      // Absent means a server too old to say, NOT a server that allows nothing — the difference
+      // decides whether the picker falls back to its own list or offers nothing at all.
+      rankingVendors: Array.isArray(raw.rankingVendors) ? raw.rankingVendors : [],
       read: true,
     };
   } catch {

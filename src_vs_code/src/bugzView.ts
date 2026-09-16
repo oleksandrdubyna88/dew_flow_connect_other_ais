@@ -44,9 +44,12 @@ export interface BugzViewState {
  */
 export const RANKING_VENDORS: readonly string[] = ['local'];
 
-/** Whether this model may be offered at all. */
-export const mayRank = (model: string): boolean =>
-  model.length === 0 || RANKING_VENDORS.includes(model.split('/')[0]?.toLowerCase() ?? '');
+/** Whether this model may be offered, against a given list of vendors. */
+const allowedBy = (model: string, vendors: readonly string[]): boolean =>
+  model.length === 0 || vendors.includes(model.split('/')[0]?.toLowerCase() ?? '');
+
+/** Whether this model may be offered at all, by the panel's own fallback list. */
+export const mayRank = (model: string): boolean => allowedBy(model, RANKING_VENDORS);
 
 /**
  * What the Collect button says right now.
@@ -106,7 +109,13 @@ export function bugzBody(state: BugzViewState = {
 }): string {
   const run = state.corpus.lastRun;
   const running = isRunning(run);
-  const offered = state.models.filter((m) => mayRank(m.id));
+  // THIS server's list when it said, the panel's own when it is too old to. An installed
+  // extension and an installed server can be of different ages, and only the server can say what
+  // it will actually accept this minute.
+  const vendors = state.corpus.rankingVendors.length > 0
+    ? state.corpus.rankingVendors
+    : RANKING_VENDORS;
+  const offered = state.models.filter((m) => allowedBy(m.id, vendors));
 
   const picker = offered.length === 0
     ? '<div class="hint">No local engine was found. The ranking pass reads findings that are not'
@@ -122,7 +131,7 @@ export function bugzBody(state: BugzViewState = {
     <button type="button" class="run" data-command="collectBugs"${running ? ' disabled' : ''}>${
   escape(collectLabel(run))}</button>
     <button type="button" class="run" data-command="reviewBugs"${
-  run.collected > 0 ? '' : ' disabled'}>Review bugs</button>
+  state.corpus.funnel.collected > 0 ? '' : ' disabled'}>Review bugs</button>
   </div>
   <button type="button" class="run" data-command="setBugsServer">${
   state.server.length > 0 ? `Ingest server: ${escape(state.server)}` : 'Set the ingest server…'}</button>

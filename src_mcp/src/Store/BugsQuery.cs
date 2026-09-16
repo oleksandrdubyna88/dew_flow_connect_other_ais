@@ -53,7 +53,15 @@ public sealed record BugFunnel(
     int Gating = 0,
     int Runtime = 0,
     int Located = 0,
-    int Unprocessed = 0);
+    int Unprocessed = 0,
+    /// <summary>How many findings have a collected pair, across every run there has ever been.</summary>
+    /// <remarks>
+    /// The corpus's own size, and deliberately not the last run's tally. The Review button was gated
+    /// on `lastRun.collected`, so a second, incremental run that collected nothing new — every
+    /// remaining candidate skipped — disabled the button over the ten pairs the first run had already
+    /// collected. A batch delta is not a corpus. (Code round 2, gemini.)
+    /// </remarks>
+    int Collected = 0);
 
 /// <summary>What the corpus has to offer, and what each step of the filter cost to get there.</summary>
 /// <param name="Candidates">
@@ -75,6 +83,17 @@ public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Can
     /// step before. (Plan round, codex.)</para>
     /// </remarks>
     public CollectRunRow LastRun { get; init; } = new();
+
+    /// <summary>The vendors that may be shown a finding's own words.</summary>
+    /// <remarks>
+    /// <para><b>On the wire, so the picker reads the list that ENFORCES rather than a copy of it.</b>
+    /// Both sides asserting `shared/ranking-vendors.txt` stops them drifting in the repository — it
+    /// does not stop an installed extension and an installed server of different ages disagreeing,
+    /// and this product ships its two halves out of step. A panel that reads the list from the
+    /// server it is actually talking to cannot offer a model that server will refuse.</para>
+    /// <para>The panel keeps its own list as the FALLBACK, for a server too old to send this.</para>
+    /// </remarks>
+    public IReadOnlyList<string> RankingVendors { get; init; } = RankingModels.Local;
 }
 
 /// <summary>
@@ -135,7 +154,8 @@ public static class BugsQuery
                 CASE WHEN f.is_gating = 1                                          THEN 1 ELSE 0 END AS gating,
                 CASE WHEN f.category IN ('Reliability', 'Performance', 'Security') THEN 1 ELSE 0 END AS runtime,
                 CASE WHEN f.file != '' AND f.line != 0                             THEN 1 ELSE 0 END AS located,
-                CASE WHEN f.collect_state = ''                                     THEN 1 ELSE 0 END AS unhandled
+                CASE WHEN f.collect_state = ''                                     THEN 1 ELSE 0 END AS unhandled,
+                CASE WHEN f.collect_state = 'collected'                            THEN 1 ELSE 0 END AS collected
             FROM findings f JOIN rounds r ON r.id = f.round_id
         )
         SELECT
@@ -145,7 +165,8 @@ public static class BugsQuery
             SUM(on_code * accepted * gating)                                      AS n_gating,
             SUM(on_code * accepted * gating * runtime)                            AS n_runtime,
             SUM(on_code * accepted * gating * runtime * located)                  AS n_located,
-            SUM(on_code * accepted * gating * runtime * located * unhandled)      AS n_unprocessed
+            SUM(on_code * accepted * gating * runtime * located * unhandled)      AS n_unprocessed,
+            SUM(on_code * accepted * gating * runtime * located * collected)      AS n_collected
         FROM flagged
         """;
 
@@ -266,7 +287,8 @@ public static class BugsQuery
                 Gating: Count(rows, "n_gating"),
                 Runtime: Count(rows, "n_runtime"),
                 Located: Count(rows, "n_located"),
-                Unprocessed: Count(rows, "n_unprocessed"))
+                Unprocessed: Count(rows, "n_unprocessed"),
+                Collected: Count(rows, "n_collected"))
             : new BugFunnel();
     }
 

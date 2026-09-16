@@ -6043,3 +6043,14 @@ the view.
 **An older server sends no `lastRun`.** That means *no run has ever started*, never *unavailable*;
 these two halves have shipped out of step before, so `parseBugs` maps the absent key onto the same
 empty shape an empty id means.
+
+**The picker follows the server it is talking to.** `--bugs-json` carries `rankingVendors`, and the
+section offers what THAT list allows. Both halves also assert `shared/ranking-vendors.txt`, but a
+repository-level check keeps two source files honest and says nothing about an installed extension
+and an installed server of different ages — which is exactly how this product has shipped before. The
+panel's own constant is the fallback for a server too old to send one.
+
+**Review is gated on what the corpus HOLDS, not on the last run.** It was gated on
+`lastRun.collected`, a batch delta: run one collects ten pairs, run two takes the remaining
+candidates and legitimately skips every one, and the button went dark over ten pairs sitting in the
+database. `BugFunnel.collected` is the count across every run there has ever been.

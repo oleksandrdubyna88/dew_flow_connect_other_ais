@@ -591,9 +591,15 @@ public sealed class RoundsDb : IDisposable
         using var write = _db.CreateCommand();
         write.CommandText = """
             UPDATE collect_runs
-               SET heartbeat_utc = $now, candidates = $candidates, picked = $picked,
+               SET heartbeat_utc = $now, state = 'running',
+                   candidates = $candidates, picked = $picked,
                    collected = $collected, skipped = $skipped, failed = $failed
-             WHERE id = $id AND state = 'running'
+             -- A beat is PROOF OF LIFE, so it takes a swept run back. The sweep presumes a run
+             -- gone after thirty silent minutes, and a laptop that slept longer than that is a
+             -- run that was never gone at all: without this line it would keep working, keep
+             -- claiming findings, and show `interrupted` for ever. Only a FINISHED run is out of
+             -- reach, which is what the terminal guard below is for. (Code round 2, local.)
+             WHERE id = $id AND finished_utc = ''
             """;
         BindTally(write, runId, candidates, picked, tally);
         write.ExecuteNonQuery();

@@ -1129,6 +1129,26 @@ were decided.
 **Kept forever.** ~400 bytes a run, about one run a day: 150 KB a year beside a database already
 megabytes of rounds and findings. Deleting a run would orphan every finding naming it.
 
+### A beat is proof of life (2026-09-16)
+
+Two rules that only make sense together, and the second was a defect the code round found in the
+first.
+
+**A finished run cannot un-finish itself.** `FinishCollectRun` updates only a row still believed to
+be `running`, so a process that stops beating, gets swept by another process, and then wakes up and
+completes cannot overwrite the sweep and claim `done` after somebody else recorded that nobody knew.
+
+**But a BEAT takes a swept run back.** The first version guarded the beat the same way, and that was
+wrong: a laptop asleep for more than the stale window has its run swept while the process is
+perfectly alive, and under that guard it could never report again — it would keep working, keep
+claiming findings, and show `interrupted` for ever. A heartbeat is evidence the owner is there, so it
+restores `running` and is gated on `finished_utc` instead. Sweeping is a guess; a beat is not.
+
+**And `running` means NOT FINISHED, never "equal to running".** The states are read against a list of
+endings, so one this build has never heard of counts as still going. Waiting too long for a run that
+ended costs a stale line; declaring a working run finished costs a second collection started beside
+the first.
+
 ### Which models may read a finding's own words (2026-09-16)
 
 `RankingModels` in the core is an allowlist, and the collector refuses anything outside it **before
