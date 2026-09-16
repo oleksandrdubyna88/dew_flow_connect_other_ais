@@ -15,6 +15,7 @@ import {
   pinnable,
   promptsFrom,
   sessionFileIn,
+  sessionFileOf,
   severalMatch,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
@@ -765,6 +766,109 @@ test('a title row carrying nothing but spaces is not a name, and does not demote
 
     const read = await promptsFrom(found.kind === 'one' ? found.file : '');
     assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['hello']);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+/**
+ * THE ID, not the name — what a conversation that was pinned once already knows about its session.
+ *
+ * <p>A conversation keeps `source: {kind:'claude', sessionId}`, and that id IS the file's name. The
+ * store has held it since the day the pin was built, and nothing used it to find the file: a reload
+ * empties the remembered path and the next press walks the folder by a title another program is
+ * rewriting underneath it. So the tab was hunted by a string while its identity sat on the record.</p>
+ */
+
+test('a conversation with a stored id finds its file though every title differs', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    const id = '942e84d6-1eff-4c68-ad29-642ac4b90e9a';
+    writeFileSync(join(dir, `${id}.jsonl`), `${titled('Nothing like the tab')}\n${said('мой вопрос')}\n`, 'utf8');
+
+    const found = await sessionFileOf(home, 'D:\\work\\app', true, id);
+    assert.strictEqual(found.kind, 'one', 'a conversation whose file we can NAME was not found');
+    assert.strictEqual(found.kind === 'one' ? found.file : '', join(dir, `${id}.jsonl`));
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['мой вопрос']);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('resolving by id reads no transcript at all', async () => {
+  // The point of the id path is that it costs one look at the directory entry. A file whose contents
+  // are not lines of JSON — and would produce nothing at all if they were read — still resolves.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    const id = '11111111-2222-3333-4444-555555555555';
+    writeFileSync(join(dir, `${id}.jsonl`), '\u0000\u0001 not a transcript at all \u0000', 'utf8');
+
+    const found = await sessionFileOf(home, 'D:\\work\\app', true, id);
+
+    assert.strictEqual(found.kind, 'one', 'the id path read the file instead of naming it');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a stored id that does not look like one never becomes a path', async () => {
+  // A record is a file a person or another program can edit, and this turns a stored string back
+  // into a path. `..\outside.jsonl` joined to the project directory is a file OUTSIDE it, and an
+  // access check would confirm it exists quite happily. (codex, the plan round, as a security
+  // finding.) The shape is asked before the disk is touched, and containment after.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    const elsewhere = join(home, '.claude', 'projects', 'D--somebody-else');
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(elsewhere, 'outside.jsonl'), `${said('another person’s conversation')}\n`, 'utf8');
+
+    const refused = [
+      '../D--somebody-else/outside',
+      '..\\D--somebody-else\\outside',
+      'D--somebody-else/outside',
+      '11111111-2222-3333-4444-555555555555/../../D--somebody-else/outside',
+      '',
+      'outside',
+    ];
+    for (const id of refused) {
+      const answer = await sessionFileOf(home, 'D:\\work\\app', true, id);
+
+      assert.strictEqual(answer.kind, 'none', `an id of another shape became a path: ${id}`);
+      assert.doesNotMatch(
+        answer.kind === 'none' ? answer.refusal : '',
+        /somebody-else/,
+        'the refusal repeated a path outside the project directory back at the caller',
+      );
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an id whose file is gone says so, and the name is still there to fall back on', async () => {
+  // The two halves of the fallback, as the host composes them: the id misses because the session was
+  // deleted, and the tab's name still reaches the one session that answers to it. Without this, a
+  // conversation whose id went stale would sit on the id's refusal for ever. (codex, the plan round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl'), `${titled('The tab')}\n${said('here')}\n`, 'utf8');
+
+    const stale = await sessionFileOf(home, 'D:\\work\\app', true, '942e84d6-1eff-4c68-ad29-642ac4b90e9a');
+    assert.strictEqual(stale.kind, 'none', 'a session id whose file is gone answered as though it were there');
+    assert.match(stale.kind === 'none' ? stale.refusal : '', /D--work-app/, 'the refusal does not say where it looked');
+
+    const byName = await sessionFileIn(home, 'D:\\work\\app', true, 'The tab');
+    assert.strictEqual(byName.kind, 'one', 'the name could not answer after the id missed');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

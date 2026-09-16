@@ -68,6 +68,19 @@ export function sessionIdOf(file: string): string {
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 /**
+ * Whether this string is a session id — the shape stated ONCE, for everything that acts on one.
+ *
+ * <p>Exported because a stored id is about to be turned back into a PATH, and a record is a file a
+ * person or another program can edit: `..\\..\\elsewhere` joined to a directory is a file outside it,
+ * and an `access` check would happily confirm that it exists. The reader that does the join asks this
+ * before it touches the disk, and checks containment after. (codex, the plan round, as a security
+ * finding.)</p>
+ */
+export function isSessionId(id: string): boolean {
+  return SESSION_ID.test(id);
+}
+
+/**
  * The folder a source itself names, or empty when it names none — exhaustive over the kinds.
  *
  * <p>A `file` knows where it is; a `claude` session is a UUID and knows nothing, so its folder is

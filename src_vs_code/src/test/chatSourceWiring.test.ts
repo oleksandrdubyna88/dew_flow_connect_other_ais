@@ -34,19 +34,62 @@ test('a record is written with the conversation’s OWN source and root, not wit
 test('the pin writes the session id AND the folder it was found in, and saves for itself', () => {
   // A UUID names no directory, so the root cannot be worked out later from the source — it has to be
   // captured here, from the search that found the session. Three reviewers refused the alternative.
+  //
+  // ONE ROAD IN. There are two ways a session is discovered — the walk as a tab opens, and a press
+  // that finds the tab unpinned — and they used to write different amounts of it: the press wrote the
+  // file alone, so what it learned died at the next reload while the walk's version lasted for ever.
+  // Both go through `adoptFound` now, and this asserts BOTH halves: what the helper writes, and that
+  // each caller reaches it. A second copy of these four lines anywhere else fails the count below.
   const command = source('chatCommand.ts');
-  const pin = command.slice(command.indexOf('function pinSession('), command.indexOf('function pinSession(') + 2_400);
+  const pin = command.slice(command.indexOf('function adoptFound('), command.indexOf('function adoptFound(') + 2_400);
 
   assert.match(pin, /sessionIdOf\(/u, 'the pin stores something other than the session’s id');
   assert.match(pin, /mine\.source = sourceOfSession\(/u, 'the pin does not give the conversation its identity');
   assert.match(pin, /filedUnder\(one\.folder,/u, 'the pin files the conversation under this window’s first root instead of the session’s own');
   // AND IT WRITES. Without this the source lives only in memory and dies with the window.
   assert.match(pin, /keepQueued\(entry, mine\);/u, 'the source is never written to disk, so it dies with the window');
-  // Guarded on `fromSession`, or the record would state its origin two ways and `agreeOnOrigin`
-  // would refuse to read it back — the conversation would save and then be unopenable.
-  assert.match(pin, /if \(!fromSession \|\| title\.length === 0\) \{/u, 'a session source can be written onto a tab that has no session');
   // An id it cannot read is no id: inventing one would match a tab that is not this one.
   assert.match(pin, /if \(sessionId\.length === 0\) \{/u, 'a file name of an unexpected shape becomes a source anyway');
+
+  // Guarded on `fromSession`, or the record would state its origin two ways and `agreeOnOrigin`
+  // would refuse to read it back — the conversation would save and then be unopenable.
+  const walk = command.slice(command.indexOf('function pinSession('), command.indexOf('function pinSession(') + 1_400);
+  assert.match(walk, /if \(!fromSession \|\| title\.length === 0\) \{/u, 'a session source can be written onto a tab that has no session');
+  assert.match(walk, /adoptFound\(entry, mine,/u, 'the walk keeps its own copy of what a pin writes');
+  // Exactly two callers and the definition. A third way to adopt a session is a writer nobody
+  // checked against the store's origin pair.
+  assert.equal(command.split('adoptFound(').length - 1, 3, 'a caller was added to or removed from the one road in');
+  assert.match(
+    command.slice(command.indexOf('async function resolveAndPin('), command.indexOf('async function resolveAndPin(') + 1_800),
+    /adoptFound\(entry, mine,/u,
+    'a press that resolves an unpinned tab keeps the file alone, so what it found dies at the next reload',
+  );
+});
+
+test('the Asked button asks the session ID before it asks the name', () => {
+  // The identity was on the record all along and nothing used it: a reload empties the remembered
+  // path and the next press walked the folder by a title Claude Code rewrites underneath it. The id
+  // IS the file's name, so the answer is one directory entry rather than every transcript read —
+  // 5.2 s warm on the operator's own folder, measured.
+  const command = source('chatCommand.ts');
+  const resolve = command.slice(command.indexOf('async function resolveAndPin('), command.indexOf('async function resolveAndPin(') + 1_800);
+
+  assert.ok(
+    resolve.indexOf('findSessionById(') > 0 && resolve.indexOf('findSessionById(') < resolve.indexOf('findSessionIn('),
+    'the name is asked before the id, so a renamed conversation is hunted by a string that is already stale',
+  );
+  // And the id is looked for in EVERY root, as the name is: a session's id names no folder.
+  assert.match(
+    command.slice(command.indexOf('async function findSessionById('), command.indexOf('async function findSessionById(') + 800),
+    /everyFolder\(/u,
+    'the id is looked for in one root only',
+  );
+  // A source that is not a Claude session has no id to look for, and says so by finding nothing.
+  assert.match(
+    command.slice(command.indexOf('async function findSessionById('), command.indexOf('async function findSessionById(') + 800),
+    /if \(source\.kind !== 'claude'\) \{/u,
+    'a file-opened conversation is asked for a session id it cannot have',
+  );
 });
 
 test('the write queue is ONE queue, so the pin cannot race the page', () => {
