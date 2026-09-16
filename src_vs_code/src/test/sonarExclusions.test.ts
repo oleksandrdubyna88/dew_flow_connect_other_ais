@@ -23,6 +23,7 @@ import * as path from 'node:path';
 const HERE = path.join(__dirname, '..', '..');
 const SOURCE = path.join(HERE, 'src');
 const WORKFLOW = path.join(HERE, '..', '.github', 'workflows', 'sonarcloud.yml');
+const CI = path.join(HERE, '..', '.github', 'workflows', 'ci.yml');
 
 /** Every module in `src` that imports the editor, and therefore cannot run under `node --test`. */
 const needsAHost = (): readonly string[] =>
@@ -93,6 +94,12 @@ test('the exclusion is a small minority of the source, and the decisions are on 
  * gained a comment saying every project must be listed. <b>Then it happened to `coai-bugs`</b>: a
  * whole new binary, 29 passing tests, and a gate reading 9.0 %. A comment is not a check, which is
  * the entire difference between that note and this test.</p>
+ *
+ * <p><b>And the same omission was worse in `ci.yml`.</b> Looking for the coverage gap turned up a
+ * bigger one beside it: the job that gates every pull request ran two of the four .NET suites, so
+ * `coai-server`'s 320 tests and `coai-bugs`' 29 were never executed by the check that is allowed to
+ * say no. A suite nobody runs is not a suite. Both workflows are asserted here, because the reason
+ * is the same in both and so is the silence.</p>
  */
 
 /** Every runner this repository builds, by the name its executable is given. */
@@ -117,10 +124,19 @@ const dotnetTestProjects = (): readonly string[] => {
   return [...new Set(found)].sort();
 };
 
-/** What the workflow actually runs under `dotnet-coverage collect`. */
+/** What the coverage job actually runs under `dotnet-coverage collect`. */
 const collected = (): readonly string[] => {
   const workflow = fs.readFileSync(WORKFLOW, 'utf8');
   const names = [...workflow.matchAll(/dotnet-coverage collect[^\n]*?\/([A-Za-z.]+)$/gmu)]
+    .map((match) => match[1] ?? '');
+
+  return [...new Set(names)].sort();
+};
+
+/** What the pull-request gate actually executes. */
+const executedByCi = (): readonly string[] => {
+  const workflow = fs.readFileSync(CI, 'utf8');
+  const names = [...workflow.matchAll(/run:\s*\.\/\S*?\/([A-Za-z.]+Tests)\s*$/gmu)]
     .map((match) => match[1] ?? '');
 
   return [...new Set(names)].sort();
@@ -137,6 +153,22 @@ test('every .NET test project is collected for coverage, or the code it covers r
       `${project} is not run by the coverage step in sonarcloud.yml, so everything it covers arrives `
       + 'at the quality gate as 0 % of new code. That has failed a pull request twice — coai-server '
       + 'and coai-bugs — for a reason about the analysis rather than about the change.',
+    );
+  }
+});
+
+test('every .NET test project is EXECUTED by the pull-request gate', () => {
+  // The louder half of the same omission. Coverage that reads zero is a number nobody can act on;
+  // a suite the gate never runs is a regression nobody hears about at all, until a release or
+  // until somebody runs it by hand. `ci.yml` ran two of four.
+  const projects = dotnetTestProjects();
+  const runs = executedByCi();
+
+  for (const project of projects) {
+    assert.ok(
+      runs.includes(project),
+      `${project} is built by ci.yml and never run by it. Its tests cannot fail a pull request, `
+      + 'which means they cannot stop anything — and a suite nobody runs is not a suite.',
     );
   }
 });

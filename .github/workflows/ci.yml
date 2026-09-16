@@ -54,6 +54,22 @@ jobs:
       - name: Test the bench
         run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
 
+      # THE OTHER TWO BINARIES, which this job did not run at all.
+      #
+      # `coai-server` has had 320 tests and `coai-bugs` arrived with 29, and neither suite was
+      # executed by the check that gates every pull request — so a regression in either was invisible
+      # here and waited for a release or for somebody running them by hand. Both DO run on Linux
+      # already, under `dotnet-coverage` in the sonarcloud job, which is how we know they pass on a
+      # runner; they were simply never added to the gate that is allowed to say no.
+      #
+      # `sonarExclusions.test.ts` asserts every `*.Tests.csproj` in the repository appears in both
+      # workflows, so the fourth binary cannot repeat this.
+      - name: Test the Team server
+        run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
+
+      - name: Test the ingest server
+        run: ./src_bugs/tests/bin/Release/net10.0/CoaiBugs.Tests
+
       # The rules that check themselves: a misfiled plan and a stale pin are red builds,
       # not discoveries.
       # The server ships as Native AOT and now carries a native dependency (SQLite). A trim or IL
