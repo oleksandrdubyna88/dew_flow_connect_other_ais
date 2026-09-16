@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Gate;
 using CoaiMcp.Core.Rounds;
@@ -557,6 +558,132 @@ public sealed class RoundsDb : IDisposable
             write.ExecuteNonQuery();
         }
     }
+
+    /// <summary>Opens the run, before a single candidate is decided.</summary>
+    /// <remarks>
+    /// Before, not after. One write at the finish is the shape that cannot represent <i>running</i>,
+    /// and a button whose whole job is to say what is happening needs exactly that state to exist
+    /// while it happens. (Plan round, gemini and codex.)
+    /// </remarks>
+    public void StartCollectRun(string runId, string model)
+    {
+        var now = Now();
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO collect_runs (id, started_utc, heartbeat_utc, state, model)
+            VALUES ($id, $now, $now, 'running', $model)
+            ON CONFLICT(id) DO NOTHING
+            """;
+        Bind(write, "$id", runId);
+        Bind(write, "$now", now);
+        Bind(write, "$model", model);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>The run is alive, and this is how far it has got.</summary>
+    /// <remarks>
+    /// Written as each candidate is decided, on the beat that already happens there. Progress that is
+    /// only written twice is not progress, and a heartbeat that is only written twice cannot tell a
+    /// live run from an abandoned one — which is the difference the sweep depends on.
+    /// </remarks>
+    public void BeatCollectRun(string runId, int candidates, int picked, CollectTally tally)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE collect_runs
+               SET heartbeat_utc = $now, candidates = $candidates, picked = $picked,
+                   collected = $collected, skipped = $skipped, failed = $failed
+             WHERE id = $id AND state = 'running'
+            """;
+        BindTally(write, runId, candidates, picked, tally);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>The run is over, however it ended.</summary>
+    /// <remarks>
+    /// Called from a <c>finally</c>, so a throw on candidate three still writes a terminal state. It
+    /// used to be reachable only by the happy path, which left the row — and the button — in flight
+    /// for ever. (Plan round, codex.)
+    /// </remarks>
+    public void FinishCollectRun(
+        string runId, string state, int candidates, int picked, CollectTally tally, string reasons)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE collect_runs
+               SET heartbeat_utc = $now, finished_utc = $now, state = $state,
+                   candidates = $candidates, picked = $picked,
+                   collected = $collected, skipped = $skipped, failed = $failed, reasons = $reasons
+             WHERE id = $id
+            """;
+        BindTally(write, runId, candidates, picked, tally);
+        Bind(write, "$state", state);
+        Bind(write, "$reasons", reasons);
+        write.ExecuteNonQuery();
+    }
+
+    private void BindTally(
+        SqliteCommand write, string runId, int candidates, int picked, CollectTally tally)
+    {
+        Bind(write, "$id", runId);
+        Bind(write, "$now", Now());
+        Bind(write, "$candidates", candidates);
+        Bind(write, "$picked", picked);
+        Bind(write, "$collected", tally.Collected);
+        Bind(write, "$skipped", tally.Skipped);
+        Bind(write, "$failed", tally.Failed);
+    }
+
+    /// <summary>Ends the runs whose owner stopped saying it was alive.</summary>
+    /// <remarks>
+    /// <para><b>Marked, never deleted.</b> The id is a foreign key in all but name — every finding the
+    /// run claimed carries it — so deleting the row would leave those rows naming a run that cannot be
+    /// looked up. An interrupted run is a fact about the run, not an absence of one.</para>
+    /// <para><b>And only a STALE one.</b> The panel reaches this database through one-shot
+    /// invocations, so a sweep that took every row with no <c>finished_utc</c> would end the run that
+    /// is happening right now, from the process that was asked to display it. The heartbeat is what
+    /// tells the two apart. (Plan round, gemini — it caught this before it shipped.)</para>
+    /// </remarks>
+    /// <returns>How many runs were ended.</returns>
+    public int SweepStaleCollectRuns(TimeSpan staleAfter)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE collect_runs
+               SET state = 'interrupted', finished_utc = $now
+             WHERE state = 'running' AND heartbeat_utc < $cutoff
+            """;
+        Bind(write, "$now", Now());
+        Bind(write, "$cutoff", _time.GetUtcNow().UtcDateTime.Subtract(staleAfter).ToString("O"));
+
+        return write.ExecuteNonQuery();
+    }
+
+    /// <summary>The most recent run, or an empty row when none has ever started.</summary>
+    /// <remarks>
+    /// Empty rather than null, per the family's rule about nulls in business logic, and it carries a
+    /// meaning the panel needs: <i>no run has ever happened here</i> is a state the button renders,
+    /// and it must not be confused with <i>this build cannot tell you</i>.
+    /// </remarks>
+    public CollectRunRow LastCollectRun()
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = """
+            SELECT id, started_utc, finished_utc, heartbeat_utc, state, model,
+                   candidates, picked, collected, skipped, failed, reasons
+              FROM collect_runs ORDER BY started_utc DESC LIMIT 1
+            """;
+        using var rows = read.ExecuteReader();
+
+        return rows.Read()
+            ? new CollectRunRow(
+                rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetInt32(7),
+                rows.GetInt32(8), rows.GetInt32(9), rows.GetInt32(10), rows.GetString(11))
+            : new CollectRunRow();
+    }
+
+    private string Now() => _time.GetUtcNow().UtcDateTime.ToString("O");
 
     private static void Bind(SqliteCommand command, string name, object value) =>
         command.Parameters.AddWithValue(name, value);

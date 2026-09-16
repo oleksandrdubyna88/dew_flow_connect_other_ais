@@ -1,4 +1,5 @@
 using CoaiMcp.Collecting;
+using CoaiMcp.Core.Collecting;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Normalizer;
@@ -205,6 +206,108 @@ public sealed class CollectRunTests : IAsyncLifetime
         Row()["collect_run_id"].Should().Be(winner.RunId);
     }
 
+    /// <summary>A run exists in the database WHILE it happens, not only once it is over.</summary>
+    /// <remarks>
+    /// The durable-status rule: a button that starts a process must read its state back from storage,
+    /// because a flag in a webview dies on reload. A row written only at the finish cannot express
+    /// `running` at all, so there would be nothing for the button to read while the work was on.
+    /// </remarks>
+    [Fact]
+    public async Task ARunIsRecorded_AndSaysWhatItDid()
+    {
+        var broken = await Head();
+        await File.WriteAllTextAsync(Path.Combine(_repo, "Totals.cs"), Fixed);
+        await Commit("hold the lock");
+        Seed(broken, "Totals.cs", 5);
+
+        var summary = await Run();
+
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var run = db.LastCollectRun();
+        run.Id.Should().Be(summary.RunId, "the row and the summary are the same run");
+        run.State.Should().Be(CollectRunState.Done);
+        run.Running.Should().BeFalse();
+        run.Collected.Should().Be(1);
+        run.Picked.Should().Be(1);
+        run.FinishedUtc.Should().NotBeEmpty();
+    }
+
+    /// <summary>A run that throws still ends, and says it failed.</summary>
+    /// <remarks>
+    /// The completing write used to be reachable only by the happy path. A throw on candidate three
+    /// then left the row — and the button reading it — in flight for ever, which is the one thing the
+    /// durable-status rule forbids outright. (Plan round, codex.)
+    /// </remarks>
+    [Fact]
+    public async Task ARunThatThrowsStillEnds()
+    {
+        Seed(await Head(), "Totals.cs", 5);
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var run = new CollectRun(new ThrowingCollector(), TimeProvider.System);
+
+        var boom = async () => await run.RunAsync(_data, db, 50);
+
+        await boom.Should().ThrowAsync<InvalidOperationException>();
+        var row = db.LastCollectRun();
+        row.Any.Should().BeTrue("the run started, so it must be on record");
+        row.State.Should().Be(CollectRunState.Failed);
+        row.Running.Should().BeFalse("a button that reads this must not wait for ever");
+        row.FinishedUtc.Should().NotBeEmpty();
+    }
+
+    /// <summary>Somebody stopping a run is not the run failing.</summary>
+    /// <remarks>
+    /// `interrupted` is what a closed window means too, and the difference matters to a person
+    /// reading the row later: nothing is known about what the rest would have decided, while the
+    /// candidates already claimed keep their own outcomes.
+    /// </remarks>
+    [Fact]
+    public async Task ACancelledRunIsInterrupted_NotFailed()
+    {
+        Seed(await Head(), "Totals.cs", 5);
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var run = new CollectRun(new CancellingCollector(), TimeProvider.System);
+
+        var stopped = async () => await run.RunAsync(_data, db, 50);
+
+        await stopped.Should().ThrowAsync<OperationCanceledException>();
+        db.LastCollectRun().State.Should().Be(CollectRunState.Interrupted);
+    }
+
+    /// <summary>A model that is not local is refused before anything is read.</summary>
+    /// <remarks>
+    /// Two reviewers of the plan round found this independently: narrowing the panel's picker narrows
+    /// a PICKER. `--collect-bugs` can be run from a terminal and a stale webview posts what it last
+    /// rendered, so the refusal has to live at the boundary every caller passes through. A finding's
+    /// title, why and fix are the reviewers' own prose about somebody's code and are NOT anonymised.
+    /// </remarks>
+    [Fact]
+    public async Task AModelThatIsNotLocalIsRefused_BeforeAnythingIsRead()
+    {
+        Seed(await Head(), "Totals.cs", 5);
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var counted = new CountingCollector();
+        var run = new CollectRun(counted, TimeProvider.System);
+
+        var refused = async () => await run.RunAsync(_data, db, 50, all: false, model: "gemini/pro");
+
+        (await refused.Should().ThrowAsync<ArgumentException>())
+            .WithMessage("*not a local model*");
+        counted.Asked.Should().Be(0, "it must refuse before it reads, not after");
+        db.LastCollectRun().Any.Should().BeFalse("a refused run never started");
+    }
+
+    /// <summary>An empty model is no ranking pass, which is the ordinary CLI case.</summary>
+    [Fact]
+    public async Task NoModelAtAllIsAllowed()
+    {
+        Seed(await Head(), "notes.md", 1);
+
+        var summary = await Run();
+
+        summary.Candidates.Should().Be(1, "a run with no ranking pass is a normal run");
+    }
+
     private async Task<CollectSummary> Run(bool all = false)
     {
         using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
@@ -286,4 +389,35 @@ public sealed class CollectRunTests : IAsyncLifetime
 internal sealed class FakeClock(DateTimeOffset now) : TimeProvider
 {
     public override DateTimeOffset GetUtcNow() => now;
+}
+
+/// <summary>A collector that throws — for the paths that only exist when the work goes wrong.</summary>
+internal sealed class ThrowingCollector : ICollector
+{
+    public Task<CollectOutcome> CollectAsync(Candidate candidate, CancellationToken ct = default) =>
+        throw new InvalidOperationException("the walk fell over");
+}
+
+/// <summary>A collector that is stopped, as a person pressing cancel would stop it.</summary>
+internal sealed class CancellingCollector : ICollector
+{
+    public Task<CollectOutcome> CollectAsync(Candidate candidate, CancellationToken ct = default) =>
+        throw new OperationCanceledException();
+}
+
+/// <summary>A collector that only counts how often it was asked.</summary>
+/// <remarks>
+/// The assertion that matters for the allowlist is not that the call FAILED but that the work never
+/// began: "refused after reading every finding" would pass a test that only checked for a throw.
+/// </remarks>
+internal sealed class CountingCollector : ICollector
+{
+    public int Asked { get; private set; }
+
+    public Task<CollectOutcome> CollectAsync(Candidate candidate, CancellationToken ct = default)
+    {
+        Asked++;
+
+        return Task.FromResult(CollectOutcome.Skip("never_reached"));
+    }
 }

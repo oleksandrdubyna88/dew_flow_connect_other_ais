@@ -37,40 +37,121 @@ public sealed record CollectSummary(
 /// so a later run with a repaired walk can revisit what an earlier one skipped; this takes the
 /// unprocessed candidates, and <c>all</c> is how somebody asks for the rest.</para>
 /// </remarks>
-public sealed class CollectRun(Collector collector, TimeProvider time, TextWriter? progress = null)
+public sealed class CollectRun(ICollector collector, TimeProvider time, TextWriter? progress = null)
 {
     /// <summary>Collects every candidate the corpus offers, writing each outcome as it is decided.</summary>
     /// <param name="all">
     /// Revisit candidates an earlier run already handled — what makes a repaired walk worth having.
     /// </param>
+    /// <param name="model">
+    /// The model a later ranking pass may use, recorded on the run. Empty means no ranking pass, and
+    /// is the ordinary case for a run started from a terminal.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// The model is named and is not local. Thrown BEFORE anything is read, because a finding's own
+    /// words are not anonymised and this is the boundary that decides whether they leave the machine.
+    /// </exception>
     public async Task<CollectSummary> RunAsync(
-        string dataDir, RoundsDb db, int limit, bool all = false, CancellationToken ct = default)
+        string dataDir, RoundsDb db, int limit, bool all = false, string model = "",
+        CancellationToken ct = default)
     {
-        var runId = time.GetUtcNow().UtcDateTime.ToString("yyyyMMddTHHmmss")
-            + "-" + Guid.NewGuid().ToString("N")[..6];
-        var candidates = BugsQuery.Read(dataDir, limit, all).Candidates;
-        var decided = new List<(CollectOutcome Outcome, bool Claimed)>(candidates.Count);
-
-        Say($"collecting {candidates.Count} candidate(s), run {runId}");
-        foreach (var (candidate, index) in candidates.Select((c, i) => (c, i)))
+        // First, and before a candidate is read: a picker is not an enforcement, and this is the
+        // one place every caller passes through. (Plan round, gemini and codex, independently.)
+        if (!RankingModels.IsAllowed(model))
         {
-            var outcome = await collector.CollectAsync(Ask(candidate), ct);
-
-            // Written per candidate rather than at the end: a run interrupted after forty of fifty has
-            // done forty candidates' work, and throwing that away because the fiftieth was still
-            // running would make a long run something nobody dares start.
-            // What this run READ, so a revisit under `--all` can land while a lost race still cannot.
-            var claimed = db.RecordCollect(
-                candidate.Id, candidate.CollectState, State(outcome.State), outcome.Reason, outcome.FixSha, runId);
-
-            decided.Add((outcome, claimed));
-            Say($"  [{index + 1}/{candidates.Count}] {Short(candidate.RepoPath)} {candidate.File}:{candidate.Line}"
-                + $" — {State(outcome.State)}{Because(outcome)}{(claimed ? string.Empty : " (claimed elsewhere)")}");
+            throw new ArgumentException(RankingModels.Refusal(model), nameof(model));
         }
 
-        return Summarise(runId, decided);
+        var runId = time.GetUtcNow().UtcDateTime.ToString("yyyyMMddTHHmmss")
+            + "-" + Guid.NewGuid().ToString("N")[..6];
+        var corpus = BugsQuery.Read(dataDir, limit, all);
+        var candidates = corpus.Candidates;
+        var offered = all ? corpus.Funnel.Located : corpus.Funnel.Unprocessed;
+        var decided = new List<(CollectOutcome Outcome, bool Claimed)>(candidates.Count);
+
+        // The row exists WHILE the work happens, not after it. One write at the end is the shape
+        // that cannot represent `running`, and a button whose whole job is to say what is happening
+        // needs that state to exist while it does. (Plan round, gemini and codex.)
+        db.StartCollectRun(runId, model);
+        var ending = CollectRunState.Failed;
+
+        try
+        {
+            Say($"collecting {candidates.Count} candidate(s), run {runId}");
+            foreach (var (candidate, index) in candidates.Select((c, i) => (c, i)))
+            {
+                var outcome = await collector.CollectAsync(Ask(candidate), ct);
+
+                // Written per candidate rather than at the end: a run interrupted after forty of fifty
+                // has done forty candidates' work, and throwing that away because the fiftieth was
+                // still running would make a long run something nobody dares start.
+                // What this run READ, so a revisit under `--all` can land while a lost race cannot.
+                var claimed = db.RecordCollect(
+                    candidate.Id, candidate.CollectState, State(outcome.State), outcome.Reason,
+                    outcome.FixSha, runId);
+
+                decided.Add((outcome, claimed));
+
+                // The same beat says how far it has got AND that it is still alive. Two writes could
+                // express neither: progress needs more than two points, and a sweep cannot tell an
+                // abandoned run from a live one without a recent timestamp.
+                db.BeatCollectRun(runId, offered, candidates.Count, Tally(decided));
+
+                Say($"  [{index + 1}/{candidates.Count}] {Short(candidate.RepoPath)} {candidate.File}:{candidate.Line}"
+                    + $" — {State(outcome.State)}{Because(outcome)}{(claimed ? string.Empty : " (claimed elsewhere)")}");
+            }
+
+            ending = CollectRunState.Done;
+
+            return Summarise(runId, decided);
+        }
+        catch (OperationCanceledException)
+        {
+            // Somebody stopped it. Not a failure of ours and not a success — the same thing a closed
+            // window means, and the candidates already decided keep their own outcomes.
+            ending = CollectRunState.Interrupted;
+            throw;
+        }
+        finally
+        {
+            // A `finally`, because the completing write used to be reachable only by the happy path:
+            // a throw on candidate three left the row — and the button — in flight for ever.
+            // (Plan round, codex.)
+            db.FinishCollectRun(
+                runId, ending, offered, candidates.Count, Tally(decided), Funnel(decided));
+        }
     }
 
+    /// <summary>The three counts, from the outcomes decided so far.</summary>
+    private static CollectTally Tally(IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided) =>
+        new(
+            decided.Count(d => d.Outcome.State is CollectState.Collected),
+            decided.Count(d => d.Outcome.State is CollectState.Skipped),
+            decided.Count(d => d.Outcome.State is CollectState.Failed));
+
+    /// <summary>The funnel as one string, for the column that keeps it.</summary>
+    /// <remarks>
+    /// `reason:count`, comma-joined and ordered by count — bounded by the nine skip codes rather than
+    /// by the number of candidates, which is what keeps the row a few hundred bytes for ever.
+    /// </remarks>
+    private static string Funnel(IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided) =>
+        string.Join(
+            ',',
+            Reasons(decided)
+                .OrderByDescending(reason => reason.Value)
+                .Select(reason => $"{reason.Key}:{reason.Value}"));
+
+    /// <summary>How many candidates each reason accounted for.</summary>
+    /// <remarks>
+    /// One projection, two shapes: the summary wants it as counts a caller can index, the column
+    /// wants it as text. Grouping twice is how the two would eventually disagree.
+    /// </remarks>
+    private static Dictionary<string, int> Reasons(
+        IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided) =>
+        decided
+            .SelectMany(d => d.Outcome.Reasons)
+            .GroupBy(reason => reason, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
     /// <summary>
     /// The tallies, counted once over the outcomes rather than accumulated into as they arrive.
     /// </summary>
@@ -81,18 +162,22 @@ public sealed class CollectRun(Collector collector, TimeProvider time, TextWrite
     /// (Code round, codex.)
     /// </remarks>
     private static CollectSummary Summarise(
-        string runId, IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided) =>
-        new(
+        string runId, IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided)
+    {
+        // Through the same two projections the run row is written from. They counted the identical
+        // three things separately for one commit, which is exactly how a summary and a persisted row
+        // come to disagree about what a run did.
+        var tally = Tally(decided);
+
+        return new(
             runId,
             decided.Count,
-            decided.Count(d => d.Outcome.State is CollectState.Collected),
-            decided.Count(d => d.Outcome.State is CollectState.Skipped),
-            decided.Count(d => d.Outcome.State is CollectState.Failed),
+            tally.Collected,
+            tally.Skipped,
+            tally.Failed,
             decided.Count(d => !d.Claimed),
-            decided
-                .SelectMany(d => d.Outcome.Reasons)
-                .GroupBy(reason => reason, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal));
+            Reasons(decided));
+    }
 
     /// <summary>
     /// A line per candidate, on stderr, while the run is happening.

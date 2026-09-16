@@ -28,7 +28,8 @@ internal static class Schema
     // Consultations is LAST because main's WhoCalled shipped first: a file migrated by that build
     // already records three steps, so inserting ahead of it would leave those databases without the
     // consultations table while believing they had run every step.
-    internal static readonly string[] Steps = [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState];
+    internal static readonly string[] Steps =
+        [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState, TheRunsThemselves];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -239,5 +240,42 @@ internal static class Schema
         ALTER TABLE findings ADD COLUMN collect_run_id TEXT NOT NULL DEFAULT '';
         ALTER TABLE findings ADD COLUMN collect_reason TEXT NOT NULL DEFAULT '';
         ALTER TABLE findings ADD COLUMN fix_sha        TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>The runs themselves, so a button can say what is happening.</summary>
+    /// <remarks>
+    /// <para><b>A run id on a finding says which run decided it; it does not say what that run DID,</b>
+    /// or whether one is happening now. Story 3 needed neither — its only surface was a CLI one-shot
+    /// whose summary a person read as it scrolled past. A button needs both: the durable-status rule
+    /// requires the state to survive a reload and to be read back from storage rather than from a
+    /// flag in a webview that a reload destroys.</para>
+    /// <para><b><c>heartbeat_utc</c>, and deliberately not a pid.</b> A row must be able to say
+    /// whether the run that owns it is still alive, because the panel reaches this database only
+    /// through one-shot invocations — a sweep that cleared every unfinished row would clear a run
+    /// that is alive at that moment. A pid cannot answer it here: the data directory may be a network
+    /// share, so a pid can come from another machine, where it is not merely useless but will
+    /// eventually name a live and unrelated process. A timestamp means the same thing on every host.
+    /// (Plan round, gemini, refined.)</para>
+    /// <para><b>Kept forever.</b> ~400 bytes a run, about one run a day — 150 KB a year, beside a
+    /// database already megabytes of rounds. Deleting a run would orphan every finding whose
+    /// <c>collect_run_id</c> names it, and that correlation is the whole reason the id exists.</para>
+    /// </remarks>
+    internal const string TheRunsThemselves = """
+        CREATE TABLE IF NOT EXISTS collect_runs (
+            id            TEXT PRIMARY KEY,
+            started_utc   TEXT NOT NULL,
+            finished_utc  TEXT NOT NULL DEFAULT '',
+            heartbeat_utc TEXT NOT NULL,
+            state         TEXT NOT NULL DEFAULT 'running',
+            model         TEXT NOT NULL DEFAULT '',
+            candidates    INTEGER NOT NULL DEFAULT 0,
+            picked        INTEGER NOT NULL DEFAULT 0,
+            collected     INTEGER NOT NULL DEFAULT 0,
+            skipped       INTEGER NOT NULL DEFAULT 0,
+            failed        INTEGER NOT NULL DEFAULT 0,
+            reasons       TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_collect_runs_started ON collect_runs(started_utc DESC);
         """;
 }

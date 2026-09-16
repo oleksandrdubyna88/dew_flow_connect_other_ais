@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Collecting;
 using Microsoft.Data.Sqlite;
 
 namespace CoaiMcp.Store;
@@ -59,7 +60,22 @@ public sealed record BugFunnel(
 /// Capped by the caller's limit. <see cref="BugFunnel.Unprocessed"/> is the true total and is never
 /// capped — a caller that sized the work off the list would size it off the cap.
 /// </param>
-public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Candidates);
+public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Candidates)
+{
+    /// <summary>The most recent collector run, or an empty row when none has ever started.</summary>
+    /// <remarks>
+    /// <para><b>An init property with a default, so it is always present and never null.</b> The panel
+    /// renders three different things — no run, a run happening now, a run that ended — and an absent
+    /// value has to mean the first of those rather than "this build cannot tell you".</para>
+    /// <para><b>And it rides HERE rather than in a mode of its own.</b> The panel owns no SQLite and
+    /// reaches this database by spawning a process; a second question would be a second spawn for an
+    /// answer the first one already had the file open for.</para>
+    /// <para>An older binary emits no <c>lastRun</c> key at all. A reader must treat that as "no run",
+    /// which is the same state an empty id means — the two halves of this product have shipped out of
+    /// step before. (Plan round, codex.)</para>
+    /// </remarks>
+    public CollectRunRow LastRun { get; init; } = new();
+}
 
 /// <summary>
 /// The accepted findings, read back as material rather than as a log.
@@ -209,7 +225,10 @@ public static class BugsQuery
             using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
             db.Open();
 
-            return new BugCorpus(Funnel(db), Candidates(db, Math.Clamp(limit, 1, MaxLimit), all));
+            return new BugCorpus(Funnel(db), Candidates(db, Math.Clamp(limit, 1, MaxLimit), all))
+            {
+                LastRun = LastRun(db),
+            };
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteError && TooOld(e))
         {
@@ -225,6 +244,29 @@ public static class BugsQuery
     private static bool TooOld(SqliteException e) =>
         e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase)
         || e.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The most recent run, or an empty row.</summary>
+    /// <remarks>
+    /// A table this reader was written before, so a database that predates it answers no rows rather
+    /// than throwing — the same <c>TooOld</c> path the collector columns already take.
+    /// </remarks>
+    private static CollectRunRow LastRun(SqliteConnection db)
+    {
+        using var read = db.CreateCommand();
+        read.CommandText = """
+            SELECT id, started_utc, finished_utc, heartbeat_utc, state, model,
+                   candidates, picked, collected, skipped, failed, reasons
+              FROM collect_runs ORDER BY started_utc DESC LIMIT 1
+            """;
+        using var rows = read.ExecuteReader();
+
+        return rows.Read()
+            ? new CollectRunRow(
+                rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetInt32(7),
+                rows.GetInt32(8), rows.GetInt32(9), rows.GetInt32(10), rows.GetString(11))
+            : new CollectRunRow();
+    }
 
     private static BugFunnel Funnel(SqliteConnection db)
     {
