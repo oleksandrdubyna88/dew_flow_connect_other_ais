@@ -230,7 +230,7 @@ public sealed class StageRulesTests : IDisposable
     /// production answer to "did this come from the mount". A code round caught the earlier
     /// version matching exactly two path segments against four hard-coded directory names: the
     /// walk sets <c>RecurseSubdirectories</c>, so splitting a rule into <c>common/testing/*.md</c>
-    /// - the whole point of the modularization follow-up - produced selected files this dropped
+    /// — the whole point of the modularization follow-up — produced selected files this dropped
     /// before counting, which would have kept the canary green on the very day it must fire.
     /// </remarks>
     private static IEnumerable<string> MountRulesOf(RuleBundle bundle) =>
@@ -238,7 +238,7 @@ public sealed class StageRulesTests : IDisposable
             .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal))
             .Select(file => file.WithinMount);
 
-    /// <summary>Those of them the ORDER does not rank as tier - the rotated tail, as selected.</summary>
+    /// <summary>Those of them the ORDER does not rank as tier — the rotated tail, as selected.</summary>
     private static IReadOnlyList<string> TailOf(RuleBundle bundle) =>
         [.. MountRulesOf(bundle).Where(within => !RuleOrder.IsTier(within))];
 
@@ -268,12 +268,12 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// The tail is everything the ORDER does not rank as tier - not what another stage's tier names.
+    /// The tail is everything the ORDER does not rank as tier — not what another stage's tier names.
     /// </summary>
     /// <remarks>
     /// The canary collects with <see cref="RuleOrder.ForBranch"/>, whose tier is
     /// <c>RuleOrder</c>'s own table. <c>StageRules.Plan</c> is the PLAN stage's tier and names
-    /// rules that table does not - <c>development-workflow.md</c>, <c>planning-docs.md</c>. Counting
+    /// rules that table does not — <c>development-workflow.md</c>, <c>planning-docs.md</c>. Counting
     /// with the wrong list makes the canary lenient in the one direction that matters: a genuinely
     /// reachable tail rule is read as tier and never counted.
     /// </remarks>
@@ -292,7 +292,7 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// An oversized rule is SKIPPED and the walk goes on - so a smaller rule behind it is still shown.
+    /// An oversized rule is SKIPPED and the walk goes on — so a smaller rule behind it is still shown.
     /// </summary>
     /// <remarks>
     /// <para>The property the canary's conclusion rests on and nothing was proving. It says

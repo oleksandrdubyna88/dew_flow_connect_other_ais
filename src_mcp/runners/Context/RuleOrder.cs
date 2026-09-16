@@ -144,7 +144,7 @@ public sealed record RuleOrder
     /// table has never heard of ranks last and is ordered alphabetically rather than dropped.</para>
     /// <para><b>Public because a second copy of this list is the defect it would cause.</b> A code
     /// round found the canary in <c>StageRulesTests</c> classifying rules against a hand-typed tier
-    /// assembled from <c>StageRules.Plan</c> - a DIFFERENT stage's tier - so a genuinely reachable
+    /// assembled from <c>StageRules.Plan</c> — a DIFFERENT stage's tier — so a genuinely reachable
     /// tail rule was read as tier and never counted. Anything that must tell tier from tail asks
     /// <see cref="IsTier"/> rather than keeping its own list.</para>
     /// </remarks>
