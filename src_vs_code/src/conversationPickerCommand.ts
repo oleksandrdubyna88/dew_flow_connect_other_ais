@@ -232,6 +232,10 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
       // every open one, which would put conversations belonging to other tabs into an answer about
       // this one.
       open: byLastUsed(openConversations(panels)).filter((one) => shown === undefined || shown.has(one.id)),
+      // A narrowed list is an answer somebody already worked out, so it is not filtered again by the
+      // window's FIRST root — which is the workspace this picker is handed, and which emptied every
+      // narrowed pick for a tab under a second root.
+      narrowed: narrowed !== undefined,
       stored: narrowed?.rows ?? deps.index.entries(scopeOf(everywhere, deps.workspace())),
       index: deps.index.state(),
       // Asked at every draw, not once at opening: judged against this instant, so a window that has

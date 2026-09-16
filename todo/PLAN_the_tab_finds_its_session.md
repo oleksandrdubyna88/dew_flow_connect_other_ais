@@ -134,32 +134,14 @@ committed before the next one starts. Epic A alone fixes the operator's bug and 
   it more than the Asked button does. A cut that found nothing says so and never reports silence:
   *"Only the newest 250 of 1 010 sessions in … were read in 10 s, and none of them is called X."*
 
-### EPIC B — the refusal has a door
+### EPIC B — the refusal has a door — **DEFERRED 2026-09-16, extracted to its own plan**
 
-- **B1 — the sessions of a folder can be listed, every one with a label, and the list says when it
-  was cut.** `sessionsIn` → `SessionList {cards, cut}`, keeping the `mtime` `sessionFiles` already
-  computes and drops; `SessionCard` carries `names`, `sessionId`, `at` and `opening` (the first thing
-  the person said, cut short) so a titleless session has a label. The reading half moves to
-  `claudeSessionFiles.ts` — `claudeSessions.ts` passes 800 lines otherwise. A fourth `Found` kind,
-  `unmatched`, tells "the folder answered and nothing is called this" from "there was nowhere to
-  look", and `oneAnswerFrom`'s precedence becomes several > said > unmatched > none. Rows are decided
-  in a pure `sessionPicker.ts`: label, age, folder, the id's first eight characters as the tie-break,
-  former names in the detail so typing an old name still finds it, a notice row for a folder that
-  would not answer and one for a list that was cut. `sessionPrefill` returns the de-ellipsised name
-  **only when it would leave rows standing** — a prefill that filters everything away is worse than
-  none.
-- **B2 — a refusal that a choice can answer offers the choice, and the choice is never guessed.**
-  The `asked` message gains `door: 'choose' | 'none'`; the Asked region gains one button, unhidden
-  only for `several` and `unmatched`. `createQuickPick` (not `showQuickPick`, which has no `value`
-  to prefill), `matchOnDescription`/`matchOnDetail`, the title naming the conversation. A row whose
-  file has gone since the listing is refused at the press and removed; Escape writes nothing and
-  leaves the refusal and its door on screen; a notice row cannot be chosen.
-- **B3 — a chosen session is kept, said honestly when it is not, and found again after a reload.**
-  `adoptFound` with the folder the card came from — `reorigin` files a claude source under the first
-  root, which is why `pinSession` bypasses it. `keepAwaited` returns the write's real outcome, so a
-  store that was busy is reported as *not yet written* instead of looking kept. The end-to-end
-  scenario test: the shipped page, the press, the choice, the save, a second store reading it back,
-  the id resolving to the file — and the record containing no path under the home directory.
+After epic A the lookup answers under every name a session has worn and, for a pinned conversation,
+by the session id itself — so the picker is needed for the **5 sessions in 101** that carry no title
+row at all, and for a name two sessions genuinely share. The operator chose to wait until the refusal
+is met again on a live session rather than build for it now. The whole design, and the trigger that
+brings it back, are in
+[PLAN_the_sessions_can_be_offered.md](PLAN_the_sessions_can_be_offered.md).
 
 ### EPIC C — the two wrong sentences
 

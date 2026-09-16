@@ -96,14 +96,19 @@ export function narrowedTitle(why: Narrowing, tab: string, among: number): strin
       // The reason is carried, not swallowed: a permissions problem and a transient failure need
       // different things done about them, and reading identically would tell nobody which it was.
       return `Conversations for “${tab}”, as they were last read — the folder did not answer just now (${why.reason})`;
+    case 'unmatched':
+      // THE COMMONEST OF THEM, and it used to be told as the one above: the folder answered
+      // perfectly well and nothing in it is called this. Saying the folder did not answer sent
+      // people looking for a problem that was not there.
+      return `No Claude session is called “${tab}” — which conversation did you mean?`;
     default: {
-      // EXHAUSTIVE BY NAME, like every other answer in this file: a fourth reason must be a compile
+      // EXHAUSTIVE BY NAME, like every other answer in this file: a fifth reason must be a compile
       // error rather than a picker with no title.
       const unhandled: never = why;
 
       throw new Error(
         `a narrowing this build has no sentence for: ${JSON.stringify(unhandled)}`
-        + ' — the reasons it may give are several, ambiguous session, cross root and unreadable',
+        + ' — the reasons it may give are several, ambiguous session, cross root, unreadable and unmatched',
       );
     }
   }

@@ -40,6 +40,7 @@ const asked = (over: Partial<GotoAsked> = {}): GotoAsked => ({
   source: sourceOfFile(HERE),
   ambiguous: false,
   severalSessions: true,
+  walkFailed: false,
   namesakes: 1,
   candidates: [],
   inRoot: [],
@@ -105,7 +106,10 @@ test('a walk that FAILED never becomes a conversation opened on a name', () => {
   const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
   const mine = meta({ id: 'astra', title: 'speak with Astra' });
 
-  const answer = goto(asked({ tab, ambiguous: true, severalSessions: false, source: { kind: 'none' }, inRoot: [mine] }));
+  // `walkFailed` is what says the directory would not open. Until it existed this test passed with
+  // `severalSessions: false` alone, because every non-namesake case was called unreadable — which is
+  // exactly the defect the test below this one now covers.
+  const answer = goto(asked({ tab, ambiguous: true, severalSessions: false, walkFailed: true, source: { kind: 'none' }, inRoot: [mine] }));
   assert.equal(kindOf(answer), 'pick', 'a session directory that could not be read opened a conversation anyway');
   // AND IT SAYS WHICH AMBIGUITY IT MET. Telling somebody their sessions share a name, when the truth
   // is that the folder would not open, sends them looking for a duplicate that is not there.
@@ -468,4 +472,43 @@ test('a record re-read at the press is bindable only if it is still this tab’s
   assert.equal(bindable(record, sourceOfFile(HERE), 'D:\\rsd\\two', true), false, 'a conversation from another project was bound to this tab');
   // And the two roots are compared the way paths are, not as raw strings.
   assert.equal(bindable(record, sourceOfFile(HERE), 'D:/RSD/ONE', true), true, 'one root spelled two ways read as two roots');
+});
+
+test('a folder that ANSWERED and matched nothing says so, rather than that it could not be read', () => {
+  // `ambiguous` folds two different facts into one flag — the folder would not open, and the folder
+  // opened and nothing in it is called this — and `goto` had nothing to tell them apart with, so the
+  // commonest case of all was reported as a failure that had not happened. The person was then sent
+  // looking for a directory problem while the truth was that no session wears that name.
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const mine = meta({ id: 'astra', title: 'speak with Astra' });
+
+  const answered = goto(asked({
+    tab,
+    ambiguous: true,
+    severalSessions: false,
+    walkFailed: false,
+    source: { kind: 'none' },
+    inRoot: [mine],
+  }));
+  assert.equal(kindOf(answered), 'pick');
+  assert.equal(
+    answered.kind === 'pick' ? answered.why.kind : '',
+    'unmatched',
+    'a folder that answered perfectly well was reported as one that could not be read',
+  );
+
+  // And a walk that really did fail still says that, because the two ask different things of the person.
+  const failed = goto(asked({
+    tab,
+    ambiguous: true,
+    severalSessions: false,
+    walkFailed: true,
+    source: { kind: 'none' },
+    inRoot: [mine],
+  }));
+  assert.equal(
+    failed.kind === 'pick' ? failed.why.kind : '',
+    'unreadable',
+    'a walk that could not be done lost its own sentence',
+  );
 });

@@ -256,13 +256,22 @@ test('a narrowed picker says WHY it is asking, and each reason gets its own sent
   const several = narrowedTitle({ kind: 'several' }, 'main.ts', 2);
   const ambiguous = narrowedTitle({ kind: 'ambiguous session' }, 'Fixing the lock', 3);
   const unreadable = narrowedTitle({ kind: 'unreadable', reason: 'EACCES' }, 'main.ts', 1);
+  const unmatched = narrowedTitle({ kind: 'unmatched' }, 'Fixing the lock', 3);
 
   assert.match(several, /2 conversations/u, 'it does not say how many there are to choose between');
   assert.match(several, /main\.ts/u, 'it does not name the tab');
   assert.match(ambiguous, /Claude session/u, 'an ambiguous session reads as two conversations, which is a different problem');
   assert.match(ambiguous, /Fixing the lock/u);
   assert.match(unreadable, /last read/u, 'a list that may be behind is presented as current');
-  assert.equal(new Set([several, ambiguous, unreadable]).size, 3, 'two different reasons say the same thing');
+  // THE COMMONEST REASON, and it used to borrow the sentence above: no session is called this, which
+  // is a fact about names and not about a folder that would not open. Somebody sent after a
+  // directory problem that is not there looks in the wrong place for as long as they believe it.
+  assert.match(unmatched, /No Claude session is called/u, 'it does not say that nothing answers to the name');
+  assert.match(unmatched, /Fixing the lock/u, 'it does not name the tab');
+  assert.doesNotMatch(unmatched, /last read|did not answer/u,
+    'a folder that answered perfectly well is still described as one that failed');
+  assert.equal(new Set([several, ambiguous, unreadable, unmatched]).size, 4,
+    'two different reasons say the same thing');
 });
 
 test('a narrowing this build has no sentence for fails by name', () => {
@@ -270,7 +279,7 @@ test('a narrowing this build has no sentence for fails by name', () => {
 
   assert.throws(() => narrowedTitle(odd, 'main.ts', 1), (thrown: Error) => {
     assert.match(thrown.message, /because/u, 'the failure does not say what arrived');
-    assert.match(thrown.message, /several, ambiguous session, cross root and unreadable/u, 'it does not name the reasons that are legal');
+    assert.match(thrown.message, /several, ambiguous session, cross root, unreadable and unmatched/u, 'it does not name the reasons that are legal');
 
     return true;
   });

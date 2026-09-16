@@ -119,6 +119,19 @@ export interface PickerInput {
   /** Whether the person asked for every workspace rather than this one. */
   readonly everywhere: boolean;
   /**
+   * Whether these rows were CHOSEN for this question rather than gathered from the store.
+   *
+   * <p>A narrowed list is an answer somebody already worked out — the conversations that could
+   * belong to this tab — and filtering it again by workspace throws away rows that were selected on
+   * purpose. It did: the picker is handed the window's FIRST root as its workspace, so a narrowed
+   * pick for a tab under the second root came up empty, and so did the *cross root* case, whose
+   * entire subject is a conversation filed under another root. The globe that would have widened it
+   * is suppressed for narrowed lists, so there was no way out of the empty list either.</p>
+   *
+   * <p>The query filter still applies — that is the person typing, not a rule about roots.</p>
+   */
+  readonly narrowed: boolean;
+  /**
    * What the person has typed, matched BEFORE the hundred-row cut.
    *
    * <p>QuickPick filters the items it was given, and this list is capped — so without this the
@@ -150,7 +163,7 @@ export function pickerRows(input: PickerInput): readonly PickerRow[] {
   }
   const held = new Set(input.open.map((one) => one.id));
   const closed = input.stored.filter((one) => !held.has(one.id)
-    && (input.everywhere || one.workspace === input.workspace)
+    && (input.narrowed || input.everywhere || one.workspace === input.workspace)
     && matches(one, input.query));
   const recent = recentRows(closed, input.now, input.elsewhere);
   if (input.index.kind === 'unavailable') {

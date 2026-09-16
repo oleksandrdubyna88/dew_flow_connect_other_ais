@@ -53,7 +53,9 @@ export type Narrowing =
   /** This tab's conversation exists, filed under ANOTHER project of this window. */
   | { readonly kind: 'cross root' }
   /** The store could not be read; these are the rows as they were last known. */
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  | { readonly kind: 'unreadable'; readonly reason: string }
+  /** The folder ANSWERED, and no session in it is called what this tab is called. */
+  | { readonly kind: 'unmatched' };
 
 /**
  * What *go to* should do.
@@ -135,6 +137,17 @@ export interface GotoAsked {
    * choose whether name evidence is valid".)</p>
    */
   readonly severalSessions: boolean;
+  /**
+   * Whether the session walk FAILED, as against answering and matching nothing.
+   *
+   * <p>`ambiguous` folds the two together — it is true for a directory that would not open AND for
+   * one that opened and holds nothing of this name — and with only that flag the decision below had
+   * to call every non-namesake case unreadable. So the commonest case there is, a tab whose name
+   * belongs to no session at all, was reported as a failure that had not happened, sending the person
+   * after a directory problem that was not there. Carried in separately because the two ask
+   * different things of them: one is "try again", the other is "pick one".</p>
+   */
+  readonly walkFailed: boolean;
   /**
    * How many tabs open right now carry this tab's label — at least 1, since this tab is one of them.
    *
@@ -276,7 +289,7 @@ export function goto(asked: GotoAsked): Goto {
       // AND IT SAYS WHICH AMBIGUITY. A walk that could not be done is not two sessions of one name,
       // and telling somebody their sessions share a name when the truth is that the folder would not
       // open sends them looking for a duplicate that is not there. (gemini, the code round.)
-      why: asked.severalSessions ? { kind: 'ambiguous session' } : { kind: 'unreadable', reason: 'this tab’s Claude sessions could not be read' },
+      why: whyNarrowed(asked),
       offer,
       bind: true,
     };
@@ -355,6 +368,25 @@ function eligible(kind: TabKind): boolean {
  */
 const sameName = (rows: readonly ConversationMeta[], label: string): readonly ConversationMeta[] =>
   (label.trim().length === 0 ? [] : rows.filter((meta) => meta.title === label));
+
+/**
+ * Which ambiguity this is, in the order the person cares about.
+ *
+ * <p>Three situations reach one picker and they ask three different things. Two sessions of one name
+ * is *"which of these is yours"*. A folder that would not open is *"try again"*. A folder that opened
+ * and holds nothing of this name — the commonest of the three — is *"none of them is called that;
+ * pick one"*, and it used to be told as the second, sending people after a directory problem that
+ * was not there.</p>
+ */
+function whyNarrowed(asked: GotoAsked): Narrowing {
+  if (asked.severalSessions) {
+    return { kind: 'ambiguous session' };
+  }
+
+  return asked.walkFailed
+    ? { kind: 'unreadable', reason: 'this tab’s Claude sessions could not be read' }
+    : { kind: 'unmatched' };
+}
 
 /**
  * The root this tab belongs to — its own, or the fallback for a tab under none of them.
