@@ -47,6 +47,18 @@ public sealed class TheBuiltBinariesTests : IDisposable
             ? published
             : Built("src_mcp", "src", "coai-mcp");
 
+    /// <summary>Asserts the binary is there, rather than skipping when it is not.</summary>
+    /// <remarks>
+    /// <b>It used to skip, and a skip is indistinguishable from a pass in a summary line.</b> This
+    /// project references BOTH binaries, so building the tests always builds them: there is no honest
+    /// case where one is missing, and the one case that would produce it — a path computed wrongly for
+    /// the platform — is exactly what would make this whole file quietly stop testing anything.
+    /// </remarks>
+    private static void MustExist(string exe) =>
+        File.Exists(exe).Should().BeTrue(
+            $"{exe} is referenced by this test project, so a build that produced the tests produced it "
+            + "too — if it is not there, the path is wrong and this suite is testing nothing");
+
     private static string Built(params string[] parts)
     {
         var configuration = AppContext.BaseDirectory.Contains("Release", StringComparison.Ordinal)
@@ -70,8 +82,8 @@ public sealed class TheBuiltBinariesTests : IDisposable
     [Fact]
     public async Task ARealUploadCrossesTwoRealProcesses()
     {
-        Assert.SkipUnless(File.Exists(BugsExe), $"{BugsExe} is not built");
-        Assert.SkipUnless(File.Exists(McpExe), $"{McpExe} is not built");
+        MustExist(BugsExe);
+        MustExist(McpExe);
 
         var port = FreePort();
         var key = IssueKey();
@@ -116,7 +128,7 @@ public sealed class TheBuiltBinariesTests : IDisposable
     [Fact]
     public void TheExitCodesTellAnOldBinaryFromABadArgument()
     {
-        Assert.SkipUnless(File.Exists(BugsExe), $"{BugsExe} is not built");
+        MustExist(BugsExe);
 
         Run(BugsExe, "--rotate-the-moon", _dir).Code.Should().Be(
             64, "a mode this binary has never heard of is how a caller detects an old one");
