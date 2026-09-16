@@ -698,3 +698,74 @@ test('two sessions that BOTH once wore this name are still a refusal, never a pi
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('a stale title re-asserted over a rename leaves a refusal, never the wrong conversation', async () => {
+  // codex, the code round, on the version of this that called the last row the CURRENT name: the
+  // writer that puts an old title back runs on every turn, so a session's real name can sit in the
+  // second tier while a namesake sits there too. What must NOT happen is a pick. The safe direction
+  // is the one this module has always taken — and the session id and the picker are what recover
+  // from it, which is stories A2 and B.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    // Renamed to New, and then Claude Code put Old back under it.
+    writeFileSync(join(dir, 'theirs.jsonl'), `${renamed('New')}\n${renamed('Old')}\n${said('the one they mean')}\n`, 'utf8');
+    // Another conversation that wore New once, long ago.
+    writeFileSync(join(dir, 'other.jsonl'), `${renamed('New')}\n${renamed('Something else')}\n${said('not this one')}\n`, 'utf8');
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'New');
+
+    assert.strictEqual(answer.kind, 'several',
+      'a name sitting in the second tier for two sessions was handed to one of them');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a WHOLE name answers before a name that merely starts the same way', async () => {
+  // A truncated tab is a prefix of everything that begins with it, and one of those is the session
+  // called exactly what the tab could show. Refusing that pair as ambiguous is an ambiguity nobody
+  // has. (gemini, the code round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'whole.jsonl'), `${titled('Bug fix')}\n${said('the exact one')}\n`, 'utf8');
+    writeFileSync(join(dir, 'longer.jsonl'), `${titled('Bug fix pipeline')}\n${said('the longer one')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'Bug fix…');
+    assert.strictEqual(found.kind, 'one', 'a session named exactly what the tab shows was refused as ambiguous');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['the exact one']);
+
+    // And a real ambiguity is still refused: two names that only START the same, and no whole name.
+    const both = await sessionFileIn(home, 'D:\\work\\app', true, 'Bug f…');
+    assert.strictEqual(both.kind, 'several', 'two prefixes and no whole name were picked between');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a title row carrying nothing but spaces is not a name, and does not demote a real one', async () => {
+  // A blank row counted as a name takes the LATEST place and pushes the name the person gave the
+  // conversation down into the earlier tier — where a namesake can reach it and the pair is refused.
+  // (gemini, the code round.) The harm needs the namesake to be visible at all, which is why this
+  // fixture has one.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${renamed('A real name')}\n${renamed('   ')}\n${said('hello')}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${renamed('A real name')}\n${renamed('Moved on')}\n${said('not this')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'A real name');
+    assert.strictEqual(found.kind, 'one', 'a blank title row displaced the name the person gave it');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['hello']);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

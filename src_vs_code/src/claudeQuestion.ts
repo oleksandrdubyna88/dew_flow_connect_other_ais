@@ -69,21 +69,30 @@ export interface AskedSet {
  * re-asserts the old title minutes later. A session must therefore answer to every name it has
  * carried.</p>
  *
- * <p><b>Why {@link current} is kept apart.</b> Answering to any former name lets a conversation the
+ * <p><b>Why {@link latest} is kept apart.</b> Answering to any former name lets a conversation the
  * person has moved on from outrank the one in front of them: A was once *Refactor X*, B is called
- * that today, and a flat set hands over whichever was listed first — or refuses both. So the current
- * name answers first and former names only when nothing currently wears the name. (gemini, the plan
- * round.)</p>
+ * that today, and a flat set hands over whichever was listed first — or refuses both. So the latest
+ * name answers first and former names only when nothing has this one as its latest. (gemini, the
+ * plan round.)</p>
  */
 export interface SessionNames {
-  /** The name of the LAST title row of either kind, which is what the tab wears. Empty for neither. */
-  readonly current: string;
-  /** Every other distinct name the file has carried, first seen first, without {@link current}. */
+  /**
+   * The name of the LAST title row of either kind — and not a claim that the tab wears it.
+   *
+   * <p>It is called `latest` rather than `current` because the file cannot answer the stronger
+   * question: the writer that re-asserts a stale title runs on every turn, so the last row is
+   * sometimes a name the person replaced minutes ago. A session demoted that way answers in the
+   * second tier, where the worst outcome is a REFUSAL rather than the wrong conversation — and both
+   * the session id (which is what the file is called) and the picker exist to recover from it.
+   * (codex, the code round, against an earlier version of this comment that claimed more.)</p>
+   */
+  readonly latest: string;
+  /** Every other distinct name the file has carried, first seen first, without {@link latest}. */
   readonly former: readonly string[];
 }
 
 /** A session that has never named itself. Its tab is named from the first prompt, and that is written nowhere. */
-export const NO_NAMES: SessionNames = { current: '', former: [] };
+export const NO_NAMES: SessionNames = { latest: '', former: [] };
 
 /**
  * One accumulator, fed a line at a time, that both readers of a session's name use.
@@ -99,26 +108,28 @@ export interface NameCollector {
 }
 
 export function collectNames(): NameCollector {
-  const seen: string[] = [];
+  // A NEW array per line rather than a splice and a push into the old one. The accumulator outlives
+  // the call, so it is exactly the shared state `coding-style.md` means, and two vendors said so on
+  // one round. A session's distinct names are a handful — 162 across 101 real sessions, at most two
+  // in any one file — so the copy costs nothing worth keeping a mutation for.
+  let seen: readonly string[] = [];
 
   return {
     take(line: string): void {
-      const named = titleFrom(line) || customTitleFrom(line);
+      // TRIMMED. A title row carrying only spaces is a name nobody typed, and `namesTheSame` would
+      // read it as a prefix that matches whatever follows it. (gemini, the code round.)
+      const named = (titleFrom(line) || customTitleFrom(line)).trim();
       if (named.length === 0) {
         return;
       }
-      // Kept in FIRST-SEEN order with the last occurrence deciding nothing but `current`: a title
-      // re-asserted on every turn would otherwise crowd the list it shares with the real names.
-      const already = seen.indexOf(named);
-      if (already >= 0) {
-        seen.splice(already, 1);
-      }
-      seen.push(named);
+      // Kept in FIRST-SEEN order, with a repeat moving to the end: a title re-asserted on every turn
+      // would otherwise crowd the list it shares with the names a person actually chose.
+      seen = [...seen.filter((one) => one !== named), named];
     },
     names(): SessionNames {
-      const current = seen[seen.length - 1] ?? '';
+      const latest = seen[seen.length - 1] ?? '';
 
-      return { current, former: seen.slice(0, -1) };
+      return { latest, former: seen.slice(0, -1) };
     },
   };
 }

@@ -102,14 +102,26 @@ export function foldersToSearch(open: readonly string[], home: string): readonly
  * the tab's doing and never a conversation that happens to be named with one.</p>
  */
 export function namesTheSame(title: string, looking: string): boolean {
-  const cut = /(\.\.\.|…)$/.exec(looking);
-  if (cut === null) {
+  const whole = unshortened(looking);
+  if (whole === looking) {
     return title === looking;
   }
-  const prefix = looking.slice(0, looking.length - cut[0].length).trimEnd();
 
   // A name that is NOTHING but an ellipsis names everything, which is no name at all.
-  return prefix.length > 0 && title.startsWith(prefix);
+  return whole.length > 0 && title.startsWith(whole);
+}
+
+/**
+ * A tab's name with the truncation taken off — the most of a session's name the tab could show.
+ *
+ * <p>Exported because three things need the same answer and must not each keep their own regex: the
+ * prefix rule above, the whole-name tier in {@link namedAmong}, and the text a picker's filter box
+ * opens holding. A name that was not truncated comes back unchanged.</p>
+ */
+export function unshortened(looking: string): string {
+  const cut = /(\.\.\.|…)$/.exec(looking);
+
+  return cut === null ? looking : looking.slice(0, looking.length - cut[0].length).trimEnd();
 }
 
 /**
@@ -118,8 +130,14 @@ export function namesTheSame(title: string, looking: string): boolean {
  * <p>Two tiers, and the order is the whole point. A session answers to every name it has carried,
  * because Claude Code puts an old title back minutes after a person types a new one — but a flat set
  * would let a conversation that was *Refactor X* last week outrank the one called that today, and
- * the person is looking at the second. So: anything currently wearing the name answers; only when
- * nothing does are former names consulted. (gemini, the plan round.)</p>
+ * the person is looking at the second. So: anything whose LATEST name is this answers; only when
+ * nothing does are earlier names consulted. (gemini, the plan round.)</p>
+ *
+ * <p><b>What the tiers cannot do.</b> `latest` is the last title row, not a fact about the tab — the
+ * stale writer can leave a session's real name in the second tier. Where that happens beside a
+ * namesake, this refuses instead of choosing, which is the safe direction and the one this module
+ * has always taken; the session id and the picker are what recover from it. (codex, the code round,
+ * on a version of this comment that claimed the last row was authoritative.)</p>
  *
  * <p>Ambiguity INSIDE a tier is not resolved here and must not be — two sessions wearing one name is
  * the refusal this module exists to make, and a tie-break invented at this level would be a guess
@@ -133,12 +151,34 @@ export function namedAmong<T>(
   namesOf: (item: T) => SessionNames,
   looking: string,
 ): readonly T[] {
-  const now = items.filter((item) => namesTheSame(namesOf(item).current, looking));
-  if (now.length > 0) {
-    return now;
-  }
+  const latest = closest(items, (item) => [namesOf(item).latest], looking);
 
-  return items.filter((item) => namesOf(item).former.some((name) => namesTheSame(name, looking)));
+  return latest.length > 0 ? latest : closest(items, (item) => namesOf(item).former, looking);
+}
+
+/**
+ * The items one of whose names is this name — WHOLE names first, and a truncated tab's prefix only
+ * where no whole name answers.
+ *
+ * <p>A tab wearing *Bug fix…* is a prefix of both *Bug fix* and *Bug fix pipeline*, and refusing the
+ * session that is called exactly what the tab could show, because another name merely starts the
+ * same way, is an ambiguity nobody has. (gemini, the code round.) Where the ambiguity is real — two
+ * whole names, or two prefixes and no whole name — this still returns both, and the caller still
+ * refuses.</p>
+ */
+function closest<T>(
+  items: readonly T[],
+  namesOf: (item: T) => readonly string[],
+  looking: string,
+): readonly T[] {
+  const wanted = unshortened(looking);
+  const whole = wanted.length === 0
+    ? []
+    : items.filter((item) => namesOf(item).some((name) => name === wanted));
+
+  return whole.length > 0
+    ? whole
+    : items.filter((item) => namesOf(item).some((name) => namesTheSame(name, looking)));
 }
 
 /** One session file, and the question waiting in it. */
