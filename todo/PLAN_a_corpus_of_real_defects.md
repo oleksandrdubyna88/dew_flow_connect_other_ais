@@ -422,20 +422,19 @@ behave, and one check runs the **real binary** and parses its output with the pa
 - [x] The three drifted references above are corrected and the six satisfied DoD boxes are ticked.
 ### Story 5 — the review page, and the pairs it has nothing to show without
 
+> Revised after the plan round: 15 findings, 11 accepted. Two of them corrected statements of mine
+> that were simply false — this codebase already HAS a multi-select, and a stored pair is not
+> anonymous even though its skeletons are.
+
 **The corpus contains no pairs.** `CollectOutcome` carries `SymbolName`, `SkeletonBefore` and
 `SkeletonAfter` — the collector MUST compute both skeletons, because comparing them is how it
 decides the method changed at all — and then throws all three away. Only `fix_sha` is persisted.
 What shipped is a corpus of POINTERS: `(repo_path, head_sha, fix_sha, file, line)`.
 
-That is defensible on its own terms — the database stays small and holds nothing un-anonymised —
-and it leaves both remaining stories with nothing to read. Recomputing a pair costs a git read, a
-locate, a normalise, a second git read and a second normalise, per candidate, at review time AND
-again at upload time; and the symbol name is not stored either, so each recomputation must
+**Operator decision, 2026-09-16: store them when collected.** Recomputing costs a git read, a
+locate, a normalise, a second git read and a second normalise per candidate, at review time AND
+again at upload time — and the symbol name is not stored either, so each recomputation must
 re-locate by line first, exactly as the collector did.
-
-**Operator decision, 2026-09-16: store them when collected.** The skeletons are anonymous by
-construction — that is precisely what the zero-knowledge property test guarantees — so this stores
-nothing identifying, and review and upload become plain reads.
 
 ```sql
 CREATE TABLE IF NOT EXISTS collect_pairs (
@@ -449,9 +448,39 @@ CREATE TABLE IF NOT EXISTS collect_pairs (
 );
 ```
 
-One row per COLLECTED finding, written in the same statement-run as `RecordCollect` so a pair and
-its outcome cannot disagree. `--all` rewrites it, which is also how the pairs already collected by
-story 3 and 4 runs — which have none — come to exist.
+#### What is anonymous here, said precisely
+
+The first draft's Definition of Done said *every stored pair passes the zero-knowledge check*, and
+that is false. `symbol_name` is a name, and `finding_id` joins straight back to the repository path,
+the commit, the file and the line. **The two SKELETONS carry the zero-knowledge guarantee; the row
+around them is local metadata.** (Plan round, codex.)
+
+It adds no new exposure where it sits: `coai.db` already holds the repository path, the file, the
+line and the reviewers' un-anonymised prose about the code. The boundary that matters is what LEAVES
+the machine — and story 6 sends the two skeletons and the language, never the symbol and never the
+join. The check to write is therefore *every stored SKELETON is anonymous*, asserted over the
+column rather than over the row.
+
+#### One transaction, and `--all` must not forget a decision
+
+**The outcome and the pair are one transaction.** A kill between the two writes leaves a database
+where they disagree, which is the one thing the first draft claimed could not happen. Rolled back
+together, with an interruption test. (Plan round, codex.)
+
+**`--all` upserts the pair and leaves `keep` alone.** Two reviewers found this independently and it
+is the sharpest failure in the story: a person reviews two hundred pairs, runs `--all` to pick up a
+repaired walk, and an ordinary upsert takes every decision back to `-1`. Silently.
+
+```sql
+INSERT INTO collect_pairs (...) VALUES (...)
+ON CONFLICT(finding_id) DO UPDATE SET
+  symbol_name = excluded.symbol_name, language = excluded.language,
+  skeleton_before = excluded.skeleton_before, skeleton_after = excluded.skeleton_after,
+  written_utc = excluded.written_utc        -- and NOT keep
+```
+
+Tested across a rerun for a kept row AND a dropped one, because `0` and `1` are both decisions and a
+guard written as `WHERE keep = -1` would preserve only one of them.
 
 #### Growth budget
 
@@ -460,25 +489,48 @@ story 3 and 4 runs — which have none — come to exist.
   mean, 706 at p90, 1 576 at the largest. A pair is two of them — **762 bytes** at the median — so
   the 462 usable candidates the funnel measured are **344 KB**. (I first wrote ~1.6 KB a pair and
   ~1 MB from intuition; measuring it halved the number, which is the reason the rule asks for one.)
-- **Who retires it.** Nobody: kept forever, because it IS the corpus. A pair is the artefact the
-  whole plan exists to produce, and `keep = 0` marks a person's decision rather than deleting the
-  evidence for it.
-- **When it is interrupted.** Nothing to sweep: a pair is written with its outcome or not at all,
-  and a run that dies mid-way leaves the pairs it had already written, which are true.
+- **Who retires it.** Nobody: kept forever, projected ~344 KB for the measured corpus, stored in
+  `coai.db`. It IS the artefact this whole plan exists to produce, so a retention window would
+  delete the product; `keep = 0` marks a person's decision rather than destroying the evidence for
+  it. A legitimate answer under `planning-docs.md` precisely because it is a decision with a number.
+- **When it is interrupted.** Nothing to sweep: the pair is written inside its outcome's
+  transaction, so a run that dies leaves the pairs it had already committed, which are true.
+
+#### How the page reaches the pairs
+
+The panel owns no SQLite, and `PROJECT.md:52` sanctions one shape for crossing that gap: a one-shot
+CLI mode chosen from `args[0]` before any transport opens, whose stdout is its entire interface.
+The first draft described a page reading and writing a table and never said how. (Plan round,
+gemini.)
+
+| Mode | Answers |
+|---|---|
+| `--pairs-json [--limit N]` | the collected pairs with their `keep`, for the page to render |
+| `--pairs-keep --in <decisions.json>` | writes a batch of keep/drop decisions, file-in as `--findings-many` does |
+
+**A batch file, not one spawn per decision**, on the precedent of `--findings-many`: a review of two
+hundred pairs is two hundred spawns otherwise. And `PROJECT.md:70` — *adding a one-shot mode means
+adding it here* — so both go into that list in the same change.
+
+**Neither exits 64.** A binary that KNOWS a mode must never exit 64 whatever is wrong with the
+request, because 64 is how the extension detects an OLD binary and falls back; a request fault
+wearing that code hides itself behind a successful-looking fallback. A malformed decisions file is
+**65 (EX_DATAERR)**, as `--findings-many` answers an unreadable keys file.
 
 #### The page
 
 `RoundsLogPanel` (`src_vs_code/src/roundsLogPanel.ts:63`) is the surface precedent — a webview panel
 of its own rather than a panel section, because a person reading pairs is reading, not configuring.
 
-**The first multi-select in this codebase**, and that is worth saying out loud: there is no checkbox
-list anywhere in the extension today, so there is no local pattern to follow and one is being set.
-A row per pair, its before and after side by side, a checkbox, and select-all.
+**This is NOT the first multi-select, and the first draft was wrong to say so.** `roundsLog.ts:1121`
+already renders `<input type="checkbox" id="pickall">` over a `.pick` column, and `PROJECT.md:75`
+records what it cost: *a tick-box and an Export branch each need an early `return` or the control
+also opens the row it sits in, and no source assertion can see a missing one.* Building a fresh
+pattern would have reintroduced a solved bug. This page adopts that file's propagation handling and
+its select-all. (Plan round, gemini.)
 
-**The decision is PERSISTED, not held in the page.** `keep` is a column for the same reason
-`collect_runs` is a table: a review of two hundred pairs is not finished in one sitting, and a
-decision that dies on reload is a decision nobody will make twice. Story 4's durable-status rule
-applies unchanged.
+**The decision is PERSISTED, not held in the page** — same reason `collect_runs` is a table. A review
+of two hundred pairs is not finished in one sitting.
 
 #### The ranking pass
 
@@ -486,31 +538,50 @@ applies unchanged.
 model cluster at 4s and 5s, so a threshold over them filters nothing. Sort by category in code, from
 the returned rank.
 
+**A model's answer is external unvalidated data**, and the first draft specified the prompt and
+nothing about the reply. So: a strict schema; ids the model invented are dropped; ids it omitted keep
+their original order rather than vanishing; duplicate ranks break ties by the original order; and a
+reply that will not parse is a failure with a visible reason, never a silently shorter list.
+(Plan round, gemini and codex.)
+
+**It runs through the shared launcher with a timeout and a tree-kill**, like every other process
+here. A local model that hangs would otherwise leave the operation pending for ever — which is the
+failure the durable-status rule exists for — and the failure is recorded so a retry costs no
+decisions.
+
 **It uses story 4's allowlist and does not own it.** `RankingModels` refuses a non-local model
-before a finding field is read; this story calls that boundary rather than re-deciding it. The
-ranking pass is the first thing in this pipeline that actually SENDS `title`, `why` and `fix`
-anywhere, which is what the allowlist was built for — until now it has guarded a step that did not
-yet exist.
+before a finding field is read. This pass is the first thing in the pipeline that actually SENDS
+`title`, `why` and `fix` anywhere: until now that boundary has guarded a step that did not exist.
 
 #### Test plan
 
 - `collect_pairs` against a seeded `RoundsDb`, and the migration from a hand-spelled older schema.
-- A collected candidate writes its pair; a skipped one writes none; `--all` rewrites one that exists.
-- The page RUN, not read: the operator ruling at `.agents/PROJECT.md:78`. Select two of three rows,
-  press keep, and assert what the script posts — a multi-select that renders and selects nothing is
-  precisely the defect story 4's picker was.
+- A collected candidate writes its pair inside the outcome's transaction; a skipped one writes none;
+  an interruption between the two leaves neither.
+- `--all` rewrites a pair and PRESERVES `keep`, asserted for a kept row and a dropped one.
+- Every stored SKELETON passes the zero-knowledge check, asserted over the column.
+- The page RUN, not read (`PROJECT.md:78`), and the assertion is that the decision was PERSISTED:
+  select two of three, press keep, read the value back after a reload. A message posted to a broken
+  handler would pass a test that stopped at the message.
+- A ranking reply that invents an id, omits one, or will not parse at all.
 - A ranking pass with a non-local model is refused before any finding text is read.
-- The zero-knowledge assertion runs over what is STORED, not only over what is computed: a pair that
-  reaches this table carrying a name is a `failed`, and now there is a table to assert it against.
 
 #### Definition of done
 
-- [ ] `collect_pairs` exists; a collected candidate writes one; `--all` rewrites it.
-- [ ] Every stored pair passes the zero-knowledge check.
-- [ ] The page lists pairs, multi-selects, and its decisions survive a reload.
-- [ ] The ranking pass asks for a ranking and is refused a non-local model at the boundary.
-- [ ] `research/module_extension.md` and `module_server.md` updated; the growth line above is real.
+- [ ] `collect_pairs` exists; a collected candidate writes one in its outcome's transaction.
+- [ ] `--all` preserves `keep` for both a kept and a dropped row.
+- [ ] Every stored SKELETON passes the zero-knowledge check — the row is local metadata and the plan
+      says which half carries the guarantee.
+- [ ] `--pairs-json` and `--pairs-keep` exist, are named in `PROJECT.md`, and neither exits 64.
+- [ ] The page lists pairs, multi-selects on `roundsLog.ts`'s pattern, and its decisions survive a
+      reload — proved by reading them back, not by watching a message.
+- [ ] The ranking pass validates the model's reply and cannot hang.
+- [ ] `research/module_extension.md` and `module_server.md` updated.
 
+#### What this story does NOT own
+
+The run records and the allowlist are story 4's. Anything that sends a pair off this machine is
+story 6's: this story ends with a person's keep/drop decision written to a column.
 
 ## Test plan
 
