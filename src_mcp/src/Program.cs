@@ -54,6 +54,12 @@ internal static class Program
         /// </remarks>
         Version,
 
+        /// <summary>The collected pairs, for the review page to render.</summary>
+        Pairs,
+
+        /// <summary>A batch of keep/drop decisions, file-in as `--findings-many` takes its keys.</summary>
+        PairsKeep,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -159,6 +165,8 @@ internal static class Program
                 "--bugs-json" => Startup.Bugs,
                 "--normalize" => Startup.Normalize,
                 "--collect-bugs" => Startup.Collect,
+                "--pairs-json" => Startup.Pairs,
+                "--pairs-keep" => Startup.PairsKeep,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -205,6 +213,12 @@ internal static class Program
 
             case Startup.Collect:
                 return await CollectBugsAsync(args);
+
+            case Startup.Pairs:
+                return PairsJson(args);
+
+            case Startup.PairsKeep:
+                return PairsKeep(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -425,6 +439,85 @@ internal static class Program
     /// half an hour, which nobody can see.
     /// </remarks>
     private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(30);
+
+    /// <summary>The collected pairs, with whatever a person has decided about them.</summary>
+    /// <remarks>
+    /// Opens for writing because it MIGRATES first, exactly as `--bugs-json` does and for the same
+    /// reason: a person may run it before the server has ever opened the file with a build that has
+    /// the pairs table. 74 when the file will not open, because an empty list and a success would
+    /// read as "there is nothing to review".
+    /// </remarks>
+    internal static int PairsJson(string[] args)
+    {
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; no pair can be read from it");
+            return 74; // EX_IOERR
+        }
+
+        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+            new Collecting.PairsAnswer([.. db.Pairs(Limit(args, Store.BugsQuery.DefaultLimit))]),
+            Server.ServerJsonContext.Default.PairsAnswer));
+
+        return 0;
+    }
+
+    /// <summary>Writes a batch of keep/drop decisions.</summary>
+    /// <remarks>
+    /// <para><b>A file in, not one spawn per decision</b>, on `--findings-many`'s precedent: a review
+    /// of two hundred pairs is two hundred process launches otherwise.</para>
+    /// <para><b>65 and never 64 for a bad file.</b> 64 is how a caller detects a binary too old for a
+    /// mode and falls back; a request fault wearing that code would send it down the fallback and
+    /// hide itself behind a successful-looking answer. This binary KNOWS the mode.</para>
+    /// </remarks>
+    internal static int PairsKeep(string[] args)
+    {
+        var flags = Flags(args);
+        if (!flags.TryGetValue("--in", out var input))
+        {
+            Note("--pairs-keep needs --in <decisions.json>");
+            return 65; // EX_DATAERR
+        }
+
+        Collecting.KeepRequest? request;
+        try
+        {
+            request = System.Text.Json.JsonSerializer.Deserialize(
+                File.ReadAllText(input), Server.ServerJsonContext.Default.KeepRequest);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                                      or System.Text.Json.JsonException)
+        {
+            Note($"--pairs-keep could not read {input}: {e.Message}");
+            return 65; // EX_DATAERR
+        }
+
+        var asked = request?.Items ?? [];
+        // Validated because it came from another process: a keep outside the three it may be is a
+        // request fault, not a value to write and puzzle over later.
+        if (Array.Exists([.. asked], one => !Core.Collecting.Keep.IsDecision(one.Keep)))
+        {
+            Note("--pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)");
+            return 65; // EX_DATAERR
+        }
+
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; no decision can be written to it");
+            return 74; // EX_IOERR
+        }
+
+        var decided = db.RecordKeep(
+            [.. asked.Select(one => new Core.Collecting.KeepDecision(one.FindingId, one.Keep))]);
+        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+            new Collecting.KeepAnswer(decided), Server.ServerJsonContext.Default.KeepAnswer));
+
+        return 0;
+    }
 
     internal static int NormalizeJson(string[] args)
     {

@@ -314,9 +314,17 @@ public sealed class RoundsDb : IDisposable
     /// The state the row carried when this run read it — empty for an unprocessed candidate. The
     /// write lands only if the row still says that, so a run that lost the race is told.
     /// </param>
+    /// <param name="pair">
+    /// The before/after skeletons, when the candidate was collected. Written in the SAME
+    /// transaction as the outcome: a kill between the two would leave a database whose outcome says
+    /// `collected` and whose pairs table has nothing to show for it, which is the one disagreement
+    /// this pair of writes exists to make impossible. (Plan round, codex.)
+    /// </param>
     public bool RecordCollect(
-        long findingId, string was, string state, string reason, string fixSha, string runId)
+        long findingId, string was, string state, string reason, string fixSha, string runId,
+        CollectedPair? pair = null)
     {
+        using var transaction = _db.BeginTransaction();
         using var write = _db.CreateCommand();
         write.CommandText = """
             UPDATE findings
@@ -334,7 +342,96 @@ public sealed class RoundsDb : IDisposable
         // The swap, and the caller is told whether it won. Two runs can read the same finding; an
         // unconditional write let the slower one replace a `collected` row and its fix_sha with its
         // own later verdict, so durable state depended on timing. (Code round, codex.)
-        return write.ExecuteNonQuery() == 1;
+        var claimed = write.ExecuteNonQuery() == 1;
+        if (claimed && pair is { } collected)
+        {
+            WritePair(findingId, collected);
+        }
+
+        transaction.Commit();
+
+        return claimed;
+    }
+
+    /// <summary>The pair, written beside the outcome that produced it.</summary>
+    /// <remarks>
+    /// <b>The upsert replaces the pair and leaves <c>keep</c> exactly where it was.</b> This is the
+    /// sharpest failure the plan round found, and two reviewers found it independently: a person
+    /// reviews two hundred pairs, reruns `--all` to pick up a repaired walk, and an ordinary upsert
+    /// takes every decision back to `-1` without saying anything. `0` and `1` are BOTH decisions, so
+    /// the column is simply not in the update list — a guard written `WHERE keep = -1` would have
+    /// preserved the kept rows and quietly un-dropped the dropped ones.
+    /// </remarks>
+    private void WritePair(long findingId, CollectedPair pair)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO collect_pairs
+                (finding_id, symbol_name, language, skeleton_before, skeleton_after, written_utc)
+            VALUES ($id, $symbol, $language, $before, $after, $now)
+            ON CONFLICT(finding_id) DO UPDATE SET
+                symbol_name = excluded.symbol_name, language = excluded.language,
+                skeleton_before = excluded.skeleton_before,
+                skeleton_after = excluded.skeleton_after,
+                written_utc = excluded.written_utc
+            """;
+        Bind(write, "$id", findingId);
+        Bind(write, "$symbol", pair.SymbolName);
+        Bind(write, "$language", pair.Language);
+        Bind(write, "$before", pair.SkeletonBefore);
+        Bind(write, "$after", pair.SkeletonAfter);
+        Bind(write, "$now", Now());
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>The collected pairs, newest first, with whatever a person has decided about them.</summary>
+    public IReadOnlyList<StoredPair> Pairs(int limit)
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = """
+            SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
+                   p.keep, f.severity, f.category, f.title
+              FROM collect_pairs p JOIN findings f ON f.id = p.finding_id
+             ORDER BY p.written_utc DESC, p.finding_id
+             LIMIT $limit
+            """;
+        Bind(read, "$limit", limit);
+        using var rows = read.ExecuteReader();
+        var pairs = new List<StoredPair>();
+        while (rows.Read())
+        {
+            pairs.Add(new StoredPair(
+                rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                rows.GetString(4), rows.GetInt32(5), rows.GetString(6), rows.GetString(7),
+                rows.GetString(8)));
+        }
+
+        return pairs;
+    }
+
+    /// <summary>Records what a person decided about a batch of pairs.</summary>
+    /// <remarks>
+    /// One transaction for the batch, because a review is a batch: two hundred decisions arriving as
+    /// two hundred spawns is the shape `--findings-many` was created to end.
+    /// </remarks>
+    /// <returns>How many rows were actually decided.</returns>
+    public int RecordKeep(IReadOnlyList<KeepDecision> decisions)
+    {
+        using var transaction = _db.BeginTransaction();
+        var decided = 0;
+        foreach (var decision in decisions)
+        {
+            using var write = _db.CreateCommand();
+            write.CommandText =
+                "UPDATE collect_pairs SET keep = $keep WHERE finding_id = $id";
+            Bind(write, "$keep", decision.Keep);
+            Bind(write, "$id", decision.FindingId);
+            decided += write.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+
+        return decided;
     }
 
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>

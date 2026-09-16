@@ -52,7 +52,8 @@ node .agents/conventions/tools/pin-check.mjs
   What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
-  `--ask-remote`, `--providers`, `--bugs-json`, `--normalize` and `--collect-bugs`, and their stdout
+  `--ask-remote`, `--providers`, `--bugs-json`, `--normalize`, `--collect-bugs`, `--pairs-json` and
+  `--pairs-keep`, and their stdout
   is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
