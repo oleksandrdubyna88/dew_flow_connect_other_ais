@@ -45,6 +45,12 @@ public static class CoaiLogging
 
         return new LoggerConfiguration()
             .MinimumLevel.Is(FloorFromEnvironment())
+            // The rule's own two overrides, and they earned themselves the day `coai-bugs` was
+            // wired up: ONE ingest of a single pair wrote eleven framework lines around the one
+            // line this server had to say. "Request and handler chatter drowns the application's
+            // own story at Information" is the rule, verbatim.
+            .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .WriteTo.Sink(new AnsiConsoleSink(formatter, console))
             .WriteTo.File(formatter, file, shared: false)
             .CreateLogger();

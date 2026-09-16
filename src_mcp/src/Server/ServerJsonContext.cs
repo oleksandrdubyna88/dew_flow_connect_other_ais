@@ -186,7 +186,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Collecting.PairsAnswer))]
 [JsonSerializable(typeof(Collecting.KeepRequest))]
 [JsonSerializable(typeof(Collecting.KeepAnswer))]
-[JsonSerializable(typeof(Collecting.UploadRequest))]
-[JsonSerializable(typeof(Collecting.UploadAnswer))]
+// The wire pair lives in the shared core, so BOTH halves serialize the same declaration.
+[JsonSerializable(typeof(Core.Collecting.UploadRequest))]
+[JsonSerializable(typeof(Core.Collecting.UploadAnswer))]
 [JsonSerializable(typeof(Collecting.UploadSummary))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

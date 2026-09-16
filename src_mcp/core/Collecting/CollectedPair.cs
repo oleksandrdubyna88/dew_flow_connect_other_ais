@@ -40,6 +40,14 @@ public sealed record StoredPair(
 /// <summary>What a person decided about one pair.</summary>
 public readonly record struct KeepDecision(long FindingId, int Keep);
 
+/// <summary>What the ingest server said about one pair, ready to be written down.</summary>
+/// <remarks>
+/// A batch's outcomes travel together so they can be written in ONE transaction: marking two hundred
+/// pairs one statement at a time leaves half a batch recorded when the process is killed.
+/// </remarks>
+/// <param name="Why">The server's reason, when it refused. Empty otherwise.</param>
+public readonly record struct SendOutcome(long FindingId, string Why, bool WasRefused);
+
 /// <summary>The vocabulary of <see cref="StoredPair.Keep"/>, spelled once.</summary>
 /// <remarks>
 /// Not a boolean, for the reason <c>collect_state</c> is not one: "nobody has looked at it" and

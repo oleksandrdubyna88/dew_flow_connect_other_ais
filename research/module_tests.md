@@ -303,6 +303,7 @@ reply for it to order.
 | `TheIngestTests` | the pure decisions | a refusal that strands its neighbours; a leak that is stored |
 | `TheRouteTests` | the REAL server in-process | the AOT JSON binding, the bearer header, the 401, the caps |
 | `OnlyThreeFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing |
+| `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
 
 **Why an HTTP suite when the decisions are already unit-tested.** `Ingest.Take` is pure and covered;
 the route is not part of it. The one that matters most is the AOT JSON binding — this repository has
@@ -313,10 +314,20 @@ and a serializer context compiles perfectly while binding nothing.
 this repository's own methods it found two defects in the validator — adjacent empty strings read as
 a leak, and a C# range operator read as a numeric literal — both of which refused good work.
 
-**What these still do not prove.** No scenario drives `coai-mcp --upload-pairs` against a running
-`coai-bugs` end to end; the client's send path is covered by its own unit tests and the server's by
-its HTTP suite, and nothing yet joins them. And the no-client-IP promise is a deployment fact that
-no test here can reach.
+**The live cross-implementation check.** `BothHalvesTests` seeds a real `coai.db`, hosts the real
+`coai-bugs` in-process, and runs `UploadRun.RunAsync` against it. It was the loudest finding of the
+code round and the convention is explicit: *a contract with two implementations has ONE live check
+that exercises them against each other — two suites agreeing with the same file is not that check.*
+The wire types are shared now, which removes most of the drift it was written to catch; what it
+still catches is what a shared record cannot promise — that the client derives the id the server
+derives, that it reads the words the server writes, that both AOT serializers bind the other's
+documents, and that a queue past the 200-pair cap arrives in full rather than reporting success
+about its first batch. Before it, `UploadRun.RunAsync` had no test at all; only its private mapping
+did, and the catalogue said otherwise.
+
+**What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
+writes `remote_addr` before the request reaches any route — and no test in this process can reach
+it. It is verified by reading the deployed stack's logs after a real ingest.
 
 ## What this does NOT prove
 

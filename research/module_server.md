@@ -2155,6 +2155,16 @@ The client knows the source and asserts a blacklist; the server never saw it, so
 whitelist — every word a placeholder, runtime vocabulary or a keyword; every string empty; every
 number zero. It needs no parser and cannot be defeated by a name nobody thought to forbid.
 
+**Unless it cannot SEE the word.** The scanner matched `[A-Za-z_][A-Za-z_0-9]*`, so
+`method_1() { Жертва(); }` contained exactly one word as far as it was concerned. A whitelist
+that silently ignores part of its input is not a whitelist: the Cyrillic identifier was never
+checked, therefore never refused, and would have reached the public corpus. It reads Unicode
+letters now. This was the worst defect in the change and a code round found it.
+
+The same round found the mirror of it: tree-sitter reports some tokens as PHRASES — TypeScript’s
+`unique symbol` — and a phrase never matches a word, so `unique` was in no list and an ordinary
+skeleton was refused as a leak. Keywords are split into words before they are compared.
+
 **And it is not proof.** A method literally named `method_1` normalises to a placeholder that may be
 the same string, and nothing here can tell them apart. Nothing unsafe follows, but the plan called
 this the guarantee and a reviewer was right that the guarantee is the client's property test.
@@ -2201,6 +2211,59 @@ machine cannot tell a real skeleton from a crafted one.
 `sent_utc` and no `send_refusal`. **The key is never an argument** — `COAI_BUGS_KEY` or
 `--key-file`, because an argument is in process listings and shell history — and a non-loopback
 `http` server is refused outright.
+
+**It sends as many batches as it takes.** It sent one, so two thousand kept pairs answered "200
+accepted" and exit code 0 with eighteen hundred still queued and nothing saying so.
+
+**An acknowledgement is matched by ID, not by position.** The id is a pure function of the
+payload, so the client derives exactly what the server will. Matching by order works until the
+day the server reorders anything, and then every acknowledgement goes to the wrong local pair,
+silently, with both halves believing they succeeded. Four reviewers said so. A word the client
+does not know, an id it did not send, a repeat, a count that disagrees — any of them and the whole
+batch is left alone. An unknown word used to fall through to "refused", which would strand a good
+pair for ever and blame a normaliser that was working.
+
+**A refusal can be undone.** `Sendable` excludes anything carrying a `send_refusal`, and the
+refusals worth having are precisely the ones OUR normaliser caused — two were found in the
+alphabet check by running it over this repository, and both refused good work. Repairing the
+normaliser with no way to re-offer what it spoiled repairs nothing, so `--requeue-refused` clears
+the column.
+
+### One wire contract, in the core
+
+`UploadedPair`, `UploadRequest`, `UploadAnswer`, the three outcome words and `PairId` live in
+`CoaiMcp.Core.Collecting`, which both binaries reference. They were a copy per binary: a field
+renamed on one side leaves the other compiling, both suites green, and the runtime dropping
+whatever no longer lines up — and the architecture test that pins the three fields could only
+watch one of the two copies. `BothHalvesTests` is the live check the conventions require on top
+of that.
+
+**The fields are nullable, whatever their initializers say.** An omitted JSON field is null
+however a positional record spells its default, and the validator dereferenced it — so a
+malformed document was a 500 rather than a refusal. `Whole()` is the one place that is settled.
+
+**The id is length-prefixed.** It hashed `language\0before\0after`, and a skeleton may legally
+contain a NUL: two genuinely different pairs then hashed the same, and the second came back
+`duplicate` and was never stored.
+
+### Quarantine has a size, and moving through it is atomic
+
+`Keep` inserted into quarantine and asked the corpus AFTERWARDS, so a pair that had already been
+promoted — and therefore deleted from quarantine — was written back in, answered `duplicate`, and
+then sat in `--waiting` for ever, because promoting it again is a no-op. Three reviewers found
+that row from three directions. The check and the insert are one transaction; `--promote` removes
+the quarantine row whether or not the corpus insert wrote anything, because what it promises is
+"the corpus holds it and quarantine does not".
+
+**And the room has a size.** The body cap and the batch cap bound one REQUEST; nothing bounded
+ten thousand of them, and quarantine has no timer and no retention rule because a person reads
+every row. Past `Corpus.MostWaiting` the server refuses new pairs and says why — a queue somebody
+must work through, rather than a disk that fills.
+
+**One connection, guarded.** The route holds a single `SqliteConnection` for the process
+lifetime and `SqliteConnection` is not thread-safe, so two concurrent uploads would have used it
+at once. A lock, not a connection per request: SQLite serialises writers anyway, and one
+connection is what makes a transaction here mean what it says.
 
 **A pair is marked only on an acknowledgement.** Marked when the batch left, it would be skipped for
 ever if the reply never came. A transport failure marks nothing; a refusal is marked as refused

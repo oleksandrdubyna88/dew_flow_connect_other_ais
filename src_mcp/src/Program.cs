@@ -57,6 +57,9 @@ internal static class Program
         /// <summary>Sends the pairs a person kept. The only mode that leaves this machine.</summary>
         UploadPairs,
 
+        /// <summary>Clears every send refusal, so a repaired normaliser can offer them again.</summary>
+        RequeueRefused,
+
         /// <summary>The collected pairs, for the review page to render.</summary>
         Pairs,
 
@@ -171,6 +174,7 @@ internal static class Program
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
                 "--upload-pairs" => Startup.UploadPairs,
+                "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -226,6 +230,9 @@ internal static class Program
 
             case Startup.UploadPairs:
                 return await UploadPairsAsync(args);
+
+            case Startup.RequeueRefused:
+                return RequeueRefused();
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -622,10 +629,20 @@ internal static class Program
             return 74; // EX_IOERR
         }
 
+        // Ctrl+C aborts the request in flight rather than leaving it to the two-minute timeout.
+        // Nothing is lost by stopping: a pair is marked only on an acknowledgement, so whatever was
+        // in the air is simply offered again next time. (Code round, local.)
+        using var stopping = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            stopping.Cancel();
+        };
+
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         var run = new Collecting.UploadRun(http, Console.Error);
         var summary = await run.RunAsync(
-            db, server, key, Limit(args, Collecting.UploadRun.PerBatch));
+            db, server, key, Limit(args, Collecting.UploadRun.PerBatch), stopping.Token);
 
         Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
             summary, Server.ServerJsonContext.Default.UploadSummary));
@@ -636,14 +653,59 @@ internal static class Program
     }
 
     /// <summary>The key, from the environment or a file. Never from argv.</summary>
+    /// <remarks>
+    /// <b>Named file, named failure.</b> It asked <c>File.Exists</c> first and fell through to the
+    /// environment variable when the answer was no — so a typo in <c>--key-file</c>, or a file this
+    /// process may not read, silently became "no key was given" and then "no key: set
+    /// COAI_BUGS_KEY". Somebody who names a file is telling you where the key is. (Code round,
+    /// local.)
+    /// </remarks>
     private static string Key(IReadOnlyDictionary<string, string> flags)
     {
-        if (flags.TryGetValue("--key-file", out var file) && File.Exists(file))
+        if (flags.TryGetValue("--key-file", out var file))
         {
-            return File.ReadAllText(file).Trim();
+            try
+            {
+                return File.ReadAllText(file).Trim();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Note($"--key-file {file} could not be read: {e.Message}");
+
+                return string.Empty;
+            }
         }
 
         return (Environment.GetEnvironmentVariable("COAI_BUGS_KEY") ?? string.Empty).Trim();
+    }
+
+    /// <summary>
+    /// Clears every send refusal, so a repaired normaliser can offer those pairs again.
+    /// </summary>
+    /// <remarks>
+    /// <b>A refusal was permanent and it should not have been.</b> `Sendable` excludes anything
+    /// carrying a <c>send_refusal</c>, and the refusals worth having are exactly the ones OUR
+    /// normaliser caused — testing the alphabet check against this repository found two defects in
+    /// it, and both refused perfectly good work. Repairing the normaliser with no way to re-offer
+    /// what it spoiled repairs nothing. (Code round, codex.)
+    /// </remarks>
+    internal static int RequeueRefused()
+    {
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; there is nothing to requeue in it");
+
+            return 74; // EX_IOERR
+        }
+
+        var again = db.RequeueRefused();
+        Note(again == 0
+            ? "no pair is carrying a refusal"
+            : $"{again} pair(s) may be offered again; run --upload-pairs when the normaliser is fixed");
+
+        return 0;
     }
 
     internal static int NormalizeJson(string[] args)

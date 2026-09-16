@@ -149,6 +149,38 @@ public sealed class TheAlphabetTests
         Alphabet.Admits("method_1() { }", SourceLanguage.CSharp, Keywords(SourceLanguage.CSharp))
             .Should().BeTrue("the shape is right, which is all this check can ever say");
 
+    /// <summary>
+    /// An identifier that is not ASCII is still an identifier.
+    /// </summary>
+    /// <remarks>
+    /// <b>The worst defect this validator has had.</b> The word pattern was `[A-Za-z_][A-Za-z_0-9]*`,
+    /// so a Cyrillic, Greek or CJK name was not MATCHED at all — and a word the scanner never sees is
+    /// a word it never refuses. `method_1() { Жертва(); }` passed the whitelist and would have reached
+    /// a public corpus carrying somebody's real identifier. A whitelist that silently ignores part of
+    /// its input is not a whitelist. (Code round, codex.)
+    /// </remarks>
+    [Theory]
+    [InlineData("method_1() { Жертва(); }")]
+    [InlineData("method_1() { Ταμείο(); }")]
+    [InlineData("method_1() { 支払い(); }")]
+    [InlineData("method_1() { var_1 = Zahlungsdienst; }")]
+    public void AnIdentifierThatIsNotAsciiIsStillRefused(string skeleton) =>
+        Alphabet.Admits(skeleton, SourceLanguage.CSharp, Keywords(SourceLanguage.CSharp))
+            .Should().BeFalse("a word the scanner cannot see is a word it cannot refuse");
+
+    /// <summary>A compound keyword is admitted, word by word.</summary>
+    /// <remarks>
+    /// The grammars report some tokens as PHRASES — TypeScript has `unique symbol` — and the scanner
+    /// reads words. `unique` alone was in no list, so a perfectly ordinary TypeScript skeleton was
+    /// refused. (Code round, codex.)
+    /// </remarks>
+    [Fact]
+    public void ACompoundKeywordIsAdmittedWordByWord() =>
+        Alphabet.Admits(
+            "method_1(var_1) { type_1 var_2 = var_1 as unique symbol; }",
+            SourceLanguage.TypeScript,
+            Keywords(SourceLanguage.TypeScript)).Should().BeTrue();
+
     private static string Root()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)

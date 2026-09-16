@@ -34,7 +34,7 @@ internal static class Admin
             "--issue-key" => Issue(corpus, args, secret, now),
             "--revoke" => Revoke(corpus, args, now),
             "--promote" => Promote(corpus, args, now),
-            _ => Waiting(corpus),
+            _ => Waiting(corpus, args),
         };
     }
 
@@ -69,7 +69,12 @@ internal static class Admin
         {
             Say("--revoke needs --id <id>");
 
-            return 64; // EX_USAGE — this binary's modes are its whole interface, and this IS one
+            // NOT 64. `.agents/PROJECT.md`: a binary that KNOWS a one-shot mode must never exit
+            // 64, whatever is wrong with the request — 64 is reserved for "this binary has never
+            // heard of that mode", which is how a caller detects an old binary and falls back.
+            // This binary knows `--revoke` perfectly well; the ARGUMENT is what is wrong.
+            // (Code round, codex/local.)
+            return 65; // EX_DATAERR
         }
 
         if (!corpus.Revoke(id, now))
@@ -85,16 +90,28 @@ internal static class Admin
     }
 
     /// <summary>Moves one pair out of quarantine, because a person read it.</summary>
+    /// <remarks>
+    /// <b>It prints what it moved, not only that it moved something.</b> The id is typed or pasted
+    /// from `--waiting` and there is no undo, so the one defence against promoting the wrong row is
+    /// seeing the row. A confirmation prompt was asked for instead; this is the same protection
+    /// without making a one-shot mode unusable from a script. (Code round, local.)
+    /// </remarks>
     private static int Promote(Corpus corpus, string[] args, string now)
     {
-        var id = Flag(args, "--entry");
+        // Lowercased because the id is hex from `IdOf` and SQLite compares text byte for byte:
+        // an id pasted from a terminal that upper-cased it would answer "nothing in quarantine"
+        // about a row that is right there. (Code round, local.)
+        var id = Flag(args, "--entry").ToLowerInvariant();
         if (id.Length == 0)
         {
             Say("--promote needs --entry <id>; run --waiting to see what is there");
 
-            return 64; // EX_USAGE
+            return 65; // EX_DATAERR — this binary knows the mode; the argument is what is wrong
         }
 
+        // Read BEFORE the move, because after it the row is gone from quarantine and there is
+        // nothing left to describe.
+        var moving = corpus.Find(id);
         if (!corpus.Promote(id, now))
         {
             Say($"nothing in quarantine with id {id}");
@@ -102,9 +119,18 @@ internal static class Admin
             return 69; // EX_UNAVAILABLE
         }
 
-        Say($"promoted {id}; the corpus now holds {corpus.Held()}");
+        Say($"promoted [{moving.Language}] {First(moving.Before)}");
+        Say($"the corpus now holds {corpus.Held()}");
 
         return 0;
+    }
+
+    /// <summary>A skeleton's first line, which is what identifies it to a person.</summary>
+    private static string First(string skeleton)
+    {
+        var line = skeleton.Split('\n')[0].Trim();
+
+        return line.Length > 72 ? line[..72] + "…" : line;
     }
 
     /// <summary>What is waiting for somebody to read it.</summary>
@@ -112,15 +138,23 @@ internal static class Admin
     /// The skeletons themselves, because the decision a person makes is about what the code SAYS —
     /// a list of ids would be a list nobody can judge.
     /// </remarks>
-    private static int Waiting(Corpus corpus)
+    private static int Waiting(Corpus corpus, string[] args)
     {
-        var waiting = corpus.Waiting(50);
-        if (waiting.Count == 0)
+        var total = corpus.WaitingCount();
+        var limit = Number(args, "--limit", 50);
+        var skip = Number(args, "--skip", 0);
+        var waiting = corpus.Waiting(limit, skip);
+        if (total == 0)
         {
             Say("nothing is waiting");
 
             return 0;
         }
+
+        // The TOTAL first, and before the skeletons: it said "50 waiting" after printing fifty,
+        // which reads as "that was all of them" whether there are fifty or five hundred, and the
+        // number arrived after the scrollback had already gone past. (Code round, codex/local.)
+        Say($"{total} waiting; showing {waiting.Count} from {skip}");
 
         foreach (var (id, language, before, after) in waiting)
         {
@@ -130,10 +164,15 @@ internal static class Admin
             Console.Out.WriteLine(after);
         }
 
-        Say($"{waiting.Count} waiting; promote one with --promote --entry <id>");
+        Say(skip + waiting.Count < total
+            ? $"{total - skip - waiting.Count} more; --waiting --skip {skip + waiting.Count}"
+            : "promote one with --promote --entry <id>");
 
         return 0;
     }
+
+    private static int Number(string[] args, string name, int fallback) =>
+        int.TryParse(Flag(args, name), out var value) && value > 0 ? value : fallback;
 
     private static string Flag(string[] args, string name)
     {

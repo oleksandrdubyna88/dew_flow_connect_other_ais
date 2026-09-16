@@ -466,6 +466,53 @@ public sealed class RoundsDb : IDisposable
         return pairs;
     }
 
+    /// <summary>
+    /// Writes down what a whole batch came to, in one transaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>It was two hundred separate updates. A kill halfway through left half the batch marked
+    /// sent and half not — a local state no retry can reason about, because nothing records that the
+    /// batch was ever partial. One transaction means the client's picture of a batch is the
+    /// server's. (Code round, local.)</para>
+    /// <para>Called ONLY on an acknowledgement, never when the batch left: a pair marked before the
+    /// server answered is a pair this client would skip for ever.</para>
+    /// </remarks>
+    public void RecordSend(IReadOnlyList<SendOutcome> outcomes)
+    {
+        using var transaction = _db.BeginTransaction();
+        foreach (var outcome in outcomes)
+        {
+            using var write = _db.CreateCommand();
+            write.CommandText = outcome.WasRefused
+                ? "UPDATE collect_pairs SET send_refusal = $why WHERE finding_id = $id"
+                : "UPDATE collect_pairs SET sent_utc = $why WHERE finding_id = $id";
+            Bind(write, "$why", outcome.WasRefused ? outcome.Why : Now());
+            Bind(write, "$id", outcome.FindingId);
+            write.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    /// <summary>
+    /// Clears every refusal, so a repaired normaliser can offer those pairs again.
+    /// </summary>
+    /// <remarks>
+    /// <b>Without this a refusal is permanent.</b> `Sendable` excludes anything with a
+    /// <c>send_refusal</c>, and the refusals worth having are precisely the ones OUR normaliser
+    /// caused — two were found in the alphabet check by running it over this repository, and both
+    /// refused perfectly good work. Fixing the normaliser and having no way to re-offer what it
+    /// spoiled is fixing nothing. (Code round, codex.)
+    /// </remarks>
+    /// <returns>How many pairs are sendable again.</returns>
+    public int RequeueRefused()
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = "UPDATE collect_pairs SET send_refusal = '' WHERE send_refusal != ''";
+
+        return write.ExecuteNonQuery();
+    }
+
     /// <summary>Marks a pair the server acknowledged.</summary>
     /// <remarks>
     /// Called ONLY on an acknowledgement — accepted or already held — never when the batch left.

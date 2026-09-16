@@ -21,6 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\src\CoaiBugs.csproj" />
     <ProjectReference Include="..\..\src_mcp\normalizer\CoaiMcp.Normalizer.csproj" />
+    <!-- The CLIENT half. `BothHalvesTests` drives the real `UploadRun` against the real server,
+         which is the live cross-implementation check the conventions require of a contract with two
+         implementations — two suites agreeing with the same file is not that check. -->
+    <ProjectReference Include="..\..\src_mcp\src\CoaiMcp.csproj" />
   </ItemGroup>
 
 </Project>

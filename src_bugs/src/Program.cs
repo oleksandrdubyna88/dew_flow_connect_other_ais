@@ -1,6 +1,9 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
 using CoaiBugs;
 using CoaiMcp.Core.Collecting;
+using CoaiMcp.ServiceDefaults;
+using Serilog;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 /// <summary>
@@ -47,6 +50,18 @@ internal sealed class Program
         }
 
         var builder = WebApplication.CreateSlimBuilder(args);
+
+        // Two sinks, always, the same bootstrap `coai-server` calls — colour to the console and one
+        // file per run under the data directory's `logs/{yyyy-MM-dd}/`. It was missing entirely, and
+        // a server whose only record of a run is a terminal buffer has no record of it.
+        //
+        // What is deliberately NOT wired is `UseSerilogRequestLogging`: request logging writes the
+        // client address, which is the one thing this server promises never to keep.
+        builder.Logging.ClearProviders();
+        builder.Logging.AddSerilog(
+            CoaiLogging.CreateDewFlowLogger("coai-bugs", logsRoot: CoaiLogPath.RootFor(Data())),
+            dispose: true);
+
         builder.Services.ConfigureHttpJsonOptions(
             options => options.SerializerOptions.TypeInfoResolverChain.Insert(0, BugsJson.Default));
         builder.WebHost.ConfigureKestrel(
@@ -54,13 +69,16 @@ internal sealed class Program
 
         var app = builder.Build();
         using var corpus = Corpus.Open(Path.Combine(Data(), "coai-bugs.db"));
-        var keywords = SkeletonKeywords.Read(Root());
+        var keywords = SkeletonKeywords.From(Keywords());
+        app.Logger.LogInformation(
+            "coai-bugs is up: {Languages} keyword lists, {Waiting} waiting, {Held} in the corpus",
+            keywords.Count, corpus.WaitingCount(), corpus.Held());
 
         // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
         // would be an unauthenticated read of how much anybody has contributed.
         app.MapGet("/health", () => Results.Ok(new Health("ok")));
 
-        app.MapPost("/ingest", (IngestRequest? request, HttpRequest http) =>
+        app.MapPost("/ingest", (UploadRequest? request, HttpRequest http) =>
             Accept(corpus, keywords, request, http, secret));
 
         await app.RunAsync();
@@ -76,16 +94,16 @@ internal sealed class Program
     /// batch the client retries unchanged for ever, with every valid pair stranded behind the invalid
     /// one. (Plan round, gemini.)</para>
     /// <para><b>No client address is read or logged.</b> `HttpRequest` is taken for its headers and
-    /// nothing else, and no logging middleware is registered — but THIS PROCESS CANNOT KEEP THAT
-    /// PROMISE ALONE. A reverse proxy writes `remote_addr` before the request reaches any route. The
-    /// promise is a deployment obligation, written in the deploy notes with the nginx and Kestrel
+    /// nothing else, and no request-logging middleware is registered — but THIS PROCESS CANNOT KEEP
+    /// THAT PROMISE ALONE. A reverse proxy writes `remote_addr` before the request reaches any route.
+    /// The promise is a deployment obligation, written in the deploy notes with the nginx and Kestrel
     /// settings that keep it, and verified by reading the deployed stack's logs after a real ingest.
     /// Three reviewers said an in-process test cannot prove it, and they were right.</para>
     /// </remarks>
-    private static Results<Ok<IngestAnswer>, UnauthorizedHttpResult, BadRequest<Problem>> Accept(
+    private static Results<Ok<UploadAnswer>, UnauthorizedHttpResult, BadRequest<Problem>> Accept(
         Corpus corpus,
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
-        IngestRequest? request,
+        UploadRequest? request,
         HttpRequest http,
         string secret)
     {
@@ -111,15 +129,19 @@ internal sealed class Program
 
         var answer = Ingest.Take(
             corpus, items, keywords, keyId, DateTime.UtcNow.ToString("O"));
-        corpus.Counted(keyId);
+        corpus.RecordSubmission(keyId);
 
         return TypedResults.Ok(answer);
     }
 
     /// <summary>The key a request presents, from the one header that carries it.</summary>
+    /// <remarks>
+    /// The scheme is matched case-insensitively, as RFC 6750 requires: a proxy that normalises the
+    /// header to `bearer` is not an attacker, and a 401 for it is a morning somebody loses.
+    /// </remarks>
     private static string Presented(HttpRequest http) =>
         http.Headers.Authorization.ToString() is { Length: > 7 } header
-        && header.StartsWith("Bearer ", StringComparison.Ordinal)
+        && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             ? header[7..]
             : string.Empty;
 
@@ -129,21 +151,37 @@ internal sealed class Program
     private static string Data() =>
         Environment.GetEnvironmentVariable("COAI_BUGS_DATA") ?? Directory.GetCurrentDirectory();
 
-    /// <summary>Where `shared/skeleton-keywords.txt` is, walking up from the binary.</summary>
-    private static string Root()
+    /// <summary>
+    /// The keyword list, out of this binary rather than off the disk around it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It walked parent directories for `shared/skeleton-keywords.txt`, and FOUR reviewers
+    /// noticed the same thing: a published AOT binary lives in a directory with no repository above
+    /// it.</b> The startup then threw <c>FileNotFoundException</c> before the server listened, so a
+    /// deployment that built perfectly could not run at all. The file is an embedded resource now —
+    /// there is nothing beside the binary to lose, and the build fails if it is missing.</para>
+    /// <para><c>COAI_BUGS_KEYWORDS</c> names a file to use instead, for an operator who needs to
+    /// correct the list without waiting for a release.</para>
+    /// </remarks>
+    private static string Keywords()
     {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        if (Environment.GetEnvironmentVariable("COAI_BUGS_KEYWORDS") is { Length: > 0 } file)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "shared", SkeletonKeywords.FileName)))
-            {
-                return dir.FullName;
-            }
+            return File.ReadAllText(file);
         }
 
-        throw new FileNotFoundException(
-            $"shared/{SkeletonKeywords.FileName} was not found beside this binary; it is the word "
-            + "list the alphabet check is made of and the server cannot validate without it");
+        var assembly = typeof(Program).Assembly;
+        using var stream = assembly.GetManifestResourceStream(ResourceName)
+            ?? throw new InvalidOperationException(
+                $"{ResourceName} is not embedded in this binary; it is the word list the alphabet "
+                + "check is made of and the server cannot validate without it");
+        using var text = new StreamReader(stream);
+
+        return text.ReadToEnd();
     }
+
+    /// <summary>What the embedded keyword file is called inside the assembly.</summary>
+    internal const string ResourceName = "CoaiBugs." + SkeletonKeywords.FileName;
 }
 
 /// <summary>What `/health` says, which is nothing about the corpus.</summary>
@@ -153,8 +191,8 @@ public sealed record Health(string Status);
 public sealed record Problem(string Why);
 
 /// <summary>The serializer's whole world: nothing reflective, as every binary here is built.</summary>
-[JsonSerializable(typeof(IngestRequest))]
-[JsonSerializable(typeof(IngestAnswer))]
+[JsonSerializable(typeof(UploadRequest))]
+[JsonSerializable(typeof(UploadAnswer))]
 [JsonSerializable(typeof(Health))]
 [JsonSerializable(typeof(Problem))]
 internal sealed partial class BugsJson : JsonSerializerContext;

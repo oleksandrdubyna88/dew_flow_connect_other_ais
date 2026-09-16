@@ -23,14 +23,25 @@ public static class SkeletonKeywords
     /// Sections are <c>[CSharp]</c>, then one word a line. Comments open with <c>#</c>, because the
     /// file explains itself to whoever opens it wondering why a server has a word list in it.
     /// </remarks>
-    public static IReadOnlyDictionary<string, IReadOnlySet<string>> Read(string repositoryRoot)
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> Read(string repositoryRoot) =>
+        From(File.ReadLines(Path.Combine(repositoryRoot, "shared", FileName)));
+
+    /// <summary>The same list, from wherever the caller has it.</summary>
+    /// <remarks>
+    /// The ingest server does not read a path. A published binary is a directory with no repository
+    /// above it, and walking parents for <c>shared/</c> made a deployed server throw on startup —
+    /// four reviewers found it. It carries the file as an embedded resource and hands the text here.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> From(string text) =>
+        From(text.Split('\n'));
+
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> From(IEnumerable<string> lines)
     {
-        var file = Path.Combine(repositoryRoot, "shared", FileName);
         var sections = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
         var current = string.Empty;
         var words = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var raw in File.ReadLines(file))
+        foreach (var raw in lines)
         {
             var line = raw.Trim();
             if (line.Length == 0 || line.StartsWith('#'))
