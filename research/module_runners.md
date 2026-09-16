@@ -1021,3 +1021,39 @@ warning on every Windows machine that nobody could act on.
 A remote vendor never reaches the `--version` probe, and that arm is load-bearing rather than tidy: the
 executable a remote vendor names is `coai-mcp` **itself**, so without it the probe would have run this
 binary against itself and reported whatever it printed as a vendor's health.
+
+### What counts as hopeless, and why it is only what was observed (2026-09-16, issue #165)
+
+`Hopeless` was two words — *daily* and *exhausted* — taken from the one answer that had been measured
+when it was written. On 2026-09-09 codex answered something else:
+
+```
+{"type":"error","message":"You’ve hit your usage limit. Upgrade to Pro … to purchase more."}
+```
+
+It contains neither word, so the scheduler waited it out. **Four reviewers of one code round failed
+after 204.4, 212.6, 209.9 and 240.8 seconds — five attempts each, the whole ladder — and a plan round
+spent 213 of its 213 seconds on a single reviewer.** The sentence was already known to `Phrases`,
+whose own remark says codex *"says You’ve hit your usage limit — never rate limit, never 429"*: the
+HIT list knew it and the HOPELESS list did not, which is the whole of the gap.
+
+`Spent` is now `["daily", "exhausted", "hit your usage limit"]`, and **nothing goes in it that has not
+been read off a real vendor answer.** The first draft also had *weekly limit*, *upgrade*, *purchase*,
+*resets at* and *try again at*; the plan round removed all five and was right twice over. A bare
+*upgrade* or *purchase* turns *"rate limit reached; upgrade to the paid plan for higher throughput"* —
+a sales footer on a throttle that clears — into a reviewer nobody waits for; and *try again at 15:45*
+is thirty seconds away at 15:44:30, inside the first rung. Both are guarded by negative tests.
+
+**And the reason is now the terminal line rather than the first marked one.** A vendor that prints
+`429 Too Many Requests` and then says the allowance is gone had the first line read as its reason, so
+the scheduler was told a limit that cannot clear was worth waiting for. `Reason` makes two passes over
+the marked lines, the hopeless one first. Only MARKED lines are considered, which a reviewer asked to
+widen and which was declined: every phrase in `Spent` is itself matched by `Phrases`, so an unmarked
+spent line cannot occur for anything observed, and scanning unmarked lines is exactly what would let
+that sales footer reach the decision.
+
+**What this deliberately does not do** is parse a stated wait and compare it against the deadline —
+*retry after 20 seconds* against *retry after 3 hours*. That is the general form of the rule and it
+would subsume the vocabulary; no sample of the string has been observed from a vendor this product
+runs, and this file already records what writing a rule against an imagined string cost once.
+

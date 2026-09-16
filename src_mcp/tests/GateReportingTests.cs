@@ -100,6 +100,84 @@ public sealed class GateReportingTests
             .Should().BeFalse("that one clears while you wait, which is what the retry is for");
     }
 
+
+    // ---------- a spent allowance is not a throttle (issue #165) ----------
+
+    /// <summary>
+    /// The sentence this change was written for, copied out of this installation's own logs.
+    /// </summary>
+    /// <remarks>
+    /// <para>2026-09-09: four codex reviewers failed after 204.4, 212.6, 209.9 and 240.8 seconds on
+    /// one code round, and a plan round spent 213 of its 213 seconds on a single reviewer — five
+    /// attempts each, the whole ladder, against an allowance that money clears and time does not.
+    /// <c>Hopeless</c> was two words, <i>daily</i> and <i>exhausted</i>, and this contains neither.</para>
+    /// </remarks>
+    private const string SpentAllowance =
+        "{\"type\":\"error\",\"message\":\"You've hit your usage limit. Upgrade to Pro "
+        + "(https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more.\"}";
+
+    [Fact]
+    public void AnAllowanceThatIsSpent_IsNotWaitedOn()
+    {
+        RateLimit.Hopeless(SpentAllowance)
+            .Should().BeTrue("no arrangement of the ladder makes that sentence come out differently");
+    }
+
+    [Fact]
+    public void ATransientLimitThatMENTIONSUpgrading_IsStillRetried()
+    {
+        // The first draft of the vocabulary had `upgrade` and `purchase` as bare words, and this is
+        // the case that would have cost: a per-minute throttle carrying a sales footer. It clears
+        // while you wait, so refusing to wait would turn a recoverable refusal into a lost reviewer.
+        // (Two reviewers, the plan round.)
+        RateLimit.Hopeless("429 Too Many Requests — rate limit reached; upgrade to the paid plan for higher throughput")
+            .Should().BeFalse("a throttle is a throttle whatever is being sold underneath it");
+        RateLimit.Hopeless("503 Service Unavailable. Please upgrade your client library to v2.")
+            .Should().BeFalse("that sentence is not about an allowance at all");
+    }
+
+    [Fact]
+    public void AThrottleThatNamesHowLongToWait_IsStillRetried()
+    {
+        // "try again IN" is the throttle the ladder exists for. Its opposite, "try again AT 15:45",
+        // is deliberately NOT classified either way: at 15:44:30 it is thirty seconds off, inside the
+        // first rung, and deciding it needs the clock rather than a word. The open tail says so.
+        RateLimit.Hopeless("Rate limit reached for gpt-5. Please try again in 1.2s.")
+            .Should().BeFalse("one rung of the ladder is exactly this long");
+    }
+
+    [Fact]
+    public void WhenAVendorSaysBoth_TheTerminalLineIsTheOneThatDecides()
+    {
+        // A vendor that prints the throttle first and the spent allowance after it had its terminal
+        // fact read as a transient one, because the reason was the FIRST marked line. Both the
+        // scheduler and the person now get the line that ends the matter.
+        var result = new ProcessResult(
+            1,
+            StdOut: string.Empty,
+            StdErr: "429 Too Many Requests\nYou have exhausted your daily quota on this model\n  at run()",
+            TimedOut: false);
+
+        RateLimit.Reason(result).Should().Contain("exhausted your daily quota");
+        RateLimit.Hopeless(RateLimit.Reason(result))
+            .Should().BeTrue("the ladder would otherwise run against a limit that cannot clear");
+    }
+
+    [Fact]
+    public void WhenNoLineIsTerminal_TheFirstMarkedLineIsStillTheReason()
+    {
+        // The other half of the same rule, and the one that would break silently: preferring a
+        // terminal line must not stop an ordinary throttle from being reported at all.
+        var result = new ProcessResult(
+            1,
+            StdOut: string.Empty,
+            StdErr: "loading model\n429 Too Many Requests\n503 UNAVAILABLE: high demand",
+            TimedOut: false);
+
+        RateLimit.Reason(result).Should().Contain("429 Too Many Requests");
+        RateLimit.Hopeless(RateLimit.Reason(result)).Should().BeFalse();
+    }
+
     // ---------- what a failed reviewer still costs ----------
 
     [Fact]
