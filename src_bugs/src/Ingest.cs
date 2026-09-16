@@ -104,11 +104,20 @@ public static class Ingest
             return $"'{name}' is not a language this corpus holds";
         }
 
-        if (!keywords.TryGetValue(name, out var words))
-        {
-            return $"this server has no keyword list for {name}";
-        }
+        return keywords.TryGetValue(name, out var words)
+            ? Leaked(before, after, language, words)
+            : $"this server has no keyword list for {name}";
+    }
 
+    /// <summary>What the alphabet refuses in either half, or why the pair teaches nothing.</summary>
+    /// <remarks>
+    /// Split out of <see cref="Unfit"/> to stay inside the cyclomatic bound the C# doctrine sets at
+    /// four. The two are also two different questions — "is this anonymous" and "is this a change at
+    /// all" — and they read better apart than stacked.
+    /// </remarks>
+    private static string Leaked(
+        string before, string after, SourceLanguage language, IReadOnlySet<string> words)
+    {
         // BOTH halves. A pair is only as anonymous as its worse side, and checking one would be a
         // check that reads as thorough and is not.
         foreach (var skeleton in (string[])[before, after])

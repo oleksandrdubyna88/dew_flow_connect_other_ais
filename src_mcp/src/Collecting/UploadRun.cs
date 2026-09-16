@@ -50,45 +50,63 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
             total = Add(total, await OnceAsync(db, sendable, server, key, ct));
         }
 
-        Say(total.Offered == 0
-            ? "nothing to send: no kept pair is unsent"
-            : $"{total.Accepted} accepted, {total.Duplicate} already held, {total.Refused} refused");
+        Say(Summarise(total));
 
         return total;
     }
 
-    /// <summary>One request, and what it came to.</summary>
+    /// <summary>What the run came to, in one line for a person watching it.</summary>
+    private static string Summarise(UploadSummary total) =>
+        total.Offered == 0
+            ? "nothing to send: no kept pair is unsent"
+            : $"{total.Accepted} accepted, {total.Duplicate} already held, {total.Refused} refused";
+
+    /// <summary>
+    /// One request, and what it came to — with the transport's own failures separated out.
+    /// </summary>
+    /// <remarks>
+    /// The try/catch is a method of its own so that neither half exceeds the cyclomatic bound of
+    /// four the C# doctrine sets. A code round flagged the original at six; extracting the batch
+    /// loop was not enough on its own, which is what happens when the fix is applied without the
+    /// count being taken again.
+    /// </remarks>
     private async Task<UploadSummary> OnceAsync(
         RoundsDb db, IReadOnlyList<StoredPair> sendable, Uri server, string key, CancellationToken ct)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(server, "/ingest"))
-            {
-                Content = JsonContent.Create(
-                    new UploadRequest([.. sendable.Select(Wire)]),
-                    Server.ServerJsonContext.Default.UploadRequest),
-            };
-            request.Headers.Authorization = new("Bearer", key);
-
-            using var reply = await http.SendAsync(request, ct);
-            if (!reply.IsSuccessStatusCode)
-            {
-                // NOTHING is marked. A refusal of the whole request says nothing about any single
-                // pair, and marking them would lose every one of them silently.
-                return new UploadSummary(
-                    sendable.Count, Trouble: $"the server answered {(int)reply.StatusCode}");
-            }
-
-            var answer = await reply.Content.ReadFromJsonAsync(
-                Server.ServerJsonContext.Default.UploadAnswer, ct);
-
-            return Record(db, sendable, answer?.Items ?? []);
+            return await SendAsync(db, sendable, server, key, ct);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
             return new UploadSummary(sendable.Count, Trouble: e.Message);
         }
+    }
+
+    private async Task<UploadSummary> SendAsync(
+        RoundsDb db, IReadOnlyList<StoredPair> sendable, Uri server, string key, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(server, "/ingest"))
+        {
+            Content = JsonContent.Create(
+                new UploadRequest([.. sendable.Select(Wire)]),
+                Server.ServerJsonContext.Default.UploadRequest),
+        };
+        request.Headers.Authorization = new("Bearer", key);
+
+        using var reply = await http.SendAsync(request, ct);
+        if (!reply.IsSuccessStatusCode)
+        {
+            // NOTHING is marked. A refusal of the whole request says nothing about any single
+            // pair, and marking them would lose every one of them silently.
+            return new UploadSummary(
+                sendable.Count, Trouble: $"the server answered {(int)reply.StatusCode}");
+        }
+
+        var answer = await reply.Content.ReadFromJsonAsync(
+            Server.ServerJsonContext.Default.UploadAnswer, ct);
+
+        return Record(db, sendable, answer?.Items ?? []);
     }
 
     /// <summary>
@@ -155,20 +173,35 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var answer in answers)
         {
-            if (!Took.Known(answer.Took))
+            var wrong = Unrecognised(byId, seen, answer);
+            if (wrong.Length > 0)
             {
-                return $"the server said '{answer.Took}', which is not a word this client knows; "
-                       + "nothing was marked";
-            }
-
-            if (!byId.ContainsKey(answer.EntryId) || !seen.Add(answer.EntryId))
-            {
-                return $"the server answered about '{answer.EntryId}', which this client did not "
-                       + "send exactly once; nothing was marked";
+                return wrong;
             }
         }
 
         return string.Empty;
+    }
+
+    /// <summary>Why this ONE answer cannot be trusted, or empty when it can.</summary>
+    /// <remarks>
+    /// Split from <see cref="Mismatch"/> to stay inside the cyclomatic bound of four. It also
+    /// mutates <paramref name="seen"/>, which is the whole point of it: an id answered twice is as
+    /// much a contract failure as an id never sent, and only the set can tell.
+    /// </remarks>
+    private static string Unrecognised(
+        IReadOnlyDictionary<string, StoredPair> byId, HashSet<string> seen, UploadResult answer)
+    {
+        if (!Took.Known(answer.Took))
+        {
+            return $"the server said '{answer.Took}', which is not a word this client knows; "
+                   + "nothing was marked";
+        }
+
+        return byId.ContainsKey(answer.EntryId) && seen.Add(answer.EntryId)
+            ? string.Empty
+            : $"the server answered about '{answer.EntryId}', which this client did not send "
+              + "exactly once; nothing was marked";
     }
 
     private static UploadSummary Add(UploadSummary total, UploadSummary batch) =>

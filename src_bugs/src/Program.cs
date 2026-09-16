@@ -74,6 +74,19 @@ internal sealed class Program
             return 64; // EX_USAGE
         }
 
+        return await ServeAsync(args);
+    }
+
+    /// <summary>
+    /// Everything after the one-shot modes: the transport, and the two things it needs first.
+    /// </summary>
+    /// <remarks>
+    /// Its own method so that neither half exceeds the cyclomatic bound of four the C# doctrine
+    /// sets. `Main` is now three decisions — is this an admin mode, is this a mode at all, otherwise
+    /// serve — which is also the clearest statement of what this binary does.
+    /// </remarks>
+    private static async Task<int> ServeAsync(string[] args)
+    {
         var secret = Secret();
         if (secret.Length == 0)
         {
