@@ -103,11 +103,14 @@ export const PHRASE_FALLBACK_COLOUR = 'var(--vscode-textLink-foreground)';
  * hashing one name at a time, and the argument transfers here unchanged. Writing a second allocator
  * would be a second implementation of a capability that already exists.</p>
  *
- * <p><b>A phrase keeps its colour when another is added beside it.</b> A name's slot comes from a
- * hash of the name itself and the list only decides who wins a genuine collision — measured over
- * this allocator: adding a seventh phrase moved none of the first six. That is what makes the same
- * phrase the same colour in the editor and on its sidebar button, which are separate webviews
- * refreshed on their own clocks and can be one phrase apart.</p>
+ * <p><b>A phrase keeps its colour when a NON-COLLIDING phrase is added beside it.</b> A name's slot
+ * comes from a hash of the name itself, so most additions move nobody — measured: adding a seventh
+ * phrase moved none of the first six. But the list decides who wins a genuine collision, and that
+ * does happen: adding `phrase-11` to `['phrase-1','phrase-2']` moves `phrase-2`. So this is NOT
+ * subset-stable, and the cross-surface promise rests on both surfaces reading one saved list rather
+ * than on the allocator — they can differ only while one of them is stale, and only then if a
+ * collision exists. The limit is pinned by a test in `phrases.test.ts`; the alternative was measured
+ * and is worse (a per-id hash gives three phrases two colours).</p>
  *
  * <p>The five anchored VENDOR slots are offered last rather than withheld, so eight phrases get
  * eight colours and twelve get twelve; the thirteenth repeats, which is that palette's documented

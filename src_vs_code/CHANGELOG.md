@@ -9,7 +9,9 @@ you can follow it across the panel without reading. *Another client* takes a neu
 it is not a vendor and should not be dressed as one.
 **You can tell your phrases apart, and the edit form says which box is which** (#295). Every phrase
 now has its own colour on the left edge — in **Edit phrases** and on its button in the sidebar, the
-*same* colour in both, so you can find the button that belongs to the box you are looking at. And
+same colour in both once each has drawn the current list, so you can find the button that belongs to
+the box you are looking at. (Just after you add a phrase, a view that has not repainted yet can
+briefly show one of them differently.) And
 the two boxes on the edit form are labelled **Name** and **What it copies**; they had only
 placeholders, which disappear the moment a box has anything in it, which is the whole of the time.
 
