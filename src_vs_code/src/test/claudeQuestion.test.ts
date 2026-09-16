@@ -8,6 +8,7 @@ import {
   WaitingSession,
   projectDirIn,
   projectDirName,
+  SCAN_BUDGET,
   waitingIn,
   waitingQuestion,
 } from '../claudeSessions';
@@ -535,7 +536,7 @@ test('Take the question does not report silence for sessions it never read', asy
     const older = new Date(Date.now() - 60_000);
     utimesSync(join(dir, 'old.jsonl'), older, older);
 
-    const answer = await waitingQuestion(home, 'D:\\work\\app', true, '', { most: 1, withinMs: 10_000 });
+    const answer = await waitingQuestion(home, 'D:\\work\\app', true, '', { most: 1, withinMs: 10_000, mostBytes: SCAN_BUDGET.mostBytes });
 
     assert.strictEqual(answer.kind, 'failed', 'a folder that was cut short reported that nothing was waiting in it');
     assert.match(answer.kind === 'failed' ? answer.refusal : '', /newest 1 of 2/u, 'the cut is not named');

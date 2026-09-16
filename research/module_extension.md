@@ -1589,9 +1589,15 @@ worked in. **A cut is never reported as an absence**: the Asked button says *"On
 1 010 sessions in … were read, and none of them is called X"*, and *Take the question* — the reader
 that holds each file WHOLE in memory, and therefore needs the bound more — answers `failed` naming
 the cut rather than "nothing is waiting", which would be this module claiming something it did not
-look at. What the budget does NOT bound is one pathological file: the deadline is checked between
-files, because the largest session here is 21 MB and streams in about a tenth of a second, and a
-per-line clock costs more than it saves. Said out loud rather than assumed away.
+look at. **One FILE is bounded too**, by bytes: the deadline is only checked between files, so
+without a size cap a single pathological session — one on a slow mount, or one a logging bug grew to
+half a gigabyte — would overrun the whole budget inside one read and report nothing about it. Three
+reviewers across three vendors said so on one round. `mostBytes` is 64 MB against a largest real
+session of 21 MB, and a file past it is skipped and COUNTED in the cut. `waitingQuestion` also stopped
+holding each file as a whole string AND again as an array of lines — two full copies of a session
+that can be tens of megabytes — and streams into the lines instead. What is still NOT bounded is the
+number of workspace ROOTS, each walked with its own budget; named rather than fixed, because a shared
+budget would make the answer depend on which root was listed first.
 
 **A tab pins its FILE, not the name that found it.** Claude Code refines a conversation's
 `ai-title` as it goes on and the tab follows it, so a name captured when the chat opened stops
@@ -1618,11 +1624,21 @@ instead of dying with the window.
 program can edit, and `..\..\elsewhere` joined to the project directory is a file outside it that
 `access` would confirm quite happily. So the id must match the session-id shape (`isSessionId`,
 exported from `chatSource.ts` so the rule is stated once) before the disk is touched, and the
-resolved path must still be under the directory afterwards. Deliberately redundant: the shape test is
-the rule, and the containment test is what survives somebody loosening the regex without knowing why
-it is there. Both were verified by disabling each in turn — containment alone still refuses every
-traversal; with both gone, a session file belonging to another project resolves. (codex, the plan
-round, as a security finding.)
+resolved path must still be under the directory afterwards — **and where it really LEADS must be
+under it too**, because anything on the machine can drop a `<valid-uuid>.jsonl` into the project
+directory pointing at a file elsewhere, and `resolve` and `access` are both perfectly happy with it.
+Deliberately redundant: the shape test is the rule, and the containment tests are what survive
+somebody loosening the regex without knowing why it is there. Verified by disabling each in turn —
+containment alone still refuses every traversal; with both gone, a session file belonging to another
+project resolves. The link half is a PURE function (`staysInside`) tested as data, because Windows
+refuses a symlink to an unprivileged process (EPERM, measured here) and a test that builds one would
+pass by doing nothing. (codex, the plan round, as a security finding.)
+
+**The id answers from ONE root.** The walk asks every workspace root, since an id names no folder —
+and then the conversation's own filed root answers first, falling back to `pinnable`'s rule (exactly
+one root, nothing else in doubt) when the record does not name one. A UUID living in two roots is not
+a shape this data has, which is precisely why taking whichever root was listed first would be a pick
+nobody would ever see fail. (gemini, the plan round.)
 
 **Three refusals, all of them named.** Two sessions in one folder sharing a title is a refusal, never
 a pick — `oneAnswerFrom` says the same for two workspace ROOTS each holding one, which was a

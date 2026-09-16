@@ -78,7 +78,7 @@ import {
 import { LanguageCode } from './settingsShape';
 import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
-import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sessionIdOf } from './chatSource';
+import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sameRoot, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
   Asked,
@@ -540,7 +540,15 @@ async function resolveAndPin(entry: ChatEntry, mine: Thread): Promise<Asked> {
   // the name walk below is hunting a string another program rewrites underneath it, which is the
   // defect this whole plan is about. Measured on the operator's folder: 5.2 s warm against one stat.
   const byId = await findSessionById(mine.source);
-  const kept = byId.find((one) => one.found.kind === 'one');
+  // ONE root, on the same terms the name walk uses. A UUID naming a session in two roots at once is
+  // not a shape this data has — which is exactly why answering with whichever root was listed first
+  // would be a pick nobody would ever see fail. The conversation's OWN filed root answers first when
+  // it is one of them, since that is where this session was found the day it was pinned. (gemini,
+  // the plan round.)
+  const own = byId.find((one) => one.found.kind === 'one' && sameRoot(one.folder, mine.workspace, NAMES_ARE_CASE_BLIND));
+  const kept = own ?? (pinnable(byId.map((one) => one.found))
+    ? byId.find((one) => one.found.kind === 'one')
+    : undefined);
   if (kept !== undefined) {
     // Nothing is written: the id is already on the record, and the path is deliberately not.
     mine.sessionFile = (kept.found as Extract<Found, { kind: 'one' }>).file;

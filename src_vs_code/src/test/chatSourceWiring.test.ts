@@ -60,11 +60,26 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
   // checked against the store's origin pair.
   assert.equal(command.split('adoptFound(').length - 1, 3, 'a caller was added to or removed from the one road in');
   assert.match(
-    command.slice(command.indexOf('async function resolveAndPin('), command.indexOf('async function resolveAndPin(') + 1_800),
+    bodyOf(command, 'async function resolveAndPin('),
     /adoptFound\(entry, mine,/u,
     'a press that resolves an unpinned tab keeps the file alone, so what it found dies at the next reload',
   );
 });
+
+/**
+ * One function's text, from its opening line to the next top-level declaration.
+ *
+ * <p>A fixed width was what these assertions used, and a comment added inside a function pushed the
+ * line being asserted past the end of the slice — a test that went red for the length of a paragraph
+ * rather than for anything about the code. The end is found rather than guessed.</p>
+ */
+const bodyOf = (text: string, opening: string): string => {
+  const at = text.indexOf(opening);
+  assert.ok(at >= 0, `there is no ${opening} to read`);
+  const after = text.indexOf('\n}', at);
+
+  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
+};
 
 test('the Asked button asks the session ID before it asks the name', () => {
   // The identity was on the record all along and nothing used it: a reload empties the remembered
@@ -72,24 +87,25 @@ test('the Asked button asks the session ID before it asks the name', () => {
   // IS the file's name, so the answer is one directory entry rather than every transcript read —
   // 5.2 s warm on the operator's own folder, measured.
   const command = source('chatCommand.ts');
-  const resolve = command.slice(command.indexOf('async function resolveAndPin('), command.indexOf('async function resolveAndPin(') + 1_800);
+  const resolve = bodyOf(command, 'async function resolveAndPin(');
 
   assert.ok(
     resolve.indexOf('findSessionById(') > 0 && resolve.indexOf('findSessionById(') < resolve.indexOf('findSessionIn('),
     'the name is asked before the id, so a renamed conversation is hunted by a string that is already stale',
   );
+  // ONE root answers, on the same terms the name walk uses — and the conversation's own filed root
+  // answers first, since that is where the session was found the day it was pinned.
+  assert.match(resolve, /sameRoot\(one\.folder, mine\.workspace,/u,
+    'the conversation’s own root has no say in which session its id names');
+  assert.match(resolve, /pinnable\(byId\.map/u,
+    'two roots answering to one id would be picked between rather than refused');
+
+  const byId = bodyOf(command, 'async function findSessionById(');
   // And the id is looked for in EVERY root, as the name is: a session's id names no folder.
-  assert.match(
-    command.slice(command.indexOf('async function findSessionById('), command.indexOf('async function findSessionById(') + 800),
-    /everyFolder\(/u,
-    'the id is looked for in one root only',
-  );
+  assert.match(byId, /everyFolder\(/u, 'the id is looked for in one root only');
   // A source that is not a Claude session has no id to look for, and says so by finding nothing.
-  assert.match(
-    command.slice(command.indexOf('async function findSessionById('), command.indexOf('async function findSessionById(') + 800),
-    /if \(source\.kind !== 'claude'\) \{/u,
-    'a file-opened conversation is asked for a session id it cannot have',
-  );
+  assert.match(byId, /if \(source\.kind !== 'claude'\) \{/u,
+    'a file-opened conversation is asked for a session id it cannot have');
 });
 
 test('the write queue is ONE queue, so the pin cannot race the page', () => {
