@@ -104,6 +104,30 @@ jobs:
           printf '%s\n' "$BUGS_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      # WHICH key this run is holding — derived from the private half, so it is a PUBLIC key and
+      # safe to print. Without it the first deployment failed as a bare
+      # `Permission denied (publickey,password)`, which is the same message for five different
+      # causes: a key that is not the pair of the one the host trusts, a key that did not survive
+      # being pasted into the secret box, the wrong user, loose modes on the host's `.ssh`, and an
+      # `authorized_keys` line the host cannot parse. The host's side of that question is one
+      # `ssh-keygen -lf ~coai-bugs-deploy/.ssh/authorized_keys`; this is the other side, and
+      # comparing two fingerprints answers it in a second.
+      #
+      # It fails the run when the private half cannot be read at all, because "cannot be read" is a
+      # malformed secret and that is worth saying plainly rather than letting ssh report it as a
+      # refusal by the server.
+      - name: Which key this run holds
+        run: |
+          set -euo pipefail
+          ssh-keygen -y -f ~/.ssh/id_bugs > ~/.ssh/id_bugs.pub 2>/dev/null || {
+            echo "::error::BUGS_DEPLOY_KEY could not be read as an OpenSSH private key. It is either"
+            echo "::error::truncated, re-wrapped, or the wrong kind of value. Re-paste the WHOLE file,"
+            echo "::error::including the BEGIN and END lines and the trailing newline."
+            exit 1
+          }
+          echo "this run offers: $(ssh-keygen -lf ~/.ssh/id_bugs.pub)"
+          echo "the host must list the same fingerprint in ~coai-bugs-deploy/.ssh/authorized_keys"
+
       # The server's own secret, delivered from the secret store rather than typed on the box. It
       # reaches the host over ssh on STDIN — never as an argument, which `ps` and the auth log see.
       - name: The server's secret, from the secret store
