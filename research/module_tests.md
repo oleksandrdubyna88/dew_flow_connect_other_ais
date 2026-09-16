@@ -273,6 +273,27 @@ between the halves is exercised against the **real binary's** output, and `parse
 against an OLD server's answer (no `lastRun` key) as well as a new one. That pairing is the lesson
 of every wire field this product has shipped out of step.
 
+## The review page's suites (2026-09-16)
+
+| Suite | Drives | Catches |
+|---|---|---|
+| `ThePairsThemselvesTests` | real SQLite | an upsert that forgets a decision; a pair written for a claim that lost |
+| `WhatIsStoredIsAnonymousTests` | the real normaliser, then the COLUMN | a skeleton computed correctly and stored wrong |
+| `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success |
+| `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
+| `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
+
+**Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
+source text, and story 4 earned that ruling: a model picker matched every regex written about it
+while being wired to nothing. The boxes the test drives are built from the ids the page ACTUALLY
+rendered — a hand-written fixture handed to the shim would pass with no checkbox on the page at all,
+which is the mistake its first version made.
+
+**What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
+end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
+pairs. And the ranking has no transport, so `Ranking.Order` is exercised and nothing produces a real
+reply for it to order.
+
 ## What this does NOT prove
 
 The most valuable section, and the first one people drop.

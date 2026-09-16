@@ -6054,3 +6054,32 @@ panel's own constant is the fallback for a server too old to send one.
 `lastRun.collected`, a batch delta: run one collects ten pairs, run two takes the remaining
 candidates and legitimately skips every one, and the button went dark over ten pairs sitting in the
 database. `BugFunnel.collected` is the count across every run there has ever been.
+
+## The review page: deciding what the corpus keeps (2026-09-16)
+
+A webview panel of its own rather than a section, on `RoundsLogPanel`'s precedent — a person reading
+two hundred before/after pairs is reading, and a sidebar column is not where reading happens. Each
+row carries the method, what the reviewers said the defect WAS, and the two skeletons side by side.
+
+**The tick-boxes are `roundsLog.ts`'s, not a new pattern.** The plan called this the first
+multi-select in the codebase and a plan reviewer corrected it: that file already has a `.pick` column
+and a `pickall` box, and `PROJECT.md` records what they cost — a tick branch needs an early `return`
+or the control also opens the row it sits in, and no source assertion can see a missing one.
+
+**The page never paints a decision itself.** It posts what was pressed; the extension writes it; the
+page is redrawn from what the database then says. A page that congratulates itself and is wrong is
+the failure story 4's Collect button had when it was drawn from a flag instead of a row.
+
+**A failed read is not an empty corpus.** `readPairs` and `writeKeep` answer a tagged result, and
+the page renders the two differently: *nothing has been collected yet* sends a person to press
+Collect, while *the pairs could not be read* sends them somewhere else entirely. The first version
+returned `[]` for both and four reviewers said so — the same distinction `BugCorpus.read` already
+carried, missing from its neighbour in the same change.
+
+**A decision reaches the sidebar.** The Bugz section counts what is still waiting, and it is a
+different window onto the same database; without a callback the count sat stale until something
+unrelated repainted the panel.
+
+**The server's output is validated at the boundary**, field by field, before a row is rendered: a
+`JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
+reach the page as `undefined` in a cell and as an invalid id in the decision posted back.

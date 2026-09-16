@@ -20,7 +20,17 @@ public sealed record KeepAsk(long FindingId = 0, int Keep = Core.Collecting.Keep
 /// pairs is two hundred process launches otherwise, which is the shape `--findings-many` exists to
 /// have ended.
 /// </remarks>
-public sealed record KeepRequest(IReadOnlyList<KeepAsk>? Items = null);
+public sealed record KeepRequest(IReadOnlyList<KeepAsk>? Items = null)
+{
+    /// <summary>The decisions, or nothing at all when the document did not carry the field.</summary>
+    /// <remarks>
+    /// Nullable ON PURPOSE and read through a pattern match at the one boundary: a client that omits
+    /// `items` has sent a malformed request, and that must be told apart from one that explicitly sent
+    /// an empty array. Normalising the absence to `[]` here would make a misspelled field look like a
+    /// successful no-op — which it did, and a reviewer caught it. (Code round, codex.)
+    /// </remarks>
+    public IReadOnlyList<KeepAsk>? Items { get; init; } = Items;
+}
 
 /// <summary>How many rows a batch actually decided.</summary>
 /// <remarks>

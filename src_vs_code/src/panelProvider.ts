@@ -2189,6 +2189,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       read: () => readPairs(server.fsPath),
       decide: (ids, keep) => writeKeep(
         server.fsPath, ids, keep, keysFileIn(this.context.globalStorageUri.fsPath)),
+      // A decision changes how many pairs the Bugz section says are waiting, and that section is a
+      // different window onto the same database. Without this the count sat stale until something
+      // unrelated repainted the panel. (Code round, gemini.)
+      changed: async () => {
+        this.bugzAt = 0;
+        await this.render();
+      },
     });
 
     await this.review.show();

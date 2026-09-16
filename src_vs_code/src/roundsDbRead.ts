@@ -357,39 +357,99 @@ export async function readBugs(
 }
 
 /**
+ * What a pair read came to.
+ *
+ * <p><b>"Nothing was collected" and "the read failed" are different sentences</b>, and the first
+ * version of this returned `[]` for both. Four reviewers said so, and they were right to: the page
+ * would then say "Nothing has been collected yet" over a corpus of two hundred pairs whose server
+ * had merely timed out, and the person would go and collect again for nothing. `BugCorpus` already
+ * carries exactly this distinction as its `read` flag; this did not, in the same change.</p>
+ */
+export type PairsRead =
+  | { readonly ok: true; readonly pairs: readonly ReviewPair[] }
+  | { readonly ok: false; readonly why: string };
+
+/** What a decision write came to. */
+export type KeepWrite =
+  | { readonly ok: true; readonly decided: number }
+  | { readonly ok: false; readonly why: string };
+
+/**
+ * Every field the page renders, checked before it is rendered.
+ *
+ * <p>`JSON.parse(...) as T` is a promise, not a check. The server's output is external data by the
+ * coding-style rule, and a malformed element would otherwise reach the page as `undefined` in a
+ * table cell and as an invalid id in the decision it posts back.</p>
+ */
+function pairOf(raw: unknown): ReviewPair | undefined {
+  if (raw === null || typeof raw !== 'object') {
+    return undefined;
+  }
+
+  const one = raw as Record<string, unknown>;
+  const text = (key: string): string => (typeof one[key] === 'string' ? one[key] as string : '');
+  if (typeof one['findingId'] !== 'number' || typeof one['keep'] !== 'number') {
+    return undefined;
+  }
+
+  return {
+    findingId: one['findingId'] as number,
+    symbolName: text('symbolName'),
+    language: text('language'),
+    skeletonBefore: text('skeletonBefore'),
+    skeletonAfter: text('skeletonAfter'),
+    keep: one['keep'] as number,
+    severity: text('severity'),
+    category: text('category'),
+    title: text('title'),
+  };
+}
+
+/**
  * The collected pairs, as the server has them.
  *
- * <p>An empty list on anything going wrong, and that is right HERE where it would be wrong for
- * findings: a page with no rows says "nothing has been collected yet", which is the honest reading
- * of both an empty corpus and a server that could not answer. There is no claim in it.</p>
+ * <p>A LIMIT travels, because the page must not silently show the first page of a corpus as though
+ * it were all of it — the mode has always taken one and this did not pass it.</p>
  */
 export async function readPairs(
   executable: string,
+  limit: number = MAX_LIMIT,
   run: Run = serverRun(executable),
-): Promise<readonly ReviewPair[]> {
-  const { code, output } = await run(['--pairs-json'], CAP_MS);
+): Promise<PairsRead> {
+  const { code, output } = await run(['--pairs-json', '--limit', String(limit)], CAP_MS);
   if (code !== 0) {
-    return [];
+    return { ok: false, why: output.trim() || `the server exited ${code}` };
   }
 
   try {
-    const raw = JSON.parse(output) as { items?: readonly ReviewPair[] };
+    const raw = JSON.parse(output) as { items?: unknown };
+    if (!Array.isArray(raw?.items)) {
+      return { ok: false, why: 'the server answered something this panel does not understand' };
+    }
 
-    return Array.isArray(raw?.items) ? raw.items : [];
+    const pairs = raw.items.map(pairOf).filter((one): one is ReviewPair => one !== undefined);
+    if (pairs.length !== raw.items.length) {
+      return {
+        ok: false,
+        why: `${raw.items.length - pairs.length} of ${raw.items.length} pairs were malformed`,
+      };
+    }
+
+    return { ok: true, pairs };
   } catch {
-    return [];
+    return { ok: false, why: 'the server answered something that is not JSON' };
   }
 }
 
 /**
  * Writes a batch of decisions, and answers how many rows were actually decided.
  *
- * <p><b>A file in, not one spawn per decision.</b> A review of two hundred pairs is two hundred
- * process launches otherwise — the shape `--findings-many` exists to have ended — and the same
- * `keysFileIn` helper writes it, so the leak behaviour is the one already reasoned about there.</p>
+ * <p><b>A file in, not one spawn per decision</b>, on `--findings-many`'s precedent: a review of
+ * two hundred pairs is two hundred process launches otherwise.</p>
  *
- * <p>The COUNT, not a boolean: a caller that sent fifty and hears "forty-nine" has learned
- * something, and the page says so rather than redrawing as though everything landed.</p>
+ * <p>A FAILURE is not zero decisions. "Nothing was written because the pairs are gone" and "nothing
+ * was written because the server could not run" send a person to two different places, and the
+ * panel said the first for both.</p>
  */
 export async function writeKeep(
   executable: string,
@@ -397,21 +457,23 @@ export async function writeKeep(
   keep: number,
   withFile: WithKeysFile,
   run: Run = serverRun(executable),
-): Promise<number> {
+): Promise<KeepWrite> {
   const asked = JSON.stringify({ items: ids.map((findingId) => ({ findingId, keep })) });
 
   return withFile(asked, async (file) => {
     const { code, output } = await run(['--pairs-keep', '--in', file], CAP_MS);
     if (code !== 0) {
-      return 0;
+      return { ok: false as const, why: output.trim() || `the server exited ${code}` };
     }
 
     try {
-      const raw = JSON.parse(output) as { decided?: number };
+      const raw = JSON.parse(output) as { decided?: unknown };
 
-      return typeof raw?.decided === 'number' ? raw.decided : 0;
+      return typeof raw?.decided === 'number'
+        ? { ok: true as const, decided: raw.decided }
+        : { ok: false as const, why: 'the server did not say how many decisions it wrote' };
     } catch {
-      return 0;
+      return { ok: false as const, why: 'the server answered something that is not JSON' };
     }
   });
 }

@@ -1129,6 +1129,50 @@ were decided.
 **Kept forever.** ~400 bytes a run, about one run a day: 150 KB a year beside a database already
 megabytes of rounds and findings. Deleting a run would orphan every finding naming it.
 
+### The pairs themselves (`collect_pairs`, 2026-09-16)
+
+The collector computed both skeletons and threw them away. It has to compute them — comparing them
+is how it decides the method changed at all — so what shipped after story 3 was a corpus of
+**pointers**: `(repo_path, head_sha, fix_sha, file, line)`, with not even the symbol name kept, so
+rebuilding a pair meant a git read, a locate, a normalise, a second git read and a second normalise,
+per candidate, at review time AND again at upload time.
+
+**The pair is written in the SAME transaction as its outcome.** A kill between two separate writes
+would leave a finding saying `collected` with nothing to show for it, which is the one disagreement
+these two writes exist to make impossible.
+
+**`--all` rewrites the pair and does not touch `keep`.** The column is in neither the insert list
+nor the `DO UPDATE SET` list, so SQLite leaves it. This is the sharpest thing in the story: a person
+reviews two hundred pairs, reruns `--all` for a repaired walk, and an upsert that touched `keep`
+would take every decision back to `-1` silently. `0` and `1` are BOTH decisions, so a guard written
+`WHERE keep = -1` would preserve the kept rows and quietly un-drop the dropped ones — and a code
+round then produced six findings insisting the opposite, whose suggested fix (*add `keep` to the
+ON CONFLICT update list*) would have introduced exactly the defect they described.
+
+#### What is anonymous here, said precisely
+
+The two **skeletons** carry the zero-knowledge guarantee. The **row** does not: `symbol_name` is a
+name, and `finding_id` joins straight back to the repository path, the commit, the file and the
+line. The plan first claimed "every stored pair passes the zero-knowledge check" and a reviewer
+refused it.
+
+It adds no new exposure where it sits — `coai.db` already holds all four, and the reviewers'
+un-anonymised prose besides. **The boundary is the upload**, and story 6 sends the skeletons and the
+language and nothing else. `WhatIsStoredIsAnonymousTests` asserts the property over the COLUMN, read
+back out of SQLite rather than compared to what was passed in, because a skeleton can be computed
+correctly and stored wrong.
+
+#### Two modes, and neither exits 64
+
+`--pairs-json [--limit N]` answers the pairs; `--pairs-keep --in <decisions.json>` writes a batch of
+keep/drop decisions. A **file**, on `--findings-many`'s precedent: a review of two hundred pairs is
+two hundred process launches otherwise.
+
+A request fault is **65**, never 64 — 64 means *this binary is too old for that mode* and sends the
+caller down a fallback, so a fault wearing it hides behind a successful-looking answer. A document
+with no `items` list is a fault; `{"items": []}` is somebody deciding about nothing, which is fine.
+The difference is the one a stale or misspelled file falls through.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the

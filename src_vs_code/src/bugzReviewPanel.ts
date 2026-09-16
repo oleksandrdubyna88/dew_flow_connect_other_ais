@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 
-import { ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { KeepWrite, PairsRead } from './roundsDbRead';
+
+import { reviewPageHtml } from './bugzReviewPage';
 
 /**
  * The window the review page lives in.
@@ -15,11 +17,20 @@ import { ReviewPair, reviewPageHtml } from './bugzReviewPage';
  * story 4's Collect button had, when it was drawn from a flag instead of from a row.</p>
  */
 export interface ReviewHooks {
-  /** The pairs as the server has them now. */
-  readonly read: () => Promise<readonly ReviewPair[]>;
+  /** The pairs as the server has them now, or why it could not say. */
+  readonly read: () => Promise<PairsRead>;
 
-  /** Writes a batch of decisions and answers how many rows it actually decided. */
-  readonly decide: (ids: readonly number[], keep: number) => Promise<number>;
+  /** Writes a batch of decisions, or says why it could not. */
+  readonly decide: (ids: readonly number[], keep: number) => Promise<KeepWrite>;
+
+  /**
+   * Something was decided.
+   *
+   * <p>The sidebar shows how many pairs are still waiting, and a decision made HERE changed that.
+   * Without this the count sat stale until something unrelated repainted the panel — the review
+   * window and the section were reading one database and telling two stories. (Code round, gemini.)</p>
+   */
+  readonly changed: () => Promise<void>;
 }
 
 export class BugzReviewPanel {
@@ -73,16 +84,19 @@ export class BugzReviewPanel {
    */
   private queue(ids: readonly number[], keep: number): void {
     this.inFlight = this.inFlight.then(async () => {
-      const decided = await this.hooks.decide(ids, keep);
-      if (decided !== ids.length) {
-        // Said out loud rather than swallowed: a decision that did not land is the one thing a
-        // person cannot see from a page that redrew itself successfully.
+      const written = await this.hooks.decide(ids, keep);
+      if (!written.ok) {
+        // A FAILURE, not "none of them existed". The two send a person to different places, and
+        // saying the wrong one sends them to collect again for nothing. (Code round, codex.)
+        await vscode.window.showErrorMessage(`The decision could not be saved: ${written.why}`);
+      } else if (written.decided !== ids.length) {
         await vscode.window.showWarningMessage(
-          `${decided} of ${ids.length} decisions were written. The rest name pairs this database `
-          + 'does not have — collect again and they will come back.');
+          `${written.decided} of ${ids.length} decisions were written. The rest name pairs this `
+          + 'database does not have — collect again and they will come back.');
       }
 
       await this.draw();
+      await this.hooks.changed();
     }).catch(async (wrong: unknown) => {
       await vscode.window.showErrorMessage(`The decision could not be saved: ${String(wrong)}`);
       await this.draw();
@@ -95,14 +109,18 @@ export class BugzReviewPanel {
       return;
     }
 
-    const pairs = await this.hooks.read();
+    const answer = await this.hooks.read();
     if (this.panel === undefined) {
       // Disposed while the server was being asked. Painting into it now is the `Webview is
       // disposed` this repository has already been caught by once.
       return;
     }
 
-    open.webview.html = reviewPageHtml(pairs, nonce());
+    // A read that FAILED is not an empty corpus. Rendering the empty page for it would tell a
+    // person their two hundred pairs are gone because a process timed out. (Code round, codex.)
+    open.webview.html = answer.ok
+      ? reviewPageHtml(answer.pairs, nonce())
+      : reviewPageHtml([], nonce(), answer.why);
   }
 }
 

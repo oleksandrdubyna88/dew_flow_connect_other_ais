@@ -135,12 +135,17 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
     /// <para>The collector computes both skeletons — comparing them is how it decides the method
     /// changed at all — and until story 5 it threw them away, leaving a corpus of pointers that the
     /// review page and the upload would each have had to recompute from git.</para>
-    /// <para><b>Only a COLLECTED outcome has one.</b> A skip has no after; a failure has nothing
+    /// <para><b>Only a COLLECTED outcome has one, and EVERY collected outcome has one.</b> A skip has
+    /// no after; a failure has nothing
     /// anybody should keep. Returning null for those is what keeps the table exactly as long as the
     /// list of collected findings.</para>
+    /// <para>It used to require a non-empty after-skeleton as well, which sounds careful and is not:
+    /// a collected outcome whose skeleton came back empty is a defect in the normaliser, and storing
+    /// nothing for it would hide that as a finding the review page simply never shows. The outcome
+    /// says collected, so a pair is written and the emptiness is visible. (Code round, codex.)</para>
     /// </remarks>
     private static CollectedPair? Pair(CollectOutcome outcome) =>
-        outcome.State is CollectState.Collected && outcome.SkeletonAfter.Length > 0
+        outcome.State is CollectState.Collected
             ? new CollectedPair(
                 outcome.SymbolName, Language(outcome), outcome.SkeletonBefore, outcome.SkeletonAfter)
             : null;
