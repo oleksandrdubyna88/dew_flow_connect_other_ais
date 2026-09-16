@@ -13,18 +13,18 @@ namespace CoaiMcp.Tests;
 /// question can be handed the same answer, and there is no atomic hand-off from a probe socket to an
 /// <see cref="HttpListener"/> — so a better probe is not the cure.
 /// </para>
-/// <para><b>What it cost.</b> `mcp-v0.25.0`, 2026-09-15 19:03 UTC. The linux-x64 leg of the release
+/// <para><b>What it cost.</b> mcp-v0.25.0, 2026-09-15 19:03 UTC. The linux-x64 leg of the release
 /// matrix failed in
 /// <c>RemoteShimScenarioTests.WithoutATokenItRefusesBeforeItAsksAnybody (1ms)</c> with
 /// <c>System.Net.HttpListenerException : Address already in use</c> — thrown out of the fixture's
 /// <c>InitializeAsync</c>, before the test it is named after ran a line, which is why the sentence
 /// blames a test that has nothing to do with tokens. Five of six legs passed. One missing leg leaves
-/// the release short a platform, and a release that is short a platform is never published: 0.25.0
-/// sat as a DRAFT with ten assets instead of twelve while the binaries in it were correct.
+/// the release short a platform, and a release short a platform is never published: 0.25.0 sat as a
+/// DRAFT with ten assets instead of twelve while the binaries in it were correct.
 /// </para>
 /// <para>So a lost port is treated as ordinary and the next one is taken. Only a whole run of
-/// candidates disappearing is reported, because that is a machine that is out of ports rather than a
-/// race that was lost — and the two want different cures, so the message says which one it saw.
+/// candidates disappearing is reported, because that is a machine out of ports rather than a race,
+/// and the two want different cures — so the message says which one it saw.
 /// </para>
 /// </remarks>
 internal static class LoopbackStub
@@ -39,35 +39,59 @@ internal static class LoopbackStub
     /// </remarks>
     internal const int Attempts = 10;
 
+    /// <summary>
+    /// Every way a platform says that address is taken, measured rather than assumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>This set is the whole reason the catch below is narrow. Retrying on ANY
+    /// <see cref="HttpListenerException"/> would turn an access-denied prefix or a malformed
+    /// registration into ten attempts and a sentence blaming ports, which is a worse failure than
+    /// the one being fixed: it is wrong AND it takes ten times as long to be wrong.</para>
+    /// <para>Measured on this family's own platforms, with the port held two different ways —
+    /// because the way it is held changes the code, which is not obvious and is why this list is
+    /// longer than one entry:</para>
+    /// <list type="table">
+    ///   <item><description>Windows, held by another HttpListener: 183, ERROR_ALREADY_EXISTS</description></item>
+    ///   <item><description>Windows, held by an ordinary socket: 32, ERROR_SHARING_VIOLATION</description></item>
+    ///   <item><description>Linux, held by another HttpListener: 400, the managed listener's own registration clash</description></item>
+    ///   <item><description>Linux, held by an ordinary socket: 98, EADDRINUSE — this is the one that failed CI</description></item>
+    /// </list>
+    /// <para>48 (BSD and macOS EADDRINUSE) and 10048 (WSAEADDRINUSE) are carried on the same terms
+    /// but were NOT measured here — there is no macOS on this machine, and the Winsock code did not
+    /// surface in either Windows case. They are unambiguous spellings of the same condition, so
+    /// including them cannot widen the catch to something else; and if a platform ever answers with a
+    /// code that is not in this list, the retry test goes red on that leg and names it, which is the
+    /// intended way to find out.</para>
+    /// </remarks>
+    private static readonly HashSet<int> PortIsTaken = [32, 48, 98, 183, 400, 10048];
+
     /// <summary>A stub on a port nobody else holds.</summary>
     internal static (HttpListener Server, string Prefix) Start() => Start(FreePorts(), Attempts);
 
     /// <summary>
-    /// The same, over a caller's candidates — which is what makes the race testable, since a lost
-    /// port cannot be arranged through the OS on demand.
+    /// The same, over a caller's candidates and a caller's way of binding one — which is what makes
+    /// both halves testable, since neither a lost port nor a denied prefix can be arranged through
+    /// the OS on demand.
     /// </summary>
-    internal static (HttpListener Server, string Prefix) Start(IEnumerable<int> candidates, int attempts)
+    /// <param name="candidates">Ports to try, in order.</param>
+    /// <param name="attempts">How many may be lost before this is reported as a failure.</param>
+    /// <param name="bind">Starts a listener on one prefix; the real one when omitted.</param>
+    internal static (HttpListener Server, string Prefix) Start(
+        IEnumerable<int> candidates, int attempts, Func<string, HttpListener>? bind = null)
     {
+        bind ??= Bind;
         var lost = new List<int>();
 
         foreach (var port in candidates)
         {
             var prefix = $"http://127.0.0.1:{port}/";
-            var server = new HttpListener();
-            server.Prefixes.Add(prefix);
 
             try
             {
-                server.Start();
-
-                return (server, prefix);
+                return (bind(prefix), prefix);
             }
-            catch (Exception e) when (e is HttpListenerException or SocketException)
+            catch (Exception e) when (IsTaken(e))
             {
-                // The managed listener reports this as HttpListenerException on Linux and Windows
-                // both; SocketException is caught because the bind underneath it is a socket and a
-                // platform that lets one through would otherwise crash the whole class.
-                server.Close();
                 lost.Add(port);
 
                 if (lost.Count >= attempts)
@@ -78,6 +102,39 @@ internal static class LoopbackStub
         }
 
         throw new InvalidOperationException(NoPortHeld(lost));
+    }
+
+    /// <summary>
+    /// Whether this failure is the port being gone — and NOT anything else, which is rethrown
+    /// unchanged so it arrives as itself rather than as a story about ports.
+    /// </summary>
+    private static bool IsTaken(Exception e) => e switch
+    {
+        HttpListenerException h => PortIsTaken.Contains(h.ErrorCode),
+        SocketException s => s.SocketErrorCode == SocketError.AddressAlreadyInUse,
+        _ => false,
+    };
+
+    /// <summary>A started listener, or whatever went wrong trying.</summary>
+    private static HttpListener Bind(string prefix)
+    {
+        var server = new HttpListener();
+        server.Prefixes.Add(prefix);
+
+        try
+        {
+            server.Start();
+        }
+        catch
+        {
+            // A listener that did not start still holds a registration and a handle, and ten of
+            // those over a retry loop is a leak that makes the next attempt fail for a new reason.
+            server.Close();
+
+            throw;
+        }
+
+        return server;
     }
 
     /// <summary>

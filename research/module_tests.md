@@ -100,6 +100,22 @@ unit test was green. `RemoteShimScenarioTests` runs the real binary end to end, 
 cancellation paths: the shim reaching its own deadline (it cancels and says so), and the shim being
 KILLED (it leaves a claim the parent acts on).
 
+**The socket the stub sits on is part of that harness, and it is the reason a correct release did not
+ship.** The fixture asked the OS for a free port and then let go of it, which is a race nothing owns:
+on 2026-09-15 the `linux-x64` leg lost it, the fixture threw out of `InitializeAsync`, xUnit blamed
+whichever test was first, and `mcp-v0.25.0` stayed a DRAFT carrying ten assets instead of twelve.
+`LoopbackStub` takes the next candidate instead, bounded at ten, and `AStubSurvivesALostPortTests`
+covers three flows: a lost port is retried; the single-attempt behaviour that shipped fails on the
+same input; a failure that is NOT a taken port arrives as itself rather than as a story about ports.
+
+What that simulation does NOT prove: the collision is CONSTRUCTED, by holding the port with an
+ordinary socket or by handing the stub a binder that throws. Nothing here reproduces the ambient
+contention of a loaded runner, and nothing here can — so the retry is proved, and the frequency it
+was written for is not. The set of error codes it treats as a taken port was measured on two of the
+six release platforms (Windows 32/183, Linux 98/400, each held both ways); macOS's 48 and Winsock's
+10048 are carried unmeasured. A platform answering with a code outside that set does not degrade
+quietly — it reddens the retry test on that leg, by name.
+
 ### The extension's flows
 
 The VS Code commands in `src_vs_code/package.json` (`contributes.commands`) are the extension's
