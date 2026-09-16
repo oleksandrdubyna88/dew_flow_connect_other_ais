@@ -6011,3 +6011,35 @@ than as deliberation.
 finishing to its last decision*. For an ordinary round that is the deciding; for a round somebody
 came back to after lunch it counts the lunch. Saying so is cheaper than a measurement that quietly
 means two things.
+
+## Bugz: a section that says what a collector run is doing (2026-09-16)
+
+One section, four controls: a model picker, **Collect**, **Review bugs** (story 5's page, disabled
+until a run has collected something) and the ingest server's address.
+
+**Nothing in the panel holds the run's state.** The run writes itself to `coai.db` before it starts
+and again when it ends, and the section renders that row — so closing the window, pressing F5 or
+hiding the panel changes what is *displayed* and never what is true. A `_busy` flag on the provider
+would die with the view, which is the failure the durable-status rule is written against. The panel
+owns no SQLite: `--bugs-json` grew a `lastRun` object rather than a second mode, so one spawn
+answers both questions.
+
+**The section holds no free-text control, and that is load-bearing.** It must be in `staticKey` or
+the Collect button can never repaint while a run happens; and a section that IS in `staticKey` and
+holds a text box is rebuilt under the caret on every keystroke — the defect that turned the chat
+section's prompt textarea into a picker. There is a third way (the consultant prompt is a textarea
+held by `focusin` until focus leaves), so this is a **choice** rather than the only option: the
+server address is asked for with `vscode.window.showInputBox` behind a button, exactly as
+`addTeamServer` and `customConsultant` already ask for theirs, and its validator refuses while the
+box is still open. `bugzSection.test.ts` asserts the section contains no `<input>` or `<textarea>`,
+so a later edit that adds one fails rather than silently reintroducing the flicker.
+
+**The picker cannot offer what the collector will refuse.** The allowlist is enforced in
+`RankingModels` on the server side; `RANKING_VENDORS` in `bugzView.ts` exists only so the dropdown
+does not display a model that always fails. If the two ever disagree the collector wins and the
+person sees its refusal — which is the right way round, but a picker offering a refusal is a bug in
+the view.
+
+**An older server sends no `lastRun`.** That means *no run has ever started*, never *unavailable*;
+these two halves have shipped out of step before, so `parseBugs` maps the absent key onto the same
+empty shape an empty id means.

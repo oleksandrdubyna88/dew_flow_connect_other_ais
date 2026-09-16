@@ -167,4 +167,31 @@ public sealed class ZeroKnowledgeTests
 
         throw new DirectoryNotFoundException($"no repository root above {AppContext.BaseDirectory}");
     }
+
+    /// <summary>A regex is a literal, and what people put in one is the point.</summary>
+    /// <remarks>
+    /// <para>It passed through VERBATIM until 2026-09-16 — pattern and flags — so a method matching
+    /// an internal hostname shipped that hostname in its skeleton. The property test found it only
+    /// because a new file in this repository happened to use `/&amp;/g`, and what it reported was the
+    /// stray `g`: the flag was a bare word, while the pattern beside it was not even suspected.</para>
+    /// <para>This is the case that would have caught it directly, and it is deliberately a pattern
+    /// nobody could mistake for harmless.</para>
+    /// </remarks>
+    [Fact]
+    public void ARegexIsBlanked_PatternAndFlags()
+    {
+        var source = """
+            function reach(url) {
+              return /api\.internal\.acme-corp\.example/gi.test(url);
+            }
+            """;
+
+        var skeleton = new TreeSitterNormalizer().Normalise(SourceLanguage.JavaScript, source);
+
+        skeleton.Should().NotContain("acme", "a hostname in a pattern is a hostname");
+        skeleton.Should().NotContain("internal");
+        skeleton.Should().NotContain("gi", "the flags are part of the literal too");
+        Skeleton.Leaks(skeleton, SourceLanguage.JavaScript, new TreeSitterNormalizer().KeywordsOf(SourceLanguage.JavaScript))
+            .Should().BeEmpty();
+    }
 }

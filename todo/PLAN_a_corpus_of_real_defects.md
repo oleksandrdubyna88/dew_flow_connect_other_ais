@@ -264,9 +264,9 @@ schema — retrofitting it after the index is live means re-auditing everything 
 
 **Story 4 reuses, and these are verified:** the model list is `modelsFor` (`src_vs_code/src/models.ts:97`)
 with `modelsProvenance` (`:242`) — not consultant-specific. The two-select row shape is
-`consultantBody` (`src_vs_code/src/consultantView.ts:30`); the settings shape is `consultSettingsFrom`
+`consultantBody` (`src_vs_code/src/consultantView.ts:112`); the settings shape is `consultSettingsFrom`
 (`src_vs_code/src/consultSettings.ts:194`) and the runtime filter beside it (`:118`). A section is one
-line at `section()` (`src_vs_code/src/panelView.ts:708`) **plus a `staticKey` field** (`:2450`) or it
+line at `section()` (`src_vs_code/src/panelView.ts:735`) **plus a `staticKey` field** (`:2626`) or it
 can never repaint to reveal the Review button. Story 5's surface is `RoundsLogPanel`
 (`src_vs_code/src/roundsLogPanel.ts:61`). The sidecar is spawned through `IProcessLauncher`
 (`src_mcp/runners/Processes/ProcessLauncher.cs:129`), file-in/file-out and batched one spawn per run,
@@ -282,56 +282,142 @@ the returned rank.
 
 ### Story 4 — the `Bugz` section, and the run state it needs first
 
+> Revised after the plan round: 16 findings, 12 accepted. What changed is recorded inline — the sweep
+> is a heartbeat rather than a timeout, the model restriction moved from the picker to the collection
+> boundary, and this section now carries the growth budget the convention requires.
+
 **The surface.** One new panel section, `Bugz`, carrying four controls: a model picker, a **Collect**
 button, a **Review bugs** button (story 5's page, present and disabled until a run has collected
 something), and the ingest server's address.
 
-**`collect_runs` comes BEFORE any markup, and story 3 did not build it.** Story 3 stamps a run id on
-every row it claims, so *which run decided this finding* is answerable; what is not stored anywhere is
-*what run X did* or *is a run in flight right now*. `CollectSummary` is computed, printed to stderr
-and lost when the process exits. That was sufficient for a CLI one-shot, which was story 3's only
-surface — and it is not sufficient for a button.
+#### Who owns what, across stories 3 to 6
 
-The durable-status rule (`.agents/conventions/common/durable-status.md`) is explicit: an action that
-starts a process must reflect real state across a reload, the source of truth is persisted
-server-side and re-read on load, and a crash must never leave the UI stuck in-flight. With nothing
-persisted about a run, a Collect button is exactly the *clicked → reloaded → state lost* case the rule
-exists to forbid. So:
+| | Owns | Explicitly does NOT |
+|---|---|---|
+| **3** (shipped) | `findings.collect_state/collect_run_id/collect_reason/fix_sha`; the walk; the run id | any record OF a run; anything a person presses |
+| **4** (this) | `collect_runs`; the section; the Collect button's enabled state; the model allowlist | the review page's contents; any outbound call |
+| **5** | the review page, the multi-select, the ranking pass | the run records; the allowlist it must USE |
+| **6** | `coai-bugs`, its keys, its quarantine | anything in `coai.db` |
 
-1. `collect_runs` as one appended `Schema.Steps` entry, per the contract above.
-2. `CollectRun` writes the row **before** the first candidate, and completes it at the end — not one
-   write at the finish, which is the shape that cannot represent *running*.
-3. A **startup sweep** for a run with no `finished_utc`, mirroring the `InProgress` sweeps the rest of
-   this codebase already runs. A VS Code window that closed mid-run killed its child, and that run
-   must not read as in-flight forever.
-4. The panel reads it through the one-shot mode, because **the panel owns no SQLite** — `--bugs-json`
-   grows a `lastRun` object rather than gaining a second mode and a second spawn.
+#### `collect_runs`, and why story 3 did not build it
 
-**The server address is a dialog, not a box — and this is a constraint, not a preference.**
-`staticKey` in `panelView.ts` is the list of state whose change repaints the panel. The Bugz section
-MUST be in it, or the Collect button can never repaint to show a run's progress and item 1 above buys
-nothing. But that same function carries a warning learned the hard way: a section holding a free-text
-control must NOT be in `staticKey`, because the page then rebuilds under a focused box on every
-keystroke — which is why the chat section's prompt textarea became a picker. A server URL is free
-text, so the two requirements collide, and the codebase has already settled it twice:
-`addTeamServer` and `customConsultant` collect a URL through `vscode.window.showInputBox` behind a
-command button, with a validator that can refuse while the box is still open. Bugz follows them. No
-inline text control enters this section.
+Story 3 stamps a run id on every row it claims, so *which run decided this finding* is answerable;
+what is stored nowhere is *what run X did* or *is a run in flight right now*. `CollectSummary` is
+computed, printed to stderr and lost when the process exits. That was sufficient for a CLI one-shot,
+which was story 3's only surface — and it is not sufficient for a button. The durable-status rule
+(`.agents/conventions/common/durable-status.md`) requires the state to survive a reload, to be read
+back from storage rather than from a local flag, and never to stick in-flight after a crash.
 
-**The model picker is the Consultant's row with a narrower vendor list.** `modelsFor` and
-`modelsProvenance` are not consultant-specific and the two-select shape is `consultantBody`'s. The
-list must be narrower for a reason that is not stylistic: the ranking pass reads `title`, `why` and
-`fix`, which are full of domain names and are **not** sanitised — the normaliser runs later, on code.
-Pointing that step at a cloud vendor by accident leaks before anything has been anonymised.
+```sql
+CREATE TABLE IF NOT EXISTS collect_runs (
+  id TEXT PRIMARY KEY, started_utc TEXT, finished_utc TEXT, heartbeat_utc TEXT,
+  state TEXT NOT NULL DEFAULT 'running',   -- running | done | failed | interrupted
+  model TEXT, candidates INT, picked INT, collected INT, skipped INT, failed INT,
+  reasons TEXT                              -- the funnel, per stage
+);
+```
 
-**Line references drift under this file.** `panelView.ts` moved twice in one day while story 3 was in
-review (`staticKey` 2450 → 2556 → 2626, `section()` 708 → 730 → 735, `consultantBody` 30 → 112) because
-a parallel session works it. Every reference here is re-verified at the moment it is used, never
-trusted from this document.
+1. The row is written **before** the first candidate, not once at the end — a single write at the
+   finish is the shape that cannot represent *running*.
+2. Counts and `heartbeat_utc` are refreshed **as each candidate is decided**, on the write that
+   already happens there. Progress was promised and two writes cannot express it; either the writes
+   or the promise had to go, and the writes are nearly free because `RecordCollect` is already a
+   per-candidate statement. *(Plan round, gemini.)*
+3. A terminal state is written in a **`finally`**, with whatever counts were reached. A throw or a
+   hang on candidate three otherwise never reaches the completing write, and the button stays
+   in-flight forever. *(Plan round, codex.)*
 
-**Not in this story:** the review page itself (story 5) and anything that sends a pair anywhere
-(story 6). Collect writes to the local database and nothing leaves the machine.
+#### The sweep is a heartbeat, and deliberately not a pid
 
+The plan round caught a defect this would have shipped: because the panel reaches SQLite only through
+one-shot invocations, a sweep that ran at `--bugs-json` startup and cleared every row with no
+`finished_utc` would clear the row of a `--collect-bugs` run that is **alive at that moment**. And
+deleting the row orphans every finding already stamped with its id. *(gemini.)*
+
+gemini proposed a pid column and a liveness check. This uses a **heartbeat** instead, reusing
+`chatStoreSweep`'s pattern (`HEARTBEAT_EVERY_MS`, `HEARTBEAT_STALE_MS`) rather than inventing a
+second answer to the same question — and for a reason the pid proposal does not survive: **the data
+directory can be a network share.** The operator runs one on a NAS, so a row may carry a pid from a
+different machine, where it is not merely useless but actively wrong — it will eventually name a
+live, unrelated process. A timestamp means the same thing on every host.
+
+- A run refreshes `heartbeat_utc` as it decides each candidate.
+- A run whose heartbeat is older than the stale window is presumed gone. The window is
+  `chatStoreSweep`'s thirty minutes and for its stated reason: wide enough for a sleeping laptop, a
+  host paused under a debugger, or a window that has just reloaded.
+- It is then marked `interrupted`, **never deleted** — the id is a foreign key in all but name.
+
+#### The model restriction is enforced at the boundary, not at the picker
+
+Two reviewers found this independently. A picker is UI: `--collect-bugs` can be invoked directly, a
+persisted setting survives a narrowed list, and a stale webview posts whatever it last rendered. So
+**one named allowlist lives in `CoaiMcp.Core`, the collector refuses anything outside it before a
+single finding field is read, and the picker is derived FROM that list** rather than agreeing with it
+separately. A test asserts the refusal and that no call was made.
+
+**Assumption, stated because it narrows the operator's spec:** the allowlist is **local vendors
+only** for now. The ranking pass reads `title`, `why` and `fix`, which are the reviewers' own words
+about somebody's code and are not sanitised — the normaliser runs later, on source. The honest
+complication is that those words were often *written by* a cloud model during the review round that
+produced them, so this is not a categorical leak; it is an uncontrolled one, and local-only is the
+defensible default until a person decides otherwise. The question is at the end of this story.
+
+#### The server address is a dialog, not a box
+
+`staticKey` is the state whose change repaints the panel. The Bugz section MUST be in it or the
+Collect button can never repaint, and everything above buys nothing. But that same function carries a
+warning learned the hard way: a section holding a free-text control must NOT be in `staticKey`,
+because the page then rebuilds under a focused box on every keystroke — which is why the chat
+section's prompt textarea became a picker. A server URL is free text, so `addTeamServer` and
+`customConsultant` settle it: `vscode.window.showInputBox` behind a command button, with a validator
+that refuses while the box is still open. No inline text control enters this section.
+
+#### Growth budget
+
+Required by `planning-docs.md` for any plan introducing a growth surface, and this adds one table.
+
+- **Projected size.** One row per Collect press. At the plan's own volume — a person pressing it
+  about once a day — that is ~365 rows a year. A row is two timestamps, a heartbeat, a state, a model
+  name, five integers and a `reasons` string capped at the nine skip codes with counts: ~400 bytes.
+  **~150 KB a year**, beside a `coai.db` that is already megabytes of rounds and findings.
+- **Who retires it.** Nobody: **kept forever, projected ~150 KB/year, stored in `coai.db`** beside the
+  findings whose `collect_run_id` points at it. Deleting a run would orphan the rows that name it, and
+  the whole point of the id is that *which run decided this, under which rules* stays answerable.
+- **When it is interrupted.** The heartbeat sweep above, invoked by whichever one-shot mode opens the
+  database for writing — the same idempotent `RoundsDb.Open` path the migration already runs through.
+
+#### Compatibility, because the halves ship out of step
+
+`--bugs-json` grows a `lastRun` object rather than gaining a second mode and a second spawn. The two
+halves of this product have shipped out of step before, so: `lastRun` is **optional** and its absence
+means *no run has ever finished*, never *unavailable*; a new panel reading old output must therefore
+behave, and one check runs the **real binary** and parses its output with the panel's own reader.
+*(Plan round, codex.)*
+
+#### Test plan
+
+- `collect_runs` against a seeded `RoundsDb` on real SQLite in a temp directory, as `RoundsDbTests`
+  does; the migration tested from a **hand-spelled older schema**, never from the current `Schema`
+  constant, or it follows the code forward and stops testing.
+- A run interrupted between its two writes leaves a `running` row; a fresh heartbeat is left alone and
+  a stale one is marked `interrupted` — both asserted, because a sweep that cleared a live run is the
+  defect the plan round caught.
+- A model outside the allowlist is refused **before any field is read**, and nothing is called.
+- `bundledPage.test.ts` drives the assembled page: press Collect, observe running → done, confirm the
+  section repaints and that Review flips from disabled to enabled only when a run collected something.
+  Static assertions that the markup contains the right text stay green while a click does nothing.
+- One end-to-end check over the real binary's output and the panel's reader, both shapes.
+- `research/module_server.md`, `module_extension.md` and `module_tests.md` updated; diagrams re-rendered.
+
+#### Definition of done
+
+- [ ] `collect_runs` exists; a run writes it before the work, on every candidate, and in a `finally`.
+- [ ] A stale run is swept to `interrupted`; a live one is untouched; no row is ever deleted.
+- [ ] The allowlist is one list in the core, enforced before any finding field is read.
+- [ ] `--bugs-json` reports `lastRun`, optional, and old output parses.
+- [ ] The section renders, repaints, and holds no free-text control.
+- [ ] `TreeSitter.DotNet` is exempt from the monthly bump by something that FAILS, not by a sentence.
+- [ ] The three drifted references above are corrected and the six satisfied DoD boxes are ticked.
 ## Test plan
 
 - `BugsQuery` against a seeded `RoundsDb`, the `RoundsDbTests` pattern: real SQLite, temp directory.
@@ -347,16 +433,16 @@ trusted from this document.
 ## Definition of Done
 
 - [x] Story 1 reports the count, and the decision to continue is recorded against it.
-- [ ] `TreeSitter.DotNet` is pinned in `Directory.Packages.props` with its reason, and exempted
+- [x] `TreeSitter.DotNet` is pinned in `Directory.Packages.props` with its reason, and exempted
       from the monthly bump in writing.
-- [ ] The publish keeps three grammars and drops the rest, and something FAILS if that step is
+- [x] The publish keeps three grammars and drops the rest, and something FAILS if that step is
       removed — an unchecked pruning step is a step that silently stops running.
-- [ ] Nothing outside the normalizer's own project names `TreeSitter`, and a test says so.
-- [ ] The guard tests reachability, never equality, and has a test that would fail on equality.
-- [ ] `skipped` and `failed` are distinct, and a zero-knowledge failure is `failed`.
-- [ ] Skip reasons are attributed to the stage that produced them — a funnel, not a flat percentage,
+- [x] Nothing outside the normalizer's own project names `TreeSitter`, and a test says so.
+- [x] The guard tests reachability, never equality, and has a test that would fail on equality.
+- [x] `skipped` and `failed` are distinct, and a zero-knowledge failure is `failed`.
+- [x] Skip reasons are attributed to the stage that produced them — a funnel, not a flat percentage,
       so `language_unsupported` cannot mask `fix_commit_not_found`.
-- [ ] The normalizer's property test covers every shipped grammar; `.mjs`/`.cjs` map to JavaScript.
+- [x] The normalizer's property test covers every shipped grammar; `.mjs`/`.cjs` map to JavaScript.
 - [ ] The server validates the alphabet, not the absence of names.
 - [ ] Ingest lands in quarantine; nothing reaches a live index without a reviewed promotion.
 - [ ] No personal data is stored, and the route does not log client IPs.

@@ -1,4 +1,4 @@
-import { DbFinding, DbLog, EMPTY_LOG, ManyFound, parseFindings, parseLog, parseManyFindings } from './roundsDb';
+import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
@@ -332,4 +332,25 @@ export function serverRun(executable: string, stop?: () => boolean): Run {
 export function serverRunAt(executable: string, resolvedDirectory: string): Run {
   return (args, capMs) =>
     capture(executable, [...args], false, capMs, undefined, { COAI_DATA_DIR: resolvedDirectory });
+}
+
+/**
+ * What the corpus has to offer, and what the last collector run made of it.
+ *
+ * <p>One spawn for both, because the panel owns no SQLite and the server already has the file open
+ * to answer the first question. A second mode would be a second process for an answer it was
+ * holding.</p>
+ *
+ * <p><b>An old server is not a failure.</b> `--bugs-json` arrived before the run table did, so a
+ * server that predates it answers a corpus with no `lastRun`; {@link parseBugs} reads that as "no
+ * run has ever started", which is exactly what it means. A server too old for the FLAG exits
+ * `EX_USAGE`, and that is nothing known rather than nothing there.</p>
+ */
+export async function readBugs(
+  executable: string,
+  run: Run = serverRun(executable),
+): Promise<BugCorpus> {
+  const { code, output } = await run(['--bugs-json'], CAP_MS);
+
+  return code === EX_USAGE ? EMPTY_CORPUS : parseBugs(output);
 }

@@ -56,7 +56,15 @@
          grammars for eight RIDs. Writing the binding is easy; sourcing and building the grammars is
          the part that is not, and doing it ourselves was the cost that nearly bought a Rust
          toolchain. The publish drops every grammar but c-sharp/typescript/javascript — about 60 MB
-         per RID of languages nobody here parses. -->
+         per RID of languages nobody here parses.
+
+         EXEMPT FROM THE MONTHLY LATEST-STABLE BUMP. Not because staying current is wrong, but
+         because a bump here changes NATIVE binaries that two checks are written against by
+         name: the DropGrammarsNobodyParses target prunes by filename, and the release workflow
+         asserts the archive holds exactly the grammars shared/kept-grammars.txt lists. Neither
+         is something the compiler sees. Upgrade deliberately, re-run the publish and count the
+         grammars - ThePinThatMustNotDriftTests fails until the version here is changed on
+         purpose. -->
     <PackageVersion Include="TreeSitter.DotNet" Version="1.3.0" />
   </ItemGroup>
 

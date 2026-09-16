@@ -370,6 +370,20 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
             return "0";
         }
 
+        if (kind is "regex")
+        {
+            // A regex is a LITERAL, and it went through verbatim until this line. That is the same
+            // leak a string would be and arguably a worse one: what people put in a pattern is
+            // hostnames, internal URL shapes, ticket prefixes, a product name in a parser. The
+            // whole node goes, flags included — `/x/g` left its `g` standing as a bare word, which
+            // is how the property test noticed the pattern beside it had never been touched.
+            //
+            // `/(?:)/` rather than `//`, because two slashes begin a comment and a skeleton that
+            // reads as one is a skeleton a person misreads. It is what an empty regex stringifies
+            // to, it carries no word characters, and it keeps the shape of the call it sits in.
+            return "/(?:)/";
+        }
+
         return node.Children.Any() || !NamesSomething(kind) ? null : placeholders.For(node);
     }
 
