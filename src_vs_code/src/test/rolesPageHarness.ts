@@ -26,6 +26,8 @@ export class Node {
   value: string;
   checked: boolean;
   className: string;
+  /** What `setAttribute` has written — the page keeps `aria-selected` in step with the class. */
+  readonly attributes: Record<string, string>;
   hidden: boolean;
   parent: Node | undefined;
 
@@ -36,6 +38,7 @@ export class Node {
     this.value = '';
     this.checked = false;
     this.className = '';
+    this.attributes = {};
     this.hidden = false;
   }
 
@@ -52,6 +55,10 @@ export class Node {
     }
 
     return null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value;
   }
 
   under(parent: Node): Node {

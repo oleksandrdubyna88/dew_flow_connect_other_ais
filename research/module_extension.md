@@ -4394,7 +4394,7 @@ settings editor as a wall of JSON with their own writing inside it. `promptFile`
 is not a slug rather than sanitising one — a caller holding a refused id is a caller whose id came
 from somewhere it should not have, and writing `....escaped.md` would hide that.
 
-**Three tabs, remembered by the host (2026-09-16, issue #293).** The page was one column of
+**Three tabs, remembered by the host (2026-09-16, issue #293** — [PLAN_edit_roles_in_tabs.md](PLAN_edit_roles_in_tabs.md)**).** The page was one column of
 everything: seven roles, each with up to six prompt boxes ten rows high, under three `<h2>`
 headings on one scroll. Those headings are now a tab strip, and the sections carry `data-section`.
 

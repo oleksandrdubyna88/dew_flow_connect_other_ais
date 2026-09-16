@@ -402,15 +402,15 @@ const TAB_NAMES: Readonly<Record<string, string>> = {
 };
 
 /** The three tabs, with the open one marked. */
-function tabStrip(open_: string): string {
+function tabStrip(openTab: string): string {
   return ROLE_TABS
-    .map((id) => `<button type="button" class="tab${id === open_ ? ' on' : ''}" data-tab="${id}">${TAB_NAMES[id]}</button>`)
+    .map((id) => `<button type="button" role="tab" id="tab-${id}" aria-controls="section-${id}" aria-selected="${id === openTab ? 'true' : 'false'}" class="tab${id === openTab ? ' on' : ''}" data-tab="${id}">${TAB_NAMES[id]}</button>`)
     .join('');
 }
 
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
-  const open_ = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
+  const openTab = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
   // By BUCKET, not by "plan and everything else". That filter was right while there were two
   // kinds of round, and drew a document role under a heading that was wrong about it the moment
   // there were three.
@@ -437,25 +437,28 @@ ${styles(state.uiScale)}
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
 
-<div class="tabs">${tabStrip(open_)}</div>
+<div class="tabs" role="tablist" aria-label="Which roles to edit">${tabStrip(openTab)}</div>
 
-<section data-section="plan"${open_ === 'plan' ? '' : ' hidden'}>
+<section id="section-plan" role="tabpanel" aria-labelledby="tab-plan" data-section="plan"${openTab === 'plan' ? '' : ' hidden'}>
 <p class="note">Roles that read the plan, before any code exists.</p>
 ${[...plan, ...waiting].map((r) => roleBlock(all, r, state.texts)).join('\n')}
 </section>
 
-<section data-section="code"${open_ === 'code' ? '' : ' hidden'}>
+<section id="section-code" role="tabpanel" aria-labelledby="tab-code" data-section="code"${openTab === 'code' ? '' : ' hidden'}>
 <p class="note">Roles that read the change itself.</p>
 ${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+<!-- The control lives in the section its effect lands in. A new role always joins the code
+     bucket of the result stage, so offered from the plan tab it was a button that quietly
+     created something on another tab and moved the person there. (gemini, the code round.) -->
+<button type="button" class="add role" data-add="role">Add a role</button>
+${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}
 </section>
 
-<section data-section="documents"${open_ === 'documents' ? '' : ' hidden'}>
+<section id="section-documents" role="tabpanel" aria-labelledby="tab-documents" data-section="documents"${openTab === 'documents' ? '' : ' hidden'}>
 <p class="note">Roles that read a document rather than a diff — what <code>review_document</code> runs. A role here never sees a checkout or a change.</p>
 ${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 </section>
 
-<button type="button" class="add role" data-add="role">Add a role</button>
-${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}
 ${script(nonce)}
 </body>
 </html>`;
@@ -470,7 +473,6 @@ body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
 header { display: flex; align-items: baseline; gap: 12px; }
 h1 { font-size: 1.4em; }
 h2 { font-size: 1.1em; margin: 20px 0 2px; }
-${ROLE_TONE_CSS}
 /* The rounds log's strip, the same class names and the same metrics: two pages of this product
    with tabs that look different would be two products. */
 .tabs { display: flex; gap: 6px; margin: 10px 0; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -484,6 +486,11 @@ ${ROLE_TONE_CSS}
 .role { border-left: 3px solid var(--tone-code); background: var(--vscode-textBlockQuote-background);
   padding: 6px 10px; margin: 8px 0; }
 .role.off { opacity: 0.55; }
+/* AFTER the rule above, and that is the whole of it: .role and .role-arch have equal
+   specificity and the base rule sets the entire border-left shorthand, so a palette declared
+   first is a palette that never wins. Two reviewers of the code round found this; the test that
+   now guards it reads the ORDER, because there is no CSS engine in the suite to ask. */
+${ROLE_TONE_CSS}
 .role > summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
 .role .title { font-weight: 600; }
 .role .id, .badge { font-size: 0.82em; opacity: 0.65; }
@@ -553,7 +560,11 @@ function script(nonce: string): string {
       const which = tab.dataset.tab;
       const strip = document.querySelectorAll('[data-tab]');
       for (let i = 0; i < strip.length; i += 1) {
-        strip[i].className = strip[i].dataset.tab === which ? 'tab on' : 'tab';
+        const isOpen = strip[i].dataset.tab === which;
+        strip[i].className = isOpen ? 'tab on' : 'tab';
+        // In step with the class, or a screen reader goes on announcing the tab that was open
+        // before the press — which is worse than never having said which one it was.
+        if (strip[i].setAttribute) { strip[i].setAttribute('aria-selected', isOpen ? 'true' : 'false'); }
       }
       const sections = document.querySelectorAll('[data-section]');
       for (let i = 0; i < sections.length; i += 1) {
