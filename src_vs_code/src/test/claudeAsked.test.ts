@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -14,9 +14,11 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
+  SCAN_BUDGET,
   sessionFileIn,
   sessionFileOf,
   severalMatch,
+  staysInside,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
@@ -903,7 +905,7 @@ test('a folder larger than the budget is read newest-first, and the cut is NAMED
     mkdirSync(dir, { recursive: true });
     manySessions(dir, 5, (n) => (n === 4 ? 'The oldest' : `Session ${n}`));
 
-    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The oldest', { most: 3, withinMs: 10_000 });
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The oldest', { most: 3, withinMs: 10_000, mostBytes: SCAN_BUDGET.mostBytes });
 
     assert.strictEqual(answer.kind, 'none', 'a session outside the budget was found, so nothing was bounded');
     assert.match(answer.kind === 'none' ? answer.refusal : '', /newest 3 of 5/u,
@@ -922,7 +924,7 @@ test('a match INSIDE the budget is still a match', async () => {
     mkdirSync(dir, { recursive: true });
     manySessions(dir, 5, (n) => `Session ${n}`);
 
-    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Session 1', { most: 3, withinMs: 10_000 });
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Session 1', { most: 3, withinMs: 10_000, mostBytes: SCAN_BUDGET.mostBytes });
 
     assert.strictEqual(answer.kind, 'one', 'a session well inside the budget was refused');
   } finally {
@@ -942,6 +944,7 @@ test('a walk that runs out of TIME stops, and says that is why', async () => {
     const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The oldest', {
       most: 1_000,
       withinMs: 10_000,
+      mostBytes: SCAN_BUDGET.mostBytes,
       now: () => {
         clock += 4_000;
 
@@ -957,3 +960,101 @@ test('a walk that runs out of TIME stops, and says that is why', async () => {
   }
 });
 
+
+test('a session file that LEADS outside the folder is refused, however it is spelled', async () => {
+  // Lexical containment says nothing about a link. Anything on this machine can drop a file named
+  // like a session id into the project directory pointing at something else, and both `resolve` and
+  // `access` are perfectly happy with it. (codex, the plan round, as a security finding.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    const elsewhere = join(home, 'secrets');
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(elsewhere, { recursive: true });
+    const secret = join(elsewhere, 'notes.jsonl');
+    writeFileSync(secret, `${said('somebody else’s words')}\n`, 'utf8');
+    const id = '11111111-2222-3333-4444-555555555555';
+    let linked = true;
+    try {
+      symlinkSync(secret, join(dir, `${id}.jsonl`), 'file');
+    } catch {
+      // Windows without developer mode refuses a symlink to an unprivileged process (EPERM,
+      // measured here). This leg cannot run, and the test below covers the same decision as data.
+      linked = false;
+    }
+    if (linked) {
+      const answer = await sessionFileOf(home, 'D:\\work\\app', true, id);
+
+      assert.strictEqual(answer.kind, 'none', 'a link out of the project directory was followed');
+      assert.doesNotMatch(answer.kind === 'none' ? answer.refusal : '', /secrets/u,
+        'the refusal repeated the path the link led to');
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a refusal about a stored id repeats neither the id nor a path built from it', async () => {
+  // A refusal that echoes what it was given is a refusal somebody can probe with. (codex, the plan
+  // round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+
+    const answer = await sessionFileOf(home, 'D:\\work\\app', true, '../../etc/passwd');
+
+    assert.strictEqual(answer.kind, 'none');
+    const refusal = answer.kind === 'none' ? answer.refusal : '';
+    assert.doesNotMatch(refusal, /passwd|\.\./u, 'the refusal says back the string it was asked to refuse');
+    assert.match(refusal, /shape this build knows/u, 'the refusal does not say what was wrong');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session too big to read under the budget is SKIPPED and counted, never silently dropped', async () => {
+  // The hole three reviewers found in the first budget: it bounded how many files were opened and
+  // said nothing about how big one of them could be, so a single pathological session could overrun
+  // the whole deadline inside one read — and the sentence at the end would have claimed the folder
+  // held nothing by that name.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'huge.jsonl'), `${titled('The one being looked for')}\n${'x'.repeat(4_096)}\n`, 'utf8');
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'The one being looked for', {
+      most: 250,
+      withinMs: 10_000,
+      mostBytes: 1_024,
+    });
+
+    assert.strictEqual(answer.kind, 'none', 'a file past the byte budget was read anyway');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /small enough to read/u,
+      'a skipped file was reported as a session that is not called that');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session file is inside the folder only if it LEADS there too', () => {
+  // The decision as data, because the case it exists for cannot be built on this machine: Windows
+  // refuses a symlink to an unprivileged process (EPERM, measured), so the filesystem leg above
+  // passes by doing nothing here. A skip is not a pass.
+  const dir = join('C:', 'Users', 'me', '.claude', 'projects', 'D--work-app');
+  const file = join(dir, '11111111-2222-3333-4444-555555555555.jsonl');
+
+  assert.strictEqual(staysInside(dir, file, { dir, file }), true, 'an ordinary session file was refused');
+
+  // Spelled inside, leads out: the link case, which the lexical half cannot see.
+  const secret = join('C:', 'Users', 'me', 'secrets', 'notes.jsonl');
+  assert.strictEqual(staysInside(dir, file, { dir, file: secret }), false, 'a link out of the folder was followed');
+
+  // Spelled out, however it leads: refused by the lexical half, which is asked first and costs nothing.
+  const outside = join('C:', 'Users', 'me', '.claude', 'projects', 'D--somebody-else', 'x.jsonl');
+  assert.strictEqual(staysInside(dir, outside, { dir, file: outside }), false, 'a path outside the folder was accepted');
+
+  // And the directory itself is not a file inside itself.
+  assert.strictEqual(staysInside(dir, dir, { dir, file: dir }), false, 'the folder was accepted as a session in it');
+});

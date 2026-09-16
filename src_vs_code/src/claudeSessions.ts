@@ -192,26 +192,49 @@ function closest<T>(
  * real folder here and `withinMs` roughly 2× its measured time, so an ordinary machine never meets
  * either. (local and gemini, the plan round.)</p>
  *
- * <p><b>What it does NOT bound.</b> The deadline is checked between FILES, so one pathological file
- * can overrun it. That is deliberate rather than overlooked: the largest single session here is 21 MB
- * and streams in about a tenth of a second, and a per-line clock on every line of every file costs
- * more than it saves. Said out loud so the limit is known rather than assumed away.</p>
+ * <p><b>ONE FILE is bounded too, by bytes.</b> The deadline is checked between files, so without
+ * this a single pathological session — one on a slow network mount, or one a logging bug grew to
+ * half a gigabyte — would overrun the whole budget inside one read and report nothing about it.
+ * Three reviewers across three vendors said so on one round, and they were right: a budget with an
+ * unbounded step in it is not a budget. `mostBytes` is 64 MB against a largest real session of
+ * 21 MB here, so nothing anybody has meets it; a file past it is skipped and COUNTED in the cut,
+ * never silently dropped.</p>
+ *
+ * <p><b>What it still does not bound</b> is the number of workspace ROOTS: each is walked with its
+ * own budget, so a three-root window can cost three of them. Named rather than fixed — a shared
+ * budget would make the answer depend on which root was listed first, which is the kind of
+ * order-dependence this module spends whole rounds removing.</p>
  *
  * @param now injected in tests only — a real deadline proved with a real wait is a test nobody runs
  */
 export interface ScanBudget {
   readonly most: number;
   readonly withinMs: number;
+  readonly mostBytes: number;
   readonly now?: () => number;
 }
 
-export const SCAN_BUDGET: ScanBudget = { most: 250, withinMs: 10_000 };
+export const SCAN_BUDGET: ScanBudget = { most: 250, withinMs: 10_000, mostBytes: 64 * 1_024 * 1_024 };
 
 /** How much of a folder a walk actually read, when it did not read all of it. */
 export interface ScanCut {
   readonly read: number;
   readonly of: number;
-  readonly why: 'count' | 'time';
+  readonly why: 'count' | 'time' | 'size';
+}
+
+/**
+ * Whether this file is small enough to be read at all under the budget.
+ *
+ * <p>A file that is not there is not too big — it is gone, which the reader that opens it already
+ * has a sentence for. Only an answered `stat` can refuse one.</p>
+ */
+async function withinSize(file: string, budget: ScanBudget): Promise<boolean> {
+  try {
+    return (await fs.stat(file)).size <= budget.mostBytes;
+  } catch {
+    return true;
+  }
 }
 
 /** What a walk took, and whether it was cut short. */
@@ -236,6 +259,7 @@ async function withinBudget<T>(
   const clock = budget.now ?? Date.now;
   const started = clock();
   const taken: T[] = [];
+  let oversized = 0;
   for (const file of files) {
     if (taken.length >= budget.most) {
       return { taken, cut: { read: taken.length, of: files.length, why: 'count' } };
@@ -243,19 +267,31 @@ async function withinBudget<T>(
     if (clock() - started >= budget.withinMs) {
       return { taken, cut: { read: taken.length, of: files.length, why: 'time' } };
     }
+    if (!await withinSize(file, budget)) {
+      // SKIPPED, AND COUNTED. A file too big to read under the budget is not a file that says
+      // nothing — it is one nobody looked in, and the cut is how the caller says so.
+      oversized += 1;
+      continue;
+    }
     taken.push(await take(file));
   }
 
-  return { taken, cut: undefined };
+  return {
+    taken,
+    cut: oversized === 0 ? undefined : { read: taken.length, of: files.length, why: 'size' },
+  };
 }
 
 /** How a cut reads in a refusal: what was read, out of what, and why it stopped there. */
 function cutSays(cut: ScanCut, budget: ScanBudget, whereabouts: string): string {
-  const stopped = cut.why === 'count'
-    ? `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} were read`
-    : `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} could be read within ${Math.round(budget.withinMs / 1_000)} s`;
+  if (cut.why === 'time') {
+    return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} could be read within ${Math.round(budget.withinMs / 1_000)} s`;
+  }
+  if (cut.why === 'size') {
+    return `Only ${cut.read} of ${cut.of} sessions ${whereabouts} were small enough to read`;
+  }
 
-  return stopped;
+  return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} were read`;
 }
 
 /** One session file, and the question waiting in it. */
@@ -582,14 +618,23 @@ export async function sessionFileOf(
     return dir;
   }
   const file = path.resolve(dir, `${sessionId}.jsonl`);
-  const inside = path.relative(dir, file);
-  if (inside.length === 0 || inside.startsWith('..') || path.isAbsolute(inside)) {
-    return { kind: 'none', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
+  if (!await readable(file)) {
+    // Asked before the links are followed, so a file that is simply not there gets the sentence about
+    // a deleted session rather than one about escaping a directory.
+    return staysInside(dir, file, { dir, file })
+      ? { kind: 'none', refusal: `The session this conversation was pinned to is no longer in ${dir}.` }
+      : { kind: 'none', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
+  }
+  // WHERE IT REALLY LEADS, not only how it is spelled. Lexical containment says nothing about a
+  // LINK: anything on this machine can drop a `<valid-uuid>.jsonl` into the project directory
+  // pointing at a file elsewhere, and both `resolve` and `access` are perfectly happy with it.
+  // (codex, the plan round, as a security finding.)
+  const real = { dir: await realOf(dir), file: await realOf(file) };
+  if (!staysInside(dir, file, real)) {
+    return { kind: 'none', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
   }
 
-  return await readable(file)
-    ? { kind: 'one', file }
-    : { kind: 'none', refusal: `The session this conversation was pinned to is no longer in ${dir}.` };
+  return { kind: 'one', file };
 }
 
 /**
@@ -655,6 +700,43 @@ export async function promptsFrom(file: string): Promise<Asked> {
   }
 
   return { kind: 'said', said };
+}
+
+/** Whether this path is inside that directory — lexically, which is the cheap half of the question. */
+function under(dir: string, file: string): boolean {
+  const inside = path.relative(dir, file);
+
+  return inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside);
+}
+
+/**
+ * Whether a session file is inside the project directory BOTH as spelled and as it really leads.
+ *
+ * <p>Pure, and separate from the reader, because the case it exists for cannot be built on every
+ * machine: Windows refuses a symlink to an unprivileged process, so a test that creates one passes
+ * by doing nothing here. The decision is data — two paths and where they really point — so it is
+ * tested as data, and the filesystem leg runs where it can. (codex, the plan round, as a security
+ * finding; and the repository's own rule that a skip is not a pass.)</p>
+ *
+ * @param real where the two actually lead, with every link followed
+ */
+export function staysInside(dir: string, file: string, real: { readonly dir: string; readonly file: string }): boolean {
+  return under(dir, file) && under(real.dir, real.file);
+}
+
+/**
+ * Where a path really leads, with every link followed — or the path itself when it cannot be asked.
+ *
+ * <p>A path that cannot be resolved is returned unchanged rather than thrown over: the caller
+ * compares two of these, and a pair that are both unresolved compares exactly as the lexical check
+ * already did. Nothing is loosened by the failure.</p>
+ */
+async function realOf(target: string): Promise<string> {
+  try {
+    return await fs.realpath(target);
+  } catch {
+    return target;
+  }
 }
 
 /** Whether a path is still there to be read. */
@@ -766,18 +848,20 @@ export async function waitingQuestion(
   // hungriest one.
   const walk = await withinBudget(files, budget, async (file) => file);
   for (const file of walk.taken) {
-    let body: string;
-    try {
-      body = await fs.readFile(file, 'utf8');
-    } catch (reason) {
-      if (missing(reason)) {
-        // Deleted while this was running. Another product owns the directory; the rest still counts.
-        continue;
-      }
+    // STREAMED INTO LINES, never the whole file as a string AND again as an array — which is what
+    // `readFile` plus `split` cost, two full copies of a session that can be tens of megabytes. The
+    // byte cap above bounds the rest. (gemini and codex, the plan round, on the same paragraph.)
+    const lines: string[] = [];
+    await eachLine(file, (line) => {
+      lines.push(line);
 
-      return { kind: 'failed', refusal: `Claude Code's session file could not be read: ${where(reason)}` };
+      return true;
+    });
+    if (lines.length === 0 && !await readable(file)) {
+      // Deleted while this was running. Another product owns the directory; the rest still counts.
+      continue;
     }
-    const asked = lastAsked(body.split('\n'));
+    const asked = lastAsked(lines);
     if (asked.kind === 'asked') {
       sessions.push({ file, asked: asked.set });
     } else if (asked.kind === 'unreadable') {
