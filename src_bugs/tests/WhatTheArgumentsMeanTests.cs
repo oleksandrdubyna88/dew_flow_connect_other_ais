@@ -94,14 +94,22 @@ public sealed class WhatTheArgumentsMeanTests
     [Fact]
     public void AFileNamedByTheEnvironmentReplacesTheEmbeddedList()
     {
+        // Content the EMBEDDED list cannot contain, and the whole value asserted rather than two
+        // fragments of it. The first version wrote `[CSharp]\nlock\n` and asked whether the result
+        // contained those two — which the embedded list does, so the test passed whether the
+        // override was read or ignored entirely. It was the only cover on the branch its own
+        // remarks call the one that rots. (CodeRabbit, #328.)
+        const string OverrideOnly = "[NotALanguageThisBinaryShips]\nkeyword-that-exists-only-here\n";
         var file = Path.Combine(Path.GetTempPath(), $"kw-{Guid.NewGuid():N}.txt");
-        File.WriteAllText(file, "[CSharp]\nlock\nreturn\n");
+        File.WriteAllText(file, OverrideOnly);
         var was = Environment.GetEnvironmentVariable("COAI_BUGS_KEYWORDS");
         try
         {
             Environment.SetEnvironmentVariable("COAI_BUGS_KEYWORDS", file);
 
-            Program.Keywords().Should().Contain("[CSharp]").And.Contain("lock");
+            Program.Keywords().Should().Be(
+                OverrideOnly,
+                "the override REPLACES the embedded list rather than adding to it");
         }
         finally
         {

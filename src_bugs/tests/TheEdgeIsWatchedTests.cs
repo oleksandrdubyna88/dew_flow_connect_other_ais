@@ -133,10 +133,17 @@ public sealed class TheEdgeIsWatchedTests
     /// except this.
     /// </summary>
     /// <remarks>
-    /// The boundary has two halves in two languages: a C# catalog and an nginx file. A reviewer
+    /// <para>The boundary has two halves in two languages: a C# catalog and an nginx file. A reviewer
     /// pointed out that adding a sixth header to one leaves the other silently wrong in whichever
     /// direction was forgotten — nginx forwarding a header the server cannot report, or a server
-    /// watching for one nginx never clears.
+    /// watching for one nginx never clears.</para>
+    /// <para><b>It asserts the VALUE, not just the directive name, and that distinction is the whole
+    /// test.</b> The first version looked for <c>proxy_set_header X-Real-IP</c>, which is a substring
+    /// of <c>proxy_set_header X-Real-IP $remote_addr;</c> — the one spelling this file exists to
+    /// forbid. It would have passed on a vhost that forwarded every contributor's address. The
+    /// matcher is <see cref="ClearsHeader"/> so that the two spellings can be held against it
+    /// directly, rather than by editing the shipped vhost to see a test go red. (CodeRabbit, #328.)
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheVhostClearsEveryHeaderThisServerWatchesFor()
@@ -145,10 +152,56 @@ public sealed class TheEdgeIsWatchedTests
 
         foreach (var header in Program.Forwarding)
         {
-            vhost.Should().Contain(
-                $"proxy_set_header {header}",
-                $"the server warns about {header}, so the vhost this ships with must clear it");
+            ClearsHeader(vhost, header).Should().BeTrue(
+                "the server warns about {0}, so the vhost this ships with must clear it — "
+                + "`proxy_set_header {0} \"\";` and nothing else", header);
         }
+    }
+
+    /// <summary>
+    /// The matcher itself, held against both spellings, so its teeth are permanent.
+    /// </summary>
+    /// <remarks>
+    /// A test that reads a file can only be proven to have teeth by breaking that file, and the file
+    /// here is the one carrying this server's no-client-address promise — not something to weaken on
+    /// disk, even briefly, to watch an assertion fire. So the condition is a function and the
+    /// dangerous spelling is an INPUT.
+    /// </remarks>
+    [Fact]
+    public void ClearingAHeaderIsNotTheSameAsMentioningIt()
+    {
+        ClearsHeader("proxy_set_header X-Real-IP        \"\";", "X-Real-IP").Should().BeTrue();
+
+        ClearsHeader("proxy_set_header X-Real-IP        $remote_addr;", "X-Real-IP").Should().BeFalse(
+            "that directive forwards the address, which is the one thing the vhost must not do");
+        ClearsHeader("proxy_set_header X-Real-IP $proxy_add_x_forwarded_for;", "X-Real-IP")
+            .Should().BeFalse();
+        ClearsHeader("# proxy_set_header X-Real-IP \"\";", "X-Real-IP").Should().BeFalse(
+            "a commented-out directive clears nothing");
+        ClearsHeader("proxy_set_header X-Forwarded-For \"\";", "X-Real-IP").Should().BeFalse(
+            "a different header being cleared says nothing about this one");
+    }
+
+    /// <summary>Does this vhost set <paramref name="header"/> to the empty string, and only that?</summary>
+    private static bool ClearsHeader(string vhost, string header)
+    {
+        foreach (var line in vhost.Split('\n'))
+        {
+            var directive = line.Trim();
+            if (!directive.StartsWith($"proxy_set_header {header}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Whatever follows the name, with the spacing nginx allows, must be the empty string.
+            var value = directive[$"proxy_set_header {header}".Length..].Trim();
+            if (value is "\"\";" or "'';")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>And it writes no log that could hold an address.</summary>

@@ -1091,14 +1091,13 @@ jobs:
           # The ARCHIVE, not the directory it was made from: checking the publish output proves a
           # file was BUILT, and what ships is this file, with a copy that silently did nothing
           # sitting between the two.
-          LISTING=$(tar tzf "$NAME.tar.gz")
-          for WANTED in coai-bugs e_sqlite3 DEPLOY.md nginx-coai-bugs.conf; do
-            printf '%s' "$LISTING" | grep -q "$NAME/[^/]*$WANTED" || {
-              echo "the archive does not carry $WANTED beside the binary"
-              printf '%s' "$LISTING"
-              exit 1
-            }
-          done
+          #
+          # In a SCRIPT the ordinary suite runs, not inline here. Inline, this check matched the
+          # wanted name anywhere in an entry, so `coai-bugs.dbg` satisfied the search for
+          # `coai-bugs` and an archive without the executable passed. Release-only shell is shell
+          # nothing executes until the day it matters. (CodeRabbit, #328.)
+          .github/scripts/archive-carries.sh "$NAME.tar.gz" \
+            coai-bugs '*e_sqlite3*' DEPLOY.md nginx-coai-bugs.conf
 
       - name: Checksum
         shell: bash

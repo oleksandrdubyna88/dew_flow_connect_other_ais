@@ -118,7 +118,14 @@ rollback() {
     say "rolling back to $previous"
     # The trail loses its last entry FIRST, so a second consecutive rollback reads correctly.
     sed -i '$d' "$TRAIL"
-    switch_to "$previous" || say "the rollback to $previous did not start either — $SERVICE is DOWN"
+    # `switch_to … || say …` returned the status of `say`, which is 0. So a rollback whose canary
+    # also failed exited 0, `--rollback` reported success to the workflow, and the one outcome
+    # worth shouting about — the service is DOWN and nothing here could bring it back — arrived as
+    # a green step. The message is the same; the STATUS is now the truth. (CodeRabbit, #328.)
+    if ! switch_to "$previous"; then
+        say "the rollback to $previous did not start either — $SERVICE is DOWN"
+        return 1
+    fi
 }
 
 retain() {

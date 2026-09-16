@@ -121,7 +121,9 @@ jobs:
             | ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
                   "$USER_NAME@$HOST" secret
 
+      # IDENTIFIED, because the rollback step below has to tell two different failures apart.
       - name: Deploy, and let the host's script decide
+        id: deploy
         env:
           HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
@@ -131,10 +133,18 @@ jobs:
           ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
               "$USER_NAME@$HOST" "deploy $VERSION"
 
-      # The version answering the INTERNET, not the one the script said it installed.
-      - name: What the public endpoint reports
-        env:
-          VERSION: ${{ inputs.version }}
+      # THE EDGE, which is the half the host cannot check for itself.
+      #
+      # `release.sh`'s canary already proved the new build serves `/health` on loopback — that is
+      # what decided the deploy. What it cannot see is nginx, TLS and DNS, so this asks the same
+      # question from the internet and that is the whole of its job.
+      #
+      # It deliberately does NOT assert a version, and the step used to be named as though it did,
+      # with an unused `VERSION` in its environment saying so. `/health` answers `{"status":"ok"}`
+      # and carries no version on purpose: it is unauthenticated and faces the public internet, so
+      # a build banner there would tell anybody which release is running. The release that is
+      # serving is established on the host, where that information already is. (CodeRabbit, #328.)
+      - name: The edge reaches the new build
         run: |
           set -euo pipefail
           for attempt in $(seq 1 20); do
@@ -147,13 +157,31 @@ jobs:
           echo "bugs.remsoft.dev did not answer /health after the deploy"
           exit 1
 
+      # ONLY when the host thinks it succeeded, and that condition is the point.
+      #
+      # `if: failure()` fired for EITHER failure, and the deploy failing is the case where
+      # `release.sh` has ALREADY rolled back and exited 1. A second `--rollback` then pops another
+      # entry off the trail: with two earlier releases it retreats one further than anybody asked,
+      # and with one it finds nothing to go back to and STOPS the service. A canary doing its job —
+      # rejecting a bad build and restoring the good one — would have ended as an outage.
+      #
+      # So this runs only when the deploy step SUCCEEDED and something after it did not, which is
+      # exactly the case the host does not know about: the edge never came back. (CodeRabbit, #328.)
       - name: Roll back, and say so
-        if: failure()
+        if: failure() && steps.deploy.outcome == 'success'
         env:
           HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
         run: |
           set -euo pipefail
-          echo "::error::the deploy did not verify; rolling the host back"
+          echo "::error::the host installed it but the edge never answered; rolling back"
           ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
               "$USER_NAME@$HOST" "deploy --rollback"
+
+      # And when the DEPLOY is what failed, say what the host already did rather than doing it
+      # again. A run that ends here has a service on its previous release, or stopped — `release.sh`
+      # decided which, and its output is above.
+      - name: The host rolled itself back
+        if: failure() && steps.deploy.outcome == 'failure'
+        run: |
+          echo "::error::the host rejected this build; release.sh has already restored the previous release or stopped the unit. Nothing further was sent, because a second rollback would retreat past the release that is serving."
