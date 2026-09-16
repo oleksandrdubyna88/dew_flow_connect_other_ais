@@ -411,13 +411,15 @@ behave, and one check runs the **real binary** and parses its output with the pa
 
 #### Definition of done
 
-- [ ] `collect_runs` exists; a run writes it before the work, on every candidate, and in a `finally`.
-- [ ] A stale run is swept to `interrupted`; a live one is untouched; no row is ever deleted.
-- [ ] The allowlist is one list in the core, enforced before any finding field is read.
-- [ ] `--bugs-json` reports `lastRun`, optional, and old output parses.
-- [ ] The section renders, repaints, and holds no free-text control.
-- [ ] `TreeSitter.DotNet` is exempt from the monthly bump by something that FAILS, not by a sentence.
-- [ ] The three drifted references above are corrected and the six satisfied DoD boxes are ticked.
+- [x] `collect_runs` exists; a run writes it before the work, on every candidate, and in a `finally`.
+- [x] A stale run is swept to `interrupted`; a live one is untouched; no row is ever deleted.
+- [x] The allowlist is one list in the core, enforced before any finding field is read — and it now
+      travels on the wire, so the picker follows the server it is talking to rather than a copy.
+- [x] `--bugs-json` reports `lastRun`, optional, and old output parses — checked against the REAL
+      binary by `bugzLiveContract.test.ts`, not only against hand-written JSON.
+- [x] The section renders, repaints, and holds no free-text control.
+- [x] `TreeSitter.DotNet` is exempt from the monthly bump by something that FAILS, not by a sentence.
+- [x] The three drifted references above are corrected and the six satisfied DoD boxes are ticked.
 ## Test plan
 
 - `BugsQuery` against a seeded `RoundsDb`, the `RoundsDbTests` pattern: real SQLite, temp directory.

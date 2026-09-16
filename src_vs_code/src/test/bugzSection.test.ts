@@ -6,7 +6,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun } from '../roundsDb';
-import { RANKING_VENDORS, collectLabel, lastRunLine, mayRank } from '../bugzView';
+import { RANKING_VENDORS, bugzBody, collectLabel, lastRunLine, mayRank } from '../bugzView';
 
 /**
  * The Bugz section — its pure decisions, and its controls RUN rather than read.
@@ -38,8 +38,12 @@ const RUN: CollectRun = {
   reasons: '',
 };
 
-const corpus = (lastRun: CollectRun): BugCorpus => ({
-  funnel: { all: 100, onCode: 80, accepted: 60, gating: 50, runtime: 40, located: 40, unprocessed: 20 },
+const corpus = (lastRun: CollectRun, collected = 0): BugCorpus => ({
+  funnel: {
+    all: 100, onCode: 80, accepted: 60, gating: 50, runtime: 40, located: 40, unprocessed: 20,
+    collected,
+  },
+  rankingVendors: ['local'],
   lastRun,
   read: true,
 });
@@ -261,6 +265,57 @@ test('only a local model may rank', () => {
  *
  * <p>These two halves have shipped out of step before, so the panel must read the old shape.</p>
  */
+/**
+ * Review stays available when a later run collects nothing new.
+ *
+ * <p>The button was gated on `lastRun.collected`, which is a BATCH DELTA. Run one collects ten
+ * pairs; run two takes the remaining candidates and skips every one of them, legitimately, so its
+ * delta is zero — and the button went dark over the ten pairs sitting in the database. What gates
+ * it is what the corpus HOLDS.</p>
+ */
+test('a run that collected nothing new does not hide what is already collected', () => {
+  const nothingNew = { ...RUN, state: 'done', finishedUtc: 'x', collected: 0, skipped: 7 };
+  const { html } = run({}, { bugz: corpus(nothingNew, 10) });
+  const section = html.slice(html.indexOf('data-section="bugz"'));
+  const body = section.slice(0, section.indexOf('</details>'));
+
+  assert.ok(!/data-command="reviewBugs" disabled/.test(body),
+    'ten pairs are in the database; a batch delta of zero must not hide them');
+});
+
+/**
+ * A state this build has never heard of is treated as STILL GOING.
+ *
+ * <p>An equality test against `running` would call a later paused-for-approval state finished,
+ * re-enable Collect and let a second run start beside the first. Waiting too long costs a stale
+ * line; declaring a working run finished costs a duplicate collection.</p>
+ */
+test('an unknown run state is not mistaken for a finished one', () => {
+  assert.ok(isRunning({ ...RUN, state: 'paused-for-approval' }));
+  assert.ok(!isRunning({ ...RUN, state: 'done' }));
+  assert.ok(!isRunning({ ...RUN, state: 'interrupted' }));
+});
+
+/**
+ * The picker offers what THIS server allows, not what this build was compiled believing.
+ *
+ * <p>Both halves asserting `shared/ranking-vendors.txt` keeps two source files honest; it says
+ * nothing about an installed extension and an installed server of different ages. The list travels
+ * on the wire, and the panel's own is only the fallback for a server too old to send one.</p>
+ */
+test('the picker follows the server it is actually talking to', () => {
+  const models = [{ id: 'onprem/qwen', label: 'on-prem' }, { id: 'local/qwen', label: 'here' }];
+  const newer = { ...corpus(RUN, 1), rankingVendors: ['local', 'onprem'] };
+
+  assert.match(bugzBody({ corpus: newer, models, model: '', server: '' }), /onprem\/qwen/);
+
+  // And a server too old to say falls back to what this build knows, rather than to nothing.
+  const older = { ...corpus(RUN, 1), rankingVendors: [] };
+  const html = bugzBody({ corpus: older, models, model: '', server: '' });
+  assert.ok(!html.includes('onprem/qwen'), 'an unknown vendor is not offered on a guess');
+  assert.match(html, /local\/qwen/);
+});
+
 test('a corpus from a server too old to have runs still reads', () => {
   const old = parseBugs(JSON.stringify({
     funnel: { all: 1, onCode: 1, accepted: 1, gating: 1, runtime: 1, located: 1, unprocessed: 1 },

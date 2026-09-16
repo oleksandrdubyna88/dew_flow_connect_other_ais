@@ -42,7 +42,13 @@ public sealed record CollectRunRow(
     string Reasons = "")
 {
     /// <summary>Whether a run is happening — what the button is disabled by.</summary>
-    public bool Running => State is CollectRunState.Running;
+    /// <remarks>
+    /// <b>Defined as "not finished", not as "equal to running".</b> A state this build has never
+    /// heard of — a later one that pauses for an approval, say — would read as FINISHED under an
+    /// equality test, and the panel would re-enable Collect and let a second run start beside the
+    /// first. Unknown means keep waiting, which is the safe direction. (Code round 2, codex.)
+    /// </remarks>
+    public bool Running => Any && !CollectRunState.IsFinished(State);
 
     /// <summary>Whether any run has ever been recorded here.</summary>
     public bool Any => Id.Length > 0;
@@ -74,4 +80,16 @@ public static class CollectRunState
     /// they were decided, and `--all` is how somebody revisits the rest.
     /// </remarks>
     public const string Interrupted = "interrupted";
+
+    /// <summary>The states that mean nothing more will happen.</summary>
+    /// <remarks>
+    /// The list is of ENDINGS rather than of beginnings, and everything is read against it: a state
+    /// nobody here recognises is treated as still going, because the cost of waiting for a run that
+    /// has ended is a stale line, and the cost of declaring one finished while it works is a second
+    /// run started beside it.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> Finished = [Done, Failed, Interrupted];
+
+    /// <summary>Whether this state means the run is over.</summary>
+    public static bool IsFinished(string state) => Finished.Contains(state, StringComparer.Ordinal);
 }
