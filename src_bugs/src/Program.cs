@@ -14,7 +14,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 /// key table has no name, no address and no <c>last_seen_utc</c>; and the route logs no client
 /// address. That last one this process cannot guarantee on its own — see the note on `/ingest`.</para>
 /// </remarks>
-internal static class Program
+// NOT static: `WebApplicationFactory<Program>` takes it as a type argument, which is how the
+// tests host this server in-process. `coai-server` is arranged the same way.
+internal sealed class Program
 {
     /// <summary>The environment variable holding the secret keys are hashed with.</summary>
     /// <remarks>

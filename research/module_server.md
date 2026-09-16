@@ -2129,3 +2129,79 @@ round assembly (`BuildWork`, `ComposePrompt`, the deal and the seed); the docume
 (`ReviewDocumentAsync` and its four helpers, which need a delegate back to `RunStageAsync`); and
 `resolve`. The last two are the largest and the most entangled with session state, which is why they
 are last rather than first.
+
+## `coai-bugs`: the only thing that leaves the machine (2026-09-16)
+
+Six stories read a local database and a local git history. This one sends, and everything before it
+is worth exactly what it lets through.
+
+### Three fields cross
+
+`UploadedPair` is the language and the two skeletons. `StoredPair` carries the finding id, the
+symbol, the severity, the category and the title, and every one of them must never leave — a
+story-5 code round flagged reusing it here as the obvious way to leak all five in one edit that
+reads like a simplification. `OnlyThreeFieldsLeaveTests` names the three rather than counting them,
+because a count passes when somebody swaps one for `SymbolName`; adding the symbol back turns two
+tests red, one of them by finding the name in the serialised body.
+
+**The id is derived, not sent.** The plan first promised idempotency on a client-generated entry id
+AND that only three fields cross; two reviewers said both cannot hold. Both do when the id is a pure
+function of the payload — `sha256(language\0before\0after)` — so the server computes it, nothing
+extra crosses, and two people who found the same defect send one row.
+
+### The alphabet is a SHAPE check
+
+The client knows the source and asserts a blacklist; the server never saw it, so it asserts a
+whitelist — every word a placeholder, runtime vocabulary or a keyword; every string empty; every
+number zero. It needs no parser and cannot be defeated by a name nobody thought to forbid.
+
+**And it is not proof.** A method literally named `method_1` normalises to a placeholder that may be
+the same string, and nothing here can tell them apart. Nothing unsafe follows, but the plan called
+this the guarantee and a reviewer was right that the guarantee is the client's property test.
+
+Testing the validator against this repository's OWN skeletons — rather than fixtures — found two
+defects in it: `"[^"]+"` matches across two adjacent empty strings, so `method_1("", "")` read as a
+leak; and `[\d.]*` swallowed the C# range operator, so `var_1[0..0]` read as the literal `0..`. Both
+refused perfectly good work, which is the direction nobody notices.
+
+### Per-item results
+
+A whole-batch refusal is a batch the client retries unchanged, for ever, with every valid pair
+stranded behind the invalid one. So `/ingest` answers **200 with a result per item** — `accepted`,
+`duplicate` or `refused` with the word that caused it — and a refusal never fails its neighbours.
+`duplicate` is a success: the corpus holds it and the client may stop sending it.
+
+### Keys, and what is deliberately not stored
+
+HMAC-SHA256 with a server secret, compared in constant time against **every** row, so the answer's
+timing does not depend on where a key sits. A revoked key and an unknown one are indistinguishable.
+`--issue-key` prints the key once and stores only the hash; `--revoke` ends one.
+
+**`last_seen_utc` does not exist**, on purpose: with submission timestamps it is a record of when a
+person we handed a key to was working. `submissions` is a counter without a clock — **and it is not
+a rate limit**, which the plan claimed until a reviewer pointed out that a lifetime count has no
+window and no reset. What bounds abuse is the 1 MB body cap and the 200-pair batch cap.
+
+**The no-client-IP promise is a DEPLOYMENT obligation, not a code one.** A reverse proxy writes
+`remote_addr` before the request reaches any route, so an in-process test asserting that no logging
+middleware is registered passes while nginx logs every upload. Three reviewers said so. The route
+reads no address; the rest is nginx and Kestrel configuration, verified by reading the deployed
+stack's logs after a real ingest.
+
+### Quarantine has a door
+
+Ingest lands in quarantine; `corpus` is the promoted table. `--waiting` shows a person the skeletons
+and `--promote` moves one across in a single transaction, so an interrupted promotion leaves the row
+where it started. Nothing automatic and no timer — the whole reason quarantine exists is that a
+machine cannot tell a real skeleton from a crafted one.
+
+### The client half
+
+`coai-mcp --upload-pairs --server <https://host>` sends pairs whose `keep = 1` and which have no
+`sent_utc` and no `send_refusal`. **The key is never an argument** — `COAI_BUGS_KEY` or
+`--key-file`, because an argument is in process listings and shell history — and a non-loopback
+`http` server is refused outright.
+
+**A pair is marked only on an acknowledgement.** Marked when the batch left, it would be skipped for
+ever if the reply never came. A transport failure marks nothing; a refusal is marked as refused
+rather than sent, because retrying produces the same answer and hides a defect in our normaliser.

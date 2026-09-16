@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" />
+    <!-- Hosts the real server in-process. The decisions are unit-tested; the ROUTE, the bearer
+         header and the AOT JSON binding are not part of them. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 

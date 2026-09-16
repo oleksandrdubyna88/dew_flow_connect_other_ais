@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- `Program` is internal and the harness hosts it. Same arrangement as `coai-server`. -->
+    <InternalsVisibleTo Include="CoaiBugs.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The core, for `Alphabet` and `RuntimeVocabulary`.
 
          A plan reviewer asked for the vocabulary to travel as a shared FILE, on the premise that
