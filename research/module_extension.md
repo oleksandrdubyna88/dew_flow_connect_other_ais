@@ -1882,6 +1882,12 @@ question the shape cannot: a run that did not reach every candidate is dated for
 other failure. Without it, hiding the panel once left two families saying *not asked yet* until the
 editor restarted.
 
+**And the dating happens where a THROW is visible.** It was done inside the try, so an exception
+left nothing dated and the edge trigger never asked again for the rest of the session - the very hole
+the dating exists to close. `probeSucceeded` is the predicate, in `claudeProbe.ts` where a test can
+call it; the `finally` is what reads it, because a `finally` is the only place that sees a throw as
+well as a return.
+
 **The record names the binary, not only the version.** A reviewer row and a consultant can point at
 two different installations of one version, signed into two different accounts, and a record keyed by
 version alone would label both from whichever was asked. It carries its executable and declines to

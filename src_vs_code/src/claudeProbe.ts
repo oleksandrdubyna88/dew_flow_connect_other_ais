@@ -114,6 +114,20 @@ export function askedEverything(
 }
 
 /**
+ * Did this run SUCCEED — did it confirm at least one family, having reached them all?
+ *
+ * <p>Three different failures answer false and each is a state this installation reaches: nothing
+ * learned at all, an allowance that is spent (every candidate answered, none confirmed), and a run
+ * abandoned because the panel was hidden under it. They differ in what they leave behind and not in
+ * what should happen next, which is that the person can try again shortly.</p>
+ */
+export function probeSucceeded(found: ProbeResult | undefined, candidates?: readonly string[]): boolean {
+  return found !== undefined
+    && found.models.some((m) => m.verified)
+    && askedEverything(found, candidates);
+}
+
+/**
  * The answer to keep, given what was found and what was already held.
  *
  * <p>Its own function because it is the rule the plan round pressed hardest on, and a rule inside an
