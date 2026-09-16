@@ -54,8 +54,9 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, RoundKey, serverRun } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, writeKeep } from './roundsDbRead';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
+import { BugzReviewPanel } from './bugzReviewPanel';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -1699,10 +1700,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         await this.collectBugs();
         break;
       case 'reviewBugs':
-        // Story 5's page. Until it exists the button is disabled unless a run collected
-        // something, so this is reachable only once there is something to show.
-        await vscode.window.showInformationMessage(
-          'The review page arrives with the next story. What has been collected is in the local database.');
+        await this.reviewBugs();
         break;
       case 'setBugsServer':
         await this.setBugsServer();
@@ -2075,6 +2073,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private bugzAt = 0;
 
+  /** The review window, held so a second press returns to it rather than opening another. */
+  private review: BugzReviewPanel | undefined;
+
   /**
    * What the corpus and the last run look like now.
    *
@@ -2168,6 +2169,34 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * held by `focusin` — but a dialog is what the two nearest neighbours do, it validates before it
    * closes, and it keeps this section free of the trap entirely.</p>
    */
+  /**
+   * Opens the review page over what has been collected.
+   *
+   * <p>One panel, held, so pressing the button twice brings the same window back rather than
+   * opening a second one over the same rows — two windows writing decisions about the same pairs
+   * would each redraw from a database the other had just changed.</p>
+   */
+  private async reviewBugs(): Promise<void> {
+    const server = serverPath(this.context.globalStorageUri);
+    if (server === undefined) {
+      await vscode.window.showWarningMessage(
+        'The MCP server is not installed yet, so there is nothing to review.');
+
+      return;
+    }
+
+    this.review ??= new BugzReviewPanel({
+      read: () => readPairs(server.fsPath),
+      decide: (ids, keep) => writeKeep(
+        server.fsPath, ids, keep, keysFileIn(this.context.globalStorageUri.fsPath)),
+    });
+
+    await this.review.show();
+    // The Bugz section shows how many are waiting, and a decision changes that.
+    this.bugzAt = 0;
+    await this.render();
+  }
+
   private async setBugsServer(): Promise<void> {
     const typed = await vscode.window.showInputBox({
       title: 'Where collected pairs are sent',
