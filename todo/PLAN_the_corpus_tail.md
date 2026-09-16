@@ -7,6 +7,19 @@
 > when that plan was promoted on 2026-09-16. Everything here was named in it rather than ticked, and
 > a named gap in a shipped plan reads as done to everybody who was not there.
 >
+> **The boundary with [PLAN_the_bugs_release_line.md](../research/PLAN_the_bugs_release_line.md), named here
+> as well as there** (`planning-docs.md`: a boundary between two plans is written into the OLDER
+> document too, because a division legible from one direction only is how the same work gets built
+> twice):
+>
+> | Item | Built by | Order |
+> |---|---|---|
+> | `bugs-v*` release line, two Linux RIDs, the smoke | the release-line plan | 1st |
+> | `deploy/nginx/coai-bugs` and `deploy/bugs/README.md` | the release-line plan | 1st, before the tag |
+> | The post-deploy log check, as an automated gate | **stays here** — it needs a deployment to run against | after a host exists |
+> | The ranking pass's transport | **stays here** | independent of both |
+> | `panelProvider.ts:2991`'s `Math.random()` nonce | **stays here** | independent of both |
+>
 > Related docs: [module_server.md](../research/module_server.md),
 > [module_tests.md](../research/module_tests.md),
 > [architecture.md](../research/architecture.md).
@@ -28,21 +41,17 @@ beside `CollectRun`, and it must go through the same local-model path the allowl
 order follows `Order`'s rules in each case. One scenario over a real local engine, skipped when none
 is configured.
 
-## 2. `coai-bugs` has no release line and no deploy notes
+## 2. ~~`coai-bugs` has no release line and no deploy notes~~ — CLOSED
 
-The binary builds, the tests run it, and nothing ships it. `coai-mcp` and the extension have release
-workflows; this has neither a tag shape nor a published artefact.
+Built by [PLAN_the_bugs_release_line.md](../research/PLAN_the_bugs_release_line.md): a `bugs-v*` line over two
+Linux RIDs whose smoke starts the PUBLISHED binary and waits for `/health`, because that is the
+only thing that can see the embedded keyword list arrive; `deploy/nginx/coai-bugs`; and
+`deploy/bugs/README.md`, which travels inside the archive rather than beside it.
 
-**What the release needs**, from what story 6 already proved it needs:
-
-- A tag shape of its own — `bugs-v0.1.0` — because its version is not the MCP server's and a shared
-  tag would release two things on one decision.
-- `COAI_BUGS_CONTRACT_EXE` pointed at the published binary in the workflow, exactly as
-  `COAI_CONTRACT_EXE` already is for `coai-mcp`. `TheBuiltBinariesTests` is written to be that smoke
-  and is worth nothing to a release that does not run it against the published artefact. **This is
-  the one that matters most:** the defect it exists to catch is a keyword file that is present in a
-  checkout and absent from a deployment, and only the published binary can prove otherwise.
-- A deploy notes file recording the nginx and Kestrel configuration — see 3.
+**What that plan's own round then found**, and worth carrying forward as the reason this was not a
+formality: `error_log ... warn` still records a contributor's address, because `limit_req` logs
+`client: <address>` at ERROR level — so a vhost with `access_log off` keeps a dated list of exactly
+the people it throttled, and a verification recipe that sends one SUCCESSFUL pair never sees it.
 
 ## 3. The no-client-IP promise is a deployment obligation
 
@@ -50,11 +59,16 @@ workflows; this has neither a tag shape nor a published artefact.
 reviewers were right that this proves nothing: a reverse proxy writes `remote_addr` before the
 request reaches any route. `UseSerilogRequestLogging` is deliberately not wired for the same reason.
 
-**What closes it:** a deploy notes file naming the nginx directives that suppress the access log for
-this vhost and the Kestrel settings that keep it, plus a post-deploy check that reads the deployed
-stack's logs after a real ingest and asserts no address appears. The check belongs with the other
-post-deploy checks, not in a unit suite, because the thing being checked is a machine's
-configuration and not this code.
+**Half of it is now closed.** The deploy notes and the vhost exist, and the server watches its own
+edge: any forwarding header arriving makes it warn, by NAME and never by value, because it cannot
+read an nginx config it has no reliable path to and a check that passed on a file nginx never
+loaded would be worse than none.
+
+**What is still open is the AUTOMATED post-deploy check** — running the recipe in
+`deploy/bugs/README.md` against a real host and failing if an address appears in any of the four
+places. It cannot be written until there is a deployment to run it against, and it belongs with the
+other post-deploy checks rather than in a unit suite, because the thing being checked is a
+machine's configuration and not this code.
 
 ## 4. Smaller, and honest about being small
 
@@ -66,15 +80,15 @@ configuration and not this code.
 
 ## Build order
 
-3 before 2 — the deploy notes are an input to the release, not a follow-up — then 1, which touches
-nothing either of them touches. 4 is independent of all three.
+2 and the first half of 3 are done, in that order and for that reason — the deploy notes are an
+input to the release rather than a follow-up. What is left is 1 and 4, which touch nothing each
+other or the closed items touch, and the automated post-deploy check, which waits on a host.
 
 ## Definition of done
 
 - [ ] The ranking pass calls a local model and orders by its answer, with the fake-model tests above.
-- [ ] `bugs-v*` releases `coai-bugs`, and the workflow runs `TheBuiltBinariesTests` against the
-      PUBLISHED binary through `COAI_BUGS_CONTRACT_EXE`.
-- [ ] A deploy notes file records the nginx and Kestrel configuration that keeps the no-IP promise.
+- [x] `bugs-v*` releases `coai-bugs`, with a smoke that starts the published binary.
+- [x] A deploy notes file records the nginx configuration that keeps the no-IP promise.
 - [ ] A post-deploy check reads the deployed logs after a real ingest and finds no address.
 - [ ] `panelProvider.ts:2991` uses `randomBytes`, or the operator says it stays.
 - [ ] This plan is promoted when the list above is done.

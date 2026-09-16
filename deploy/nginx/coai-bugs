@@ -1,0 +1,108 @@
+# /etc/nginx/sites-available/coai-bugs — the corpus ingest server's edge.
+#
+# ---------------------------------------------------------------------------
+# THIS FILE EXISTS TO KEEP A PROMISE THE APPLICATION CANNOT KEEP ALONE.
+#
+# `coai-bugs` accepts anonymous before/after code skeletons from anybody holding a key. The
+# key carries no identity: the key table has no name, no address and no `last_seen_utc`, and
+# `submissions` is a counter without a clock — deliberately, because with timestamps it would
+# be a record of when a person we handed a key to was working.
+#
+# The route reads no client address and the server registers no request-logging middleware.
+# THAT PROVES NOTHING ON ITS OWN. nginx writes `$remote_addr` to the access log before the
+# request reaches any route, so a default vhost in front of this server records every
+# contributor's address next to the minute they contributed — which is the whole thing the
+# application was built not to do. Three code-round reviewers said an in-process test cannot
+# reach this, and they were right: it is a property of THIS FILE.
+#
+# So, three rules, and none of them is a preference:
+#
+#   1. `access_log off`. Not a custom format with the address removed — off. A format is one
+#      edit away from carrying it again, and nothing fails when it does.
+#   2. The forwarding headers are CLEARED, not merely unset. The Team server's vhost sets
+#      `X-Real-IP` and `X-Forwarded-For` because it partitions a rate limit on the real address.
+#      This one must not — and "must not set them" is weaker than it sounds, because a location
+#      that ever picks up a distro `proxy_params` or an inherited include acquires them without
+#      anybody choosing to. Setting them to the empty string means nginx sends no such header
+#      whatever else in the config tried to. (Plan round, codex.)
+#   3. `error_log /dev/null crit`, and NOT `warn` as this file first said. **A rate limit writes
+#      the client address to the ERROR log.** `limit_req` and `limit_conn` emit
+#      `limiting requests, ... client: 203.0.113.7` at error level by default, so a vhost with
+#      `access_log off` and `error_log warn` still keeps a dated list of exactly the contributors
+#      who hit the limit — and the manual verification recipe, which sends ONE successful pair,
+#      would never have seen it. A plan reviewer caught this before the first deployment.
+#
+#      What it costs, said plainly: this vhost has no error diagnostics. A 502 here is debugged by
+#      reading the service's own journal, or by temporarily pointing this at a file and accepting
+#      that whatever it records must then be deleted. That trade is deliberate. The alternative —
+#      keeping a log "just for errors" — is keeping the addresses of everyone the server was rude
+#      to, which is not a better set of people to have a list of.
+#
+# What DOES hold an address, and why it is not a breach: `limit_req_zone` keys on
+# `$binary_remote_addr`, so nginx keeps the address in shared memory for the length of the
+# rate-limit window. It is never written to disk and never reaches the application. A rate
+# limit that does not know who is calling is not a rate limit; a LOG is a record. The
+# difference is the whole design.
+# ---------------------------------------------------------------------------
+#
+# Port 80 only, for the same reason `deploy/nginx/coai` is: `certbot --nginx` runs `nginx -t`
+# BEFORE it issues, so a file naming a certificate that does not exist yet aborts the issue and
+# blocks the reload. certbot edits this file in place afterwards, adding the TLS listener and
+# the 301. See deploy/bugs/README.md for what it looks like after that.
+
+limit_req_zone  $binary_remote_addr zone=bugs_req:10m rate=2r/s;
+limit_conn_zone $binary_remote_addr zone=bugs_conn:10m;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name bugs.remsoft.dev;
+
+    server_tokens off;
+
+    # RULE 1. Off, not filtered.
+    access_log off;
+    # RULE 3. To nowhere, at `crit`. `limit_req` logs the client address at ERROR level, so any
+    # real destination here is a list of the contributors this server throttled.
+    error_log /dev/null crit;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+
+    # The application refuses a larger body itself (`Ingest.MostBytes`). This is the same bound
+    # one hop earlier, so a body that will be refused is never carried across the network.
+    client_max_body_size 1m;
+
+    location / {
+        # 2r/s, not the Team server's 20. A contributor sends at most a few hundred pairs and
+        # then stops for days; nothing here is interactive and nothing here polls.
+        limit_req  zone=bugs_req burst=10 nodelay;
+        limit_conn bugs_conn 20;
+
+        proxy_pass http://127.0.0.1:8110;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # RULE 2, and it is an ASSIGNMENT rather than an omission on purpose. An empty value makes
+        # nginx send no such header at all, which an omission does not guarantee: a location that
+        # inherits `proxy_params` or any include setting them would pass a real address through
+        # while this file looked correct. Do not "tidy these away" and do not copy the Team
+        # server's versions in to match it — that site partitions a rate limit on the address and
+        # this one promises never to hold it.
+        proxy_set_header X-Real-IP        "";
+        proxy_set_header X-Forwarded-For  "";
+        proxy_set_header Forwarded        "";
+        proxy_set_header CF-Connecting-IP "";
+        proxy_set_header True-Client-IP   "";
+
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_connect_timeout 5s;
+
+        proxy_buffering on;
+    }
+}

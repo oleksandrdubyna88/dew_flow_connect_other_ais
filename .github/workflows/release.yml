@@ -26,6 +26,7 @@ on:
       - 'mcp-v*'
       - 'extension-v*'
       - 'server-v*'
+      - 'bugs-v*'
   workflow_dispatch:
     inputs:
       target:
@@ -888,3 +889,245 @@ jobs:
           docker buildx imagetools create -t "$IMAGE:$VERSION" -t "$IMAGE:latest" \
             "$IMAGE@$AMD64" \
             "$IMAGE@$ARM64"
+
+
+  # ---------------------------------------------------------------------------
+  # `coai-bugs`, the corpus ingest server.
+  #
+  # TWO RIDs, not six, and that is the whole difference from its siblings. `coai-mcp` runs on
+  # whatever machine a person develops on and `coai-server` is handed to other people; this one is
+  # deployed, by us, to a Linux host under systemd behind nginx (deploy/bugs/README.md). Building
+  # win-arm64 for it would be four more legs of a matrix producing artefacts nothing installs.
+  #
+  # Its smoke is the reason this line is worth having at all. The defect the story-6 code round
+  # found FOUR times, from four reviewers, is that the keyword list was read by walking parent
+  # directories for `shared/` — which works in a checkout and in no deployment, so a build that
+  # succeeded produced a binary that threw before it listened. The list is an embedded resource
+  # now, and `SkeletonKeywords.From(Keywords())` runs BEFORE any route is mapped: a published
+  # binary that answers /health has proved it carries its own word list. Nothing else can prove it.
+  # ---------------------------------------------------------------------------
+  bugs-draft:
+    name: the bugs release, as a draft
+    if: startsWith(github.ref, 'refs/tags/bugs-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create it, once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
+          "coai-bugs ${GITHUB_REF_NAME#bugs-v}"
+          "Native AOT builds of the ConnectOtherAIs corpus ingest server. Deploy notes, and the nginx rules that keep its no-client-address promise, are in deploy/bugs/README.md."
+
+  bugs-binaries:
+    name: coai-bugs (${{ matrix.rid }})
+    # Written the same way as its two siblings for the reason they record: a job whose needed job
+    # was SKIPPED is skipped whatever its own `if` says, which once turned a whole build path into
+    # a run that produced nothing.
+    if: >-
+      always() && !cancelled()
+      && startsWith(github.ref, 'refs/tags/bugs-v') && needs.bugs-draft.result == 'success'
+    needs: [bugs-draft]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # THE SUBMODULE, without which the tests below cannot pass.
+      #
+      # `StageRulesTests` reads `.agents/conventions/` — it asks the production collector which
+      # rules the tier selects and whether they resolve in the pinned mount — and a bare checkout
+      # has an empty submodule directory. So every mcp leg that RUNS its tests failed two tests and
+      # the whole release with them, while `osx-x64`, which is cross-built and skips its tests,
+      # passed. That is what burned `mcp-v0.26.0` and then `mcp-v0.27.0`: a release line that could
+      # not publish at all, with the failure looking like a test regression rather than a missing
+      # checkout. `ci.yml` has had this step all along, which is why the pull requests were green.
+      #
+      # `--depth 1` and only this path: never `submodules: recursive`, which would drag whatever
+      # code submodules appear later into the build.
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Toolchain (linux)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+
+      # Never ship a binary that has not passed its own tests, and this suite is the one that
+      # drives the built server as a real process.
+      - name: Build and test
+        run: |
+          set -euo pipefail
+          dotnet build src_bugs/tests/CoaiBugs.Tests.csproj -c Release
+          ./src_bugs/tests/bin/Release/net10.0/CoaiBugs.Tests
+
+      - name: The version this release stamps
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#bugs-v}" >> "$GITHUB_ENV"
+
+      - name: Publish
+        run: dotnet publish src_bugs/src/CoaiBugs.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+
+      # THE SMOKE THIS LINE EXISTS FOR. A cross-built arm64 binary cannot run on an x64 runner, so
+      # that one leg checks what it can — the file exists and is an ELF — and says so out loud
+      # rather than passing quietly.
+      - name: Smoke the published binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The architecture is asserted for EVERY leg, runnable or not. A name-presence check on
+          # `e_sqlite3` passes just as happily for a library of the wrong architecture, and an
+          # arm64 archive carrying an x64 one is a deployment that fails when it opens the key
+          # table. (Plan round, codex.)
+          case "${{ matrix.rid }}" in
+            linux-x64)   WANT="x86-64" ;;
+            linux-arm64) WANT="aarch64" ;;
+            *) echo "no expected architecture for ${{ matrix.rid }}"; exit 1 ;;
+          esac
+          for BINARY in out/coai-bugs out/*e_sqlite3*; do
+            file -L "$BINARY" | grep -q "$WANT" || {
+              echo "$BINARY is not $WANT — this archive would not run on the platform it names"
+              file -L "$BINARY"
+              exit 1
+            }
+          done
+          echo "the binary and its native library are both $WANT"
+
+          if [ "${{ matrix.rid }}" != "linux-x64" ] && [ "$(uname -m)" != "aarch64" ]; then
+            echo "cross-built ${{ matrix.rid }} cannot RUN here; the architecture check above is what this leg gets"
+            exit 0
+          fi
+
+          export COAI_BUGS_SECRET=a-smoke-secret-not-a-real-one
+          export COAI_BUGS_DATA="$(mktemp -d)"
+
+          # An unknown mode must answer 64 — the signal a caller uses to detect an old binary, and
+          # a branch this server did not have at all until a scenario test found it starting
+          # Kestrel and listening for ever instead.
+          set +e
+          ./out/coai-bugs --rotate-the-moon >/dev/null 2>&1
+          UNKNOWN=$?
+          set -e
+          [ "$UNKNOWN" = "64" ] || { echo "an unknown mode answered $UNKNOWN, not 64"; exit 1; }
+
+          # THE DATABASE, and this line is the `e_sqlite3` check. `--waiting` opens the file
+          # through `Corpus.Open`, which is a P/Invoke into SQLite — the exact call that threw
+          # DllNotFoundException when `mcp-v0.18.1` shipped its executable alone. `/health` below
+          # touches no database at all and would pass with the library missing, which a plan
+          # reviewer pointed out. Both steps are here because they check different things.
+          ./out/coai-bugs --waiting
+
+          # And the whole startup, which is what proves the keyword list travelled INSIDE the
+          # binary: the list is parsed — and now asserted non-empty — before any route is mapped,
+          # so a server that answers /health has one.
+          setsid ./out/coai-bugs --urls http://127.0.0.1:8119 &
+          SERVER=$!
+          # The whole process GROUP, on every exit: success, failure, and the cancellation a
+          # release is most likely to meet. A child left holding port 8119 is the next matrix leg's
+          # problem and reads as an unrelated flake. (Plan round, codex.)
+          trap 'kill -- "-$SERVER" 2>/dev/null || kill "$SERVER" 2>/dev/null || true' EXIT INT TERM
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8119/health | grep -q ok; then
+              echo "the published binary listens and carries its own keyword list"
+              exit 0
+            fi
+            kill -0 "$SERVER" 2>/dev/null || { echo "the server exited during startup"; wait "$SERVER"; exit 1; }
+            sleep 1
+          done
+          # Bounded at forty seconds rather than the job's timeout: a binary that hangs before
+          # binding should cost one step, not the whole runner budget.
+          echo "the published binary never answered /health in 40s"
+          exit 1
+
+      # The binary, the native library it dlopens, and the notes that make it safe to run.
+      #
+      # `e_sqlite3` is the lesson the mcp line paid for on 0.18.1: Native AOT compiles managed code,
+      # and a P/Invoke into SQLite still resolves at run time through the OS loader, which searches
+      # the directory the executable sits in. That release shipped the executable alone; it started,
+      # answered every flag, and threw DllNotFoundException the first time anything touched the
+      # database. THIS SERVER IS ALL DATABASE — every request reads the key table — so the same
+      # omission here is a server that answers 401 to everybody and logs nothing about why.
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="coai-bugs-$VERSION-${{ matrix.rid }}"
+          mkdir "$NAME"
+          NATIVE=$(ls out/*e_sqlite3* 2>/dev/null | head -1)
+          if [ -z "$NATIVE" ]; then
+            echo "the SQLite native library is not in the publish output — this server would ship unable to read its own key table"
+            ls -la out
+            exit 1
+          fi
+          cp "$NATIVE" "$NAME/"
+          cp out/coai-bugs "$NAME/"
+          # The deploy notes travel WITH the binary. They are not documentation about this
+          # artefact, they are half of what makes it safe to run: the no-client-address promise is
+          # kept by the nginx rules in them, and an operator who has the binary and not the notes
+          # has a server that quietly records every contributor.
+          cp deploy/bugs/README.md "$NAME/DEPLOY.md"
+          cp deploy/nginx/coai-bugs "$NAME/nginx-coai-bugs.conf"
+          tar czf "$NAME.tar.gz" "$NAME"
+          echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
+
+          # The ARCHIVE, not the directory it was made from: checking the publish output proves a
+          # file was BUILT, and what ships is this file, with a copy that silently did nothing
+          # sitting between the two.
+          LISTING=$(tar tzf "$NAME.tar.gz")
+          for WANTED in coai-bugs e_sqlite3 DEPLOY.md nginx-coai-bugs.conf; do
+            printf '%s' "$LISTING" | grep -q "$NAME/[^/]*$WANTED" || {
+              echo "the archive does not carry $WANTED beside the binary"
+              printf '%s' "$LISTING"
+              exit 1
+            }
+          done
+
+      - name: Checksum
+        shell: bash
+        run: sha256sum "$ASSET" > "$ASSET.sha256"
+
+      - name: Attach to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
+
+  bugs-release-complete:
+    name: the bugs release carries every platform
+    if: startsWith(github.ref, 'refs/tags/bugs-v')
+    needs: [bugs-binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # The RIDs are passed explicitly, which the script's own comment asks for: the three lines
+      # have independent lifecycles, and this one deliberately builds two platforms rather than six.
+      - name: Verify every expected asset, then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/scripts/verify-and-publish-release.sh bugs "$GITHUB_REF_NAME" linux-x64 linux-arm64

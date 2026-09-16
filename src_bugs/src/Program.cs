@@ -117,7 +117,7 @@ internal sealed class Program
 
         var app = builder.Build();
         using var corpus = Corpus.Open(Path.Combine(Data(), "coai-bugs.db"));
-        var keywords = SkeletonKeywords.From(Keywords());
+        var keywords = Checked(SkeletonKeywords.From(Keywords()));
 
         // Guarded, because two of those three arguments are COUNT queries: an installation that has
         // turned Information off would pay for them anyway, on every start, to build a line nobody
@@ -134,7 +134,7 @@ internal sealed class Program
         app.MapGet("/health", () => Results.Ok(new Health("ok")));
 
         app.MapPost("/ingest", (UploadRequest? request, HttpRequest http) =>
-            Accept(corpus, keywords, request, http, secret));
+            Accept(corpus, keywords, request, http, secret, app.Logger));
 
         await app.RunAsync();
 
@@ -160,8 +160,24 @@ internal sealed class Program
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
         UploadRequest? request,
         HttpRequest http,
-        string secret)
+        string secret,
+        Microsoft.Extensions.Logging.ILogger log)
     {
+        // The edge is checked on every request, because the request IS the evidence. A plan round
+        // asked for a mode that reads the nginx file; this process cannot know where that file is,
+        // `include` and templating mean the file on disk is not the effective config, and a check
+        // that passes on a file nginx never loaded is worse than none. A forwarding header arriving
+        // here means the edge sends one, whatever any file says. (Plan round, local/codex.)
+        if (EdgeSentAnAddress(http) is { Length: > 0 } header)
+        {
+            // The NAME, never the value: a warning quoting the address would be the leak it exists
+            // to report, written by the code that noticed it.
+            log.LogWarning(
+                "the edge sent {Header}. This server promises not to hold contributor addresses and "
+                + "its vhost must not set forwarding headers — see deploy/bugs/README.md",
+                header);
+        }
+
         var presented = Presented(http);
         var keyId = corpus.KeyFor(presented, secret);
         if (keyId.Length == 0)
@@ -224,6 +240,58 @@ internal sealed class Program
         var name = args[0].Split('=', 2)[0];
 
         return Array.IndexOf(HostArguments, name) >= 0 ? string.Empty : args[0];
+    }
+
+    /// <summary>
+    /// The headers an edge uses to pass a client's address on, none of which may reach this server.
+    /// </summary>
+    /// <remarks>
+    /// Five rather than two: the Team server's vhost sets `X-Real-IP` and `X-Forwarded-For`, and a
+    /// deployment that ever sits behind Cloudflare or a distro's stock `proxy_params` acquires the
+    /// others without anybody choosing them. Naming only the two we write ourselves would watch for
+    /// the mistake we already know about and miss the one we inherit.
+    /// </remarks>
+    private static readonly string[] Forwarding =
+        ["X-Forwarded-For", "X-Real-IP", "Forwarded", "CF-Connecting-IP", "True-Client-IP"];
+
+    /// <summary>The forwarding header this request carries, by NAME, or empty.</summary>
+    /// <remarks>
+    /// It answers the name and never the value, and that is the whole contract: the value is the
+    /// thing being protected, so a report carrying it would defeat the report.
+    /// </remarks>
+    internal static string EdgeSentAnAddress(HttpRequest http) =>
+        Array.Find(Forwarding, name => http.Headers.ContainsKey(name)) ?? string.Empty;
+
+    /// <summary>
+    /// The keyword list, refused when it parsed to nothing usable.
+    /// </summary>
+    /// <remarks>
+    /// <c>/health</c> answers from a route that touches neither this list nor the database, so a
+    /// build accident that embedded an empty file would start, satisfy the release smoke, publish,
+    /// and then refuse every submission with "this server has no keyword list for CSharp" — which
+    /// reads like the contributor's fault and is not. Better to not start. (Plan round, local.)
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, IReadOnlySet<string>> Checked(
+        IReadOnlyDictionary<string, IReadOnlySet<string>> keywords)
+    {
+        if (keywords.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "no keyword list was parsed at all; the alphabet check is made of it and this "
+                + "server cannot validate a single pair without one");
+        }
+
+        foreach (var (language, words) in keywords)
+        {
+            if (words.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"the keyword list for {language} parsed to no words, so every {language} pair "
+                    + "would be refused as if the contributor had leaked something");
+            }
+        }
+
+        return keywords;
     }
 
     private static string Secret() =>
