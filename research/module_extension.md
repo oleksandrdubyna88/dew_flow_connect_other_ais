@@ -3916,6 +3916,26 @@ be done, says so on the console, and *not knowing* is a reason to ASK rather tha
 who presses a chord and sees nothing presses it again; it is the same window notification the *Asked*
 button already shows for the same walk.
 
+### A folder that ANSWERED and matched nothing says so (2026-09-16)
+
+`ambiguous` folds two different facts into one flag — the session directory would not open, and the
+directory opened and holds nothing of this tab's name — so the decision had nothing to tell them
+apart with and called every non-namesake case *unreadable*. The commonest situation there is was
+therefore reported as a failure that had not happened: *"Conversations for X, as they were last read
+— the folder did not answer just now"*, above a folder that had answered perfectly well. Somebody
+sent after a directory problem looks for it for as long as they believe in it.
+
+`GotoAsked.walkFailed` now carries the failure separately, `Narrowing` has a fifth member, and
+`whyNarrowed` asks in the order the person cares about: two sessions of one name, then a walk that
+could not be done, then **No Claude session is called “X” — which conversation did you mean?**
+
+**And a narrowed list is no longer filtered by the window's first root.** `pickerRows` dropped every
+row whose `workspace` was not the picker's — which is the FIRST root, since that is what the command
+hands it — so a narrowed pick for a tab under a second root came up empty, and so did the *cross
+root* case, whose entire subject is a conversation filed somewhere else. The globe that would widen
+the scope is suppressed for narrowed lists, so there was no way out of the empty list either. A
+narrowed list is an answer somebody already worked out; what the person TYPES still filters it.
+
 **The latch is set inside the `try`.** Set outside it, a synchronous throw anywhere in the work would
 never reach the `finally`, and the command would be dead until the window was reloaded.
 

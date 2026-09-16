@@ -86,6 +86,25 @@ test('each of the six answers is carried out, and a seventh would be a compile e
   assert.match(command, /const unhandled: never = answer;/u, 'a seventh answer would be a press that does nothing');
 });
 
+test('the two ambiguities the walk can meet arrive as two separate facts', () => {
+  // `ambiguous` is true both for a folder that would not open and for one that opened and holds
+  // nothing of this name, so the decision could only ever call the second the first — and the
+  // commonest case of all was reported as a failure that had not happened. The fact each sentence
+  // rests on is gathered separately at the walker boundary.
+  const command = source('chatCommand.ts');
+
+  assert.match(command, /walkFailed: walked\.unsure,/u,
+    'a walk that ANSWERED and one that could not be done still arrive as the same fact');
+  assert.match(command, /severalSessions: severalMatch\(walked\.found\),/u,
+    'the positive fact that licenses the name fallback was lost');
+  // And the decision itself asks them in the order the person cares about.
+  const decide = source('chatGoto.ts');
+  const why = decide.slice(decide.indexOf('function whyNarrowed('), decide.indexOf('function whyNarrowed(') + 700);
+  assert.ok(why.indexOf('severalSessions') < why.indexOf('walkFailed'),
+    'a failed walk outranks two sessions of one name, which is the rarer and less useful answer');
+  assert.match(why, /kind: 'unmatched'/u, 'a folder that answered and matched nothing has no sentence of its own');
+});
+
 test('START creates nothing — it opens the picker with the offer, and waits', () => {
   // Pressing this chord by accident on a tab with no conversation must not resolve a CLI and launch
   // a vendor process for something nobody has typed into. (Two vendors, the plan round — and it is

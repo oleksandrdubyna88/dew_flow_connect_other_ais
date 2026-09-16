@@ -53,7 +53,7 @@ const open = (over: Partial<OpenConversation> = {}): OpenConversation => ({
 
 /** The input, with everything a test does not care about filled in. */
 const input = (over: Partial<PickerInput>): PickerInput => ({
-  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, now: AT, elsewhere: new Set<string>(), query: '', ...over,
+  open: [], stored: [], index: READY, workspace: WORKSPACE, everywhere: false, narrowed: false, now: AT, elsewhere: new Set<string>(), query: '', ...over,
 });
 
 const shown = (rows: readonly PickerRow[]): readonly string[] => rows.flatMap((row) => (row.kind === 'conversation' ? [row.id] : []));
@@ -366,4 +366,45 @@ test('an OPEN conversation is never filtered away by what is typed — the widge
   const rows = pickerRows(input({ open: [open()], stored: [], query: 'nothing like this' }));
 
   assert.deepEqual(shown(rows), ['a1']);
+});
+
+test('a NARROWED pick shows the rows it was given, under whichever root they are filed', () => {
+  // The picker is handed the window's FIRST root as its workspace, and a narrowed list was filtered
+  // by it again — so a pick for a tab under the second root came up empty, and so did the cross-root
+  // case, whose whole subject is a conversation filed somewhere else. The globe that would widen the
+  // scope is suppressed for narrowed lists, so there was no way out of the empty list either.
+  const under = (workspace: string, id: string): ConversationMeta =>
+    meta({ id, workspace, title: `in ${workspace}` });
+
+  const rows = pickerRows(input({
+    stored: [under('D:\\rsd\\two', 'far'), under(WORKSPACE, 'near')],
+    narrowed: true,
+  }));
+
+  assert.deepEqual(
+    rows.filter((one) => one.kind === 'conversation').map((one) => (one.kind === 'conversation' ? one.id : '')),
+    ['far', 'near'],
+    'a row chosen for this question was filtered away for being filed under another root',
+  );
+
+  // And an ordinary list is still this workspace's own: the narrowing is the exception, not a
+  // loosening of the rule.
+  const ordinary = pickerRows(input({ stored: [under('D:\\rsd\\two', 'far'), under(WORKSPACE, 'near')] }));
+  assert.deepEqual(
+    ordinary.filter((one) => one.kind === 'conversation').map((one) => (one.kind === 'conversation' ? one.id : '')),
+    ['near'],
+    'the whole store leaked into a picker that asks about this workspace',
+  );
+
+  // What a person TYPES still filters a narrowed list — that is them, not a rule about roots.
+  const typed = pickerRows(input({
+    stored: [under('D:\\rsd\\two', 'far'), under(WORKSPACE, 'near')],
+    narrowed: true,
+    query: 'rsd\\two',
+  }));
+  assert.deepEqual(
+    typed.filter((one) => one.kind === 'conversation').map((one) => (one.kind === 'conversation' ? one.id : '')),
+    ['far'],
+    'the query stopped filtering when the list was narrowed',
+  );
 });

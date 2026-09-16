@@ -44,6 +44,14 @@ const KEY = 'coai.conversationsPickerOpen';
 
 const widget = (): string => read(join('src', 'conversationPickerCommand.ts'));
 
+test('a NARROWED list is not filtered again by this window’s first root', () => {
+  // The picker is handed the window's first workspace, and a narrowed list is an answer somebody
+  // already worked out — filtering it again emptied every pick for a tab under a second root, and
+  // the globe that would have widened the scope is suppressed for narrowed lists.
+  assert.match(widget(), /narrowed: narrowed !== undefined,/u,
+    'the picker cannot tell a chosen list from one gathered out of the store');
+});
+
 test('the picker has a command, the manifest declares it, and activate registers it', () => {
   const declared = MANIFEST.contributes.commands.find((row) => row.command === SWITCH);
 

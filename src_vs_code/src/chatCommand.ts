@@ -986,6 +986,10 @@ export async function askedForGoto(
     // so a length test was false in a one-root workspace however many sessions shared the name, and
     // the fallback was dead in the commonest case there is. (CodeRabbit, on the pull request.)
     severalSessions: severalMatch(walked.found),
+    // THE OTHER HALF of what `ambiguous` folds together: a walk that could not be DONE, as against
+    // one that was done and matched nothing. Two situations, and the person needs a different thing
+    // from each — "try again" against "none of them is called that, pick one".
+    walkFailed: walked.unsure,
     // How many tabs are called what this one is called — this tab included, so never below 1. It is
     // what lets a NAME be evidence: with two tabs of one name it identifies neither.
     namesakes: all.filter((one) => one.label === (tab?.label ?? '')).length,
