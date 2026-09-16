@@ -174,3 +174,43 @@ test('the probe stops when whoever asked for it has gone away', async () => {
   const found = await probeClaudeModels(watched, undefined, () => gone);
   assert.equal(found?.models.length, 1, 'four candidates are up to a hundred seconds of billed requests');
 });
+
+// ---------------------------------------------------------------------------------------------
+// Round 2: what an answer that could not be CONFIRMED may do to one that was
+
+test('an unconfirmed answer never displaces a confirmed one', () => {
+  // The gap round 1's merge left. A candidate whose request FAILED with an ordinary non-zero exit —
+  // a spent allowance is exactly this — is recorded as asked-and-unverified, not skipped. The merge
+  // then let that unverified entry win over yesterday's confirmed one, so every family a person had
+  // silently went back to "not asked yet" after waiting through a probe. (local Architecture.)
+  const spent: ProbeResult = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-17T10:00:00.000Z',
+    models: HELD.models.map((m) => ({ asked: m.asked, answered: '', verified: false })),
+  };
+  const kept = probeToKeep(spent, HELD);
+
+  assert.equal(kept?.models.filter((m) => m.verified).length, 4,
+    'a run that confirmed nothing took away four families that were confirmed');
+  assert.equal(kept?.models.find((m) => m.asked === 'sonnet')?.answered, 'claude-sonnet-5',
+    'and the concrete id it had resolved to went with them');
+});
+
+test('but a CONFIRMED answer does replace the one it supersedes', () => {
+  const moved: ProbeResult = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-17T10:00:00.000Z',
+    models: [{ asked: 'sonnet', answered: 'claude-sonnet-6', verified: true }],
+  };
+
+  assert.equal(probeToKeep(moved, HELD)?.models.find((m) => m.asked === 'sonnet')?.answered, 'claude-sonnet-6',
+    'a family that answered as something new must say so');
+});
+
+test('the answer records WHICH binary it is about', async () => {
+  const fake = cli({ haiku: 'claude-haiku-4-5' });
+  const found = await probeClaudeModels({ ...fake, executable: 'C:/tools/claude.cmd' }, ['haiku']);
+
+  assert.equal(found?.executable, 'C:/tools/claude.cmd',
+    'two Claude CLIs on one machine are two accounts, and a record that cannot say which is evidence about neither');
+});

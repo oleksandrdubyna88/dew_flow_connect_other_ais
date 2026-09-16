@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { claudeExecutableFor, claudeIsWanted } from '../claudeCli';
+import { RETRY_AFTER_MS, claudeExecutableFor, claudeIsWanted, mayAsk } from '../claudeCli';
 import { CALLER_KINDS, ConsultSettings, DEFAULT_CONSULT, resolveConsultant } from '../consultSettings';
 import { Runtime } from '../models';
 import { Vendor } from '../vendors';
@@ -94,4 +94,26 @@ test('a Claude reviewer row, or a Claude consultant, is reason enough', () => {
   assert.equal(claudeIsWanted([vendor()], consulting('')), true);
   assert.equal(claudeIsWanted([], consulting('claude')), true,
     'the consultant section can be the only thing on this machine that runs Claude');
+});
+
+// ---------------------------------------------------------------------------------------------
+// When a probe may be started again (round 2, gemini Architecture)
+
+test('a probe that FAILED can be tried again, once the backoff has passed', () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+
+  // The defect: the trigger recorded which executable it had asked for and never cleared it, so a
+  // probe that timed out, was abandoned, or met a spent allowance locked the panel into the
+  // unasked state for the rest of the session — a person had to repoint the CLI and back to retry.
+  assert.equal(mayAsk('claude', 'claude', now, now), false, 'it failed a moment ago');
+  assert.equal(mayAsk('claude', 'claude', now, 0), false, 'nothing failed, so nothing is retried');
+  assert.equal(mayAsk('claude', 'claude', now, now - RETRY_AFTER_MS), true,
+    'the backoff passed and it may be asked again');
+});
+
+test('a probe is always started for a CLI nobody has asked about', () => {
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+
+  assert.equal(mayAsk('', 'claude', now, 0), true, 'nothing has been asked yet');
+  assert.equal(mayAsk('claude', 'D:/other/claude.exe', now, 0), true, 'the CLI was repointed');
 });

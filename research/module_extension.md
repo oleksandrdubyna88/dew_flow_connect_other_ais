@@ -1859,6 +1859,34 @@ so there is none to borrow an engine from, and handing it the reviewer-keyed map
 lookup that could never hit. `modelsFor` gained a third local state to go with it — *the engine has
 not been asked yet*, which is a different sentence from *this engine did not answer*.
 
+**Three rules keep a failure from costing anybody a model, and each came from a reviewer.** A run
+that could not ask every candidate MERGES into what was held rather than replacing it, so a hiccup on
+`haiku` does not take `sonnet` with it. A run that confirmed NOTHING — which is exactly what a spent
+allowance produces, every candidate answered and none verified — never displaces a verdict that was
+confirmed, because an unverified entry is the absence of a decision rather than a decision. And
+nothing is carried across a CLI version change at all.
+
+**A failure is dated, not latched.** The refresh is edge-triggered on the executable, which is what
+stopped a render from spawning a process on every paint; but an edge alone has no way back, so a
+probe that timed out or met a spent allowance left the dropdown saying *not asked yet* until the
+editor restarted. `mayAsk` in `claudeCli.ts` holds the three states: a CLI nobody asked about is
+always asked, one that ANSWERED is not asked again this session, and one that FAILED may be asked
+again after ten minutes. A CLI that will not say its `--version` is not dated — it is not installed
+at that path, and re-asking it for ever is a spawn nobody wanted.
+
+**The record names the binary, not only the version.** A reviewer row and a consultant can point at
+two different installations of one version, signed into two different accounts, and a record keyed by
+version alone would label both from whichever was asked. It carries its executable and declines to
+speak for another; a record written before that field existed names none and is trusted, because
+nothing else about it says otherwise.
+
+> **The residual window, stated rather than implied.** The chat reads the discovery snapshot straight
+> off disk, so a chat opened before the panel has rendered has no way to ask the CLI its version. It
+> refuses an answer past its week — the half it CAN check — and the window that leaves is a CLI
+> upgraded within the week, before the next panel render, where the picker may show a verdict the
+> panel would already have withheld. Closing it properly means the chat asking the CLI its version,
+> which is a process spawn per chat.
+
 > **The open tail is the API.** When a vendor key is configured somewhere this extension can read it,
 > `/v1/models` becomes the better candidate source and the CLI probe becomes the confirmation step
 > rather than the discovery one. Nothing here has such a key today.

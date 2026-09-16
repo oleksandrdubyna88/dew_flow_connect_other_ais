@@ -42,6 +42,16 @@ export interface ProbedModel {
 
 /** Everything one probe run found, and when — the shape the cache holds. */
 export interface ProbeResult {
+  /**
+   * The binary that answered, as this installation resolves it.
+   *
+   * <p>A version alone cannot identify a CLI: a reviewer row and a consultant can point at two
+   * DIFFERENT installations of the same version, signed into two different accounts, and one record
+   * would then label both from whichever was asked. Recorded so a record can decline to speak for a
+   * binary it never ran. Empty on a record written before this field existed, which is trusted only
+   * where nothing else says otherwise. (codex Architecture, round 2.)</p>
+   */
+  readonly executable?: string | undefined;
   /** The CLI that answered, so a different binary invalidates rather than inherits. */
   readonly cliVersion: string;
   readonly checkedUtc: string;
@@ -80,6 +90,12 @@ export const PROBE_GOOD_FOR_MS = 7 * 24 * 60 * 60 * 1000;
  * is what was asked for.</p>
  */
 export function familyOf(model: string): string {
+  // The version, the vendor prefix and a context-window suffix are all dropped, because none of them
+  // is what was ASKED for: a candidate is a family word (`sonnet`) and the CLI answers with a
+  // concrete id (`claude-sonnet-5`, `claude-opus-5[1m]`). Comparing those two whole would answer
+  // "no" for every candidate that worked. Dropping the version is safe precisely because the version
+  // is the thing the alias exists to leave unsaid — asking for `sonnet` means "whichever is current",
+  // so an answer that is a different version of sonnet is the right answer, not a mismatch.
   const bare = model.trim().toLowerCase().replace(/^claude[-.]?/, '').replace(/\[[^\]]*\]$/, '');
   const word = /^([a-z]+)/.exec(bare);
 

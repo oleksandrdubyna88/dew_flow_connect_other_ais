@@ -177,8 +177,12 @@ export interface PanelState {
    * <p>A second map rather than the one above, because the two are keyed by different things and
    * the section they serve holds no reviewer rows: since story C5 a consultant is a definition with
    * its own endpoint, and two callers pointing at one engine share its answer.</p>
+   *
+   * <p>The name is the one the consultant section's own state uses. It was `consultEngines` here and
+   * `enginesByEndpoint` there — two names for one value across a boundary, which is how a name stops
+   * meaning anything. (Round 2.)</p>
    */
-  readonly consultEngines?: Readonly<Record<string, LocalEngine>> | undefined;
+  readonly enginesByEndpoint?: Readonly<Record<string, LocalEngine>> | undefined;
   /**
    * What the corpus holds and what the last collector run made of it.
    *
@@ -355,7 +359,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         // nothing, and a saved model was then labelled gone by something that had never looked.
         // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
         // answer a row that holds no reviewer.
-        enginesByEndpoint: state.consultEngines,
+        enginesByEndpoint: state.enginesByEndpoint,
         consultPrompt: state.consultPrompt,
         // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
         // caller wears the colour its vendor has on its card and in a running round. Passed even

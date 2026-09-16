@@ -165,3 +165,22 @@ test('a catalog kept from a FAILED refresh is not republished as current', () =>
 
   assert.strictEqual(openingModel(list, saved, 'o5-mini'), 'o5-mini', 'a pick made from the shown list was not honoured');
 });
+
+test('a Claude probe past its week is not handed to the chat', () => {
+  // A chat opened before the panel has rendered reads this snapshot straight off disk. The panel
+  // withholds an answer whose CLI version no longer matches; this side cannot ask the CLI, so the
+  // half it CAN check is the age. (codex Consistency, round 2 of issue #301.)
+  const probe = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-01T10:00:00.000Z',
+    models: [{ asked: 'sonnet', answered: 'claude-sonnet-5', verified: true }],
+  };
+  const discovery = discoveryFrom({ codex: [], agy: [], catalogs: {}, claude: probe });
+  const now = Date.parse('2026-09-16T10:00:00.000Z');
+
+  assert.ok(discovery.claude, 'the snapshot still holds what it was given');
+  assert.equal(catalogUsing(discovery, [], now).claudeProbe, undefined,
+    'a fifteen-day-old verdict was offered as though the CLI had just said it');
+  assert.ok(catalogUsing(discovery, [], Date.parse('2026-09-03T10:00:00.000Z')).claudeProbe,
+    'and one taken two days ago is still the answer');
+});
