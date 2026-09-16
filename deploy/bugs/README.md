@@ -203,7 +203,14 @@ useradd --create-home --shell /bin/sh coai-bugs-deploy
 # the `bin` symlink in the parent, writes `releases/.trail` and takes `.release.lock` there. The
 # group is `coai-bugs` so the service can traverse in and execute what it finds; 0750 keeps
 # everybody else out.
-install -d -m 0750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs /opt/coai-bugs/releases
+install -d -m 0750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs
+
+# SETGID on `releases`, and it is not decoration. `release.sh` runs as `coai-bugs-deploy`, so a
+# release directory it creates would otherwise carry that account's OWN group — and the service,
+# which is in `coai-bugs`, would be reading the binary through the world bits or not at all. The
+# setgid bit makes every release directory inherit `coai-bugs`, so group access is what the service
+# actually uses and `releases` can stay closed to everybody else.
+install -d -m 2750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs/releases
 
 # The DATA belongs to the service, and the deploy account is deliberately not in reach of it: it
 # delivers releases, it does not get to read the corpus.
