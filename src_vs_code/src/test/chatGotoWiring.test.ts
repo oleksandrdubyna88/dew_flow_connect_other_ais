@@ -98,15 +98,21 @@ test('the two ambiguities the walk can meet arrive as two separate facts', () =>
   // AND A THROWN WALK IS NOT THE ONLY FAILURE. A directory that would not list, and a folder too big
   // to finish, both come back as an ordinary `none`, so the reason is read off the ANSWER rather
   // than inferred from the absence of an exception.
-  assert.match(command, /one\.kind === 'none' && one\.why === 'unreadable'/u,
+  assert.match(command, /walked\.found\.some\(didNotAnswer\)/u,
     'only a thrown walk counts as a failure, so an unlistable folder reads as "nothing is called that"');
+  // And that reading is EXHAUSTIVE over the reason, so a third one cannot be counted as a finished
+  // search by default.
+  const reading = command.slice(command.indexOf('function didNotAnswer('), command.indexOf('function didNotAnswer(') + 700);
+  assert.match(reading, /const unhandled: never = one\.why;/u,
+    'a walk outcome nobody has thought of yet would be read as a folder that answered');
   assert.match(command, /severalSessions: severalMatch\(walked\.found\),/u,
     'the positive fact that licenses the name fallback was lost');
   // And the decision itself asks them in the order the person cares about.
   const decide = source('chatGoto.ts');
   const why = decide.slice(decide.indexOf('function whyNarrowed('), decide.indexOf('function whyNarrowed(') + 700);
-  assert.ok(why.indexOf('severalSessions') < why.indexOf('walkFailed'),
-    'a failed walk outranks two sessions of one name, which is the rarer and less useful answer');
+  assert.ok(why.indexOf('walkFailed') < why.indexOf('severalSessions'),
+    'a search that did not finish is outranked by two sessions of one name, so a list that may be'
+    + ' missing the right answer is presented as a straight choice between the wrong ones');
   assert.match(why, /kind: 'unmatched'/u, 'a folder that answered and matched nothing has no sentence of its own');
 });
 

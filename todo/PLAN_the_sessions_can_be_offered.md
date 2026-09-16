@@ -84,10 +84,10 @@ Written up in full in the parent plan's epic B, and summarised here so this file
 | The scan budget (`ScanBudget`, `ScanCut`, the size cap) | the lookup plan, epic A — shipped | passes it to `sessionsIn` and renders the cut as a notice row |
 | `Found.why` (`unmatched` against `unreadable`) | the lookup plan, epic C — shipped | the picker's door opens for `unmatched` and for `several`, never for `unreadable` |
 | The two *go to* sentences and the narrowed-list filter | the lookup plan, epic C — shipped | nothing; they are independent of the picker |
-| **Listing a folder's sessions** (`sessionsIn`, `SessionCard`, `claudeSessionFiles.ts`) | **this plan** | the lookup plan only MATCHES; it never enumerates |
-| **The rows, the prefill and the QuickPick** | **this plan** | the lookup plan has none |
-| **The door in the Asked region, and keeping the choice** | **this plan** | the lookup plan pins in memory and writes only what a complete walk found |
-| **The end-to-end scenario test** of page → choice → reload | **this plan** | the lookup plan's tests stop at the module boundary, which is what leaves that gap |
+| **Listing a folder's sessions** (`sessionsIn`, `SessionCard`, `claudeSessionFiles.ts`) | **this plan — NOT BUILT** | the lookup plan only MATCHES; it never enumerates |
+| **The rows, the prefill and the QuickPick** | **this plan — NOT BUILT** | the lookup plan has none |
+| **The door in the Asked region, and keeping the choice** | **this plan — NOT BUILT** | the lookup plan pins in memory and writes only what a complete walk found |
+| **The end-to-end scenario test** of page → choice → reload | **this plan — NOT BUILT** | the lookup plan's tests stop at the module boundary, which is what leaves that gap |
 
 **Order:** the lookup plan first, and it has shipped. Everything the picker needs from it — the names, the id
 path, the budget, `adoptFound`, `Found.why` — exists now. This plan adds only enumeration and a way to

@@ -929,6 +929,31 @@ async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource
   return false;
 }
 
+/**
+ * Whether this answer means the folder did not SAY, as against saying there is nothing of that name.
+ *
+ * <p>Exhaustive over `Found.none`'s reason rather than a comparison against one string: a third
+ * reason added to that union — a cancelled walk, a second kind of partial read — must be a compile
+ * error here rather than a new failure silently counted as a completed search. (codex, the code
+ * round.)</p>
+ */
+function didNotAnswer(one: Found): boolean {
+  if (one.kind !== 'none') {
+    return false;
+  }
+  switch (one.why) {
+    case 'unreadable':
+      return true;
+    case 'unmatched':
+      return false;
+    default: {
+      const unhandled: never = one.why;
+
+      throw new Error(`a walk outcome this build has no reading for: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
 /** A filesystem path as a uri, the way a record spells one. The host's, so `chatSource.ts` needs none. */
 const asUri = (path: string): string => vscode.Uri.file(path).toString();
 
@@ -994,7 +1019,7 @@ export async function askedForGoto(
     // big to finish reading, both come back as an ordinary `none` — so asking only `unsure` would
     // have called them "no session is called that", which is the very mistake this fixes. The reason
     // is a field on the answer rather than the wording of its sentence. (codex, the plan round.)
-    walkFailed: walked.unsure || walked.found.some((one) => one.kind === 'none' && one.why === 'unreadable'),
+    walkFailed: walked.unsure || walked.found.some(didNotAnswer),
     // How many tabs are called what this one is called — this tab included, so never below 1. It is
     // what lets a NAME be evidence: with two tabs of one name it identifies neither.
     namesakes: all.filter((one) => one.label === (tab?.label ?? '')).length,

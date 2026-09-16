@@ -653,9 +653,14 @@ export async function sessionFileOf(
   sessionId: string,
 ): Promise<Found> {
   if (!isSessionId(sessionId)) {
+    // UNREADABLE rather than unmatched, for all three of these: a path that escapes the folder, or a
+    // stored id of another shape, is a refusal to LOOK — not a folder that looked and found nothing.
+    // Calling it the second would let a caller offer to start a conversation on the strength of a
+    // search that never happened. (gemini, the code round.)
+    //
     // Said without repeating the string back: a refusal that echoes a path is a refusal that helps
     // somebody probe with it.
-    return { kind: 'none', why: 'unmatched', refusal: 'This conversation does not name a Claude Code session of a shape this build knows.' };
+    return { kind: 'none', why: 'unreadable', refusal: 'This conversation does not name a Claude Code session of a shape this build knows.' };
   }
   const dir = await projectDirFor(home, cwd, caseBlind);
   if (typeof dir !== 'string') {
@@ -667,7 +672,7 @@ export async function sessionFileOf(
     // a deleted session rather than one about escaping a directory.
     return staysInside(dir, file, { dir, file })
       ? { kind: 'none', why: 'unmatched', refusal: `The session this conversation was pinned to is no longer in ${dir}.` }
-      : { kind: 'none', why: 'unmatched', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
+      : { kind: 'none', why: 'unreadable', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
   }
   // WHERE IT REALLY LEADS, not only how it is spelled. Lexical containment says nothing about a
   // LINK: anything on this machine can drop a `<valid-uuid>.jsonl` into the project directory
@@ -676,7 +681,7 @@ export async function sessionFileOf(
   const realDir = await realOf(dir);
   const realFile = await realOf(file);
   if (realDir === undefined || realFile === undefined || !staysInside(dir, file, { dir: realDir, file: realFile })) {
-    return { kind: 'none', why: 'unmatched', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
+    return { kind: 'none', why: 'unreadable', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
   }
   const real = { dir: realDir, file: realFile };
 
