@@ -44,9 +44,9 @@ Written up in full in the parent plan's epic B, and summarised here so this file
   cut short. That is what gives a titleless session a row a human can choose; the enumerating pass
   already parses every line, so it costs nothing. **It is a LABEL, never a match**: deriving a name
   and matching on it stays refused, for the reason the parent plan records.
-- A fourth `Found` kind, `unmatched`, tells "the folder answered and nothing is called this" from
-  "there was nowhere to look". (Epic C has already added the equivalent to the *go to* path, so the
-  two would want to agree.)
+- Telling "the folder answered and nothing is called this" from "it would not say" is DONE — epic C
+  gave `Found.none` a typed `why`, and the door opens for `unmatched` and for `several`, never for
+  `unreadable`. Nothing more is needed here than to read it.
 - Rows are decided in a pure module: label, age, folder when there is more than one root, the id's
   first eight characters as the tie-break, former names in the detail so typing an old name finds it,
   a notice row for a folder that would not answer and one for a list that was cut.
@@ -73,6 +73,41 @@ Written up in full in the parent plan's epic B, and summarised here so this file
   reading it back, the id resolving to the file — and the record containing no path under the home
   directory. This was accepted at the parent plan's gate round and is the piece that is genuinely
   missing from what shipped.
+
+## The boundary with [the lookup plan](PLAN_the_tab_finds_its_session.md)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| Reading a session's names (`namesOf`, `collectNames`, `namedAmong`) | the lookup plan, epic A — shipped | uses it; the picker's rows show `latest` and make `former` findable by typing |
+| Resolving by session id (`sessionFileOf`, `isSessionId`, the containment checks) | the lookup plan, epic A — shipped | uses it to re-check a chosen session at the press, and after a reload |
+| `adoptFound` — the one road that writes a session onto a record | the lookup plan, epic A — shipped | calls it with the folder the chosen card came from |
+| The scan budget (`ScanBudget`, `ScanCut`, the size cap) | the lookup plan, epic A — shipped | passes it to `sessionsIn` and renders the cut as a notice row |
+| `Found.why` (`unmatched` against `unreadable`) | the lookup plan, epic C — shipped | the picker's door opens for `unmatched` and for `several`, never for `unreadable` |
+| The two *go to* sentences and the narrowed-list filter | the lookup plan, epic C — shipped | nothing; they are independent of the picker |
+| **Listing a folder's sessions** (`sessionsIn`, `SessionCard`, `claudeSessionFiles.ts`) | **this plan** | the lookup plan only MATCHES; it never enumerates |
+| **The rows, the prefill and the QuickPick** | **this plan** | the lookup plan has none |
+| **The door in the Asked region, and keeping the choice** | **this plan** | the lookup plan pins in memory and writes only what a complete walk found |
+| **The end-to-end scenario test** of page → choice → reload | **this plan** | the lookup plan's tests stop at the module boundary, which is what leaves that gap |
+
+**Order:** the lookup plan first, and it has shipped. Everything the picker needs from it — the names, the id
+path, the budget, `adoptFound`, `Found.why` — exists now. This plan adds only enumeration and a way to
+ask; it changes nothing the lookup plan decided.
+
+**Disjoint:** the table is complete, not a sample. Nothing else is shared between the two.
+
+## How it would be verified
+
+```bash
+cd src_vs_code
+npm ci                 # first time in a fresh worktree
+npm test               # clean, tsc, then node --test over every out/test/*.test.js
+npm run typecheck      # tsc -p ./ --noEmit — read the EXIT STATUS, tsc emits despite errors
+node --test out/test/sessionPicker.test.js        # after npm run compile, for one file
+```
+
+The suite is `node:test`; there is no `dotnet test` in this half and no extension-host harness, so
+the QuickPick itself is asserted against its own source and the page is RUN through
+`bundledPage.test.ts`.
 
 ## Definition of Done
 

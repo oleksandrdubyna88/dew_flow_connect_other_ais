@@ -93,8 +93,13 @@ test('the two ambiguities the walk can meet arrive as two separate facts', () =>
   // rests on is gathered separately at the walker boundary.
   const command = source('chatCommand.ts');
 
-  assert.match(command, /walkFailed: walked\.unsure,/u,
+  assert.match(command, /walkFailed: walked\.unsure \|\| walked\.found\.some\(/u,
     'a walk that ANSWERED and one that could not be done still arrive as the same fact');
+  // AND A THROWN WALK IS NOT THE ONLY FAILURE. A directory that would not list, and a folder too big
+  // to finish, both come back as an ordinary `none`, so the reason is read off the ANSWER rather
+  // than inferred from the absence of an exception.
+  assert.match(command, /one\.kind === 'none' && one\.why === 'unreadable'/u,
+    'only a thrown walk counts as a failure, so an unlistable folder reads as "nothing is called that"');
   assert.match(command, /severalSessions: severalMatch\(walked\.found\),/u,
     'the positive fact that licenses the name fallback was lost');
   // And the decision itself asks them in the order the person cares about.

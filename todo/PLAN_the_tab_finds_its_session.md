@@ -159,6 +159,27 @@ program's undocumented derivation, and a decoder that drifts binds a tab to the 
 silently. B1 labels such a session with what was said in it; a label is shown to a person who then
 chooses, which is the opposite of a silent guess.
 
+## The boundary with [the picker plan](PLAN_the_sessions_can_be_offered.md)
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| Reading a session's names (`namesOf`, `collectNames`, `namedAmong`) | **this plan**, epic A — shipped | uses it; the picker's rows show `latest` and make `former` findable by typing |
+| Resolving by session id (`sessionFileOf`, `isSessionId`, the containment checks) | **this plan**, epic A — shipped | uses it to re-check a chosen session at the press, and after a reload |
+| `adoptFound` — the one road that writes a session onto a record | **this plan**, epic A — shipped | calls it with the folder the chosen card came from |
+| The scan budget (`ScanBudget`, `ScanCut`, the size cap) | **this plan**, epic A — shipped | passes it to `sessionsIn` and renders the cut as a notice row |
+| `Found.why` (`unmatched` against `unreadable`) | **this plan**, epic C — shipped | the picker's door opens for `unmatched` and for `several`, never for `unreadable` |
+| The two *go to* sentences and the narrowed-list filter | **this plan**, epic C — shipped | nothing; they are independent of the picker |
+| **Listing a folder's sessions** (`sessionsIn`, `SessionCard`, `claudeSessionFiles.ts`) | the picker plan | this plan only MATCHES; it never enumerates |
+| **The rows, the prefill and the QuickPick** | the picker plan | this plan has none |
+| **The door in the Asked region, and keeping the choice** | the picker plan | this plan pins in memory and writes only what a complete walk found |
+| **The end-to-end scenario test** of page → choice → reload | the picker plan | this plan's tests stop at the module boundary, which is what leaves that gap |
+
+**Order:** this plan first, and it has shipped. Everything the picker needs from it — the names, the id
+path, the budget, `adoptFound`, `Found.why` — exists now. The picker adds only enumeration and a way to
+ask; it changes nothing this plan decided.
+
+**Disjoint:** the table is complete, not a sample. Nothing else is shared between the two.
+
 ## Test plan
 
 RED first, every one of them, per `common/testing.md`. The suite is `node:test` over real temp
