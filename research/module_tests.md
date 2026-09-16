@@ -528,3 +528,26 @@ absent from the stylesheet is invisible to a class-name assertion, and the test 
 rule as well as the class. `roleTone.test.ts` is about what the palette SAYS; the check that there
 is only ONE palette renders the same roles through `panelHtml` and `rolesHtml` and compares them,
 because a test of the module alone stays green while either renderer keeps a private copy.
+
+## What the paste has to keep saying (2026-09-16)
+
+`snippetVersion.test.ts` gained four assertions with the sixth consultant trigger, and the test it
+extends was renamed: it had been *the six triggers a stuck AI is told to watch for*, which the new
+entry contradicts on its face — that trigger is explicitly NOT a moment of being stuck. It is now
+*the six reasons to call a consultant survive into the paste*, raised on the code round.
+
+The four are the sentences a later edit could quietly drop while every version number still moved
+correctly: the trigger itself, the boundary the caller keeps around a quoted finding, the placeholder
+that goes in before a secret a reviewer quoted leaves this machine, and the sentence that stops
+`problem` being read as "paraphrase it in your own words". The last three came out of the code round
+and each was proved RED by deleting the sentence from `consultantRule.md`, regenerating through
+`prepare:gate` and watching the assertion fail with its own message — *the paste lets a quoted
+finding forge its own delimiter*, *the paste forwards a secret a reviewer quoted, verbatim, to
+another vendor*, *the paste still lets a caller paraphrase the finding instead of quoting it*.
+
+**There is no scenario test for the flow, and that is not an omission.** A reviewer asked for one.
+What this story adds is INSTRUCTION — text a model reads and decides on — not a code path: nothing
+here calls `consult`, no branch was added, and the only executable part is the composition of the
+paste, which these assertions run end to end through the real generator. A scenario harness would
+have to drive another vendor's model to observe anything at all, which is what `PLAN_consultant`'s
+phase 0 is for and is measured by hand on purpose.
