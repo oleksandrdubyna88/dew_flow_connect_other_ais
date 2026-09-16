@@ -1165,7 +1165,7 @@ frequently *written by* a cloud model, since the reviewer that produced them rea
 It is not categorically a new exposure; it is an uncontrolled one, and local-only is the defensible
 default until a person decides otherwise.
 
-`--collect-bugs --model <vendor/name>` exits **64** with the refusal's own sentence.
+`--collect-bugs --model <vendor/name>` exits **65 (EX_DATAERR)** with the refusal's own sentence — never 64, which is reserved for a mode this binary does not have, so a caller can tell an old server from a bad request. A request fault wearing 64 would send the caller down that fallback and hide itself behind a successful-looking answer.
 
 ## What a round can be asked afterwards (2026-09-08)
 

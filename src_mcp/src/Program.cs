@@ -399,10 +399,16 @@ internal static class Program
 
         if (summary.Refusal.Length > 0)
         {
-            // A named model that may not be shown un-anonymised finding text. EX_USAGE, because the
-            // person asked for something the tool will not do — not a failure of the tool.
+            // A named model that may not be shown un-anonymised finding text.
+            //
+            // 65 and emphatically NOT 64. This binary KNOWS `--collect-bugs`; it is refusing an
+            // ARGUMENT, and 64 is reserved for a mode the binary does not have, so a caller can tell
+            // an old server from a bad request and fall back. A request fault wearing 64 would send
+            // the caller down that fallback and hide itself behind a successful-looking answer —
+            // which is why `--findings-many` answers an unreadable keys file with 65 too.
+            // (PROJECT.md, the one-shot mode paragraph; raised at the story-5 plan round.)
             Note(summary.Refusal);
-            return 64; // EX_USAGE
+            return 65; // EX_DATAERR
         }
 
         Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
