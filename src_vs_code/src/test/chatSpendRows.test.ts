@@ -282,7 +282,7 @@ test('a record at the mark is forgotten and a later one is kept', () => {
     { utc: '2026-09-16T10:00:00.001Z', provider: 'codex', model: 'gpt-5.4' },
   ];
 
-  const kept = rememberedChat(rows, marks);
+  const kept = rememberedChat(rows, marks, (provider) => provider);
 
   // AT the mark is forgotten, exactly as `remembered()` treats the reviewers' one.
   assert.deepEqual(kept.map((one) => one.utc), ['2026-09-16T10:00:00.001Z']);
@@ -296,7 +296,7 @@ test('forgetting one model leaves the vendor’s other models alone', () => {
     { utc: '2026-09-16T09:00:00.000Z', provider: 'claude', model: 'gpt-5.4' },
   ];
 
-  const kept = rememberedChat(rows, marks);
+  const kept = rememberedChat(rows, marks, (provider) => provider);
 
   // This is the assertion that fails if the key collapses to the provider, or to the model.
   assert.deepEqual(
@@ -327,5 +327,27 @@ test('what a line wrote down decides its row, not the preset list as it is today
 test('a ledger with nothing forgotten is returned whole', () => {
   const rows = [{ utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'gpt-5.4' }];
 
-  assert.deepEqual(rememberedChat(rows, {}), rows);
+  assert.deepEqual(rememberedChat(rows, {}, (provider) => provider), rows);
+});
+
+test('a model that happens to name a property of every object is not forgotten by accident', () => {
+  // `marks` comes back from globalState as a plain object parsed from JSON, so it answers for names
+  // it INHERITED: `({})['toString']` is a function, not undefined. A lookup that hit one would
+  // compare a string to a function, yield false, and drop the record — a model called `toString`
+  // would vanish from the chart having never been forgotten. That is the shape of the STATUS_MARKS
+  // defect found in the sidebar the day before, and the code round raised it here.
+  //
+  // It cannot happen, and the reason is the delimiter: a key is `provider\0model`, and NO property
+  // of Object.prototype contains a NUL. The same NUL that stops two pairs spelling one key is what
+  // makes an inherited name unreachable. This test is here so that a future key format cannot lose
+  // that property silently — flatten the key to `provider-model` and it goes red.
+  const rows = [
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'toString' },
+    { utc: '2026-09-16T09:00:00.000Z', provider: 'codex', model: 'constructor' },
+    { utc: '2026-09-16T09:00:00.000Z', provider: '__proto__', model: 'valueOf' },
+  ];
+
+  const kept = rememberedChat(rows, {}, (provider) => provider);
+
+  assert.equal(kept.length, rows.length, 'a record was forgotten by a mark nobody wrote');
 });

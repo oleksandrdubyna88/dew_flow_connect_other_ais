@@ -355,11 +355,17 @@ export interface ForgettableRecord {
  *
  * <p>Generic over the record because turns and doors differ in everything except the fields above:
  * one filter for both, rather than two that can drift.</p>
+ *
+ * <p><b>`vendorOf` is REQUIRED, with no identity default.</b> A caller filtering raw ledger records
+ * without it would key them by the recorded PRESET id, so a mark written for the vendor row a person
+ * can see would match nothing and the spending would stay on the chart — silently, and looking
+ * exactly like a button that does not work. Making it required is what stops that call compiling.
+ * (codex, the code round.)</p>
  */
 export function rememberedChat<T extends ForgettableRecord>(
   records: readonly T[],
   marks: Readonly<Record<string, string>>,
-  vendorOf: ChatVendorOf = (provider) => provider,
+  vendorOf: ChatVendorOf,
 ): readonly T[] {
   return records.filter((one) => {
     const mark = marks[chatForgetKey(chatRowProvider(one.provider, one.vendor, vendorOf), one.model)];

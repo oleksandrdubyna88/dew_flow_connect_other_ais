@@ -1968,7 +1968,7 @@ function chatSpendCard(row: ChatSpendRow, busiest: number, colour: (provider: st
   const forget = named
     ? `<button class="link forget" data-command="forgetChat" data-id="${escapeHtml(row.provider)}" data-model="${escapeHtml(row.model)}"
             title="Clear ${escapeHtml(named ? `${row.provider} · ${model}` : model)}'s recorded chat from this chart. Nothing is deleted from the ledger — the row simply stops counting what is already there, and comes back the next time this model answers."
-            aria-label="Forget ${escapeHtml(row.provider)}'s recorded chat spending">✕</button>`
+            aria-label="Forget ${escapeHtml(`${row.provider} · ${model}`)}'s recorded chat spending">✕</button>`
     : '';
 
   return `<div class="spend">
