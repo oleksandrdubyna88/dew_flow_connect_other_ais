@@ -8,6 +8,47 @@
 > this file's own preference, and the reason is written there rather than left as a version bump
 > somebody finds later.
 
+### Everything this side says to a person is written down (2026-09-16, in progress)
+
+There are **109** `window.show*Message` call sites here and, until now, no durable record of any of
+them: `createOutputChannel` appears zero times, there is no log file and no telemetry. A message a
+person misses is a message that never happened, and on 2026-09-16 that cost ninety minutes — a
+settings-mirror stand-down warned once, nobody saw it, and eleven code rounds ran against a role
+deleted thirty-eight minutes earlier. Plan, two gate rounds deep:
+[PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
+
+**What exists after step S1** — the record and the ledgers, with no funnel in front of them yet:
+
+| Module | What it holds |
+|---|---|
+| `notifications.ts` | the record, the line it becomes, the line read back. Six classes, by what the person must DO |
+| `notificationsFile.ts` | `notifications.jsonl` (this side) and `server-notices.jsonl` (`coai-mcp`), **two files merged at read time** |
+| `credentialWords.ts` | the credential word list, extracted from `consultantWrite.ts` rather than copied |
+| `scripts/count-notifications.mjs` | the site count, DERIVED — with `notification-sites.json` checked in and a test that goes red on drift |
+
+Four decisions worth knowing before changing any of it:
+
+- **Two ledgers, never one.** The first draft of the plan proposed a single file both halves append
+  to and called that the established shape here. It is the opposite: `architecture.md` records that
+  chat rows inside the server's `usage.jsonl` were rejected on this gate's plan round — *"its two
+  writers release on different days"* — and this file records the same refusal a second time for
+  `chat-doors.jsonl`. Two files and one merge is what lets either half ship alone.
+- **Append-only, absolutely.** Nothing updates, truncates or compacts. That is what keeps the
+  measured `O_APPEND` guarantee applicable, what makes reading the newest N from the END of the file
+  exact, and what removes every lock the design would otherwise need.
+- **Redaction happens at the line serialiser, over every string field, read off the record.** Not on
+  the one field somebody remembered: the plan's own first draft redacted `detail` and left eight
+  other strings composed from the same exception text.
+- **The count is derived.** The plan published 109 sites, a class table summing to 113 and "95
+  events" — none of which reconcile, and every test was green because no test knew the number. It is
+  **93** events (109 − 16 modal), and it comes from a script now.
+
+`jsonlLedger` gained three things for this: a second append chain (a stalled notification append must
+not delay a chat turn), a drain to quiescence rather than a snapshot (anything recorded after
+`deactivate` took its snapshot went with the host), and an `onFailure` callback (it catches
+internally, so a funnel built on it would have reported zero lost records straight through a disk
+failure).
+
 ### A phrase is the same colour in both places, and its boxes say what they are (2026-09-15)
 
 Six phrases were six identical rectangles: `.phrase` gave every one the same left edge, so finding

@@ -20,11 +20,19 @@
 //
 //   node scripts/measure-append.mjs             — the default: 4 writers, 500 records each
 //   node scripts/measure-append.mjs 8 1000      — heavier
+//   node scripts/measure-append.mjs --sync      — the 2026-09-09 call, for reproducing that result
+//   node scripts/measure-append.mjs 4 200 --dir=V:\coai   — somewhere else: a NAS, a UNC path
+//
+// RESULTS SO FAR, with their conditions, because a result without them is not one:
+//   2026-09-09  appendFileSync   8 × 1000, 116 MB, local NTFS  → 8000 of 8000, 0 torn
+//   2026-09-16  appendFile       8 × 1000, 116 MB, local NTFS  → 8000 of 8000, 0 torn
+//   2026-09-16  appendFile       4 × 200, 11.6 MB, SMB share   → 800 of 800, 0 torn
 //
 // Exit code 0 means every line survived; 1 means the file tore, and the ledger needs a file per
 // host after all.
 
 import { appendFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { appendFile } from 'node:fs/promises';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -54,31 +62,61 @@ function record(writer, index) {
   })}\n`;
 }
 
-function writeMany(path, writer, count) {
+/**
+ * The writer under test — and it must be the one PRODUCTION uses.
+ *
+ * <p>This harness measured `appendFileSync`, and the notifications plan cited the result as proof
+ * that its ledger's appends do not tear. They are not the same call: `jsonlLedger.appendLine`
+ * awaits `appendFile` from `node:fs/promises`. Both open with `'a'`, so both are `O_APPEND` and the
+ * ARGUMENT for why they are safe is the same argument — but the same argument is not the same
+ * measurement, and a plan may not treat one as the other. (Raised by the consultation on
+ * `todo/PLAN_every_message_is_written_down.md`, then verified by reading both call sites.)</p>
+ *
+ * <p>So the promise-based writer is now the default, and `--sync` keeps the call that produced the
+ * original 2026-09-09 result, so it stays reproducible.</p>
+ */
+async function writeMany(path, writer, count, mode) {
   for (let index = 0; index < count; index += 1) {
-    appendFileSync(path, record(writer, index));
+    const line = record(writer, index);
+    if (mode === 'sync') {
+      appendFileSync(path, line);
+    } else {
+      await appendFile(path, line, 'utf8');
+    }
   }
 }
 
 // A forked child arrives here with its instructions in argv, and does nothing else.
 if (process.argv[2] === 'write') {
-  writeMany(process.argv[3], Number(process.argv[4]), Number(process.argv[5]));
+  await writeMany(process.argv[3], Number(process.argv[4]), Number(process.argv[5]), process.argv[6]);
   process.exit(0);
 }
 
-const writers = Number(process.argv[2] ?? 4);
-const each = Number(process.argv[3] ?? 500);
-const home = join(tmpdir(), `coai-append-${process.pid}`);
+const args = process.argv.slice(2);
+const mode = args.includes('--sync') ? 'sync' : 'promises';
+/**
+ * Where to measure, because WHERE is a condition of the result rather than a detail.
+ *
+ * <p>The default is the temp directory, which on this machine is a local NTFS disk. The coai data
+ * directory is relocatable and has been a NAS share here, and SMB does not guarantee atomic append
+ * — so `--dir=\\\\server\\share` is how anybody finds out whether the guarantee survives the move,
+ * rather than assuming a local result covers it.</p>
+ */
+const chosen = args.find((a) => a.startsWith('--dir='))?.slice('--dir='.length);
+const counts = args.filter((a) => !a.startsWith('--'));
+const writers = Number(counts[0] ?? 4);
+const each = Number(counts[1] ?? 500);
+const home = join(chosen ?? tmpdir(), `coai-append-${process.pid}`);
 mkdirSync(home, { recursive: true });
 const path = join(home, 'chat-usage.jsonl');
 
-console.log(`${writers} processes × ${each} records → ${path}`);
+console.log(`${writers} processes × ${each} records, ${mode} writer → ${path}`);
 const startedMs = Date.now();
 
 await Promise.all(
   Array.from({ length: writers }, (_unused, writer) =>
     new Promise((resolve, reject) => {
-      const child = fork(HERE, ['write', path, String(writer), String(each)], { stdio: 'inherit' });
+      const child = fork(HERE, ['write', path, String(writer), String(each), mode], { stdio: 'inherit' });
       child.on('error', reject);
       child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`writer ${writer} exited ${code}`))));
     })),
