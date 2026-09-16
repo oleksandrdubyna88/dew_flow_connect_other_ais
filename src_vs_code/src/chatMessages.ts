@@ -133,7 +133,16 @@ export type ChatCommand =
    * neither end of this is allowed to be the only one that says no.</p>
    */
   | { readonly kind: 'openFile'; readonly path: string; readonly line: number }
-  | { readonly kind: 'copyAnswer'; readonly index: number }
+  /**
+   * The whole answer at `index`, with the signature its control was drawn with.
+   *
+   * <p>The signature does ONE job here and deliberately not the other: it is echoed back on the
+   * acknowledgement so the page can tell that the control it is about to tick is still drawn for the
+   * text that was copied — an answer arriving between the press and the clipboard resolving shifts
+   * what `index` means. It does NOT gate the copy; this control's staleness is resolved at press
+   * time in `chatCommand.ts`, and changing that is a different question from this one.</p>
+   */
+  | { readonly kind: 'copyAnswer'; readonly index: number; readonly sig: string }
   /**
    * One BLOCK of an answer — a fenced block or a quote — by the position the renderer gave it.
    *
@@ -362,10 +371,12 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
         : IGNORE;
     }
     case 'copyAnswer': {
-      const index = message.index;
-
+      const { index, sig } = message;
+      // BOTH, bounded the way the block control's is. The signature is only ever echoed back to the
+      // page, but a value that goes out again is a value worth bounding on the way in.
       return typeof index === 'number' && Number.isSafeInteger(index) && index >= 0
-        ? { kind: 'copyAnswer', index }
+        && typeof sig === 'string' && sig.length > 0 && sig.length <= SIGNATURE_MAX
+        ? { kind: 'copyAnswer', index, sig }
         : IGNORE;
     }
     case 'copyBlock': {

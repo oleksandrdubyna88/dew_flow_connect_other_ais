@@ -190,14 +190,20 @@ test('a file reference from an answer is confined before anything opens it', () 
   }
 });
 
-test('a copy names an answer by an index that is really an index', () => {
-  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index: 3 }),
-    { kind: 'copyAnswer', index: 3 });
-  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index: 0 }),
-    { kind: 'copyAnswer', index: 0 });
+test('a copy names an answer by an index that is really an index, and the signature it was drawn with', () => {
+  // The signature is echoed back on the acknowledgement so the page can tell the control it is about
+  // to tick is still drawn for the text that was copied. It goes out again, so it is bounded on the
+  // way in exactly as the block control's is.
+  const whole = { type: 'command', command: 'copyAnswer', index: 3, sig: '7-abc' };
+  assert.deepStrictEqual(chatCommandOf(whole), { kind: 'copyAnswer', index: 3, sig: '7-abc' });
+  assert.deepStrictEqual(chatCommandOf({ ...whole, index: 0 }), { kind: 'copyAnswer', index: 0, sig: '7-abc' });
   for (const index of [-1, 1.5, '2', undefined, Number.NaN]) {
-    assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index }),
+    assert.deepStrictEqual(chatCommandOf({ ...whole, index }),
       { kind: 'ignore' }, `index ${String(index)} was accepted`);
+  }
+  for (const sig of ['', undefined, 7, 'x'.repeat(200)]) {
+    assert.deepStrictEqual(chatCommandOf({ ...whole, sig }),
+      { kind: 'ignore' }, `signature ${String(sig)} was accepted`);
   }
 });
 

@@ -679,6 +679,42 @@ would have got through. `ChatPanelHooks.onCopyBlock` carries it to the host, whi
 against **its own stored markdown** through the same walk that drew the control. Nothing about the
 text crosses the boundary, so a page that lies can only be refused.
 
+**And the control says so when it lands (2026-09-16, issue #313).** A green tick appears beside the
+label for a second. Both hooks used to discard the `CopyReport` with a bare `void`, which is why
+neither control could ever move: the one fact worth showing was thrown away at the moment it became
+known. They now hand it to `acknowledgement` in `answerCopy.ts` — the rule lives there rather than in
+`chatCommand.ts` for the reason that file already exists, since nothing in `chatCommand.ts` can be
+imported by a test — and a report whose `copied` is false acknowledges **nothing**, so a refused
+clipboard leaves only the sentence that says why. A tick there would be a claim about where the next
+paste is coming from, and it would be wrong; the panel's phrase button learned that from a Blocking
+finding, and this is the same acknowledgement one surface over.
+
+`pushChatCopied` posts `{ type: 'copied', index, block?, sig }` — its own message, and not for the
+reason `note` and `asked` have one. Those are about a state push being read as the whole truth about
+the regions it names; this one is about `pushChatState` **de-duplicating by serialised payload**, so
+pressing one control twice would post an identical payload and the second tick would never arrive.
+The coordinates are echoed back exactly as the page sent them, which is why the answer-level control
+gained a `data-sig` of its own: an answer arriving between the press and the write resolving shifts
+what `index` names, and the tick would land on somebody else's answer. That signature does one job
+and deliberately not the other — it matches the acknowledgement to a control, and does **not** gate
+the copy, whose own staleness is still resolved at press time.
+
+The mark cannot live on the element alone. `#messages` is replaced wholesale on every push, so an
+answer arriving inside the second would take the tick away with the node it rebuilt; the page keeps
+which copies landed and paints them again after each rebuild. The value it keeps is a **generation**
+rather than a deadline, which is what makes two presses safe: the second takes ownership and the
+first press's timer finds a number that is no longer its own and leaves the mark alone. Without it
+the first timer clears a tick the second press had half a second left of.
+
+**What the change cost the test harness, and what that uncovered.** `runChatPage` answered
+`document.querySelectorAll` with `[]` for every selector, which is the quietest way a test can pass
+against a page that found nothing — the loop runs zero times and *"it did not mark the wrong
+control"* is true because it marked no control at all. It now serves selectors **by name** from a
+table and **throws** on one it has not been taught, the same rule `cssRules.ts` follows by answering
+`undefined` rather than guessing. Making it refuse immediately found that `button[data-zoom]` and
+`button[data-tone]` had both been answered with `[]` since they shipped, so neither stepper's wiring
+had ever been exercised by anything.
+
 **The decision lives in `answerCopy.ts`, not in the hook.** `conversationHooks` closes over `vscode`
 and nothing in this repository imports it, so a rule written there is a rule no test can reach — the
 plan for this feature specified an end-to-end test that could not have been run, and that is how it

@@ -252,7 +252,7 @@ test('the word Copied is painted green by a rule that matches the button the scr
   // (d) And it wins the cascade it is in — including the hover a mouse is still sitting in, and a
   //     later rule that restores a fill through `background-color` rather than the shorthand.
   assert.deepEqual(
-    beating(green[0]!, matching).map((other) => other.selector),
+    beating(green[0]!, matching, button, IN_THE_ROW).map((other) => other.selector),
     [],
     'another rule outranks the acknowledgement and paints this button instead',
   );
