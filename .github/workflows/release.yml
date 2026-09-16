@@ -152,6 +152,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # THE SUBMODULE, without which the tests below cannot pass.
+      #
+      # `StageRulesTests` reads `.agents/conventions/` — it asks the production collector which
+      # rules the tier selects and whether every tier entry resolves in the pinned mount — and a
+      # bare checkout leaves that directory empty. So every leg that RUNS its tests failed two
+      # tests and took the release down with them, while `osx-x64` passed because it is
+      # cross-built and skips them.
+      #
+      # That is what burned `mcp-v0.26.0` and then `mcp-v0.27.0`: a release line that could not
+      # publish AT ALL, presenting as a test regression rather than as a missing checkout.
+      # `ci.yml` has had this step since it was written, which is exactly why every pull request
+      # was green while no mcp release could be cut.
+      #
+      # `--depth 1` and only this path: never `submodules: recursive`, which would drag whatever
+      # code submodules appear later into the build.
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -550,6 +568,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+
+      # THE SUBMODULE, without which the tests below cannot pass.
+      #
+      # `StageRulesTests` reads `.agents/conventions/` — it asks the production collector which
+      # rules the tier selects and whether every tier entry resolves in the pinned mount — and a
+      # bare checkout leaves that directory empty. So every leg that RUNS its tests failed two
+      # tests and took the release down with them, while `osx-x64` passed because it is
+      # cross-built and skips them.
+      #
+      # That is what burned `mcp-v0.26.0` and then `mcp-v0.27.0`: a release line that could not
+      # publish AT ALL, presenting as a test regression rather than as a missing checkout.
+      # `ci.yml` has had this step since it was written, which is exactly why every pull request
+      # was green while no mcp release could be cut.
+      #
+      # `--depth 1` and only this path: never `submodules: recursive`, which would drag whatever
+      # code submodules appear later into the build.
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
 
       - uses: actions/setup-dotnet@v6
         with:
