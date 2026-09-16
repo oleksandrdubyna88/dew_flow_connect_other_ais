@@ -41,12 +41,9 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         _dataDir = Directory.CreateTempSubdirectory("coai-shim-data-").FullName;
         _outputDir = Directory.CreateTempSubdirectory("coai-shim-out-").FullName;
 
-        // A free port, taken by asking the OS rather than by guessing one.
-        var port = FreePort();
-        _prefix = $"http://127.0.0.1:{port}/";
-        _server = new HttpListener();
-        _server.Prefixes.Add(_prefix);
-        _server.Start();
+        // A started stub on a port nobody else holds. Asking the OS for a free port does not
+        // reserve it, and losing that race failed a release leg - see LoopbackStub.
+        (_server, _prefix) = LoopbackStub.Start();
         _ = Task.Run(ServeAsync);
 
         return ValueTask.CompletedTask;
@@ -71,16 +68,6 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         }
 
         return ValueTask.CompletedTask;
-    }
-
-    private static int FreePort()
-    {
-        using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-
-        return port;
     }
 
     private async Task ServeAsync()
