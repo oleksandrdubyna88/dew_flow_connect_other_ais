@@ -99,6 +99,21 @@ export async function probeClaudeModels(
 }
 
 /**
+ * Did this answer reach every candidate?
+ *
+ * <p>An abandoned run and a complete one are the same SHAPE, and the caller needs to tell them
+ * apart: VS Code disposes a view when it is hidden, so switching to another sidebar view mid-probe
+ * stops it — and a trigger that read that as a success would never ask again this session, leaving
+ * the candidates it never reached saying "not asked yet" until the editor restarted.</p>
+ */
+export function askedEverything(
+  probe: ProbeResult | undefined,
+  candidates: readonly string[] = CLAUDE_CANDIDATES,
+): boolean {
+  return candidates.every((one) => (probe?.models ?? []).some((m) => m.asked === one));
+}
+
+/**
  * The answer to keep, given what was found and what was already held.
  *
  * <p>Its own function because it is the rule the plan round pressed hardest on, and a rule inside an

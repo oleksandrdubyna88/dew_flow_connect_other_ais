@@ -47,7 +47,7 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { PROBE_FILE, parseProbe, writeProbe } from './claudeProbeFile';
-import { PROBE_CAP_MS, probeClaudeModels, probeToKeep } from './claudeProbe';
+import { PROBE_CAP_MS, askedEverything, probeClaudeModels, probeToKeep } from './claudeProbe';
 import { ProbeResult, stillGood } from './claudeModels';
 import { writeFileAtomically } from './atomicFile';
 import { seedIfEmpty } from './sideSettings';
@@ -783,8 +783,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       this.claudeProbe = probeToKeep(found, this.claudeProbe);
       // A run that confirmed NOTHING is a failure, whatever it managed to record: an allowance that
       // is spent answers every candidate, unverified, and a person must be able to try again after
-      // signing in rather than restarting the editor.
-      if (found === undefined || !found.models.some((m) => m.verified)) {
+      // signing in rather than restarting the editor. So is one that did not reach every candidate —
+      // hiding this view disposes it and stops the probe, and an abandoned run has the same shape as
+      // a finished one.
+      if (found === undefined || !found.models.some((m) => m.verified) || !askedEverything(found)) {
         this.claudeProbeFailedAt = Date.now();
       }
       if (this.claudeProbe !== undefined) {
