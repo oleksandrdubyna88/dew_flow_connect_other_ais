@@ -59,7 +59,7 @@
 ## The symptom
 
 **Edit phrases** is a stack of identical boxes. Every one has the same left edge —
-`phrasesPage.ts:127` gives `.phrase` a single `border-left-color: var(--vscode-textLink-foreground)`
+`phrasesPage.ts:139` gives `.phrase` a single `border-left-color: var(--vscode-textLink-foreground)`
 for all of them — so with six phrases the page is six identical rectangles and the only way to find
 one is to read it.
 
@@ -68,7 +68,7 @@ visually connects a button to the box that defines it. Press the wrong one and y
 clipboard.
 
 And the edit form has **no labels at all** — verified: `grep -c '<label'` in `phrasesPage.ts`
-returns **0**. The only cues are two `placeholder` attributes (`phrasesPage.ts:115`, `:118`), and a
+returns **0**. The only cues are two `placeholder` attributes (`phrasesPage.ts:117`, `:121`), and a
 placeholder vanishes the moment the box has content, which is the normal state of a saved phrase.
 
 ## What already exists, and what does not
@@ -93,8 +93,11 @@ needs and what the roles page's own labelled fields already are.
 1. Each entry in **Edit phrases** has a left edge in its own colour; no two phrases in one list share
    one (up to the palette's size).
 2. A phrase's button in the sidebar carries **the same colour** as its box in the editor.
-3. The colour is stable for a phrase across a repaint and across the two surfaces — it is a function
-   of the id list, not of position in the DOM.
+3. The colour is stable for a phrase across a repaint, and the same in both surfaces **when they
+   have rendered the same saved list** — it is a function of the id list, not of position in the DOM.
+   *(Written as unconditional in the first draft. It is not: the allocator is not subset-stable, so a
+   stale view can differ after a collision. See the known limit above, and the test that names the
+   pair.)*
 4. Both boxes on the edit form carry a **visible label**, associated with the control (`for`/`id`), so
    it is both readable and announced.
 5. Nothing about what a phrase IS or DOES changes: the id, the name, the text, the clipboard payload,
@@ -130,7 +133,7 @@ later:
 - `PhraseRowView` gains nothing; the page builds the allocator once from `state.rows.map(r => r.id)`
   and passes each row its colour, the same shape `reviewersBody` uses.
 - `phraseRow` emits `<div class="phrase" data-id="…" style="border-left-color:…">`.
-- `.phrase` (`phrasesPage.ts:127`) keeps its border and its 3px width and keeps a fallback colour;
+- `.phrase` (`phrasesPage.ts:139`) keeps its border and its 3px width and keeps a fallback colour;
   only the per-row hue moves inline.
 - The two controls become labelled:
   ```html
@@ -145,7 +148,7 @@ later:
 
 - `phrasesBody` builds `phraseColours(phrases.map(p => p.id))` and gives each button
   `style="border-left-color:…"`.
-- `.phrases .run` (`panelView.ts:2301`) gains the 3px left border and a fallback, so the inline hue
+- `.phrases .run` (`panelView.ts:2313`) gains the 3px left border and a fallback, so the inline hue
   has something to paint.
 
 ### The repaint key already covers this
