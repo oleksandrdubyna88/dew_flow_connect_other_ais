@@ -214,3 +214,34 @@ test('the answer records WHICH binary it is about', async () => {
   assert.equal(found?.executable, 'C:/tools/claude.cmd',
     'two Claude CLIs on one machine are two accounts, and a record that cannot say which is evidence about neither');
 });
+
+test('a merge carries nothing across a different BINARY, even at the same version', () => {
+  // The half the executable field was added for and the merge had not yet asked about. A reviewer
+  // row and a consultant can point at two installations of one version, signed into two different
+  // accounts — so carrying one's verdicts into the other's record labels a family from an account
+  // that never answered for it. (codex Architecture, round 2.)
+  const mine: ProbeResult = { ...HELD, executable: 'C:/tools/claude.cmd' };
+  const theirs: ProbeResult = {
+    cliVersion: '2.1.0',
+    executable: 'D:/other/claude.exe',
+    checkedUtc: '2026-09-17T10:00:00.000Z',
+    models: [{ asked: 'haiku', answered: 'claude-haiku-4-5', verified: true }],
+  };
+
+  assert.deepEqual(probeToKeep(theirs, mine)?.models.map((m) => m.asked), ['haiku'],
+    'the other binary\'s account answered for one family and was credited with four');
+});
+
+test('and it still carries across a record that names no binary', () => {
+  // Written by a build before that field existed. Nothing about it says it is another installation,
+  // and refusing it would throw away a good answer on the day this shipped.
+  const older: ProbeResult = { ...HELD, executable: undefined };
+  const now: ProbeResult = {
+    cliVersion: '2.1.0',
+    executable: 'C:/tools/claude.cmd',
+    checkedUtc: '2026-09-17T10:00:00.000Z',
+    models: [{ asked: 'haiku', answered: 'claude-haiku-4-5', verified: true }],
+  };
+
+  assert.equal(probeToKeep(now, older)?.models.length, 4, 'an older record is not another binary');
+});

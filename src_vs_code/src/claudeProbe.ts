@@ -109,10 +109,16 @@ export function probeToKeep(found: ProbeResult | undefined, held: ProbeResult | 
   if (found === undefined) {
     return held;
   }
-  if (held === undefined || held.cliVersion !== found.cliVersion) {
-    // Nothing to carry forward, or nothing that MAY be carried forward: a different binary can
-    // reach different families, and inheriting the old one's answers is how a model stays wrong
-    // for a week after the CLI changed under it.
+  // Nothing to carry forward, or nothing that MAY be carried forward. A different VERSION can
+  // reach different families, so inheriting the old one's answers is how a model stays wrong for a
+  // week after the CLI changed under it - and a different BINARY at the same version is a different
+  // INSTALLATION, very possibly a different account, so its verdicts were never about this one. A
+  // record that names no binary was written before that field existed: nothing about it says it is
+  // another installation, and refusing it would throw away a good answer on the day this shipped.
+  const elsewhere = (held?.executable ?? '').length > 0
+    && (found.executable ?? '').length > 0
+    && held?.executable !== found.executable;
+  if (held === undefined || held.cliVersion !== found.cliVersion || elsewhere) {
     return found;
   }
 
