@@ -1,5 +1,38 @@
 # Changelog
 
+## Extension 0.48.0 — 2026-09-16
+
+**The Bugz section: the gate's own findings become a corpus of real defects.** Every accepted
+finding this gate has ever produced names a method somebody really broke and a commit where somebody
+really fixed it. The panel can now collect those pairs, show them to you, and let you decide which
+ones are worth keeping — one **Collect** button, a live count while it runs, and a review page that
+puts the broken method beside the fixed one.
+
+Nothing leaves your machine at this point. Collecting reads your own `coai.db` and your own git
+history, and the review page writes one column: whether you kept the pair or dropped it.
+
+**It says what it is doing, and it still says it after a reload.** A collection run is recorded
+server-side with a heartbeat, so closing the panel mid-run and coming back shows the run still going
+rather than a button that forgot. A run whose process died is swept, and the section says so instead
+of showing "running" for ever.
+
+**The review page shows the finding's own words beside the code.** The skeletons say what the code
+did; the reviewers' severity, category and title say what they thought was wrong with it. Neither is
+legible without the other — so both are on the page, and neither is anonymous, and neither of them
+ever leaves.
+
+**Three fixes from the review rounds, all of them things that looked finished:**
+
+- **The model picker did nothing.** Four reviewers found it: the `<select>` posted its choice to
+  config while the provider read an unassigned private field, so the ranking model you picked was
+  never the one used. They are real settings now.
+- **A failed read is not an empty corpus.** When the server could not be reached, the section drew
+  "0 candidates" — indistinguishable from a machine that genuinely has none. It says it could not
+  read instead.
+- **A CSP nonce is not a random-looking string.** `Math.random()` is not a source of randomness for
+  anything that defends a page; it is `randomBytes` now. (One more call site is still open and is
+  recorded in `todo/PLAN_the_corpus_tail.md` rather than silently rewritten.)
+
 ## Extension 0.47.0 — 2026-09-15
 
 **A chat row can be cleared from the spending chart, the way a reviewer's always could** (#298).
