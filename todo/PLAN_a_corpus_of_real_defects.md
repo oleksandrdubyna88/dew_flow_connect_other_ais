@@ -420,6 +420,98 @@ behave, and one check runs the **real binary** and parses its output with the pa
 - [x] The section renders, repaints, and holds no free-text control.
 - [x] `TreeSitter.DotNet` is exempt from the monthly bump by something that FAILS, not by a sentence.
 - [x] The three drifted references above are corrected and the six satisfied DoD boxes are ticked.
+### Story 5 — the review page, and the pairs it has nothing to show without
+
+**The corpus contains no pairs.** `CollectOutcome` carries `SymbolName`, `SkeletonBefore` and
+`SkeletonAfter` — the collector MUST compute both skeletons, because comparing them is how it
+decides the method changed at all — and then throws all three away. Only `fix_sha` is persisted.
+What shipped is a corpus of POINTERS: `(repo_path, head_sha, fix_sha, file, line)`.
+
+That is defensible on its own terms — the database stays small and holds nothing un-anonymised —
+and it leaves both remaining stories with nothing to read. Recomputing a pair costs a git read, a
+locate, a normalise, a second git read and a second normalise, per candidate, at review time AND
+again at upload time; and the symbol name is not stored either, so each recomputation must
+re-locate by line first, exactly as the collector did.
+
+**Operator decision, 2026-09-16: store them when collected.** The skeletons are anonymous by
+construction — that is precisely what the zero-knowledge property test guarantees — so this stores
+nothing identifying, and review and upload become plain reads.
+
+```sql
+CREATE TABLE IF NOT EXISTS collect_pairs (
+  finding_id      INTEGER PRIMARY KEY REFERENCES findings(id),
+  symbol_name     TEXT NOT NULL,
+  language        TEXT NOT NULL,
+  skeleton_before TEXT NOT NULL,
+  skeleton_after  TEXT NOT NULL,
+  written_utc     TEXT NOT NULL,
+  keep            INTEGER NOT NULL DEFAULT -1   -- -1 undecided, 0 dropped, 1 kept
+);
+```
+
+One row per COLLECTED finding, written in the same statement-run as `RecordCollect` so a pair and
+its outcome cannot disagree. `--all` rewrites it, which is also how the pairs already collected by
+story 3 and 4 runs — which have none — come to exist.
+
+#### Growth budget
+
+- **Projected size, measured rather than guessed.** 53 real methods from this repository, put
+  through the shipped `--normalize` on 2026-09-16: a skeleton is **381 bytes** at the median, 416
+  mean, 706 at p90, 1 576 at the largest. A pair is two of them — **762 bytes** at the median — so
+  the 462 usable candidates the funnel measured are **344 KB**. (I first wrote ~1.6 KB a pair and
+  ~1 MB from intuition; measuring it halved the number, which is the reason the rule asks for one.)
+- **Who retires it.** Nobody: kept forever, because it IS the corpus. A pair is the artefact the
+  whole plan exists to produce, and `keep = 0` marks a person's decision rather than deleting the
+  evidence for it.
+- **When it is interrupted.** Nothing to sweep: a pair is written with its outcome or not at all,
+  and a run that dies mid-way leaves the pairs it had already written, which are true.
+
+#### The page
+
+`RoundsLogPanel` (`src_vs_code/src/roundsLogPanel.ts:63`) is the surface precedent — a webview panel
+of its own rather than a panel section, because a person reading pairs is reading, not configuring.
+
+**The first multi-select in this codebase**, and that is worth saying out loud: there is no checkbox
+list anywhere in the extension today, so there is no local pattern to follow and one is being set.
+A row per pair, its before and after side by side, a checkbox, and select-all.
+
+**The decision is PERSISTED, not held in the page.** `keep` is a column for the same reason
+`collect_runs` is a table: a review of two hundred pairs is not finished in one sitting, and a
+decision that dies on reload is a decision nobody will make twice. Story 4's durable-status rule
+applies unchanged.
+
+#### The ranking pass
+
+**Ranking, not scoring.** Ask for *the best 10 of these 200, ranked*. Unanchored 1–5 scales make a
+model cluster at 4s and 5s, so a threshold over them filters nothing. Sort by category in code, from
+the returned rank.
+
+**It uses story 4's allowlist and does not own it.** `RankingModels` refuses a non-local model
+before a finding field is read; this story calls that boundary rather than re-deciding it. The
+ranking pass is the first thing in this pipeline that actually SENDS `title`, `why` and `fix`
+anywhere, which is what the allowlist was built for — until now it has guarded a step that did not
+yet exist.
+
+#### Test plan
+
+- `collect_pairs` against a seeded `RoundsDb`, and the migration from a hand-spelled older schema.
+- A collected candidate writes its pair; a skipped one writes none; `--all` rewrites one that exists.
+- The page RUN, not read: the operator ruling at `.agents/PROJECT.md:78`. Select two of three rows,
+  press keep, and assert what the script posts — a multi-select that renders and selects nothing is
+  precisely the defect story 4's picker was.
+- A ranking pass with a non-local model is refused before any finding text is read.
+- The zero-knowledge assertion runs over what is STORED, not only over what is computed: a pair that
+  reaches this table carrying a name is a `failed`, and now there is a table to assert it against.
+
+#### Definition of done
+
+- [ ] `collect_pairs` exists; a collected candidate writes one; `--all` rewrites it.
+- [ ] Every stored pair passes the zero-knowledge check.
+- [ ] The page lists pairs, multi-selects, and its decisions survive a reload.
+- [ ] The ranking pass asks for a ranking and is refused a non-local model at the boundary.
+- [ ] `research/module_extension.md` and `module_server.md` updated; the growth line above is real.
+
+
 ## Test plan
 
 - `BugsQuery` against a seeded `RoundsDb`, the `RoundsDbTests` pattern: real SQLite, temp directory.
