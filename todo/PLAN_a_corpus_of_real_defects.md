@@ -606,6 +606,109 @@ Stated so story 6 does not discover it:
 The run records and the allowlist are story 4's. Anything that sends a pair off this machine is
 story 6's: this story ends with a person's keep/drop decision written to a column.
 
+### Story 6 — `coai-bugs`, and the only story that sends anything
+
+Everything so far has stayed on one machine. This is the boundary, and it is the whole risk of the
+plan: five stories of care about anonymity are worth exactly what this one upload sends.
+
+#### What crosses, and nothing else
+
+```csharp
+public sealed record UploadedPair(string Language, string SkeletonBefore, string SkeletonAfter);
+```
+
+**A type of its own, and that is the point.** `StoredPair` carries the finding id, the symbol, the
+severity, the category and the title — every one of which must never leave, and a code round of
+story 5 flagged reusing it here as the obvious way to leak all five at once. The upload maps
+explicitly at the boundary, so adding a field to the stored row cannot silently widen what is sent.
+
+**The id does not cross either.** Idempotency needs a stable key, and `finding_id` is a pointer into
+somebody's database — two uploads from one machine would correlate. The client generates an opaque
+entry id per pair (a hash of the two skeletons and the language, which is stable, carries nothing,
+and deduplicates identical pairs from different people for free).
+
+#### The server checks the ALPHABET, not the absence of names
+
+The two validators are deliberately different, and this is the strictly stronger one. The client
+knows the original and asserts a blacklist — nothing of the input survived. The server has never
+seen the original, so a blacklist is impossible; it asserts a **whitelist**: every identifier
+matches `var_\d+|type_\d+|method_\d+` or is runtime vocabulary, every string is `""`, every number
+is `0`. It needs no parser, and a skeleton that fails it is refused rather than quarantined.
+
+**Refused, not quarantined**, because the two are different failures: a leaked identifier is a
+defect in a client we wrote and it must come back as an error somebody reads, while a crafted but
+well-formed skeleton is a thing quarantine exists for.
+
+#### Quarantine is the first schema, not a later one
+
+Ingest lands in quarantine and promotion is a separate reviewed step. The alphabet validator stops
+leaked identifiers; it cannot tell a real skeleton from a crafted one, and a corpus shown to people
+as precedent is worth poisoning. Retrofitting quarantine after an index is live means re-auditing
+everything already in it — so it goes in the first migration, before there is anything to audit.
+
+#### Identity is a key and nothing else
+
+```sql
+CREATE TABLE api_keys (
+  id TEXT PRIMARY KEY, key_hash TEXT NOT NULL UNIQUE,
+  created_utc TEXT NOT NULL, revoked_utc TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',            -- OUR record, not the holder's data
+  submissions INTEGER NOT NULL DEFAULT 0
+);
+```
+
+The key is stored as a **hash**: a stolen database must not become a set of working keys.
+
+**`last_seen_utc` is omitted on purpose.** With submission timestamps it is a behavioural trace tied
+to a key we know we handed to one person — a record of when somebody was working. `submissions` is a
+counter without a clock, which is what a rate limit needs and all it needs.
+
+**And the web server must not log client IPs for this route**, or the claim is false one layer below
+the table. That is a deployment fact, not a code fact, so it is written in the deploy notes AND
+asserted by the route's own test that no request-logging middleware is registered for it.
+
+#### The shape
+
+| | |
+|---|---|
+| `POST /ingest` | a batch of `UploadedPair`, keyed, idempotent on the entry id |
+| `GET /health` | unauthenticated, says nothing about the corpus |
+
+A standalone AOT binary — the operator's decision on 2026-09-15, because `coai-server` sits behind
+Entra and a domain allow-list which is load-bearing there and wrong here: anyone should be able to
+contribute, not only people with a Team server.
+
+**The client half is `coai-mcp --upload-pairs`**, not the panel: the pairs are in SQLite and the
+panel owns none, so the one-shot mode that already reads them is where the upload belongs. It sends
+only pairs whose `keep = 1`, and records what was sent so a second run does not send it again.
+
+#### Test plan
+
+- The alphabet validator over the skeletons this repository's own corpus produces — every one must
+  pass — and over crafted ones carrying a hostname, an identifier and a number, which must not.
+- A refused skeleton is a 4xx a person can read, and lands in NO table.
+- The same entry id twice stores one row.
+- A revoked key is refused; an unknown key is refused; both without saying which.
+- The `http/` contract suite gains this server — that suite is what caught the AOT JSON binding
+  failure that made a released `coai-server` answer 500 to everything.
+- `--upload-pairs` sends only `keep = 1`, sends the three fields and no others, and is idempotent.
+
+#### Definition of done
+
+- [ ] `UploadedPair` is a type of its own and nothing maps `StoredPair` onto the wire.
+- [ ] The server validates the alphabet and refuses rather than quarantines a leak.
+- [ ] Ingest lands in quarantine; nothing reaches a live index without a reviewed promotion.
+- [ ] Keys are hashed, `last_seen_utc` does not exist, and no route logs a client IP.
+- [ ] `--upload-pairs` sends kept pairs only, and twice is the same as once.
+- [ ] The contract suite covers the new server; `research/module_server.md` and `architecture.md`
+      describe the boundary.
+
+#### What this story does NOT own
+
+Retrieval, the PR gate and the weekly synthesis are downstream and out of this plan entirely. The
+ranking pass's transport is story 5's unfinished tail and stays there — it is not a prerequisite for
+sending a pair somebody already decided to keep.
+
 ## Test plan
 
 - `BugsQuery` against a seeded `RoundsDb`, the `RoundsDbTests` pattern: real SQLite, temp directory.
