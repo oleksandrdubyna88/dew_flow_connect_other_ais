@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { PROBE_PROMPT, ProbePorts, probeClaudeModels, probeToKeep } from '../claudeProbe';
+import { PROBE_PROMPT, ProbePorts, askedEverything, probeClaudeModels, probeToKeep } from '../claudeProbe';
 import type { ProbeResult } from '../claudeModels';
 
 /**
@@ -244,4 +244,20 @@ test('and it still carries across a record that names no binary', () => {
   };
 
   assert.equal(probeToKeep(now, older)?.models.length, 4, 'an older record is not another binary');
+});
+
+test('an answer that did not reach every candidate says so', () => {
+  // VS Code disposes a view when it is HIDDEN, so switching to another sidebar view mid-probe
+  // abandons the run — and the answer it leaves looks exactly like a complete one. Without this the
+  // trigger records a success, never asks again this session, and two families stay "not asked yet"
+  // until the editor restarts. Found re-reading the loop, not by a reviewer.
+  const partial: ProbeResult = {
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [{ asked: 'haiku', answered: 'claude-haiku-4-5', verified: true }],
+  };
+
+  assert.equal(askedEverything(partial), false, 'three of the four candidates were never reached');
+  assert.equal(askedEverything(HELD), true, 'and a run that reached them all is complete');
+  assert.equal(askedEverything(undefined), false, 'nothing at all is not a complete run');
 });

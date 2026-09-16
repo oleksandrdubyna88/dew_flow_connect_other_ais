@@ -1874,6 +1874,14 @@ always asked, one that ANSWERED is not asked again this session, and one that FA
 again after ten minutes. A CLI that will not say its `--version` is not dated — it is not installed
 at that path, and re-asking it for ever is a spawn nobody wanted.
 
+**An ABANDONED run is not a finished one, and they have the same shape.** VS Code disposes a view
+when it is HIDDEN, so switching to another sidebar view mid-probe stops it — the probe asks before
+every candidate whether anyone is still waiting, because four of them is up to a hundred seconds of
+billed requests. What that leaves looks exactly like a complete answer, so `askedEverything` asks the
+question the shape cannot: a run that did not reach every candidate is dated for a retry like any
+other failure. Without it, hiding the panel once left two families saying *not asked yet* until the
+editor restarted.
+
 **The record names the binary, not only the version.** A reviewer row and a consultant can point at
 two different installations of one version, signed into two different accounts, and a record keyed by
 version alone would label both from whichever was asked. It carries its executable and declines to
