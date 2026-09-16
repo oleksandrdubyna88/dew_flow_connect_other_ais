@@ -309,6 +309,9 @@ reply for it to order.
 | `OnlyThreeFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing |
 | `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
 | `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code |
+| `TheEdgeIsWatchedTests` | the running server, reading what it LOGGED | a misconfigured edge going unnoticed; the address reaching a log |
+| `WhatTheArgumentsMeanTests` | the argument rules, in-process | 64 answered for a mode this binary has, or withheld for one it does not |
+| `TheKeywordListIsCheckedTests` | the startup guard | a binary that starts, passes the smoke, and refuses every pair |
 
 **Why an HTTP suite when the decisions are already unit-tested.** `Ingest.Take` is pure and covered;
 the route is not part of it. The one that matters most is the AOT JSON binding — this repository has
@@ -331,6 +334,32 @@ about its first batch. Before it, `UploadRun.RunAsync` had no test at all; only 
 did, and the catalogue said otherwise.
 
 **And one level below that: two real processes.** `BothHalvesTests` hosts the server's ASSEMBLIES, which cannot see a publish-layout, trimming or embedded-resource defect — and this story's whole reason for existing is a keyword file read from a directory no release has. `TheBuiltBinariesTests` starts the built `coai-bugs` on a real port, mints a key through the real `--issue-key`, uploads through the real `coai-mcp --upload-pairs`, and reads the result back through the real `--waiting`. It is on `COAI_CONTRACT_EXE`, the seam the release workflow already sets, so the same scenario is a fast check here and the release smoke there.
+
+**Three suites that exist because the code round moved the code out from under them.**
+
+`TheEdgeIsWatchedTests` drives the real server and asserts on **what it logged**, because the edge
+warning has no other observable: it changes no status, no body and no row, deliberately — refusing
+the request would break a deployment over a header the contributor never sent. Its first version
+called the helper directly and a reviewer applied this repository's own rule to it: delete the
+production line a user would notice and watch THAT go red. Deleting the whole warning left every
+one of those tests green. Deleting it now turns **7 of 11** red. It also reads the header list
+**from** `Program.Forwarding` rather than retyping it, and asserts the shipped vhost clears every
+name in it — the boundary has two halves in two languages and nothing else holds them together.
+
+`WhatTheArgumentsMeanTests` covers what `TheBuiltBinariesTests` proves but a coverage run cannot
+see: the exit-code rule lives inside a spawned PROCESS, so it was exercised and measured as
+untouched. Both earn their place — one proves the code really reaches the shell, the other can be
+run against every shape cheaply. It also caught a hidden dependency: `Unknown()` treated every
+admin mode as unknown, which was safe **only** because `Main` checked `Admin.Knows` first, so
+swapping two lines would have made `--issue-key` exit 64 and tell every caller this binary was too
+old for a mode it has.
+
+`TheKeywordListIsCheckedTests` covers the guard that decides whether the server starts at all. It
+was covered, and then it was not: the code round replaced `Checked` (which threw) with
+`WhyUnusable` (which answers a value, as the doctrine requires), and the tests stayed with the old
+name. SonarCloud reported it as a coverage gap; what it was, was the startup guard having no test.
+Its last assertion runs the check over the list **this binary actually carries**, so a release
+whose embedded resource parsed to nothing is red before it reaches a host.
 
 **It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 
