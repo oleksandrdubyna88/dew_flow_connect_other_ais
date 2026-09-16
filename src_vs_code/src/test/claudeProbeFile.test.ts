@@ -38,7 +38,9 @@ test('an entry that is half written never reaches a dropdown as confirmed', () =
     cliVersion: '2.1.0',
     checkedUtc: '2026-09-16T10:00:00.000Z',
     models: [
-      { asked: 'fable', answered: 'claude-fable-5-1', verified: 'yes' },
+      // A truthy verdict over an answer from ANOTHER family: the stored boolean is ignored and the
+      // answer beside it decides, so this is refused rather than believed.
+      { asked: 'fable', answered: 'claude-opus-5', verified: 'yes' },
       { asked: 'sonnet' },
       { answered: 'claude-opus-5' },
       null,
@@ -48,7 +50,7 @@ test('an entry that is half written never reaches a dropdown as confirmed', () =
 
   assert.ok(read);
   assert.deepEqual(read.models, [
-    { asked: 'fable', answered: 'claude-fable-5-1', verified: false },
+    { asked: 'fable', answered: 'claude-opus-5', verified: false },
     { asked: 'sonnet', answered: '', verified: false },
   ], 'a truthy-looking value was taken for a confirmation, or an entry with no candidate survived');
 });
@@ -59,4 +61,30 @@ test('an answer from another binary, or from last month, is not used', () => {
   assert.equal(stillGood(parseProbe(writeProbe(PROBE)), '2.1.0', at + 60_000), true);
   assert.equal(stillGood(parseProbe(writeProbe(PROBE)), '2.2.0', at + 60_000), false);
   assert.equal(stillGood(parseProbe(writeProbe(PROBE)), '2.1.0', at + 8 * 24 * 3600_000), false);
+});
+
+test('a stored verdict is never trusted — it is re-derived from the answer beside it', () => {
+  // A hand-edited or older-build entry claiming a family it did not get. The two fields are one
+  // decision written twice, and only one of them is evidence.
+  const lying = parseProbe(JSON.stringify({
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [
+      { asked: 'fable', answered: 'claude-opus-5', verified: true },
+      { asked: 'opus', answered: 'claude-opus-5', verified: false },
+    ],
+  }));
+
+  assert.equal(lying?.models[0]?.verified, false, 'the answer names another family, so it is not confirmed');
+  assert.equal(lying?.models[1]?.verified, true, 'and one that DID answer as itself is, whatever the file said');
+});
+
+test('a file that has grown beyond anything this writes is refused', () => {
+  const huge = JSON.stringify({
+    cliVersion: 'x'.repeat(5_000),
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [],
+  });
+
+  assert.equal(parseProbe(huge), undefined, 'a version string this long was not written by this product');
 });

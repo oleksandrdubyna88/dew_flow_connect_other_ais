@@ -147,9 +147,9 @@ import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
+import { claudeExecutableFor, claudeIsWanted } from './claudeCli';
 import {
   executableFor,
-  executableForRuntime,
   VendorInstall,
   vendorInstall,
   vendorTerminal,
@@ -186,6 +186,7 @@ const MINT_BACKOFF_MS = 10 * 60 * 1000;
 function onRuntime(one: ResolvedConsultant | undefined, runtime: string): boolean {
   return one !== undefined && one.kind === 'definition' && one.runtime === runtime;
 }
+
 
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
@@ -228,6 +229,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private claudeProbeInFlight = false;
   /** True from the moment a probe starts until it lands, so the sections can say so. */
   private askingClaude = false;
+  /**
+   * Which Claude binary the last refresh was started FOR, or empty for none yet.
+   *
+   * <p>The trigger, and the reason it is the executable rather than a boolean: a render must not
+   * start a refresh that has already been started for the same CLI, and repointing that CLI
+   * must start one. A boolean would have answered the first and lost the second.</p>
+   */
+  private claudeAskedFor = '';
+  /** The version the last refresh read, so a cached answer from another binary is not shown. */
+  private claudeCliVersion = '';
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
@@ -667,13 +678,37 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * are never going to open.</p>
    */
   private claudeProbeAnswer(vendors: readonly Vendor[], consult: ConsultSettings): ProbeResult | undefined {
-    const wanted = vendors.some((v) => v.runtime === 'claude')
-      || CALLER_KINDS.some(({ id }) => onRuntime(consult.byCaller[id], 'claude'));
-    if (wanted) {
-      void this.refreshClaudeProbe(vendors);
+    const wanted = claudeIsWanted(vendors, consult);
+    // EDGE-TRIGGERED. It used to start a refresh on every render, and the refresh repainted from a
+    // `finally` whatever it had found — so a fresh cache still caused a repaint, which started
+    // another refresh, which spawned another `--version`, for ever. A render now asks at most once
+    // per SETTLING: the flag is cleared only when a probe genuinely could not be judged fresh, and
+    // the executable is part of the key so repointing the CLI is still noticed. (Blocking, codex.)
+    if (wanted && this.claudeAskedFor !== claudeExecutableFor(vendors, consult)) {
+      this.claudeAskedFor = claudeExecutableFor(vendors, consult);
+      this.refreshClaudeProbe(vendors, consult).then(undefined, (error: unknown) => {
+        // A catch-all at the detached edge, per the try/catch rule: this promise is deliberately
+        // not awaited, so without one a failure here is an unhandled rejection and nothing else.
+        console.error('ConnectOtherAIs: the Claude model probe failed', error);
+      });
     }
 
-    return this.claudeProbe;
+    return this.claudeProbeToShow();
+  }
+
+  /**
+   * The answer a dropdown may draw on — which is not always the one on disk.
+   *
+   * <p>An answer whose CLI version no longer matches the binary this machine runs is EVIDENCE ABOUT
+   * ANOTHER BINARY. Keeping it in memory is right (it is what a failed probe falls back to), but
+   * presenting it as confirmed would label a family verified from a record a different CLI wrote —
+   * and a person choosing that alias can then silently get the default. It is withheld until a probe
+   * confirms it against the version actually installed. (codex SecurityReliability, this round.)</p>
+   */
+  private claudeProbeToShow(): ProbeResult | undefined {
+    return this.claudeProbe !== undefined && this.claudeProbe.cliVersion === this.claudeCliVersion
+      ? this.claudeProbe
+      : undefined;
   }
 
   /**
@@ -683,31 +718,44 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * spawn — so it is asked here rather than in the render, and a machine with no Claude CLI answers
    * an empty version and is never probed at all.</p>
    */
-  private async refreshClaudeProbe(vendors: readonly Vendor[]): Promise<void> {
+  private async refreshClaudeProbe(vendors: readonly Vendor[], consult: ConsultSettings): Promise<void> {
     if (this.claudeProbeInFlight) {
       return;
     }
     this.claudeProbeInFlight = true;
+    // Whether anything CHANGED, so a no-op run repaints nothing. A repaint that changed nothing was
+    // what closed the loop above into an endless one.
+    let moved = false;
     try {
       if (!this.claudeProbeRead) {
         this.claudeProbeRead = true;
         this.claudeProbe = await this.readClaudeProbe();
+        moved = this.claudeProbe !== undefined;
       }
-      const executable = executableForRuntime('claude', vendors);
+      const executable = claudeExecutableFor(vendors, consult);
       const cliVersion = await askVersion(executable);
+      moved = moved || cliVersion !== this.claudeCliVersion;
+      this.claudeCliVersion = cliVersion;
       if (cliVersion.length === 0 || stillGood(this.claudeProbe, cliVersion, Date.now())) {
         return;
       }
+      moved = true;
 
       // SAID before it is started. The alternative is tens of seconds of a dropdown that looks
       // finished, which is exactly how a person chooses from a list that was about to change.
       this.askingClaude = true;
       await this.render();
-      const found = await probeClaudeModels({
-        run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS),
-        cliVersion: async () => cliVersion,
-        now: () => Date.now(),
-      });
+      const found = await probeClaudeModels(
+        {
+          run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => this.held.view === undefined),
+          cliVersion: async () => cliVersion,
+          now: () => Date.now(),
+        },
+        undefined,
+        // Asked before each candidate. Four of them is up to a hundred seconds of BILLED requests,
+        // and a window that has gone will not read the answer. (gemini, this round.)
+        () => this.held.view === undefined,
+      );
       // A run that learned nothing keeps the previous answer: an account whose allowance is spent
       // is a state this installation is really in, and it must not empty anybody's dropdown.
       this.claudeProbe = probeToKeep(found, this.claudeProbe);
@@ -716,10 +764,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
     } finally {
       this.claudeProbeInFlight = false;
+      const wasLooking = this.askingClaude;
       this.askingClaude = false;
-      // Whatever happened, the panel stops saying it is looking. Cleared here rather than at
-      // the end, because a throw here would otherwise leave that sentence on screen for good.
-      await this.render();
+      // Whatever happened, the panel stops saying it is looking. Cleared here rather than at the
+      // end, because a throw would otherwise leave that sentence on screen for good — and repainted
+      // ONLY when something a person can see actually changed, because an unconditional repaint
+      // here is what made every render start another probe.
+      if (moved || wasLooking) {
+        await this.render();
+      }
     }
   }
 
@@ -746,8 +799,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     try {
       await vscode.workspace.fs.createDirectory(this.dataDir);
       await writeFileAtomically(vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath, writeProbe(probe));
-    } catch {
-      // Nothing to do and nothing to say: the list on screen is correct either way.
+    } catch (error) {
+      // The list on screen is correct either way — this costs a re-probe next week, not an answer.
+      // But a persistence failure that says nothing is one nobody can act on, and this product's
+      // own store already names the path it could not write. (codex Conventions, this round.)
+      console.error(
+        `ConnectOtherAIs: the Claude model probe could not be kept at ${vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath}`,
+        error,
+      );
     }
   }
 
@@ -762,6 +821,31 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>No in-flight endpoint check is needed here, unlike the reviewer path: the key IS the
    * endpoint, so an answer for one a person has since retyped is simply never looked up.</p>
    */
+  private consultEnginesAnswer(consult: ConsultSettings): Record<string, LocalEngine> {
+    if (!this.consultEnginesInFlight) {
+      this.consultEnginesInFlight = true;
+      this.probeConsultEngines(consult).then(
+        (probed) => {
+          const changed = JSON.stringify(probed) !== JSON.stringify(this.consultEnginesShown);
+          this.consultEnginesShown = probed;
+          this.consultEnginesInFlight = false;
+
+          return changed ? this.render() : undefined;
+        },
+        (error: unknown) => {
+          this.consultEnginesInFlight = false;
+          console.error('ConnectOtherAIs: a consultant endpoint could not be probed', error);
+        },
+      );
+    }
+
+    return this.consultEnginesShown;
+  }
+
+  /** What the last consultant probe found, so a render draws it without waiting for the next one. */
+  private consultEnginesShown: Record<string, LocalEngine> = {};
+  private consultEnginesInFlight = false;
+
   private async probeConsultEngines(consult: ConsultSettings): Promise<Record<string, LocalEngine>> {
     const A_MINUTE = 60 * 1000;
     const wanted = [...new Set(
@@ -874,7 +958,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // The consultant's own engines, keyed by ENDPOINT: since story C5 the section holds no
       // reviewer rows, so there is none to borrow one from, and a row whose endpoint nobody probed
       // had its saved model labelled gone by something that had never looked.
-      consultEngines: await this.probeConsultEngines(settings.consult),
+      //
+      // NOT awaited, unlike the reviewer rows' probe beside it. Ten consultant endpoints that refuse
+      // are ten sequential connection waits, and a refused endpoint is deliberately re-asked rather
+      // than cached — so awaiting this would put that whole cost on every repaint. It repaints when
+      // it lands. (codex and gemini UxDxPerformance, this round.)
+      consultEngines: this.consultEnginesAnswer(settings.consult),
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
       bugz: await this.bugz(),
@@ -1457,6 +1546,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const discovered = {
       codex: state.codexModels,
       agy: state.agyModels,
+      // The chat resolves its Claude list from this snapshot, so the probe rides in it. Without it
+      // the picker offered every curated alias as though each had been confirmed, one surface away
+      // from the panel saying which had.
+      claude: state.claudeProbe,
       catalogs: Object.fromEntries(
         (state.teamServers ?? []).flatMap((one) =>
           (one.catalog === undefined ? [] : [[one.server.id, { ...one.catalog, url: one.server.url }]])),

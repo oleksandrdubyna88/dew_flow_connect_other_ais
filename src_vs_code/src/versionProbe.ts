@@ -138,6 +138,13 @@ export function capture(
       answer(-1, '');
     }, capMs);
 
+    // NOTHING IS COMING. This function has no way to send input, so an open pipe is a promise it
+    // cannot keep - and a child that waits on one waits for the cap. MEASURED by the live contract
+    // check written for issue #301: the Claude CLI prints "no stdin data received in 3s, proceeding
+    // without it" and waits those three seconds, on every candidate, so a four-candidate probe spent
+    // twelve seconds waiting for a stream nobody would ever write to.
+    child.writeAndEnd('');
+
     child.onStdout((chunk) => {
       output += chunk;
     });

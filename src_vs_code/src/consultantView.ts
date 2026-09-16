@@ -37,14 +37,19 @@ export interface ConsultantViewState {
   /** True while that answer is being refreshed \u2014 seconds of real requests, so a row says so. */
   readonly askingClaude?: boolean | undefined;
   /**
-   * The local engines the panel has probed, by the endpoint they answer on.
+   * The local engines the panel has probed, BY THE ENDPOINT THEY ANSWER ON.
    *
    * <p>Keyed by endpoint rather than by reviewer row, and that is forced rather than chosen: since
    * story C5 the consultant section holds no reviewer rows at all, so there is no row to borrow an
    * engine from. Absent is a real state and NOT the same as an engine that refused — a dropdown
    * that has never asked must not call a saved model gone.</p>
+   *
+   * <p><b>The name carries the key, and it has to.</b> This was `localEngines`, the same name the
+   * panel gives its reviewer-keyed map — and a reviewer on this change's code round read the name,
+   * took this for that map, and filed a Blocking finding against wiring that was already right. The
+   * finding was wrong; the ambiguity it tripped over was not, and it was one rename away.</p>
    */
-  readonly localEngines?: Readonly<Record<string, LocalEngine>> | undefined;
+  readonly enginesByEndpoint?: Readonly<Record<string, LocalEngine>> | undefined;
   /** The prompt override as it is ON DISK, or empty for "the one this build ships with". */
   readonly consultPrompt?: string | undefined;
   /**
@@ -232,7 +237,7 @@ function placed(
   // THE ENGINE, when one has been probed for this endpoint. Nothing was passed here at all, so a
   // local consultant had an empty dropdown and its saved model was labelled gone by something that
   // had never asked an engine. (issue #301.)
-  const engine = one.runtime === 'local' ? (state.localEngines ?? {})[one.baseUrl] : undefined;
+  const engine = one.runtime === 'local' ? (state.enginesByEndpoint ?? {})[one.baseUrl] : undefined;
   const models = placeable
     ? modelsFor(one.runtime, state.codexModels ?? [], one.model, engine, state.agyModels ?? [], [], state.claudeProbe)
     : [];

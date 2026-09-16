@@ -355,7 +355,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         // nothing, and a saved model was then labelled gone by something that had never looked.
         // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
         // answer a row that holds no reviewer.
-        localEngines: state.consultEngines,
+        enginesByEndpoint: state.consultEngines,
         consultPrompt: state.consultPrompt,
         // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
         // caller wears the colour its vendor has on its card and in a running round. Passed even

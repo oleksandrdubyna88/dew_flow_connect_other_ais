@@ -1,4 +1,4 @@
-import { ProbeResult } from './claudeModels';
+import { ProbeResult, answeredAsAsked } from './claudeModels';
 
 /**
  * Where a probe's answer is kept between windows, and the three things that keeps it honest.
@@ -21,6 +21,12 @@ import { ProbeResult } from './claudeModels';
 /** One file, named for what it holds rather than for who wrote it. */
 export const PROBE_FILE = 'claude-models.json';
 
+/** Longer than any version string or timestamp this writes, and short enough to refuse a novel. */
+export const LONGEST_FIELD = 200;
+
+/** Far more entries than there are candidate families, and far fewer than a file can hold. */
+export const MOST_ENTRIES = 64;
+
 /** Everything read back, or nothing — a file that cannot be understood is not an answer. */
 export function parseProbe(text: string): ProbeResult | undefined {
   try {
@@ -29,7 +35,13 @@ export function parseProbe(text: string): ProbeResult | undefined {
     if (record === null || typeof record.cliVersion !== 'string' || typeof record.checkedUtc !== 'string') {
       return undefined;
     }
-    const models = Array.isArray(record.models) ? record.models : [];
+    // Bounded on the way IN as well as by construction. The file holds one entry per candidate
+    // family and nothing here can grow it — but it is a file on a disk other things can write, and
+    // a parser that will map a million entries at panel start is one an editor slip can hang.
+    if (record.cliVersion.length > LONGEST_FIELD || record.checkedUtc.length > LONGEST_FIELD) {
+      return undefined;
+    }
+    const models = (Array.isArray(record.models) ? record.models : []).slice(0, MOST_ENTRIES);
 
     return {
       cliVersion: record.cliVersion,
@@ -39,11 +51,16 @@ export function parseProbe(text: string): ProbeResult | undefined {
       models: models
         .filter((m): m is Record<string, unknown> => m !== null && typeof m === 'object')
         .filter((m) => typeof m['asked'] === 'string' && (m['asked'] as string).length > 0)
-        .map((m) => ({
-          asked: m['asked'] as string,
-          answered: typeof m['answered'] === 'string' ? m['answered'] : '',
-          verified: m['verified'] === true,
-        })),
+        .map((m) => {
+          const asked = m['asked'] as string;
+          const answered = typeof m['answered'] === 'string' ? m['answered'] : '';
+
+          // RE-DERIVED, never read. The file held one decision written twice, and the two can
+          // disagree: an entry saying `fable` was confirmed while recording that `claude-opus-5`
+          // answered would have labelled Fable verified off a record proving it was not. The answer
+          // is the evidence; the verdict is a function of it. (codex Architecture, this round.)
+          return { asked, answered, verified: answeredAsAsked(asked, answered) };
+        }),
     };
   } catch {
     return undefined;

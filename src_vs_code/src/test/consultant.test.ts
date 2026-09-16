@@ -1442,7 +1442,7 @@ function engineAt(models: readonly string[]): LocalEngine {
 test("a local consultant's dropdown offers what the engine at ITS endpoint answered", () => {
   const view = viewWith(
     definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:11434'),
-    { localEngines: { 'http://127.0.0.1:11434': engineAt(['qwen3-coder:30b', 'gpt-oss:20b']) } },
+    { enginesByEndpoint: { 'http://127.0.0.1:11434': engineAt(['qwen3-coder:30b', 'gpt-oss:20b']) } },
   );
 
   assert.deepEqual(view.models.map((m) => m.id), ['qwen3-coder:30b', 'gpt-oss:20b'],
@@ -1464,7 +1464,7 @@ test('a local consultant nobody asked an engine for is NOT told its model is gon
 test('an engine at ANOTHER endpoint is not this row\'s answer', () => {
   const view = viewWith(
     definition('my-box', 'local', 'qwen3-coder:30b', 'http://127.0.0.1:8000'),
-    { localEngines: { 'http://127.0.0.1:11434': engineAt(['gpt-oss:20b']) } },
+    { enginesByEndpoint: { 'http://127.0.0.1:11434': engineAt(['gpt-oss:20b']) } },
   );
 
   assert.ok(!view.models.some((m) => m.id === 'gpt-oss:20b'),

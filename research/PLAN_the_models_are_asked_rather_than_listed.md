@@ -13,9 +13,12 @@
 
 ## The three asks, and what is measured about each
 
-> «должно брать реалтайм текущие доступные модели из соотв кли (кодекс, клод, джеминай). плюс по
-> умолчанию берем самую высокую версию (например фабл 5 и 5.1) если доступно. плюс для консультанта
-> должно быть возможность выбрать в том числе локальную модель»
+> *"It should take the currently available models from the corresponding CLI in real time (codex,
+> claude, gemini). Plus, by default we take the highest version (for example fable 5 and 5.1) if it
+> is available. Plus, for the consultant there should be the option of choosing a local model too."*
+>
+> — issue #301, translated. Every string this repository keeps is English, and the original is on the
+> issue itself where anyone can read it in the words it was written in.
 >
 > *Take the currently available models in real time from the corresponding CLI (codex, claude,
 > gemini). Plus, by default take the highest version — Fable 5 and 5.1, say — if it is available.

@@ -31,6 +31,15 @@ export const PROBE_CAP_MS = 25_000;
 export const PROBE_PROMPT = 'hi';
 
 /**
+ * How many candidates in a row may fail to run before the CLI is judged absent.
+ *
+ * <p>Two rather than one, because one is a hiccup and two in a row is a binary that is not there.
+ * Two rather than four, because asking a CLI that cannot start four times is four timeouts a
+ * person waits through to learn what the first two already said.</p>
+ */
+export const GIVE_UP_AFTER = 2;
+
+/**
  * Ask the CLI about each candidate, once.
  *
  * <p>Sequential rather than parallel, deliberately: four concurrent requests against an account that
@@ -41,19 +50,36 @@ export const PROBE_PROMPT = 'hi';
 export async function probeClaudeModels(
   ports: ProbePorts,
   candidates: readonly string[] = CLAUDE_CANDIDATES,
+  /** Asked before every candidate: true means whoever wanted this has gone, so stop spending. */
+  givenUp: () => boolean = () => false,
 ): Promise<ProbeResult | undefined> {
   const cliVersion = await ports.cliVersion();
   if (cliVersion.length === 0) {
     return undefined;
   }
   const models: ProbedModel[] = [];
+  let couldNotRun = 0;
   for (const asked of candidates) {
-    const { code, output } = await ports.run(['--model', asked, '-p', PROBE_PROMPT, '--output-format', 'json']);
-    if (code === -1) {
-      // The CLI did not run at all — not installed, not on the path, killed at the cap. Anything
-      // learned so far is kept; what was not asked stays unasked rather than becoming a denial.
+    if (givenUp()) {
+      // The window closed, or a newer probe started. Four candidates is up to a hundred seconds of
+      // BILLED requests, and finishing them for an answer nobody will read is the worst outcome
+      // available. (gemini, this round.)
       break;
     }
+    const { code, output } = await ports.run(['--model', asked, '-p', PROBE_PROMPT, '--output-format', 'json']);
+    if (code === -1) {
+      // `capture` answers -1 for a spawn error, a timeout and an unreadable exit alike, so this
+      // cannot tell "no such binary" from "that one request hung". Both were treated as the first
+      // and the whole run was abandoned — which meant one transient hiccup on `haiku` left sonnet,
+      // opus and fable unasked for a week. Now only a CLI that has failed to run TWICE RUNNING is
+      // given up on; a single failure costs its own candidate and nothing else.
+      couldNotRun += 1;
+      if (couldNotRun >= GIVE_UP_AFTER) {
+        break;
+      }
+      continue;
+    }
+    couldNotRun = 0;
     const answered = modelThatAnswered(output);
     models.push({ asked, answered, verified: answeredAsAsked(asked, answered) });
   }
@@ -73,5 +99,24 @@ export async function probeClaudeModels(
  * a run that found something replaces it.</p>
  */
 export function probeToKeep(found: ProbeResult | undefined, held: ProbeResult | undefined): ProbeResult | undefined {
-  return found ?? held;
+  if (found === undefined) {
+    return held;
+  }
+  if (held === undefined || held.cliVersion !== found.cliVersion) {
+    // Nothing to carry forward, or nothing that MAY be carried forward: a different binary can
+    // reach different families, and inheriting the old one's answers is how a model stays wrong
+    // for a week after the CLI changed under it.
+    return found;
+  }
+
+  // A run that could not ask every candidate used to REPLACE the whole answer with its prefix, so
+  // three families confirmed yesterday silently became "not asked yet" — a discovery subtracting,
+  // which is the one thing this feature promised never to do. What this run learned wins for the
+  // families it reached; the rest stand. (Raised independently by three reviewers this round.)
+  const asked = new Set(found.models.map((m) => m.asked));
+
+  return {
+    ...found,
+    models: [...found.models, ...held.models.filter((m) => !asked.has(m.asked))],
+  };
 }

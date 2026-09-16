@@ -145,10 +145,22 @@ export function stillGood(probe: ProbeResult | undefined, cliVersion: string, no
  * entry names the concrete model the CLI resolved it to; an unverified one says it was not asked.</p>
  */
 export function claudeModels(probe: ProbeResult | undefined, curated: readonly ModelChoice[]): ModelChoice[] {
-  const verified = new Map((probe?.models ?? []).filter((m) => m.verified).map((m) => [familyOf(m.asked), m]));
+  const answered = (probe?.models ?? []).filter((m) => m.verified);
+  // BY WHAT WAS ASKED first, and only then by family. The candidates are family words today, so the
+  // two keys agree — but the exact id is what a candidate set holding a concrete model would carry,
+  // and `familyOf` alone would have keyed two of those onto one entry. An empty family keys nothing:
+  // it is what `familyOf` answers for a name it could not read, and one unreadable entry must not
+  // become the answer for every choice whose id is equally unreadable. (gemini, this round.)
+  const exact = new Map(answered.map((m) => [m.asked, m]));
+  const byFamily = new Map(answered.flatMap((m) => {
+    const family = familyOf(m.asked);
+
+    return family.length === 0 ? [] : [[family, m] as const];
+  }));
 
   return curated.map((choice) => {
-    const found = verified.get(familyOf(choice.id));
+    const family = familyOf(choice.id);
+    const found = exact.get(choice.id) ?? (family.length === 0 ? undefined : byFamily.get(family));
 
     return found === undefined
       ? { id: choice.id, label: `${choice.label} — not asked yet` }
