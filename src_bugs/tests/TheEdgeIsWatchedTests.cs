@@ -180,29 +180,38 @@ public sealed class TheEdgeIsWatchedTests
             "a commented-out directive clears nothing");
         ClearsHeader("proxy_set_header X-Forwarded-For \"\";", "X-Real-IP").Should().BeFalse(
             "a different header being cleared says nothing about this one");
+
+        // nginx takes the LAST directive for a header. A check that stopped at the first match
+        // would call this file safe while the server forwarded every address.
+        ClearsHeader(
+            "proxy_set_header X-Real-IP \"\";\nproxy_set_header X-Real-IP $remote_addr;",
+            "X-Real-IP").Should().BeFalse("the last directive is the one nginx applies");
+        ClearsHeader(
+            "proxy_set_header X-Real-IP $remote_addr;\nproxy_set_header X-Real-IP \"\";",
+            "X-Real-IP").Should().BeTrue("and the last one here clears it");
     }
 
     /// <summary>Does this vhost set <paramref name="header"/> to the empty string, and only that?</summary>
+    /// <remarks>
+    /// The LAST directive for a header wins, which is nginx's rule and not an implementation
+    /// detail: a first version took the first match, so a file that cleared the header and then set
+    /// it to <c>$remote_addr</c> further down would have been called safe while nginx forwarded the
+    /// address.
+    /// </remarks>
     private static bool ClearsHeader(string vhost, string header)
     {
-        foreach (var line in vhost.Split('\n'))
-        {
-            var directive = line.Trim();
-            if (!directive.StartsWith($"proxy_set_header {header}", StringComparison.Ordinal))
-            {
-                continue;
-            }
+        var prefix = $"proxy_set_header {header}";
+        var effective = vhost.Split('\n')
+            .Select(line => line.Trim())
+            .Where(directive => directive.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(directive => directive[prefix.Length..].Trim())
+            .LastOrDefault();
 
-            // Whatever follows the name, with the spacing nginx allows, must be the empty string.
-            var value = directive[$"proxy_set_header {header}".Length..].Trim();
-            if (value is "\"\";" or "'';")
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return IsEmpty(effective);
     }
+
+    /// <summary>An nginx value that is the empty string, in either quoting.</summary>
+    private static bool IsEmpty(string? value) => value is "\"\";" or "'';";
 
     /// <summary>And it writes no log that could hold an address.</summary>
     /// <remarks>
