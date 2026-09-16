@@ -38,7 +38,7 @@ import { CONSULTANT_RULE } from './generated/consultantRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '244ff630faba1e6f';
+export const SNIPPET_BODY_SHA = '4e23e7a87052fe36';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -61,7 +61,7 @@ export const SNIPPET_BODY_SHA = '244ff630faba1e6f';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 8;
+export const ARTEFACT_VERSION = 9;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -122,7 +122,7 @@ export type SnippetStatus =
  * `review_document` — the same defect the first version marker was introduced for, one rule
  * file over.</p>
  */
-export const DOCUMENT_VERSION = 2;
+export const DOCUMENT_VERSION = 3;
 
 /**
  * The CALLER half's version — say which model you are when you open the gate.
