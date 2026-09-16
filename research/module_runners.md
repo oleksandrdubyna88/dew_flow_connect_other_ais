@@ -84,11 +84,15 @@ sequenceDiagram
   2 247 there (2 213 under LF), so the tail takes ONE rule on Linux and NONE on Windows and the rest
   are skipped as oversized. It is correct and all but inert; rule
   modularization or the resolver is what would give it room, and
-  `StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` fails the day that changes.
+  `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud` fails the day that changes.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
   so it would differ between two rounds on one machine. Measured basis:
-  [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md). `Walk` is `ForBranch("")` —
-  the language doctrines, then
+  [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md).
+  **The tier is public, as a table and as a predicate**: `RuleOrder.TierRules` and
+  `RuleOrder.IsTier(withinMount)`. Anything that must tell tier from tail asks the predicate rather
+  than keeping its own list — a code round found the canary classifying against a tier assembled by
+  hand from `StageRules.Plan`, which is a DIFFERENT stage's tier, so a reachable tail rule was read
+  as tier and never counted. `Walk` is `ForBranch("")` — the language doctrines, then
   `security.md`, `testing.md`, `reuse-first.md`, `coding-style.md`, `knowledge-base.md`, then ordinal
   path. The corpus is larger than the budget and selection is whole-file, so whatever sorts first is
   what a reviewer is judged against: plain alphabetical order let `development-workflow.md` (14 KB)

@@ -132,8 +132,8 @@ public sealed class StageRulesTests : IDisposable
     {
         if (MountedCorpus() is not { } corpus)
         {
-            // Assert.Skip throws, but it is not annotated as such — the return is for the compiler.
-            Assert.Skip("the conventions submodule is not populated in this checkout");
+            // Assert.Skip/Fail throw, but are not annotated as such — the return is for the compiler.
+            RequireTheMount("the stage-tier resolution test");
             return;
         }
 
@@ -145,62 +145,68 @@ public sealed class StageRulesTests : IDisposable
     }
 
     /// <summary>
-    /// How much of the budget is left for the ROTATED TAIL once the tier has taken its share.
+    /// The ROTATED TAIL fits at most one rule once the tier has taken its share of the budget.
     /// </summary>
     /// <remarks>
-    /// <para><b>A canary, and it is currently red in the honest sense: the answer is zero.</b> Measured
-    /// against the real mounted corpus, 2026-09-16 — the instruction files, this repository's own rules
-    /// and all eight tier rules come to about 78 900 of the 80 000-byte budget, leaving roughly 1 100
-    /// bytes, while the SMALLEST rule outside the tier is <c>common/durable-status.md</c> at 2 247. So
-    /// nothing in the tail fits, `Collect` skips each oversized file and keeps walking, and all 24 are
-    /// omitted every round.</para>
-    /// <para>The branch rotation therefore orders a queue nothing is ever taken from. It is not wrong
-    /// and it costs nothing, but it is INERT at this corpus size — and the claim it was added to
-    /// support, that different branches read different parts of the corpus, is true of the mechanism
-    /// and false of this repository today. This test exists so that stops being invisible: if rule
-    /// modularization or a smaller base ever makes room, it fails and somebody re-reads the record.</para>
-    /// <para>It asserts the FACT, not an aspiration. A failure here is news, not a defect.</para>
+    /// <para><b>A canary over the real mounted corpus, measured 2026-09-16 — and the answer depends on
+    /// the checkout's line endings.</b> The instruction files, this repository's own rules and all eight
+    /// tier rules come to 78 855 of the 80 000-byte budget on a CRLF checkout and 77 562 under LF,
+    /// leaving 1 145 or 2 438 bytes; the smallest rule outside the tier is
+    /// <c>common/durable-status.md</c> at 2 247 or 2 213. So NOTHING in the tail fits on Windows and
+    /// exactly ONE rule fits on Linux — and it is that same rule on every branch, being the only one
+    /// small enough to be eligible. <c>Collect</c> skips an oversized file and keeps walking, so it
+    /// tries all 24 and omits the rest.</para>
+    /// <para>That is why this asserts a BOUND and not an equality: an equality would have to be
+    /// written per platform, and a canary that passes on the author's machine and fails in CI is the
+    /// defect it is here to catch. The branch rotation orders a queue at most one rule is ever taken
+    /// from, so the claim it was added to support — that different branches read different parts of
+    /// the corpus — is true of the MECHANISM and false of this repository today.</para>
+    /// <para>It asserts the FACT, not an aspiration. A failure here is news, not a defect, and the
+    /// assertion message carries the re-baselining steps for whoever trips it.</para>
     /// </remarks>
     [Fact]
-    public void TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud()
+    public void TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud()
     {
         if (MountedCorpus() is not { } corpus)
         {
-            Assert.Skip("the conventions submodule is not populated in this checkout");
+            // Assert.Skip/Fail throw, but are not annotated as such — the return is for the compiler.
+            RequireTheMount("the rotated-tail canary");
             return;
         }
 
-        var tier = StageRules.Plan.Concat(StageRules.Document)
-            .Concat((string[])["csharp/doctrine.md", "rust/doctrine.md", "typescript/doctrine.md"])
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
 
         // Through the PRODUCTION collector, not a byte-count beside it. Three reviewers made the same
         // point and they were right: a parallel calculation certifies its own arithmetic, so if Collect
         // ever changes how it measures or skips, this could pass while a tail rule really is selected —
         // or fail while none is. It also makes the test read whatever the platform reads, which matters
-        // more here than anywhere: the leftover is ~1.1 KB under CRLF and ~2.4 KB under LF, and the
-        // smallest tail rule sits between the two.
-        var mountRules = RuleFiles
-            .Collect(repoRoot, RuleFiles.DefaultBudgetBytes, RuleOrder.ForBranch("canary/the-tail"))
-            .Files
-            .Select(file => file.WithinMount)
-            .Where(within => within.Split('/') is [("common" or "csharp" or "rust" or "typescript"), _])
-            .ToList();
+        // more here than anywhere: the leftover straddles the smallest tail rule between CRLF and LF.
+        // The branch name is arbitrary and the result does not depend on it: the tier is fixed on every
+        // branch, and only ONE rule is small enough to be eligible for what is left, so every branch
+        // reaches the same answer. TwoBranches_SeeDifferentTails in RuleOrderTests is what covers the
+        // branch-sensitivity of the ORDER; this covers the budget.
+        var bundle = RuleFiles.Collect(
+            repoRoot, RuleFiles.DefaultBudgetBytes, RuleOrder.ForBranch("canary/the-tail"));
 
-        mountRules.Should().NotBeEmpty("the tier itself is reachable — if this fails, something bigger broke");
+        // "Nothing fits after the tier" says nothing until the tier really was selected — and a bundle
+        // holding one tail rule and no tier rule would have satisfied the NotBeEmpty this replaces.
+        // A code round asked for exactly this, and the expectation is derived from the production
+        // table rather than retyped.
+        MountRulesOf(bundle).Where(RuleOrder.IsTier).Should().BeEquivalentTo(
+            RuleOrder.TierRules.Where(entry => File.Exists(Path.Combine(corpus, Native(entry)))),
+            "the tier is what spends the budget, so every tier rule present in the corpus must be shown");
 
-        var reachedTail = mountRules.Where(within => !tier.Contains(within, StringComparer.OrdinalIgnoreCase)).ToList();
+        var reachedTail = TailOf(bundle);
 
         reachedTail.Should().HaveCountLessThanOrEqualTo(1,
-            "the rotated tail is effectively inert at this corpus size: the base and the eight tier "
-            + "rules spend nearly the whole 80 000-byte budget, and every rule outside the tier is "
-            + "larger than what is left — 0 of 24 fit under CRLF, 1 of 24 under LF, which is why this "
-            + "is a bound and not an equality. WHEN THIS FAILS the tail has become genuinely reachable, "
-            + "which is GOOD NEWS and not a defect: re-measure "
-            + "research/RESULTS_rules_selection_budget.md, update the coverage claim in "
-            + "RuleOrder.ForBranch and research/module_runners.md, and raise this bound in the same "
-            + $"change. Reached this run: [{string.Join(", ", reachedTail)}]");
+            $"the tail reached [{string.Join(", ", reachedTail)}] and at most one rule can fit today. "
+            + "WHEN THIS FAILS the tail has become genuinely reachable, which is GOOD NEWS and not a "
+            + "defect. Re-baseline in the same change: (1) re-measure "
+            + "research/RESULTS_rules_selection_budget.md, (2) update the claim in RuleOrder.ForBranch "
+            + "and research/module_runners.md, (3) raise this bound. Why a bound and not an equality: "
+            + "the base and the eight tier rules spend nearly the whole 80 000-byte budget and every "
+            + "rule outside the tier is larger than what is left — 0 of 24 fit under CRLF, 1 of 24 "
+            + "under LF");
     }
 
     /// <summary>
@@ -209,7 +215,7 @@ public sealed class StageRulesTests : IDisposable
     /// </summary>
     /// <remarks>
     /// The other half of the pair a code round asked for. Without this, a green
-    /// <c>TheRotatedTail_CurrentlyFitsNothing</c> is equally consistent with "the tail is out of
+    /// <c>TheRotatedTail_CurrentlyFitsAtMostOneRule</c> is equally consistent with "the tail is out of
     /// budget" and "the tail is never collected at all", and only the first is true.
     /// </remarks>
     [Fact]
@@ -227,6 +233,104 @@ public sealed class StageRulesTests : IDisposable
         paths.Should().Contain(["common/git-workflow.md", "common/pull-requests.md"],
             "and the rules outside the tier follow it when the budget allows");
     }
+
+    /// <summary>The rules a bundle took from a MOUNT, whatever their depth.</summary>
+    /// <remarks>
+    /// <c>RuleFiles.Candidate</c> strips the mount prefix and leaves a non-mounted file's
+    /// <c>WithinMount</c> equal to its <c>Path</c>, so the difference between the two IS the
+    /// production answer to "did this come from the mount". A code round caught the earlier
+    /// version matching exactly two path segments against four hard-coded directory names: the
+    /// walk sets <c>RecurseSubdirectories</c>, so splitting a rule into <c>common/testing/*.md</c>
+    /// - the whole point of the modularization follow-up - produced selected files this dropped
+    /// before counting, which would have kept the canary green on the very day it must fire.
+    /// </remarks>
+    private static IEnumerable<string> MountRulesOf(RuleBundle bundle) =>
+        bundle.Files
+            .Where(file => !file.Path.Equals(file.WithinMount, StringComparison.Ordinal))
+            .Select(file => file.WithinMount);
+
+    /// <summary>Those of them the ORDER does not rank as tier - the rotated tail, as selected.</summary>
+    private static IReadOnlyList<string> TailOf(RuleBundle bundle) =>
+        [.. MountRulesOf(bundle).Where(within => !RuleOrder.IsTier(within))];
+
+    /// <summary>
+    /// A mounted rule in a SUBDIRECTORY is still a tail rule the canary must count.
+    /// </summary>
+    /// <remarks>
+    /// The case rule modularization creates, and the one the canary exists to notice:
+    /// <c>RuleFiles</c> walks the mount with <c>RecurseSubdirectories = true</c>, so splitting
+    /// <c>common/testing.md</c> into <c>common/testing/*.md</c> yields selected files three
+    /// segments deep. A classifier that matches exactly two segments drops them before counting,
+    /// so the day capacity finally appears the canary stays green and the record stays stale.
+    /// </remarks>
+    [Fact]
+    public void TheTailCount_IncludesAMountedRuleAtAnyDepth()
+    {
+        WriteMount();
+        Write(".agents/conventions/common/security.md", Filler("security", 1_000));
+        Write(".agents/conventions/common/reliability/retries.md", Filler("retries", 1_000));
+
+        var bundle = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("feat/deep"));
+
+        bundle.Files.Select(file => file.WithinMount).Should().Contain("common/reliability/retries.md",
+            "the collector recurses, so the nested rule IS selected");
+        TailOf(bundle).Should().Contain("common/reliability/retries.md",
+            "and a rule outside the tier is tail however deep it sits");
+    }
+
+    /// <summary>
+    /// The tail is everything the ORDER does not rank as tier - not what another stage's tier names.
+    /// </summary>
+    /// <remarks>
+    /// The canary collects with <see cref="RuleOrder.ForBranch"/>, whose tier is
+    /// <c>RuleOrder</c>'s own table. <c>StageRules.Plan</c> is the PLAN stage's tier and names
+    /// rules that table does not - <c>development-workflow.md</c>, <c>planning-docs.md</c>. Counting
+    /// with the wrong list makes the canary lenient in the one direction that matters: a genuinely
+    /// reachable tail rule is read as tier and never counted.
+    /// </remarks>
+    [Fact]
+    public void TheTailCount_UsesTheOrdersOwnTier_NotThePlanStages()
+    {
+        WriteMount();
+        Write(".agents/conventions/common/security.md", Filler("security", 1_000));
+        Write(".agents/conventions/common/development-workflow.md", Filler("workflow", 1_000));
+
+        var bundle = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("feat/tier"));
+
+        TailOf(bundle).Should().Contain("common/development-workflow.md",
+            "the branch order does not rank it as tier, so it is tail however the plan stage reads it");
+        TailOf(bundle).Should().NotContain("common/security.md", "which the order DOES rank as tier");
+    }
+
+    /// <summary>
+    /// A missing mount is a developer's offline checkout — and in CI it is a broken job, not a skip.
+    /// </summary>
+    /// <remarks>
+    /// A code round asked, twice and in two stages, whether this skip could hide the canary behind a
+    /// green CI run. In this repository it cannot: <c>.github/workflows/ci.yml</c> initialises
+    /// <c>.agents/conventions</c> before the test step, and the two steps between them —
+    /// <c>npm ci --prefix .agents/conventions</c> and <c>rules.mjs check</c> — both fail outright on
+    /// an empty mount, so the job dies before the suite starts. But that is the WORKFLOW's guarantee,
+    /// not this test's, and a guarantee a test leans on silently is one a workflow edit can remove in
+    /// silence. So the skip is scoped to a machine that is not CI; where <c>CI</c> is set, the same
+    /// condition fails and names the step to run.
+    /// </remarks>
+    private static void RequireTheMount(string what)
+    {
+        const string Setup = "git submodule update --init --depth 1 .agents/conventions";
+
+        if (Environment.GetEnvironmentVariable("CI") is { Length: > 0 } ci
+            && !ci.Equals("false", StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Fail($"{what} needs the conventions mount and CI is the authoritative run: {Setup}");
+        }
+
+        Assert.Skip($"{what} needs the conventions mount, absent in this checkout: {Setup}");
+    }
+
+    /// <summary>A mount-relative rule name as this platform spells a path.</summary>
+    private static string Native(string withinMount) =>
+        withinMount.Replace('/', Path.DirectorySeparatorChar);
 
     /// <summary>The mounted conventions of THIS repository, or nothing when it is not populated.</summary>
     private static string? MountedCorpus()

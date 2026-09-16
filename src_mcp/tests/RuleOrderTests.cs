@@ -130,11 +130,11 @@ public sealed class RuleOrderTests : IDisposable
     /// 41 000-byte budget, so its tail has room. The real corpus does not: measured 2026-09-16, the
     /// base and the tier leave 1 145 bytes (2 438 under LF) against a smallest non-tier rule of 2 247
     /// (2 213), so the rotation reaches one rule on Linux and none on Windows. This test asserts the
-    /// mechanism; <c>StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud</c> asserts
+    /// mechanism; <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud</c> asserts
     /// the fact.</para>
     /// </remarks>
     [Fact]
-    public void TwoBranches_SeeDifferentTails_SoTheCorpusIsStillRead()
+    public void TwoBranches_SeeDifferentTails_OnAFixtureWithRoomForThem()
     {
         WriteMount();
         for (var i = 0; i < 20; i++)

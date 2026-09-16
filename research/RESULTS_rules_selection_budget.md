@@ -144,7 +144,7 @@ What actually would: **rule modularization** (splitting the rules over 15 KB —
 25 082 bytes, 31 % of the budget) or **targeted selection** (the resolver, blocked on E1). Both are
 already recorded as the follow-ups; this measurement is the strongest case yet for the first of them.
 
-`StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` pins the fact and fails — as
+`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud` pins the fact and fails — as
 news, not as a defect — the day the tail becomes reachable. Its message carries the re-baselining
 procedure, because a test that fails on GOOD news has to say what to do about it: re-measure this
 file, update the claim in `RuleOrder.ForBranch` and `module_runners.md`, and raise the bound in the
@@ -156,7 +156,15 @@ found the claim in five documents and every one is corrected in the same change 
 this file (the bullet above), `RuleOrder.ForBranch`'s remarks, `research/module_runners.md`,
 `RuleOrderTests.TwoBranches_SeeDifferentTails_...`'s remarks, and
 [PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
-in two places — its summary and its epic 3. `StageRulesTests` already read correctly.
+in two places — its summary and its epic 3.
+
+**And that grep was not enough, which is the part worth keeping.** A code round then found two more
+sites it could not have matched, because they were not prose: the canary's own remarks still said
+*the answer is zero*, and two test NAMES still carried the withdrawn claim —
+`TheRotatedTail_CurrentlyFitsNothing_...` and `TwoBranches_SeeDifferentTails_SoTheCorpusIsStillRead`.
+An identifier asserts as loudly as a sentence and no search for a phrase will find it. Both are
+renamed here, to `TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud` and
+`TwoBranches_SeeDifferentTails_OnAFixtureWithRoomForThem`.
 
 ## What this does not settle
 
