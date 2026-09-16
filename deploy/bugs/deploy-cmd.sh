@@ -110,22 +110,27 @@ ARCHIVE="coai-bugs-$WHAT-$RID.tar.gz"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# `--proto '=https'` and `--proto-redir '=https'`, because `-L` follows redirects and this is
-# downloading a BINARY this host is about to execute as a service. Without them a redirect to
-# plain http is followed silently, and the checksum below does not save it: the checksum comes
-# down the same hijacked connection. SonarCloud S6506 flagged both lines and was right.
-# Named once, so the two downloads cannot drift apart — and so that removing the scheme pinning has
-# to be a deliberate edit to a line that says what it is for, rather than a flag quietly dropped
-# from one of two near-identical commands. (SonarCloud S1192.)
-HTTPS_ONLY="--proto =https --proto-redir =https --tlsv1.2"
+# ONE function, with the flags written LITERALLY inside it.
+#
+# `--proto '=https'` and `--proto-redir '=https'` matter because `-L` follows redirects and this is
+# downloading a BINARY the host is about to run as a service. Without them a redirect to plain http
+# is followed silently, and the checksum below does not save it — the checksum arrives over the same
+# hijacked connection.
+#
+# It was two literal `curl` lines (S1192: the same literal four times), then one shell VARIABLE
+# holding the flags — and that second attempt was worse in a way worth recording: SonarCloud raised
+# S6506 again on both calls, because a scheme pinned through `$HTTPS_ONLY` is invisible to anything
+# reading the command. The analyser was right to be unconvinced. A function keeps the literal in one
+# place AND keeps it where a reader, and a scanner, can see it.
+fetch_https() {
+  # $1 timeout, $2 destination, $3 url
+  curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    --max-time "$1" -o "$2" "$3"
+}
 
-# shellcheck disable=SC2086  # HTTPS_ONLY is three flags and must word-split into three
-curl -fsSL $HTTPS_ONLY \
-  --max-time 120 -o "$WORK/$ARCHIVE" "$RELEASES/bugs-v$WHAT/$ARCHIVE" \
+fetch_https 120 "$WORK/$ARCHIVE" "$RELEASES/bugs-v$WHAT/$ARCHIVE" \
   || refuse "no $ARCHIVE in release bugs-v$WHAT"
-# shellcheck disable=SC2086
-curl -fsSL $HTTPS_ONLY \
-  --max-time 30 -o "$WORK/$ARCHIVE.sha256" "$RELEASES/bugs-v$WHAT/$ARCHIVE.sha256" \
+fetch_https 30 "$WORK/$ARCHIVE.sha256" "$RELEASES/bugs-v$WHAT/$ARCHIVE.sha256" \
   || refuse "no checksum for $ARCHIVE"
 
 # VERIFIED before anything is unpacked. A download this host did not check is a download somebody
