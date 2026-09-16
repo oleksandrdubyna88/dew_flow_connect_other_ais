@@ -115,9 +115,27 @@ internal sealed class Program
         builder.WebHost.ConfigureKestrel(
             kestrel => kestrel.Limits.MaxRequestBodySize = Ingest.MostBytes);
 
+        // BEFORE the database is opened, and as a VALUE rather than an exception.
+        //
+        // Two findings in one line. The C# doctrine says expected failures are values and never
+        // `throw` for control flow, and a keyword list that parsed to nothing is an expected
+        // configuration result. And it used to run AFTER `Corpus.Open`, so a misconfigured server
+        // created its database file on the way to refusing to start. (Code round, codex/local.)
+        //
+        // 78 rather than an unhandled exception, because the deploy unit sets
+        // `RestartPreventExitStatus=78`: a permanent configuration fault must stop, and
+        // `Restart=always` would otherwise restart the same broken binary every five seconds for
+        // ever while the operator reads a crash loop instead of one clear line. (Code round, codex.)
+        var keywords = SkeletonKeywords.From(Keywords());
+        if (WhyUnusable(keywords) is { Length: > 0 } unusable)
+        {
+            await Console.Error.WriteLineAsync($"[coai-bugs] {unusable}");
+
+            return 78; // EX_CONFIG
+        }
+
         var app = builder.Build();
         using var corpus = Corpus.Open(Path.Combine(Data(), "coai-bugs.db"));
-        var keywords = Checked(SkeletonKeywords.From(Keywords()));
 
         // Guarded, because two of those three arguments are COUNT queries: an installation that has
         // turned Information off would pay for them anyway, on every start, to build a line nobody
@@ -129,12 +147,38 @@ internal sealed class Program
                 keywords.Count, corpus.WaitingCount(), corpus.Held());
         }
 
+        // BEFORE routing, so it sees every request rather than one handler's.
+        //
+        // It lived inside the `/ingest` handler and two reviewers said the same thing: a header
+        // arriving at `/health`, at an unknown path, or at any route added later would never be
+        // noticed, and every new endpoint would have to remember to repeat the check. A
+        // cross-cutting property belongs at the boundary it is a property of. (Code round,
+        // gemini/codex.)
+        app.Use(async (context, next) =>
+        {
+            if (EdgeSentAnAddress(context.Request) is { Length: > 0 } header)
+            {
+                // The NAME, never the value: a warning quoting the address would be the leak it
+                // exists to report, written by the code that noticed it. DEPLOY.md rather than the
+                // repository path, because that is what the release archive unpacks it as and the
+                // operator reading this line has the archive, not the checkout. (Code round,
+                // gemini/local.)
+                app.Logger.LogWarning(
+                    "the edge sent {Header}. This server promises not to hold contributor addresses "
+                    + "and its vhost must clear the forwarding headers — see DEPLOY.md beside this "
+                    + "binary, or deploy/bugs/README.md in the repository",
+                    header);
+            }
+
+            await next(context);
+        });
+
         // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
         // would be an unauthenticated read of how much anybody has contributed.
         app.MapGet("/health", () => Results.Ok(new Health("ok")));
 
         app.MapPost("/ingest", (UploadRequest? request, HttpRequest http) =>
-            Accept(corpus, keywords, request, http, secret, app.Logger));
+            Accept(corpus, keywords, request, http, secret));
 
         await app.RunAsync();
 
@@ -160,24 +204,8 @@ internal sealed class Program
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
         UploadRequest? request,
         HttpRequest http,
-        string secret,
-        Microsoft.Extensions.Logging.ILogger log)
+        string secret)
     {
-        // The edge is checked on every request, because the request IS the evidence. A plan round
-        // asked for a mode that reads the nginx file; this process cannot know where that file is,
-        // `include` and templating mean the file on disk is not the effective config, and a check
-        // that passes on a file nginx never loaded is worse than none. A forwarding header arriving
-        // here means the edge sends one, whatever any file says. (Plan round, local/codex.)
-        if (EdgeSentAnAddress(http) is { Length: > 0 } header)
-        {
-            // The NAME, never the value: a warning quoting the address would be the leak it exists
-            // to report, written by the code that noticed it.
-            log.LogWarning(
-                "the edge sent {Header}. This server promises not to hold contributor addresses and "
-                + "its vhost must not set forwarding headers — see deploy/bugs/README.md",
-                header);
-        }
-
         var presented = Presented(http);
         var keyId = corpus.KeyFor(presented, secret);
         if (keyId.Length == 0)
@@ -251,16 +279,41 @@ internal sealed class Program
     /// others without anybody choosing them. Naming only the two we write ourselves would watch for
     /// the mistake we already know about and miss the one we inherit.
     /// </remarks>
-    private static readonly string[] Forwarding =
-        ["X-Forwarded-For", "X-Real-IP", "Forwarded", "CF-Connecting-IP", "True-Client-IP"];
+    /// <remarks>
+    /// <b>Internal, because the tests read THIS rather than retyping it</b> — a list a test repeats
+    /// is a list that will not notice its sixth entry — and because one of them asserts that every
+    /// name here is also cleared in `deploy/nginx/coai-bugs`. The two halves of this boundary are a
+    /// C# array and an nginx file, and nothing but that test holds them together. (Code round,
+    /// codex.)
+    /// </remarks>
+    internal static readonly System.Collections.Frozen.FrozenSet<string> Forwarding =
+        System.Collections.Frozen.FrozenSet.ToFrozenSet(
+            ["X-Forwarded-For", "X-Real-IP", "Forwarded", "CF-Connecting-IP", "True-Client-IP"],
+            StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The forwarding header this request carries, by NAME, or empty.</summary>
     /// <remarks>
     /// It answers the name and never the value, and that is the whole contract: the value is the
     /// thing being protected, so a report carrying it would defeat the report.
     /// </remarks>
-    internal static string EdgeSentAnAddress(HttpRequest http) =>
-        Array.Find(Forwarding, name => http.Headers.ContainsKey(name)) ?? string.Empty;
+    internal static string EdgeSentAnAddress(HttpRequest http)
+    {
+        // The REQUEST'S headers are walked, not the catalog: a request carries a handful and the
+        // probe is a frozen-set hit rather than five dictionary look-ups through a closure. It runs
+        // on every request now that it is middleware, which is what made this worth doing at all.
+        // (Code round, gemini.)
+        foreach (var header in http.Headers)
+        {
+            if (Forwarding.TryGetValue(header.Key, out var known))
+            {
+                // The catalog's spelling, not the request's: a header arriving as `x-real-ip`
+                // must be reported by the name the vhost and the tests use.
+                return known;
+            }
+        }
+
+        return string.Empty;
+    }
 
     /// <summary>
     /// The keyword list, refused when it parsed to nothing usable.
@@ -271,27 +324,25 @@ internal sealed class Program
     /// and then refuse every submission with "this server has no keyword list for CSharp" — which
     /// reads like the contributor's fault and is not. Better to not start. (Plan round, local.)
     /// </remarks>
-    internal static IReadOnlyDictionary<string, IReadOnlySet<string>> Checked(
-        IReadOnlyDictionary<string, IReadOnlySet<string>> keywords)
+    /// <returns>Why the list is unusable, or empty when it is usable.</returns>
+    internal static string WhyUnusable(IReadOnlyDictionary<string, IReadOnlySet<string>> keywords)
     {
         if (keywords.Count == 0)
         {
-            throw new InvalidOperationException(
-                "no keyword list was parsed at all; the alphabet check is made of it and this "
-                + "server cannot validate a single pair without one");
+            return "no keyword list was parsed at all; the alphabet check is made of it and this "
+                   + "server cannot validate a single pair without one";
         }
 
         foreach (var (language, words) in keywords)
         {
             if (words.Count == 0)
             {
-                throw new InvalidOperationException(
-                    $"the keyword list for {language} parsed to no words, so every {language} pair "
-                    + "would be refused as if the contributor had leaked something");
+                return $"the keyword list for {language} parsed to no words, so every {language} "
+                       + "pair would be refused as if the contributor had leaked something";
             }
         }
 
-        return keywords;
+        return string.Empty;
     }
 
     private static string Secret() =>
