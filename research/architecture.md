@@ -523,3 +523,33 @@ when it opens the database — because the panel only ever calls the second one.
 abandoned run reads as `running` for ever, the Collect button stays disabled, and the only thing
 that would clear it is a collect the button will not start. The sweep is safe from a reader because
 staleness is decided by a heartbeat, so a run happening in another process right now is untouched.
+
+## The boundary the corpus crosses (2026-09-16)
+
+```
+  one machine                                 |  anywhere
+                                              |
+  gate findings -> collector -> collect_pairs |
+                                  |           |
+                          review page (keep)  |
+                                  |           |
+                   coai-mcp --upload-pairs ---+--> coai-bugs POST /ingest
+                      language + 2 skeletons  |        alphabet check
+                                              |        quarantine
+                                              |        --promote -> corpus
+```
+
+**Everything left of the line is local.** The collector reads `coai.db` and a git history; the review
+page reads pairs and writes one person's decision. Nothing in stories 0–5 opens a socket.
+
+**Three fields cross the line**, and a test names them. What stays behind is not incidental: the
+finding id is a pointer into somebody's database, the symbol is a name, and the severity, category
+and title are the reviewers' own prose about somebody's code.
+
+**Both sides validate, differently.** The client asserts a blacklist because it holds the original;
+the server asserts a whitelist because it never will. Neither is redundant — a client defect is
+exactly the case where the first check is the one that failed.
+
+`coai-bugs` is a separate binary rather than a route on `coai-server` because that server sits behind
+Entra and a domain allow-list, which is load-bearing there and exactly wrong here: anyone should be
+able to contribute, not only people with a Team server.

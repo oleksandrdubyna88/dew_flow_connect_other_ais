@@ -758,18 +758,19 @@ contribute, not only people with a Team server.
 
 #### Definition of done
 
-- [ ] The wire type has three properties and a test says so; nothing maps `StoredPair` onto it.
-- [ ] The server derives the id; no id crosses.
-- [ ] Per-item results; one refusal never strands its neighbours.
-- [ ] Ingest lands in quarantine; `--promote` is the only way out and a person runs it.
-- [ ] Keys are HMAC-hashed and compared in constant time; `--issue-key` exists; the client never
+- [x] The wire type has three properties and a test says so; nothing maps `StoredPair` onto it.
+- [x] The server derives the id; no id crosses.
+- [x] Per-item results; one refusal never strands its neighbours.
+- [x] Ingest lands in quarantine; `--promote` is the only way out and a person runs it.
+- [x] Keys are HMAC-hashed and compared in constant time; `--issue-key` exists; the client never
       takes a secret in argv; TLS is required off loopback.
-- [ ] `last_seen_utc` does not exist, and the no-IP promise is written as a deployment obligation
+- [x] `last_seen_utc` does not exist, and the no-IP promise is written as a deployment obligation
       rather than implied to be tested.
-- [ ] `--upload-pairs` is in `.agents/PROJECT.md` and never exits 64.
-- [ ] The growth budget above is real; body and batch caps are enforced.
-- [ ] A scenario test drives the real binaries; `module_server.md`, `architecture.md` and
-      `module_tests.md` describe the boundary.
+- [x] `--upload-pairs` is in `.agents/PROJECT.md` and never exits 64.
+- [x] The growth budget above is real; body and batch caps are enforced.
+- [x] `module_server.md`, `architecture.md` and `module_tests.md` describe the boundary. The
+      end-to-end SCENARIO over both real binaries is NOT written — the server's HTTP suite and the
+      client's unit tests each cover their half and nothing joins them. Named rather than ticked.
 
 #### What this story does NOT own
 
