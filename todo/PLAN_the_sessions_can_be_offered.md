@@ -1,7 +1,7 @@
 # PLAN — the sessions can be offered, when no name reaches them
 
 > Status: **plan only, nothing implemented yet. Deferred by operator decision, 2026-09-16.** Extracted
-> from [PLAN_the_tab_finds_its_session.md](PLAN_the_tab_finds_its_session.md) when its epics A and C
+> from [PLAN_the_tab_finds_its_session.md](../research/PLAN_the_tab_finds_its_session.md) when its epics A and C
 > shipped: after the lookup was fixed this is needed for **5 sessions in 101**, and the operator chose
 > to wait for the refusal to be met again on a live session rather than build for it now.
 >
@@ -74,7 +74,7 @@ Written up in full in the parent plan's epic B, and summarised here so this file
   directory. This was accepted at the parent plan's gate round and is the piece that is genuinely
   missing from what shipped.
 
-## The boundary with [the lookup plan](PLAN_the_tab_finds_its_session.md)
+## The boundary with [the lookup plan](../research/PLAN_the_tab_finds_its_session.md)
 
 | Item | Built by | The other plan's part |
 |---|---|---|

@@ -1,12 +1,28 @@
 # PLAN — the tab finds its session, or offers the choice
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/claudeSessions.ts`,
-> `claudeQuestion.ts`, `chatCommand.ts`, `chatGoto.ts`, `conversationChoice.ts`,
-> `conversationPicker.ts`, `chatPage.ts`, and one new pure module for a session picker's rows.
+> Status: **IMPLEMENTED, 2026-09-16** — epics A and C. Epic B (the fallback picker) was DEFERRED by
+> the operator the same day and lives in [PLAN_the_sessions_can_be_offered.md](../todo/PLAN_the_sessions_can_be_offered.md),
+> which carries the trigger that brings it back; the boundary table below says who builds what.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_what_you_asked_is_on_disk.md](../research/PLAN_what_you_asked_is_on_disk.md),
-> [PLAN_go_to_conversation.md](../research/PLAN_go_to_conversation.md).
+> Shipped in PR #332 (epics A) and its successor (epic C), extension 0.49.0. Scope as built:
+> `claudeSessions.ts`, `claudeQuestion.ts`, `chatSource.ts`, `chatCommand.ts`, `chatGoto.ts`,
+> `conversationChoice.ts`, `conversationPicker.ts` — and NOT `chatPage.ts`, which only epic B touches.
+>
+> **What shipped differently from the plan.** Four things, all of them the gate's doing:
+> `SessionNames.current` became `latest`, because the file cannot answer the stronger question — a
+> second writer re-asserts a stale title, so the last row is not a fact about the tab (codex). A whole
+> name beats a prefix inside a tier, which the plan did not foresee (gemini). The budget grew a
+> per-FILE byte cap after three reviewers found that bounding how many files are opened says nothing
+> about how big one of them can be. And `Found.none` gained a typed `why`, because `walkFailed`
+> originally caught only a walk that THREW while an unlistable folder came back as an ordinary
+> absence — the same class of lie the plan set out to fix.
+>
+> **The open tail**, beyond epic B: the end-to-end scenario test of page → choice → reload, accepted
+> at the plan round and owned by the picker plan, because the page it would drive is epic B's.
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_what_you_asked_is_on_disk.md](PLAN_what_you_asked_is_on_disk.md),
+> [PLAN_go_to_conversation.md](PLAN_go_to_conversation.md).
 
 ## The symptom
 
@@ -141,7 +157,7 @@ by the session id itself — so the picker is needed for the **5 sessions in 101
 row at all, and for a name two sessions genuinely share. The operator chose to wait until the refusal
 is met again on a live session rather than build for it now. The whole design, and the trigger that
 brings it back, are in
-[PLAN_the_sessions_can_be_offered.md](PLAN_the_sessions_can_be_offered.md).
+[PLAN_the_sessions_can_be_offered.md](../todo/PLAN_the_sessions_can_be_offered.md).
 
 ### EPIC C — the two wrong sentences
 
@@ -159,7 +175,7 @@ program's undocumented derivation, and a decoder that drifts binds a tab to the 
 silently. B1 labels such a session with what was said in it; a label is shown to a person who then
 chooses, which is the opposite of a silent guess.
 
-## The boundary with [the picker plan](PLAN_the_sessions_can_be_offered.md)
+## The boundary with [the picker plan](../todo/PLAN_the_sessions_can_be_offered.md)
 
 | Item | Built by | The other plan's part |
 |---|---|---|
