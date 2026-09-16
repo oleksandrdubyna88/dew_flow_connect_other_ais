@@ -182,21 +182,53 @@ key: this is a fully independent deployment, so a mistake in one cannot reach th
 
 ### One-time, on the host
 
+**Who owns what, and why it is not all one account.** Two accounts touch this deployment and they
+want opposite things. `coai-bugs` RUNS the service and owns its data; it must never be able to
+replace the binary it executes. `coai-bugs-deploy` INSTALLS releases and owns the release area; it
+must never be able to read the corpus or the secret. So the release directories belong to the
+deploy account and the data directory does not, and the one file that needs root is reached through
+a helper rather than by making the deploy account root.
+
+The first version of these notes had `releases` owned by `coai-bugs` and gave the deploy account
+sudo for nothing but `systemctl`. Under it the first deploy could not get as far as failing
+usefully: `release.sh` could not take its lock in `/opt/coai-bugs`, could not create the release
+directory, could not create the `bin` symlink, and the `secret` verb — which runs BEFORE anything is
+installed — could not write `/etc` at all. (CodeRabbit, #328.)
+
 ```bash
 useradd --system --home /opt/coai-bugs --shell /usr/sbin/nologin coai-bugs
 useradd --create-home --shell /bin/sh coai-bugs-deploy
-install -d -m 0755 -o coai-bugs -g coai-bugs /opt/coai-bugs/data /opt/coai-bugs/releases
+
+# The release area belongs to the DEPLOY account: it creates `releases/<version>-<stamp>`, swaps
+# the `bin` symlink in the parent, writes `releases/.trail` and takes `.release.lock` there. The
+# group is `coai-bugs` so the service can traverse in and execute what it finds; 0750 keeps
+# everybody else out.
+install -d -m 0750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs /opt/coai-bugs/releases
+
+# The DATA belongs to the service, and the deploy account is deliberately not in reach of it: it
+# delivers releases, it does not get to read the corpus.
+install -d -m 0750 -o coai-bugs -g coai-bugs /opt/coai-bugs/data
 
 # the checkout the wrapper and the release script are read FROM
 git clone --depth 1 -b main https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git \
   /opt/coai-bugs/src
 chown -R coai-bugs-deploy:coai-bugs-deploy /opt/coai-bugs/src
 
-# the deploy account may restart this one unit and nothing else
+# The one thing that needs root: writing /etc/coai-bugs/env as root:coai-bugs 0640. It is INSTALLED
+# to /usr/local/sbin rather than run from the checkout, which the deploy account can write — a root
+# script in a directory its caller owns is a way to become root. Reinstall it if it ever changes;
+# it is the only file here that does not update itself with the checkout.
+install -m 0755 -o root -g root /opt/coai-bugs/src/deploy/bugs/install-env.sh \
+  /usr/local/sbin/coai-bugs-install-env
+
+# The deploy account may restart this one unit, and run that one helper with NO arguments. The
+# trailing "" is what says "no arguments": a sudoers command with no argument spec permits any.
 cat > /etc/sudoers.d/coai-bugs-deploy <<'SUDO'
 coai-bugs-deploy ALL=(root) NOPASSWD: /bin/systemctl restart coai-bugs, /bin/systemctl stop coai-bugs, /bin/systemctl is-active coai-bugs
+coai-bugs-deploy ALL=(root) NOPASSWD: /usr/local/sbin/coai-bugs-install-env ""
 SUDO
 chmod 0440 /etc/sudoers.d/coai-bugs-deploy
+visudo -cf /etc/sudoers.d/coai-bugs-deploy   # a bad drop-in locks sudo for everybody
 
 mkdir -p ~coai-bugs-deploy/.ssh && chmod 700 ~coai-bugs-deploy/.ssh
 # paste the authorized_keys line above, with the PUBLIC half of BUGS_DEPLOY_KEY

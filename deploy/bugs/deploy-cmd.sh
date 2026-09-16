@@ -12,15 +12,21 @@
 #
 # All secrets live in the repository's Actions Secrets. `COAI_BUGS_SECRET` is delivered from there
 # on every deploy, over ssh, on STDIN — never as an argument, because an argument is in `ps`, in
-# `/proc/<pid>/cmdline` and in the auth log. This file writes it to `/etc/coai-bugs/env` with the
-# mode the unit's ExecStartPre insists on, and prints nothing back: a wrapper that echoed it would
-# put it in the workflow log.
+# `/proc/<pid>/cmdline` and in the auth log. It reaches `/etc/coai-bugs/env` through the root
+# helper described at `secret` below, and nothing here prints it back: a wrapper that echoed the
+# value would put it in the workflow log.
+#
+# NOTHING IN THIS FILE RUNS AS ROOT. It runs as `coai-bugs-deploy`, which owns the release area and
+# may restart one unit. Everything needing more than that is a named, argument-less helper reached
+# through one sudoers line — see `install-env.sh`.
 #
 # THE FORCED COMMAND POINTS AT THIS FILE IN THE CHECKOUT, not at a copy under /root, so a fix to
 # this wrapper reaches the host the same way a fix to release.sh does. A copy would be a second
 # thing to keep in step, and the Team server already paid for that lesson: its host script was
 # three commits behind the workflow invoking it and the deploy failed on an option it had never
-# heard of.
+# heard of. `install-env.sh` is the ONE exception, and for the opposite reason: it runs as root,
+# this checkout is writable by the deploy account, and a root script in a writable directory is a
+# way to become root.
 #
 #   authorized_keys line:
 #     restrict,command="/opt/coai-bugs/src/deploy/bugs/deploy-cmd.sh" ssh-ed25519 AAAA... coai-bugs-deploy-ci
@@ -36,7 +42,6 @@ set -eu
 SRC=/opt/coai-bugs/src
 RELEASES=https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/releases/download
 RID=linux-x64
-ENV_FILE=/etc/coai-bugs/env
 
 refuse() { printf '%s\n' "$1" >&2; exit 1; }
 
@@ -50,28 +55,19 @@ VERB=${1:-}
 
 case "$VERB" in
   secret)
-    # One line, from stdin. `head -1` bounds what a client can write; `tr -d` removes the newline
-    # a shell pipeline adds, which would otherwise become part of the secret and hash differently
-    # from the one the client thinks it sent.
-    SECRET=$(head -c 4096 | head -1 | tr -d '\r\n')
-    [ -n "$SECRET" ] || refuse "no secret arrived on stdin"
-
-    install -d -m 0750 -o root -g coai-bugs /etc/coai-bugs
-    umask 077
-    TMP=$(mktemp)
-    {
-      printf 'COAI_BUGS_SECRET=%s\n' "$SECRET"
-      printf 'COAI_BUGS_DATA=/opt/coai-bugs/data\n'
-    } > "$TMP"
-    # Both values in ONE file so the daemon and every maintenance command read the same database.
-    # Setting the data directory in the unit and not here is how keys get issued into a file the
-    # server never opens, and every upload is then rejected with a 401 nobody can explain.
-    chown root:coai-bugs "$TMP"
-    chmod 0640 "$TMP"
-    mv -f "$TMP" "$ENV_FILE"
-    # Nothing is printed. A wrapper that confirmed the value would put it in a CI log.
-    printf 'the environment file is written\n'
-    exit 0
+    # HANDED TO A ROOT HELPER, because this script is not root and the file it is asking for is.
+    #
+    # `/etc/coai-bugs/env` has to be `root:coai-bugs 0640` — the service reads it, the deploy
+    # account must not be able to read a secret back out of it. This wrapper runs as
+    # `coai-bugs-deploy`, so every line that used to be here (`install -o root`, `chown
+    # root:coai-bugs`, writing under `/etc`) failed for the account that actually runs it. The
+    # whole `secret` verb could not work as written, which meant the FIRST deploy could not work:
+    # it is the step that gives the service its secret before anything is installed.
+    #
+    # The helper is `/usr/local/sbin/coai-bugs-install-env`, installed from `install-env.sh` and
+    # owned by root — never executed out of this checkout, which the deploy account can write.
+    # stdin passes straight through; nothing here reads the secret. (CodeRabbit, #328.)
+    exec sudo -n /usr/local/sbin/coai-bugs-install-env
     ;;
 
   health)
