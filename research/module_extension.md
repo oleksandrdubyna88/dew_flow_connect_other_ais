@@ -1588,8 +1588,30 @@ matching hours later — which is precisely the window this button exists for. `
 the file in the background as the tab opens, while the name still matches, and keeps it; every later
 press reads that path directly. It pins only when exactly ONE session across every workspace root
 matches, because pinning one of two namesakes would make that refusal permanent and invisible. A
-reload loses the pin and the first press resolves again by name — the path is not put in the store,
+reload loses the pin and the first press resolves again — the path is not put in the store,
 since that would be somebody's home directory living in workspace state.
+
+**And after a reload it resolves by the ID, not by the name (2026-09-16).** The identity was on the
+record the whole time: a pinned conversation keeps `source: {kind:'claude', sessionId}`, and that id
+is exactly what the session file is CALLED. Nothing used it — the first press after a reload walked
+the folder comparing titles, hunting a string Claude Code rewrites underneath it, which is how a
+renamed conversation became unfindable for ever. `sessionFileOf` joins `projectsRoot` +
+`projectDirIn` + `<sessionId>.jsonl` and asks `access`: no transcript is read at all, and on the
+operator's own folder that is one directory entry instead of 1.2 GB streamed (5.2 s warm, measured).
+The name walk is the fallback, for a conversation that never had an id and for one whose session has
+since been deleted — and what it finds is now ADOPTED through `adoptFound`, the one road in that
+`pinSession` also takes, so a resolution discovered on the Asked path is written to the record
+instead of dying with the window.
+
+**Turning a stored string back into a path is asked twice.** A record is a file a person or another
+program can edit, and `..\..\elsewhere` joined to the project directory is a file outside it that
+`access` would confirm quite happily. So the id must match the session-id shape (`isSessionId`,
+exported from `chatSource.ts` so the rule is stated once) before the disk is touched, and the
+resolved path must still be under the directory afterwards. Deliberately redundant: the shape test is
+the rule, and the containment test is what survives somebody loosening the regex without knowing why
+it is there. Both were verified by disabling each in turn — containment alone still refuses every
+traversal; with both gone, a session file belonging to another project resolves. (codex, the plan
+round, as a security finding.)
 
 **Three refusals, all of them named.** Two sessions in one folder sharing a title is a refusal, never
 a pick — `oneAnswerFrom` says the same for two workspace ROOTS each holding one, which was a

@@ -88,6 +88,7 @@ import {
   pinnable,
   promptsFrom,
   sessionFileIn,
+  sessionFileOf,
   severalMatch,
   waitingQuestion,
 } from './claudeSessions';
@@ -532,19 +533,80 @@ async function findSessionIn(title: string): Promise<readonly FoundIn[]> {
  * background walk at open time found nothing yet. What it resolves it keeps, on the same terms
  * `pinSession` uses: exactly one session, across every root, with nothing else in doubt.</p>
  */
-async function resolveAndPin(id: object, title: string): Promise<Asked> {
-  const found = await findSession(title);
-  if (!pinnable(found)) {
-    // Nothing to keep, and the reason is the one the refusal would give anyway.
-    return oneAnswerFrom(found.map(asAsked));
+async function resolveAndPin(entry: ChatEntry, mine: Thread): Promise<Asked> {
+  // THE ID FIRST. A conversation that was pinned once keeps `source: {kind:'claude', sessionId}`,
+  // and that id is what the file is CALLED — so the answer is a directory entry rather than every
+  // transcript in the folder read for its title. It is also the only path that survives a rename:
+  // the name walk below is hunting a string another program rewrites underneath it, which is the
+  // defect this whole plan is about. Measured on the operator's folder: 5.2 s warm against one stat.
+  const byId = await findSessionById(mine.source);
+  const kept = byId.find((one) => one.found.kind === 'one');
+  if (kept !== undefined) {
+    // Nothing is written: the id is already on the record, and the path is deliberately not.
+    mine.sessionFile = (kept.found as Extract<Found, { kind: 'one' }>).file;
+
+    return await promptsFrom(mine.sessionFile);
   }
-  const file = found.find((answer) => answer.kind === 'one')!.file;
-  const mine = threads.get(id);
-  if (mine !== undefined) {
-    mine.sessionFile = file;
+  // The id missed — this conversation never had one, or the session it names has been deleted — so
+  // the tab's name is asked, and what it finds is ADOPTED: source, workspace and a queued write, on
+  // the terms `pinSession` uses. Until this, a resolution found here died with the window and the
+  // same walk ran again after every reload. (codex, the plan round.)
+  const found = await findSessionIn(mine.title);
+  if (!pinnable(found.map((one) => one.found))) {
+    // Nothing to keep, and the reason is the one the refusal would give anyway.
+    return oneAnswerFrom(found.map((one) => asAsked(one.found)));
+  }
+  adoptFound(entry, mine, found.find((one) => one.found.kind === 'one')!);
+
+  return await promptsFrom(mine.sessionFile);
+}
+
+/**
+ * Each folder's answer for the session a conversation's own source NAMES, or nothing to ask.
+ *
+ * <p>A source that is not a Claude session — a file-opened chat, or one that was never pinned — has
+ * no id to look for, and an empty list is what says so. Every root is asked, as the name walk asks
+ * them: the id names no folder, and a workspace can hold two.</p>
+ */
+async function findSessionById(source: ConversationSource): Promise<readonly FoundIn[]> {
+  if (source.kind !== 'claude') {
+    return [];
   }
 
-  return await promptsFrom(file);
+  return await everyFolder(async (folder, caseBlind) => ({
+    folder,
+    found: await sessionFileOf(os.homedir(), folder, caseBlind, source.sessionId),
+  }));
+}
+
+/**
+ * Keep the session this answer found: the file in memory, the identity on the record.
+ *
+ * <p>ONE road in, because there are two ways a session is discovered — the walk as a tab opens, and
+ * a press that finds the tab unpinned — and they wrote different amounts of it. The press wrote the
+ * file alone, so what it learned was lost at the next reload while the walk's version lasted for
+ * ever. The difference was invisible: both produce prompts on screen.</p>
+ *
+ * <p><b>The FOLDER the session was found in</b>, never this window's first root: a session's id names
+ * no directory, so the only honest answer is where it was found. That is why this cannot go through
+ * `reorigin`, which computes the root from the source and gets `''` for a Claude one.</p>
+ */
+function adoptFound(entry: ChatEntry, mine: Thread, one: FoundIn): void {
+  mine.sessionFile = (one.found as Extract<Found, { kind: 'one' }>).file;
+  const sessionId = sessionIdOf(mine.sessionFile);
+  if (sessionId.length === 0) {
+    // A file of a shape this build does not recognise. The tab keeps its pin — the Asked button
+    // reads that file happily — and the conversation keeps no source, which is the honest answer:
+    // an id invented here would match a tab that is not this one.
+    return;
+  }
+  mine.source = sourceOfSession(sessionId);
+  mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
+  // WRITTEN EXPLICITLY. `show`'s guard compares messages, model and mark, so a source arriving on
+  // its own — which is exactly what this is, minutes after the last thing anybody said — would
+  // never reach disk through that path. Queued behind the conversation's other writes, so it
+  // cannot carry a stale revision.
+  keepQueued(entry, mine);
 }
 
 /** A lookup answer as an answer about prompts — the refusals are word for word the same ones. */
@@ -577,25 +639,7 @@ function pinSession(entry: ChatEntry, title: string, fromSession: boolean): void
     if (mine === undefined || !pinnable(found.map((one) => one.found))) {
       return;
     }
-    const one = found.find((answer) => answer.found.kind === 'one')!;
-    mine.sessionFile = (one.found as Extract<Found, { kind: 'one' }>).file;
-    const sessionId = sessionIdOf(mine.sessionFile);
-    if (sessionId.length === 0) {
-      // A file of a shape this build does not recognise. The tab keeps its pin — the Asked button
-      // reads that file happily — and the conversation keeps no source, which is the honest answer:
-      // an id invented here would match a tab that is not this one.
-      return;
-    }
-    // THE FOLDER THE SESSION WAS FOUND IN, not this window's first root. That distinction is the
-    // whole of what three reviewers corrected in this story's plan — and a session's own source knows
-    // no folder, so this is the one origin that cannot go through `reorigin`.
-    mine.source = sourceOfSession(sessionId);
-    mine.workspace = filedUnder(one.folder, whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
-    // WRITTEN EXPLICITLY. `show`'s guard compares messages, model and mark, so a source arriving on
-    // its own — which is exactly what this is, minutes after the last thing anybody said — would
-    // never reach disk through that path. Queued behind the conversation's other writes, so it
-    // cannot carry a stale revision.
-    keepQueued(entry, mine);
+    adoptFound(entry, mine, found.find((answer) => answer.found.kind === 'one')!);
   })().catch((reason: unknown) => {
     // The outer edge of a detached call. The `try` above covers only the walk; everything after it —
     // the id, the file, the queue — used to escape unobserved, which `reliability.md` forbids of any
@@ -3113,7 +3157,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           // after the reload would never be found again. (CodeRabbit, PR #207.)
           const answer = mine.sessionFile.length > 0
             ? await promptsFrom(mine.sessionFile)
-            : await resolveAndPin(id, mine.title);
+            : await resolveAndPin(found, mine);
           // A REASON, never a blank region. Four situations look identical from an empty box — no
           // session file, no folder, a namesake it refuses to pick between, and a conversation the
           // person has not spoken in yet — and the box is the only place they are looking.

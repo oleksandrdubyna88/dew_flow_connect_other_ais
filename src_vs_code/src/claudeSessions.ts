@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
 import { AskedSet, SessionNames, collectNames, humanSaid, lastAsked } from './claudeQuestion';
+import { isSessionId } from './chatSource';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -425,12 +426,36 @@ export async function sessionFileIn(
   caseBlind: boolean,
   looking: string,
 ): Promise<Found> {
-  const root = projectsRoot(home);
   if (looking.length === 0) {
     // A tab with no name cannot be joined to anything. It is not an error — a chat opened from a
     // file is exactly this — so it is said plainly rather than dressed as a failure.
     return { kind: 'none', refusal: 'This conversation is not named after a Claude Code session.' };
   }
+  const dir = await projectDirFor(home, cwd, caseBlind);
+  if (typeof dir !== 'string') {
+    return dir;
+  }
+  const files = await sessionFiles(dir);
+  if (!Array.isArray(files)) {
+    return { kind: 'none', refusal: (files as ReadFailure).refusal };
+  }
+  return await theOneCalled(files, looking, `in ${dir}`);
+}
+
+/**
+ * Where this folder's sessions are kept, or the named reason there is nowhere to look.
+ *
+ * <p>ONE copy. The same eleven lines opened `sessionFileIn` and `waitingQuestion`, and a third reader
+ * was about to be written; the refusals they produce are the ones a person reads when a window is
+ * pointed at the wrong machine, so two of them drifting apart is two different explanations of one
+ * situation.</p>
+ */
+async function projectDirFor(
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+): Promise<string | Extract<Found, { kind: 'none' }>> {
+  const root = projectsRoot(home);
   let names: string[];
   try {
     names = await fs.readdir(root);
@@ -440,17 +465,54 @@ export async function sessionFileIn(
       : { kind: 'none', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
   const dir = projectDirIn(root, cwd, names, caseBlind);
-  if (dir.length === 0) {
-    return {
-      kind: 'none',
-      refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
-    };
+
+  return dir.length > 0 ? dir : {
+    kind: 'none',
+    refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
+  };
+}
+
+/**
+ * The session file a conversation's own ID names — no titles read, no directory walked.
+ *
+ * <p><b>The identity was on the record all along.</b> A pinned conversation keeps
+ * `source: {kind:'claude', sessionId}`, and that id is exactly what the file is called. Nothing used
+ * it: a reload empties the remembered path and the next press goes hunting by a title that Claude
+ * Code rewrites underneath it. So a conversation whose file could be NAMED was searched for by
+ * string. This names it — one `access`, and on the operator's own folder that is a directory entry
+ * instead of 1.2 GB streamed.</p>
+ *
+ * <p><b>A stored string becoming a path is a security question, and it is asked twice.</b> A record
+ * is a file a person or another program can edit: `..\\..\\elsewhere` joined to the project directory
+ * is a file outside it, and `access` would confirm it exists quite happily. So the id must LOOK like
+ * one before the disk is touched, and the resolved path must still be under the directory after.
+ * Belt and braces on purpose — the regex is the rule and the containment check is what survives the
+ * regex being loosened by somebody who does not know why it is there. (codex, the plan round.)</p>
+ */
+export async function sessionFileOf(
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+  sessionId: string,
+): Promise<Found> {
+  if (!isSessionId(sessionId)) {
+    // Said without repeating the string back: a refusal that echoes a path is a refusal that helps
+    // somebody probe with it.
+    return { kind: 'none', refusal: 'This conversation does not name a Claude Code session of a shape this build knows.' };
   }
-  const files = await sessionFiles(dir);
-  if (!Array.isArray(files)) {
-    return { kind: 'none', refusal: (files as ReadFailure).refusal };
+  const dir = await projectDirFor(home, cwd, caseBlind);
+  if (typeof dir !== 'string') {
+    return dir;
   }
-  return await theOneCalled(files, looking, `in ${dir}`);
+  const file = path.resolve(dir, `${sessionId}.jsonl`);
+  const inside = path.relative(dir, file);
+  if (inside.length === 0 || inside.startsWith('..') || path.isAbsolute(inside)) {
+    return { kind: 'none', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
+  }
+
+  return await readable(file)
+    ? { kind: 'one', file }
+    : { kind: 'none', refusal: `The session this conversation was pinned to is no longer in ${dir}.` };
 }
 
 /**
