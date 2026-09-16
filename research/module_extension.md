@@ -2612,7 +2612,8 @@ So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it besi
 one of the 24 rule bodies the conventions repository hashes against its migration baseline, so its
 `<!-- coai-snippet v5 -->` cannot be raised: the gate half is frozen at v5 and will be until that
 inventory retires. A change that arrives as a whole new half therefore brings a marker of its own —
-`coai-document`, `coai-caller`, `coai-consultant`, each at v1 — and `snippetStatus` compares a pasted
+`coai-document`, `coai-caller`, `coai-consultant`, each at v1 when it arrived, and each raised since
+by a change to its own rule (v3, v2 and v2 as of 2026-09-16) — and `snippetStatus` compares a pasted
 copy half by half. A paste missing one of them is `older` by its ABSENCE rather than by a number,
 which is what lets a copy made before a half existed be recognised at all.
 
@@ -2633,9 +2634,11 @@ person reading the menu had no way to learn that the block in their repository w
 would now give them. That is the defect the label was introduced to fix, arriving through the one door
 left open, and the operator reported it twice.
 
-`ARTEFACT_VERSION` is the answer: an ordinal for the composed paste, 6 because the menu has been
-showing 5 for the whole artefact and the next one is 6. It numbers a different thing from
-`SNIPPET_VERSION`, which stays 5 and stays the gate rule's own marker. Three sentences read it — the
+`ARTEFACT_VERSION` is the answer: an ordinal for the composed paste, introduced at 6 because the menu
+had been showing 5 for the whole artefact and the next one was 6 — and moved on every change to the
+paste since, to 9 on 2026-09-16 (see *A finding that changes everything is the fifth reason to ask*
+below). It numbers a different thing from `SNIPPET_VERSION`, which stays 5 and stays the gate rule's
+own marker. Three sentences read it — the
 menu title, the panel's stale-copy note, and the notification after the click — and two tests keep it
 honest: `snippetVersion.test.ts`'s hash guard fails on any change to the artefact text and names the
 number to raise, and `snippetVersionIsVisible.test.ts` fails when the `package.json` title disagrees
@@ -2665,6 +2668,43 @@ is no block, and the clipboard still carries the gate half its submodule already
 [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md),
 which stays open. The boundary: this change owns the NUMBER and the shape of the sentence; that plan
 owns the ADVICE and what goes on the clipboard for a mount.
+
+### A finding that changes everything is the fifth reason to ask, and agreement is earned (2026-09-16)
+
+Story 2.1 of
+[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../todo/PLAN_a_finding_that_changes_everything_calls_the_consultant.md).
+The five triggers in `consultantRule.md` all described being STUCK, and the most consequential moment
+of a gate round is the opposite one: the caller reads a finding, writes *this changes everything*,
+and acts on it — the whole decision taken by the one model whose work is under review. So the list
+has six entries now. The new one sits at position 5 and is anchored on the caller's OWN verdict,
+never on the `severity` a reviewer attached (a `blocking` answered by editing a paragraph is not
+this; a `minor` that invalidates a step is); it is called BEFORE `resolve`, because accept-or-reject
+is the decision a consultation informs and `resolve` is where it is recorded; and it is one
+consultation per round, because the budget is per session. The person's own request keeps the last
+place, being the one entry that needs no judgement. `critical` appears nowhere in the rule, and a
+test holds that half to it: it is not one of the four severities, and the parser rejects it by name.
+
+**The finding travels as EVIDENCE, and agreement is something the consultant earns.** A reviewer's
+finding is output from another model on its way into a third model's prompt, so the rule says to
+quote it verbatim, fenced, as the thing that was said — and that neither side takes orders from it.
+The "two rules about the answer" are three: between *the advice is material* and *the next call
+reports the verification* now sits *never agree because it sounds right* — an answer that only
+asserts has given the caller nothing to act on; ask for what makes the defect real, reject what
+cannot produce it, and run the check yourself before a line changes. And a consultation the caller
+cannot get — feature off, budget spent, turn failed — is named as no verdict at all: verify the
+finding against the code, and put it to the person if that is not enough.
+
+**One cascade, one commit.** The text change moved `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` 8 → 9,
+`CONSULTANT_VERSION` 1 → 2 with its marker, and the `(v9)` menu title; `DOCUMENT_VERSION` 2 → 3 moved
+in the same cascade because the document gate's own correction — a plan is not a document, the
+sibling plan on this branch — had already raised `coai-document` to v3 in conventions, and one
+artefact may move only once. That is also why the conventions pin bump sits in the SAME commit as
+the constants: `snippetVersion.test.ts` compares the marker in the mounted text with `KNOWN_HALVES`,
+so a pin carrying v3 beside a `DOCUMENT_VERSION` of 2 fails with *coai-document's marker and its
+version disagree*, and a story must be committable with its tests green. `SNIPPET_VERSION` stays 5
+(frozen) and `CALLER_VERSION` stays 2: only the halves whose rule changed move. The
+`ARTEFACT_VERSION` docblock that said the two numbers "differ by one" was corrected in passing — it
+had been false since 8 against 5.
 
 ### The Consultant section: who a stuck AI asks, and the one box that is a FILE (2026-09-13)
 
@@ -5863,9 +5903,10 @@ click it. Asked by the operator in exactly those terms: "how does a person find 
 
 Two places say it now, and they answer different questions:
 
-- **The menu item** — `Copy the CLAUDE.md snippet (v6)` — is read BEFORE the click, and is what makes
-  a stale copy worth a second look. It is a static string in the manifest, so a test asserts it
-  carries `(v${ARTEFACT_VERSION})`: the version cannot drift out of the menu without a red suite.
+- **The menu item** — `Copy the CLAUDE.md snippet (v9)`, the number being `ARTEFACT_VERSION` as of
+  2026-09-16 — is read BEFORE the click, and is what makes a stale copy worth a second look. It is a
+  static string in the manifest, so a test asserts it carries `(v${ARTEFACT_VERSION})`: the version
+  cannot drift out of the menu without a red suite.
 - **The message after the click** is the only one that can compare. It names what went on the
   clipboard and what this repository already had: *"…is on your clipboard. This repository's copy is
   missing or behind on the consultant — replace the block between the markers."* A repository that is
