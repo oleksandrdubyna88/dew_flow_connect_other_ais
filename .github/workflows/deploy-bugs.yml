@@ -81,8 +81,10 @@ jobs:
     name: put it on the host
     needs: [preflight]
     runs-on: ubuntu-latest
-    # Someone approves before anything reaches the machine.
-    environment: production
+    # Its OWN environment, not the Team server's `production`: a fully independent deployment
+    # means an independent set of secrets and an independent approval. The key that can update
+    # this service must not be reachable from a workflow that deploys the other one.
+    environment: production_bugs
     timeout-minutes: 20
     steps:
       - name: The key, for this run only
