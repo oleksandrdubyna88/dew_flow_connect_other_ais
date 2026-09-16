@@ -182,3 +182,242 @@ test('anything that is not a copied message is left to the rest of the script', 
 
   assert.equal(ship.textContent, 'Ship it', 'a message that names no phrase changed a button anyway');
 });
+
+/**
+ * The acknowledgement's COLOUR.
+ *
+ * <p>Issue #322: the button says *Copied* in the same colour and weight as its own name, so the one
+ * signal that the clipboard write resolved is the one nobody notices.</p>
+ *
+ * <p><b>Why this is not a substring assertion.</b> `.agents/PROJECT.md` and `.coderabbit.yaml` refuse
+ * a new behavioural assertion over page source text (operator ruling, 2026-09-14), and the plan round
+ * for this change found the specific hole: a rule reading `.never[data-said="1"] { color:
+ * var(--vscode-charts-green) }` satisfies every string match anybody would write and matches no
+ * button. So four things are pinned TO EACH OTHER — the attribute the script is observed writing, the
+ * element the page is observed rendering, the rule the stylesheet is parsed into, and the cascade
+ * that rule has to win.</p>
+ *
+ * <p>The selector matcher below answers true, false or <b>undefined</b>, and never guesses: a
+ * construct it does not model is undefined, and a separate assertion proves the undefined set holds
+ * nothing that could paint this button. A matcher that quietly matched what it could not parse is a
+ * failure this family has already paid for.</p>
+ */
+
+interface Rule {
+  readonly selector: string;
+  readonly body: string;
+  /** Source order, which is what decides a specificity tie. */
+  readonly at: number;
+}
+
+/** An element, as much of one as a selector can ask about. */
+interface Element {
+  readonly tag: string;
+  readonly classes: readonly string[];
+  readonly attrs: Readonly<Record<string, string>>;
+}
+
+/** The panel's stylesheet, parsed. Comments are dropped; there are no at-rules to nest. */
+function stylesheet(html: string): Rule[] {
+  const open = html.indexOf('<style>');
+  const close = html.indexOf('</style>', open);
+  assert.ok(open >= 0 && close > open, 'the panel ships no stylesheet');
+  const css = html.slice(open + '<style>'.length, close).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!css.includes('@media') && !css.includes('@keyframes'), 'this parser does not nest');
+
+  const rules: Rule[] = [];
+  const pattern = /([^{}]+)\{([^{}]*)\}/g;
+  for (let found = pattern.exec(css); found !== null; found = pattern.exec(css)) {
+    rules.push({
+      selector: (found[1] ?? '').trim().replace(/\s+/g, ' '),
+      body: (found[2] ?? '').trim(),
+      at: rules.length,
+    });
+  }
+  assert.ok(rules.length > 20, 'the stylesheet did not parse into rules');
+
+  return rules;
+}
+
+/** CSS specificity as (ids, classes+attributes+pseudo-classes, elements+pseudo-elements). */
+function specificity(selector: string): readonly [number, number, number] {
+  const count = (pattern: RegExp): number => (selector.match(pattern) ?? []).length;
+
+  return [
+    count(/#[\w-]+/g),
+    count(/\.[\w-]+/g) + count(/\[[^\]]*\]/g) + count(/(?<!:):[a-z-]+(?:\([^)]*\))?/g),
+    count(/(?:^|[\s>+~])[a-z][\w-]*/g) + count(/::[a-z-]+/g),
+  ];
+}
+
+/** Bigger wins; zero is a tie, which source order then breaks. */
+function outranks(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+  return (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]);
+}
+
+/** Everything this matcher models. Anything else is an honest undefined. */
+const MODELLED =
+  /^(?:[a-z][\w-]*)?(?:\.[\w-]+|\[[\w-]+(?:="[^"]*")?\]|:(?:hover|focus|active|focus-within))+$|^[a-z][\w-]*$/;
+
+/** Does one compound selector describe this element? undefined when it cannot be read. */
+function compoundMatches(compound: string, element: Element): boolean | undefined {
+  if (!MODELLED.test(compound)) {
+    return undefined;
+  }
+  const tag = compound.match(/^[a-z][\w-]*/)?.[0];
+  if (tag !== undefined && tag !== element.tag) {
+    return false;
+  }
+  for (const [, name] of compound.matchAll(/\.([\w-]+)/g)) {
+    if (!element.classes.includes(name ?? '')) {
+      return false;
+    }
+  }
+  for (const [, name, , value] of compound.matchAll(/\[([\w-]+)(="([^"]*)")?\]/g)) {
+    const held = element.attrs[name ?? ''];
+    if (held === undefined || (value !== undefined && held !== value)) {
+      return false;
+    }
+  }
+
+  // A pseudo-class is a state the element CAN be in — a mouse sits on the button it has just
+  // pressed — so it is a live competitor for the cascade rather than a reason to stop looking.
+  return true;
+}
+
+/** Could this selector paint `element` sitting inside `ancestors`? undefined when unreadable. */
+function couldMatch(
+  selector: string,
+  element: Element,
+  ancestors: readonly Element[],
+): boolean | undefined {
+  let unreadable = false;
+  for (const branch of selector.split(',')) {
+    // THE SUBJECT DECIDES FIRST. A combinator only ever adds a constraint, so a branch whose last
+    // compound cannot be this element is a definite no however it is joined. Asking about the
+    // combinator first put `.sec-phrases > summary` — a rule for a disclosure heading, which can
+    // never be a button — into the unreadable pile, and the test then failed on its own guard
+    // instead of on the missing rule it was written to find.
+    const compounds = branch.trim().split(/[\s>+~]+/).filter(Boolean);
+    const last = compounds.length === 0
+      ? undefined
+      : compoundMatches(compounds[compounds.length - 1] ?? '', element);
+    if (last === undefined) {
+      unreadable = true;
+      continue;
+    }
+    if (!last) {
+      continue;
+    }
+    // It could be the subject, and how it is joined to its ancestors is beyond this matcher.
+    if (/[>+~]/.test(branch)) {
+      unreadable = true;
+      continue;
+    }
+    let left = [...ancestors];
+    const reached = compounds.slice(0, -1).every((compound) => {
+      const found = left.findIndex((up) => compoundMatches(compound, up) === true);
+      if (found < 0) {
+        unreadable = unreadable || left.some((up) => compoundMatches(compound, up) === undefined);
+
+        return false;
+      }
+      left = left.slice(found + 1);
+
+      return true;
+    });
+    if (reached) {
+      return true;
+    }
+  }
+
+  return unreadable ? undefined : false;
+}
+
+/** The phrase button the page actually renders, read out of the markup rather than assumed. */
+function renderedPhraseButton(html: string): Element {
+  const row = html.match(/<div class="phrases">([\s\S]*?)<\/div>/);
+  assert.ok(row, 'the phrases section renders no button row for the rule to key on');
+  const tag = (row[1] ?? '').match(/<button[^>]*data-command="copyPhrase"[^>]*>/);
+  assert.ok(tag, 'the phrase row holds no copy button');
+  const classes = (tag[0].match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/).filter(Boolean);
+  const attrs: Record<string, string> = {};
+  for (const [, name, value] of tag[0].matchAll(/([\w-]+)="([^"]*)"/g)) {
+    attrs[name ?? ''] = value ?? '';
+  }
+  assert.ok(classes.includes('run'), `the copy button lost its run class: ${tag[0]}`);
+
+  return { tag: 'button', classes, attrs };
+}
+
+/** Does a rule set a colour at all? One that does not cannot win or lose this argument. */
+function paints(rule: Rule): boolean {
+  return /(^|;)\s*(color|background)\s*:/.test(rule.body);
+}
+
+test('the word Copied is painted green by a rule that matches the button the script marks', () => {
+  const html = panelHtml(state(), 'n0nce');
+
+  // (a) The attribute the rule keys on — OBSERVED, by running the panel's own script.
+  const ship = new Button('a', 'Ship it');
+  const page = run([ship]);
+  page.say({ type: 'copied', id: 'a' });
+  assert.equal(ship.dataset.said, '1', 'the script no longer marks the button a rule could key on');
+  assert.equal(ship.textContent, 'Copied', 'the acknowledgement is not on the button any more');
+
+  // (b) The element the page renders, read out of the markup, wearing the mark from (a).
+  const drawn = renderedPhraseButton(html);
+  const button: Element = { ...drawn, attrs: { ...drawn.attrs, 'data-said': ship.dataset.said ?? '' } };
+  const inside: readonly Element[] = [{ tag: 'div', classes: ['phrases'], attrs: {} }];
+
+  // (c) The rule, found by MATCHING it against that element — never by searching the text for it.
+  const sheet = stylesheet(html);
+  const unreadable = sheet.filter(
+    (rule) => paints(rule)
+      && couldMatch(rule.selector, button, inside) === undefined
+      && /\brun\b|\bphrases\b|data-said|\bbutton\b/.test(rule.selector),
+  );
+  assert.deepEqual(
+    unreadable.map((rule) => rule.selector),
+    [],
+    'a rule that could paint this button is written in a form this test cannot read, so the verdict below is not trustworthy',
+  );
+
+  const matching = sheet.filter(
+    (rule) => paints(rule) && couldMatch(rule.selector, button, inside) === true,
+  );
+  const green = matching.filter((rule) => rule.body.includes('var(--vscode-charts-green)'));
+  assert.deepEqual(
+    green.map((rule) => rule.selector),
+    ['.phrases .run[data-said="1"]'],
+    'nothing in the panel stylesheet paints the copied state green, so Copied arrives in the same colour as the phrase name',
+  );
+
+  // (d) And it wins the cascade it is in — including the hover a mouse is still sitting in.
+  const rule = green[0]!;
+  const rank = specificity(rule.selector);
+  const beaten = matching.filter((other) => {
+    if (other === rule) {
+      return false;
+    }
+    const against = outranks(specificity(other.selector), rank);
+
+    return against > 0 || (against === 0 && other.at > rule.at);
+  });
+  assert.deepEqual(
+    beaten.map((other) => other.selector),
+    [],
+    'another rule outranks the acknowledgement and paints this button instead',
+  );
+
+  // And it goes away with the mark, so the button is a button again.
+  page.tick();
+  assert.equal(ship.dataset.said, undefined, 'the green state never lifts');
+});
+
+test('the acknowledgement takes its green from the theme, never a hex of ours', () => {
+  const rule = stylesheet(panelHtml(state(), 'n0nce'))
+    .find((one) => one.selector === '.phrases .run[data-said="1"]');
+  assert.ok(rule, 'the acknowledgement rule is gone');
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(rule.body), `a colour of ours instead of the theme: ${rule.body}`);
+});
