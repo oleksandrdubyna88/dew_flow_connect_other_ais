@@ -95,6 +95,18 @@ jobs:
       #     `src_vs_code/src/test/claudeAdapter.test.mjs`, which runs the hook and asserts what it
       #     emits — including the case where the submodule is missing.
       #
+      #
+      #   sonar.issue.ignore  typescript:S1523 in src_vs_code/src/test/**
+      #     "Dynamically executing code is security-sensitive", raised on `new Function`. In THIS
+      #     repository that call is not a shortcut, it is the rule: `.agents/PROJECT.md` says a
+      #     webview page is tested by RUNNING it, because a substring assertion over a page's text
+      #     cannot see a control wired to the wrong branch, and running the page means executing
+      #     the script the page itself generated. Fifteen test sites do it (bundledPage, chatPage,
+      #     consultantSectionScript, rolesPageScript, rolesPageHarness); the input is a fixture the
+      #     test wrote two lines earlier, and there is no user and no untrusted value anywhere in
+      #     it. The rule stays ON for production code, which is where it means something. Noticed
+      #     when extracting a shim into a new file made a moved line count as NEW code and took the
+      #     quality gate to a security rating of D on a pure refactor.
       #   sonar.cpd.exclusions    + src_vs_code/src/help{Content,Ru,Uk,De,Es}.ts
       #     The help catalogue is five files holding the SAME 23 article ids, each with the same six
       #     fields, because a translation pass has to be a file reviewable on its own —
@@ -125,6 +137,9 @@ jobs:
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**" \
             /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts" \
+            /d:sonar.issue.ignore.multicriteria="e1" \
+            /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \
+            /d:sonar.issue.ignore.multicriteria.e1.resourceKey="src_vs_code/src/test/**" \
             /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**,src_vs_code/src/chatCommand.ts,src_vs_code/src/chatGotoCommand.ts,src_vs_code/src/chatPanel.ts,src_vs_code/src/chatPresetsPanel.ts,src_vs_code/src/chatRestorePanel.ts,src_vs_code/src/consultationWatcher.ts,src_vs_code/src/conversationPickerCommand.ts,src_vs_code/src/dataCommands.ts,src_vs_code/src/escalationWatcher.ts,src_vs_code/src/extension.ts,src_vs_code/src/helpPanel.ts,src_vs_code/src/installer.ts,src_vs_code/src/panelProvider.ts,src_vs_code/src/phrasesPanel.ts,src_vs_code/src/rolesPanel.ts,src_vs_code/src/roundsLogPanel.ts,src_vs_code/src/sideConfig.ts,src_vs_code/src/snippetInWorkspace.ts,src_vs_code/src/textToneHost.ts,src_vs_code/src/uiScaleHost.ts"
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release --no-incremental
