@@ -24,20 +24,25 @@ import type { UsageEntry } from '../usage';
  */
 
 
-function todayAt(hours: number): string {
+/**
+ * Local NOON, and the hour matters as much as the day: the window is built from the local calendar
+ * day, and noon is the only hour no inhabited offset can move out of its own day. The neighbouring
+ * `chatSpendRows.test.ts` says the same, and this file used 09:00 until the code round said so.
+ */
+function todayAtNoon(): string {
   const day = new Date();
-  day.setHours(hours, 0, 0, 0);
+  day.setHours(12, 0, 0, 0);
 
   return day.toISOString();
 }
 
 const REVIEWER: UsageEntry = {
-  utc: todayAt(9), provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
+  utc: todayAtNoon(), provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
   stage: 'CodeReview', seconds: 23, tokensIn: 1_000_000, tokensOut: 200_000, costUsd: null, outcome: 'ok',
 };
 
 const TURN: ChatTurnRecord = {
-  utc: todayAt(12), provider: 'codex', model: 'gpt-5.4', vendor: 'codex',
+  utc: todayAtNoon(), provider: 'codex', model: 'gpt-5.4', vendor: 'codex',
   tokensIn: 2_000_000, tokensOut: 1_000_000, costUsd: null, seconds: 4,
   outcome: 'answered', conversation: 'c1', title: 'a tab',
 };
@@ -51,8 +56,14 @@ function spendingTab(chat: { turns: readonly ChatTurnRecord[]; doors: readonly n
   return usageTabHtml([REVIEWER], 'day', [], PRICES, [], 'me', chat);
 }
 
+/** What the page does when it is run: the listener it registered, and what it has posted so far. */
+interface RunningPage {
+  readonly click: (event: { target: unknown }) => void;
+  readonly posted: readonly unknown[];
+}
+
 /** The page's own click listener, captured out of its script exactly as the webview would run it. */
-function pageClickListener(): (event: { target: unknown }) => void {
+function pageClickListener(): RunningPage {
   const html = roundsLogHtml([], [], 'n0nce');
   const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = script.slice(script.indexOf('>') + 1);
@@ -82,14 +93,15 @@ function pageClickListener(): (event: { target: unknown }) => void {
   );
 
   assert.ok(click, 'the page registers no click listener, so this test is driving nothing');
-  (click as { posted?: unknown[] }).posted = posted;
 
-  return click;
+  // Returned as a pair rather than hung off the function: attaching a property to it would mutate a
+  // value this test did not make, and reading it back needed an `as unknown as` cast — both of which
+  // the house rules refuse in a fixture. (codex, the code round.)
+  return { click, posted };
 }
 
 test('pressing the ✕ on a chat row sends the model as well as the vendor', () => {
-  const click = pageClickListener();
-  const posted = (click as unknown as { posted: unknown[] }).posted;
+  const { click, posted } = pageClickListener();
 
   const button = {
     getAttribute: (name: string) =>
