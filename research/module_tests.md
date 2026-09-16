@@ -312,6 +312,7 @@ reply for it to order.
 | `TheEdgeIsWatchedTests` | the running server, reading what it LOGGED | a misconfigured edge going unnoticed; the address reaching a log |
 | `WhatTheArgumentsMeanTests` | the argument rules, in-process | 64 answered for a mode this binary has, or withheld for one it does not |
 | `TheKeywordListIsCheckedTests` | the startup guard | a binary that starts, passes the smoke, and refuses every pair |
+| `TheArchiveCheckTests` | the RELEASE's own shell, executed | an archive shipped without the executable, or without the library it dlopens |
 
 **Why an HTTP suite when the decisions are already unit-tested.** `Ingest.Take` is pure and covered;
 the route is not part of it. The one that matters most is the AOT JSON binding — this repository has
@@ -360,6 +361,17 @@ was covered, and then it was not: the code round replaced `Checked` (which threw
 name. SonarCloud reported it as a coverage gap; what it was, was the startup guard having no test.
 Its last assertion runs the check over the list **this binary actually carries**, so a release
 whose embedded resource parsed to nothing is red before it reaches a host.
+
+`TheArchiveCheckTests` is the fourth, and it exists for a class of code the other three cannot
+reach: **shell that only runs during a release.** The archive check lived inline in `release.yml`,
+where nothing executes it until the day it matters, and it was wrong —
+`grep "$NAME/[^/]*coai-bugs"` matches `coai-bugs.dbg`, so an archive carrying the debug symbols and
+not the executable passed the one check whose job is to prove the executable is there. It is
+`.github/scripts/archive-carries.sh` now, and this suite runs **the real script** against archives
+built to be wrong on purpose. It needs a POSIX shell: CI runs on `ubuntu-latest` where that is
+always true, so a missing `sh` fails there and skips on a Windows checkout — the shape of
+`StageRulesTests.RequireTheMount`, and for its reason. The same principle applies to any check that
+moves into a workflow: a condition nothing executes is a condition nobody has read.
 
 **It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 

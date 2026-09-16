@@ -102,6 +102,41 @@ binary without them has a server recording every contributor.
 - `KeyFor` still scans every active key row — rejected three times now on scale rather than
   principle: hand-issued keys, tens of rows.
 
+## What the review round changed after this was written
+
+Six real defects, and the theme is worth keeping: **everything here runs once, on the day it
+matters.** A release line, a deploy wrapper and a rollback have no ordinary path — nothing exercises
+them until the thing they exist for is happening, and by then the cost of being wrong is the
+outage. Three of the six were cases of exactly that, and the fix in each case was to give the logic
+somewhere it runs on every push.
+
+- **The deploy account could not deploy.** The notes gave `releases` to the service account and the
+  deploy account sudo for `systemctl` alone. Under that, `release.sh` could not take its lock in
+  `/opt/coai-bugs`, create the release directory or swap the `bin` symlink, and the `secret` verb —
+  which runs *before* anything is installed — could not write `/etc` at all. The release area now
+  belongs to `coai-bugs-deploy` with the service's group for traversal; `data` deliberately does
+  not, so the account that delivers releases cannot read the corpus.
+- **The one root operation is a separate, installed file.** `deploy/bugs/install-env.sh` goes to
+  `/usr/local/sbin` and is named in sudoers with a trailing `""` so it takes no arguments. It is the
+  one file here that does *not* update itself with the checkout, and for the opposite of the usual
+  reason: the deploy account owns the checkout, and a root script in a directory its caller can
+  write is a way to become root.
+- **A rollback that ran twice.** `if: failure()` fired for either failure, and the deploy failing is
+  the case where the host has *already* rolled back. The second `--rollback` retreated past the
+  release that was serving, or stopped the service outright — a canary doing its job ending as an
+  outage.
+- **A rollback that reported success while the service was down.** `switch_to … || say …` returns
+  the status of `say`.
+- **An archive check satisfied by debug symbols.** `grep "$NAME/[^/]*coai-bugs"` matches
+  `coai-bugs.dbg`. The check whose entire job is to prove the executable is in the archive passed on
+  an archive without it. It is `.github/scripts/archive-carries.sh` now, matching basenames as
+  globs, and `TheArchiveCheckTests` runs the real script against archives built to be wrong.
+- **Two tests with no teeth**, both on the promise this plan is about. `proxy_set_header X-Real-IP`
+  is a substring of `proxy_set_header X-Real-IP $remote_addr;`, so the header test would have passed
+  on a vhost forwarding every contributor's address; the condition is a function now, held against
+  both spellings, because the file under test is not one to weaken on disk to watch an assertion
+  fire. The keyword-override test asserted two fragments the *embedded* list also contains.
+
 ## Definition of done
 
 - [x] `bugs-v*` is a trigger, and the two RIDs are named in both the matrix and the verifier.
