@@ -2356,17 +2356,33 @@ const CSS = `
 
      THE FILL GOES, and that is the point rather than a flourish. Measured against VS Code's own
      registry defaults, charts.green on the button background is 2.48:1 in the default dark theme and
-     1.46:1 in the light one — a word nobody sees, which is what was complained about. On the editor's
-     own ground the same token is 9.04:1 dark, 4.33:1 light, and 11.52:1 / 9.31:1 in the two
-     high-contrast themes. testing.iconPassed reads as the apter token and was measured too: it
-     defines one pale green for BOTH modes and lands at 2.00:1 on white, so it is not used.
+     1.46:1 in the light one — a word nobody sees, which is what was complained about.
+
+     It goes to TRANSPARENT rather than to a background of its own, and that correction came from the
+     code round. This panel is a sidebar view whose body is already transparent, so the ground here is
+     sideBar.background, which is DARKER than editor.background in the default dark theme and slightly
+     off white in the light one — naming editor.background would have painted a lighter rectangle onto
+     that ground for exactly one second. Against the real ground the token gives 9.74:1 in the default
+     dark theme and 4.07:1 in the default light one, 8.40 / 3.90 on the registry defaults a theme that
+     sets neither falls back to, and 11.52 / 9.31 in the two high-contrast themes.
+
+     (No hex anywhere in here, and that is not fussiness: a comment in this stylesheet is inlined into
+     the page, so panelView.test.ts sees it as page content and refuses colours of ours. It caught the
+     first draft of this paragraph.)
+
+     The light figure is AA-large rather than AA-normal, and it is this token's own ceiling against
+     its own ground: the three charts.green-on-background controls already in this panel sit at the
+     same ratio, and closing it would take a colour of ours, which the conventions forbid.
+     testing.iconPassed reads as the apter token and was measured too — it defines one pale green for
+     BOTH modes and lands at 2.00:1 on white, so it is not used.
 
      Specificity (0,3,1) beats button:hover at (0,1,1), which is deliberate — the mouse is still
      sitting on the button it just pressed. panelPhrasesScript.test.ts asserts that ranking against
-     the parsed sheet rather than trusting this paragraph.
+     the parsed sheet rather than trusting this paragraph, and it ranks background-color as well as
+     the shorthand, because a longhand restores a fill just as completely.
 
      No backticks in here: this comment is INSIDE the CSS template literal, and one would end it. */
-  .phrases .run[data-said="1"] { background: var(--vscode-editor-background); color: var(--vscode-charts-green); font-weight: 600; }
+  .phrases .run[data-said="1"] { background: transparent; color: var(--vscode-charts-green); font-weight: 600; }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
