@@ -2350,6 +2350,23 @@ const CSS = `
      use, and for the same reason: the colour is decided over the whole list rather than named by a
      class. Without this rule the inline colour has nothing to paint. */
   .phrases .run { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--vscode-panel-border); }
+  /* The second a phrase says *Copied*, keyed on the mark the script already writes — no class of its
+     own, because data-said is what guards the acknowledgement from arriving twice, and a second name
+     for one state is a state that can disagree with itself.
+
+     THE FILL GOES, and that is the point rather than a flourish. Measured against VS Code's own
+     registry defaults, charts.green on the button background is 2.48:1 in the default dark theme and
+     1.46:1 in the light one — a word nobody sees, which is what was complained about. On the editor's
+     own ground the same token is 9.04:1 dark, 4.33:1 light, and 11.52:1 / 9.31:1 in the two
+     high-contrast themes. testing.iconPassed reads as the apter token and was measured too: it
+     defines one pale green for BOTH modes and lands at 2.00:1 on white, so it is not used.
+
+     Specificity (0,3,1) beats button:hover at (0,1,1), which is deliberate — the mouse is still
+     sitting on the button it just pressed. panelPhrasesScript.test.ts asserts that ranking against
+     the parsed sheet rather than trusting this paragraph.
+
+     No backticks in here: this comment is INSIDE the CSS template literal, and one would end it. */
+  .phrases .run[data-said="1"] { background: var(--vscode-editor-background); color: var(--vscode-charts-green); font-weight: 600; }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

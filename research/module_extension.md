@@ -5951,6 +5951,27 @@ script on the click, which a reviewer called Blocking and was right to: a button
 the press confirms just as confidently when the clipboard was held by something else, and the person
 then pastes whatever was there before. The host posts `copied` with the id afterwards, and only then.
 
+**And it says so in green, on the panel's own ground (2026-09-16, issue #322).** For a year the
+acknowledgement was one short word in the same colour and weight as a phrase name, in a row of short
+words — correct, and unnoticeable. `.phrases .run[data-said="1"]` keys on the mark the script already
+writes, so nothing in the script changed and there is no second name for one state. What the rule
+does is drop the blue fill for that second, and the reason is measured rather than tasteful: against
+VS Code's own registry defaults, `charts.green` on `button.background` is **2.48:1** dark and
+**1.46:1** light — a colour nobody sees, which is what was being complained about — while on
+`editor.background` the same token gives **9.04 / 4.33 / 11.52 / 9.31** across the default dark,
+default light and two high-contrast themes. `testing.iconPassed` is the semantically apter token and
+was measured too: it defines one pale green for BOTH modes and lands at **2.00:1** on white, so the
+house token stays. The light theme's 4.33:1 is AA-large rather than AA-normal and is this token's own
+ceiling against its own ground; the three `charts.green`-on-background controls already in this panel
+sit at exactly the same ratio.
+
+The rule's specificity `(0,3,1)` beats `button:hover` at `(0,1,1)` — deliberate, because the mouse is
+still on the button it just pressed — and `panelPhrasesScript.test.ts` asserts that ranking by parsing
+the stylesheet and ranking every rule that could match the button the page actually renders, rather
+than by matching the CSS text. That is the page-test ruling applied to a stylesheet: the plan round's
+sharpest finding was that `.never[data-said="1"] { color: var(--vscode-charts-green) }` satisfies
+every string match anyone would write and matches nothing.
+
 **And its code round found the defect that justified the whole convention.** The acknowledgement was
 first tested by matching the assembled page for `message?.type === 'copied'` and for the word
 `Copied`. Both matched. What they matched contained `/["\]/g` — an unterminated character class,
