@@ -1,5 +1,5 @@
 import { escapeHtml, jsonForScript } from './webviewHtml';
-import { renderAnswer } from './renderAnswer';
+import { renderAnswer, signatureOf } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { vendorPalette } from './vendorColour';
@@ -481,7 +481,15 @@ export function chatMessagesHtml(
         // scopes is the confusion this whole feature began as: the operator read the row below an
         // answer as belonging to the block above it, which is exactly what its name invited.
         // (gemini, the plan round.)
-        : `<button type="button" class="copy" data-copy="${index}" title="Copy the whole answer as Markdown">${COPY_ANSWER}</button>`;
+        // ITS SIGNATURE TOO, which the block controls beside it have always carried. Here it does one
+        // job and not the other: the host's acknowledgement echoes it back so the page can tell that
+        // the control it is about to mark is still drawn for the text that was copied — an answer
+        // arriving between the press and the clipboard resolving otherwise shifts what index 3 means,
+        // and the tick would land on somebody else's answer. It does NOT gate the copy itself; the
+        // answer control's own staleness is resolved at press time in `chatCommand.ts` and changing
+        // that is a different question from this one.
+        : `<button type="button" class="copy" data-copy="${index}" data-sig="${signatureOf(message.text)}"`
+          + ` title="Copy the whole answer as Markdown">${COPY_ANSWER}</button>`;
       // CARRY NOTHING ABOVE. On the last answer only, and it names what it does rather than what it
       // breaks: nothing is deleted and the conversation stays whole on screen — what changes is where
       // a HANDOVER starts, to another model or to a Team server that is told everything every turn.
@@ -904,6 +912,20 @@ function chatStyle(
      in the answer reveals it, which is what :focus-within is for. (gemini, the code round.) */
   .msg .copy { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0; cursor: pointer; opacity: .55; }
   .msg:hover .copy, .msg:focus-within .copy, .msg .copy:focus { opacity: 1; }
+  /* IT LANDED. A tick beside the label for a second, and the control at full strength while it is
+     there — .copy sits at .55 unless the message is hovered, and a tick at 55 % is the washed-out
+     version of the one thing that was asked to be noticeable. A SHAPE as well as a colour, so it is
+     not carrying its meaning in the hue alone.
+
+     The mark is written only when the host says the clipboard write RESOLVED. A control that
+     confirmed on the press would confirm just as confidently while the clipboard was held by
+     something else, and the person then pastes whatever was there before — the panel's phrase button
+     learned that from a Blocking finding, and this is the same acknowledgement one surface over.
+
+     No hex and no @keyframes in here: a comment in a page stylesheet is page content, and an at-rule
+     would make the flat-rule test parser grow support for a flourish. */
+  .msg .copy[data-copied="1"] { opacity: 1; }
+  .msg .copy[data-copied="1"]::after { content: " \\2713"; color: var(--vscode-charts-green); }
   hr.end { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 14px 0 0; opacity: .55; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }
@@ -1110,6 +1132,14 @@ ${attachedHtml(state.attached)}
  * the rule behave differently for the people most likely to have scrolled.</p>
  */
 export const FOLLOW_SLACK_PX = 48;
+
+/**
+ * How long a copy control wears its tick.
+ *
+ * <p>One second, matching the panel's phrase button (`COPIED_FOR_MS` there) and matching what was
+ * asked for. Long enough to be seen without becoming a state the control appears to be in.</p>
+ */
+export const COPIED_FOR_MS = 1000;
 
 /**
  * Was the reader at the bottom — and therefore should a new answer be scrolled to?
@@ -1733,6 +1763,32 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       vscode.postMessage({ type: 'command', command: 'stop', turn: turn });
     });
   }
+  // WHICH COPIES HAVE LANDED, and whose second it is. The mark cannot live on the element alone:
+  // a state push replaces #messages wholesale, so an answer arriving inside the second would take
+  // the tick away with the node it rebuilt. It cannot ride the state push either — that channel is
+  // de-duplicated by serialised payload on the host side, so a second identical acknowledgement
+  // would simply be dropped. So the page remembers, and paints again after every rebuild.
+  //
+  // The value is a GENERATION rather than a deadline, which is what makes two presses safe: the
+  // second press takes ownership, and the first press's timer finds a number that is no longer its
+  // own and leaves the mark alone. Without it the first timer clears a tick the second press had
+  // half a second left of.
+  var copiedMarks = {};
+  var copySeq = 0;
+  function copyKeyOf(at, block, sig) {
+    return String(at) + ':' + (block === undefined || block === null ? '' : String(block)) + ':' + String(sig);
+  }
+  function paintCopied() {
+    var controls = document.querySelectorAll('.copy');
+    for (var index = 0; index < controls.length; index += 1) {
+      var one = controls[index];
+      var held = one.dataset || {};
+      var at = held.copy === undefined ? held.at : held.copy;
+      var wanted = copiedMarks[copyKeyOf(at, held.block, held.sig)] !== undefined;
+      if (wanted) { one.dataset.copied = '1'; }
+      else if (held.copied !== undefined) { delete one.dataset.copied; }
+    }
+  }
   const messagesRegion = document.getElementById('messages');
   if (messagesRegion) {
     messagesRegion.addEventListener('click', function (event) {
@@ -1750,7 +1806,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
           file: acted.dataset.file, line: Number(acted.dataset.line || 0),
         });
       } else if (typeof acted.dataset.copy === 'string') {
-        vscode.postMessage({ type: 'command', command: 'copyAnswer', index: Number(acted.dataset.copy) });
+        // The signature travels so the host can echo it back with its acknowledgement and the tick
+        // can be matched to the control that was drawn for this text. Nothing is marked here: the
+        // press is not the event worth showing, the clipboard write resolving is.
+        vscode.postMessage({
+          type: 'command', command: 'copyAnswer',
+          index: Number(acted.dataset.copy), sig: acted.dataset.sig,
+        });
       } else if (typeof acted.dataset.cut === 'string') {
         // ASKED, not drawn. The host records the mark and pushes the transcript back with the rule
         // on it — so a press that failed to record shows nothing, rather than a line that is not
@@ -1842,6 +1904,26 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // Its OWN message, not a thin state push. This handler treats a capped notice and a failure line
     // as gone when a state message does not mention them, so answering "what did I ask" through the
     // state channel would silently clear both.
+    // A COPY THAT LANDED. Its own message, like 'asked' and 'note' below, because a state push is
+    // read as the whole truth about every region it mentions — and because the host de-duplicates
+    // that channel, so pressing the same control twice would post an identical payload and the
+    // second one would never arrive.
+    if (data.type === 'copied') {
+      var landed = copyKeyOf(data.index, data.block, data.sig);
+      copySeq += 1;
+      var mine = copySeq;
+      copiedMarks[landed] = mine;
+      paintCopied();
+      setTimeout(function () {
+        // A LATER PRESS OWNS IT NOW. Clearing on a stale generation is what made the tick vanish
+        // early when somebody copied the same block twice in quick succession.
+        if (copiedMarks[landed] !== mine) { return; }
+        delete copiedMarks[landed];
+        paintCopied();
+      }, ${COPIED_FOR_MS});
+
+      return;
+    }
     if (data.type === 'asked') {
       const at = typeof data.at === 'number' ? data.at : 0;
       if (at < askedSeen) {
@@ -1943,6 +2025,10 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     if (messages && typeof data.messagesHtml === 'string' && lastWritten.messages !== data.messagesHtml) {
       messages.innerHTML = data.messagesHtml;
       lastWritten.messages = data.messagesHtml;
+      // THE NEW CONTROLS ARE BARE. Assigning innerHTML builds fresh elements carrying only what the
+      // markup says, so a copy that landed a moment ago would lose its tick to an arriving answer.
+      // The page remembers which ones landed and paints them again.
+      paintCopied();
       wrote = true;
     }
     if (thinking && typeof data.thinkingHtml === 'string' && lastWritten.thinking !== data.thinkingHtml) {

@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
-import { answerToCopy, blockToCopy } from './answerCopy';
-import { textCopier, type CopyDecision } from './copyText';
+import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
+import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
 import { TurnSpend, spendLabel, spendSoFar } from './chatSpend';
 import {
@@ -57,7 +57,7 @@ import { recordChatDoor } from './chatDoorsFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
-import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, pushChatFresh, pushChatNote, pushChatState, setChatDraft } from './chatPanel';
+import { chatTextTone, chatUiScale, createChatPanel, pushChatCopied, pushChatDraft, pushChatFresh, pushChatNote, pushChatState, setChatDraft } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
 import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
@@ -3196,7 +3196,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           void vscode.window.showWarningMessage(message);
         });
       },
-      onCopyAnswer: (id, index) => {
+      onCopyAnswer: (id, index, sig) => {
         // The SOURCE, out of the thread the page was rendered from. A person copying an answer wants
         // the markdown they can paste into a plan or an issue, and that is the one thing selecting
         // the page cannot give them - a selection gives what the page shows.
@@ -3208,21 +3208,63 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const decision: CopyDecision = said === undefined || said.role !== 'model'
           ? { kind: 'refused', said: 'That answer is not on this page any more.' }
           : answerToCopy(said.text);
-        void answerCopier.copy(() => decision);
+        tellThePage(panels, id, index, undefined, sig, answerCopier.copy(() => decision));
       },
       onCopyBlock: (id, index, block, sig) => {
         // The SAME markdown the page was drawn from, walked by the SAME function that numbered the
         // control. Nothing the page sent becomes text: it named a position and echoed a signature,
         // and both are checked here against what this host holds.
-        void answerCopier.copy(() => {
+        tellThePage(panels, id, index, block, sig, answerCopier.copy(() => {
           const said = threads.get(id)?.messages[index];
 
           return said === undefined || said.role !== 'model'
             ? { kind: 'refused', said: 'That answer is not on this page any more.' }
             : blockToCopy(said.text, block, sig);
-        });
+        }));
       },
   };
+}
+
+/**
+ * Tick the control that was pressed — but only once the clipboard actually took the text.
+ *
+ * <p>Both copy hooks discarded their report with a bare `void`, which is why neither control could
+ * ever move: the one fact worth showing was thrown away at the point it became known. It is a
+ * function rather than two copies of four lines because the two hooks differ in one argument, and
+ * two sites that each need a catch is how one of them ends up without one.</p>
+ *
+ * <p><b>Nothing is shown for a copy that did not land.</b> `CopyReport.copied` is true only when the
+ * write RESOLVED; a refusal and a clipboard held by another program both come back false, and the
+ * sentence `copyText.ts` has already put in the status bar is then the only thing the person sees,
+ * which is right — a tick there would be a lie about where their paste is coming from.</p>
+ *
+ * <p>The rejection is caught rather than left to float. `textCopier.copy` answers a report on every
+ * path it knows, but an unowned rejection from a boundary like this one surfaces as an extension-host
+ * error rather than as anything the tab can say, and the panel's own message dispatch already guards
+ * itself the same way.</p>
+ */
+function tellThePage(
+  panels: ChatPanels,
+  id: object,
+  index: number,
+  block: number | undefined,
+  sig: string,
+  copying: Promise<CopyReport>,
+): void {
+  void copying.then((report) => {
+    // THE RULE IS IN `answerCopy.ts`, where a test can reach it. Nothing in this file can be
+    // imported by the suite, so a condition written here is a condition nothing checks.
+    const landed = acknowledgement(report, { index, ...(block === undefined ? {} : { block }), sig });
+    if (landed === undefined) {
+      return;
+    }
+    const entry = panels.entryOf(id);
+    if (entry !== undefined) {
+      pushChatCopied(entry, landed.index, landed.block, landed.sig);
+    }
+  }).catch(() => {
+    // The person has the sentence; a tab that could not be told is not worth a second failure.
+  });
 }
 
 /**

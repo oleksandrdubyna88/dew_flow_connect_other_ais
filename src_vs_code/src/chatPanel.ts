@@ -117,7 +117,7 @@ export interface ChatPanelHooks {
    * the tab lives. What is copied is the source, because that is the one thing a selection cannot
    * give: selecting the page gives what the page shows.</p>
    */
-  readonly onCopyAnswer: (id: object, index: number) => void;
+  readonly onCopyAnswer: (id: object, index: number, sig: string) => void;
   /**
    * Copy ONE block of the answer at `index` — a fenced block or a quote — by its position.
    *
@@ -363,7 +363,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'copyAnswer':
-      hooks.onCopyAnswer(id, command.index);
+      hooks.onCopyAnswer(id, command.index, command.sig);
 
       return;
     case 'copyBlock':
@@ -513,6 +513,28 @@ export function setChatDraft(entry: ChatEntry, draft: string): void {
  */
 export function pushChatNote(entry: ChatEntry, id: string, note: string): void {
   entry.panel.post({ type: 'note', id, noteHtml: escapeHtml(note) });
+}
+
+/**
+ * A copy LANDED — the tick beside the control that was pressed.
+ *
+ * <p>Posted only when the clipboard write RESOLVED. A control that confirmed on the press would
+ * confirm just as confidently while the clipboard was held by another program, and the person then
+ * pastes whatever was there before; the panel's phrase button learned that from a Blocking finding
+ * and this is the same acknowledgement one surface over.</p>
+ *
+ * <p>Its OWN message, and not for the reason `note` and `asked` have one. Those are about a state
+ * push being read as the whole truth about the regions it names; this one is about
+ * {@link pushChatState} DE-DUPLICATING by serialised payload — press the same control twice and the
+ * second push would be identical to the first and dropped, so the second tick would never arrive.</p>
+ *
+ * <p>The coordinates are echoed back exactly as the page sent them, `sig` included. They are not
+ * re-derived here: the page has to match this against a control it has RENDERED, and a coordinate
+ * computed from what the host holds now would name a different control after an answer arrived
+ * between the press and the write resolving.</p>
+ */
+export function pushChatCopied(entry: ChatEntry, index: number, block: number | undefined, sig: string): void {
+  entry.panel.post({ type: 'copied', index, ...(block === undefined ? {} : { block }), sig });
 }
 
 /**

@@ -1,5 +1,5 @@
 import { answerBlocks, signatureOf } from './renderAnswer';
-import type { CopyDecision } from './copyText';
+import type { CopyDecision, CopyReport } from './copyText';
 
 /**
  * What a copy control on an answer takes, and what is said about it.
@@ -78,4 +78,30 @@ export function answerToCopy(markdown: string): CopyDecision {
     done: 'Copied the answer — paste it with Ctrl+V.',
     failed: 'The answer could not be copied — the clipboard is held by another program.',
   };
+}
+
+/** Where a copy control sits: which message, which block of it, and what it was drawn against. */
+export interface CopiedControl {
+  readonly index: number;
+  /** Absent for the control that copies the whole answer. */
+  readonly block?: number;
+  readonly sig: string;
+}
+
+/**
+ * Whether to tell the page a copy landed — and it is a function so that a test can ask.
+ *
+ * <p>The rule is one line and the reason it is not written inline is the one this file already
+ * exists for: the hooks live inside a closure over `vscode` in `chatCommand.ts`, which no test in
+ * this repository can import. A rule written there is a rule nothing can reach, and the plan for the
+ * block-copy control learned that by specifying an end-to-end test that could not have been run.</p>
+ *
+ * <p><b>A copy that did not land is acknowledged with nothing.</b> `copied` is true only when the
+ * clipboard write RESOLVED; a refusal, and a clipboard held by another program, both come back
+ * false. The sentence `copyText.ts` has already put in the status bar is then the only thing the
+ * person sees, which is right — a tick beside the control would be a claim about where their next
+ * paste is coming from, and it would be wrong.</p>
+ */
+export function acknowledgement(report: CopyReport, where: CopiedControl): CopiedControl | undefined {
+  return report.copied ? where : undefined;
 }

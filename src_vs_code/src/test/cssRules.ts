@@ -54,32 +54,67 @@ export function stylesheet(html: string): Rule[] {
   const css = html.slice(open + '<style>'.length, close).replace(/\/\*[\s\S]*?\*\//g, '');
 
   const rules: Rule[] = [];
-  const pattern = /([^{}]+)\{([^{}]*)\}/g;
-  let consumed = 0;
-  const skipped: string[] = [];
-  for (let found = pattern.exec(css); found !== null; found = pattern.exec(css)) {
-    const from = pattern.lastIndex - found[0].length;
-    if (from > consumed) {
-      skipped.push(css.slice(consumed, from));
-    }
-    consumed = pattern.lastIndex;
-    rules.push({
-      selector: (found[1] ?? '').trim().replace(/\s+/g, ' '),
-      body: (found[2] ?? '').trim(),
-      at: rules.length,
-    });
-  }
-  skipped.push(css.slice(consumed));
-
-  // THE PROOF THAT THIS FLAT PARSER WAS ALLOWED TO BE FLAT. An at-rule, a nested selector or a brace
-  // inside a quoted value leaves text behind, and text left behind means the rules that follow it
-  // have slid out of alignment — every one of them still looks like a rule, which is why this cannot
-  // be left to inspection.
-  const left = skipped.map((text) => text.trim()).filter((text) => text.length > 0);
-  assert.deepEqual(left, [], 'the stylesheet did not parse as flat rules, so every verdict over it is unsound');
+  read(css, rules, '');
   assert.ok(rules.length > 0, 'the stylesheet parsed into no rules at all');
 
   return rules;
+}
+
+/** At-rules whose body holds ORDINARY RULES, which therefore still compete in the cascade. */
+const DESCEND = /^@(media|supports|container|layer|scope)\b/;
+
+/** At-rules whose body is not rules at all — frames, a font, a counter. Skipped whole. */
+const OPAQUE = /^@(keyframes|-\w+-keyframes|font-face|counter-style|property|page|font-feature-values)\b/;
+
+/**
+ * One level of a stylesheet, by brace DEPTH rather than by a regex over `[^{}]`.
+ *
+ * <p>It started as that regex, and a reviewer was right that it could not be trusted: a nested block
+ * leaves text behind, and text left behind means every rule after it has slid out of alignment while
+ * still looking exactly like a rule. So this walks, and it asserts that it consumed everything —
+ * which is what makes a construct it does not understand a loud failure rather than a silent
+ * misreading. Whatever is skipped is named in the failure.</p>
+ */
+function read(css: string, into: Rule[], within: string): void {
+  let at = 0;
+  let consumed = 0;
+  const skipped: string[] = [];
+  while (at < css.length) {
+    const opens = css.indexOf('{', at);
+    if (opens < 0) {
+      break;
+    }
+    let depth = 1;
+    let scan = opens + 1;
+    while (scan < css.length && depth > 0) {
+      if (css[scan] === '{') { depth += 1; }
+      else if (css[scan] === '}') { depth -= 1; }
+      scan += 1;
+    }
+    assert.ok(depth === 0, `a block opened at ${opens} and never closed, so this stylesheet cannot be read`);
+    const prelude = css.slice(consumed === at ? at : consumed, opens).trim().replace(/\s+/g, ' ');
+    const body = css.slice(opens + 1, scan - 1);
+    if (prelude.startsWith('@')) {
+      if (DESCEND.test(prelude)) {
+        read(body, into, prelude);
+      } else if (!OPAQUE.test(prelude)) {
+        skipped.push(prelude);
+      }
+    } else {
+      into.push({ selector: prelude, body: body.trim(), at: into.length });
+    }
+    at = scan;
+    consumed = scan;
+  }
+  const tail = css.slice(consumed).trim();
+  if (tail.length > 0) {
+    skipped.push(tail);
+  }
+  assert.deepEqual(
+    skipped, [],
+    `${within.length === 0 ? 'the stylesheet' : within} holds something this parser does not understand, `
+    + 'so every verdict over it is unsound',
+  );
 }
 
 /** (ids, classes + attributes + pseudo-classes, elements + pseudo-elements). */
@@ -104,6 +139,13 @@ const MODELLED =
 
 /** Does one compound selector describe this element? `undefined` when it cannot be read. */
 export function compoundMatches(compound: string, element: Element): boolean | undefined {
+  // A PSEUDO-ELEMENT IS NOT THIS ELEMENT. `::after` addresses a generated box of its own, so a rule
+  // ending in one never paints the element it hangs off and never competes with a rule that does.
+  // That is a definite no rather than an "I cannot read this": answering `undefined` would put every
+  // ::after rule into the unreadable pile a caller is told to treat as untrustworthy.
+  if (compound.includes('::')) {
+    return false;
+  }
   if (!MODELLED.test(compound)) {
     return undefined;
   }
@@ -130,6 +172,45 @@ export function compoundMatches(compound: string, element: Element): boolean | u
   return true;
 }
 
+/** One branch of a selector — no commas — against this element. `undefined` when unreadable. */
+function branchMatches(
+  branch: string,
+  element: Element,
+  ancestors: readonly Element[],
+): boolean | undefined {
+  // THE SUBJECT DECIDES FIRST. A combinator only ever adds a constraint, so a branch whose last
+  // compound cannot be this element is a definite no however it is joined. Asking about the
+  // combinator first put `.sec-phrases > summary` — a rule for a disclosure heading, which can never
+  // be a button — into the unreadable pile, and the first test to use this failed on its own guard
+  // rather than on the thing it was written to find.
+  const compounds = branch.trim().split(/[\s>+~]+/).filter(Boolean);
+  const last = compounds.length === 0
+    ? undefined
+    : compoundMatches(compounds[compounds.length - 1] ?? '', element);
+  if (last !== true) {
+    return last;
+  }
+  // It could be the subject, and how it is joined to its ancestors is beyond this matcher.
+  if (/[>+~]/.test(branch)) {
+    return undefined;
+  }
+  let left = [...ancestors];
+  let unreadable = false;
+  const reached = compounds.slice(0, -1).every((compound) => {
+    const found = left.findIndex((up) => compoundMatches(compound, up) === true);
+    if (found < 0) {
+      unreadable = left.some((up) => compoundMatches(compound, up) === undefined);
+
+      return false;
+    }
+    left = left.slice(found + 1);
+
+    return true;
+  });
+
+  return reached ? true : (unreadable ? undefined : false);
+}
+
 /** Could this selector paint `element` sitting inside `ancestors`? `undefined` when unreadable. */
 export function couldMatch(
   selector: string,
@@ -138,45 +219,37 @@ export function couldMatch(
 ): boolean | undefined {
   let unreadable = false;
   for (const branch of selector.split(',')) {
-    // THE SUBJECT DECIDES FIRST. A combinator only ever adds a constraint, so a branch whose last
-    // compound cannot be this element is a definite no however it is joined. Asking about the
-    // combinator first put `.sec-phrases > summary` — a rule for a disclosure heading, which can
-    // never be a button — into the unreadable pile, and the first run of the test that uses this
-    // failed on its own guard rather than on the thing it was written to find.
-    const compounds = branch.trim().split(/[\s>+~]+/).filter(Boolean);
-    const last = compounds.length === 0
-      ? undefined
-      : compoundMatches(compounds[compounds.length - 1] ?? '', element);
-    if (last === undefined) {
-      unreadable = true;
-      continue;
-    }
-    if (!last) {
-      continue;
-    }
-    // It could be the subject, and how it is joined to its ancestors is beyond this matcher.
-    if (/[>+~]/.test(branch)) {
-      unreadable = true;
-      continue;
-    }
-    let left = [...ancestors];
-    const reached = compounds.slice(0, -1).every((compound) => {
-      const found = left.findIndex((up) => compoundMatches(compound, up) === true);
-      if (found < 0) {
-        unreadable = unreadable || left.some((up) => compoundMatches(compound, up) === undefined);
-
-        return false;
-      }
-      left = left.slice(found + 1);
-
-      return true;
-    });
-    if (reached) {
+    const answer = branchMatches(branch, element, ancestors);
+    if (answer === true) {
       return true;
     }
+    unreadable = unreadable || answer === undefined;
   }
 
   return unreadable ? undefined : false;
+}
+
+/**
+ * How strongly this selector paints THIS element — the specificity of the branch that reaches it.
+ *
+ * <p><b>Per branch, never over the whole list.</b> CSS ranks each branch of a grouped selector on its
+ * own, and counting the group as one cost this its first honest verdict: `.msg:hover .copy,
+ * .msg:focus-within .copy, .msg .copy:focus` counts six classes and three pseudo-classes together,
+ * which outranks everything, while the branch that actually reaches the element is worth (0,3,0) and
+ * loses to the rule under test. A test asserted it was being beaten by a rule that cannot beat it.</p>
+ *
+ * <p>The strongest matching branch wins, which is what the cascade does when two branches of one
+ * rule both reach an element.</p>
+ */
+export function rankFor(selector: string, element: Element, ancestors: readonly Element[]): Specificity {
+  let best: Specificity = [0, 0, 0];
+  for (const branch of selector.split(',')) {
+    if (branchMatches(branch, element, ancestors) === true && outranks(specificity(branch), best) > 0) {
+      best = specificity(branch);
+    }
+  }
+
+  return best;
 }
 
 /**
@@ -185,9 +258,14 @@ export function couldMatch(
  * <p>`background-` longhands are in, and that was a code-round finding rather than foresight: a rule
  * setting `background-color` alone restores a fill just as completely as `background` does, and a
  * check that looked only for the shorthand would have ranked it out of the contest.</p>
+ *
+ * <p>`opacity` is in for the same reason one step further out: a control held at `.55` shows its
+ * colour at `.55`, so a rule that dims it decides how it looks as surely as one that recolours it.
+ * The chat tab's copy controls are dimmed until their message is hovered, which is exactly the rule
+ * an acknowledgement has to win.</p>
  */
 export function paints(rule: Rule): boolean {
-  return /(^|;)\s*(color|background(-[a-z]+)?)\s*:/.test(rule.body);
+  return /(^|;)\s*(color|background(-[a-z]+)?|opacity)\s*:/.test(rule.body);
 }
 
 /**
@@ -207,15 +285,25 @@ export function painters(
   };
 }
 
-/** Of the rules that match, the ones that beat `rule` — by specificity, or by coming later on a tie. */
-export function beating(rule: Rule, matching: readonly Rule[]): Rule[] {
-  const rank = specificity(rule.selector);
+/**
+ * Of the rules that match, the ones that beat `rule` — by specificity, or by coming later on a tie.
+ *
+ * <p>Ranked by {@link rankFor}, so a grouped selector is judged on the branch that actually reaches
+ * this element rather than on the whole list added together.</p>
+ */
+export function beating(
+  rule: Rule,
+  matching: readonly Rule[],
+  element: Element,
+  ancestors: readonly Element[],
+): Rule[] {
+  const rank = rankFor(rule.selector, element, ancestors);
 
   return matching.filter((other) => {
     if (other === rule) {
       return false;
     }
-    const against = outranks(specificity(other.selector), rank);
+    const against = outranks(rankFor(other.selector, element, ancestors), rank);
 
     return against > 0 || (against === 0 && other.at > rule.at);
   });

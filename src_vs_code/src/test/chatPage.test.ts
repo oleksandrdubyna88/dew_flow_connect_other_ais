@@ -6,6 +6,8 @@ import { ChatMessage } from '../chatPage';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
 import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, COLLAPSE_AFTER_CHARS, COLLAPSE_AFTER_LINES, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, foldKey, foldLabel, isLong, shouldFollow } from '../chatPage';
+import { beating, couldMatch, painters, stylesheet, type Element } from './cssRules';
+import { acknowledgement } from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -388,6 +390,11 @@ interface RunningPage {
   composerResized(): void;
   /** Put the keyboard on an element, as a person tabbing to it would. */
   focusOn(id: string): void;
+  /** Every copy control the page has actually rendered, read out of the markup it wrote. */
+  copyControls(): Fake[];
+  /** Run what the page asked to happen later — the second a copy acknowledgement lasts.
+   *  `count` runs only the oldest N, so one press's timer can fire while another's is still pending. */
+  secondPasses(count?: number): void;
 }
 
 /**
@@ -457,6 +464,57 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   let settleFonts = () => { /* replaced by the promise below */ };
   const fontsReady = new Promise<void>((resolve) => { settleFonts = () => { resolve(); }; });
   let focused: Fake | undefined;
+  // THE CONTROLS INSIDE A REGION, which have no id and so cannot come through `getElementById`.
+  // Derived from the markup the page has actually written, read lazily off the region's own
+  // innerHTML — so a state push that rebuilds #messages yields FRESH elements carrying only the
+  // attributes in the new markup, which is what assigning innerHTML really does. Memoised per
+  // markup, and the memo is dropped the moment the markup changes.
+  //
+  // Selectors are served BY NAME, from a table. Teaching it a pattern language was the tempting
+  // shape and the wrong one: a grammar answers something for a selector it half understands, and
+  // "something" here means a test binding to the wrong element. A name it has not been taught throws.
+  const SERVED: Record<string, { readonly region: boolean; readonly holds: (tag: string) => boolean }> = {
+    // Inside #messages, which a push replaces wholesale.
+    '.copy': { region: true, holds: (tag) => /class="[^"]*\bcopy\b[^"]*"/.test(tag) },
+    // Page chrome, rendered once. Before this table both answered [], so neither stepper's wiring had
+    // ever been exercised by anything — found the moment the harness refused rather than shrugged,
+    // which is the whole argument for refusing.
+    'button[data-zoom]': { region: false, holds: (tag) => / data-zoom="/.test(tag) },
+    'button[data-tone]': { region: false, holds: (tag) => / data-tone="/.test(tag) },
+  };
+  const lastMarkup: Record<string, string> = {};
+  const found: Record<string, Map<string, Fake>> = {};
+  const serve = (selector: string): Fake[] => {
+    const rule = SERVED[selector];
+    if (rule === undefined) {
+      throw new Error(
+        `the page asked document.querySelectorAll(${JSON.stringify(selector)}), which this harness does not `
+        + 'model — answering [] would let a test pass while the page found nothing. Teach the harness that selector.',
+      );
+    }
+    const region = seen['messages'];
+    const markup = rule.region && region !== undefined && region.innerHTML.length > 0 ? region.innerHTML : html;
+    const memo = (found[selector] ??= new Map());
+    if (lastMarkup[selector] !== markup) {
+      memo.clear();
+      lastMarkup[selector] = markup;
+    }
+
+    return [...markup.matchAll(/<button[^>]*>/g)]
+      .map((match) => match[0] ?? '')
+      .filter(rule.holds)
+      .map((tag) => {
+        let one = memo.get(tag);
+        if (one === undefined) {
+          one = fake();
+          seed(one, tag);
+          memo.set(tag, one);
+        }
+
+        return one;
+      });
+  };
+  const copyControls = (): Fake[] => serve('.copy');
   const document_ = {
     get activeElement() { return focused; },
     getElementById: (id: string) => {
@@ -477,7 +535,12 @@ function runChatPage(over: RunOptions = {}): RunningPage {
 
       return seen[id];
     },
-    querySelectorAll: () => [],
+    // IT REFUSES WHAT IT CANNOT SERVE. This answered `[]` for every selector, which is the quietest
+    // way a test can pass against a page that found nothing: the loop runs zero times, the assertion
+    // "the mark did not land on the wrong control" is true because it landed on no control at all,
+    // and the shipped webview never paints. An unmodelled selector is a loud failure here, the same
+    // rule `cssRules.ts` follows by answering `undefined` rather than guessing a match.
+    querySelectorAll: (selector: string) => serve(selector),
     addEventListener() { /* the page listens on window */ },
     body: { style: emptyStyle() },
     fonts: { ready: fontsReady },
@@ -504,7 +567,13 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   }
 
 
-  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', 'FileReader', body)(
+  // COLLECTED, not run. A tick that clears itself after a second would otherwise make every test
+  // that presses a copy control wait a real second, or race it. The test says when the second is up.
+  const later: Array<() => void> = [];
+  new Function(
+    'document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', 'FileReader', 'setTimeout',
+    body,
+  )(
     document_,
     window_,
     // `setState` as well as `postMessage`: the page tells VS Code which conversation it is the
@@ -513,6 +582,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
     (fn: () => void) => { pending.push(fn); },
     withoutResizeObserver === true ? undefined : FakeResizeObserver,
     FakeFileReader,
+    (fn: () => void): number => later.push(fn),
   );
 
   const region = () => {
@@ -560,6 +630,16 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       const element = document_.getElementById(id);
       assert.ok(element, `the page renders no #${id} to focus`);
       focused = element;
+    },
+    copyControls: () => copyControls(),
+    secondPasses(count = Number.POSITIVE_INFINITY) {
+      // The OLDEST first, and only as many as asked — because "the first press's timer fires while
+      // the second press still has half its second left" is a real sequence, and draining every
+      // pending timer at once cannot express it.
+      const due = later.splice(0, Math.min(count, later.length));
+      for (const fn of due) {
+        fn();
+      }
     },
     composerResized() {
       assert.ok(observed, 'the page is not watching the composer for a height change');
@@ -1422,13 +1502,19 @@ test('a link posts to the host and never navigates the page itself', () => {
 
 test('a copy control asks the host for the message it names', () => {
   const page = runChatPage();
-  page.deliver({ type: 'state', messagesHtml: '<button type="button" class="copy" data-copy="3"></button>' });
+  page.deliver({
+    type: 'state',
+    messagesHtml: '<button type="button" class="copy" data-copy="3" data-sig="7-abc"></button>',
+  });
 
-  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { copy: '3' } }) } });
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { copy: '3', sig: '7-abc' } }) } });
 
+  // The SIGNATURE travels with the position. The host echoes it back on its acknowledgement so the
+  // tick can be matched to the control that was drawn for this text — an answer arriving between the
+  // press and the clipboard resolving shifts what index 3 means.
   assert.deepStrictEqual(
     page.posted.filter((message) => message['command'] === 'copyAnswer'),
-    [{ type: 'command', command: 'copyAnswer', index: 3 }],
+    [{ type: 'command', command: 'copyAnswer', index: 3, sig: '7-abc' }],
   );
 });
 
@@ -2845,5 +2931,194 @@ test('a fold key the host did not write is never put into the stylesheet', () =>
     String(page.seen['folds']?.textContent ?? ''),
     '',
     'the page wrote a stylesheet out of text it read back from its own DOM',
+  );
+});
+
+/**
+ * THE COPY ACKNOWLEDGEMENT — issue #313.
+ *
+ * <p>A copy control that does not move when it is pressed leaves the person with a status-bar
+ * sentence off where they are not looking, which also cannot say WHICH of several controls on a long
+ * answer fired. A green tick appears beside the label for a second.</p>
+ *
+ * <p><b>It appears when the write RESOLVED, never on the press.</b> This product ruled on that once
+ * already, on the panel's phrase button, after a reviewer called the press-time flip Blocking: a
+ * control that confirms on the press confirms just as confidently when the clipboard was held by
+ * something else, and the person then pastes whatever was there before. So the page marks nothing of
+ * its own — it waits to be told.</p>
+ */
+
+/** An answer with a fenced block in it, so both kinds of copy control are on the page. */
+const ANSWERED = [{
+  role: 'model' as const,
+  text: 'Here is the change:\n\n```ts\nconst a = 1;\n```\n\nThat is all.',
+}];
+
+/** What a control is called by, the way the page keys it: the message, the block, the signature. */
+function keyOf(control: Fake): string {
+  const data = control.dataset;
+
+  return `${data['copy'] ?? data['at'] ?? ''}:${data['block'] ?? ''}:${data['sig'] ?? ''}`;
+}
+
+/** The acknowledgement the host posts, built from the control the person actually pressed. */
+function acknowledge(page: RunningPage, control: Fake): void {
+  const data = control.dataset;
+  page.deliver({
+    type: 'copied',
+    index: Number(data['copy'] ?? data['at'] ?? 0),
+    ...(data['block'] === undefined ? {} : { block: Number(data['block']) }),
+    sig: data['sig'] ?? '',
+  });
+}
+
+const marked = (page: RunningPage): string[] =>
+  page.copyControls().filter((one) => one.dataset['copied'] === '1').map(keyOf);
+
+test('the harness serves the copy controls the page really rendered, and refuses a selector it cannot', () => {
+  // The guard on every assertion below. A harness that answers [] for an unmodelled selector lets a
+  // test pass while the page found nothing — the loop runs zero times and "it did not mark the wrong
+  // control" is true because it marked no control at all.
+  const page = runChatPage({ messages: ANSWERED });
+  const controls = page.copyControls();
+
+  assert.ok(controls.length >= 2, `an answer with a fenced block has an answer control and a block control, got ${controls.length}`);
+  assert.ok(
+    controls.some((one) => one.dataset['block'] !== undefined),
+    'no block control was served, so nothing below tests the control the issue is about',
+  );
+  assert.ok(
+    controls.every((one) => (one.dataset['sig'] ?? '').length > 0),
+    'a copy control carries no signature, so an acknowledgement cannot be matched to the text it was drawn for',
+  );
+});
+
+test('a copy the host confirmed is marked on the control that was pressed, and on no other', () => {
+  const page = runChatPage({ messages: ANSWERED });
+  const controls = page.copyControls();
+  const block = controls.find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+
+  assert.deepEqual(marked(page), [keyOf(block)], 'the control the person pressed does not say the copy landed');
+});
+
+test('a copy that never landed is never marked', () => {
+  // The whole reason the mark waits for the host. Pressing posts and nothing else happens; a refused
+  // clipboard produces no acknowledgement, so no tick — and the sentence that says why is the only
+  // thing the person sees, which is correct.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  page.fire('messages', 'click', {
+    target: { closest: () => ({ dataset: { ...block.dataset } }) },
+  });
+
+  assert.deepEqual(marked(page), [], 'the page marked a control on the press, before anything reached the clipboard');
+});
+
+test('the mark goes when the second is up, so the control is a control again', () => {
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+  page.secondPasses();
+
+  assert.deepEqual(marked(page), [], 'the tick stays on the control for ever');
+});
+
+test('a second copy of the same control holds the mark for its own second, not the first one', () => {
+  // Two presses half a second apart: the first timer must not clear a mark the second one owns.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+
+  acknowledge(page, block);
+  acknowledge(page, block);
+  page.secondPasses(1);
+
+  assert.deepEqual(
+    marked(page), [keyOf(block)],
+    'the first press cleared the mark the second press owns, so the tick vanished half a second early',
+  );
+});
+
+test('an answer arriving does not take the mark away with the region it rebuilds', () => {
+  // #messages is replaced wholesale on every push, so a mark that lives only on the element dies
+  // with it. The page keeps what it was told and paints it again.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+  const was = keyOf(block);
+
+  acknowledge(page, block);
+  page.deliver({ type: 'state', messagesHtml: chatMessagesHtml([...ANSWERED, { role: 'you', text: 'and next?' }]) });
+
+  assert.deepEqual(
+    marked(page), [was],
+    'the acknowledgement was lost when an arriving answer rebuilt the region under it',
+  );
+});
+
+test('the tick is painted by a rule that matches the control the page marks', () => {
+  // The mark is an attribute; without a rule keyed on it the page sets a state nothing shows. The
+  // selector is checked against the control the page ACTUALLY renders, because a rule reading
+  // `.never[data-copied="1"]` satisfies every substring search and matches nothing.
+  const page = runChatPage({ messages: ANSWERED });
+  const block = page.copyControls().find((one) => one.dataset['block'] !== undefined);
+  assert.ok(block, 'the page rendered no block control');
+  const control: Element = {
+    tag: 'button',
+    classes: ['copy', 'blockCopy'],
+    attrs: { ...block.dataset, copied: '1', 'data-copied': '1' },
+  };
+  const inside: readonly Element[] = [
+    { tag: 'div', classes: ['msg', 'model'], attrs: {} },
+    { tag: 'p', classes: ['blockRow'], attrs: {} },
+  ];
+
+  const sheet = stylesheet(chatPageHtml(state({ messages: ANSWERED }), 'n0nce'));
+  const tick = sheet.find((rule) => rule.selector === '.msg .copy[data-copied="1"]::after');
+  assert.ok(tick, 'nothing in the chat stylesheet draws a tick beside a control that copied');
+  assert.match(tick.body, /content:\s*"\s*\\2713"/, `the tick is not a tick: ${tick.body}`);
+  assert.ok(
+    tick.body.includes('var(--vscode-charts-green)'),
+    `the tick is not the theme's green: ${tick.body}`,
+  );
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(tick.body), `a colour of ours instead of the theme: ${tick.body}`);
+
+  // The selector really reaches that control — asked of the element, not of the text.
+  assert.equal(
+    couldMatch('.msg .copy[data-copied="1"]', control, inside), true,
+    'the rule is keyed on something the rendered control does not carry, so it paints nothing',
+  );
+
+  // And the control comes to full strength with it: .copy sits at .55 unless the message is
+  // hovered, and a tick at 55 % is the washed-out version of the one thing asked to be noticeable.
+  const { matching, unreadable } = painters(sheet, control, inside);
+  assert.deepEqual(
+    unreadable.filter((rule) => /\bcopy\b|data-copied/.test(rule.selector)).map((rule) => rule.selector),
+    [],
+    'a rule that could paint this control is written in a form this test cannot read',
+  );
+  const lit = matching.find((rule) => rule.selector === '.msg .copy[data-copied="1"]');
+  assert.ok(lit, 'the marked control is not brought to full strength, so its tick is dimmed with it');
+  assert.deepEqual(
+    beating(lit, matching, control, inside).map((rule) => rule.selector), [],
+    'another rule outranks the copied state and dims the control the tick is on',
+  );
+});
+
+test('a copy that did not land is acknowledged with nothing', () => {
+  // The host's own half of the rule, where a test can reach it — `chatCommand.ts` cannot be imported.
+  const where = { index: 2, block: 0, sig: '7-abc' };
+
+  assert.deepEqual(acknowledgement({ copied: true, said: 'Copied the block.' }, where), where);
+  assert.equal(
+    acknowledgement({ copied: false, said: 'The block could not be copied.' }, where), undefined,
+    'a refused clipboard would still tick the control, and the person pastes what was there before',
   );
 });
