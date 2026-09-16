@@ -98,7 +98,17 @@ switch_to() {
 
 rollback() {
     local previous
-    previous=$(tail -n 2 "$TRAIL" 2>/dev/null | head -n 1 || true)
+    # TWO entries are required, and the count is checked rather than assumed. `tail -n 2 | head -n 1`
+    # on a trail holding ONE line returns that line — the release being rolled back OUT of — so the
+    # first deployment would have "rolled back" onto itself, restarted the rejected build, and called
+    # that a recovery. It is the first deployment where a canary failure is most likely.
+    local entries
+    entries=$(wc -l < "$TRAIL" 2>/dev/null || echo 0)
+    previous=""
+    if [[ "$entries" -ge 2 ]]; then
+        previous=$(tail -n 2 "$TRAIL" | head -n 1)
+    fi
+
     if [[ -z "$previous" || ! -d "$previous" ]]; then
         say "no earlier deployment to roll back to — stopping $SERVICE rather than leaving a rejected build serving"
         $SYSTEMCTL stop "$SERVICE" || true
@@ -179,7 +189,11 @@ ls "$RELEASE"/*e_sqlite3* >/dev/null 2>&1 \
     || die "$RELEASE carries no e_sqlite3 — every request reads the key table, so this build would answer 401 to everybody"
 chmod +x "$RELEASE/$SERVICE"
 
-PREVIOUS=$(readlink -f "$LIVE" 2>/dev/null || true)
+# `readlink` WITHOUT -f, and the distinction matters: `-f` resolves a path and answers one even when
+# nothing is there, so on a first deployment PREVIOUS came back non-empty and the failure path took
+# the rollback branch instead of the "nothing to roll back to" one. Plain `readlink` answers only for
+# a symlink that exists.
+PREVIOUS=$(readlink "$LIVE" 2>/dev/null || true)
 printf '%s\n' "$RELEASE" >> "$TRAIL"
 
 if switch_to "$RELEASE"; then
