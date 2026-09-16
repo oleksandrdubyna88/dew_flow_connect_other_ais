@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DbTotals, EMPTY_TOTALS } from '../roundsDb';
 import { LogRow, PAGE_SIZE, roundsLogHtml } from '../roundsLog';
+import { Element, Rule, couldMatch, painters, stylesheet } from './cssRules';
 
 /**
  * The page holds a PAGE, and the numbers under it come from SQL.
@@ -559,4 +560,205 @@ test('the header box is checked and not indeterminate when everything shown is s
 
   assert.equal(page.at('pickall').checked, true);
   assert.equal(page.at('pickall').indeterminate, false);
+});
+
+/**
+ * THE PAGER'S APPEARANCE — issue #297.
+ *
+ * <p>«кнопки активны, а при нажатии ничего не происходит» — the buttons are active and pressing them
+ * does nothing. They are not active: `prev.disabled` and `next.disabled` are set correctly and the
+ * four tests above press them and assert the clamping. What is missing is that NOTHING SAYS SO. The
+ * button stylesheet had no `:disabled` rule at all, so a disabled control kept the filled colour and
+ * the hand cursor — and `button:hover` matched it too, because a browser matches `:hover` on a
+ * disabled element and suppresses only the pointer events. A control that invites the pointer, lights
+ * up under it and does nothing is the whole report.</p>
+ *
+ * <p>Asserted against the PARSED stylesheet and a modelled element rather than against its text: a
+ * rule keyed on something no button carries satisfies every substring search and paints nothing.</p>
+ */
+
+/** A pager button as the page renders it, in each of the two states that matter. */
+const LIVE: Element = { tag: 'button', classes: ['secondary'], attrs: {} };
+const DEAD: Element = { tag: 'button', classes: ['secondary'], attrs: { disabled: '' } };
+const ON_THE_PAGE: readonly Element[] = [{ tag: 'div', classes: ['pager'], attrs: {} }];
+
+function sheet(): Rule[] {
+  return stylesheet(roundsLogHtml([], [], 'n0nce', '', '', TOTALS, ''));
+}
+
+test('a pager button that cannot be pressed does not look pressable', () => {
+  const { matching, unreadable } = painters(sheet(), DEAD, ON_THE_PAGE);
+  assert.deepEqual(
+    unreadable.filter((rule) => /\bbutton\b|\bpager\b/.test(rule.selector)).map((rule) => rule.selector),
+    [],
+    'a rule that could paint a pager button is in a form this test cannot read, so the verdict is not trustworthy',
+  );
+  const dims = matching.filter((rule) => /(^|;)\s*opacity\s*:/.test(rule.body));
+  assert.ok(
+    dims.length > 0,
+    'nothing in the stylesheet dims a disabled button, so a control that cannot be pressed is painted exactly like one that can',
+  );
+  assert.ok(
+    dims.some((rule) => /cursor:\s*default/.test(rule.body)),
+    'a disabled button keeps the hand cursor, which is the page inviting a press it will not accept',
+  );
+});
+
+test('hovering a dead control does not light it up', () => {
+  // The half that adding a rule does not fix: `button:hover` stays in the sheet and still MATCHES a
+  // disabled button, so a new `:hover:not(:disabled)` rule simply does not apply there and the old
+  // one is left unopposed. The hover selectors have to be rewritten, not joined.
+  const rules = sheet();
+  const onDead = rules.filter(
+    (rule) => rule.selector.includes(':hover') && couldMatch(rule.selector, DEAD, ON_THE_PAGE) === true,
+  );
+  assert.deepEqual(
+    onDead.map((rule) => rule.selector), [],
+    'a hover rule still reaches a disabled button, so the dead control highlights under the pointer',
+  );
+
+  // And the live one still does, or the fix has taken the feedback off every button.
+  const onLive = rules.filter(
+    (rule) => rule.selector.includes(':hover') && couldMatch(rule.selector, LIVE, ON_THE_PAGE) === true,
+  );
+  assert.ok(onLive.length > 0, 'no hover rule reaches a button that CAN be pressed any more');
+});
+
+test('the pager says which page it is on even when there is only one', () => {
+  // Two true statements that together read as a broken pager: both buttons are disabled because
+  // today holds less than a page, and the line under them announces that the database has thousands
+  // of rounds. The pager has to speak for itself.
+  const page = open(
+    [row({ key: 'a', startedUtc: '2026-09-16T10:00:00Z' })],
+    { rounds: 4211, findings: 8687, accepted: 900, rejected: 300, gating: 120, tokensIn: 1, tokensOut: 2, costUsd: 3 },
+  );
+
+  assert.match(
+    page.at('pageinfo').textContent, /page 1 of 1/,
+    'at one page the pager says nothing about paging, so the footer’s much larger count reads as its own',
+  );
+});
+
+/**
+ * TWO VIEWS OVER ONE TABLE — issue #297.
+ *
+ * <p>Conversations used to sit in the Rounds list with a `Kind` column telling them apart. The
+ * operator asked for them to MOVE, so the tab says which kind and the column is gone.</p>
+ *
+ * <p>The load-bearing property is ORDER: the view filters before the search, the facets, the sort,
+ * the page count and the slice. Filtering after the slice gives the Conversations tab one row out of
+ * a page of two hundred rounds with <i>Older</i> enabled onto an empty page, while the counts and
+ * the search still speak for both kinds — and a test over a single mixed page passes while that is
+ * broken. So every test below crosses a page boundary. (The plan round.)</p>
+ */
+
+/** A conversation row, as `chatRows` builds one: no repository, no stage, no findings. */
+function chat(over: Partial<LogRow> = {}): LogRow {
+  return row({
+    key: 'chat:c1:2026-09-05T07:41:00.000Z', kind: 'conversation',
+    repoPath: '', repoName: '', branch: '', stage: '', verdict: '', gating: 0, findings: null,
+    subject: 'why does the gate refuse', answered: 'codex/gpt-5.5',
+    ...over,
+  });
+}
+
+/** Press a tab the way the delegated handler is reached. */
+function toTab(page: Page, which: string): void {
+  page.click(hit('[data-tab]', which));
+}
+
+/** Type into the search box, which reads the event rather than the element. */
+function search(page: Page, text: string): void {
+  page.at('search').heard['input']?.({ target: { value: text } });
+}
+
+test('the conversations tab shows conversations, and never a round', () => {
+  const rows = [...many(PAGE_SIZE + 5), chat({ key: 'chat:a' }), chat({ key: 'chat:b' })];
+  const page = open(rows);
+
+  toTab(page, 'conversations');
+
+  assert.match(
+    page.at('pageinfo').textContent, /rows 1–2 of 2 · page 1 of 1/,
+    'the conversations view is still counting the rounds beside them, so its pager is about a list nobody asked for',
+  );
+});
+
+test('the rounds tab shows rounds, and never a conversation', () => {
+  const rows = [...many(PAGE_SIZE + 5), chat({ key: 'chat:a' }), chat({ key: 'chat:b' })];
+  const page = open(rows);
+
+  assert.match(
+    page.at('pageinfo').textContent, new RegExp(`of ${PAGE_SIZE + 5} · page 1 of 2`),
+    'the rounds view still holds the conversations that were moved out of it',
+  );
+});
+
+test('a search that matches both kinds answers for the view it is asked in', () => {
+  // The case a single-page test cannot see: the counts, not only the first rows, have to be the
+  // view's own.
+  const rows = [
+    ...many(PAGE_SIZE + 5).map((r, i) => ({ ...r, subject: `shared word ${i}` })),
+    chat({ key: 'chat:a', subject: 'shared word in a conversation' }),
+  ];
+  const page = open(rows);
+  search(page, 'shared word');
+
+  assert.match(page.at('pageinfo').textContent, new RegExp(`of ${PAGE_SIZE + 5} `), 'the rounds view counted the conversation too');
+
+  toTab(page, 'conversations');
+  assert.match(page.at('pageinfo').textContent, /rows 1–1 of 1/, 'the conversations view counted the rounds too');
+});
+
+test('switching view goes back to the first page, because it is a different list', () => {
+  // BOTH views hold more than one page, deliberately. With a one-page conversations list the clamp
+  // in `render` pulls an out-of-range page back to the first one by itself, and this test passed
+  // with `firstPage()` deleted — found by deleting it. The clamp is a floor, not the rule.
+  const chats = Array.from({ length: PAGE_SIZE + 3 }, (_, i) => chat({ key: `chat:${i}`, number: i + 1 }));
+  const page = open([...many(PAGE_SIZE + 5), ...chats]);
+  page.at('next').heard['click']?.();
+  assert.match(page.at('pageinfo').textContent, /page 2 of 2/, 'the round view did not turn its page');
+
+  toTab(page, 'conversations');
+
+  assert.match(
+    page.at('pageinfo').textContent, /page 1 of 2/,
+    'a view change kept a page number that belonged to the other list',
+  );
+});
+
+test('a conversation is not offered an export, and is not counted as a round on screen', () => {
+  // One shared table means the tick-boxes, both Export controls and the database footer are all
+  // still in the DOM. They are hidden by the view rather than left to be pressed over rows whose
+  // findings do not exist. (The plan round.)
+  const css = stylesheet(roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS));
+  const inChat: readonly Element[] = [{ tag: 'section', classes: ['view-conversations'], attrs: { id: 'tab-rounds' } }];
+  const gone = (id: string): boolean => css.some(
+    (rule) => /display:\s*none/.test(rule.body)
+      && couldMatch(rule.selector, { tag: 'button', classes: [], attrs: { id } }, inChat) === true,
+  );
+
+  assert.ok(gone('exportpicked'), 'the conversations view still offers to export rows that have no findings');
+  assert.ok(gone('clearpicked'), 'and still offers to clear a selection it cannot make');
+  const footer = css.some((rule) => /display:\s*none/.test(rule.body)
+    && couldMatch(rule.selector, { tag: 'div', classes: ['hint'], attrs: { id: 'recorded' } }, inChat) === true);
+  assert.ok(footer, 'the conversations view still announces how many ROUNDS the database holds');
+});
+
+test('the two views name the same column differently, and neither header is built by script', () => {
+  const html = roundsLogHtml([], [], 'n0nce', 'usage', 'spots', TOTALS);
+  const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+
+  assert.ok(head.includes('>Round</span>') && head.includes('>Turn</span>'), 'a round’s Round is a conversation’s Turn');
+  assert.ok(head.includes('>Reviewers</span>') && head.includes('>Who answered</span>'), 'and its Reviewers is the one model that answered');
+  assert.ok(!head.includes('>Kind<'), 'the Kind column is still there, so the table is still one list with a label');
+
+  const css = stylesheet(html);
+  const hides = (klass: string, within: string): boolean => css.some(
+    (rule) => /display:\s*none/.test(rule.body)
+      && couldMatch(rule.selector, { tag: 'span', classes: [klass], attrs: {} },
+        [{ tag: 'section', classes: [within], attrs: {} }]) === true,
+  );
+  assert.ok(hides('asChat', 'view-rounds'), 'the rounds view shows both labels at once');
+  assert.ok(hides('asRound', 'view-conversations'), 'the conversations view shows both labels at once');
 });

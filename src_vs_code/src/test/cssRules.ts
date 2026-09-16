@@ -135,7 +135,20 @@ export function outranks(a: Specificity, b: Specificity): number {
 
 /** Every compound this matcher models. Anything else is an honest `undefined`. */
 const MODELLED =
-  /^(?:[a-z][\w-]*)?(?:\.[\w-]+|\[[\w-]+(?:="[^"]*")?\]|:(?:hover|focus|active|focus-within|focus-visible))+$|^[a-z][\w-]*$/;
+  /^(?:[a-z][\w-]*)?(?:#[\w-]+|\.[\w-]+|\[[\w-]+(?:="[^"]*")?\]|:(?:hover|focus|active|focus-within|focus-visible|disabled|enabled)|:not\(:(?:disabled|enabled)\))+$|^[a-z][\w-]*$/;
+
+/**
+ * Whether an element is disabled, which is the one pseudo-class here that is NOT a guess.
+ *
+ * <p>`:hover` and `:focus` are states an element can enter without anything saying so, which is why
+ * they are treated as live possibilities below. `:disabled` is not: it is the `disabled` attribute,
+ * which the element either carries or does not. So it is answered rather than assumed — and that
+ * distinction is the whole point of teaching this matcher about it, because a rule written
+ * `:hover:not(:disabled)` and a rule written `:hover` differ on exactly that element.</p>
+ */
+function isDisabled(element: Element): boolean {
+  return element.attrs['disabled'] !== undefined;
+}
 
 /** Does one compound selector describe this element? `undefined` when it cannot be read. */
 export function compoundMatches(compound: string, element: Element): boolean | undefined {
@@ -153,6 +166,13 @@ export function compoundMatches(compound: string, element: Element): boolean | u
   if (tag !== undefined && tag !== element.tag) {
     return false;
   }
+  // An id is the `id` attribute, answered like any other. It is here because leaving it out made a
+  // rule for a SPAN unreadable to a test asking about a BUTTON, which then failed on its own guard.
+  for (const [, wanted] of compound.matchAll(/#([\w-]+)/g)) {
+    if (element.attrs['id'] !== wanted) {
+      return false;
+    }
+  }
   for (const [, name] of compound.matchAll(/\.([\w-]+)/g)) {
     if (!element.classes.includes(name ?? '')) {
       return false;
@@ -165,10 +185,21 @@ export function compoundMatches(compound: string, element: Element): boolean | u
     }
   }
 
-  // A PSEUDO-CLASS IS A STATE THE ELEMENT CAN BE IN, and is therefore a live competitor for the
-  // cascade rather than a reason to stop looking — a mouse is still sitting on the button it has
-  // just pressed. Narrowing this to "only if the element is modelled as hovered" would exclude the
-  // one class of rule the ranking below exists to catch.
+  // :disabled and :not(:disabled) ARE answered, because they are the `disabled` attribute rather
+  // than a state the element can wander into. A rule guarded by one reaches a different set of
+  // elements from the same rule without it, which is the difference a dead control that still
+  // lights up under the pointer is made of.
+  for (const [, negated, name] of compound.matchAll(/:(not\(:)?(disabled|enabled)\)?/g)) {
+    const wants = (name === 'disabled') !== (negated !== undefined);
+    if (isDisabled(element) !== wants) {
+      return false;
+    }
+  }
+
+  // EVERY OTHER PSEUDO-CLASS IS A STATE THE ELEMENT CAN BE IN, and is therefore a live competitor
+  // for the cascade rather than a reason to stop looking — a mouse is still sitting on the button it
+  // has just pressed. Narrowing those to "only if the element is modelled as hovered" would exclude
+  // the one class of rule the ranking exists to catch.
   return true;
 }
 

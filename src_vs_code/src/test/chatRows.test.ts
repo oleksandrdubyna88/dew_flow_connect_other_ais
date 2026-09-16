@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatTurnRecord } from '../chatUsage';
-import { LogRow, chatRows, mergedRows, roundsLogHtml, rowMatches } from '../roundsLog';
+import { LogRow, chatRows, inView, mergedRows, roundsLogHtml, rowMatches } from '../roundsLog';
 import { priceOfLine } from '../usage';
 
 /**
@@ -230,7 +230,7 @@ test('a date range that excludes a conversation excludes it, as it would a round
   assert.strictEqual(rowMatches(chat, { to: '2026-09-09' }, ''), true, 'a bare day means the END of it');
 });
 
-test('the page has a Kind column and a Kind filter, and the detail row spans every column', () => {
+test('the kind is the TAB now, and the detail row still spans every column', () => {
   // The colspan is the column COUNT, and it used to be a literal `15`. A column added without it
   // leaves an opened row's detail short by one and the table visibly ragged — so it is derived, and
   // this is the test that says so.
@@ -241,8 +241,11 @@ test('the page has a Kind column and a Kind filter, and the detail row spans eve
   // one thing this test exists to prevent.
   const headers = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>')).match(/<th\b/g) ?? [];
 
-  assert.match(html, /<th data-sort="kind">Kind<\/th>/, 'the column is missing');
-  assert.match(html, /<select data-filter="kind">/, 'the facet is missing');
+  // THE COLUMN AND THE FACET ARE GONE, and that is the change rather than a regression: they told a
+  // conversation from a round inside ONE list, and conversations have a tab of their own since issue
+  // #297. A column saying what the tab already says is a column whose only job is to be filtered on.
+  assert.ok(!/<th [^>]*data-sort="kind"/.test(html), 'the Kind column is back, so the table is one list with a label again');
+  assert.ok(!html.includes('data-filter="kind"'), 'the Kind facet is back, filtering a list that no longer mixes kinds');
   assert.match(html, /var COLUMN_COUNT = \d+;/, 'the colspan is not derived from the columns');
   assert.match(
     html,
@@ -252,19 +255,18 @@ test('the page has a Kind column and a Kind filter, and the detail row spans eve
   assert.ok(!html.includes('colspan="15"'), 'the hand-written colspan is still there');
 });
 
-test('the Kind facet offers both halves once they exist, and neither before', () => {
-  const both = roundsLogHtml(mergedRows([reviewRow()], chatRows([record()])), [], 'n0nce');
-  const options = /<select data-filter="kind">(.*?)<\/select>/.exec(both)?.[1] ?? '';
+test('the two kinds are still one merged list, and the view is what separates them', () => {
+  // `mergedRows` did not change: the page holds both kinds and `inView` decides which are on screen.
+  // What went is the Kind FACET, which used to be how a person separated them by hand.
+  const rows = mergedRows([reviewRow()], chatRows([record()]));
 
-  assert.match(options, /value="review"/);
-  assert.match(options, /value="conversation"/);
-
-  // A filter offers only what exists: with no conversations recorded, the option is not there to be
-  // chosen — the same rule every other facet on this page follows.
-  const roundsOnly = roundsLogHtml([reviewRow()], [], 'n0nce');
-  const alone = /<select data-filter="kind">(.*?)<\/select>/.exec(roundsOnly)?.[1] ?? '';
-  assert.match(alone, /value="review"/);
-  assert.ok(!alone.includes('value="conversation"'), 'a filter must not offer an empty result');
+  assert.equal(rows.filter((r) => inView(r, 'rounds')).length, 1, 'the rounds view does not hold the round');
+  assert.equal(rows.filter((r) => inView(r, 'conversations')).length, 1, 'the conversations view does not hold the conversation');
+  assert.equal(
+    rows.filter((r) => inView(r, 'rounds')).concat(rows.filter((r) => inView(r, 'conversations'))).length,
+    rows.length,
+    'a row belongs to neither view or to both, so something is invisible or counted twice',
+  );
 });
 
 test('a conversation row carries its vendor, so the Vendor facet reaches it too', () => {
