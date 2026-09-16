@@ -21,6 +21,8 @@ export interface LogPageMessage {
   readonly type?: unknown;
   readonly command?: unknown;
   readonly id?: unknown;
+  /** The model half of a CHAT row's identity — a vendor alone cannot name one of those rows. */
+  readonly model?: unknown;
   /**
    * The three fields the rounds database keys a round by, carried BY the request.
    *
@@ -48,6 +50,8 @@ export type LogCommand =
   | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
   | { readonly kind: 'forget'; readonly provider: string }
+  /** One CHAT row, which is a vendor AND a model — one id cannot name the pair. */
+  | { readonly kind: 'forgetChat'; readonly provider: string; readonly model: string }
   | {
     readonly kind: 'findings';
     readonly key: string;
@@ -142,6 +146,8 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return { kind: 'usageWindow', window: id };
     case 'forgetUsage':
       return { kind: 'forget', provider: id };
+    case 'forgetChat':
+      return { kind: 'forgetChat', provider: id, model: text(message.model) };
     case 'findings':
       return findingsOf(message, id);
     case 'export':

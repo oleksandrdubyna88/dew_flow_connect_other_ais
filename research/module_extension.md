@@ -47,6 +47,36 @@ The labels are `<label for=…>` paired with control ids (`phrase-name-<id>`, `p
 **Name** and **What it copies**. The `for`/`id` pairing is what makes them labels rather than
 captions sitting nearby, and it is the half a screen reader depends on; the test asserts the pairing,
 not merely the presence of the word.
+### A chat row can be cleared from the spending chart (2026-09-16)
+
+The spending tab draws two ledgers. Every card in the **Reviewers** half has carried a ✕ since it
+shipped — `forgetUsage`, whose tooltip is almost the operator's own sentence: *"Nothing is deleted
+from the ledger — the row simply stops counting what is already there, and comes back the next time
+this vendor runs."* Every card in the **Chat** half carried nothing (issue #298).
+
+The mechanism is the reviewers': **a watermark, applied on READ, never a rewrite**. The writer
+appends while the panel is open, so filtering a file and writing it back would race a turn finishing
+mid-write. A new map, `coai.chatUsageForgottenBefore`, sits beside the existing one — two ledgers,
+two maps, and no state of one makes a state of the other wrong.
+
+**What differs is what a row IS.** A reviewer row is a vendor; a chat row is a vendor AND a model, so
+the mark is keyed on that pair. Forgetting `codex · gpt-5.4` must leave `codex · gpt-5.5` alone —
+they are two rows, and a person pressing ✕ is pointing at one of them.
+
+**`chatRowProvider` was extracted so the chart and the filter cannot drift.** Deciding which row a
+line belongs in is a three-way rule, and only the first two thirds are obvious: *what the line wrote
+down* wins over *what the preset list says today*, because a preset is a row somebody edits and
+re-resolving old lines would move a year of history to another vendor in an append-only ledger
+(CodeRabbit, PR #209). The plan said only "apply `vendorOf`". A filter that had done that would have
+keyed marks by the resolver alone and silently missed every line carrying its own `vendor` — which,
+since #209, is every recent one. It is now one exported function used by both.
+
+**The defect that a rendered-markup test could not see.** The button carries `data-model`, and the
+page's delegated `[data-command]` handler posted only `id`. Every assertion over the HTML was green
+and the control forgot nothing, because the half saying WHICH model never left the page. The handler
+now sends the model too; `forgetAChatRow.test.ts` **executes the page's own click listener** and
+catches it. That is the one case in this series where "run the page" was both available and right —
+the rounds-log page has a script with a branch in it, unlike the sidebar's static markup.
 
 ### A reviewer's status carries a mark you can see without reading (2026-09-15)
 

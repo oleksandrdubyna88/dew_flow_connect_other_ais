@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
 import { chatSettingsFrom, clearedByWriting } from './chatSettings';
 import { phrasesFrom, type Phrase } from './phrases';
+import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
@@ -20,6 +21,7 @@ import {
   staticKey,
   withholdsRepaint,
   VSCODE_COMMAND_FOR,
+  type ChatLedgers,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { PriceOfModel, usageTabHtml } from './roundsLog';
@@ -581,13 +583,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // `vendorOf` turns the id a chat recorded - the model PRESET in force - into the vendor whose
       // row it belongs in, so both halves of the page name the same three vendors the same way.
       // Resolved on the way OUT rather than on the way in, which names every line already on disk.
-      {
-        turns: await this.chatLines(),
-        doors: await this.doorLines(),
-        vendorOf: vendorOfPreset(chatModelPresetsFrom(
-          vscode.workspace.getConfiguration('coai').get('chatModelPresets'),
-        )),
-      },
+      await this.chatLedgers(),
     );
   }
 
@@ -981,6 +977,65 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Per vendor, the instant before which its recorded runs are not counted. */
   private forgottenBefore(): Record<string, string> {
     return this.context.globalState.get<Record<string, string>>('coai.usageForgottenBefore') ?? {};
+  }
+
+  /**
+   * Clear one CHAT row from the spending chart, after asking.
+   *
+   * <p>The reviewers' watermark, keyed differently because the row is: a chat row is a vendor AND a
+   * model (`ChatSpendRow`), so forgetting <em>codex · gpt-5.4</em> must leave <em>codex · gpt-5.5</em>
+   * alone — they are two rows on the page and a person pressing ✕ is pointing at one of them.</p>
+   *
+   * <p>A SECOND map beside `coai.usageForgottenBefore`, never a change to it: the two halves of the
+   * page are two ledgers, and nothing about one makes a state of the other wrong.</p>
+   */
+  async forgetChatUsage(provider: string, model: string): Promise<void> {
+    const named = model.length > 0 ? `${provider} · ${model}` : provider;
+    const forget = 'Forget';
+    const answer = await vscode.window.showWarningMessage(
+      `Clear ${named}'s recorded chat from the spending chart?`,
+      {
+        modal: true,
+        detail:
+          'The chart stops counting what this model has recorded so far. Nothing is deleted from '
+          + 'the ledger on disk, and the row comes back the next time this model answers.',
+      },
+      forget,
+    );
+    if (answer !== forget) {
+      return;
+    }
+
+    const marks = { ...this.chatForgottenBefore(), [chatForgetKey(provider, model)]: new Date().toISOString() };
+    await this.context.globalState.update('coai.chatUsageForgottenBefore', marks);
+    await this.render();
+  }
+
+  /** Per vendor-and-model pair, the instant before which its recorded chat is not counted. */
+  private chatForgottenBefore(): Record<string, string> {
+    return this.context.globalState.get<Record<string, string>>('coai.chatUsageForgottenBefore') ?? {};
+  }
+
+  /**
+   * Both chat ledgers, minus what has been forgotten.
+   *
+   * <p>The filter is applied HERE, on the way out, for the reason `remembered()` gives about the
+   * reviewers' one: the writer appends while this panel is open, so filtering a file and writing it
+   * back would race a turn finishing mid-write. The caches below hold what the FILE said; what is
+   * forgotten is a question about the marks, and it is asked on every render — so a mark written a
+   * moment ago takes effect on the next paint whether or not the lines came from a cache.</p>
+   */
+  private async chatLedgers(): Promise<ChatLedgers> {
+    const marks = this.chatForgottenBefore();
+    const vendorOf = vendorOfPreset(chatModelPresetsFrom(
+      vscode.workspace.getConfiguration('coai').get('chatModelPresets'),
+    ));
+
+    return {
+      turns: rememberedChat(await this.chatLines(), marks, vendorOf),
+      doors: rememberedChat(await this.doorLines(), marks, vendorOf),
+      vendorOf,
+    };
   }
 
   /**
@@ -1565,6 +1620,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         if (id !== undefined) {
           await this.forgetUsage(id);
         }
+        break;
+      // Posted by the rounds-log page, never by the sidebar — the sidebar's spending region has no
+      // chat half. It is in the shared vocabulary because that is where every `data-command` this
+      // product emits is declared, and the exhaustiveness check below then demands a case here.
+      case 'forgetChat':
         break;
       case 'installServer':
         // The panel has no business downloading anything itself: the command that does it is

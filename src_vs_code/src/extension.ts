@@ -106,6 +106,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await panelRef.forgetUsage(provider);
       await refreshRoundsLog(roundsLog, watcher, panelRef, true);
     },
+    onForgetChat: async (provider, model) => {
+      await panelRef.forgetChatUsage(provider, model);
+      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
     // A row was opened. The list no longer carries findings — 3.78 MB of a 3.83 MB payload, for
     // rounds nobody had opened — so this is the read that replaces them, for the one round clicked.
     // The round's identity arrives WITH the request rather than being looked up in state the host

@@ -1957,8 +1957,22 @@ function chatSpendCard(row: ChatSpendRow, busiest: number, colour: (provider: st
   const ever = total(row.allTimeUsd, row.allTimeEstimatedUsd);
   const allTime = ever === '—' ? '' : ` · ${ever} all time`;
 
+  // The ✕ the Reviewers half has had since this tab shipped, in the same place and with the same
+  // words. It carries the MODEL as well as the vendor, because a chat row is a pair and one id
+  // cannot name it. Both halves are escaped: a model id is written by a vendor, and one carrying a
+  // quote would otherwise close the attribute and forge the pair the button acts on. (codex, the
+  // plan round.)
+  //
+  // The `nothing chosen` row gets none: there is no pair to forget, and a control that cannot act is
+  // worse than no control.
+  const forget = named
+    ? `<button class="link forget" data-command="forgetChat" data-id="${escapeHtml(row.provider)}" data-model="${escapeHtml(row.model)}"
+            title="Clear ${escapeHtml(named ? `${row.provider} · ${model}` : model)}'s recorded chat from this chart. Nothing is deleted from the ledger — the row simply stops counting what is already there, and comes back the next time this model answers."
+            aria-label="Forget ${escapeHtml(row.provider)}'s recorded chat spending">✕</button>`
+    : '';
+
   return `<div class="spend">
-  <div class="head"><span class="name" style="color:${named ? colour(row.provider) : 'inherit'}">${escapeHtml(named ? row.provider : 'nothing chosen')}</span><span class="model">${escapeHtml(model)}</span><span class="cost">${total(row.costUsd, row.estimatedUsd)}</span></div>
+  <div class="head"><span class="name" style="color:${named ? colour(row.provider) : 'inherit'}">${escapeHtml(named ? row.provider : 'nothing chosen')}</span><span class="model">${escapeHtml(model)}</span><span class="cost">${total(row.costUsd, row.estimatedUsd)}</span>${forget}</div>
   <div class="bar"><span style="width:${barWidth(row.tokensIn + row.tokensOut, busiest)}%"></span></div>
   <div class="figures">${shortNumber(row.tokensIn)} in · ${shortNumber(row.tokensOut)} out · ${row.turns} turn(s)</div>
   <div class="hint">${rates}${allTime}</div>
@@ -2567,6 +2581,7 @@ export const PANEL_COMMANDS = [
   'installVendorCli',
   'updateVendorCli',
   'forgetUsage',
+  'forgetChat',
   'reprobeLocal',
   // Takes the consultant's prompt override away, so the shipped prompt answers again. A command
   // rather than an emptied box: both do it, and only one of them is discoverable.

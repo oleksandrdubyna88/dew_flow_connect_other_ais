@@ -1590,7 +1590,12 @@ export function roundsLogHtml(
     }
     var button = target.closest('[data-command]');
     if (button) {
-      vscode.postMessage({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id') });
+      // The model rides along because a CHAT row is a vendor AND a model, and one id cannot name
+      // the pair. Every other command ignores it; the decoder reads it only for the one that needs
+      // it. Without this the cross on a chat row looked right in the markup and forgot nothing,
+      // because the page never sent the half that says which model. (No backticks in here: this is
+      // inside a template literal.)
+      vscode.postMessage({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id'), model: button.getAttribute('data-model') });
       return;
     }
     var th = target.closest('th[data-sort]');
