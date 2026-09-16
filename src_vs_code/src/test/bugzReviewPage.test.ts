@@ -185,18 +185,47 @@ test('the decision buttons are disabled until something is selected', () => {
   assert.match(page.controls['picked']!.textContent, /1 selected/);
 });
 
+/**
+ * Select-all takes every row, and the boxes SAY so.
+ *
+ * <p>The first version asserted `posted.at(-1)` after a second decision — and after a decision the
+ * selection is spent, so a broken select-all posts nothing and `at(-1)` still refers to the earlier
+ * message. The test would have stayed green while the control stopped working. A reviewer of the
+ * pull request caught it; it is the same shape as every assertion that survives its own break.</p>
+ */
 test('select-all takes every row, and pressing it again clears them', () => {
   const page = run([pair(1), pair(2), pair(3)]);
 
   page.click(page.controls['pickall']!);
-  page.click(page.controls['keep']!);
-  assert.deepEqual([...page.posted.at(-1)!.ids!].sort((a, b) => a - b), [1, 2, 3]);
+  assert.deepEqual(page.boxes.map((b) => b.checked), [true, true, true]);
+  assert.equal(page.controls['pickall']!.checked, true, 'the box shows what it just did');
+  assert.equal(page.controls['keep']!.disabled, false);
 
   page.click(page.controls['pickall']!);
+  assert.deepEqual(page.boxes.map((b) => b.checked), [false, false, false]);
+  assert.equal(page.controls['pickall']!.checked, false);
+  assert.equal(page.controls['keep']!.disabled, true, 'nothing is selected to decide about');
+
+  // And it still SENDS what it selected.
   page.click(page.controls['pickall']!);
-  page.click(page.controls['drop']!);
-  assert.deepEqual([...page.posted.at(-1)!.ids!].sort((a, b) => a - b), [1, 2, 3],
-    'off then on selects everything again');
+  page.click(page.controls['keep']!);
+  assert.deepEqual([...page.posted.at(-1)!.ids!].sort((a, b) => a - b), [1, 2, 3]);
+});
+
+/**
+ * After a decision, the select-all box is not left ticked over an empty selection.
+ *
+ * <p>It showed the opposite of what the next click would do: ticked, over nothing selected, so
+ * pressing it appeared to CLEAR and actually selected everything.</p>
+ */
+test('a spent selection leaves the select-all box unticked', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(page.controls['pickall']!);
+  page.click(page.controls['keep']!);
+
+  assert.equal(page.controls['pickall']!.checked, false);
+  assert.deepEqual(page.boxes.map((b) => b.checked), [false, false]);
 });
 
 test('drop sends the drop decision, not the keep one', () => {

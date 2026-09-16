@@ -74,7 +74,10 @@ export class BugzReviewPanel {
     }
 
     await this.draw();
-    this.panel.reveal(vscode.ViewColumn.Active);
+    // `?.` because `draw` awaits the server and a person can close the window while it does; the
+    // dispose handler then clears this. The command dispatcher starts `run()` with `void`, so the
+    // rejection would surface as an unhandled one rather than as anything anybody could act on.
+    this.panel?.reveal(vscode.ViewColumn.Active);
   }
 
   /**
