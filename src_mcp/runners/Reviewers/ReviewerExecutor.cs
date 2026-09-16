@@ -155,7 +155,7 @@ public static class RateLimit
     /// throttle that clears, and refusing to wait it out would lose a reviewer that would have
     /// answered. (The plan round, two vendors independently.)</para>
     /// </remarks>
-    private static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit"];
+    internal static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit"];
 
     /// <summary>
     /// Whether waiting is pointless: a SPENT allowance, not a per-minute throttle.
