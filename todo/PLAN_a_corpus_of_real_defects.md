@@ -608,6 +608,10 @@ story 6's: this story ends with a person's keep/drop decision written to a colum
 
 ### Story 6 — `coai-bugs`, and the only story that sends anything
 
+> Revised after the plan round: 24 findings, 23 accepted. The first draft contradicted itself about
+> the entry id, called a lifetime counter a rate limit, and implied a test could prove something no
+> application-level test can. All three are corrected below.
+
 Everything so far has stayed on one machine. This is the boundary, and it is the whole risk of the
 plan: five stories of care about anonymity are worth exactly what this one upload sends.
 
@@ -617,36 +621,65 @@ plan: five stories of care about anonymity are worth exactly what this one uploa
 public sealed record UploadedPair(string Language, string SkeletonBefore, string SkeletonAfter);
 ```
 
-**A type of its own, and that is the point.** `StoredPair` carries the finding id, the symbol, the
-severity, the category and the title — every one of which must never leave, and a code round of
-story 5 flagged reusing it here as the obvious way to leak all five at once. The upload maps
-explicitly at the boundary, so adding a field to the stored row cannot silently widen what is sent.
+**A type of its own.** `StoredPair` carries the finding id, the symbol, the severity, the category
+and the title — every one of which must never leave, and a story-5 code round flagged reusing it
+here as the obvious way to leak all five at once. Explicit mapping at the boundary is human
+discipline, so an **architecture test** asserts this type has exactly three properties: adding one,
+or mapping the stored row onto the wire, is a red test rather than a silent widening.
 
-**The id does not cross either.** Idempotency needs a stable key, and `finding_id` is a pointer into
-somebody's database — two uploads from one machine would correlate. The client generates an opaque
-entry id per pair (a hash of the two skeletons and the language, which is stable, carries nothing,
-and deduplicates identical pairs from different people for free).
+**The id is DERIVED, not sent.** The first draft promised idempotency on a client-generated entry id
+AND that only three fields cross — both cannot be true, and two reviewers said so. They can both be
+KEPT: the id is a pure function of the payload, `sha256(language \0 before \0 after)`, so the server
+computes it and nothing extra crosses. It is stable, carries nothing, deduplicates identical pairs
+from different people for free, and there is no mismatch case to handle because there is no second
+copy to disagree.
 
-#### The server checks the ALPHABET, not the absence of names
+#### The alphabet check is SHAPE validation, not proof of anonymity
 
-The two validators are deliberately different, and this is the strictly stronger one. The client
-knows the original and asserts a blacklist — nothing of the input survived. The server has never
-seen the original, so a blacklist is impossible; it asserts a **whitelist**: every identifier
-matches `var_\d+|type_\d+|method_\d+` or is runtime vocabulary, every string is `""`, every number
-is `0`. It needs no parser, and a skeleton that fails it is refused rather than quarantined.
+The two validators are deliberately different. The **client** knows the original and asserts a
+blacklist — nothing of the input survived — as a property test over real files, per grammar. The
+**server** has never seen the original, so a blacklist is impossible; it asserts a whitelist: every
+identifier matches `var_\d+|type_\d+|method_\d+` or is runtime vocabulary, every string is `""`,
+every number is `0`.
 
-**Refused, not quarantined**, because the two are different failures: a leaked identifier is a
-defect in a client we wrote and it must come back as an error somebody reads, while a crafted but
-well-formed skeleton is a thing quarantine exists for.
+**And that is a shape, not a proof.** A source method literally named `method_1` normalises to a
+placeholder that may be the same string, and the server cannot tell the two apart. Nothing unsafe
+follows — a name that coincides with what we would have generated carries no information — but the
+first draft called this check the guarantee, and the guarantee is the client-side property test.
+(Plan round, codex.)
 
-#### Quarantine is the first schema, not a later one
+**The vocabulary is REFERENCED, not copied.** A plan reviewer asked for a shared file on the premise
+that the ingest server is a different binary which cannot reach `CoaiMcp.Core` — and checking it
+before building, that premise is wrong: `coai-server` already references `CoaiMcp.Runners`, so a
+sibling server can reference the core directly. A project reference is strictly stronger than a file
+plus two parity tests, because the compiler enforces it and there is only ever one list. The
+reviewer's concern — two lists drifting — is the right concern and this is the better answer to it.
 
-Ingest lands in quarantine and promotion is a separate reviewed step. The alphabet validator stops
-leaked identifiers; it cannot tell a real skeleton from a crafted one, and a corpus shown to people
-as precedent is worth poisoning. Retrofitting quarantine after an index is live means re-auditing
-everything already in it — so it goes in the first migration, before there is anything to audit.
+#### Per-item results, or one bad pair strands every good one
 
-#### Identity is a key and nothing else
+A batch that fails as a whole is a batch the client retries unchanged, for ever, with every valid
+pair behind the invalid one. So `POST /ingest` answers **200 with a result per item** —
+`accepted`, `duplicate`, or `refused` with a reason a person can read — and a refusal never fails
+its neighbours. (Plan round, gemini.)
+
+The client marks a pair sent **only on `accepted` or `duplicate`**, never on the batch leaving: a
+pair marked before the server answered is a pair lost in silence, and a kill between the two must
+leave it to be retried. A `refused` pair is marked refused locally, so it is not retried blindly and
+a person can see there is something wrong with OUR normaliser.
+
+#### Quarantine, and how anything leaves it
+
+Ingest lands in quarantine; the live index is a separate table. The alphabet check stops leaked
+identifiers; it cannot tell a real skeleton from a crafted one, and a corpus shown to people as
+precedent is worth poisoning. It goes in the FIRST migration, because retrofitting it after an index
+is live means re-auditing everything already there.
+
+**Promotion is `coai-bugs --promote`**, an admin one-shot, a person reading. Nothing automatic and no
+timer: the first draft said 'a separate reviewed step' and named no mechanism, which makes quarantine
+a room with no door. An interrupted promotion leaves the rows in quarantine, because the row moves
+inside one transaction.
+
+#### Identity is a key, and the key is not in argv
 
 ```sql
 CREATE TABLE api_keys (
@@ -657,51 +690,86 @@ CREATE TABLE api_keys (
 );
 ```
 
-The key is stored as a **hash**: a stolen database must not become a set of working keys.
+- **HMAC-SHA256 with a server secret**, not a bare hash: a stolen database must not be a rainbow-table
+  exercise. Compared in constant time.
+- **`coai-bugs --issue-key --note "..."`** prints a key once and stores only its hash; `--revoke <id>`
+  ends it. A fresh deployment otherwise has an empty table and no documented way to fill it.
+- **The client reads its key from a file or the environment, never argv** — an argument is in process
+  listings and shell history, which this family's secret rule forbids outright.
+- **TLS is required** for any deployment that is not loopback. The server refuses to start otherwise
+  unless told a proxy terminates it, because a bearer key over plain HTTP is a key an observer keeps.
 
-**`last_seen_utc` is omitted on purpose.** With submission timestamps it is a behavioural trace tied
-to a key we know we handed to one person — a record of when somebody was working. `submissions` is a
-counter without a clock, which is what a rate limit needs and all it needs.
+**`last_seen_utc` is omitted on purpose**: with submission timestamps it is a record of when a person
+we handed a key to was working. `submissions` is a counter without a clock — **and it is not a rate
+limit**, which the first draft implied. A lifetime counter has no window and no reset; what actually
+bounds abuse is the body cap, the batch cap and a per-key daily quota the deployment enforces.
 
-**And the web server must not log client IPs for this route**, or the claim is false one layer below
-the table. That is a deployment fact, not a code fact, so it is written in the deploy notes AND
-asserted by the route's own test that no request-logging middleware is registered for it.
+#### The no-IP promise, honestly
+
+The application cannot keep this promise on its own. A reverse proxy writes `remote_addr` before the
+request reaches any route, and a test asserting that no logging middleware is registered passes while
+nginx logs every upload. Three reviewers said so and they are right.
+
+So it is stated as what it is: **a deployment obligation**, written in the deploy notes with the exact
+nginx and Kestrel settings, verified by reading the deployed stack's logs after a real ingest. The
+application-level test is kept for what it does prove — that WE did not add one — and is described as
+that and nothing more.
+
+#### Growth budget
+
+- **Projected size.** A pair is 762 bytes measured (story 5), plus a 64-character id and a row: call
+  it 900 bytes. The whole measured corpus of one contributor is 462 pairs — **~400 KB**. A hundred
+  contributors is 40 MB, which is the expected volume.
+- **At abuse volume**, the caps are what bound it: **1 MB body, 200 pairs a batch**, so one key's
+  daily quota is what decides the ceiling rather than the table.
+- **Who retires it.** Quarantine rows that a person REFUSED are deleted on promotion; rows nobody has
+  reviewed are kept, because deleting unreviewed submissions silently discards contributions. The
+  live index is kept for ever — it is the product.
+- **When it is interrupted.** A promotion is one transaction; an interrupted one leaves everything in
+  quarantine, which is the state it started in.
 
 #### The shape
 
 | | |
 |---|---|
-| `POST /ingest` | a batch of `UploadedPair`, keyed, idempotent on the entry id |
+| `POST /ingest` | a batch of `UploadedPair`, keyed, per-item results, idempotent on the derived id |
 | `GET /health` | unauthenticated, says nothing about the corpus |
+| `coai-bugs --issue-key` / `--revoke` / `--promote` | admin one-shots |
+| `coai-mcp --upload-pairs` | the client half — **registered in `.agents/PROJECT.md`**, and never 64 |
 
-A standalone AOT binary — the operator's decision on 2026-09-15, because `coai-server` sits behind
-Entra and a domain allow-list which is load-bearing there and wrong here: anyone should be able to
+A standalone AOT binary, per the operator's decision of 2026-09-15: `coai-server` sits behind Entra
+and a domain allow-list, which is load-bearing there and wrong here — anyone should be able to
 contribute, not only people with a Team server.
-
-**The client half is `coai-mcp --upload-pairs`**, not the panel: the pairs are in SQLite and the
-panel owns none, so the one-shot mode that already reads them is where the upload belongs. It sends
-only pairs whose `keep = 1`, and records what was sent so a second run does not send it again.
 
 #### Test plan
 
 - The alphabet validator over the skeletons this repository's own corpus produces — every one must
   pass — and over crafted ones carrying a hostname, an identifier and a number, which must not.
-- A refused skeleton is a 4xx a person can read, and lands in NO table.
-- The same entry id twice stores one row.
-- A revoked key is refused; an unknown key is refused; both without saying which.
-- The `http/` contract suite gains this server — that suite is what caught the AOT JSON binding
-  failure that made a released `coai-server` answer 500 to everything.
-- `--upload-pairs` sends only `keep = 1`, sends the three fields and no others, and is idempotent.
+- A mixed batch: the valid pairs are accepted and the invalid one refused, in one answer.
+- The same pair twice is `duplicate` and stores one row.
+- A revoked key and an unknown key are both refused, and the answers are indistinguishable.
+- `--upload-pairs` sends `keep = 1` only, sends three fields and no others, marks sent only on an
+  acknowledgement, and leaves an unacknowledged pair to be retried after a kill.
+- An architecture test: the wire type has exactly three properties.
+- The `http/` contract suite gains this server — it is what caught the AOT JSON binding failure that
+  made a released `coai-server` answer 500 to everything.
+- A scenario over the REAL built CLI and the REAL server: kept rows selected, ingested, refused,
+  persisted, retried. Catalogued in `research/module_tests.md`.
 
 #### Definition of done
 
-- [ ] `UploadedPair` is a type of its own and nothing maps `StoredPair` onto the wire.
-- [ ] The server validates the alphabet and refuses rather than quarantines a leak.
-- [ ] Ingest lands in quarantine; nothing reaches a live index without a reviewed promotion.
-- [ ] Keys are hashed, `last_seen_utc` does not exist, and no route logs a client IP.
-- [ ] `--upload-pairs` sends kept pairs only, and twice is the same as once.
-- [ ] The contract suite covers the new server; `research/module_server.md` and `architecture.md`
-      describe the boundary.
+- [ ] The wire type has three properties and a test says so; nothing maps `StoredPair` onto it.
+- [ ] The server derives the id; no id crosses.
+- [ ] Per-item results; one refusal never strands its neighbours.
+- [ ] Ingest lands in quarantine; `--promote` is the only way out and a person runs it.
+- [ ] Keys are HMAC-hashed and compared in constant time; `--issue-key` exists; the client never
+      takes a secret in argv; TLS is required off loopback.
+- [ ] `last_seen_utc` does not exist, and the no-IP promise is written as a deployment obligation
+      rather than implied to be tested.
+- [ ] `--upload-pairs` is in `.agents/PROJECT.md` and never exits 64.
+- [ ] The growth budget above is real; body and batch caps are enforced.
+- [ ] A scenario test drives the real binaries; `module_server.md`, `architecture.md` and
+      `module_tests.md` describe the boundary.
 
 #### What this story does NOT own
 
