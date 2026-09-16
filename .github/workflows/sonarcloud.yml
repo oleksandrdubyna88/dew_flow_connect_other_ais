@@ -153,6 +153,12 @@ jobs:
           # that is about the analysis rather than about the change. That is exactly what
           # `coai-server` did on the PR that introduced it: 37 passing tests, new_coverage 0.0.
           dotnet-coverage collect -f xml -o coverage/coai-server.xml -- ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
+          # And `coai-bugs` proved the note above right a second time, on the pull request that
+          # introduced IT: 29 passing tests over a whole new binary, and a gate that read 9.0 %
+          # coverage of new code because nothing here ran them. The suite also covers the CLIENT's
+          # send path — `BothHalvesTests` drives the real `UploadRun` against the real server — so
+          # leaving it out understated `src_mcp` as well.
+          dotnet-coverage collect -f xml -o coverage/coai-bugs.xml -- ./src_bugs/tests/bin/Release/net10.0/CoaiBugs.Tests
       # The extension is TypeScript and the .NET scanner does not run its tests, so every change to
       # src_vs_code arrived at the gate as 0 % coverage of new code — a number about the analysis
       # rather than about the change. Node's own runner writes lcov.

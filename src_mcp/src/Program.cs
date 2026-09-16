@@ -644,7 +644,10 @@ internal static class Program
         var summary = await run.RunAsync(
             db, server, key, Limit(args, Collecting.UploadRun.PerBatch), stopping.Token);
 
-        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+        // Awaited rather than the synchronous overload: this method is async, and a blocking write
+        // to a redirected stdout is a blocking write on the thread the caller is waiting on.
+        // (SonarCloud S6966.)
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(
             summary, Server.ServerJsonContext.Default.UploadSummary));
 
         // A transport failure is 69: nothing is wrong with the request, and the caller should try

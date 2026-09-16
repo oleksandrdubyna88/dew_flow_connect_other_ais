@@ -81,3 +81,62 @@ test('the exclusion is a small minority of the source, and the decisions are on 
     + 'wrong way to answer it.',
   );
 });
+
+/**
+ * Every .NET test project is COLLECTED, and this has now been learned twice.
+ *
+ * <p>The scanner measures what it is handed. A test project left out of the collect list does not
+ * report low coverage — the projects it covers report NONE, and a pull request fails an 80 %
+ * new-code gate for a reason that is about the analysis rather than about the change.</p>
+ *
+ * <p><b>It happened to `coai-server`</b> — 37 passing tests, `new_coverage` 0.0 — and the workflow
+ * gained a comment saying every project must be listed. <b>Then it happened to `coai-bugs`</b>: a
+ * whole new binary, 29 passing tests, and a gate reading 9.0 %. A comment is not a check, which is
+ * the entire difference between that note and this test.</p>
+ */
+
+/** Every runner this repository builds, by the name its executable is given. */
+const dotnetTestProjects = (): readonly string[] => {
+  const root = path.join(HERE, '..');
+  const found: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 4) {
+      return;
+    }
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      // `bin` and `obj` hold COPIES of a project file's output and would double every name.
+      if (entry.isDirectory() && !['bin', 'obj', 'node_modules', '.git'].includes(entry.name)) {
+        walk(path.join(dir, entry.name), depth + 1);
+      } else if (entry.isFile() && entry.name.endsWith('.Tests.csproj')) {
+        found.push(entry.name.replace(/\.csproj$/u, ''));
+      }
+    }
+  };
+  walk(root, 0);
+
+  return [...new Set(found)].sort();
+};
+
+/** What the workflow actually runs under `dotnet-coverage collect`. */
+const collected = (): readonly string[] => {
+  const workflow = fs.readFileSync(WORKFLOW, 'utf8');
+  const names = [...workflow.matchAll(/dotnet-coverage collect[^\n]*?\/([A-Za-z.]+)$/gmu)]
+    .map((match) => match[1] ?? '');
+
+  return [...new Set(names)].sort();
+};
+
+test('every .NET test project is collected for coverage, or the code it covers reads as zero', () => {
+  const projects = dotnetTestProjects();
+  const runs = collected();
+
+  assert.ok(projects.length > 0, 'no .Tests.csproj was found at all — the walk is wrong, not the repo');
+  for (const project of projects) {
+    assert.ok(
+      runs.includes(project),
+      `${project} is not run by the coverage step in sonarcloud.yml, so everything it covers arrives `
+      + 'at the quality gate as 0 % of new code. That has failed a pull request twice — coai-server '
+      + 'and coai-bugs — for a reason about the analysis rather than about the change.',
+    );
+  }
+});
