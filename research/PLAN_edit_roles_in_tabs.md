@@ -1,27 +1,27 @@
 # PLAN — Edit roles: three tabs, a green frame around what you added, and the menu's own colours
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/rolesPage.ts`,
+> Status: **IMPLEMENTED, 2026-09-16.** Scope: `src_vs_code/src/rolesPage.ts`,
 > `src_vs_code/src/rolesPanel.ts`, a new `src_vs_code/src/roleTone.ts` extracted out of
 > `src_vs_code/src/panelView.ts`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_tests.md](../research/module_tests.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [module_tests.md](module_tests.md).
 >
 > Issue: [#293](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/293).
 
 ## The symptom, in the three pictures the issue attaches
 
 1. **The page is one column of everything.** Seven roles, each with up to six prompt boxes ten rows
-   high, under three `<h2>` headings on one scroll. The operator's words: *"тут сильно много всего.
-   кажду секцию пустить в табы."*
+   high, under three `<h2>` headings on one scroll. The operator asked for each section to go into a tab, saying there is far
+   too much on the page at once (*"тут сильно много всего. кажду секцию пустить в табы."*).
 2. **A prompt you add appears with no mark on it.** `Add a prompt` repaints the page and the new
-   block lands among the shipped ones, identical to them. *"иначе не понятно куда он добавился, что
-   его можно редактировать."*
+   block lands among the shipped ones, identical to them. Otherwise there is nothing to say where it was added, or that it
+   is the one you can edit (*"иначе не понятно куда он добавился, что его можно редактировать."*).
 3. **Every left edge on this page is the same blue.** `rolesPage.ts:387` gives `.role` a fixed
    `border-left: 3px solid var(--vscode-charts-blue)`, while the sidebar has given each role its own
    tone since the settings panel was written — purple for the plan critic, yellow for conventions,
    blue for architecture, orange for security, green for UX/DX (`panelView.ts:1412`). Two views of
-   the same seven roles, coloured by two different rules. *"сейчас все синии в едит."*
+   the same seven roles, coloured by two different rules. The left-hand lines should match the colours already in the menu; in Edit they are all blue (*"сейчас все синии в едит."*).
 
 ## What ships
 
@@ -169,6 +169,48 @@ inside it, so neither selector can match the other's element; and no tone is use
 - **`tabShown` is exported beside `nextTab`.** The plan named one function; normalising on the way
   IN (the transition) and on the way OUT (drawing) is two calls to one rule, and the second needed
   a name of its own.
+## What the code round changed
+
+Thirty-one findings, eighteen gating, verdict `good_enough` with all twelve reviewers answering;
+**nine accepted, twenty-two rejected with reasons**. One of them was a defect that shipped in the
+first commit and that none of this plan's own tests could see:
+
+- **The palette was declared BEFORE the rule it has to beat, so every edge would have rendered in
+  one colour — the exact state this issue reports.** `.role` and `.role-arch` have equal
+  specificity, and `.role` sets the whole `border-left` shorthand, so the later rule wins:
+  `ROLE_TONE_CSS` emitted above `.role` is a palette that never applies. Two reviewers found it
+  independently, and codex named why the tests missed it — the cross-renderer test compares CLASS
+  NAMES, and the classes were right. Measured before believing it: `.role-plan` was at index 1687
+  of the stylesheet and `.role` at 2797. The palette moved below the base rule, and the new test
+  reads the ORDER of the two rules, since there is no CSS engine here to ask for a computed colour.
+  (It was right in `panelView.ts` and wrong here, which is what a second consumer of an extracted
+  block is for.)
+- **"Add a role" moved inside the Code review section.** It was at the bottom of the page, outside
+  all three: pressed from the plan tab it created a role in the code bucket and moved the person
+  to a tab they had not asked for. The control now lives in the section its effect lands in, and
+  `nextTab`'s `add → code` stays as the guard.
+- **The running-page test builds its nodes out of the rendered HTML** rather than from `ROLE_TABS`.
+  A fixture written from the constant would hide a page that draws `data-panel` while its script
+  queries `data-section` — the switch would do nothing and the test would stay green.
+- **The cross-renderer list comes from `BUILTIN_ROLES`**, so a role added to the catalog is covered
+  without an edit here.
+- **The tabs carry `role="tablist"`/`"tab"`/`"tabpanel"`, `aria-selected` and `aria-controls`**, and
+  the page script keeps `aria-selected` in step with the class when it switches.
+- `open_` became `openTab`; the Russian quotes from the issue are now paired with English.
+
+**Rejected, and the four worth naming.** *The tab click handler is missing its `return` and falls
+through to the role switch* (Blocking) — it is there, at `rolesPage.ts:563`, on the line after the
+post; the branch is also first in the handler and no later selector matches a tab button. *The test
+harness's `new Function` is a security defect* (Blocking) — executing the shipped script is what
+`.agents/PROJECT.md` requires, the input is a fixture the test writes two lines above, and the
+pattern predates this change. *An unknown tab id should be refused naming the legal values rather
+than ignored* — a webview message is not a name a person typed, and `roundsLogMessages.ts` settles
+this in writing: a retained webview can be older or newer than the extension, so an unknown word is
+ignored. *`research/module_tests.md` must mark every flow covered or not covered* — that file
+contains those words zero times; it is prose, and the convention quoted belongs to another
+repository. The rest were speculative type-safety and naming findings against code the compiler
+already settles.
+
 ## Build order
 
 1. `roleTone.ts` — the map, the function, the CSS — plus its tests. `panelView.ts` imports it and
@@ -210,12 +252,12 @@ Existing suites that must stay green untouched: `rolesPage.test.ts`, `rolesPageS
 
 ## Definition of Done
 
-- [ ] The three sections are tabs, one visible at a time.
-- [ ] The chosen tab survives every repaint, and adding a role lands you on the tab the role appears on.
-- [ ] A prompt you added is framed in green, the whole block, always.
-- [ ] Every left edge on this page is the colour the sidebar gives that role, from one shared source.
-- [ ] `ROLE_TONE` exists in exactly one file.
-- [ ] No new behavioural assertion over page source text (`.agents/PROJECT.md:78`).
-- [ ] Tests written first and watched red; the full suite green; `plan-lifecycle` and `pin-check` clean.
-- [ ] The coai gate: a plan round and a code round, every finding resolved with a reason.
-- [ ] `research/module_extension.md` and `research/module_tests.md` updated; this plan promoted.
+- [x] The three sections are tabs, one visible at a time.
+- [x] The chosen tab survives every repaint, and adding a role lands you on the tab the role appears on.
+- [x] A prompt you added is framed in green, the whole block, always.
+- [x] Every left edge on this page is the colour the sidebar gives that role, from one shared source.
+- [x] `ROLE_TONE` exists in exactly one file.
+- [x] No new behavioural assertion over page source text (`.agents/PROJECT.md:78`).
+- [x] Tests written first and watched red; the full suite green; `plan-lifecycle` and `pin-check` clean.
+- [x] The coai gate: a plan round and a code round, every finding resolved with a reason.
+- [x] `research/module_extension.md` and `research/module_tests.md` updated; this plan promoted.

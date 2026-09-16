@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { panelHtml, type PanelState } from '../panelView';
@@ -104,8 +105,20 @@ test('a tab the page does not know draws the default rather than nothing', () =>
 test('pressing a tab switches the page AND tells the host, in that order of importance', () => {
   // RUN, not read. The page must switch without waiting for a round trip — and it must also post,
   // or the next repaint (which every add and every switch causes) throws the person back.
-  const buttons = ROLE_TABS.map((id) => new Node({ tab: id }, 'BUTTON'));
-  const sections = ROLE_TABS.map((id) => new Node({ section: id }, 'SECTION'));
+  // The nodes are built from what the page ACTUALLY rendered, not from ROLE_TABS: if the markup
+  // and the script ever disagreed about the attribute — data-panel drawn, data-section queried —
+  // a fixture written from the constant would hide it, and the switch would do nothing on a real
+  // page while this test stayed green. (codex, the code round.)
+  const html = rolesHtml(state(), 'n0nce');
+  const drawn = (attribute: string): Node[] =>
+    [...html.matchAll(new RegExp(`data-${attribute}="([a-z]+)"`, 'gu'))]
+      .map((m) => new Node({ [attribute]: m[1] }, attribute === 'tab' ? 'BUTTON' : 'SECTION'));
+
+  const buttons = drawn('tab');
+  const sections = drawn('section');
+  assert.deepEqual(buttons.map((b) => b.dataset['tab']), [...ROLE_TABS], 'the page drew a different set of tabs');
+  assert.deepEqual(sections.map((x) => x.dataset['section']), [...ROLE_TABS], 'the sections are not the tabs');
+
   const page = runRolesPage(state(), { '[data-tab]': buttons, '[data-section]': sections });
 
   page.fire('click', buttons[1]);
@@ -117,6 +130,8 @@ test('pressing a tab switches the page AND tells the host, in that order of impo
   );
   assert.deepEqual(buttons.map((b) => b.className), ['tab', 'tab on', 'tab'],
     'the strip does not show which tab is open');
+  assert.deepEqual(buttons.map((b) => b.attributes['aria-selected']), ['false', 'true', 'false'],
+    'a screen reader is still being told the tab that was open before the press');
   assert.deepEqual(sections.map((s) => s.hidden), [true, false, true],
     'the page did not switch what is on screen');
 });
@@ -235,7 +250,9 @@ test('the same role is the same colour in the panel and on the page it is edited
   const inPanel = panelHtml(panel(), 'n0nce');
   const inPage = rolesHtml(state(), 'n0nce');
 
-  for (const roleId of ['PlanCritique', 'Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance', 'Requirements']) {
+  // From the catalog, not a list retyped here: a role added to BUILTIN_ROLES would otherwise be
+  // covered by nothing, and the two views could disagree about it forever. (gemini, the code round.)
+  for (const roleId of [...BUILTIN_ROLES.map((r) => r.id), mine.id]) {
     assert.equal(
       toneInPage(inPage, roleId),
       toneInPanel(inPanel, roleId),
@@ -247,9 +264,12 @@ test('the same role is the same colour in the panel and on the page it is edited
 test('the roles those tones name are actually different colours from one another', () => {
   // A palette that answered the same word for everything would pass the agreement test above while
   // leaving the page exactly as it is today: every edge the same blue.
+  //
+  // The five roles that have a tone of their OWN, which is the five programming ones. The two
+  // document roles deliberately share the result stage's fallback, so including them here would be
+  // asserting against a decision rather than for one.
   const inPage = rolesHtml(state(), 'n0nce');
-  const tones = ['PlanCritique', 'Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']
-    .map((id) => toneInPage(inPage, id));
+  const tones = BUILTIN_ROLES.filter((r) => r.programmingTask !== false).map((r) => toneInPage(inPage, r.id));
 
   assert.equal(new Set(tones).size, tones.length, `the five shipped roles share colours: ${tones.join(', ')}`);
 });
@@ -270,4 +290,21 @@ test('the page defines the tones it uses, so the edges are not a class with no r
   assert.match(html, /--tone-plan:/u, 'the page carries none of the palette it now names');
   assert.match(html, /\.role-arch\s*\{\s*border-left-color:\s*var\(--tone-arch\)/u,
     'the tone class colours nothing');
+});
+
+test('the tone rules come after the base rule they have to beat', () => {
+  // The defect two reviewers of the code round found, and the reason the class-name tests above
+  // could not: `.role` and `.role-arch` have EQUAL specificity, so the later one wins, and `.role`
+  // sets the whole `border-left` shorthand. Emitted first, the palette is overwritten and every
+  // edge on the page renders in one colour — which is the state issue #293 is about, with the
+  // classes added. There is no CSS engine here, so the cascade is read as order.
+  const html = rolesHtml(state(), 'n0nce');
+  const css = html.slice(html.indexOf('<style'), html.indexOf('</style>'));
+
+  const base = css.indexOf('.role { border-left');
+  assert.ok(base >= 0, 'the base rule was renamed, and this test can no longer see what it guards');
+  for (const tone of ['plan', 'arch', 'sec', 'uxdx', 'conv', 'code']) {
+    const at = css.indexOf(`.role-${tone} {`);
+    assert.ok(at > base, `.role-${tone} is declared before .role, so the base border-left overrides it`);
+  }
 });
