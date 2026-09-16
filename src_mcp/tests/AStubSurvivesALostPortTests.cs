@@ -13,25 +13,34 @@ namespace CoaiMcp.Tests;
 /// <para>The failure being pinned is not hypothetical and not local: it took the linux-x64 leg of the
 /// mcp-v0.25.0 release matrix on 2026-09-15, which left that release a DRAFT carrying ten assets
 /// instead of twelve. The binaries were correct; a stub could not get a socket.</para>
-/// <para><b>Why the second test is the one with teeth.</b> A retry cannot be proved red by deleting
-/// it — deleting it leaves the OLD code, which is a single attempt, and a single attempt is exactly
-/// what <c>attempts: 1</c> asks for here. So that test IS the unfixed behaviour, run against the same
-/// lost port, asserting it fails. The two together say: this input broke the build, and this is the
-/// line that stops it doing so again.</para>
+/// <para><b>Which test is the red one.</b>
+/// <see cref="APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun"/>, and only that one. It was
+/// verified by setting <c>Attempts</c> to 1 — the behaviour that shipped — rebuilding and running it:
+/// <code>
+/// failed …APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun (122ms)
+///   InvalidOperationException : no loopback port could be held long enough to start the stub…
+///   ---- HttpListenerException : Failed to listen on prefix 'http://127.0.0.1:63422/' because it
+///        conflicts with an existing registration on the machine.
+/// </code>
+/// Same call and same condition as CI, worded the way Windows words it. Restored, green.
+/// <see cref="WithASingleAttempt_IsRefusedRatherThanRetried"/> below does NOT prove the fix and is
+/// not claimed to — deleting the retry leaves it reaching the same exception — it pins the BOUND, so
+/// that a future edit cannot make the retry unlimited without a test noticing. The code round was
+/// right to say the first draft of this comment claimed otherwise. (codex, Conventions.)</para>
 /// <para><b>The port is held by an ordinary socket, not by another listener</b>, because that is the
 /// CI case and the two are not the same failure: a socket gives 98 on Linux and 32 on Windows, while
 /// a second HttpListener gives 400 and 183. Holding it the convenient way would have exercised a
-/// collision that CI has never had.</para>
+/// collision CI has never had.</para>
 /// </remarks>
 public sealed class AStubSurvivesALostPortTests
 {
     [Fact]
     public void APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun()
     {
-        using var thief = Hold(out var taken);
+        using var thief = Hold(bySecondListener: false, out var taken);
 
         var (server, prefix) = LoopbackStub.Start(
-            new[] { taken }.Concat(LoopbackStub.FreePorts()), LoopbackStub.Attempts);
+            LoopbackStub.FreePorts().Prepend(taken), LoopbackStub.Attempts);
 
         using var _ = server;
         server.IsListening.Should().BeTrue(
@@ -42,22 +51,24 @@ public sealed class AStubSurvivesALostPortTests
             + "somebody else sends the shim's requests to a stranger");
     }
 
+    /// <summary>
+    /// The bound, not the fix. See the note on the class about what this does and does not prove.
+    /// </summary>
     [Fact]
-    public void WithASingleAttempt_WhichIsWhatTheStubHadBefore_TheSameLostPortFailsTheRun()
+    public void WithASingleAttempt_IsRefusedRatherThanRetried()
     {
-        using var thief = Hold(out var taken);
+        using var thief = Hold(bySecondListener: false, out var taken);
 
         var failure = Record.Exception(() => LoopbackStub.Start([taken], attempts: 1));
 
         failure.Should().BeOfType<InvalidOperationException>(
-            "one attempt is the behaviour that cost mcp-v0.25.0 its linux-x64 leg")
+            "a run allowed one attempt stops after one, whatever the retry would have done")
             .Which.Message
             .Should().Contain(taken.ToString(),
                 "the port that was lost is the first thing a reader needs")
-            .And.Contain("1 candidate was taken",
-                "and losing exactly one names itself as the race rather than the machine")
-            .And.Contain("retried",
-                "so the sentence says what the code does about it, not only that it happened");
+            .And.Contain("the one candidate offered",
+                "and a single loss is described as the race it is, not as the machine being out "
+                + "of ports — the two cures are different");
     }
 
     [Fact]
@@ -68,30 +79,52 @@ public sealed class AStubSurvivesALostPortTests
 
         failure.Should().BeOfType<InvalidOperationException>()
             .Which.Message
-            .Should().Contain("2 candidates were taken",
+            .Should().Contain("all 2 candidates",
                 "the count is what separates a lost race from a machine out of ports")
             .And.Contain("not a race a retry can win",
                 "and the reader is told which of the two cures to reach for");
     }
 
     /// <summary>
-    /// Every spelling of "that address is taken" this family's six release legs can produce.
+    /// The classifier, checked against what THIS platform actually reports rather than against the
+    /// list the classifier was written from.
     /// </summary>
     /// <remarks>
-    /// 32/183 and 98/400 were measured on this machine, on Windows and under WSL, with the port held
-    /// by a socket and by a second listener. 48 and 10048 were not — there is no macOS here — and are
-    /// carried because they are unambiguous spellings of the same condition. A code missing from the
-    /// set turns a lost port into a hard failure on that platform only, which is exactly the shape of
-    /// the bug this file exists for, so each one is pinned rather than trusted.
+    /// Asked for by the code round, in these words: a synthetic theory "passes even if a release
+    /// leg's real HttpListener.Start() reports an unlisted code". It is the only test here that can
+    /// fail on macOS, where nobody has measured anything — and if it does, it names the code, which
+    /// is how the set is meant to grow. It holds the port BOTH ways because the way it is held
+    /// changes the code on both platforms measured so far.
     /// </remarks>
     [Theory]
-    [InlineData(32)]
-    [InlineData(48)]
-    [InlineData(98)]
-    [InlineData(183)]
-    [InlineData(400)]
-    [InlineData(10048)]
-    public void EveryMeasuredSpellingOfATakenPort_CostsTheCandidateAndNotTheRun(int code)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheCodeThisPlatformActuallyReports_IsOneTheStubRetries(bool bySecondListener)
+    {
+        using var thief = Hold(bySecondListener, out var taken);
+        var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{taken}/");
+
+        var failure = Record.Exception(listener.Start);
+
+        failure.Should().NotBeNull(
+            "the port is held, so this bind must fail — a platform that shares it instead is one "
+            + "where the premise of this whole file is different, and that is worth knowing");
+        LoopbackStub.Retries(failure!).Should().BeTrue(
+            $"this platform reports a taken port as {Describe(failure!)}, and the stub must know "
+            + "that code: one it does not know is rethrown rather than retried, which is exactly "
+            + "the release failure this file exists for");
+    }
+
+    /// <summary>
+    /// Every code the classifier claims, honoured. Derived from the classifier itself, so the two
+    /// cannot drift apart — a code added there is exercised here without anyone remembering to.
+    /// </summary>
+    public static TheoryData<int> RetryableCodes => [.. LoopbackStub.RetryableCodes];
+
+    [Theory]
+    [MemberData(nameof(RetryableCodes))]
+    public void EveryCodeTheStubClaims_CostsTheCandidateAndNotTheRun(int code)
     {
         var calls = 0;
 
@@ -129,21 +162,50 @@ public sealed class AStubSurvivesALostPortTests
             .Which.ErrorCode.Should().Be(5);
     }
 
+    [Fact]
+    public void CandidatesRunningOut_KeepsWhatThePlatformSaid()
+    {
+        var failure = Record.Exception(
+            () => LoopbackStub.Start([1, 2], attempts: 99, bind: _ => throw Taken(98)));
+
+        failure.Should().BeOfType<InvalidOperationException>()
+            .Which.InnerException.Should().BeOfType<HttpListenerException>(
+                "a caller whose candidates ran out still needs the errno — our sentence names the "
+                + "ports and the platform's names the reason")
+            .Which.ErrorCode.Should().Be(98);
+    }
+
     /// <summary>
-    /// A port held by an ordinary socket — the CI case, not a second listener.
+    /// A port that is genuinely held, one of the two ways a port gets held.
     /// </summary>
     /// <remarks>
-    /// It binds port 0 and KEEPS it, rather than asking for a free port and then racing to take it.
-    /// Doing it the other way would have put the bug under test into the test that proves it fixed.
+    /// The socket binds port 0 and KEEPS it, rather than asking for a free port and then racing to
+    /// take it. Doing it the other way would have put the bug under test inside the test that proves
+    /// it fixed.
     /// </remarks>
-    private static TcpListener Hold(out int port)
+    private static IDisposable Hold(bool bySecondListener, out int port)
     {
-        var thief = new TcpListener(IPAddress.Loopback, 0);
-        thief.Start();
-        port = ((IPEndPoint)thief.LocalEndpoint).Port;
+        if (bySecondListener)
+        {
+            var (server, prefix) = LoopbackStub.Start();
+            port = new Uri(prefix).Port;
 
-        return thief;
+            return server;
+        }
+
+        var socket = new TcpListener(IPAddress.Loopback, 0);
+        socket.Start();
+        port = ((IPEndPoint)socket.LocalEndpoint).Port;
+
+        return socket;
     }
+
+    private static string Describe(Exception e) => e switch
+    {
+        HttpListenerException h => $"{e.GetType().Name} {h.ErrorCode} ({e.Message})",
+        SocketException s => $"{e.GetType().Name} {s.SocketErrorCode} ({e.Message})",
+        _ => $"{e.GetType().Name} ({e.Message})",
+    };
 
     private static HttpListenerException Taken(int code) => new(code);
 

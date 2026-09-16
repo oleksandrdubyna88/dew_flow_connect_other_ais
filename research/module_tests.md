@@ -105,16 +105,22 @@ ship.** The fixture asked the OS for a free port and then let go of it, which is
 on 2026-09-15 the `linux-x64` leg lost it, the fixture threw out of `InitializeAsync`, xUnit blamed
 whichever test was first, and `mcp-v0.25.0` stayed a DRAFT carrying ten assets instead of twelve.
 `LoopbackStub` takes the next candidate instead, bounded at ten, and `AStubSurvivesALostPortTests`
-covers three flows: a lost port is retried; the single-attempt behaviour that shipped fails on the
-same input; a failure that is NOT a taken port arrives as itself rather than as a story about ports.
+covers: a lost port is retried (the one RED test — verified by setting `Attempts` to 1, the shipped
+behaviour, and watching it fail on the real symptom); the bound holds; every code the classifier
+claims is honoured, the cases DERIVED from the classifier so the two cannot drift; a failure that is
+NOT a taken port arrives as itself, unretried; an exhausted run keeps the platform's own exception;
+and — the only one that can fail on a platform nobody has measured —
+`TheCodeThisPlatformActuallyReports_IsOneTheStubRetries`, which provokes a REAL collision both ways
+on whatever leg it runs and asserts the classifier knows the code that came back.
 
-What that simulation does NOT prove: the collision is CONSTRUCTED, by holding the port with an
-ordinary socket or by handing the stub a binder that throws. Nothing here reproduces the ambient
-contention of a loaded runner, and nothing here can — so the retry is proved, and the frequency it
-was written for is not. The set of error codes it treats as a taken port was measured on two of the
-six release platforms (Windows 32/183, Linux 98/400, each held both ways); macOS's 48 and Winsock's
-10048 are carried unmeasured. A platform answering with a code outside that set does not degrade
-quietly — it reddens the retry test on that leg, by name.
+What this does NOT prove: the collision in every other case is CONSTRUCTED, by holding the port or by
+handing the stub a binder that throws. Nothing here reproduces the ambient contention of a loaded
+runner, and nothing here can — so the retry is proved and the frequency it was written for is not.
+The error codes were measured on two of the six release platforms, each with the port held both ways
+(Windows 32 by a socket and 183 by a listener; Linux 98 and 400) — 98 being the one that failed CI.
+macOS's 48 and Winsock's 10048 are carried without a measurement, licensed by the Linux result: the
+managed listener handed back the raw errno, so a platform on that path reports its own. A leg whose
+code is outside the set does not degrade quietly; it reddens the test above and names the code.
 
 ### The extension's flows
 
