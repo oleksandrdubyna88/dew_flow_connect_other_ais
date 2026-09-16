@@ -72,6 +72,7 @@ import {
   ConfigReader,
   roleRecordUpdate,
   SettingMessage,
+  CoaiSettings,
   settingsFrom,
   settingWrite,
 } from './settingsShape';
@@ -701,8 +702,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
       bugz: await this.bugz(),
-      bugzModel: this.bugzModel,
-      bugzServer: this.bugzServer,
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
@@ -2052,13 +2051,24 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * going and keeps writing its own row — it only stops this window waiting, and the section then
    * shows the run's real state from the database like any other.</p>
    */
+  /** The settings as configuration has them now — the same read the render does. */
+  private settings(): CoaiSettings {
+    const config = vscode.workspace.getConfiguration('coai');
+
+    return settingsFrom((section) => config.get(section));
+  }
+
   private static readonly COLLECT_CAP_MS = 30 * 60_000;
 
-  /** Which local model a ranking pass would use. Not yet persisted — story 5 gives it a job. */
-  private bugzModel = '';
+  /**
+   * How often the section is repainted while a collection runs.
+   *
+   * <p>Three seconds. Each tick is a process spawn reading a database, so this is not free — but a
+   * run is minutes long and a progress line that moves twice is not progress. The same order as
+   * the ten-second rounds-log cache and the five-second escalation watcher beside it.</p>
+   */
+  private static readonly COLLECT_TICK_MS = 3_000;
 
-  /** Where collected pairs would be sent. */
-  private bugzServer = '';
 
   /** The corpus as last read, and when — the section repaints far more often than this changes. */
   private bugzCache: BugCorpus = EMPTY_CORPUS;
@@ -2095,22 +2105,59 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     // Through `serverRun`, which is the door that carries THIS window's data directory. A spawn
     // that skipped it would collect against a different database from the one the section shows.
+    const model = this.settings().bugzModel;
     const run = serverRun(server.fsPath);
-    const { code, output } = await run(
-      ['--collect-bugs', ...(this.bugzModel.length > 0 ? ['--model', this.bugzModel] : [])],
+    const collecting = run(
+      ['--collect-bugs', ...(model.length > 0 ? ['--model', model] : [])],
       PanelProvider.COLLECT_CAP_MS);
 
+    // NOT awaited before the repaint, and this is the point. The run writes `running` to the
+    // database before its first candidate, so the section can show it — but only if something
+    // asks. Awaiting the whole process first meant the button stayed enabled and un-progressed
+    // for the length of a multi-minute run, and a second click started a second collection.
+    // (Code round, gemini and codex, four findings between them.)
+    await this.watchCollect(collecting);
+  }
+
+  /**
+   * Repaints while a collection runs, and once more when it stops.
+   *
+   * <p>A poll rather than a subscription, because the writer is another PROCESS and the only
+   * channel between them is the database. Every tick is one spawn of `--bugs-json`, which is why
+   * it is seconds rather than milliseconds; the run writes a beat per candidate, so the numbers
+   * move whether or not a tick lands on one.</p>
+   *
+   * <p>It stops when the process exits, and repaints a final time from the row the run's own
+   * `finally` wrote — so a crash shows as `failed` and an abandoned run as `interrupted`, rather
+   * than as a button that waits for ever.</p>
+   */
+  private async watchCollect(collecting: Promise<{ code: number; output: string }>): Promise<void> {
+    let over = false;
+    const finished = collecting.then((answer) => {
+      over = true;
+
+      return answer;
+    });
+
+    while (!over) {
+      this.bugzAt = 0;
+      await this.render();
+      await Promise.race([
+        finished,
+        new Promise((wake) => setTimeout(wake, PanelProvider.COLLECT_TICK_MS)),
+      ]);
+    }
+
+    const { code, output } = await finished;
     if (code !== 0) {
       // Its own words: the collector says why it refused, and paraphrasing them here would be a
       // second copy of a rule that lives in the core.
       await vscode.window.showWarningMessage(output.trim() || 'The collector could not run.');
     }
 
-    // The row the run wrote is the truth; this is what puts it on the screen.
     this.bugzAt = 0;
     await this.render();
   }
-
   /**
    * Asks for the ingest server's address.
    *
@@ -2124,7 +2171,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async setBugsServer(): Promise<void> {
     const typed = await vscode.window.showInputBox({
       title: 'Where collected pairs are sent',
-      value: this.bugzServer,
+      value: this.settings().bugzServer,
       prompt: 'The address of the bug ingest server. Leave empty to send nowhere.',
       validateInput: (value) => {
         const trimmed = value.trim();
@@ -2150,7 +2197,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this.bugzServer = typed.trim();
+    // To configuration, like every other control here: a value kept on this object would be lost
+    // on reload and invisible to the Settings UI.
+    await vscode.workspace.getConfiguration('coai').update(
+      'bugzServer', typed.trim(), vscode.ConfigurationTarget.Global);
     await this.render();
   }
 

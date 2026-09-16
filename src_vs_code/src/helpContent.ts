@@ -294,6 +294,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'bugz',
+    en: {
+      title: "Bugz: the defects your gate already found",
+      whatItIs:
+        "Every finding you ACCEPTED is a defect a human confirmed. **Bugz** reads them back as material rather than as a log: it finds the method each one was about, finds the commit that fixed it, and keeps the pair. **Collect** does the finding; **Review bugs** is where you will decide what to keep.",
+      why:
+        "A review gate produces something most tools throw away: pairs of code that were wrong and then right, each one confirmed by a person rather than guessed at. Measured on one real database on 2026-09-15 — 8 687 findings narrowing to 462 usable ones across 115 stories and 15 repositories.\n\n**It reads only what is already on your machine.** The findings came from your own rounds and the code comes out of your own git history. Nothing is sent anywhere by collecting.",
+      setup:
+        "Choose a **ranking model** — only engines running on this machine are offered, and that is deliberate rather than cautious: a finding's title and description are the reviewers' own words about your code, and they are NOT anonymised. The anonymiser runs later and only on source. So that step reads them here or not at all.\n\nThen press **Collect**. The section shows the run as it goes and what it made of each candidate when it ends.",
+      usage:
+        "A run decides every unprocessed finding and writes down what it decided: **collected** with the commit that fixed it, **skipped** with a reason, or **failed**. Skipped is ordinary — a language nobody parses here, a commit no branch reaches any more, a fix that is not in this repository — and the reason is kept so the rate is a measurement rather than a shrug.\n\nThe run is remembered, so closing the window or pressing F5 changes what you SEE and never what happened. Press Collect again later and it takes the ones nobody has looked at yet.",
+      whatCanGoWrong:
+        "**A run that was interrupted says so.** Close the window mid-run and the row stops saying it is alive; the next time anything asks, it is marked interrupted rather than left looking like it is still going. What it had already decided is kept, because each candidate was written as it was decided.\n\n**More than half of the commits are unreachable, and that is normal.** Squash-merge deletes the branch a round ran on — 55.7 % of measured candidates — but the objects survive, so the method can still be read and the search can still be bounded by the next round in the same session.\n\n**A model that is not local is refused, wherever it came from.** The panel will not offer one, and the collector refuses one anyway before it reads a single finding — a picker is not a guarantee.",
+    },
+  },
+  {
     id: 'recent-rounds',
     en: {
       title: "Active rounds: what is running right now",

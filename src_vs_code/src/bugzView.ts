@@ -27,11 +27,16 @@ export interface BugzViewState {
 /**
  * The vendors that may be shown a finding's own words.
  *
- * <p><b>Derived from the server's list, never a second copy of it.</b> The allowlist that decides
- * this lives in `CoaiMcp.Core.Collecting.RankingModels` and is enforced there, before a single
- * finding field is read; this constant exists only so the picker cannot OFFER what the collector
- * will refuse. If the two ever disagree the collector wins and the person sees a refusal, which is
- * the right way round — but a picker offering a model that always fails is a bug in this file.</p>
+ * <p><b>It is a copy, and a test is what keeps it honest.</b> The list that DECIDES lives in
+ * `CoaiMcp.Core.Collecting.RankingModels` and is enforced there, before a single finding field is
+ * read. TypeScript cannot import a C# constant, so this cannot literally be derived from it — the
+ * plan said 'derived' and that was not achievable; what is achievable is that the two can never
+ * drift silently. `theAllowlistsAgree` reads the C# file and fails if this list differs, so adding
+ * a vendor on one side without the other is a red test rather than a feature that half works.
+ * (Code round, codex: 'the picker keeps a second independent copy'.)</p>
+ *
+ * <p>If they ever DO disagree at runtime the collector wins and the person sees its refusal, which
+ * is the right way round — but a picker offering a model that always fails is a bug in this file.</p>
  *
  * <p>Why so narrow: a finding's `title`, `why` and `fix` are the reviewers' prose about somebody's
  * code and are <b>not</b> anonymised. The normaliser runs later and only on source, so the ranking

@@ -494,3 +494,32 @@ cross-slot READ is what the unprivileged plan above is for.
 | Spending ledger + chart | `src/Server/UsageLedger.cs`, `src_vs_code/src/usage.ts` | spending spans sessions and must outlive them |
 | Audit trail per reviewer | `src/Server/RoundAudit.cs` | a gate that cannot say why a reviewer did not review cannot be trusted with a verdict |
 | Evidence kept for unparseable answers | `runners/Reviewers/ReviewerExecutor.cs` | the one failure whose raw text IS the diagnosis |
+
+## The corpus crosses both halves (2026-09-16)
+
+The defect corpus is the first feature whose state is written by one half of this product and
+displayed by the other, so it is worth naming here rather than only in the two module documents.
+
+```
+coai-mcp --collect-bugs          the extension (Bugz section)
+   writes findings.collect_*            |
+   writes collect_runs  <-------------- spawns, then polls
+          |                             |
+          +--> coai.db <--- coai-mcp --bugs-json --> { funnel, candidates, lastRun }
+```
+
+**The panel owns no SQLite.** It reaches the database only by spawning the server, which is why
+`--bugs-json` grew a `lastRun` object rather than gaining a second mode: one question, one spawn.
+It is also why the run state has to be *persisted* rather than held in the webview — the two sides
+are separate processes and the database is the only channel between them.
+
+**The wire field is optional in both directions.** An older server emits no `lastRun`, and a panel
+reading that must show "no run has ever started" rather than "unavailable". This product has
+shipped its two halves out of step before, and the rule that came out of it is that a new field is
+measured against the OLD counterpart before it ships.
+
+**A sweep runs on BOTH modes.** `--collect-bugs` sweeps before it starts, and `--bugs-json` sweeps
+when it opens the database — because the panel only ever calls the second one. Without it an
+abandoned run reads as `running` for ever, the Collect button stays disabled, and the only thing
+that would clear it is a collect the button will not start. The sweep is safe from a reader because
+staleness is decided by a heartbeat, so a run happening in another process right now is untouched.

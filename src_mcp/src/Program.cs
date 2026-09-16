@@ -390,21 +390,18 @@ internal static class Program
         var flags = Flags(args);
         flags.TryGetValue("--model", out var model);
 
-        Collecting.CollectSummary summary;
-        try
-        {
-            summary = await run.RunAsync(
-                settings.DataDir,
-                db,
-                Limit(args, Store.BugsQuery.DefaultLimit),
-                all: Array.IndexOf(args, "--all") >= 0,
-                model: model ?? string.Empty);
-        }
-        catch (ArgumentException e)
+        var summary = await run.RunAsync(
+            settings.DataDir,
+            db,
+            Limit(args, Store.BugsQuery.DefaultLimit),
+            all: Array.IndexOf(args, "--all") >= 0,
+            model: model ?? string.Empty);
+
+        if (summary.Refusal.Length > 0)
         {
             // A named model that may not be shown un-anonymised finding text. EX_USAGE, because the
             // person asked for something the tool will not do — not a failure of the tool.
-            Note(e.Message);
+            Note(summary.Refusal);
             return 64; // EX_USAGE
         }
 
@@ -479,6 +476,14 @@ internal static class Program
                     Note("the rounds database could not be opened; no corpus can be read from it");
                     return 74; // EX_IOERR
                 }
+
+                // And the sweep, here as well as in the collect mode. This is the mode the PANEL
+                // calls, and without it an abandoned run reads as `running` for ever: the Collect
+                // button stays disabled, and the only thing that would clear it is a collect the
+                // button will not start. A deadlock with no way out of it from the UI. Safe to run
+                // from a reader because the heartbeat is what decides staleness, so a run happening
+                // in another process right now is untouched. (Code round, codex and gemini.)
+                migrated.SweepStaleCollectRuns(StaleAfter);
             }
 
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(

@@ -304,6 +304,16 @@
           "minimum": 0,
           "markdownDescription": "How long a **whole round** may take before the reviewers still running are cancelled and the round is gated on whatever answered. `0` works it out from the round itself — vendors × roles reviewers through the concurrency cap, each wave allowed one reviewer timeout. At the defaults that is four waves: forty minutes. Lowering it cuts into reviewers that have not finished; their findings are lost."
         },
+        "coai.bugzModel": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Which local model ranks the collected defect corpus, as `vendor/model`. Only local engines are offered: a finding's title, why and fix are the reviewers' own words about your code and are not anonymised, so the ranking pass reads them on this machine or not at all."
+        },
+        "coai.bugzServer": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where reviewed before/after pairs are sent. Empty sends nowhere."
+        },
         "coai.credsKey": {
           "type": "string",
           "default": "",

@@ -245,28 +245,13 @@ public static class BugsQuery
         e.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase)
         || e.Message.Contains("no such column", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The most recent run, or an empty row.</summary>
+    /// <summary>The most recent run, through the one place that query lives.</summary>
     /// <remarks>
-    /// A table this reader was written before, so a database that predates it answers no rows rather
-    /// than throwing — the same <c>TooOld</c> path the collector columns already take.
+    /// It was a second copy of <see cref="RoundsDb.LastCollectRun"/> for one commit — same twelve
+    /// columns, same twelve-argument mapping — which is how the CLI and the panel come to report
+    /// different run states from one table. (Code round, codex, twice.)
     /// </remarks>
-    private static CollectRunRow LastRun(SqliteConnection db)
-    {
-        using var read = db.CreateCommand();
-        read.CommandText = """
-            SELECT id, started_utc, finished_utc, heartbeat_utc, state, model,
-                   candidates, picked, collected, skipped, failed, reasons
-              FROM collect_runs ORDER BY started_utc DESC LIMIT 1
-            """;
-        using var rows = read.ExecuteReader();
-
-        return rows.Read()
-            ? new CollectRunRow(
-                rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
-                rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetInt32(7),
-                rows.GetInt32(8), rows.GetInt32(9), rows.GetInt32(10), rows.GetString(11))
-            : new CollectRunRow();
-    }
+    private static CollectRunRow LastRun(SqliteConnection db) => CollectRuns.Last(db);
 
     private static BugFunnel Funnel(SqliteConnection db)
     {

@@ -13,6 +13,12 @@ namespace CoaiMcp.Collecting;
 /// <param name="Lost">
 /// Candidates another run had already claimed while this one was deciding them.
 /// </param>
+/// <param name="Refusal">
+/// Why nothing was attempted, or empty. A named model that may not read un-anonymised findings is
+/// an EXPECTED answer to an ordinary request, so it travels as a value: the C# doctrine says
+/// expected failures are values and that nothing throws for control flow. It was an
+/// <c>ArgumentException</c> caught by the CLI as a normal branch for one commit. (Code round, codex.)
+/// </param>
 public sealed record CollectSummary(
     string RunId = "",
     int Candidates = 0,
@@ -20,7 +26,8 @@ public sealed record CollectSummary(
     int Skipped = 0,
     int Failed = 0,
     int Lost = 0,
-    IReadOnlyDictionary<string, int>? Reasons = null);
+    IReadOnlyDictionary<string, int>? Reasons = null,
+    string Refusal = "");
 
 /// <summary>
 /// One pass over the candidates: decide what became of each, and write it down.
@@ -47,10 +54,11 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
     /// The model a later ranking pass may use, recorded on the run. Empty means no ranking pass, and
     /// is the ordinary case for a run started from a terminal.
     /// </param>
-    /// <exception cref="ArgumentException">
-    /// The model is named and is not local. Thrown BEFORE anything is read, because a finding's own
-    /// words are not anonymised and this is the boundary that decides whether they leave the machine.
-    /// </exception>
+    /// <returns>
+    /// A summary, or one carrying only a <see cref="CollectSummary.Refusal"/> when the model is named
+    /// and is not local. Refused BEFORE anything is read, because a finding's own words are not
+    /// anonymised and this is the boundary that decides whether they leave the machine.
+    /// </returns>
     public async Task<CollectSummary> RunAsync(
         string dataDir, RoundsDb db, int limit, bool all = false, string model = "",
         CancellationToken ct = default)
@@ -59,7 +67,7 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
         // one place every caller passes through. (Plan round, gemini and codex, independently.)
         if (!RankingModels.IsAllowed(model))
         {
-            throw new ArgumentException(RankingModels.Refusal(model), nameof(model));
+            return new CollectSummary(Refusal: RankingModels.Refusal(model));
         }
 
         var runId = time.GetUtcNow().UtcDateTime.ToString("yyyyMMddTHHmmss")
@@ -122,12 +130,24 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
         }
     }
 
-    /// <summary>The three counts, from the outcomes decided so far.</summary>
+    /// <summary>The three counts, in one pass over the outcomes decided so far.</summary>
+    /// <remarks>
+    /// One pass rather than three, because this runs on EVERY candidate — the beat that says how far
+    /// the run has got is written per candidate, so three scans of a growing list made the counting
+    /// quadratic in the number of candidates. It is dwarfed by the git subprocesses either way, which
+    /// is why it was written the short way first; a single fold is no harder to read. (Code round,
+    /// gemini and the local reviewer.)
+    /// </remarks>
     private static CollectTally Tally(IReadOnlyList<(CollectOutcome Outcome, bool Claimed)> decided) =>
-        new(
-            decided.Count(d => d.Outcome.State is CollectState.Collected),
-            decided.Count(d => d.Outcome.State is CollectState.Skipped),
-            decided.Count(d => d.Outcome.State is CollectState.Failed));
+        decided.Aggregate(
+            new CollectTally(),
+            (tally, decision) => decision.Outcome.State switch
+            {
+                CollectState.Collected => tally with { Collected = tally.Collected + 1 },
+                CollectState.Skipped => tally with { Skipped = tally.Skipped + 1 },
+                CollectState.Failed => tally with { Failed = tally.Failed + 1 },
+                _ => tally,
+            });
 
     /// <summary>The funnel as one string, for the column that keeps it.</summary>
     /// <remarks>

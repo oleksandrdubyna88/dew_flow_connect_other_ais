@@ -1,0 +1,25 @@
+# The vendors that may be shown a finding's OWN WORDS.
+#
+# A finding's `title`, `why` and `fix` are the reviewers' prose about somebody's code — class names,
+# product names, the shape of a private system — and they are NOT anonymised. The normaliser runs
+# later and only on SOURCE, so the ranking pass over the collected corpus is the one step in this
+# pipeline that handles un-anonymised text, and this list is where it may send it.
+#
+# ONE list, read by two things that must not disagree:
+#   - `RankingModels` in src_mcp/core/Collecting, which REFUSES anything outside it before a single
+#     finding field is read. That is the enforcement; everything else is display.
+#   - `RANKING_VENDORS` in src_vs_code/src/bugzView.ts, so the picker cannot OFFER a model the
+#     collector will refuse.
+#
+# A file rather than one side reading the other's source: a test that parses another program's
+# source goes QUIET when it drifts rather than red, which this repository has a test of its own to
+# forbid (`NothingReadsAnotherProgramsSourceTests`). Both sides assert against this, so adding a
+# vendor to one and not the other is two red tests.
+#
+# Why it is only `local` today, and the honest complication: those words were frequently WRITTEN by
+# a cloud model, since the reviewer that produced them read the diff to do it. Sending them back is
+# not categorically a new exposure — it is an uncontrolled one, and the corpus spans fifteen
+# repositories whose rounds had different vendor sets. Local-only is the defensible default until a
+# person decides otherwise, and this file is where that decision gets made.
+
+local
