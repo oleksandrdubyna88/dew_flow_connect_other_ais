@@ -85,8 +85,8 @@ gets the eight rules above. The rest are ordered by a SHA-256 of *(branch, rule 
   a branch is what a round is about and it does not change while a developer fixes what a round found;
 - different branches read different parts of the corpus **as a mechanism** — measured on a twenty-rule
   fixture over sixty branch names, where every rule appeared
-  (`AcrossEnoughBranches_EveryFamilyRuleGetsRead`). **In THIS repository it currently reaches nothing;
-  see the correction below.**
+  (`AcrossEnoughBranches_EveryFamilyRuleGetsRead`). **In THIS repository the tail currently fits at
+  most one rule, and none at all on a CRLF checkout; see the correction below.**
 - nothing consults a clock, a counter or a random source, and anyone holding the branch name can
   reproduce the order exactly. `string.GetHashCode` would NOT do: .NET randomises it per process, which
   would have reintroduced the very defect inside its own fix.
@@ -108,34 +108,55 @@ Three things still bear on the budget:
    would make room for more of the corpus without touching the order. That follow-up's case rests on
    this table.
 
-## CORRECTION, 2026-09-16 — the rotated tail is inert here
+## CORRECTION, 2026-09-16 — the rotated tail is all but inert here
 
 Measured at conventions pin `5126421b`, after the rotation shipped:
 
-| | bytes |
-|---|---|
-| base (instruction files + this repository's own rules) + all 8 tier rules | **78 855** |
-| budget | 80 000 |
-| **left for the rotated tail** | **1 145** |
-| smallest rule outside the tier (`common/durable-status.md`) | **2 247** |
-| **tail rules that fit** | **0 of 24** |
+| | CRLF (this Windows checkout) | LF (Linux, and CI) |
+|---|---|---|
+| base (instruction files + this repository's own rules) + all 8 tier rules | **78 855** | **77 562** |
+| budget | 80 000 | 80 000 |
+| **left for the rotated tail** | **1 145** | **2 438** |
+| smallest rule outside the tier (`common/durable-status.md`) | **2 247** | **2 213** |
+| **tail rules that fit** | **0 of 24** | **1 of 24** (always `durable-status.md`) |
 
 `RuleFiles.Collect` skips an oversized file and keeps walking, so it tries every one of the 24 and omits
-all of them. **The branch rotation therefore orders a queue nothing is ever taken from.** The mechanism
-is sound and the tests above are honest about their fixture; the claim that it preserves coverage *in
-this repository* was not, and is withdrawn here.
+all of them here — all but the single smallest one on a checkout with LF line endings. **The branch
+rotation therefore orders a queue that at most one rule is ever taken from.** The mechanism is sound
+and the tests above are honest about their fixture; the claim that it preserves coverage *in this
+repository* was not, and is withdrawn here.
+
+**The line endings are not a footnote.** Selection counts each file's own bytes, so a CRLF checkout
+inflates the corpus by one byte per line: the base and the tier grow 1 293 bytes while the smallest
+tail rule grows only 34, and that difference is the whole distance between *nothing fits* and *one
+thing fits*. A canary written as `min(tail) > leftover` would therefore have passed on this machine
+and failed in CI. That is why the test named below asserts a BOUND through the production collector
+instead of recomputing the arithmetic beside it.
 
 What this means for the argument that produced it: three plan-round reviewers said a fixed order would
 take 24 rules from "shown every second or third round" to "never". The rotation was the answer to that
-objection, and at this corpus size **it does not answer it** — those 24 rules are not shown. The
-reviewers were right and the remedy did not reach the problem.
+objection, and at this corpus size **it does not answer it** — all 24 are unshown here, 23 of 24
+under LF, and the one rule that does fit there is `common/durable-status.md` on EVERY branch, because
+it is the only one small enough to be eligible at all. A queue of one does not rotate. The reviewers
+were right and the remedy did not reach the problem.
 
 What actually would: **rule modularization** (splitting the rules over 15 KB — `testing.md` alone is
 25 082 bytes, 31 % of the budget) or **targeted selection** (the resolver, blocked on E1). Both are
 already recorded as the follow-ups; this measurement is the strongest case yet for the first of them.
 
 `StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` pins the fact and fails — as
-news, not as a defect — the day the tail becomes reachable.
+news, not as a defect — the day the tail becomes reachable. Its message carries the re-baselining
+procedure, because a test that fails on GOOD news has to say what to do about it: re-measure this
+file, update the claim in `RuleOrder.ForBranch` and `module_runners.md`, and raise the bound in the
+same change.
+
+**The inventory, because a correction in three files is worth nothing while a fourth still asserts
+the old thing.** `grep -rn "read different parts of the corpus" --include='*.md' --include='*.cs'`
+found the claim in five documents and every one is corrected in the same change as this section:
+this file (the bullet above), `RuleOrder.ForBranch`'s remarks, `research/module_runners.md`,
+`RuleOrderTests.TwoBranches_SeeDifferentTails_...`'s remarks, and
+[PLAN_the_rules_a_round_shows_are_drawn_at_random.md](PLAN_the_rules_a_round_shows_are_drawn_at_random.md)
+in two places — its summary and its epic 3. `StageRulesTests` already read correctly.
 
 ## What this does not settle
 

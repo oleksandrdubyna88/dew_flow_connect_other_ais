@@ -15,7 +15,9 @@
 > other 24 rules to nobody, on the only path a code round takes today. Three plan-round reviewers said
 > so independently. What shipped instead: the tier is fixed and the TAIL rotates by BRANCH, ordered by
 > a SHA-256 of *(branch, rule name)*. A branch does not change while a developer fixes what a round
-> found, so one fix is stable; different branches still read different parts of the corpus.
+> found, so one fix is stable; different branches read different parts of the corpus as a MECHANISM
+> (at this corpus size the tail fits at most one rule — see the 2026-09-16 correction in
+> [RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md)).
 > `string.GetHashCode` was refused — .NET randomises it per process, which would have put the defect
 > back inside its own fix.
 > *(2)* Tier entries were to be matched by path SUFFIX. A red test refuted it:
@@ -285,8 +287,11 @@ nobody, on the only path a code round takes until epic 2 lands. Three reviewers 
 round raised that independently, and the operator chose the third way: the TIER stays fixed and the
 TAIL rotates by BRANCH, ordered by a SHA-256 of *(branch, rule name)*. Two rounds of one fix are
 identical — a branch does not change while a developer fixes what a round found — and different
-branches still read different parts of the corpus, so `AcrossEnoughRounds_EveryFamilyRuleGetsRead`
-survives as `AcrossEnoughBranches_...` with the same assertion. `string.GetHashCode` was rejected: .NET
+branches read different parts of the corpus as a MECHANISM — though at this corpus size the tail
+fits at most one rule, see the 2026-09-16 correction in
+[RESULTS_rules_selection_budget.md](RESULTS_rules_selection_budget.md). So
+`AcrossEnoughRounds_EveryFamilyRuleGetsRead` survives as `AcrossEnoughBranches_...` with the same
+assertion. `string.GetHashCode` was rejected: .NET
 randomises it per process, which would have put the defect back inside its own fix.
 
 **3.1 - Delete the draw.** *(Opus - a deletion behind two already-pinned orders.)* `Drawn` goes, `Walk`

@@ -118,14 +118,20 @@ public sealed class RuleOrderTests : IDisposable
     }
 
     /// <summary>
-    /// Two branches read different parts of the corpus, so the rules outside the tier are still read.
+    /// Two branches read different parts of the corpus — the MECHANISM, on a fixture with room for it.
     /// </summary>
     /// <remarks>
-    /// The cost of a FIXED order, measured in `research/RESULTS_rules_selection_budget.md`: the tier
-    /// fills the budget, so the other 24 rules would never be shown to any code round. Ordering the
-    /// tail by the branch keeps the draw's coverage — every rule is read across the team's branches —
-    /// without the draw's instability, because a branch is what a round is about and it does not
-    /// change between the rounds of one fix.
+    /// <para>The cost of a FIXED order, measured in
+    /// <c>research/RESULTS_rules_selection_budget.md</c>: the tier fills the budget, so the other 24
+    /// rules would never be shown to any code round. Ordering the tail by the branch answers that
+    /// without the draw's instability, because a branch is what a round is about and it does not change
+    /// between the rounds of one fix.</para>
+    /// <para><b>What this does NOT say.</b> The fixture below writes twenty 10 KB rules under a
+    /// 41 000-byte budget, so its tail has room. The real corpus does not: measured 2026-09-16, the
+    /// base and the tier leave 1 145 bytes (2 438 under LF) against a smallest non-tier rule of 2 247
+    /// (2 213), so the rotation reaches one rule on Linux and none on Windows. This test asserts the
+    /// mechanism; <c>StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud</c> asserts
+    /// the fact.</para>
     /// </remarks>
     [Fact]
     public void TwoBranches_SeeDifferentTails_SoTheCorpusIsStillRead()

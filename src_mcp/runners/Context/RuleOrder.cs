@@ -59,13 +59,16 @@ public sealed record RuleOrder
     /// A BRANCH is what a round is about, and it does not change while a developer fixes what the last
     /// round found — so rotating the tail by it removes the instability without giving up the draw's
     /// coverage in principle.</para>
-    /// <para><b>In principle, and measured: in THIS repository the rotation currently reaches nothing.</b>
-    /// The base and the tier spend about 78 900 of the 80 000-byte budget, leaving ~1 100, and the
-    /// smallest rule outside the tier is 2 247 bytes — so every one of the 24 is skipped as oversized
-    /// and the tail is a queue nothing is taken from. The order is correct and costs nothing; it simply
-    /// has no room to act yet. What would give it room is rule modularization or the resolver, both
-    /// recorded as follow-ups. `research/RESULTS_rules_selection_budget.md` carries the numbers and
-    /// `StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` fails the day this
+    /// <para><b>In principle, and measured: in THIS repository the rotation currently reaches almost
+    /// nothing.</b> The base and the tier spend 78 855 of the 80 000-byte budget on this CRLF checkout
+    /// and 77 562 under LF, leaving 1 145 or 2 438 bytes against a smallest non-tier rule of 2 247 or
+    /// 2 213 — so the tail takes ONE rule on Linux and none on Windows, and the rest are skipped as
+    /// oversized every round. That one is <c>common/durable-status.md</c> on EVERY branch, being the
+    /// only rule small enough to be eligible, so nothing actually rotates even there: the order is
+    /// correct and costs nothing, it simply has no room to act yet. What would give it room is
+    /// rule modularization or the resolver, both recorded as follow-ups.
+    /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
+    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud</c> fails the day this
     /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
