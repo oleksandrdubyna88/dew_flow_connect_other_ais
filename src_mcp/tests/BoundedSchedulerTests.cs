@@ -164,6 +164,49 @@ public sealed class BoundedSchedulerTests : IDisposable
     }
 
     /// <summary>
+    /// The limit that started issue #165, driven through the real scheduler and a real process.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured on 2026-09-09 before this existed: four codex reviewers of one code round
+    /// failed after 204.4, 212.6, 209.9 and 240.8 seconds, five attempts each, and a plan round spent
+    /// 213 of its 213 seconds on a single reviewer — all waiting out "You've hit your usage limit.
+    /// Upgrade to Pro … to purchase", which no wait can change.</para>
+    /// <para><b>The launch count is not the whole guarantee.</b> One launch and a long wait would
+    /// satisfy a count and still be the thing that was complained about, so the progress notes are
+    /// asserted too: the scheduler says "rate limited on attempt N — waiting Ns" before every rung it
+    /// climbs, and here it must say it never. (The plan round asked for this separately from the
+    /// count.)</para>
+    /// </remarks>
+    [Fact]
+    public async Task ASpentAllowance_IsNotWaitedOn_AndNoWaitIsAnnounced()
+    {
+        var counter = Path.Combine(_dir, "spent-count.txt");
+        var said = new List<string>();
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "codex",
+            [
+                "count", counter, "stderr-exit",
+                "{\"type\":\"error\",\"message\":\"You've hit your usage limit. Upgrade to Pro "
+                    + "(https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more.\"}",
+                "1",
+            ]));
+
+        var results = await new BoundedScheduler(retryLadder: Tiny(4)).RunAllAsync(
+            [work],
+            _executor,
+            TestContext.Current.CancellationToken,
+            onProgress: p => { lock (said) { said.Add(p.Note); } });
+
+        results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>()
+            .Which.Attempts.Should().Be(1);
+        (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken))
+            .Should().HaveCount(1, "an allowance that is spent is not bought back by waiting");
+        said.Should().NotContain(n => n.Contains("rate limited on attempt", StringComparison.Ordinal),
+            "a reviewer that waits for nothing is the whole of issue #165");
+    }
+
+
+    /// <summary>
     /// A reviewer whose own deadline is shorter than the ladder stops when the deadline does,
     /// rather than waiting past it to fail once more.
     /// </summary>

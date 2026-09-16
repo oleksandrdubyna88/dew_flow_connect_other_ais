@@ -141,27 +141,65 @@ public static class RateLimit
         Phrases.Any(p => Contains(text, p)) || StatusCode.IsMatch(text);
 
     /// <summary>
-    /// Whether waiting is pointless: a DAILY allowance, not a per-minute throttle.
+    /// An allowance that has been SPENT — not a momentary refusal. Every phrase observed.
     /// </summary>
     /// <remarks>
-    /// Measured cost of not asking: gemini answered "You have exhausted your daily quota on this
-    /// model", the scheduler waited its backoff and launched a second doomed reviewer, and that
-    /// round took 157 seconds instead of 19. The retry exists for "this model is currently
-    /// experiencing high demand", which clears in seconds; a daily quota clears at midnight in
-    /// someone else's timezone.
+    /// <para>The distinction is not how big the number is, it is what kind of thing ran out: a plan's
+    /// allowance, bought back or waiting for a window measured in hours, against a refusal that
+    /// clears while you stand there.</para>
+    /// <para><b>Nothing goes in this list that has not been read off a real vendor answer.</b> The
+    /// first draft of it also had <i>weekly limit</i>, <i>upgrade</i>, <i>purchase</i>,
+    /// <i>resets at</i> and <i>try again at</i> — all reasoned from what a vendor might say, which is
+    /// the same guess that once matched a bare <c>429</c> against a Cloudflare ray id. Two of them
+    /// were worse than useless: "rate limit reached; upgrade to the paid plan" is a sales footer on a
+    /// throttle that clears, and refusing to wait it out would lose a reviewer that would have
+    /// answered. (The plan round, two vendors independently.)</para>
+    /// </remarks>
+    private static readonly string[] Spent = ["daily", "exhausted", "hit your usage limit"];
+
+    /// <summary>
+    /// Whether waiting is pointless: a SPENT allowance, not a per-minute throttle.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured cost of not asking, twice over. Gemini answered "You have exhausted your daily
+    /// quota on this model", the scheduler waited its backoff and launched a second doomed reviewer,
+    /// and that round took 157 seconds instead of 19. Then on 2026-09-09 codex answered "You've hit
+    /// your usage limit. Upgrade to Pro … to purchase", which contained neither of the two words this
+    /// knew — so four reviewers of one code round climbed the whole ladder at 204.4, 212.6, 209.9 and
+    /// 240.8 seconds, and a plan round spent 213 of its 213 seconds on one reviewer waiting.</para>
+    /// <para>The retry exists for "this model is currently experiencing high demand" and for "please
+    /// try again in 1.2s", which clear in seconds. What it must never be spent on is an allowance
+    /// that clears at midnight in somebody else's timezone, or when somebody pays.</para>
     /// </remarks>
     public static bool Hopeless(string reason) =>
-        Contains(reason, "daily") || Contains(reason, "exhausted");
+        Spent.Any(p => Contains(reason, p));
 
     /// <summary>
     /// The line that says WHICH limit was hit, so a person can tell a per-minute throttle from a
-    /// daily quota — and so <see cref="Hopeless"/> has something to read.
+    /// spent allowance — and so <see cref="Hopeless"/> has something to read.
     /// </summary>
+    /// <remarks>
+    /// <para><b>A terminal line wins over a merely marked one.</b> A vendor that prints
+    /// <c>429 Too Many Requests</c> and then says the allowance is gone had the first line read as
+    /// its reason, so the scheduler was told a limit that cannot clear was worth waiting for — and
+    /// the person was shown the less useful of the two sentences. Two passes, the terminal one
+    /// first.</para>
+    /// <para>Both passes are over MARKED lines only, and that is deliberate rather than an oversight:
+    /// every phrase in <see cref="Spent"/> is itself matched by <see cref="Phrases"/> — <i>quota</i>
+    /// covers the first two in every observed sample and <i>usage limit</i> the third — so a spent
+    /// line that is not marked cannot occur for anything seen. Scanning unmarked lines was asked for
+    /// on the plan round and declined: it is what would let a sales footer beside an unrelated error
+    /// reach this decision. (The two findings answer each other; the one with an observed failure
+    /// behind it wins.)</para>
+    /// </remarks>
     public static string Reason(ProcessResult result)
     {
-        var lines = (result.StdErr + '\n' + result.StdOut)
-            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        return lines.FirstOrDefault(Marked) ?? string.Empty;
+        var marked = (result.StdErr + '\n' + result.StdOut)
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(Marked)
+            .ToArray();
+
+        return marked.FirstOrDefault(Hopeless) ?? marked.FirstOrDefault() ?? string.Empty;
     }
 
     private static bool Contains(string text, string needle) =>
