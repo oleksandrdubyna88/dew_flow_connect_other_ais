@@ -40,10 +40,10 @@ internal static class LoopbackStub
     internal const int Attempts = 10;
 
     /// <summary>
-    /// Every way a platform says that address is taken, measured rather than assumed.
+    /// Every way a platform says that address is taken.
     /// </summary>
     /// <remarks>
-    /// <para>This set is the whole reason the catch below is narrow. Retrying on ANY
+    /// <para>This set is the whole reason the catch is narrow. Retrying on ANY
     /// <see cref="HttpListenerException"/> would turn an access-denied prefix or a malformed
     /// registration into ten attempts and a sentence blaming ports, which is a worse failure than
     /// the one being fixed: it is wrong AND it takes ten times as long to be wrong.</para>
@@ -51,36 +51,53 @@ internal static class LoopbackStub
     /// because the way it is held changes the code, which is not obvious and is why this list is
     /// longer than one entry:</para>
     /// <list type="table">
-    ///   <item><description>Windows, held by another HttpListener: 183, ERROR_ALREADY_EXISTS</description></item>
     ///   <item><description>Windows, held by an ordinary socket: 32, ERROR_SHARING_VIOLATION</description></item>
-    ///   <item><description>Linux, held by another HttpListener: 400, the managed listener's own registration clash</description></item>
+    ///   <item><description>Windows, held by another HttpListener: 183, ERROR_ALREADY_EXISTS</description></item>
     ///   <item><description>Linux, held by an ordinary socket: 98, EADDRINUSE — this is the one that failed CI</description></item>
+    ///   <item><description>Linux, held by another HttpListener: 400, the managed listener's own registration clash</description></item>
     /// </list>
-    /// <para>48 (BSD and macOS EADDRINUSE) and 10048 (WSAEADDRINUSE) are carried on the same terms
-    /// but were NOT measured here — there is no macOS on this machine, and the Winsock code did not
-    /// surface in either Windows case. They are unambiguous spellings of the same condition, so
-    /// including them cannot widen the catch to something else; and if a platform ever answers with a
-    /// code that is not in this list, the retry test goes red on that leg and names it, which is the
-    /// intended way to find out.</para>
+    /// <para><b>48 and 10048 were not measured here, and are not guesses either.</b> The Linux
+    /// measurement is what licenses them: the managed listener handed back the RAW ERRNO, 98, rather
+    /// than a .NET error of its own — so a platform on that same managed path reports its own errno,
+    /// and on BSD and macOS <c>EADDRINUSE</c> is 48. 10048 is <c>WSAEADDRINUSE</c>, the Winsock
+    /// spelling of the identical condition. Both are the same fact in another dialect, so neither can
+    /// widen the catch to a different failure.</para>
+    /// <para>And the reasoning is not load-bearing:
+    /// <c>AStubSurvivesALostPortTests.TheCodeThisPlatformActuallyReports_IsOneTheStubRetries</c>
+    /// provokes a REAL collision, both ways, on whatever platform it is running, and asserts that
+    /// whatever comes back is in this set. A platform whose code is missing reddens that test on its
+    /// own leg and names the code, which is how this list is meant to grow.</para>
     /// </remarks>
     private static readonly HashSet<int> PortIsTaken = [32, 48, 98, 183, 400, 10048];
+
+    /// <summary>
+    /// The codes above, for the test that checks each one is honoured. Exposed so the theory cannot
+    /// drift from the classifier: a code added here without a case is still exercised, and a case
+    /// with no code fails to compile a row.
+    /// </summary>
+    internal static IReadOnlyCollection<int> RetryableCodes => PortIsTaken;
 
     /// <summary>A stub on a port nobody else holds.</summary>
     internal static (HttpListener Server, string Prefix) Start() => Start(FreePorts(), Attempts);
 
+    /// <summary>The same, over a caller's candidates — which is what makes a lost port testable.</summary>
+    /// <param name="candidates">Ports to try, in order.</param>
+    /// <param name="attempts">How many may be lost before this is reported as a failure.</param>
+    internal static (HttpListener Server, string Prefix) Start(IEnumerable<int> candidates, int attempts) =>
+        Start(candidates, attempts, Bind);
+
     /// <summary>
-    /// The same, over a caller's candidates and a caller's way of binding one — which is what makes
-    /// both halves testable, since neither a lost port nor a denied prefix can be arranged through
-    /// the OS on demand.
+    /// The same again, over a caller's way of binding one — which is what makes the OTHER half
+    /// testable, since a denied prefix cannot be arranged through the OS on demand.
     /// </summary>
     /// <param name="candidates">Ports to try, in order.</param>
     /// <param name="attempts">How many may be lost before this is reported as a failure.</param>
-    /// <param name="bind">Starts a listener on one prefix; the real one when omitted.</param>
+    /// <param name="bind">Starts a listener on one prefix.</param>
     internal static (HttpListener Server, string Prefix) Start(
-        IEnumerable<int> candidates, int attempts, Func<string, HttpListener>? bind = null)
+        IEnumerable<int> candidates, int attempts, Func<string, HttpListener> bind)
     {
-        bind ??= Bind;
         var lost = new List<int>();
+        Exception? last = null;
 
         foreach (var port in candidates)
         {
@@ -90,9 +107,10 @@ internal static class LoopbackStub
             {
                 return (bind(prefix), prefix);
             }
-            catch (Exception e) when (IsTaken(e))
+            catch (Exception e) when (Retries(e))
             {
                 lost.Add(port);
+                last = e;
 
                 if (lost.Count >= attempts)
                 {
@@ -101,14 +119,25 @@ internal static class LoopbackStub
             }
         }
 
-        throw new InvalidOperationException(NoPortHeld(lost));
+        // Reached when the caller's candidates run out before the attempt bound does. The last
+        // failure is carried rather than dropped: without it the caller gets our sentence and none
+        // of the platform's, which is the half that names the actual errno.
+        throw new InvalidOperationException(NoPortHeld(lost), last);
     }
 
     /// <summary>
     /// Whether this failure is the port being gone — and NOT anything else, which is rethrown
     /// unchanged so it arrives as itself rather than as a story about ports.
     /// </summary>
-    private static bool IsTaken(Exception e) => e switch
+    /// <remarks>
+    /// Both arms are reachable and neither is the other's fallback. Every collision measured so far
+    /// arrived as an <see cref="HttpListenerException"/>, including on Linux where the managed
+    /// listener wraps the errno itself; the <see cref="SocketException"/> arm is there because the
+    /// bind underneath is a socket, and a platform that let one through unwrapped would otherwise
+    /// take down the whole fixture rather than retry. It is narrowed to the one
+    /// <see cref="SocketError"/> that means this, so it cannot swallow anything else.
+    /// </remarks>
+    internal static bool Retries(Exception e) => e switch
     {
         HttpListenerException h => PortIsTaken.Contains(h.ErrorCode),
         SocketException s => s.SocketErrorCode == SocketError.AddressAlreadyInUse,
@@ -127,8 +156,10 @@ internal static class LoopbackStub
         }
         catch
         {
-            // A listener that did not start still holds a registration and a handle, and ten of
-            // those over a retry loop is a leak that makes the next attempt fail for a new reason.
+            // Closed on the FAILURE path only. A listener that did not start still holds a
+            // registration and a handle, and ten of those over a retry loop is a leak that makes the
+            // next attempt fail for a new reason — but a finally here would close the one being
+            // returned, which is why this is a catch.
             server.Close();
 
             throw;
@@ -160,11 +191,22 @@ internal static class LoopbackStub
         return port;
     }
 
-    /// <summary>What was lost, and which of the two cures it points at.</summary>
-    private static string NoPortHeld(IReadOnlyCollection<int> lost) =>
-        $"no loopback port could be held long enough to start the stub: {lost.Count} candidate"
-        + $"{(lost.Count == 1 ? " was" : "s were")} taken between the probe closing and the listener "
-        + $"binding ({string.Join(", ", lost)}). Losing one is the ordinary race and is retried; "
-        + "losing this many means something on this machine is taking ports as fast as the OS hands "
-        + "them out, which is not a race a retry can win.";
+    /// <summary>
+    /// What was lost, and which of the two cures it points at.
+    /// </summary>
+    /// <remarks>
+    /// The two cases are written separately because one sentence covering both said, of a single
+    /// lost port, that it had been retried and that it meant the machine was out of ports — two
+    /// claims that contradict each other and are each wrong half the time. (gemini, the code round.)
+    /// </remarks>
+    private static string NoPortHeld(IReadOnlyCollection<int> lost) => lost.Count == 1
+        ? "no loopback port could be held long enough to start the stub: the one candidate offered "
+          + $"({lost.Single()}) was taken between the probe closing and the listener binding. That is "
+          + "the ordinary race and it is what the retry is for — this run had no second candidate to "
+          + "take."
+        : $"no loopback port could be held long enough to start the stub: all {lost.Count} candidates "
+          + $"({string.Join(", ", lost)}) were taken between the probe closing and the listener "
+          + "binding. Losing one is the ordinary race and is retried; losing this many means "
+          + "something on this machine is taking ports as fast as the OS hands them out, which is "
+          + "not a race a retry can win.";
 }
