@@ -63,7 +63,7 @@ export const SNIPPET_BODY_SHA = '5e630da7220cede4';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 9;
+export const ARTEFACT_VERSION = 10;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
