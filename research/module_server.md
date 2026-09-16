@@ -1098,6 +1098,55 @@ symptom, which is how the abbreviated sha turned out to be collected rather than
 
 Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 3.
 
+
+### The runs themselves (`collect_runs`, 2026-09-16)
+
+A run id on a finding says WHICH run decided it. It does not say what that run did, or whether one
+is happening now — and story 3 needed neither, because its only surface was a one-shot whose summary
+a person watched scroll past. A button needs both: the durable-status rule wants a state that
+survives a reload and is read back from storage rather than from a flag in a webview that a reload
+destroys.
+
+So a run writes itself three ways: **before** the first candidate (`running`), on **every**
+candidate as it is decided, and in a **`finally`** when it ends. The middle one is what makes
+progress expressible at all — two writes cannot describe a journey — and the last is what stops a
+throw on candidate three leaving the row, and the button reading it, in flight for ever.
+
+**The sweep is a heartbeat, and deliberately not a pid.** The plan round caught this before it
+shipped: the panel reaches this database only through one-shot invocations, so a sweep that took
+every row with no `finished_utc` would end a run that is **alive at that moment**, from the very
+process asked to display it. gemini proposed a pid and a liveness check; this uses the heartbeat
+pattern `chatStoreSweep` already runs on, for a reason the pid proposal does not survive — **the
+data directory may be a network share**, so a row can carry a pid from another machine, where it is
+not merely useless but will eventually name a live and unrelated process. A timestamp means the same
+thing on every host. The stale window is thirty minutes, thirty beats wide, so a sleeping laptop and
+a host paused under a debugger are still believed.
+
+An interrupted run is **marked, never deleted**: its id is a foreign key in all but name, and the
+candidates it did claim keep their own outcomes, because those were written per candidate as they
+were decided.
+
+**Kept forever.** ~400 bytes a run, about one run a day: 150 KB a year beside a database already
+megabytes of rounds and findings. Deleting a run would orphan every finding naming it.
+
+### Which models may read a finding's own words (2026-09-16)
+
+`RankingModels` in the core is an allowlist, and the collector refuses anything outside it **before
+it reads a single finding field**. Two reviewers of the plan round found the same thing
+independently: narrowing the panel's picker narrows a *picker*. `--collect-bugs` runs from a
+terminal, a persisted setting survives a narrowed list, and a webview that has not repainted posts
+whatever it last rendered.
+
+What is at stake is the one step in this pipeline that handles un-anonymised text. A finding's
+`title`, `why` and `fix` are the reviewers' own prose about somebody's code — class names, product
+names, the shape of a private system — and the normaliser runs later and only on **source**. The
+list is local vendors only, and the honest complication is recorded with it: those words were
+frequently *written by* a cloud model, since the reviewer that produced them read the diff to do it.
+It is not categorically a new exposure; it is an uncontrolled one, and local-only is the defensible
+default until a person decides otherwise.
+
+`--collect-bugs --model <vendor/name>` exits **64** with the refusal's own sentence.
+
 ## What a round can be asked afterwards (2026-09-08)
 
 Two lines and one directory, added because a round that answered nothing could not be questioned:

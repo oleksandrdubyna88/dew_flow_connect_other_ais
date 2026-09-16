@@ -54,7 +54,8 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readFindings, readLog, readManyFindings, RoundKey, serverRun } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, RoundKey, serverRun } from './roundsDbRead';
+import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -697,6 +698,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       consultPrompt: await this.readConsultPrompt(),
       consultations: this.consultations?.running ?? [],
       localEngines: await this.probeLocalEngines(vendors),
+      // The corpus and the last run, cached for a few seconds: this is a process spawn and a
+      // repaint is frequent. It is what puts a running collect on the screen without a poller.
+      bugz: await this.bugz(),
+      bugzModel: this.bugzModel,
+      bugzServer: this.bugzServer,
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
@@ -1690,6 +1696,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.teamCheckedAt = 0;
         await this.render();
         break;
+      case 'collectBugs':
+        await this.collectBugs();
+        break;
+      case 'reviewBugs':
+        // Story 5's page. Until it exists the button is disabled unless a run collected
+        // something, so this is reachable only once there is something to show.
+        await vscode.window.showInformationMessage(
+          'The review page arrives with the next story. What has been collected is in the local database.');
+        break;
+      case 'setBugsServer':
+        await this.setBugsServer();
+        break;
       default: {
         // A PanelCommand with no case above lands here and fails to compile. That is the whole
         // guard: the Update button was posting a command nobody handled, and nothing said so.
@@ -2013,6 +2031,127 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private phrases(): readonly Phrase[] {
     return phrasesFrom(vscode.workspace.getConfiguration('coai').get('phrases'));
+  }
+
+  /**
+   * Runs the collector over this machine's own accepted findings.
+   *
+   * <p><b>Nothing here holds the state.</b> The run writes itself to the database before it starts
+   * a candidate and again when it ends, and the section reads that row — so closing the window,
+   * pressing F5 or hiding the panel changes what is DISPLAYED and never what is true. A flag on
+   * this class would die with the view, which is the failure the durable-status rule names.</p>
+   *
+   * <p>The model is passed for the record; the collector refuses a non-local one itself, before it
+   * reads a finding, and the refusal arrives here as a non-zero exit with its own sentence.</p>
+   */
+  /**
+   * How long a collect may run before the spawn is given up on.
+   *
+   * <p>Generous: a default run is two hundred candidates and each is several git subprocesses with
+   * a thirty-second budget of its own. Giving up here does not stop the run — the child keeps
+   * going and keeps writing its own row — it only stops this window waiting, and the section then
+   * shows the run's real state from the database like any other.</p>
+   */
+  private static readonly COLLECT_CAP_MS = 30 * 60_000;
+
+  /** Which local model a ranking pass would use. Not yet persisted — story 5 gives it a job. */
+  private bugzModel = '';
+
+  /** Where collected pairs would be sent. */
+  private bugzServer = '';
+
+  /** The corpus as last read, and when — the section repaints far more often than this changes. */
+  private bugzCache: BugCorpus = EMPTY_CORPUS;
+
+  private bugzAt = 0;
+
+  /**
+   * What the corpus and the last run look like now.
+   *
+   * <p>Cached for a few seconds because a repaint is frequent and this is a process spawn. Setting
+   * {@link bugzAt} to zero is how a press of Collect says "ask again now" without a second path.</p>
+   */
+  private async bugz(): Promise<BugCorpus> {
+    const AGE_MS = 5_000;
+    if (Date.now() - this.bugzAt < AGE_MS) {
+      return this.bugzCache;
+    }
+
+    const server = serverPath(this.context.globalStorageUri);
+    this.bugzAt = Date.now();
+    this.bugzCache = server === undefined ? EMPTY_CORPUS : await readBugs(server.fsPath);
+
+    return this.bugzCache;
+  }
+
+  private async collectBugs(): Promise<void> {
+    const server = serverPath(this.context.globalStorageUri);
+    if (server === undefined) {
+      await vscode.window.showWarningMessage(
+        'The MCP server is not installed yet, so there is nothing to collect with.');
+
+      return;
+    }
+
+    // Through `serverRun`, which is the door that carries THIS window's data directory. A spawn
+    // that skipped it would collect against a different database from the one the section shows.
+    const run = serverRun(server.fsPath);
+    const { code, output } = await run(
+      ['--collect-bugs', ...(this.bugzModel.length > 0 ? ['--model', this.bugzModel] : [])],
+      PanelProvider.COLLECT_CAP_MS);
+
+    if (code !== 0) {
+      // Its own words: the collector says why it refused, and paraphrasing them here would be a
+      // second copy of a rule that lives in the core.
+      await vscode.window.showWarningMessage(output.trim() || 'The collector could not run.');
+    }
+
+    // The row the run wrote is the truth; this is what puts it on the screen.
+    this.bugzAt = 0;
+    await this.render();
+  }
+
+  /**
+   * Asks for the ingest server's address.
+   *
+   * <p>A dialog rather than a box in the section, as {@link addTeamServer} and the consultant's
+   * custom endpoint already are. The section is in `staticKey` because the Collect button has to
+   * repaint while a run happens, and a free-text control inside a repainting section is rebuilt
+   * under the caret on every keystroke. There IS a third way — the consultant prompt is a textarea
+   * held by `focusin` — but a dialog is what the two nearest neighbours do, it validates before it
+   * closes, and it keeps this section free of the trap entirely.</p>
+   */
+  private async setBugsServer(): Promise<void> {
+    const typed = await vscode.window.showInputBox({
+      title: 'Where collected pairs are sent',
+      value: this.bugzServer,
+      prompt: 'The address of the bug ingest server. Leave empty to send nowhere.',
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+          return undefined;
+        }
+
+        // Refuses while the box is still open, which is the reason for a dialog over a box: the
+        // person fixes it where they typed it instead of finding out later from a failed send.
+        try {
+          const url = new URL(trimmed);
+
+          return url.protocol === 'https:' || url.protocol === 'http:'
+            ? undefined
+            : 'An http or https address.';
+        } catch {
+          return 'That is not an address.';
+        }
+      },
+    });
+
+    if (typed === undefined) {
+      return;
+    }
+
+    this.bugzServer = typed.trim();
+    await this.render();
   }
 
   private async addTeamServer(): Promise<void> {

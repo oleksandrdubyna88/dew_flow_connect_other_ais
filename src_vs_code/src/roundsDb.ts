@@ -445,3 +445,97 @@ export function decisionsByRound(log: DbLog): Map<string, { accepted: number; re
 
   return byRound;
 }
+
+/**
+ * One collector run, as `--bugs-json` reports it.
+ *
+ * <p>An empty {@link id} means NO RUN HAS EVER STARTED here, which is a state the section renders
+ * and is not the same as "the server could not say". An older server emits no `lastRun` key at all,
+ * and {@link parseBugs} maps that absence onto this same empty shape — the two halves of this
+ * product have shipped out of step before, so a new panel must read an old answer.</p>
+ */
+export interface CollectRun {
+  readonly id: string;
+  readonly startedUtc: string;
+  readonly finishedUtc: string;
+  readonly state: string;
+  readonly model: string;
+  readonly candidates: number;
+  readonly picked: number;
+  readonly collected: number;
+  readonly skipped: number;
+  readonly failed: number;
+  readonly reasons: string;
+}
+
+/** How far the filter narrows, step by step — the only readable form of a skip rate. */
+export interface BugFunnel {
+  readonly all: number;
+  readonly onCode: number;
+  readonly accepted: number;
+  readonly gating: number;
+  readonly runtime: number;
+  readonly located: number;
+  readonly unprocessed: number;
+}
+
+/** What the corpus has to offer, and what the last run made of it. */
+export interface BugCorpus {
+  readonly funnel: BugFunnel;
+  readonly lastRun: CollectRun;
+  /** Whether the server answered at all. False is "we do not know", never "there is nothing". */
+  readonly read: boolean;
+}
+
+const NO_RUN: CollectRun = {
+  id: '',
+  startedUtc: '',
+  finishedUtc: '',
+  state: '',
+  model: '',
+  candidates: 0,
+  picked: 0,
+  collected: 0,
+  skipped: 0,
+  failed: 0,
+  reasons: '',
+};
+
+const NO_FUNNEL: BugFunnel = {
+  all: 0, onCode: 0, accepted: 0, gating: 0, runtime: 0, located: 0, unprocessed: 0,
+};
+
+/** Nothing known — which the section renders as "not asked yet", not as "no material". */
+export const EMPTY_CORPUS: BugCorpus = { funnel: NO_FUNNEL, lastRun: NO_RUN, read: false };
+
+/** Whether a run is happening — what the Collect button is disabled by. */
+export const isRunning = (run: CollectRun): boolean => run.state === 'running';
+
+/** Whether any run has ever been recorded. */
+export const hasRun = (run: CollectRun): boolean => run.id.length > 0;
+
+/**
+ * What the server said about the corpus, or nothing known.
+ *
+ * <p>Defensive in the same way {@link parseLog} is: anything malformed is an EMPTY corpus with
+ * `read: false`, because a panel that renders zeroes as fact would tell somebody there is no
+ * material when the truth is that nothing was asked. The one piece that is allowed to be missing
+ * without that verdict is `lastRun` — a server older than the run table simply has none.</p>
+ */
+export function parseBugs(text: string): BugCorpus {
+  try {
+    const raw = JSON.parse(text) as Partial<BugCorpus>;
+    if (raw?.funnel === undefined) {
+      return EMPTY_CORPUS;
+    }
+
+    return {
+      funnel: { ...NO_FUNNEL, ...raw.funnel },
+      // An absent `lastRun` is an older server, and it means the same thing an empty id means.
+      lastRun: { ...NO_RUN, ...(raw.lastRun ?? {}) },
+      read: true,
+    };
+  } catch {
+    return EMPTY_CORPUS;
+  }
+}

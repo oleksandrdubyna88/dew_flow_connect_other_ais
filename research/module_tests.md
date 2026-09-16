@@ -246,6 +246,33 @@ been changed. The product now walks at most once every ten minutes per process r
 reviewer. CI never sees any of this: a runner starts with an empty temp, so a green CI beside a
 stalled local suite is evidence FOR this cause.
 
+## The collector's suites (2026-09-16)
+
+Four, and each answers a question the others cannot.
+
+| Suite | Drives | Catches |
+|---|---|---|
+| `CollectorTests` | **real git** — a real squash-merge, a real deleted branch, a real orphan whose absence the fixture asserts | a walk that attributes the wrong commit; a sha that reaches git when it should not |
+| `CollectRunTests` | the shipped path: `BugsQuery` out, `Collector` through, `RecordCollect` in, rows read back | a classifier that never persists — the plan round's own words |
+| `TheRunsThemselvesTests` | real SQLite over a temp directory, with a clock the test moves | a sweep that ends a LIVE run; a migration that never arrives |
+| `bugzSection.test.ts` | the assembled page | a section that renders but never repaints; a text box that would flicker under the caret |
+
+**Why real git rather than a fake.** Every failure this guards against is git's — a commit no ref
+reaches, a file that moved, a history rewritten under the finding — and a fake would assert what we
+*believe* about those. Measurement kept correcting the belief: the guard was written as equality
+once and inverted the whole feature, and the first orphan rate came back 90.7 % against a branch
+that happened to be 488 commits behind.
+
+**Why a clock the test moves.** The heartbeat sweep is about elapsed time, and the alternative is a
+test that sleeps for thirty-one minutes, which is a test nobody runs. `RoundsDb.Open` takes a
+`TimeProvider` for exactly this: a clock a test cannot control is a column a test cannot assert.
+
+**What each of them would still miss, and what covers it.** A database test and a markup test can
+both pass while the built CLI, the migration and the webview wiring disagree — so the JSON contract
+between the halves is exercised against the **real binary's** output, and `parseBugs` is asserted
+against an OLD server's answer (no `lastRun` key) as well as a new one. That pairing is the lesson
+of every wire field this product has shipped out of step.
+
 ## What this does NOT prove
 
 The most valuable section, and the first one people drop.
