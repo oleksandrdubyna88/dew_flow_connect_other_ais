@@ -1,10 +1,12 @@
 # PLAN — the gate's own findings become a corpus of real defects
 
-> Status: **stories 0–3 shipped; 4–6 are open.** `rounds.base_ref` went first (PR #268) because
-> every round that ran without it lost that half permanently, and the read side followed (PR #272).
-> Story 2's package was approved on three conditions — pinned version, grammars pruned at publish,
-> the library behind `IAstNormalizer` — and all three are in. Story 3 is the collector.
-> Scope: a new `Bugz` panel section, a `coai-bugs` ingest server, and four columns on `findings`.
+> Status: **stories 0–5 shipped; 6 is open.** `rounds.base_ref` went first (PR #268) because every
+> round that ran without it lost that half permanently, and the read side followed (PR #272). Story
+> 2's package was approved on three conditions — pinned version, grammars pruned at publish, the
+> library behind `IAstNormalizer` — and all three are in. Story 3 is the collector (PR #307), story
+> 4 the panel section and the run state it needed first (PR #317), story 5 the pairs and the review
+> page (PR #320).
+> Scope remaining: `coai-bugs`, its keys and its quarantine — the one story that sends anything.
 >
 > **Two deviations from the plan as written.** The normalizer was planned as a `coai-normalize`
 > sidecar and is a MODE of `coai-mcp` instead: the reason for a separate binary was Roslyn under
@@ -258,9 +260,15 @@ schema — retrofitting it after the index is live means re-auditing everything 
 | 1 | `BugsQuery` + `coai-mcp --bugs-json` | **Shipped, PR #272.** Beside `RoundsQuery`; the panel owns no SQLite. It brought the four `findings` columns of the contract below with it, as migration step 6. |
 | 2 | The normalizer — .NET + tree-sitter | **Shipped, PRs #283 and #296.** Symbol resolution, normalisation, and the zero-knowledge property test. It is a MODE of `coai-mcp` rather than the `coai-normalize` sidecar this table first named — see below. |
 | 3 | The bounded walk + drop-with-reason | Small, because bounded. |
-| 4 | The `Bugz` panel section | See below. |
-| 5 | The review page | First multi-select in this codebase. |
-| 6 | `coai-bugs` + its release line | Mostly machinery. |
+| 4 | The `Bugz` panel section | **Shipped, PR #317.** `collect_runs` had to come first: a button
+needs a state that survives a reload, and story 3 recorded only a run id. |
+| 5 | The review page | **Shipped, PR #320.** `collect_pairs` had to come first for the same shape
+of reason: the collector computed both skeletons and threw them away, so the corpus held pointers
+and nothing to review. NOT the first multi-select — `roundsLog.ts` already had one, which the plan
+round corrected. |
+| 6 | `coai-bugs` + its release line | Mostly machinery, and the one story that CROSSES the
+boundary: the upload sends the two skeletons and the language, never the symbol and never the join
+back to repo, commit, file and line. |
 
 **Story 4 reuses, and these are verified:** the model list is `modelsFor` (`src_vs_code/src/models.ts:97`)
 with `modelsProvenance` (`:242`) — not consultant-specific. The two-select row shape is
@@ -577,6 +585,21 @@ before a finding field is read. This pass is the first thing in the pipeline tha
       reload — proved by reading them back, not by watching a message.
 - [ ] The ranking pass validates the model's reply and cannot hang.
 - [ ] `research/module_extension.md` and `module_server.md` updated.
+
+#### What story 5 did NOT finish
+
+Stated so story 6 does not discover it:
+
+- **The ranking has no transport.** `Ranking.Order` is pure and fully tested — inventions,
+  omissions, duplicate ranks, contradictions — and nothing spawns a local model to produce a reply
+  for it. The page shows pairs in collection order. `RankingModels` therefore still guards a step
+  that does not exist.
+- **No paging.** `--pairs-json` takes a limit and the caller passes one; there is no cursor and no
+  `hasMore`, so a corpus past the limit is not reviewable from the page.
+- **No in-flight feedback** while a decision writes, and no loading state while the panel first
+  reads.
+- **No live binary-to-panel contract check for the pairs.** `bugzLiveContract.test.ts` does that for
+  the corpus read; there is no equivalent here, and no end-to-end scenario test of the review flow.
 
 #### What this story does NOT own
 
