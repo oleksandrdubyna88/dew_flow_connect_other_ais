@@ -453,6 +453,9 @@ export const DATA_TO_MOVE: readonly string[] = [
   'prompts/', 'usage.jsonl',
   'documents/', 'escalations/', 'consultations/', 'callers/',
   'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
+  // The notifications ledgers — two files rather than one because their writers release on
+  // different days, which is the reason this repository refused a shared file twice already.
+  'notifications.jsonl', 'server-notices.jsonl',
   // The logs, by the operator's decision of 2026-09-15, and `rounds.md`, which a real installation
   // turned out to be holding. Both had been filed as "written again by itself" and neither is: a new
   // run writes a new log and says nothing about the runs already recorded, and NOTHING writes

@@ -268,15 +268,24 @@ Both are built on the house primitive: `appendLine` / `readLedger`
 measured — `scripts/measure-append.mjs`, `npm run measure:append`, 8 processes × 1000 records
 including 60 KB lines, zero torn lines (2026-09-09, Windows 11, NTFS, node 22).
 
-**The conditions are part of the claim, and two of them do not hold here yet.** The harness calls
-`appendFileSync` (`measure-append.mjs:27`, `:59`) while the production writer is the promise-based
-`appendFile` (`jsonlLedger.ts:1`, `:43`) — the same `'a'` mode, a different function, and the plan may
-not treat a measurement of one as a measurement of the other. And the result is about a local NTFS
-disk, while **the data directory is relocatable and has been a NAS share on this machine**, where SMB
-does not guarantee atomic append. So S1 widens the harness to exercise the real writer, adds
-concurrent readers, and re-runs it against a UNC path, with the outcome in the module's docstring. If
-it tears there, the sanctioned escape is one ledger per process (`notifications-<pid>.jsonl`, the
-`chatOrphans.ts` precedent) with a glob in the reader.
+**The conditions were part of the claim, and two of them did not hold — so S1 measured them.** The
+harness called `appendFileSync` while the production writer is the promise-based `appendFile`: the
+same `'a'` mode, a different function, and a plan may not treat a measurement of one as a measurement
+of the other. And the result was about a local NTFS disk, while the data directory is relocatable and
+has been a NAS share on this machine, where SMB does not guarantee atomic append in general.
+
+**Both measured, 2026-09-16** (`npm run measure:append`, results and conditions in the harness header
+and in `jsonlLedger.ts`):
+
+| writer | shape | where | result |
+|---|---|---|---|
+| `appendFile` (production) | 8 × 1000, 116 MB | local NTFS | 8000 of 8000, **0 torn** |
+| `appendFile` (production) | 4 × 200, 11.6 MB | SMB share | 800 of 800, **0 torn** |
+
+So the append holds for the call this code actually makes, and it holds over this machine's NAS. The
+sanctioned escape if it ever tears elsewhere is unchanged and unused: one ledger per process
+(`notifications-<pid>.jsonl`, the `chatOrphans.ts` precedent) with a glob in the reader. `--dir=` is
+how the next person asks the question of their own filesystem.
 
 **Append-only, absolutely.** One record per written occurrence. Nothing is ever updated, truncated or
 rewritten. That single rule is what makes byte-offset reads exact (C), what keeps the measured
@@ -805,8 +814,9 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
    whether the alert fires early enough and whether the ceiling is ever reached in ordinary use.
 3. **`roundsLog.ts` is far past the 800-line ceiling** and the new page deliberately does not inherit
    its shape. Should it be split — a separate task, not this one?
-4. **Whether `O_APPEND` holds on this machine's NAS path.** S1 answers it with the existing harness;
-   if it does not, the escape is one ledger per process and the plan says so.
+4. ~~**Whether `O_APPEND` holds on this machine's NAS path.**~~ **Answered, 2026-09-16**: it does —
+   4 × 200 records over SMB, 800 of 800, 0 torn, with the production writer. See *B*. The per-process
+   escape stays written down and unused.
 
 ## Definition of Done
 

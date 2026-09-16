@@ -10,32 +10,95 @@ import { dirname } from 'node:path';
  * places for the same bargain to drift — which is exactly what the reuse rule is about. Every
  * judgement about what a RECORD means stays in the module that owns the record; this holds none.</p>
  *
- * <h2>One queue for every ledger, not one each</h2>
+ * <h2>One queue per CHAIN — which used to be one for everything</h2>
  *
  * <p>The queue exists so two appends issued from one process reach the file in the order they were
- * asked for. Sharing it across ledgers is not a compromise: it is what lets `deactivate` drain
- * everything by waiting on one promise, and a second queue would be a second thing to remember to
- * flush. Writes to different files do not wait on each other in any way that matters — an append is
- * microseconds, and nothing on the answering path waits for one at all.</p>
+ * asked for. It was a single chain for every ledger here, justified on the grounds that an append is
+ * microseconds and nothing on the answering path waits for one. The notifications ledger breaks both
+ * halves of that: on a NAS an append is tens of milliseconds and can hang for SMB's timeout, and a
+ * repeating fault queues hundreds of them — so a stalled notification append would delay a CHAT TURN
+ * behind it, and `deactivate` would wait for the whole backlog before the window could close, after
+ * which VS Code kills the host and the tail is lost anyway.</p>
  *
- * <p>The measurement that makes several PROCESSES safe on one file is recorded in
- * `chatUsageFile.ts`, where the file it was measured on lives: `O_APPEND` (which `appendFile`'s
- * `'a'` is) does not tear, measured at 8 × 1000 records including 60 KB lines.</p>
+ * <p>So there are two chains and `flushLedgers` drains both: one drain for everything, which was the
+ * point of sharing, without one ledger's disk trouble becoming another's. (The plan round on
+ * `todo/PLAN_every_message_is_written_down.md`.)</p>
+ *
+ * <h2>What is measured, and under which conditions</h2>
+ *
+ * <p>`npm run measure:append` forks real processes at one file and checks every line back. Three
+ * runs, and the conditions are part of each result:</p>
+ *
+ * <ul>
+ *   <li><b>2026-09-09</b>, `appendFileSync`, 8 × 1000 records including 60 KB lines, local NTFS:
+ *       8000 whole records, 0 torn. Recorded in `chatUsageFile.ts`, where the file it was measured
+ *       on lives.</li>
+ *   <li><b>2026-09-16</b>, the PROMISE-based `appendFile` — which is what this module actually
+ *       calls — 8 × 1000, 116 MB, local NTFS: 8000 of 8000, 0 torn. The earlier run measured a
+ *       different function, and the notifications plan had cited it as though it did not; the same
+ *       argument about `O_APPEND` is not the same measurement.</li>
+ *   <li><b>2026-09-16</b>, the same writer over <b>SMB</b> to a NAS share, 4 × 200, 11.6 MB:
+ *       800 of 800, 0 torn. This is the condition that mattered most here — the data directory is
+ *       relocatable and has been a NAS share on this machine, and SMB does not guarantee atomic
+ *       append in general. It held on this one.</li>
+ * </ul>
+ *
+ * <p>None of that is a claim about every filesystem. `--dir=` is how the next person asks the same
+ * question of theirs, and the sanctioned answer if it ever tears is one ledger per process
+ * (`notifications-&lt;pid&gt;.jsonl`, the `chatOrphans.ts` precedent) with a glob in the reader.</p>
  */
 
-/** Appends, in order, one line at a time — every ledger in this process through the one chain. */
-let queue: Promise<void> = Promise.resolve();
+/** Which ordered queue an append joins. */
+export type LedgerChain = 'chat' | 'notifications';
+
+const CHAINS: readonly LedgerChain[] = ['chat', 'notifications'];
+
+/** Appends, in order, one line at a time — per chain. */
+const queues: Record<LedgerChain, Promise<void>> = {
+  chat: Promise.resolve(),
+  notifications: Promise.resolve(),
+};
+
+/**
+ * How long `deactivate` may spend draining before it gives the window back.
+ *
+ * <p>A drain without a ceiling is a window that will not close, and VS Code answers that by killing
+ * the host — which loses more than the ceiling gives up.</p>
+ */
+export const FLUSH_CEILING_MS = 2_000;
+
+export interface AppendOptions {
+  /** Which chain to join. Defaults to the chat chain, which is what every earlier caller used. */
+  readonly chain?: LedgerChain;
+  /**
+   * Told when the line could not be written, so a caller can COUNT what was lost.
+   *
+   * <p>Without it the loss is invisible to everybody but a devtools console nobody opens: this
+   * function catches internally and hands its caller a resolved promise, so a notifications funnel
+   * built on it as it stood would have reported "0 records could not be written" straight through a
+   * disk failure. A log that lies by omission is worse than no log, and that is the thesis of the
+   * ledger this parameter was added for. (The plan round, round 2.)</p>
+   */
+  readonly onFailure?: (reason: unknown) => void;
+}
 
 /**
  * Write one line down. Never rejects, and never delays the caller.
  *
- * <p>Returns the promise so a test can wait for the write it just asked for; the paths that record
- * a person's activity ignore it, because nothing anybody is reading may wait on a disk.</p>
+ * <p>Returns the promise so a test — or a caller that has promised to RECORD before it shows
+ * something — can wait for the write it just asked for; the paths that record a person's activity
+ * ignore it, because nothing anybody is reading may wait on a disk.</p>
  *
  * @param what names the ledger in the console line when a write fails — "a chat turn", "a door".
  */
-export function appendLine(path: string, line: string, what: string): Promise<void> {
-  queue = queue.then(async () => {
+export function appendLine(
+  path: string,
+  line: string,
+  what: string,
+  options: AppendOptions = {},
+): Promise<void> {
+  const chain = options.chain ?? 'chat';
+  queues[chain] = queues[chain].then(async () => {
     try {
       // The directory may genuinely not exist: on a machine where nobody has run a review round, the
       // extension's chat is the FIRST thing to write anything under the coai data directory.
@@ -45,22 +108,37 @@ export function appendLine(path: string, line: string, what: string): Promise<vo
       // Said out loud rather than swallowed, per `coding-style.md`. What is lost is one line of
       // accounting; what would be lost by throwing is the thing the person is actually doing.
       console.error(`ConnectOtherAIs: ${what} could not be written to its ledger`, reason);
+      options.onFailure?.(reason);
     }
   });
 
-  return queue;
+  return queues[chain];
 }
 
 /**
- * Wait for every queued write, to every ledger, to reach the disk.
+ * Wait for every queued write, on every chain, to reach the disk — or for the ceiling.
  *
- * <p>Called from `deactivate`. Nothing waits for a write while the window is alive, which means a
- * host closed the instant something is recorded can take the line with it; VS Code awaits what
- * `deactivate` returns, so this is the one moment the queue can be drained without making anybody
- * wait for it.</p>
+ * <p>Called from `deactivate`. This used to return the CURRENT queue, which is a snapshot and not a
+ * drain: every `appendLine` reassigns its chain, so anything recorded after that line — a dispose
+ * handler, a watcher teardown, the settings sync's last attempt, anything VS Code runs while
+ * awaiting deactivate — chained onto a promise nobody was awaiting and went with the host. With one
+ * caller and a handful of chat turns it never showed; with a funnel in front of a hundred call sites
+ * it would have, and the records lost would be the ones written as the window died. So it drains to
+ * QUIESCENCE: await, then ask whether anything joined while we waited, and stop only when nothing
+ * did.</p>
+ *
+ * <p>Bounded, because a drain that cannot end is a window that will not close.</p>
  */
-export function flushLedgers(): Promise<void> {
-  return queue;
+export async function flushLedgers(withinMs: number = FLUSH_CEILING_MS): Promise<void> {
+  const deadline = Date.now() + withinMs;
+  for (;;) {
+    const before = CHAINS.map((chain) => queues[chain]);
+    await Promise.all(before);
+    const joined = CHAINS.some((chain, i) => queues[chain] !== before[i]);
+    if (!joined || Date.now() >= deadline) {
+      return;
+    }
+  }
 }
 
 /**
