@@ -1,10 +1,11 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
-using CoaiBugs;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.ServiceDefaults;
-using Serilog;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Serilog;
+
+namespace CoaiBugs;
 
 /// <summary>
 /// `coai-bugs`: where anonymous before/after pairs arrive, and the only thing here that is public.
@@ -18,9 +19,23 @@ using Microsoft.AspNetCore.Http.HttpResults;
 /// address. That last one this process cannot guarantee on its own — see the note on `/ingest`.</para>
 /// </remarks>
 // NOT static: `WebApplicationFactory<Program>` takes it as a type argument, which is how the
-// tests host this server in-process. `coai-server` is arranged the same way.
+// tests host this server in-process — and a static class cannot be a type argument at all.
+//
+// IN A NAMESPACE, unlike `coai-server`'s equivalent. A type at global scope is a name every
+// assembly referencing this one has to live with, and `Program`, `Health` and `Problem` are three
+// of the most collidable names there are. Sonar rates it a reliability BUG (S3903) and it is right.
+// The server's own `Program.cs` has the same shape and is NOT changed here: it is outside this
+// story, it is load-bearing for that binary's test harness, and rewriting a neighbour uninvited is
+// how a small change becomes a large diff. It is worth doing, and it is worth asking first.
 internal sealed class Program
 {
+    // S1118: every member here is static, so nothing should ever construct one. Private rather
+    // than making the class static, because `WebApplicationFactory<Program>` needs a type it can
+    // name as a type argument.
+    private Program()
+    {
+    }
+
     /// <summary>The environment variable holding the secret keys are hashed with.</summary>
     /// <remarks>
     /// Not a file and not an argument: an argument is in process listings and shell history. Without
@@ -90,9 +105,16 @@ internal sealed class Program
         var app = builder.Build();
         using var corpus = Corpus.Open(Path.Combine(Data(), "coai-bugs.db"));
         var keywords = SkeletonKeywords.From(Keywords());
-        app.Logger.LogInformation(
-            "coai-bugs is up: {Languages} keyword lists, {Waiting} waiting, {Held} in the corpus",
-            keywords.Count, corpus.WaitingCount(), corpus.Held());
+
+        // Guarded, because two of those three arguments are COUNT queries: an installation that has
+        // turned Information off would pay for them anyway, on every start, to build a line nobody
+        // reads. (SonarCloud CA1873.)
+        if (app.Logger.IsEnabled(LogLevel.Information))
+        {
+            app.Logger.LogInformation(
+                "coai-bugs is up: {Languages} keyword lists, {Waiting} waiting, {Held} in the corpus",
+                keywords.Count, corpus.WaitingCount(), corpus.Held());
+        }
 
         // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
         // would be an unauthenticated read of how much anybody has contributed.
