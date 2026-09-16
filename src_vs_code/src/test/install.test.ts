@@ -1242,3 +1242,70 @@ test('the canary credential is checked BEFORE anything is fetched, staged or swa
     'the token never reaches the process table',
   );
 });
+
+test('the bugs matrix and the check that the release is complete name the same platforms', () => {
+  // The third release line, and the FIRST one that does not build six. `coai-mcp` runs on whatever
+  // machine a person develops on and `coai-server` is handed to other people; this one is deployed
+  // by us to a Linux host under systemd behind nginx (deploy/bugs/README.md). Building win-arm64
+  // for it would be four more legs producing artefacts nothing installs.
+  //
+  // Which is exactly why the script's RID list is a PARAMETER and this test exists: the default is
+  // the six both older lines build, and a line that quietly inherited it would have a completeness
+  // check waiting for four archives nobody asked for — a release that never publishes and no error
+  // that says why.
+  assert.deepEqual(ridsBuiltBy('bugs-binaries'), ['linux-arm64', 'linux-x64']);
+  assert.match(
+    jobBlock(releaseWorkflow(), 'bugs-release-complete'),
+    /verify-and-publish-release\.sh bugs "\$GITHUB_REF_NAME" linux-x64 linux-arm64/,
+    'and the completeness check is told those two rather than inheriting six');
+});
+
+test('the bugs release ships the native library, the deploy notes, and a smoke that proves the word list travelled', () => {
+  // Three things this line can get wrong, and two of them have already happened to a sibling:
+  //
+  //   * `e_sqlite3` left behind. 0.18.1 shipped the mcp executable alone and it threw
+  //     DllNotFoundException the first time anything touched the database. THIS server is all
+  //     database — every request reads the key table to authenticate — so the same omission is a
+  //     server that answers 401 to everybody and says nothing about why.
+  //   * A binary that cannot find its keyword list. Four reviewers in one round found it reading
+  //     `shared/` by walking parent directories, which works in a checkout and in no deployment.
+  //     It is embedded now, and it is parsed BEFORE any route is mapped — so a published binary
+  //     that answers /health has proved it carries one, and nothing short of running it can.
+  //   * The deploy notes left behind. They are not documentation ABOUT the artefact, they are half
+  //     of what makes it safe to run: the no-client-address promise is kept by nginx rules, and an
+  //     operator holding the binary without them has a server recording every contributor.
+  const workflow = releaseWorkflow();
+  const build = jobBlock(workflow, 'bugs-binaries');
+
+  assert.match(workflow, /- 'bugs-v\*'/, 'the tag shape is a TRIGGER, not only a job condition');
+  assert.match(
+    build,
+    /unable to read its own key table/,
+    'the package step FAILS when the native library is missing, rather than shipping a server that cannot authenticate anybody');
+  assert.match(build, /cp deploy\/bugs\/README\.md/, 'the deploy notes travel with the binary');
+  assert.match(build, /cp deploy\/nginx\/coai-bugs/, 'and so does the vhost that keeps the promise');
+  assert.match(
+    build,
+    /curl -fsS http:\/\/127\.0\.0\.1:8119\/health/,
+    'the smoke starts the PUBLISHED binary and waits for it to answer — the only check that can see a missing keyword list');
+  assert.match(
+    build,
+    /an unknown mode answered \$UNKNOWN, not 64/,
+    'and it asserts the exit code a caller uses to tell an old binary from a bad argument');
+});
+
+test('every release line drafts first and is published by the one script that counted the assets', () => {
+  // The 404 this whole shape exists to prevent: a release created by whichever matrix leg finished
+  // FIRST used to be published from that moment, while its siblings were still uploading. Measured
+  // twice, and both times a person found it. A third line is a third chance to reintroduce it, so
+  // the property is asserted across ALL of them rather than re-read by whoever adds the fourth.
+  const workflow = releaseWorkflow();
+  const drafts = workflow.match(/draft-release\.sh "\$GITHUB_REF_NAME"/g) ?? [];
+  const publishes = workflow.match(/verify-and-publish-release\.sh \w+/g) ?? [];
+
+  assert.equal(drafts.length, 3, 'mcp, server and bugs each create their release as a draft');
+  assert.equal(
+    publishes.length,
+    3,
+    'and each is published by the one script that checks every asset arrived first');
+});
