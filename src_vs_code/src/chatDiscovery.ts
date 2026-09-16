@@ -1,7 +1,7 @@
 import { Catalog } from './teamServerApi';
 import { ChatCatalog } from './chatModels';
-import type { ProbeResult } from './claudeModels';
-import { parseProbe } from './claudeProbeFile';
+import { PROBE_GOOD_FOR_MS, type ProbeResult } from './claudeModels';
+import { probeFrom } from './claudeProbeFile';
 import { ModelChoice } from './models';
 import { TeamServerState } from './teamServerView';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
@@ -37,6 +37,21 @@ export interface Discovery {
   readonly catalogs: Readonly<Record<string, StoredCatalog>>;
   /** What the Claude CLI answered, so a chat's Claude list says what the panel's says. */
   readonly claude?: ProbeResult | undefined;
+}
+
+/**
+ * A stored probe that is still inside its week, or nothing.
+ *
+ * <p>The version half of `stillGood` cannot be asked here — that needs the CLI — so this is the half
+ * that can: an answer past its week is not offered to anybody, on either surface.</p>
+ */
+function stillFresh(probe: ProbeResult | undefined, now: number): ProbeResult | undefined {
+  if (probe === undefined) {
+    return undefined;
+  }
+  const at = Date.parse(probe.checkedUtc);
+
+  return Number.isFinite(at) && now >= at && now - at < PROBE_GOOD_FOR_MS ? probe : undefined;
 }
 
 /**
@@ -134,11 +149,10 @@ export function discoveryFrom(saved: unknown): Discovery {
     }),
   );
 
-  // Read back through the probe file's own parser, which rebuilds every entry rather than trusting
-  // it — this store outlives the version that wrote it, exactly like the catalogs above.
-  const claude = typeof one['claude'] === 'object' && one['claude'] !== null
-    ? parseProbe(JSON.stringify(one['claude']))
-    : undefined;
+  // Read back through the probe's own validator, which rebuilds every entry rather than trusting it
+  // — this store outlives the version that wrote it, exactly like the catalogs above. And it is the
+  // VALUE form: serialising an object only to parse it back was a round trip that did nothing.
+  const claude = probeFrom(one['claude']);
 
   return { codex: choices(one['codex']), agy: choices(one['agy']), catalogs, claude };
 }
@@ -168,11 +182,22 @@ function fetchedFrom(cached: StoredCatalog | undefined, url: string): Catalog | 
     : undefined;
 }
 
-export function catalogUsing(discovery: Discovery, servers: readonly TeamServer[]): ChatCatalog {
+export function catalogUsing(
+  discovery: Discovery,
+  servers: readonly TeamServer[],
+  now: number = Date.now(),
+): ChatCatalog {
   return {
     discoveredCodex: discovery.codex,
     discoveredAgy: discovery.agy,
-    claudeProbe: discovery.claude,
+    // AGED HERE, and not only in the panel. The panel withholds a probe whose CLI version no longer
+    // matches the binary it just asked — but a chat opened before the panel has rendered reads this
+    // snapshot straight off disk, so on a restart after a CLI upgrade the picker would show verified
+    // models the panel was already refusing to show. This side cannot ask the CLI its version without
+    // spawning a process per chat, so what it can honestly do is refuse an answer that is out of
+    // date at all. The residual window — a CLI upgraded within the week, before the next panel
+    // render — is named in `module_extension.md`. (codex Consistency, round 2.)
+    claudeProbe: stillFresh(discovery.claude, now),
     localEngine: undefined,
     teamServers: servers.map((server): TeamServerState => ({
       server,

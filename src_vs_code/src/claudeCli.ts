@@ -41,6 +41,36 @@ export function claudeExecutableFor(vendors: readonly Vendor[], consult: Consult
   return caller === undefined ? executableForRuntime('claude', vendors) : caller.executablePath;
 }
 
+/**
+ * How long a probe that FAILED waits before it may be tried again.
+ *
+ * <p>Ten minutes: long enough that a spent allowance is not re-asked every few seconds while a person
+ * works, short enough that somebody who has just signed in, or whose network came back, does not have
+ * to close the window. The failure this bounds is the one the trigger could not express at all — it
+ * recorded which CLI it had asked about and never cleared it, so a single timeout left the dropdown
+ * saying "not asked yet" until the editor restarted.</p>
+ */
+export const RETRY_AFTER_MS = 10 * 60 * 1000;
+
+/**
+ * May a probe be started right now?
+ *
+ * <p>Three states, and the middle one is the whole point. A CLI nobody has asked about is always
+ * asked. One that was asked and ANSWERED is never asked again this session — that is the edge
+ * trigger which stopped a render from spawning a process, and it stays. One that was asked and
+ * FAILED gets `failedAt` set, and may be asked again once the backoff has passed.</p>
+ *
+ * <p>Pure, and here rather than inside the provider, because a rule with a clock in it that lives
+ * inside an async orchestration is a rule no test reaches. (gemini Architecture, round 2.)</p>
+ */
+export function mayAsk(askedFor: string, executable: string, now: number, failedAt: number): boolean {
+  if (askedFor !== executable) {
+    return true;
+  }
+
+  return failedAt > 0 && now - failedAt >= RETRY_AFTER_MS;
+}
+
 /** Would anything on this machine actually USE a Claude model? Nothing else is worth a request. */
 export function claudeIsWanted(vendors: readonly Vendor[], consult: ConsultSettings): boolean {
   return vendors.some((v) => v.runtime === 'claude')

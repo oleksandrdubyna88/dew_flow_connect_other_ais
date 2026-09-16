@@ -30,9 +30,31 @@ export const MOST_ENTRIES = 64;
 /** Everything read back, or nothing — a file that cannot be understood is not an answer. */
 export function parseProbe(text: string): ProbeResult | undefined {
   try {
-    const parsed: unknown = JSON.parse(text);
-    const record = parsed as Partial<ProbeResult> | null;
-    if (record === null || typeof record.cliVersion !== 'string' || typeof record.checkedUtc !== 'string') {
+    return probeFrom(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The same rebuilding, over a VALUE rather than a string.
+ *
+ * <p>Two callers read a stored probe: this file, from disk, and the chat's discovery snapshot, which
+ * holds an object. The snapshot used to serialise it only to hand it back to `JSON.parse` one line
+ * later — a round trip that did nothing but make the validator look like a file concern. It is a
+ * value concern; the file parser is the one that has to turn text into a value first. (gemini,
+ * round 2.)</p>
+ */
+export function probeFrom(parsed: unknown): ProbeResult | undefined {
+  {
+    // ANYTHING at all arrives here: this is called on a value out of a settings store as well as on
+    // a parse of a file, so undefined, a number and a string are all real inputs. The null check
+    // alone let undefined through to a property read - caught by the discovery suite.
+    if (typeof parsed !== 'object' || parsed === null) {
+      return undefined;
+    }
+    const record = parsed as Partial<ProbeResult>;
+    if (typeof record.cliVersion !== 'string' || typeof record.checkedUtc !== 'string') {
       return undefined;
     }
     // Bounded on the way IN as well as by construction. The file holds one entry per candidate
@@ -61,9 +83,8 @@ export function parseProbe(text: string): ProbeResult | undefined {
           // is the evidence; the verdict is a function of it. (codex Architecture, this round.)
           return { asked, answered, verified: answeredAsAsked(asked, answered) };
         }),
+      ...(typeof record.executable === 'string' ? { executable: record.executable } : {}),
     };
-  } catch {
-    return undefined;
   }
 }
 

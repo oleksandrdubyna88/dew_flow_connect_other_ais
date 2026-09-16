@@ -19,6 +19,8 @@ import { CLAUDE_CANDIDATES, ProbeResult, ProbedModel, answeredAsAsked, modelThat
 export interface ProbePorts {
   /** `versionProbe.ts`'s own `capture`, narrowed to what this uses. */
   readonly run: (args: readonly string[]) => Promise<{ code: number; output: string }>;
+  /** Which binary `run` launches, so the answer can say what it is evidence about. */
+  readonly executable?: string | undefined;
   /** The CLI's own version, so an answer is not inherited by a different binary. */
   readonly cliVersion: () => Promise<string>;
   readonly now: () => number;
@@ -88,7 +90,12 @@ export async function probeClaudeModels(
   // minute later, as "this machine reaches no Claude models at all".
   return models.length === 0
     ? undefined
-    : { cliVersion, checkedUtc: new Date(ports.now()).toISOString(), models };
+    : {
+      cliVersion,
+      executable: ports.executable ?? '',
+      checkedUtc: new Date(ports.now()).toISOString(),
+      models,
+    };
 }
 
 /**
@@ -113,10 +120,18 @@ export function probeToKeep(found: ProbeResult | undefined, held: ProbeResult | 
   // three families confirmed yesterday silently became "not asked yet" — a discovery subtracting,
   // which is the one thing this feature promised never to do. What this run learned wins for the
   // families it reached; the rest stand. (Raised independently by three reviewers this round.)
-  const asked = new Set(found.models.map((m) => m.asked));
+  // AND AN UNCONFIRMED ANSWER NEVER DISPLACES A CONFIRMED ONE. Round 1's merge carried forward the
+  // families a run did not REACH, which missed the commonest failure by far: a candidate whose
+  // request failed with an ordinary non-zero exit is recorded as asked-and-unverified, not skipped —
+  // and a spent allowance produces exactly that for every candidate. The merge then let those
+  // unverified entries win, so a person waited through a probe to watch four confirmed families go
+  // back to "not asked yet". A verdict is only overwritten by another verdict. (local, round 2.)
+  const confirmed = new Map(held.models.filter((m) => m.verified).map((m) => [m.asked, m]));
+  const taken = found.models.map((m) => (m.verified ? m : confirmed.get(m.asked) ?? m));
+  const asked = new Set(taken.map((m) => m.asked));
 
   return {
     ...found,
-    models: [...found.models, ...held.models.filter((m) => !asked.has(m.asked))],
+    models: [...taken, ...held.models.filter((m) => !asked.has(m.asked))],
   };
 }

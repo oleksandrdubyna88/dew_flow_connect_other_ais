@@ -147,7 +147,7 @@ import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
-import { claudeExecutableFor, claudeIsWanted } from './claudeCli';
+import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
 import {
   executableFor,
   VendorInstall,
@@ -239,6 +239,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private claudeAskedFor = '';
   /** The version the last refresh read, so a cached answer from another binary is not shown. */
   private claudeCliVersion = '';
+  /**
+   * When the last probe FAILED, or 0 when none has.
+   *
+   * <p>The trigger above is an edge, which is what stopped a render from spawning a process on
+   * every paint — but an edge alone has no way back: a probe that timed out or met a spent
+   * allowance left the panel saying "not asked yet" until the editor restarted. A failure is
+   * dated so the edge can be crossed again once the backoff has passed.</p>
+   */
+  private claudeProbeFailedAt = 0;
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
@@ -684,8 +693,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // another refresh, which spawned another `--version`, for ever. A render now asks at most once
     // per SETTLING: the flag is cleared only when a probe genuinely could not be judged fresh, and
     // the executable is part of the key so repointing the CLI is still noticed. (Blocking, codex.)
-    if (wanted && this.claudeAskedFor !== claudeExecutableFor(vendors, consult)) {
-      this.claudeAskedFor = claudeExecutableFor(vendors, consult);
+    const executable = claudeExecutableFor(vendors, consult);
+    if (wanted && mayAsk(this.claudeAskedFor, executable, Date.now(), this.claudeProbeFailedAt)) {
+      this.claudeAskedFor = executable;
+      this.claudeProbeFailedAt = 0;
       this.refreshClaudeProbe(vendors, consult).then(undefined, (error: unknown) => {
         // A catch-all at the detached edge, per the try/catch rule: this promise is deliberately
         // not awaited, so without one a failure here is an unhandled rejection and nothing else.
@@ -706,9 +717,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * confirms it against the version actually installed. (codex SecurityReliability, this round.)</p>
    */
   private claudeProbeToShow(): ProbeResult | undefined {
-    return this.claudeProbe !== undefined && this.claudeProbe.cliVersion === this.claudeCliVersion
-      ? this.claudeProbe
-      : undefined;
+    const probe = this.claudeProbe;
+    if (probe === undefined || probe.cliVersion !== this.claudeCliVersion) {
+      return undefined;
+    }
+
+    // And the BINARY, not only the version. A reviewer row and a consultant can point at two
+    // different installations of one version, signed into two different accounts — so a record that
+    // names another executable is evidence about another account's models. A record written before
+    // that field existed names none, and is trusted, because nothing else about it says otherwise.
+    return (probe.executable ?? '') === '' || probe.executable === this.claudeAskedFor ? probe : undefined;
   }
 
   /**
@@ -734,6 +752,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
       const executable = claudeExecutableFor(vendors, consult);
       const cliVersion = await askVersion(executable);
+      // A CLI that will not say its version is not a transient failure — it is not installed at
+      // this path — so it is NOT dated for a retry. Re-asking a binary that is not there every ten
+      // minutes would be a process spawn a person never asked for, for ever.
       moved = moved || cliVersion !== this.claudeCliVersion;
       this.claudeCliVersion = cliVersion;
       if (cliVersion.length === 0 || stillGood(this.claudeProbe, cliVersion, Date.now())) {
@@ -749,6 +770,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         {
           run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => this.held.view === undefined),
           cliVersion: async () => cliVersion,
+          executable,
           now: () => Date.now(),
         },
         undefined,
@@ -759,8 +781,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // A run that learned nothing keeps the previous answer: an account whose allowance is spent
       // is a state this installation is really in, and it must not empty anybody's dropdown.
       this.claudeProbe = probeToKeep(found, this.claudeProbe);
-      if (found !== undefined) {
-        await this.keepClaudeProbe(found);
+      // A run that confirmed NOTHING is a failure, whatever it managed to record: an allowance that
+      // is spent answers every candidate, unverified, and a person must be able to try again after
+      // signing in rather than restarting the editor.
+      if (found === undefined || !found.models.some((m) => m.verified)) {
+        this.claudeProbeFailedAt = Date.now();
+      }
+      if (this.claudeProbe !== undefined) {
+        await this.keepClaudeProbe(this.claudeProbe);
       }
     } finally {
       this.claudeProbeInFlight = false;
@@ -963,7 +991,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // are ten sequential connection waits, and a refused endpoint is deliberately re-asked rather
       // than cached — so awaiting this would put that whole cost on every repaint. It repaints when
       // it lands. (codex and gemini UxDxPerformance, this round.)
-      consultEngines: this.consultEnginesAnswer(settings.consult),
+      enginesByEndpoint: this.consultEnginesAnswer(settings.consult),
       // The corpus and the last run, cached for a few seconds: this is a process spawn and a
       // repaint is frequent. It is what puts a running collect on the screen without a poller.
       bugz: await this.bugz(),
