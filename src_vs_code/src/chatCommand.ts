@@ -600,7 +600,16 @@ async function findSessionById(source: ConversationSource): Promise<readonly Fou
  * `reorigin`, which computes the root from the source and gets `''` for a Claude one.</p>
  */
 function adoptFound(entry: ChatEntry, mine: Thread, one: FoundIn): void {
-  mine.sessionFile = (one.found as Extract<Found, { kind: 'one' }>).file;
+  const found = one.found as Extract<Found, { kind: 'one' }>;
+  mine.sessionFile = found.file;
+  if (!found.complete) {
+    // PINNED FOR THIS WINDOW, NEVER WRITTEN DOWN. The walk was cut short by its budget, so this is
+    // the only session of that name among the ones that were READ — a fine answer to "show me this
+    // conversation" and no proof at all that no namesake sits beyond the cut. Writing it would make
+    // a guess permanent, which is the exact failure the namesake refusal exists to prevent. (codex,
+    // the code round, twice.)
+    return;
+  }
   const sessionId = sessionIdOf(mine.sessionFile);
   if (sessionId.length === 0) {
     // A file of a shape this build does not recognise. The tab keeps its pin — the Asked button

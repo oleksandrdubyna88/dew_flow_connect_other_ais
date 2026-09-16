@@ -19,6 +19,7 @@ import {
   sessionFileOf,
   severalMatch,
   staysInside,
+  waitingQuestion,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
@@ -406,7 +407,7 @@ test('what may be PINNED is exactly what the button would answer', () => {
   // refused makes the refusal permanent and invisible, on a tab nobody will think to suspect. They
   // disagreed when they were first written — one root with a single match and another with two
   // namesakes was three candidates to the button and one to the pin.
-  const one = (file: string): Found => ({ kind: 'one', file });
+  const one = (file: string): Found => ({ kind: 'one', file, complete: true });
   const nothing: Found = { kind: 'none', refusal: 'nothing in this one' };
   const ambiguous: Found = { kind: 'several', refusal: '2 sessions here share the name' };
 
@@ -1057,4 +1058,81 @@ test('a session file is inside the folder only if it LEADS there too', () => {
 
   // And the directory itself is not a file inside itself.
   assert.strictEqual(staysInside(dir, dir, { dir, file: dir }), false, 'the folder was accepted as a session in it');
+});
+
+test('a match found inside a CUT scan is answered but never called complete', async () => {
+  // The cut's real cost, and the reason `Found.one` carries a flag: with 251 sessions and the name
+  // in two of them, the first match would be adopted for ever and the namesake refusal defeated by
+  // a budget nobody saw. The answer still comes back — the person gets their conversation — and the
+  // caller is told it was not proved unique. (codex, the code round, twice.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 4, (n) => (n === 0 ? 'The one wanted' : `Session ${n}`));
+
+    const cut = await sessionFileIn(home, 'D:\\work\\app', true, 'The one wanted', {
+      most: 2,
+      withinMs: 10_000,
+      mostBytes: SCAN_BUDGET.mostBytes,
+    });
+    assert.strictEqual(cut.kind, 'one', 'a match inside the budget was refused');
+    assert.strictEqual(cut.kind === 'one' ? cut.complete : true, false,
+      'a match from a scan that read two of four sessions was reported as proven unique');
+
+    const whole = await sessionFileIn(home, 'D:\\work\\app', true, 'The one wanted');
+    assert.strictEqual(whole.kind === 'one' ? whole.complete : false, true,
+      'a scan that read the whole folder was reported as incomplete');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session file that will not open is a FAILURE, not a session with nothing in it', async () => {
+  // The waiting question used to read each file with `readFile` and had this answer for free; it
+  // became a stream in this story and silently lost it, which would have reported a locked or
+  // unreadable session as one holding no question. A directory wearing a session's name is the
+  // shape that reproduces it on every platform. (codex, the code round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(dir, 'not-a-file.jsonl'));
+
+    const answer = await waitingQuestion(home, 'D:\\work\\app', true, '');
+
+    assert.strictEqual(answer.kind, 'failed', 'a session that could not be read was reported as silence');
+    assert.match(answer.kind === 'failed' ? answer.refusal : '', /could not be read/u, 'the refusal does not say what happened');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the waiting question’s deadline covers the READING, not only the choosing', async () => {
+  // The regression this story introduced and the round caught: the walk picked files under the
+  // clock and a second loop read them with no clock in it, so the time limit bounded the choosing
+  // and none of the work. (gemini, the code round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 4, (n) => `Session ${n}`);
+
+    let clock = 0;
+    const answer = await waitingQuestion(home, 'D:\\work\\app', true, '', {
+      most: 1_000,
+      withinMs: 10_000,
+      mostBytes: SCAN_BUDGET.mostBytes,
+      now: () => {
+        clock += 4_000;
+
+        return clock;
+      },
+    });
+
+    assert.strictEqual(answer.kind, 'failed', 'a walk that ran out of time reported that nothing was waiting');
+    assert.match(answer.kind === 'failed' ? answer.refusal : '', /within 10 s/u, 'the refusal does not say the time ran out');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

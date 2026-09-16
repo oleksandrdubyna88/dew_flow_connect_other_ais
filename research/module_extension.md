@@ -1593,11 +1593,20 @@ look at. **One FILE is bounded too**, by bytes: the deadline is only checked bet
 without a size cap a single pathological session — one on a slow mount, or one a logging bug grew to
 half a gigabyte — would overrun the whole budget inside one read and report nothing about it. Three
 reviewers across three vendors said so on one round. `mostBytes` is 64 MB against a largest real
-session of 21 MB, and a file past it is skipped and COUNTED in the cut. `waitingQuestion` also stopped
-holding each file as a whole string AND again as an array of lines — two full copies of a session
-that can be tens of megabytes — and streams into the lines instead. What is still NOT bounded is the
-number of workspace ROOTS, each walked with its own budget; named rather than fixed, because a shared
-budget would make the answer depend on which root was listed first.
+session of 21 MB, and a file past it — or one whose size could not be asked for at all — is skipped
+and COUNTED in the cut. The size comes from the `stat` the listing already does to sort by age, so it
+costs no second look at the disk; asking again per file was 250 more round trips on a mounted folder.
+`waitingQuestion` also stopped holding each file as a whole string AND again as an array of lines —
+two full copies of a session that can be tens of megabytes — and streams into the lines instead, with
+the reading INSIDE the budget rather than after it. What is still NOT bounded is the number of
+workspace ROOTS, each walked with its own budget; named rather than fixed, because a shared budget
+would make the answer depend on which root was listed first.
+
+**A match found inside a cut scan is answered, and never written down.** `Found.one` carries
+`complete`, and `adoptFound` persists nothing when it is false: the only session of that name among
+the ones that were READ is a good answer on screen and no proof that a namesake does not sit beyond
+the cut. With 251 sessions and the name in two of them, the first match would otherwise have been
+adopted for ever and the namesake refusal defeated by a budget nobody saw.
 
 **A tab pins its FILE, not the name that found it.** Claude Code refines a conversation's
 `ai-title` as it goes on and the tab follows it, so a name captured when the chat opened stops
