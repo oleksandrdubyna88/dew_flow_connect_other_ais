@@ -178,6 +178,52 @@ public sealed class GateReportingTests
         RateLimit.Hopeless(RateLimit.Reason(result)).Should().BeFalse();
     }
 
+
+    /// <summary>
+    /// Every phrase that makes a limit hopeless has a real vendor answer behind it, and that answer
+    /// survives the line filter.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This is the guard for the one assumption the rest of this rests on.</b>
+    /// <c>Reason</c> considers MARKED lines only, and a reviewer asked on the plan round for every
+    /// line to be scanned instead. That was declined because each phrase in <c>Spent</c> happens to
+    /// be carried by a line <c>Phrases</c> also matches — which is a property of the strings, not of
+    /// the two lists, and nothing enforced it. Add a phrase whose only sample says nothing
+    /// <c>Marked</c> recognises and <c>Reason</c> filters that line away: the scheduler climbs the
+    /// whole ladder again and no test says a word. (codex, the code round, and it is right.)</para>
+    /// <para>So the table is the enforcement. A phrase with no sample fails it; a sample that is not
+    /// marked fails it; a sample that is not hopeless fails it. The next person to add a word has to
+    /// bring the answer they read it off.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryHopelessPhrase_HasAnObservedAnswerThatSurvivesTheLineFilter()
+    {
+        // phrase → the vendor answer it was read off, verbatim.
+        var observed = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["daily"] = "TerminalQuotaError: You have exhausted your daily quota on this model.",
+            ["exhausted"] = "TerminalQuotaError: You have exhausted your daily quota on this model.",
+            ["hit your usage limit"] = SpentAllowance,
+        };
+
+        RateLimit.Spent.Should().OnlyContain(
+            p => observed.ContainsKey(p),
+            "a phrase with no vendor answer behind it is the guess this list exists to keep out");
+        observed.Keys.Should().OnlyContain(
+            p => RateLimit.Spent.Contains(p, StringComparer.Ordinal),
+            "a sample for a phrase nobody uses is a test asserting nothing");
+
+        foreach (var (phrase, answer) in observed)
+        {
+            var result = new ProcessResult(1, StdOut: string.Empty, StdErr: answer, TimedOut: false);
+
+            RateLimit.Hit(result).Should().BeTrue($"'{phrase}' must be reachable: its answer has to be MARKED");
+            RateLimit.Reason(result).Should().NotBeEmpty($"'{phrase}' must survive the line filter");
+            RateLimit.Hopeless(RateLimit.Reason(result))
+                .Should().BeTrue($"'{phrase}' must make the reason it appears in hopeless");
+        }
+    }
+
     // ---------- what a failed reviewer still costs ----------
 
     [Fact]

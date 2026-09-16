@@ -168,14 +168,14 @@ decision.
 
 ## Definition of Done
 
-- [ ] A RED test observed failing with the measured sentence before the vocabulary existed.
-- [ ] Every new phrase proved by removing it and watching its case go red.
-- [ ] A transient 429 with an incidental upgrade footer is still retried — the negative case.
-- [ ] A reviewer meeting the measured sentence launches once AND announces no wait.
-- [ ] The whole `CoaiMcp.Tests.exe` suite green, reported by its own output.
-- [ ] `research/module_runners.md` records the vocabulary and the measurement behind it, and
+- [x] A RED test observed failing with the measured sentence before the vocabulary existed.
+- [x] Every new phrase proved by removing it and watching its case go red.
+- [x] A transient 429 with an incidental upgrade footer is still retried — the negative case.
+- [x] A reviewer meeting the measured sentence launches once AND announces no wait.
+- [x] The whole `CoaiMcp.Tests.exe` suite green, reported by its own output.
+- [x] `research/module_runners.md` records the vocabulary and the measurement behind it, and
       `research/module_tests.md` names the flow and what it does not cover.
-- [ ] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
+- [x] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
 
 ## What the plan round changed
 

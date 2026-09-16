@@ -181,7 +181,8 @@ public sealed class BoundedSchedulerTests : IDisposable
     public async Task ASpentAllowance_IsNotWaitedOn_AndNoWaitIsAnnounced()
     {
         var counter = Path.Combine(_dir, "spent-count.txt");
-        var said = new List<string>();
+        var said = System.Collections.Immutable.ImmutableList<string>.Empty;
+        var gate = new object();
         var work = new ReviewerWork(FakeCliInvocations.Invoke(
             "codex",
             [
@@ -195,7 +196,7 @@ public sealed class BoundedSchedulerTests : IDisposable
             [work],
             _executor,
             TestContext.Current.CancellationToken,
-            onProgress: p => { lock (said) { said.Add(p.Note); } });
+            onProgress: p => { lock (gate) { said = said.Add(p.Note); } });
 
         results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>()
             .Which.Attempts.Should().Be(1);
