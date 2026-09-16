@@ -119,7 +119,13 @@ public sealed class StageRulesTests : IDisposable
     /// table agrees with reality. A rule renamed upstream, a typo, or a promotion that never reached
     /// this pin all fail HERE instead of silently dropping a rule out of a gate. Skipped rather than
     /// failed when the submodule is not populated — that is a checkout that has not run
-    /// `git submodule update --init`, not a broken table.
+    /// <c>git submodule update --init</c>, not a broken table.
+    /// <para><b>The skip is not a hole in CI.</b> A code round asked whether a job that forgets the
+    /// submodule would report green with this quietly skipped. It cannot: <c>.github/workflows/ci.yml</c>
+    /// initialises <c>.agents/conventions</c> before the test step, and the two steps between them —
+    /// <c>npm ci --prefix .agents/conventions</c> and <c>rules.mjs check</c> — both fail outright on an
+    /// empty mount, so the suite never runs at all without it. The skip exists for a local offline
+    /// checkout, and a local run is not the authoritative one.</para>
     /// </remarks>
     [Fact]
     public void EveryTierEntry_ResolvesInThePinnedConventionsMount()
@@ -167,41 +173,59 @@ public sealed class StageRulesTests : IDisposable
         var tier = StageRules.Plan.Concat(StageRules.Document)
             .Concat((string[])["csharp/doctrine.md", "rust/doctrine.md", "typescript/doctrine.md"])
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
 
-        var tail = Directory
-            .EnumerateFiles(corpus, "*.md", SearchOption.AllDirectories)
-            .Select(path => (Path: path, Within: Path.GetRelativePath(corpus, path).Replace('\\', '/')))
-            .Where(file => file.Within.Split('/') is [("common" or "csharp" or "rust" or "typescript"), _])
-            .Where(file => !tier.Contains(file.Within, StringComparer.OrdinalIgnoreCase))
-            .Select(file => new FileInfo(file.Path).Length)
+        // Through the PRODUCTION collector, not a byte-count beside it. Three reviewers made the same
+        // point and they were right: a parallel calculation certifies its own arithmetic, so if Collect
+        // ever changes how it measures or skips, this could pass while a tail rule really is selected —
+        // or fail while none is. It also makes the test read whatever the platform reads, which matters
+        // more here than anywhere: the leftover is ~1.1 KB under CRLF and ~2.4 KB under LF, and the
+        // smallest tail rule sits between the two.
+        var mountRules = RuleFiles
+            .Collect(repoRoot, RuleFiles.DefaultBudgetBytes, RuleOrder.ForBranch("canary/the-tail"))
+            .Files
+            .Select(file => file.WithinMount)
+            .Where(within => within.Split('/') is [("common" or "csharp" or "rust" or "typescript"), _])
             .ToList();
 
-        var spent = Directory
-            .EnumerateFiles(corpus, "*.md", SearchOption.AllDirectories)
-            .Select(path => (Path: path, Within: Path.GetRelativePath(corpus, path).Replace('\\', '/')))
-            .Where(file => tier.Contains(file.Within, StringComparer.OrdinalIgnoreCase))
-            .Sum(file => new FileInfo(file.Path).Length);
+        mountRules.Should().NotBeEmpty("the tier itself is reachable — if this fails, something bigger broke");
 
-        // The base the tier is added to: the instruction files and this repository's own rules, which
-        // lead every order and are never dropped. Measured, not assumed — they are what makes the
-        // leftover as small as it is.
-        var repoRoot = Directory.GetParent(corpus)!.Parent!.FullName;
-        string[] leading = ["CLAUDE.md", "AGENTS.md", ".agents/PROJECT.md"];
-        var baseBytes = leading
-            .Select(name => Path.Combine(repoRoot, name.Replace('/', Path.DirectorySeparatorChar)))
-            .Where(File.Exists)
-            .Sum(path => new FileInfo(path).Length)
-            + Directory.EnumerateFiles(Path.Combine(repoRoot, ".agents", "rules"), "*.md", SearchOption.AllDirectories)
-                .Sum(path => new FileInfo(path).Length);
+        var reachedTail = mountRules.Where(within => !tier.Contains(within, StringComparer.OrdinalIgnoreCase)).ToList();
 
-        var leftover = RuleFiles.DefaultBudgetBytes - baseBytes - spent;
+        reachedTail.Should().HaveCountLessThanOrEqualTo(1,
+            "the rotated tail is effectively inert at this corpus size: the base and the eight tier "
+            + "rules spend nearly the whole 80 000-byte budget, and every rule outside the tier is "
+            + "larger than what is left — 0 of 24 fit under CRLF, 1 of 24 under LF, which is why this "
+            + "is a bound and not an equality. WHEN THIS FAILS the tail has become genuinely reachable, "
+            + "which is GOOD NEWS and not a defect: re-measure "
+            + "research/RESULTS_rules_selection_budget.md, update the coverage claim in "
+            + "RuleOrder.ForBranch and research/module_runners.md, and raise this bound in the same "
+            + $"change. Reached this run: [{string.Join(", ", reachedTail)}]");
+    }
 
-        tail.Should().NotBeEmpty("the corpus has rules outside the tier");
-        tail.Min().Should().BeGreaterThan(leftover,
-            $"nothing outside the tier fits: the base and the tier spend {baseBytes + spent} of "
-            + $"{RuleFiles.DefaultBudgetBytes} bytes, leaving {leftover}, and the smallest rule outside "
-            + "the tier is larger than that. WHEN THIS FAILS the rotated tail has stopped being inert "
-            + "— which is good news — and research/RESULTS_rules_selection_budget.md needs re-measuring");
+    /// <summary>
+    /// Given room, the collector DOES reach past the tier — so the canary above measures a budget,
+    /// not a broken mechanism.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the pair a code round asked for. Without this, a green
+    /// <c>TheRotatedTail_CurrentlyFitsNothing</c> is equally consistent with "the tail is out of
+    /// budget" and "the tail is never collected at all", and only the first is true.
+    /// </remarks>
+    [Fact]
+    public void GivenRoom_TheCollectorDoesReachPastTheTier()
+    {
+        WriteMount();
+        Write(".agents/conventions/common/security.md", Filler("security", 1_000));
+        Write(".agents/conventions/common/git-workflow.md", Filler("git-workflow", 1_000));
+        Write(".agents/conventions/common/pull-requests.md", Filler("pull-requests", 1_000));
+
+        var paths = RuleFiles.Collect(_repo, 200_000, RuleOrder.ForBranch("feat/room")).Files
+            .Select(file => file.WithinMount).ToList();
+
+        paths.Should().Contain("common/security.md", "the tier rule leads");
+        paths.Should().Contain(["common/git-workflow.md", "common/pull-requests.md"],
+            "and the rules outside the tier follow it when the budget allows");
     }
 
     /// <summary>The mounted conventions of THIS repository, or nothing when it is not populated.</summary>

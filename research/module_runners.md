@@ -79,9 +79,10 @@ sequenceDiagram
   given `ForBranch(branch)` — the tier FIXED, the rest of the mount ordered by a SHA-256 of *(branch,
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
-  currently reaches nothing in this repository** — the base and the tier spend ~78 900 of the
-  80 000-byte budget, and the smallest rule outside the tier is 2 247, so all 24 are skipped as
-  oversized and the rotated tail is a queue nothing is taken from. It is correct and inert; rule
+  currently reaches almost nothing in this repository** — the base and the tier spend 78 855 of the
+  80 000-byte budget on a CRLF checkout (77 562 under LF), and the smallest rule outside the tier is
+  2 247 there (2 213 under LF), so the tail takes ONE rule on Linux and NONE on Windows and the rest
+  are skipped as oversized. It is correct and all but inert; rule
   modularization or the resolver is what would give it room, and
   `StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud` fails the day that changes.
   `string.GetHashCode` is unusable here: .NET randomises it per process,
