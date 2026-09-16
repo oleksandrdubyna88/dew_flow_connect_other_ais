@@ -29,7 +29,10 @@ internal static class Schema
     // already records three steps, so inserting ahead of it would leave those databases without the
     // consultations table while believing they had run every step.
     internal static readonly string[] Steps =
-        [Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState, TheRunsThemselves];
+    [
+        Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
+        TheRunsThemselves, ThePairsThemselves,
+    ];
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
@@ -277,5 +280,43 @@ internal static class Schema
         );
 
         CREATE INDEX IF NOT EXISTS ix_collect_runs_started ON collect_runs(started_utc DESC);
+        """;
+
+    /// <summary>The pairs themselves — the artefact this whole plan exists to produce.</summary>
+    /// <remarks>
+    /// <para><b>The collector computed both skeletons and threw them away.</b> It has to compute
+    /// them: comparing them is how it decides the method changed at all. Only <c>fix_sha</c>
+    /// survived, so what shipped was a corpus of POINTERS — and recomputing a pair costs a git read,
+    /// a locate, a normalise, a second git read and a second normalise, per candidate, at review
+    /// time and again at upload time, with the symbol name not stored either.</para>
+    /// <para><b>What is anonymous here, said precisely.</b> The two SKELETONS carry the
+    /// zero-knowledge guarantee. The row around them does NOT: <c>symbol_name</c> is a name and
+    /// <c>finding_id</c> joins straight back to the repository path, the commit, the file and the
+    /// line. That adds no new exposure where it sits — this database already holds all four, and the
+    /// reviewers' un-anonymised prose besides — because the boundary that matters is what LEAVES the
+    /// machine, and only the skeletons and the language ever do. (Plan round, codex.)</para>
+    /// <para><b><c>keep</c> is a person's decision and survives everything.</b> A review of two
+    /// hundred pairs is not finished in one sitting, and `--all` must rewrite the pair without
+    /// touching it — an ordinary upsert would take every decision back to <c>-1</c>, silently. Two
+    /// reviewers found that independently.</para>
+    /// <para><b>Kept for ever</b>, measured: a skeleton is 381 bytes at the median over 53 real
+    /// methods from this repository, so a pair is 762 and the 462 usable candidates are 344 KB. A
+    /// retention window here would delete the product.</para>
+    /// </remarks>
+    internal const string ThePairsThemselves = """
+        CREATE TABLE IF NOT EXISTS collect_pairs (
+            finding_id      INTEGER PRIMARY KEY REFERENCES findings(id),
+            symbol_name     TEXT NOT NULL,
+            language        TEXT NOT NULL,
+            skeleton_before TEXT NOT NULL,
+            skeleton_after  TEXT NOT NULL,
+            written_utc     TEXT NOT NULL,
+            -- -1 undecided, 0 dropped, 1 kept. NOT a boolean, for the reason `collect_state` is not
+            -- one: "nobody has looked" and "somebody said no" are different answers, and a flag
+            -- would make the first indistinguishable from the second for ever.
+            keep            INTEGER NOT NULL DEFAULT -1
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_collect_pairs_keep ON collect_pairs(keep);
         """;
 }

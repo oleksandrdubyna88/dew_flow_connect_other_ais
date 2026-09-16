@@ -96,7 +96,7 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
                 // What this run READ, so a revisit under `--all` can land while a lost race cannot.
                 var claimed = db.RecordCollect(
                     candidate.Id, candidate.CollectState, State(outcome.State), outcome.Reason,
-                    outcome.FixSha, runId);
+                    outcome.FixSha, runId, Pair(outcome));
 
                 decided.Add((outcome, claimed));
 
@@ -129,6 +129,28 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
                 runId, ending, offered, candidates.Count, Tally(decided), Funnel(decided));
         }
     }
+
+    /// <summary>The pair to store, when there is one.</summary>
+    /// <remarks>
+    /// <para>The collector computes both skeletons — comparing them is how it decides the method
+    /// changed at all — and until story 5 it threw them away, leaving a corpus of pointers that the
+    /// review page and the upload would each have had to recompute from git.</para>
+    /// <para><b>Only a COLLECTED outcome has one.</b> A skip has no after; a failure has nothing
+    /// anybody should keep. Returning null for those is what keeps the table exactly as long as the
+    /// list of collected findings.</para>
+    /// </remarks>
+    private static CollectedPair? Pair(CollectOutcome outcome) =>
+        outcome.State is CollectState.Collected && outcome.SkeletonAfter.Length > 0
+            ? new CollectedPair(
+                outcome.SymbolName, Language(outcome), outcome.SkeletonBefore, outcome.SkeletonAfter)
+            : null;
+
+    /// <summary>The language the pair was normalised as, for a reader that is not this program.</summary>
+    /// <remarks>
+    /// Taken from the outcome rather than re-derived from the path: the normaliser already decided
+    /// it, and a second decision made from the file extension is a second decision that can disagree.
+    /// </remarks>
+    private static string Language(CollectOutcome outcome) => outcome.Language;
 
     /// <summary>The three counts, in one pass over the outcomes decided so far.</summary>
     /// <remarks>

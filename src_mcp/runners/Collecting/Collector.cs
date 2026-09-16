@@ -333,7 +333,8 @@ public sealed class Collector(GitHistory git, IAstNormalizer normalizer) : IColl
             if (!string.Equals(skeletonAfter, skeletonBefore, StringComparison.Ordinal))
             {
                 return new CollectOutcome(
-                    CollectState.Collected, [], touched.Sha, symbol.Name, skeletonBefore, skeletonAfter);
+                    CollectState.Collected, [], touched.Sha, symbol.Name, skeletonBefore, skeletonAfter,
+                    language.ToString());
             }
         }
 

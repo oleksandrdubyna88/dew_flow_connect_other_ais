@@ -135,7 +135,9 @@ public sealed record CollectOutcome(
     string FixSha = "",
     string SymbolName = "",
     string SkeletonBefore = "",
-    string SkeletonAfter = "")
+    string SkeletonAfter = "",
+    /// <summary>What the normaliser decided this was, so nothing downstream decides it twice.</summary>
+    string Language = "")
 {
     /// <summary>The data could not support a case, for these reasons.</summary>
     public static CollectOutcome Skip(params string[] reasons) => new(CollectState.Skipped, reasons);
