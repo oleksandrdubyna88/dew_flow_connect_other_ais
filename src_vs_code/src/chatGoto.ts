@@ -383,13 +383,15 @@ const sameName = (rows: readonly ConversationMeta[], label: string): readonly Co
  * was not there.</p>
  */
 function whyNarrowed(asked: GotoAsked): Narrowing {
-  if (asked.severalSessions) {
-    return { kind: 'ambiguous session' };
+  // THE INCOMPLETE SEARCH FIRST, even when two sessions of the name were found in the roots that did
+  // answer. Telling somebody to choose between two implies the two are the candidates, and a root
+  // that would not open may hold the one they want — so the fact that part of the search did not
+  // happen outranks anything the rest of it produced. (gemini, the code round.)
+  if (asked.walkFailed) {
+    return { kind: 'unreadable', reason: 'this tab’s Claude sessions could not be read' };
   }
 
-  return asked.walkFailed
-    ? { kind: 'unreadable', reason: 'this tab’s Claude sessions could not be read' }
-    : { kind: 'unmatched' };
+  return asked.severalSessions ? { kind: 'ambiguous session' } : { kind: 'unmatched' };
 }
 
 /**

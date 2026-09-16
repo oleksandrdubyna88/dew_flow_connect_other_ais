@@ -14,6 +14,7 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
+  projectDirName,
   SCAN_BUDGET,
   sessionFileIn,
   sessionFileOf,
@@ -1147,7 +1148,7 @@ test('a folder that would not LIST says so as a fact, not as an absence', async 
   try {
     const root = join(home, '.claude', 'projects');
     mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, 'D--work-app'), 'not a directory', 'utf8');
+    writeFileSync(join(root, projectDirName('D:\\work\\app')), 'not a directory', 'utf8');
 
     const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Anything');
 
@@ -1162,7 +1163,7 @@ test('a folder that would not LIST says so as a fact, not as an absence', async 
 test('a folder that answered and holds nothing of that name says THAT, as a fact', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    const dir = join(home, '.claude', 'projects', projectDirName('D:\\work\\app'));
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'one.jsonl'), `${titled('Something else')}\n`, 'utf8');
 
@@ -1181,7 +1182,7 @@ test('a walk cut short by its budget is carried as UNREADABLE, not as an absence
   // never opened.
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    const dir = join(home, '.claude', 'projects', projectDirName('D:\\work\\app'));
     mkdirSync(dir, { recursive: true });
     manySessions(dir, 4, (n) => `Session ${n}`);
 

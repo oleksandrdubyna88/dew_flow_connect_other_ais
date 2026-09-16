@@ -3926,8 +3926,19 @@ therefore reported as a failure that had not happened: *"Conversations for X, as
 sent after a directory problem looks for it for as long as they believe in it.
 
 `GotoAsked.walkFailed` now carries the failure separately, `Narrowing` has a fifth member, and
-`whyNarrowed` asks in the order the person cares about: two sessions of one name, then a walk that
-could not be done, then **No Claude session is called “X” — which conversation did you mean?**
+`whyNarrowed` asks in the order the person cares about: **a search that did not finish first**, then
+two sessions of one name, then **No Claude session is called “X” — which conversation did you
+mean?** The incomplete search outranks the rest because telling somebody to choose between two
+implies the two are the candidates, and a root that would not open may hold the one they want.
+
+**And "the folder would not say" is a FACT on the answer, not a wording.** `Found.none` carries
+`why: 'unmatched' | 'unreadable'`, because a thrown walk is not the only failure: a directory that
+would not list, a folder cut short by its budget, a stored id of the wrong shape and a path that
+escapes the project directory all come back as an ordinary `none`. `walkFailed` reads that reason
+through an exhaustive switch, so a third reason added later is a compile error rather than a new
+failure silently counted as a finished search. Auto-open on a name is gated on it too: one root that
+would not answer, beside another holding two sessions of this name, used to let the fallback choose
+a conversation over whatever sat in the root nobody could read.
 
 **And a narrowed list is no longer filtered by the window's first root.** `pickerRows` dropped every
 row whose `workspace` was not the picker's — which is the FIRST root, since that is what the command
