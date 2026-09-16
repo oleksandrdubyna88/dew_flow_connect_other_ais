@@ -547,7 +547,20 @@ export type Found =
      */
     readonly complete: boolean;
   }
-  | { readonly kind: 'none'; readonly refusal: string }
+  | {
+    readonly kind: 'none';
+    readonly refusal: string;
+    /**
+     * WHY there is no answer — nothing is called that, or the folder would not say.
+     *
+     * <p>They are not the same fact and the caller acts on them differently: *go to* offers to start
+     * a conversation when no session wears the name, and must not when the directory simply would not
+     * open. Before this they were one `none` told apart by the WORDING of a sentence, which is not a
+     * distinction a compiler can keep. (codex, the plan round: a walk reported as failed only when it
+     * THREW, while a directory that could not be listed came back as an ordinary absence.)</p>
+     */
+    readonly why: 'unmatched' | 'unreadable';
+  }
   | { readonly kind: 'several'; readonly refusal: string };
 
 /**
@@ -570,7 +583,7 @@ export async function sessionFileIn(
   if (looking.length === 0) {
     // A tab with no name cannot be joined to anything. It is not an error — a chat opened from a
     // file is exactly this — so it is said plainly rather than dressed as a failure.
-    return { kind: 'none', refusal: 'This conversation is not named after a Claude Code session.' };
+    return { kind: 'none', why: 'unmatched', refusal: 'This conversation is not named after a Claude Code session.' };
   }
   const dir = await projectDirFor(home, cwd, caseBlind);
   if (typeof dir !== 'string') {
@@ -578,7 +591,7 @@ export async function sessionFileIn(
   }
   const files = await sessionFiles(dir);
   if (!Array.isArray(files)) {
-    return { kind: 'none', refusal: (files as ReadFailure).refusal };
+    return { kind: 'none', why: 'unreadable', refusal: (files as ReadFailure).refusal };
   }
   return await theOneCalled(files, looking, `in ${dir}`, budget);
 }
@@ -602,13 +615,16 @@ async function projectDirFor(
     names = await fs.readdir(root);
   } catch (reason) {
     return missing(reason)
-      ? { kind: 'none', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
-      : { kind: 'none', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
+      ? { kind: 'none', why: 'unmatched', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
+      : { kind: 'none', why: 'unreadable', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
   const dir = projectDirIn(root, cwd, names, caseBlind);
 
   return dir.length > 0 ? dir : {
     kind: 'none',
+    // NOTHING TO READ rather than a folder that would not answer: Claude Code has simply never run
+    // here, which is an ordinary state of the world and not a failure to report as one.
+    why: 'unmatched',
     refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
   };
 }
@@ -639,7 +655,7 @@ export async function sessionFileOf(
   if (!isSessionId(sessionId)) {
     // Said without repeating the string back: a refusal that echoes a path is a refusal that helps
     // somebody probe with it.
-    return { kind: 'none', refusal: 'This conversation does not name a Claude Code session of a shape this build knows.' };
+    return { kind: 'none', why: 'unmatched', refusal: 'This conversation does not name a Claude Code session of a shape this build knows.' };
   }
   const dir = await projectDirFor(home, cwd, caseBlind);
   if (typeof dir !== 'string') {
@@ -650,8 +666,8 @@ export async function sessionFileOf(
     // Asked before the links are followed, so a file that is simply not there gets the sentence about
     // a deleted session rather than one about escaping a directory.
     return staysInside(dir, file, { dir, file })
-      ? { kind: 'none', refusal: `The session this conversation was pinned to is no longer in ${dir}.` }
-      : { kind: 'none', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
+      ? { kind: 'none', why: 'unmatched', refusal: `The session this conversation was pinned to is no longer in ${dir}.` }
+      : { kind: 'none', why: 'unmatched', refusal: 'This conversation names a session file outside Claude Code’s own folder.' };
   }
   // WHERE IT REALLY LEADS, not only how it is spelled. Lexical containment says nothing about a
   // LINK: anything on this machine can drop a `<valid-uuid>.jsonl` into the project directory
@@ -660,7 +676,7 @@ export async function sessionFileOf(
   const realDir = await realOf(dir);
   const realFile = await realOf(file);
   if (realDir === undefined || realFile === undefined || !staysInside(dir, file, { dir: realDir, file: realFile })) {
-    return { kind: 'none', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
+    return { kind: 'none', why: 'unmatched', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
   }
   const real = { dir: realDir, file: realFile };
 
@@ -694,6 +710,10 @@ async function theOneCalled(
     // the files are newest first, so what was read is the part of the folder being worked in.
     return {
       kind: 'none',
+      // A CUT is a folder that was not finished, which is nearer to "it would not say" than to
+      // "nothing is called that" — and *go to* must not offer to start a second conversation on the
+      // strength of sessions it never opened.
+      why: 'unreadable',
       refusal: `${cutSays(walk.cut, budget, whereabouts)}, and none of them is called “${looking}”.`,
     };
   }
@@ -707,6 +727,7 @@ async function theOneCalled(
   if (only === undefined) {
     return {
       kind: 'none',
+      why: 'unmatched',
       refusal: `No session ${whereabouts} is called “${looking}” — Claude Code names a conversation once it has one.`,
     };
   }

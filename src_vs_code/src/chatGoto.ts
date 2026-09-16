@@ -277,7 +277,11 @@ export function goto(asked: GotoAsked): Goto {
     // failure is the worst kind of wrong (codex) — and this window must hold exactly ONE tab of this
     // name, or the conversation found may be the other tab's (local, gemini and codex, one case
     // each). Where either fails the question goes back to the person, narrowed to the matches.
-    const evidence = asked.severalSessions && asked.namesakes === 1;
+    // AND THE WALK MUST HAVE FINISHED. One root that would not answer beside another holding two
+    // sessions of this name is still `severalSessions`, and opening the one saved conversation of
+    // that name then chooses it over a session in the root nobody could read — evidence gathered
+    // from part of the world, used as though it were all of it. (codex, the plan round.)
+    const evidence = asked.severalSessions && !asked.walkFailed && asked.namesakes === 1;
     const only = evidence && named.length === 1 ? named[0] : undefined;
     if (only !== undefined) {
       return { kind: 'reopen', meta: only };

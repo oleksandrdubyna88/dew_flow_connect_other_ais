@@ -408,7 +408,7 @@ test('what may be PINNED is exactly what the button would answer', () => {
   // disagreed when they were first written — one root with a single match and another with two
   // namesakes was three candidates to the button and one to the pin.
   const one = (file: string): Found => ({ kind: 'one', file, complete: true });
-  const nothing: Found = { kind: 'none', refusal: 'nothing in this one' };
+  const nothing: Found = { kind: 'none', why: 'unmatched', refusal: 'nothing in this one' };
   const ambiguous: Found = { kind: 'several', refusal: '2 sessions here share the name' };
 
   assert.strictEqual(pinnable([nothing, one('mine.jsonl')]), true, 'a single match anywhere was not pinnable');
@@ -1132,6 +1132,67 @@ test('the waiting question’s deadline covers the READING, not only the choosin
 
     assert.strictEqual(answer.kind, 'failed', 'a walk that ran out of time reported that nothing was waiting');
     assert.match(answer.kind === 'failed' ? answer.refusal : '', /within 10 s/u, 'the refusal does not say the time ran out');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a folder that would not LIST says so as a fact, not as an absence', async () => {
+  // The fact `walkFailed` rests on, at the boundary that produces it. A thrown walk is not the only
+  // way a walk fails: a directory that would not list comes back as an ordinary `none`, so a caller
+  // asking only "did it throw" would report "no session is called that" about a folder nobody could
+  // read. A FILE where the project directory should be is the shape that reproduces it on every
+  // platform — `readdir` answers ENOTDIR. (codex, the plan round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const root = join(home, '.claude', 'projects');
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'D--work-app'), 'not a directory', 'utf8');
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Anything');
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.strictEqual(answer.kind === 'none' ? answer.why : '', 'unreadable',
+      'a folder that could not be listed was reported as one holding no session of that name');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a folder that answered and holds nothing of that name says THAT, as a fact', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Something else')}\n`, 'utf8');
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Anything');
+
+    assert.strictEqual(answer.kind === 'none' ? answer.why : '', 'unmatched',
+      'a folder that answered perfectly well is carried as one that would not');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a walk cut short by its budget is carried as UNREADABLE, not as an absence', async () => {
+  // A cut folder was not finished, which is nearer to "it would not say" than to "nothing is called
+  // that" — and *go to* must not offer to start a second conversation on the strength of sessions it
+  // never opened.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    manySessions(dir, 4, (n) => `Session ${n}`);
+
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Nothing here', {
+      most: 2,
+      withinMs: 10_000,
+      mostBytes: SCAN_BUDGET.mostBytes,
+    });
+
+    assert.strictEqual(answer.kind === 'none' ? answer.why : '', 'unreadable',
+      'a folder that was only half read was reported as one that holds no such session');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

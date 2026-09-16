@@ -512,3 +512,19 @@ test('a folder that ANSWERED and matched nothing says so, rather than that it co
     'a walk that could not be done lost its own sentence',
   );
 });
+
+test('an incomplete walk never opens a conversation on the strength of a name', () => {
+  // One root that would not answer, beside another holding two sessions of this name: still
+  // `severalSessions`, and opening the one saved conversation of that name chooses it over whatever
+  // sits in the root nobody could read. Evidence gathered from part of the world, used as though it
+  // were all of it. (codex, the plan round.)
+  const tab = { kind: 'claude' as const, label: 'speak with Astra', path: '' };
+  const mine = meta({ id: 'astra', title: 'speak with Astra' });
+
+  const whole = goto(asked({ tab, ambiguous: true, severalSessions: true, walkFailed: false, source: { kind: 'none' }, inRoot: [mine] }));
+  assert.equal(kindOf(whole), 'reopen', 'a complete walk with one namesake stopped opening it');
+
+  const partial = goto(asked({ tab, ambiguous: true, severalSessions: true, walkFailed: true, source: { kind: 'none' }, inRoot: [mine] }));
+  assert.equal(kindOf(partial), 'pick',
+    'a conversation was opened on a name while part of the search had not been done');
+});

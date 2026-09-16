@@ -989,7 +989,12 @@ export async function askedForGoto(
     // THE OTHER HALF of what `ambiguous` folds together: a walk that could not be DONE, as against
     // one that was done and matched nothing. Two situations, and the person needs a different thing
     // from each — "try again" against "none of them is called that, pick one".
-    walkFailed: walked.unsure,
+    //
+    // A THROWN walk is not the only way it fails. A directory that would not list, and a folder too
+    // big to finish reading, both come back as an ordinary `none` — so asking only `unsure` would
+    // have called them "no session is called that", which is the very mistake this fixes. The reason
+    // is a field on the answer rather than the wording of its sentence. (codex, the plan round.)
+    walkFailed: walked.unsure || walked.found.some((one) => one.kind === 'none' && one.why === 'unreadable'),
     // How many tabs are called what this one is called — this tab included, so never below 1. It is
     // what lets a NAME be evidence: with two tabs of one name it identifies neither.
     namesakes: all.filter((one) => one.label === (tab?.label ?? '')).length,
