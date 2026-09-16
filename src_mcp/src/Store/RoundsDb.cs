@@ -477,7 +477,7 @@ public sealed class RoundsDb : IDisposable
     /// <para>Called ONLY on an acknowledgement, never when the batch left: a pair marked before the
     /// server answered is a pair this client would skip for ever.</para>
     /// </remarks>
-    public void RecordSend(IReadOnlyList<SendOutcome> outcomes)
+    public void RecordSendOutcome(IReadOnlyList<SendOutcome> outcomes)
     {
         using var transaction = _db.BeginTransaction();
         foreach (var outcome in outcomes)

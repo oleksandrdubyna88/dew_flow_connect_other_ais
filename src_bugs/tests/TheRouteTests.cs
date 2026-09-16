@@ -158,7 +158,7 @@ public sealed class TheRouteTests
         using var http = server.CreateClient();
         using (var corpus = server.Reading())
         {
-            corpus.Keep("id-1", "CSharp", "a", "b", "key", "now");
+            corpus.Keep("CSharp", "a", "b", "key", "now");
         }
 
         var reply = await http.GetAsync("/health", TestContext.Current.CancellationToken);
@@ -166,7 +166,8 @@ public sealed class TheRouteTests
 
         reply.StatusCode.Should().Be(HttpStatusCode.OK);
         body.Should().Contain("ok");
-        body.Should().NotContain("1").And.NotContain("id-1");
+        body.Should().NotContain("1", "a count here is an unauthenticated read of how much exists");
+        body.Should().NotContain(Corpus.IdOf("CSharp", "a", "b"), "nor is an entry id");
     }
 
     /// <summary>A leak is refused over HTTP too, with the word that caused it.</summary>

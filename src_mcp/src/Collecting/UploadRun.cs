@@ -133,7 +133,7 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
 
         // ONE transaction for the batch: a kill halfway through two hundred single updates left half
         // the batch marked and half not, which is a local state no retry can reason about.
-        db.RecordSend(outcomes);
+        db.RecordSendOutcome(outcomes);
 
         return new UploadSummary(
             sent.Count,

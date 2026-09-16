@@ -34,9 +34,29 @@ internal sealed class Program
         // One-shot admin modes, chosen from args[0] before any transport is opened — the shape
         // `.agents/PROJECT.md` sanctions, and the reason a fresh deployment is not an empty table
         // with no documented way to fill it. (Plan round, codex.)
-        if (args.Length > 0 && args[0] is "--issue-key" or "--revoke" or "--promote" or "--waiting")
+        //
+        // `Admin.Knows` rather than a second copy of the list: this predicate and the switch that
+        // dispatches were two hand-maintained lists, and a mode added to one but not the other
+        // either starts Kestrel instead of running the one-shot, or falls through the switch's
+        // default and silently runs `--waiting`. Both are silent. (Code round, codex.)
+        if (Admin.Knows(args))
         {
             return Admin.Run(args, Secret(), Data());
+        }
+
+        // AND THE OTHER HALF OF THE RULE, which this binary did not have at all: an argument that
+        // names no mode must exit 64, because 64 is how a caller learns it is talking to a binary
+        // too old for what it asked. `coai-bugs --rotate-the-moon` started Kestrel and listened
+        // for ever — a scenario test over the real executable found it, four minutes and
+        // fifty-seven seconds in, which is exactly how long it takes to notice that a process
+        // nobody asked to start is still running.
+        if (Unknown(args) is { Length: > 0 } unknown)
+        {
+            await Console.Error.WriteLineAsync(
+                $"[coai-bugs] '{unknown}' is not a mode this binary has. Modes: "
+                + $"{string.Join(", ", Admin.Modes)}. With no mode it serves /ingest.");
+
+            return 64; // EX_USAGE
         }
 
         var secret = Secret();
@@ -145,6 +165,32 @@ internal sealed class Program
             ? header[7..]
             : string.Empty;
 
+    /// <summary>
+    /// Arguments the HOST understands, which are not modes and are not this binary's to refuse.
+    /// </summary>
+    /// <remarks>
+    /// The list is short because the surface is: a deployment says where to listen and which
+    /// environment it is, and everything else about this server is an environment variable. Anything
+    /// outside it that starts with <c>--</c> is a mode nobody here has heard of.
+    /// </remarks>
+    private static readonly string[] HostArguments =
+        ["--urls", "--environment", "--contentRoot", "--applicationName"];
+
+    /// <summary>The first argument that names nothing, or empty when they all name something.</summary>
+    private static string Unknown(string[] args)
+    {
+        if (args.Length == 0 || !args[0].StartsWith("--", StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        // `--urls=x` and `--urls x` are the same argument to the host, so the name is what is in
+        // front of any `=`.
+        var name = args[0].Split('=', 2)[0];
+
+        return Array.IndexOf(HostArguments, name) >= 0 ? string.Empty : args[0];
+    }
+
     private static string Secret() =>
         Environment.GetEnvironmentVariable(SecretVariable) ?? string.Empty;
 
@@ -160,8 +206,10 @@ internal sealed class Program
     /// it.</b> The startup then threw <c>FileNotFoundException</c> before the server listened, so a
     /// deployment that built perfectly could not run at all. The file is an embedded resource now —
     /// there is nothing beside the binary to lose, and the build fails if it is missing.</para>
-    /// <para><c>COAI_BUGS_KEYWORDS</c> names a file to use instead, for an operator who needs to
-    /// correct the list without waiting for a release.</para>
+    /// <para><c>COAI_BUGS_KEYWORDS</c> is read FIRST and REPLACES the embedded list — it is an
+    /// override, not an alternative path to the same words. It exists for an operator who has to
+    /// correct the list on a running deployment without waiting for a release; the embedded copy is
+    /// what every ordinary start uses.</para>
     /// </remarks>
     private static string Keywords()
     {
