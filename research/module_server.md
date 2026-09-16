@@ -981,7 +981,7 @@ is not a reader — but it is the first caller to want the collector's columns, 
 `RoundsDb` once (idempotent through `user_version`) and then reads. Without that the honest answer to
 an old schema is nought candidates, which reads as *no material* rather than *wrong schema*.
 
-Plan: `todo/PLAN_a_corpus_of_real_defects.md`, which carries the funnel measurement in full and the
+Plan: `research/PLAN_a_corpus_of_real_defects.md`, which carries the funnel measurement in full and the
 five stories after this one.
 
 ### The normalizer is a MODE, not a sidecar (`--normalize`, 2026-09-15)
@@ -1015,7 +1015,7 @@ it — and **73** (EX_CANTCREAT) for answers that could not be written, which is
 request. A method that could not be located is neither: it is an ANSWER carrying a skip reason, and a
 batch of fifty where two failed to resolve is a successful batch.
 
-Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 2.
+Plan: `research/PLAN_a_corpus_of_real_defects.md`, story 2.
 
 ### The collector finds the fix (`--collect-bugs`, 2026-09-15)
 
@@ -1096,7 +1096,7 @@ ordinary repositories, refused before git was asked anything. Whole path compone
 Every one of these was proved by breaking the fix again and watching the test go red with the real
 symptom, which is how the abbreviated sha turned out to be collected rather than merely accepted.
 
-Plan: `todo/PLAN_a_corpus_of_real_defects.md`, story 3.
+Plan: `research/PLAN_a_corpus_of_real_defects.md`, story 3.
 
 
 ### The runs themselves (`collect_runs`, 2026-09-16)

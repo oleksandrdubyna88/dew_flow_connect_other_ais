@@ -228,7 +228,7 @@ internal static class Schema
     /// <para>An accepted finding is a defect a person confirmed, and the collector turns those into
     /// anonymous before/after pairs. These four columns are what it may not lose: WHICH run looked
     /// at a finding, what it concluded, why it concluded that, and the commit it found the fix in.
-    /// See <c>todo/PLAN_a_corpus_of_real_defects.md</c>.</para>
+    /// See <c>research/PLAN_a_corpus_of_real_defects.md</c>.</para>
     /// <para><b><c>collect_state</c> is text and not a flag</b>, and that is the load-bearing choice.
     /// A boolean says only "looked at", so the first run consumes every finding it saw and a second
     /// run — with a better prompt, a wider language set, a repaired walk — can never see them again.
