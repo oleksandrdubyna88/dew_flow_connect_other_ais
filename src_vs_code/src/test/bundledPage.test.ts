@@ -24,7 +24,7 @@ import * as path from 'node:path';
 const ROOT = process.cwd();
 
 /** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
-const EMBEDDED = ['compareRows', 'rowMatches', 'money', 'cost3', 'costTitle', 'asInstant'];
+const EMBEDDED = ['compareRows', 'rowMatches', 'inView', 'money', 'cost3', 'costTitle', 'asInstant'];
 
 /**
  * The fixture's day is TODAY, taken from the real clock, and that is load-bearing rather than lazy.

@@ -1,6 +1,6 @@
 # PLAN — the log pages, and keeps conversations apart
 
-> Status: **plan only, nothing implemented yet, 2026-09-16.** Scope: the rounds-log page —
+> Status: **IMPLEMENTED, 2026-09-16.** Scope: the rounds-log page —
 > `src_vs_code/src/roundsLog.ts` (the pager's appearance, a second view over the one table), and its
 > tests.
 >
@@ -8,18 +8,21 @@
 > Related docs: [module_extension.md](../research/module_extension.md),
 > [PLAN_rounds_log_view.md](../research/PLAN_rounds_log_view.md).
 >
-> **Depends on [#313](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/pull/326)**, which
-> teaches `cssRules.ts` to walk braces. This page's stylesheet carries an `@media` block
-> (`roundsLog.ts:1218`) and the parser on `main` refuses it, so the CSS half of the test below cannot
-> be written until that lands. Not stacked on it — this branch is cut from `main` and rebased.
+> Depended on [#313](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/pull/326) for a
+> CSS parser that can walk braces — this page's stylesheet carries an `@media` block and the parser
+> before that change refused it. #313 merged first; this branch was rebased onto it and the parser
+> was proved on this page's stylesheet (83 rules, the `@media` read through) before a line depending
+> on it was written.
 
 ## Two complaints, one page
 
-> «и пофикси пагинацию, кнопки активны, а при нажатии ничего не происходит (там кажется до 200
-> записей на стр). когда некуда листать — кнопки должны быть неактивны»
+> *"Fix the pagination — the buttons are active and pressing them does nothing (about 200 rows a
+> page, it seems). When there is nowhere to page to, the buttons should be inactive."*
 >
-> «Conversations logs into separate tab … в бд смотри сам как удобно, в отд таблицу или нет, а на стр
-> в отдельный таб вынести»
+> *"Conversations logs into separate tab … do whatever suits in the database, a separate table or
+> not, but on the page put them in a tab of their own."*
+>
+> (Translated from the issue; the original is on #297.)
 
 ### A. The pager — the buttons ARE inactive, and nothing says so
 
@@ -175,3 +178,76 @@ rather than making them a kind of round applies here word for word. The issue le
 - [ ] Whole extension suite green from a cleaned `out/`; `plan-lifecycle.mjs` clean.
 - [ ] `research/module_extension.md` and `research/module_tests.md` updated.
 - [ ] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations, both READMEs updated.
+
+
+## What the code round changed
+
+Twelve of thirty-six findings taken, and **six reviewers independently found the one real defect the
+plan's shared-table shape had**: the facets. `chatRows` leaves repository, branch, stage and verdict
+empty on purpose, so choosing any of those in the conversations view matched nothing — and a value
+chosen while looking at ROUNDS survived the switch and emptied the tab before it was opened, with the
+control that did it hidden. `ROUND_ONLY_FACETS` names them once; the markup classes them, the
+stylesheet hides them, and the tab handler clears them from the state AND from the select.
+
+Also taken: `#pickall` is hidden in the conversations view but was not disabled, and an element that
+is not displayed can still be reached by a keyboard or an assistive technology — the handler refuses
+there now. `inView` was embedded into the page by `toString()` without being in `bundledPage.test.ts`'s
+`EMBEDDED` list, so the guard that proves an embedded function survives minification was not covering
+it. And the header assertions were moved off `head.includes(...)` onto a parse of the `<th>` cells.
+
+Declined with reasons: two findings claimed `tookCell` omits its column class on one branch (it does
+not — both branches carry it, and the diff shows both); one reported a `JSON.stringify` XSS at a line
+that uses `jsonForScript` (the only `JSON.stringify` on the page serialises three booleans); three
+argued the view filter runs after the slice, one of them reasoning its way to the opposite conclusion
+inside its own explanation; two asked for `inView` to be renamed over a shadowing that does not exist;
+and four asked for comments that are already there.
+
+## Two tests found weak by their own teeth check
+
+Both were written after the code they cover, which is why the check was owed.
+
+1. **The back-to-page-one test passed with `firstPage()` deleted.** `render`'s clamp pulls an
+   out-of-range page back by itself when the other view holds one page, so the test never reached the
+   rule it was named for. It is written over two views of TWO pages each now.
+2. **The filter-travel test passed with the filter-clearing deleted**, twice over. The harness
+   answered `[]` for every `querySelectorAll`, so the facet handlers had never been wired in any test
+   on this page — and once that was fixed, the fake event carried a plain object as its target, while
+   the handler reads `event.target.getAttribute('data-filter')` to know which facet moved. The event
+   carries the stub now.
+
+The harness therefore serves selectors **by name** and throws on one it has not been taught, the same
+rule `chatPage.test.ts` adopted in #313.
+
+**And a lesson that cost three attempts:** a heredoc ate the backslash of a regex escape three times
+in one sitting — `` arrived as an actual BACKSPACE character inside a regex literal, which matched
+nothing and made an empty parse read as a page with no headers. The header test now asserts its own
+parse found something before it asserts anything about what it found.
+
+## Deviations from the plan as reviewed
+
+- **The facets became view-scoped**, which the plan listed under "So:" but did not implement as a
+  named list; it is `ROUND_ONLY_FACETS` now, read by three places.
+- **Filters are cleared on the way in**, which the plan did not mention at all.
+- **The conversations view keeps its Cost column.** A reviewer asked for it to be hidden; a
+  conversation has a real cost and the column is one of the reasons to look at the tab.
+- **`#pageinfo` is not hidden anywhere**, contrary to one finding's premise: the pager speaks for both
+  views.
+
+## Definition of Done
+
+- [x] A RED test observed failing with a message naming the real symptom, for both halves.
+- [x] Every rule and filter proved by deleting it — two tests failed that check and were rewritten.
+- [x] The pager's disabled state is visible AND the hover no longer lights a dead control.
+- [x] `#pageinfo` states the position at one page as well as at ten.
+- [x] Rounds shows no conversations; Conversations shows no rounds; the headers differ — over more
+      than one page, and under a search matching both kinds.
+- [x] Colours from the theme; no hex.
+- [x] Whole extension suite green from a cleaned `out/` — 3065 tests, 3063 pass, 0 fail, 2 skipped.
+- [x] `research/module_extension.md` and `research/module_tests.md` updated.
+- [x] Promoted to `research/` with its deviations, both READMEs updated.
+
+## Open tail
+
+The facet OPTIONS are still built from the merged rows, so the Vendor list in the conversations view
+can offer a vendor that only ever answered a round. Choosing it gives an empty result, which is
+honest but not helpful; building options per view is a render-time change and wants its own plan.
