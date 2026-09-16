@@ -343,9 +343,21 @@ public sealed class RoundsDb : IDisposable
         // unconditional write let the slower one replace a `collected` row and its fix_sha with its
         // own later verdict, so durable state depended on timing. (Code round, codex.)
         var claimed = write.ExecuteNonQuery() == 1;
-        if (claimed && pair is { } collected)
+        if (claimed)
         {
-            WritePair(findingId, collected);
+            // A pair belongs to a COLLECTED finding and to no other kind. `--all` can revisit a
+            // finding that was collected and decide it is now skipped — a repaired walk that finds
+            // the earlier fix commit was wrong — and the pair written last time would otherwise
+            // survive, with `Pairs()` still offering it for review. The row follows its outcome, in
+            // the same transaction as the outcome. (CodeRabbit.)
+            if (pair is { } collected)
+            {
+                WritePair(findingId, collected);
+            }
+            else
+            {
+                ForgetPair(findingId);
+            }
         }
 
         transaction.Commit();
@@ -381,6 +393,20 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$before", pair.SkeletonBefore);
         Bind(write, "$after", pair.SkeletonAfter);
         Bind(write, "$now", Now());
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>Drops the pair of a finding that is no longer collected.</summary>
+    /// <remarks>
+    /// The decision goes with it, and that is right: a pair a later run says was never the fix is not
+    /// a pair somebody decided about. Deleting nothing is the ordinary case — most outcomes never had
+    /// a pair — so this is silent rather than counted.
+    /// </remarks>
+    private void ForgetPair(long findingId)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = "DELETE FROM collect_pairs WHERE finding_id = $id";
+        Bind(write, "$id", findingId);
         write.ExecuteNonQuery();
     }
 

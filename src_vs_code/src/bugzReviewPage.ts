@@ -180,6 +180,12 @@ ${body(pairs, rows, trouble)}
     for (var i = 0; i < boxes.length; i++) {
       boxes[i].checked = selected[boxes[i].getAttribute('data-pick')] === true;
     }
+    // The select-all box too. The browser ticks it natively on click while the handler decides
+    // from the COUNT, so the two drift apart the moment anything else changes the selection: after
+    // a decision clears it the box stayed ticked over nothing, and unticking one row left it ticked
+    // over a partial selection. It then showed the opposite of what the next click would do.
+    var all = document.getElementById('pickall');
+    if (all) { all.checked = boxes.length > 0 && n === boxes.length; }
   }
 
   function decide(keep) {

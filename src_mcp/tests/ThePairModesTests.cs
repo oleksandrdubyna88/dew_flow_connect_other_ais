@@ -120,50 +120,47 @@ public sealed class ThePairModesTests : IDisposable
 
     /// <summary>A request fault is 65 — never 64, which means an old binary.</summary>
     /// <remarks>
-    /// The rule this repository states in both directions: a mode the binary does NOT have exits 64 so
-    /// the caller falls back, and a mode it DOES have never does, whatever is wrong with the request.
-    /// A fault wearing 64 hides behind the fallback.
+    /// <para>The rule this repository states in both directions: a mode the binary does NOT have exits
+    /// 64 so the caller falls back, and a mode it DOES have never does, whatever is wrong with the
+    /// request. A fault wearing 64 hides behind the fallback.</para>
+    /// <para>The cases are DATA rather than a switch, because the complexity limit is a rule about
+    /// every method in this tree and a test is a method. (CodeRabbit.)</para>
     /// </remarks>
+    public static TheoryData<string, string> BadRequests => new()
+    {
+        // A file that is not there at all — no `--in`.
+        { "", "" },
+        // `--in "   "` reaches File.ReadAllText as an ArgumentException the old filter did not catch.
+        { "   ", "" },
+        { "file", "{ this is not json" },
+        { "file", """{"items":[{"findingId":1,"keep":7}]}""" },
+        // `{}` deserialized to a null list, became an empty batch and exited 0 — so a misspelled
+        // field looked successfully processed.
+        { "file", "{}" },
+    };
+
     [Theory]
-    [InlineData("missing-file")]
-    [InlineData("not-json")]
-    [InlineData("bad-keep")]
-    // `--in ""` reaches File.ReadAllText as an ArgumentException the old filter did not catch, so
-    // the process died with an unhandled exception instead of answering 65. (Code round, two reviewers.)
-    [InlineData("empty-path")]
-    // `{}` deserialized to a null list, became an empty batch, committed nothing and exited 0 — so a
-    // misspelled field looked successfully processed. (Code round, codex.)
-    [InlineData("no-items")]
-    public void ABadRequestIs65_Never64(string how)
+    [MemberData(nameof(BadRequests))]
+    public void ABadRequestIs65_Never64(string how, string content)
     {
         Seed();
         var file = Path.Combine(_dir, "decisions.json");
-        string[] args = ["--pairs-keep", "--in", file];
-        switch (how)
+        if (content.Length > 0)
         {
-            case "not-json":
-                File.WriteAllText(file, "{ this is not json");
-                break;
-            case "bad-keep":
-                File.WriteAllText(file, """{"items":[{"findingId":1,"keep":7}]}""");
-                break;
-            case "empty-path":
-                args = ["--pairs-keep", "--in", "   "];
-                break;
-            case "no-items":
-                File.WriteAllText(file, "{}");
-                break;
-            default:
-                args = ["--pairs-keep"];
-                break;
+            File.WriteAllText(file, content);
         }
+
+        string[] args = how switch
+        {
+            "file" => ["--pairs-keep", "--in", file],
+            "" => ["--pairs-keep"],
+            _ => ["--pairs-keep", "--in", how],
+        };
 
         Spoken(() => Program.PairsKeep(args), out var code);
 
         code.Should().Be(65, "64 is reserved for a mode this binary does not have");
     }
-
-    /// <summary>A decision outside the three it may be is refused, not written.</summary>
     /// <summary>An explicitly empty batch is a legitimate no-op, and says so.</summary>
     /// <remarks>
     /// The other half of the `no-items` case above: `{"items":[]}` is somebody deciding about nothing,

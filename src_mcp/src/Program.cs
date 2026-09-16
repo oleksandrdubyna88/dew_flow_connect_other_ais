@@ -457,9 +457,21 @@ internal static class Program
             return 74; // EX_IOERR
         }
 
-        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-            new Collecting.PairsAnswer([.. db.Pairs(Limit(args, Store.BugsQuery.DefaultLimit))]),
-            Server.ServerJsonContext.Default.PairsAnswer));
+        // A database that OPENED can still fail while it is read — a locked file, a disk that went
+        // away, a row that will not decode. `Open` answers null only for the open itself, so without
+        // this the exception escapes as an unhandled process failure rather than the 74 every other
+        // database mode here answers. (CodeRabbit.)
+        try
+        {
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                new Collecting.PairsAnswer([.. db.Pairs(Limit(args, Store.BugsQuery.DefaultLimit))]),
+                Server.ServerJsonContext.Default.PairsAnswer));
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+            return 74; // EX_IOERR
+        }
 
         return 0;
     }
@@ -474,14 +486,52 @@ internal static class Program
     /// </remarks>
     internal static int PairsKeep(string[] args)
     {
+        var asked = Decisions(args, out var refusal);
+        if (refusal.Length > 0)
+        {
+            Note(refusal);
+            return 65; // EX_DATAERR
+        }
+
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; no decision can be written to it");
+            return 74; // EX_IOERR
+        }
+
+        try
+        {
+            var decided = db.RecordKeep(
+                [.. asked.Select(one => new Core.Collecting.KeepDecision(one.FindingId, one.Keep))]);
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                new Collecting.KeepAnswer(decided), Server.ServerJsonContext.Default.KeepAnswer));
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+            return 74; // EX_IOERR
+        }
+
+        return 0;
+    }
+
+    /// <summary>The decisions a file asked for, or why it is not a request.</summary>
+    /// <remarks>
+    /// Split out so the mode above is the DATABASE work and this is the reading of a document —
+    /// which is also what keeps each of them inside the complexity the conventions allow. Every
+    /// refusal here is a request fault and its caller answers 65; none is ever 64, because 64 means
+    /// "this binary does not have that mode" and sends a caller down a fallback.
+    /// </remarks>
+    private static IReadOnlyList<Collecting.KeepAsk> Decisions(string[] args, out string refusal)
+    {
         var flags = Flags(args);
-        // Whitespace as well as absent: `--in ""` reaches `File.ReadAllText` as an ArgumentException,
-        // which the filter below does not catch and which would leave the process with an unhandled
-        // exception rather than the 65 this mode promises. (Code round, gemini and codex.)
+        // Whitespace as well as absent: `--in ""` reaches `File.ReadAllText` as an ArgumentException.
         if (!flags.TryGetValue("--in", out var input) || string.IsNullOrWhiteSpace(input))
         {
-            Note("--pairs-keep needs --in <decisions.json>");
-            return 65; // EX_DATAERR
+            refusal = "--pairs-keep needs --in <decisions.json>";
+            return [];
         }
 
         Collecting.KeepRequest? request;
@@ -494,44 +544,36 @@ internal static class Program
                                       or ArgumentException or NotSupportedException
                                       or System.Text.Json.JsonException)
         {
-            Note($"--pairs-keep could not read {input}: {e.Message}");
-            return 65; // EX_DATAERR
+            refusal = $"--pairs-keep could not read {input}: {e.Message}";
+            return [];
         }
 
-        // A document with NO `items` is a malformed request, not an empty batch. `{}` used to
-        // deserialize to null, become an empty list, commit nothing and exit 0 — so a misspelled or
-        // stale decisions file looked successfully processed. An explicitly empty array is still a
-        // legitimate no-op. (Code round, codex.)
+        return Wanted(request, out refusal);
+    }
+
+    /// <summary>What a parsed document actually asked for, once it is known to be a request.</summary>
+    /// <remarks>
+    /// A document with NO `items` is malformed, not an empty batch: `{}` used to become an empty list,
+    /// commit nothing and exit 0, so a misspelled field looked successfully processed. An explicitly
+    /// empty array stays a legitimate no-op.
+    /// </remarks>
+    private static IReadOnlyList<Collecting.KeepAsk> Wanted(
+        Collecting.KeepRequest? request, out string refusal)
+    {
         if (request?.Items is not { } asked)
         {
-            Note("--pairs-keep: the document has no `items` list");
-            return 65; // EX_DATAERR
+            refusal = "--pairs-keep: the document has no `items` list";
+            return [];
         }
 
         // Validated because it came from another process: a keep outside the three it may be is a
         // request fault, not a value to write and puzzle over later.
-        if (Array.Exists([.. asked], one => !Core.Collecting.Keep.IsDecision(one.Keep)))
-        {
-            Note("--pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)");
-            return 65; // EX_DATAERR
-        }
+        refusal = Array.Exists([.. asked], one => !Core.Collecting.Keep.IsDecision(one.Keep))
+            ? "--pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)"
+            : string.Empty;
 
-        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
-        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
-        if (db is null)
-        {
-            Note("the rounds database could not be opened; no decision can be written to it");
-            return 74; // EX_IOERR
-        }
-
-        var decided = db.RecordKeep(
-            [.. asked.Select(one => new Core.Collecting.KeepDecision(one.FindingId, one.Keep))]);
-        Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-            new Collecting.KeepAnswer(decided), Server.ServerJsonContext.Default.KeepAnswer));
-
-        return 0;
+        return asked;
     }
-
     internal static int NormalizeJson(string[] args)
     {
         var flags = Flags(args);

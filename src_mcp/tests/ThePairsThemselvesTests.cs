@@ -137,6 +137,80 @@ public sealed class ThePairsThemselvesTests : IDisposable
             .Be("GetOrAdd", "the loser must not have written its pair either");
     }
 
+    /// <summary>
+    /// A pair whose finding stops being collected is REMOVED, not left behind.
+    /// </summary>
+    /// <remarks>
+    /// `--all` revisits decided findings, and a repaired walk can conclude that what it called the
+    /// fix last time was not one — the outcome goes from `collected` to `skipped`. The pair written
+    /// then would otherwise survive with nothing pointing at it, and `Pairs()` would go on offering
+    /// it for review. A pair belongs to a collected finding and to no other kind. (CodeRabbit.)
+    /// </remarks>
+    [Fact]
+    public void APairGoesWhenItsFindingStopsBeingCollected()
+    {
+        var id = Seed();
+        using var db = Db();
+        db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+        db.Pairs(50).Should().ContainSingle();
+
+        // The later run decides the earlier fix was not one.
+        db.RecordCollect(id, "collected", "skipped", "fix_commit_not_found", "", "run-2");
+
+        db.Pairs(50).Should().BeEmpty(
+            "a pair for a finding that is no longer collected is a pair of nothing");
+    }
+
+    /// <summary>
+    /// The outcome and the pair really do roll back together.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>`AClaimThatLostLeavesNoPair` does not prove this and I thought it did.</b> Its swap
+    /// updates zero rows, so `WritePair` is never reached at all — removing `BeginTransaction`
+    /// entirely would leave that test green. A reviewer of the pull request said so, and it is the
+    /// same shape as every structural assertion that survives its own break.</para>
+    /// <para>So the pair write is made to FAIL, with a trigger that aborts it, after the finding
+    /// update has already succeeded inside the transaction. The finding must come back unchanged.</para>
+    /// </remarks>
+    [Fact]
+    public void AFailedPairWriteRollsTheOutcomeBackToo()
+    {
+        var id = Seed();
+        using var db = Db();
+
+        using (var trap = new SqliteConnection(
+            $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False"))
+        {
+            trap.Open();
+            using var make = trap.CreateCommand();
+            make.CommandText = """
+                CREATE TRIGGER no_pairs_today BEFORE INSERT ON collect_pairs
+                BEGIN SELECT RAISE(ABORT, 'no'); END;
+                """;
+            make.ExecuteNonQuery();
+        }
+
+        var write = () => db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+
+        write.Should().Throw<SqliteException>("the trigger refuses the pair");
+        Collected(id).Should().BeEmpty(
+            "the finding update was in the same transaction and must have gone back with it");
+        db.Pairs(50).Should().BeEmpty();
+    }
+
+    /// <summary>The finding's own collect_state, straight out of SQLite.</summary>
+    private string Collected(long id)
+    {
+        using var db = new SqliteConnection(
+            $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
+        db.Open();
+        using var read = db.CreateCommand();
+        read.CommandText = "SELECT collect_state FROM findings WHERE id = $id";
+        read.Parameters.AddWithValue("$id", id);
+
+        return (string)read.ExecuteScalar()!;
+    }
+
     [Fact]
     public void ADecisionCanBeChangedAndTakenBack()
     {
