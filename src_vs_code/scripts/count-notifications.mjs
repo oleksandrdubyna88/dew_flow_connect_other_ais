@@ -55,21 +55,41 @@ function everySourceFile(dir) {
   return found.sort();
 }
 
+/** The funnel itself, which is allowed — indeed required — to call the API directly. */
+const FUNNEL = 'notify.ts';
+
 /** What the source says, today. */
 export function count() {
   const byApi = Object.fromEntries(APIS.map((api) => [api, 0]));
   const perFile = {};
   let modal = 0;
+  let inTheFunnel = 0;
+  let routed = 0;
 
   for (const file of everySourceFile(SOURCE)) {
     const text = readFileSync(file, 'utf8');
+    const isFunnel = file.endsWith(FUNNEL);
     let here = 0;
     for (const api of APIS) {
       const hits = text.match(new RegExp(`\\.${api}\\b`, 'gu'))?.length ?? 0;
-      byApi[api] += hits;
-      here += hits;
+      if (isFunnel) {
+        inTheFunnel += hits;
+      } else {
+        byApi[api] += hits;
+        here += hits;
+      }
     }
-    modal += text.match(/modal:\s*true/gu)?.length ?? 0;
+    // The funnel's own `modal: true` is how it PASSES the flag on, not a question it asks. Counting
+    // it moved the event total from 93 to 92 the moment the funnel landed, which is the shape of
+    // error this whole script exists to stop.
+    if (!isFunnel) {
+      modal += text.match(/modal:\s*true/gu)?.length ?? 0;
+    }
+    // Call sites that have been routed. The definitions themselves are not calls, so the funnel
+    // and the pure half are left out of this count as well.
+    if (!isFunnel && !file.endsWith('notice.ts')) {
+      routed += text.match(/\bnotify(?:AndAsk|Then)?\(/gu)?.length ?? 0;
+    }
     if (here > 0) {
       perFile[relative(EXTENSION, file).replaceAll('\\', '/')] = here;
     }
@@ -86,6 +106,14 @@ export function count() {
     sites,
     modal,
     events: sites - modal,
+    /**
+     * Calls to the API from INSIDE the funnel. Must never be zero: a scan that matches nothing
+     * passes for ever, and this is its positive companion — the thing `testing.md` asks a
+     * structural test to have beside its prohibition.
+     */
+    inTheFunnel,
+    /** Call sites already routed through `notify`/`notifyAndAsk`. This number only goes up. */
+    routed,
     byApi,
     perFile,
   };

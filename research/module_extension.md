@@ -17,14 +17,38 @@ settings-mirror stand-down warned once, nobody saw it, and eleven code rounds ra
 deleted thirty-eight minutes earlier. Plan, two gate rounds deep:
 [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
 
-**What exists after step S1** — the record and the ledgers, with no funnel in front of them yet:
+**What exists after steps S1 and S2** — the record, the ledgers, and the funnel in front of them.
+The routing of the call sites has begun and is not finished: see *the ratchet* below.
 
 | Module | What it holds |
 |---|---|
 | `notifications.ts` | the record, the line it becomes, the line read back. Six classes, by what the person must DO |
 | `notificationsFile.ts` | `notifications.jsonl` (this side) and `server-notices.jsonl` (`coai-mcp`), **two files merged at read time** |
+| `notice.ts` | the pure half of the funnel: what a caller says, and the record it becomes |
+| `notify.ts` | the host half — the only module allowed to call `window.show*Message` |
 | `credentialWords.ts` | the credential word list, extracted from `consultantWrite.ts` rather than copied |
 | `scripts/count-notifications.mjs` | the site count, DERIVED — with `notification-sites.json` checked in and a test that goes red on drift |
+
+**Three doors, and which one a call site takes is not a matter of taste.**
+
+| | waits for the disk | waits for the PERSON | use it when |
+|---|---|---|---|
+| `notify` | yes | **no** | the ordinary case, and the only safe one inside a lock |
+| `notifyThen` | yes | no — the answer arrives in a callback | there is a button and the caller cannot wait, e.g. `reportStandDown` |
+| `notifyAndAsk` | yes | yes | a modal question, called only from outside any critical section |
+
+`notifyAndAsk` inside a critical section is a deadlock and not a slow path: `show*Message` with a
+button does not resolve until somebody clicks, so a stand-down raised inside `serverSettingsSync`'s
+locked region would hold it for as long as the toast sat on screen, every later `sync()` would
+answer `'busy'`, and the single dropped retry would fire — the 2026-09-16 incident, reproduced by
+the mechanism built against it. That is why there are three doors rather than one.
+
+**The ratchet, because 109 sites do not move in one commit.** A whitelist with a hundred entries in
+it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
+directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
+companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
+test that matches nothing passes for ever. Four sites routed so far (the three bare failures in
+`extension.ts` and `reportStandDown`); the constant stands at **105**.
 
 Four decisions worth knowing before changing any of it:
 

@@ -4,12 +4,14 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 109,
+  "sites": 105,
   "modal": 16,
-  "events": 93,
+  "events": 89,
+  "inTheFunnel": 3,
+  "routed": 4,
   "byApi": {
     "showInformationMessage": 27,
-    "showWarningMessage": 68,
+    "showWarningMessage": 64,
     "showErrorMessage": 14
   },
   "perFile": {
@@ -19,7 +21,7 @@
     "src/conversationPickerCommand.ts": 7,
     "src/dataCommands.ts": 17,
     "src/escalationWatcher.ts": 4,
-    "src/extension.ts": 15,
+    "src/extension.ts": 11,
     "src/helpPanel.ts": 1,
     "src/installer.ts": 1,
     "src/panelProvider.ts": 31,

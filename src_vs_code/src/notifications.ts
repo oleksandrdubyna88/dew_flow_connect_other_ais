@@ -91,8 +91,16 @@ export interface NotificationRecord {
   readonly role?: string;
 }
 
-/** What a title may be before it is cut. Long enough for a sentence, short enough to read. */
-export const TITLE_LIMIT = 200;
+/**
+ * What a title may be before it is cut.
+ *
+ * <p><b>1000, where the plan said 200 — a deliberate deviation.</b> `title` is the text the person
+ * was actually shown, and several messages here are longer than two hundred characters (the
+ * data-directory ones run to a paragraph). A ledger that truncates the message it claims to have
+ * recorded is not more honest for having a smaller number in it; a toast past a thousand characters
+ * is already unreadable, so nothing real is lost at this bound.</p>
+ */
+export const TITLE_LIMIT = 1000;
 
 /**
  * What a detail may be before it is cut.
