@@ -1,12 +1,26 @@
 # PLAN — the gate's own findings become a corpus of real defects
 
-> Status: **stories 0–5 shipped; 6 is open.** `rounds.base_ref` went first (PR #268) because every
-> round that ran without it lost that half permanently, and the read side followed (PR #272). Story
-> 2's package was approved on three conditions — pinned version, grammars pruned at publish, the
-> library behind `IAstNormalizer` — and all three are in. Story 3 is the collector (PR #307), story
-> 4 the panel section and the run state it needed first (PR #317), story 5 the pairs and the review
-> page (PR #320).
-> Scope remaining: `coai-bugs`, its keys and its quarantine — the one story that sends anything.
+> Status: **IMPLEMENTED, 2026-09-16.** `rounds.base_ref` went first (PR #268) because every round
+> that ran without it lost that half permanently, and the read side followed (PR #272). Story 2's
+> package was approved on three conditions — pinned version, grammars pruned at publish, the library
+> behind `IAstNormalizer` — and all three are in. Story 3 is the collector (PR #307), story 4 the
+> panel section and the run state it needed first (PR #317), story 5 the pairs and the review page
+> (PR #320), story 6 `coai-bugs` and the upload.
+>
+> **What the story-6 code round changed, because it is the part worth keeping.** The alphabet
+> scanner matched `[A-Za-z_][A-Za-z_0-9]*`, so `method_1() { Жертва(); }` contained exactly one
+> word as far as it could see — a whitelist that silently ignores part of its input is not a
+> whitelist, and the Cyrillic identifier would have reached the public corpus unchecked. The wire
+> types were a copy per binary and are now one declaration in the core. Acknowledgements were
+> matched by POSITION and are matched by a derived id. The keyword file was read by walking parent
+> directories, which works in a checkout and in no deployment; it is embedded. `Keep` inserted
+> before asking the corpus, so a promoted pair resent sat in `--waiting` for ever. And a scenario
+> over the built binaries found, on its first run, that `coai-bugs` started a web server for any
+> argument it did not recognise instead of exiting 64.
+>
+> **The open tail, extracted to [PLAN_the_corpus_tail.md](../todo/PLAN_the_corpus_tail.md):** the
+> ranking pass has no transport, `coai-bugs` has no deploy notes and no release line yet, and the
+> no-client-IP promise is a deployment obligation nothing here can test.
 >
 > **Two deviations from the plan as written.** The normalizer was planned as a `coai-normalize`
 > sidecar and is a MODE of `coai-mcp` instead: the reason for a separate binary was Roslyn under
@@ -15,9 +29,9 @@
 > binding ships prebuilt natives for every RID this product targets, so there is no third toolchain
 > in CI.
 >
-> Related docs: [module_server.md](../research/module_server.md) (the rounds database),
-> [module_extension.md](../research/module_extension.md) (the panel),
-> [PLAN_local_db.md](../research/PLAN_local_db.md) (why the projection exists).
+> Related docs: [module_server.md](module_server.md) (the rounds database),
+> [module_extension.md](module_extension.md) (the panel),
+> [PLAN_local_db.md](PLAN_local_db.md) (why the projection exists).
 
 ## The goal
 
@@ -768,9 +782,14 @@ contribute, not only people with a Team server.
       rather than implied to be tested.
 - [x] `--upload-pairs` is in `.agents/PROJECT.md` and never exits 64.
 - [x] The growth budget above is real; body and batch caps are enforced.
-- [x] `module_server.md`, `architecture.md` and `module_tests.md` describe the boundary. The
-      end-to-end SCENARIO over both real binaries is NOT written — the server's HTTP suite and the
-      client's unit tests each cover their half and nothing joins them. Named rather than ticked.
+- [x] `module_server.md`, `architecture.md` and `module_tests.md` describe the boundary.
+- [x] The end-to-end scenario over both REAL binaries exists: `TheBuiltBinariesTests` starts the
+      built `coai-bugs` on a real port, mints a key through `--issue-key`, uploads through
+      `coai-mcp --upload-pairs` and reads it back through `--waiting`. It rides `COAI_CONTRACT_EXE`,
+      so the release workflow runs the same scenario against the PUBLISHED AOT binaries. It found
+      two defects on its first run.
+- [x] The live cross-implementation check the conventions require: `BothHalvesTests` drives the real
+      client against the real server in-process, over the shared wire contract.
 
 #### What this story does NOT own
 

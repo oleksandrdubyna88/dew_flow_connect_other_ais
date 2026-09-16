@@ -172,7 +172,7 @@ renamed here, to `TheRotatedTail_CurrentlyFitsAtMostOneRule` and
   fixture; the population of branches a team actually opens is not measured here.
 - Whether the tier is the RIGHT eight. It is the eight most findings are written against, chosen by
   reading the corpus, not by counting findings — the defect corpus that would let somebody count is
-  itself an open plan (`todo/PLAN_a_corpus_of_real_defects.md`).
+  itself an open plan (`research/PLAN_a_corpus_of_real_defects.md`).
 - Anything about the resolver's selection, which has never run here.
 
 ## Three doctrines, not four
