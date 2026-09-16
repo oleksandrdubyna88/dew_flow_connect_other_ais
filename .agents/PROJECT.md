@@ -53,7 +53,7 @@ node .agents/conventions/tools/pin-check.mjs
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
   `--ask-remote`, `--providers`, `--bugs-json`, `--normalize`, `--collect-bugs`, `--pairs-json` and
-  `--pairs-keep` and `--upload-pairs`, and their stdout
+  `--pairs-keep`, `--upload-pairs` and `--requeue-refused`, and their stdout
   is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
@@ -70,6 +70,20 @@ node .agents/conventions/tools/pin-check.mjs
   collector had added three modes and named none of them here.
   **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
   the rule is unchanged and absolute.
+
+  The rule names **64 and only 64**: a mode whose ARGUMENTS are wrong answers another non-zero
+  code (`--upload-pairs` answers 65 for a missing `--server`), because 64 means *never heard of
+  that mode* and is how a caller detects an old binary. A 2026-09-16 round read it as banning all
+  non-zero codes, and as binding only `coai-mcp`; neither is what it says. It binds **every**
+  binary here — that round found `coai-bugs` answering 64 for a missing `--id`, which is the
+  defect the rule exists to prevent.
+
+- **`coai-bugs` one-shot modes**, same shape, chosen before Kestrel is built: `--issue-key`
+  (prints the key once, stores only its hash), `--revoke --id`, `--promote --entry`,
+  `--waiting [--limit n] [--skip n]`. Without them a deployment is an empty key table and a
+  quarantine nothing leaves. Configured by environment only: `COAI_BUGS_SECRET` (required; 78
+  without it), `COAI_BUGS_DATA`, `COAI_BUGS_KEYWORDS`; the client’s key is `COAI_BUGS_KEY` or
+  `--key-file`, **never** `--key`.
 - **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
   handed to VS Code as text, so a substring assertion over that text cannot see a control wired to
   the wrong branch — the string contains everything it was supposed to contain. This repository has

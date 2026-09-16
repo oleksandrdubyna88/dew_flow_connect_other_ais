@@ -526,17 +526,22 @@ staleness is decided by a heartbeat, so a run happening in another process right
 
 ## The boundary the corpus crosses (2026-09-16)
 
-```
-  one machine                                 |  anywhere
-                                              |
-  gate findings -> collector -> collect_pairs |
-                                  |           |
-                          review page (keep)  |
-                                  |           |
-                   coai-mcp --upload-pairs ---+--> coai-bugs POST /ingest
-                      language + 2 skeletons  |        alphabet check
-                                              |        quarantine
-                                              |        --promote -> corpus
+```mermaid
+flowchart LR
+    subgraph local["one machine — nothing here opens a socket"]
+        findings[("gate findings<br/>coai.db")] --> collector["collector<br/>--collect-bugs"]
+        collector --> pairs[("collect_pairs")]
+        pairs --> page["review page<br/>a person picks keep"]
+        page --> upload["coai-mcp --upload-pairs"]
+    end
+    subgraph public["anywhere"]
+        ingest["coai-bugs<br/>POST /ingest"] --> alphabet{"alphabet check<br/>whitelist"}
+        alphabet -- refused --> nowhere["stored nowhere<br/>answered with the word"]
+        alphabet -- admitted --> quarantine[("quarantine")]
+        quarantine --> promote["--promote<br/>a person reads it"]
+        promote --> corpus[("corpus")]
+    end
+    upload -- "language + 2 skeletons" --> ingest
 ```
 
 **Everything left of the line is local.** The collector reads `coai.db` and a git history; the review

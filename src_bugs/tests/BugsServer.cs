@@ -72,9 +72,6 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
             Environment.SetEnvironmentVariable(name, was);
         }
 
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try { Directory.Delete(DataDir, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        Scratch.Delete(DataDir);
     }
 }

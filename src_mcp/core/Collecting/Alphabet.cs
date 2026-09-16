@@ -30,11 +30,15 @@ public static partial class Alphabet
 
     /// <summary>Every run of word characters, which is what this has an opinion about.</summary>
     /// <remarks>
-    /// Digits are split out by the <c>[A-Za-z_]</c> start: a bare <c>0</c> is a number rather than a
-    /// word, and numbers are checked by their own rule below. A word that begins with a digit cannot
-    /// be an identifier in any language here.
+    /// <para><b>Unicode letters, not <c>[A-Za-z_]</c>, and this was the worst defect this type has
+    /// had.</b> An ASCII-only pattern does not MATCH a Cyrillic, Greek or CJK identifier — and a word
+    /// the scanner never sees is a word it never refuses. <c>method_1() { Жертва(); }</c> passed the
+    /// whitelist and would have carried somebody's real identifier into a public corpus. A whitelist
+    /// that silently ignores part of its input is not a whitelist. (Code round, codex.)</para>
+    /// <para>Digits are still split out by the letter-or-underscore start: a bare <c>0</c> is a number
+    /// rather than a word, and numbers have their own rule below.</para>
     /// </remarks>
-    [GeneratedRegex(@"[A-Za-z_][A-Za-z_0-9]*", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"[\p{L}_][\p{L}\p{N}_]*", RegexOptions.CultureInvariant)]
     private static partial Regex Words { get; }
 
     /// <summary>A numeric literal. Only an exact <c>0</c> is admitted.</summary>
@@ -47,7 +51,7 @@ public static partial class Alphabet
     /// <para>The lookbehind excludes a digit inside a placeholder — the <c>1</c> of <c>var_1</c> — and
     /// a digit that continues a number already matched.</para>
     /// </remarks>
-    [GeneratedRegex(@"(?<![A-Za-z_0-9.])\d+(\.\d+)?", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![\p{L}\p{N}_.])\d+(\.\d+)?", RegexOptions.CultureInvariant)]
     private static partial Regex Literal { get; }
 
     /// <summary>Every quoted run, with whatever is inside it captured.</summary>
@@ -83,13 +87,21 @@ public static partial class Alphabet
     {
         var known = RuntimeVocabulary.For(language);
 
+        // Split WORD BY WORD, because some grammars report a token as a phrase — TypeScript has
+        // `unique symbol` — and this scanner reads words. Matching the phrase against a word would
+        // never succeed, so `unique` alone was in no list and an ordinary skeleton was refused.
+        // (Code round, codex.)
+        var admitted = keywords
+            .SelectMany(word => word.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .ToHashSet(StringComparer.Ordinal);
+
         return
         [
             .. Words.Matches(skeleton)
                 .Select(word => word.Value)
                 .Where(word => !Placeholder.IsMatch(word)
                                && !known.Contains(word)
-                               && !keywords.Contains(word))
+                               && !admitted.Contains(word))
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];

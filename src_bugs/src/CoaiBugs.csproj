@@ -33,6 +33,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- INSIDE the binary, not beside it. It was read by walking parent directories for `shared/`,
+         which works in a checkout and fails everywhere a release actually runs: a published AOT
+         binary is a directory with no repository above it, and startup threw before the server
+         listened. Four code-round reviewers found it independently.
+
+         `LogicalName` is what `Program.ResourceName` asks for, and a test asserts the resource is
+         there and parses — so a rename here is a red test, not a dead deployment. -->
+    <EmbeddedResource Include="..\..\shared\skeleton-keywords.txt" LogicalName="CoaiBugs.skeleton-keywords.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The core, for `Alphabet` and `RuntimeVocabulary`.
 
          A plan reviewer asked for the vocabulary to travel as a shared FILE, on the premise that
