@@ -220,21 +220,16 @@ export const SCAN_BUDGET: ScanBudget = { most: 250, withinMs: 10_000, mostBytes:
 export interface ScanCut {
   readonly read: number;
   readonly of: number;
+  /** How many were passed over for being too big to read, whatever else stopped the walk. */
+  readonly skipped: number;
   readonly why: 'count' | 'time' | 'size';
 }
 
-/**
- * Whether this file is small enough to be read at all under the budget.
- *
- * <p>A file that is not there is not too big — it is gone, which the reader that opens it already
- * has a sentence for. Only an answered `stat` can refuse one.</p>
- */
-async function withinSize(file: string, budget: ScanBudget): Promise<boolean> {
-  try {
-    return (await fs.stat(file)).size <= budget.mostBytes;
-  } catch {
-    return true;
-  }
+/** A session file as the listing found it: the path, and the size that decides whether it is read. */
+export interface SessionFile {
+  readonly file: string;
+  /** Bytes, or -1 when the listing could not ask — which counts as too big rather than as empty. */
+  readonly size: number;
 }
 
 /** What a walk took, and whether it was cut short. */
@@ -252,46 +247,58 @@ interface Walk<T> {
  * and "it is not there" are different answers to the same question.</p>
  */
 async function withinBudget<T>(
-  files: readonly string[],
+  files: readonly SessionFile[],
   budget: ScanBudget,
   take: (file: string) => Promise<T>,
 ): Promise<Walk<T>> {
   const clock = budget.now ?? Date.now;
   const started = clock();
+  const over = (): boolean => clock() - started >= budget.withinMs;
   const taken: T[] = [];
-  let oversized = 0;
-  for (const file of files) {
+  let skipped = 0;
+  for (const one of files) {
     if (taken.length >= budget.most) {
-      return { taken, cut: { read: taken.length, of: files.length, why: 'count' } };
+      return { taken, cut: { read: taken.length, of: files.length, skipped, why: 'count' } };
     }
-    if (clock() - started >= budget.withinMs) {
-      return { taken, cut: { read: taken.length, of: files.length, why: 'time' } };
+    if (over()) {
+      return { taken, cut: { read: taken.length, of: files.length, skipped, why: 'time' } };
     }
-    if (!await withinSize(file, budget)) {
-      // SKIPPED, AND COUNTED. A file too big to read under the budget is not a file that says
-      // nothing — it is one nobody looked in, and the cut is how the caller says so.
-      oversized += 1;
+    if (one.size > budget.mostBytes || one.size < 0) {
+      // SKIPPED, AND COUNTED. A file too big to read under the budget — or one whose size could not
+      // be asked for at all — is not a file that says nothing; it is one nobody looked in, and the
+      // cut is how the caller says so. The size comes from the listing's own `stat`, so this costs
+      // no second look at the disk. (codex, the code round, on a redundant stat per file.)
+      skipped += 1;
       continue;
     }
-    taken.push(await take(file));
+    taken.push(await take(one.file));
+  }
+  // AND AFTER THE LAST ONE. The check above runs BEFORE a file, so a walk whose final read overran
+  // the deadline would have reported a complete scan — and a missing title would then have been
+  // reported as an absence rather than as a budget. (codex, the code round.)
+  if (over()) {
+    return { taken, cut: { read: taken.length, of: files.length, skipped, why: 'time' } };
   }
 
   return {
     taken,
-    cut: oversized === 0 ? undefined : { read: taken.length, of: files.length, why: 'size' },
+    cut: skipped === 0 ? undefined : { read: taken.length, of: files.length, skipped, why: 'size' },
   };
 }
 
 /** How a cut reads in a refusal: what was read, out of what, and why it stopped there. */
 function cutSays(cut: ScanCut, budget: ScanBudget, whereabouts: string): string {
+  const also = cut.skipped > 0 && cut.why !== 'size'
+    ? `, ${cut.skipped} of them too big to read,`
+    : '';
   if (cut.why === 'time') {
-    return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} could be read within ${Math.round(budget.withinMs / 1_000)} s`;
+    return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts}${also} could be read within ${Math.round(budget.withinMs / 1_000)} s`;
   }
   if (cut.why === 'size') {
     return `Only ${cut.read} of ${cut.of} sessions ${whereabouts} were small enough to read`;
   }
 
-  return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} were read`;
+  return `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts}${also} were read`;
 }
 
 /** One session file, and the question waiting in it. */
@@ -371,7 +378,7 @@ export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Wa
  * that says which operation failed, because reporting it as "nothing was asked here" would be this
  * module lying about the world. (codex, twice, and the coding-style rule it cites.)</p>
  */
-export async function sessionFiles(dir: string): Promise<readonly string[] | ReadFailure> {
+export async function sessionFiles(dir: string): Promise<readonly SessionFile[] | ReadFailure> {
   if (dir.length === 0) {
     return [];
   }
@@ -382,17 +389,24 @@ export async function sessionFiles(dir: string): Promise<readonly string[] | Rea
     return missing(reason) ? [] : { refusal: `Claude Code's session folder could not be listed: ${where(reason)}` };
   }
   const dated = await Promise.all(names.map(async (name) => {
-    const full = path.join(dir, name);
+    const file = path.join(dir, name);
     try {
-      return { full, at: (await fs.stat(full)).mtimeMs };
+      const stat = await fs.stat(file);
+
+      // THE SIZE COMES FROM HERE. This `stat` has to happen anyway to sort the folder by age, and
+      // asking a second time before each read was 250 more round trips on a mounted folder — about
+      // twelve seconds of them at 50 ms each, spent before a single title was looked at. (codex, the
+      // code round.)
+      return { file, at: stat.mtimeMs, size: stat.size };
     } catch {
       // Gone between the listing and the stat: another product owns this directory and is writing
-      // in it. It sorts last rather than failing the whole command.
-      return { full, at: 0 };
+      // in it. It sorts last, and its unknown size counts as too big to read rather than as empty —
+      // a file nobody could measure is a file nobody looked in.
+      return { file, at: 0, size: -1 };
     }
   }));
 
-  return dated.sort((a, b) => b.at - a.at).map((one) => one.full);
+  return dated.sort((a, b) => b.at - a.at).map((one) => ({ file: one.file, size: one.size }));
 }
 
 /** Whether a filesystem error means "it is not there" rather than "it would not answer". */
@@ -518,7 +532,21 @@ export type Asked =
  */
 /** Which file a tab's name belongs to, or why it belongs to none. */
 export type Found =
-  | { readonly kind: 'one'; readonly file: string }
+  | {
+    readonly kind: 'one';
+    readonly file: string;
+    /**
+     * Whether the whole folder was looked at before calling this the only one.
+     *
+     * <p>Required rather than optional, like every other field in this module's result types: a
+     * caller that forgets it would keep the old behaviour silently. A match found inside a CUT scan
+     * is a perfectly good answer to *"show me this conversation"* — the files are newest first — but
+     * it is not proof that no namesake sits beyond the cut, so it must not become a PERMANENT pin.
+     * With 251 sessions and the name twice, the first match would otherwise be adopted for ever and
+     * the namesake refusal defeated. (codex, the code round, twice.)</p>
+     */
+    readonly complete: boolean;
+  }
   | { readonly kind: 'none'; readonly refusal: string }
   | { readonly kind: 'several'; readonly refusal: string };
 
@@ -629,12 +657,15 @@ export async function sessionFileOf(
   // LINK: anything on this machine can drop a `<valid-uuid>.jsonl` into the project directory
   // pointing at a file elsewhere, and both `resolve` and `access` are perfectly happy with it.
   // (codex, the plan round, as a security finding.)
-  const real = { dir: await realOf(dir), file: await realOf(file) };
-  if (!staysInside(dir, file, real)) {
+  const realDir = await realOf(dir);
+  const realFile = await realOf(file);
+  if (realDir === undefined || realFile === undefined || !staysInside(dir, file, { dir: realDir, file: realFile })) {
     return { kind: 'none', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
   }
+  const real = { dir: realDir, file: realFile };
 
-  return { kind: 'one', file };
+  // An id needs no scan at all, so nothing about this answer is unverified.
+  return { kind: 'one', file: real.file, complete: true };
 }
 
 /**
@@ -646,7 +677,7 @@ export async function sessionFileOf(
  * called it seconds of a blocked extension host.</p>
  */
 async function theOneCalled(
-  files: readonly string[],
+  files: readonly SessionFile[],
   looking: string,
   whereabouts: string,
   budget: ScanBudget,
@@ -680,7 +711,7 @@ async function theOneCalled(
     };
   }
 
-  return { kind: 'one', file: only };
+  return { kind: 'one', file: only, complete: walk.cut === undefined };
 }
 
 /**
@@ -725,17 +756,18 @@ export function staysInside(dir: string, file: string, real: { readonly dir: str
 }
 
 /**
- * Where a path really leads, with every link followed — or the path itself when it cannot be asked.
+ * Where a path really leads, with every link followed — or NOTHING when it cannot be asked.
  *
- * <p>A path that cannot be resolved is returned unchanged rather than thrown over: the caller
- * compares two of these, and a pair that are both unresolved compares exactly as the lexical check
- * already did. Nothing is loosened by the failure.</p>
+ * <p>It used to hand back the path unchanged on a failure, and that is a security check answering
+ * "yes" because it could not run: a link whose target cannot be resolved is exactly the case worth
+ * refusing. Failing closed costs a session nobody could have read anyway. (codex, the code round,
+ * twice, against the rule that an error is never swallowed.)</p>
  */
-async function realOf(target: string): Promise<string> {
+async function realOf(target: string): Promise<string | undefined> {
   try {
     return await fs.realpath(target);
   } catch {
-    return target;
+    return undefined;
   }
 }
 
@@ -757,18 +789,28 @@ async function readable(file: string): Promise<boolean> {
  * as a string AND again as an array of lines, and these files are tens of megabytes after a long
  * day. A file that cannot be opened or read is not an error here — another product owns this
  * directory and is writing in it — so it contributes nothing and the next one is tried.</p>
+ *
+ * <p><b>It SAYS which of the two happened.</b> Whether a file was read to the end or gave up partway
+ * is the difference between a session with nothing in it and a session nobody could open, and a
+ * caller that cannot tell them apart reports the second as the first. The title walk does not care —
+ * a session it could not read has no name and answers to nothing — but the waiting question does,
+ * and it used to have that answer from `readFile` before this became a stream. (codex, the code
+ * round.)</p>
  */
-async function eachLine(file: string, take: (line: string) => boolean): Promise<void> {
+async function eachLine(file: string, take: (line: string) => boolean): Promise<'read' | 'stopped' | 'failed'> {
   let lines: readline.Interface | undefined;
   try {
     lines = readline.createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
     for await (const line of lines) {
       if (!take(line)) {
-        return;
+        return 'stopped';
       }
     }
+
+    return 'read';
   } catch {
-    // Locked, gone, or not text. What has been taken so far stands.
+    // Locked, gone, or not text. What has been taken so far stands, and the caller is told.
+    return 'failed';
   } finally {
     lines?.close();
   }
@@ -843,25 +885,41 @@ export async function waitingQuestion(
     return { kind: 'failed', refusal: (files as ReadFailure).refusal };
   }
   const sessions: WaitingSession[] = [];
-  // THE BUDGET MATTERS MORE HERE than on the Asked button's walk: this reader holds each file WHOLE
-  // in memory rather than streaming it, so an unbounded folder is both the slowest path and the
-  // hungriest one.
-  const walk = await withinBudget(files, budget, async (file) => file);
-  for (const file of walk.taken) {
+  let unreadable = '';
+  // THE READING HAPPENS INSIDE THE BUDGET, not after it. The first version used the walk to pick
+  // files and then read them in a second loop with no clock in it — so the time limit bounded the
+  // choosing and nothing at all of the work. (gemini, the code round, on a regression this story
+  // introduced.)
+  const walk = await withinBudget(files, budget, async (file) => {
     // STREAMED INTO LINES, never the whole file as a string AND again as an array — which is what
     // `readFile` plus `split` cost, two full copies of a session that can be tens of megabytes. The
-    // byte cap above bounds the rest. (gemini and codex, the plan round, on the same paragraph.)
+    // byte cap bounds the rest. (gemini and codex, the plan round, on the same paragraph.)
     const lines: string[] = [];
-    await eachLine(file, (line) => {
+    const read = await eachLine(file, (line) => {
       lines.push(line);
 
       return true;
     });
-    if (lines.length === 0 && !await readable(file)) {
-      // Deleted while this was running. Another product owns the directory; the rest still counts.
+    if (read === 'failed') {
+      // A file that would not be READ is not a file with nothing in it. The old `readFile` path said
+      // so and the streaming one silently could not, which is a promise this module makes in three
+      // other places. (codex, the code round.)
+      unreadable = unreadable.length > 0 ? unreadable : file;
+
+      return { file, asked: undefined };
+    }
+
+    return { file, asked: lastAsked(lines) };
+  });
+  if (unreadable.length > 0) {
+    return { kind: 'failed', refusal: `Claude Code's session file could not be read: ${unreadable}` };
+  }
+  for (const one of walk.taken) {
+    const file = one.file;
+    const asked = one.asked;
+    if (asked === undefined) {
       continue;
     }
-    const asked = lastAsked(lines);
     if (asked.kind === 'asked') {
       sessions.push({ file, asked: asked.set });
     } else if (asked.kind === 'unreadable') {

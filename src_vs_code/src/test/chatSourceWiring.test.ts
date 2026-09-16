@@ -50,6 +50,13 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
   assert.match(pin, /keepQueued\(entry, mine\);/u, 'the source is never written to disk, so it dies with the window');
   // An id it cannot read is no id: inventing one would match a tab that is not this one.
   assert.match(pin, /if \(sessionId\.length === 0\) \{/u, 'a file name of an unexpected shape becomes a source anyway');
+  // AND A SCAN THAT WAS CUT SHORT IS NOT WRITTEN DOWN. The only session of that name among the ones
+  // that were READ is a fine answer on screen and no proof that no namesake sits beyond the cut;
+  // persisting it would make a guess permanent. It is checked BEFORE the id is taken, so the whole
+  // write is skipped rather than half of it.
+  assert.match(pin, /if \(!found\.complete\) \{/u, 'a match from a budget-cut scan is persisted as though it were proven');
+  assert.ok(pin.indexOf('if (!found.complete) {') < pin.indexOf('sessionIdOf('),
+    'the completeness check runs after the record has already been given an identity');
 
   // Guarded on `fromSession`, or the record would state its origin two ways and `agreeOnOrigin`
   // would refuse to read it back — the conversation would save and then be unopenable.
