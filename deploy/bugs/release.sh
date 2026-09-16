@@ -33,6 +33,13 @@ KEEP=4                                  # the current deployment plus the three 
 SERVICE=coai-bugs
 PORT=${COAI_BUGS_PORT:-8110}
 
+# The deploy account is NOT root. The Team server next door runs its forced command as root and
+# its unit as root; this one does neither, because it is the service that faces the public
+# internet. `coai-bugs-deploy` may restart exactly this unit and nothing else
+# (/etc/sudoers.d/coai-bugs-deploy), and the service itself runs as `coai-bugs`, which owns only
+# its data directory.
+SYSTEMCTL="sudo -n systemctl"
+
 say() { printf '[coai-bugs-release] %s\n' "$*" >&2; }
 die() { say "$*"; exit 1; }
 
@@ -65,7 +72,7 @@ canary() {
             say "canary: the service answers /health and opens its database"
             return 0
         fi
-        systemctl is-active --quiet "$SERVICE" || {
+        $SYSTEMCTL is-active --quiet "$SERVICE" || {
             say "the unit stopped during the canary"
             journalctl -u "$SERVICE" -n 30 --no-pager >&2 || true
             return 1
@@ -85,7 +92,7 @@ switch_to() {
 
     ln -sfn "$release" "$LIVE.new"
     mv -Tf "$LIVE.new" "$LIVE"
-    systemctl restart "$SERVICE" || { say "the unit refused to restart on $release"; return 1; }
+    $SYSTEMCTL restart "$SERVICE" || { say "the unit refused to restart on $release"; return 1; }
     canary "$release"
 }
 
@@ -94,7 +101,7 @@ rollback() {
     previous=$(tail -n 2 "$TRAIL" 2>/dev/null | head -n 1 || true)
     if [[ -z "$previous" || ! -d "$previous" ]]; then
         say "no earlier deployment to roll back to — stopping $SERVICE rather than leaving a rejected build serving"
-        systemctl stop "$SERVICE" || true
+        $SYSTEMCTL stop "$SERVICE" || true
         return 1
     fi
 
@@ -122,6 +129,10 @@ case "${1:-}" in
         printf 'live -> %s\n' "$(readlink -f "$LIVE" 2>/dev/null || echo 'nothing')"
         printf 'retained:\n'; cat "$TRAIL" 2>/dev/null || printf '  (none)\n'
         exit 0;;
+    # Anything else is a version, handled below. Spelled out rather than left implicit: a
+    # `case` whose default is "fall through the bottom" reads as an oversight to everybody
+    # who did not write it, and to SonarCloud (S131).
+    *) ;;
 esac
 
 FROM=""
@@ -181,7 +192,7 @@ else
         rollback
     else
         sed -i '$d' "$TRAIL" 2>/dev/null || true
-        systemctl stop "$SERVICE" || true
+        $SYSTEMCTL stop "$SERVICE" || true
         say "nothing to roll back to; $SERVICE is stopped rather than serving a rejected build"
     fi
     exit 1
