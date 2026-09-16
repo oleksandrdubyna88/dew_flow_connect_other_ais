@@ -10,6 +10,23 @@ itself the next time that model answers.
 
 It clears **one row**, not one vendor — a chat row is a vendor *and* a model, so forgetting
 `codex · gpt-5.4` leaves `codex · gpt-5.5` exactly where it was.
+**Edit roles is three tabs, what you added is green, and the colours match the menu** (#293). The
+page was one column of everything — seven roles, each with up to six prompt boxes ten rows high,
+under three headings on one scroll. *Plan review*, *Code review* and *Document review* are tabs
+now, and **the tab you are on survives**: adding a prompt, flipping a switch or changing a stage
+redraws the whole page, and until now that would have thrown you back to the first section with
+the thing you just added on a tab you could no longer see. Adding a ROLE moves you to *Code
+review*, because that is where a new role appears.
+
+A prompt you added is **framed in green, on every side, and stays framed** — it used to land among
+the ones this product ships looking identical to them, so there was nothing to say which block was
+yours to edit. A shipped prompt you have rewritten is still a shipped prompt: it keeps its
+*Restore*.
+
+And every left edge on this page is now **the colour that role already wears in the panel** —
+purple for the plan critic, yellow for conventions, blue for architecture, orange for security,
+green for UX/DX. They were all the same blue here, which was one palette in the sidebar and
+another on the page you edit it from; there is one now.
 
 **The Consultant section reads like the Reviewers one** (#291). Each caller — *Claude Code asks…*,
 *Codex asks…*, *Gemini asks…* — is now a framed box with a coloured left edge, and the colour is

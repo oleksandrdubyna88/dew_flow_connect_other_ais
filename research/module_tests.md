@@ -378,3 +378,20 @@ artifact, preserving the previous binary; SQLite already matched and was not rew
 All five McpContractTests then passed with COAI_CONTRACT_EXE pointing to the installed
 globalStorage executable. Existing editor/agent processes were not restarted, so the
 manual panel scenario and an already-running host reloading remain unverified.
+
+## The roles page, RUN — and its harness (2026-09-16)
+
+`rolesPageHarness.ts` is the DOM shim and the runner, extracted out of `rolesPageScript.test.ts`
+the moment `editRolesInTabs.test.ts` needed the same thing: a second shim is two shims that drift,
+and the one thing a shim must be is the same for everybody asserting against it. It takes the
+nodes `querySelectorAll` should answer with, keyed by selector — a test that presses a tab needs
+the page to FIND the other tabs and the sections, and a shim answering every selector with nothing
+would let a broken switch look exactly like a working one.
+
+`editRolesInTabs.test.ts` covers issue #293 and executes what it can: the page's own click handler
+for the tab switch, and `nextTab` for the transition the host applies. The two assertions that are
+not executions are deliberate and say so — there is no CSS engine here, so `.prompt.mine` being
+absent from the stylesheet is invisible to a class-name assertion, and the test reads the generated
+rule as well as the class. `roleTone.test.ts` is about what the palette SAYS; the check that there
+is only ONE palette renders the same roles through `panelHtml` and `rolesHtml` and compares them,
+because a test of the module alone stays green while either renderer keeps a private copy.

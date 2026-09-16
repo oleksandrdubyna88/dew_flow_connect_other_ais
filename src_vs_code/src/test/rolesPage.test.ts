@@ -140,9 +140,13 @@ test('a role already active is never refused its own switch', () => {
 test('the plan stage and the code stage are drawn apart', () => {
   const html = rolesHtml(state({ rows: [{ id: 'Brief', stage: PLAN_STAGE, prompts: [{ id: 'brief-general' }] }] }), 'n0nce');
 
-  assert.ok(html.indexOf('data-id="Brief"') > html.indexOf('<h2>Plan review</h2>'));
-  assert.ok(html.indexOf('data-id="Brief"') < html.indexOf('<h2>Code review</h2>'));
-  assert.ok(html.indexOf('data-id="Architecture"') > html.indexOf('<h2>Code review</h2>'));
+  // The headings became tabs (issue #293), so the sections are named by `data-section` now. The
+  // guarantee is the one it always was: a plan role is drawn in the plan group and a code role is
+  // not, whatever the group is called on screen.
+  assert.ok(html.indexOf('data-id="Brief"') > html.indexOf('data-section="plan"'));
+  assert.ok(html.indexOf('data-id="Brief"') < html.indexOf('data-section="code"'));
+  assert.ok(html.indexOf('data-id="Architecture"') > html.indexOf('data-section="code"'));
+  assert.ok(html.indexOf('data-id="Architecture"') < html.indexOf('data-section="documents"'));
 });
 
 test('a RESULT-stage document role no longer says it takes part in no round', () => {
