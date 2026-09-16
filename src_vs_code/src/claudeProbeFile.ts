@@ -46,46 +46,44 @@ export function parseProbe(text: string): ProbeResult | undefined {
  * round 2.)</p>
  */
 export function probeFrom(parsed: unknown): ProbeResult | undefined {
-  {
-    // ANYTHING at all arrives here: this is called on a value out of a settings store as well as on
-    // a parse of a file, so undefined, a number and a string are all real inputs. The null check
-    // alone let undefined through to a property read - caught by the discovery suite.
-    if (typeof parsed !== 'object' || parsed === null) {
-      return undefined;
-    }
-    const record = parsed as Partial<ProbeResult>;
-    if (typeof record.cliVersion !== 'string' || typeof record.checkedUtc !== 'string') {
-      return undefined;
-    }
-    // Bounded on the way IN as well as by construction. The file holds one entry per candidate
-    // family and nothing here can grow it — but it is a file on a disk other things can write, and
-    // a parser that will map a million entries at panel start is one an editor slip can hang.
-    if (record.cliVersion.length > LONGEST_FIELD || record.checkedUtc.length > LONGEST_FIELD) {
-      return undefined;
-    }
-    const models = (Array.isArray(record.models) ? record.models : []).slice(0, MOST_ENTRIES);
-
-    return {
-      cliVersion: record.cliVersion,
-      checkedUtc: record.checkedUtc,
-      // Each entry is rebuilt rather than trusted: this file is on disk, an older build wrote it,
-      // and a half-written or hand-edited entry must not reach a dropdown as a confirmed model.
-      models: models
-        .filter((m): m is Record<string, unknown> => m !== null && typeof m === 'object')
-        .filter((m) => typeof m['asked'] === 'string' && (m['asked'] as string).length > 0)
-        .map((m) => {
-          const asked = m['asked'] as string;
-          const answered = typeof m['answered'] === 'string' ? m['answered'] : '';
-
-          // RE-DERIVED, never read. The file held one decision written twice, and the two can
-          // disagree: an entry saying `fable` was confirmed while recording that `claude-opus-5`
-          // answered would have labelled Fable verified off a record proving it was not. The answer
-          // is the evidence; the verdict is a function of it. (codex Architecture, this round.)
-          return { asked, answered, verified: answeredAsAsked(asked, answered) };
-        }),
-      ...(typeof record.executable === 'string' ? { executable: record.executable } : {}),
-    };
+  // ANYTHING at all arrives here: this is called on a value out of a settings store as well as on
+  // a parse of a file, so undefined, a number and a string are all real inputs. The null check
+  // alone let undefined through to a property read - caught by the discovery suite.
+  if (typeof parsed !== 'object' || parsed === null) {
+    return undefined;
   }
+  const record = parsed as Partial<ProbeResult>;
+  if (typeof record.cliVersion !== 'string' || typeof record.checkedUtc !== 'string') {
+    return undefined;
+  }
+  // Bounded on the way IN as well as by construction. The file holds one entry per candidate
+  // family and nothing here can grow it — but it is a file on a disk other things can write, and
+  // a parser that will map a million entries at panel start is one an editor slip can hang.
+  if (record.cliVersion.length > LONGEST_FIELD || record.checkedUtc.length > LONGEST_FIELD) {
+    return undefined;
+  }
+  const models = (Array.isArray(record.models) ? record.models : []).slice(0, MOST_ENTRIES);
+
+  return {
+    cliVersion: record.cliVersion,
+    checkedUtc: record.checkedUtc,
+    // Each entry is rebuilt rather than trusted: this file is on disk, an older build wrote it,
+    // and a half-written or hand-edited entry must not reach a dropdown as a confirmed model.
+    models: models
+      .filter((m): m is Record<string, unknown> => m !== null && typeof m === 'object')
+      .filter((m) => typeof m['asked'] === 'string' && (m['asked'] as string).length > 0)
+      .map((m) => {
+        const asked = m['asked'] as string;
+        const answered = typeof m['answered'] === 'string' ? m['answered'] : '';
+
+        // RE-DERIVED, never read. The file held one decision written twice, and the two can
+        // disagree: an entry saying `fable` was confirmed while recording that `claude-opus-5`
+        // answered would have labelled Fable verified off a record proving it was not. The answer
+        // is the evidence; the verdict is a function of it. (codex Architecture, this round.)
+        return { asked, answered, verified: answeredAsAsked(asked, answered) };
+      }),
+    ...(typeof record.executable === 'string' ? { executable: record.executable } : {}),
+  };
 }
 
 /** What goes on disk. Two spaces, because a person chasing a wrong dropdown will open it. */
