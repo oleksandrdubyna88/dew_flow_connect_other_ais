@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Collecting;
 using FluentAssertions;
 using Xunit;
 
@@ -68,5 +69,45 @@ public sealed class ThePinThatMustNotDriftTests
         }
 
         throw new FileNotFoundException("Directory.Packages.props was not found above the test binary");
+    }
+}
+
+/// <summary>
+/// The vendors that may read a finding's own words are ONE list, and both halves assert it.
+/// </summary>
+/// <remarks>
+/// The picker in the extension must not offer a model the collector refuses, and the collector must
+/// not accept one the picker cannot show. TypeScript cannot import a C# constant, so the first
+/// attempt had the panel's test read `RankingModels.cs` and parse it — which this repository
+/// forbids by a test of its own, for the reason that a parse of another program's source goes QUIET
+/// when it drifts rather than red. `shared/kept-grammars.txt` had already settled the shape: a file
+/// both sides read, so a change on one side is two red tests.
+/// </remarks>
+public sealed class TheRankingVendorsAreOneListTests
+{
+    [Fact]
+    public void TheCollectorAgreesWithTheSharedList() =>
+        RankingModels.Local.Should().Equal(
+            [.. Listed()],
+            "shared/ranking-vendors.txt is the list, and the collector is what enforces it");
+
+    /// <summary>The file's vendors, comments and blank lines dropped.</summary>
+    private static IReadOnlyList<string> Listed()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var file = Path.Combine(dir.FullName, "shared", "ranking-vendors.txt");
+            if (File.Exists(file))
+            {
+                return
+                [
+                    .. File.ReadAllLines(file)
+                        .Select(line => line.Trim())
+                        .Where(line => line.Length > 0 && !line.StartsWith('#')),
+                ];
+            }
+        }
+
+        throw new FileNotFoundException("shared/ranking-vendors.txt was not found above the test binary");
     }
 }

@@ -112,6 +112,8 @@ const SELF_EVIDENT: Record<string, string> = {
 };
 
 const SETTING_ALIAS: Record<string, string> = {
+  'coai.bugzModel': 'ranking model',
+  'coai.bugzServer': 'review bugs',
   'coai.chatPrompt': 'the prompt the passage travels with',
   'coai.chatPromptChoice': 'which of your saved prompts a chat opens with',
   'coai.chatModelName': 'which of its models answers',

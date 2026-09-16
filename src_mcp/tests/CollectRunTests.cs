@@ -289,10 +289,12 @@ public sealed class CollectRunTests : IAsyncLifetime
         var counted = new CountingCollector();
         var run = new CollectRun(counted, TimeProvider.System);
 
-        var refused = async () => await run.RunAsync(_data, db, 50, all: false, model: "gemini/pro");
+        var summary = await run.RunAsync(_data, db, 50, all: false, model: "gemini/pro");
 
-        (await refused.Should().ThrowAsync<ArgumentException>())
-            .WithMessage("*not a local model*");
+        // A VALUE, not an exception: this is an expected answer to an ordinary request, and the C#
+        // doctrine says nothing throws for control flow. (Code round, codex.)
+        summary.Refusal.Should().Contain("not a local model");
+        summary.Collected.Should().Be(0);
         counted.Asked.Should().Be(0, "it must refuse before it reads, not after");
         db.LastCollectRun().Any.Should().BeFalse("a refused run never started");
     }

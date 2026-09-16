@@ -614,7 +614,11 @@ public sealed class RoundsDb : IDisposable
                SET heartbeat_utc = $now, finished_utc = $now, state = $state,
                    candidates = $candidates, picked = $picked,
                    collected = $collected, skipped = $skipped, failed = $failed, reasons = $reasons
-             WHERE id = $id
+             -- Only a run still believed to be RUNNING may end itself. Process A stops beating,
+             -- process B sweeps its row to `interrupted`, and A then wakes and finishes: without
+             -- this it would overwrite the sweep and the row would claim to be `done` after
+             -- another process had already recorded that nobody knew. (Code round, codex.)
+             WHERE id = $id AND state = 'running'
             """;
         BindTally(write, runId, candidates, picked, tally);
         Bind(write, "$state", state);
@@ -660,28 +664,8 @@ public sealed class RoundsDb : IDisposable
     }
 
     /// <summary>The most recent run, or an empty row when none has ever started.</summary>
-    /// <remarks>
-    /// Empty rather than null, per the family's rule about nulls in business logic, and it carries a
-    /// meaning the panel needs: <i>no run has ever happened here</i> is a state the button renders,
-    /// and it must not be confused with <i>this build cannot tell you</i>.
-    /// </remarks>
-    public CollectRunRow LastCollectRun()
-    {
-        using var read = _db.CreateCommand();
-        read.CommandText = """
-            SELECT id, started_utc, finished_utc, heartbeat_utc, state, model,
-                   candidates, picked, collected, skipped, failed, reasons
-              FROM collect_runs ORDER BY started_utc DESC LIMIT 1
-            """;
-        using var rows = read.ExecuteReader();
-
-        return rows.Read()
-            ? new CollectRunRow(
-                rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
-                rows.GetString(4), rows.GetString(5), rows.GetInt32(6), rows.GetInt32(7),
-                rows.GetInt32(8), rows.GetInt32(9), rows.GetInt32(10), rows.GetString(11))
-            : new CollectRunRow();
-    }
+    /// <remarks>Through <see cref="CollectRuns"/>, which is the one place this query lives.</remarks>
+    public CollectRunRow LastCollectRun() => CollectRuns.Last(_db);
 
     private string Now() => _time.GetUtcNow().UtcDateTime.ToString("O");
 

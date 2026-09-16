@@ -33,7 +33,12 @@ public static class RankingModels
     /// The vendor half is what decides whether the text leaves the machine, and it is the half this
     /// is allowed to care about.
     /// </remarks>
-    public static readonly string[] Local = ["local"];
+    /// <remarks>
+    /// <c>IReadOnlyList</c> rather than an array: a public <c>string[]</c> protects the reference
+    /// and nothing else, so any caller could rewrite an element and move the boundary this type
+    /// exists to hold. (Code round, codex.)
+    /// </remarks>
+    public static readonly IReadOnlyList<string> Local = ["local"];
 
     /// <summary>Whether this model may be shown un-anonymised finding text.</summary>
     /// <remarks>
@@ -42,7 +47,7 @@ public static class RankingModels
     /// terminal. What is refused is a model that was NAMED and is not local.
     /// </remarks>
     public static bool IsAllowed(string model) =>
-        model.Length == 0 || Array.Exists(Local, vendor => VendorOf(model) == vendor);
+        model.Length == 0 || Local.Contains(VendorOf(model), StringComparer.Ordinal);
 
     /// <summary>The vendor half of <c>vendor/model</c>, lower case.</summary>
     /// <remarks>

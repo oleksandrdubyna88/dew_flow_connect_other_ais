@@ -88,6 +88,20 @@ export interface CoaiSettings {
    */
   readonly consult: ConsultSettings;
 
+  /**
+   * Which local model a ranking pass over the collected corpus would use.
+   *
+   * <p>A SETTING rather than a field on the panel, for the reason the panel's own header gives:
+   * settings are written to VS Code configuration, not to a place of our own, so a person who
+   * prefers the Settings UI gets the same value and it survives a reload. It was a private field
+   * for one commit, which meant the picker wrote to configuration and the panel read from a field
+   * nothing assigned — so choosing a model did nothing at all. (Code round, four reviewers.)</p>
+   */
+  readonly bugzModel: string;
+
+  /** Where collected pairs would be sent. Asked for in a dialog; stored here like any other. */
+  readonly bugzServer: string;
+
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
@@ -239,6 +253,8 @@ export const DEFAULTS: CoaiSettings = {
   // is the list of roles that HAVE a switch — the plan role is absent from it deliberately.
   roleEnabled: { Conventions: true, Architecture: true, SecurityReliability: true, UxDxPerformance: true,
     DocumentReview: true, DocumentSummary: true },
+  bugzModel: '',
+  bugzServer: '',
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
@@ -279,6 +295,10 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
   // question rather than a configuration, and two sides asking one question is right.
   'roles',
+  // The Bugz pair, per side for the reason every row above is: a side is the WORK. Two sides of one
+  // machine can face different companies, and the local engine that may read their findings — and
+  // the server those pairs would be sent to — are not the same question on both.
+  'bugzModel', 'bugzServer',
   // Which consultant answers is a property of the WORK, not of the person reading the panel — two
   // sides of one machine serving two companies want their own, like every other row above. Spread
   // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
@@ -352,6 +372,8 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     // `asCount`, not `asPositive`: zero is the meaningful value here — it means "derive it".
     roundTimeoutMinutes: asCount(read('roundTimeoutMinutes'), DEFAULTS.roundTimeoutMinutes),
     credsKey: asString(read('credsKey')),
+    bugzModel: asString(read('bugzModel')),
+    bugzServer: asString(read('bugzServer')),
 
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
@@ -492,6 +514,16 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
     env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
+  }
+  // The Bugz pair. The panel passes the model on the command line when it starts a collect, but a
+  // collect started from a TERMINAL has no panel to pass it — and a setting the server can never
+  // see is a setting that silently does nothing, which the test beside this block exists to catch.
+  // The collector refuses a non-local model wherever the value arrives from.
+  if (settings.bugzModel) {
+    env['COAI_BUGZ_MODEL'] = settings.bugzModel;
+  }
+  if (settings.bugzServer) {
+    env['COAI_BUGZ_SERVER'] = settings.bugzServer;
   }
   return env;
 }

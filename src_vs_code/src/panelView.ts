@@ -173,10 +173,7 @@ export interface PanelState {
    * exactly that — never as "there is no material", which is a different and untrue sentence.</p>
    */
   readonly bugz?: BugCorpus | undefined;
-  /** Which local model a ranking pass would use. */
-  readonly bugzModel?: string | undefined;
-  /** Where collected pairs would be sent. Set through a dialog, never an inline box. */
-  readonly bugzServer?: string | undefined;
+
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
    *
@@ -356,8 +353,10 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
           label: `${m.id} — ${id}`,
         })))
         .filter((m) => mayRank(m.id)),
-      model: state.bugzModel ?? '',
-      server: state.bugzServer ?? '',
+      // From CONFIGURATION, which is where the picker writes. They were read from panel fields
+      // for one commit, and nothing assigned those fields — so choosing a model did nothing.
+      model: state.settings.bugzModel,
+      server: state.settings.bugzServer,
     })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
@@ -2673,8 +2672,6 @@ export function staticKey(state: PanelState): string {
     // for. This is the ONLY way a persisted run state reaches the screen, and it is the whole
     // reason the section holds no free-text control.
     state.bugz,
-    state.bugzModel,
-    state.bugzServer,
     state.server,
     state.side,
     // Rare, and both are a person's doing or an answer they asked for.
