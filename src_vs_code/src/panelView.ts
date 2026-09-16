@@ -10,6 +10,7 @@ import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
+import { ROLE_TONE_CSS, roleTone } from './roleTone';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
@@ -1408,14 +1409,6 @@ export
  * round should look for something else" — and a single prompt per role could not express it.
  * The universal prompt is the default everywhere; a narrow lens is always a deliberate pick.</p>
  */
-/** Which tone wraps each role. The colour is never the only signal — the name is always written. */
-const ROLE_TONE: Record<string, string> = {
-  PlanCritique: 'plan',
-  Conventions: 'conv',
-  Architecture: 'arch',
-  SecurityReliability: 'sec',
-  UxDxPerformance: 'uxdx',
-};
 
 /**
  * What the round limit will actually be, shown beside the box that sets it.
@@ -1687,7 +1680,7 @@ function promptsBody(state: PanelState): string {
 
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
-    return `<div class="role role-${ROLE_TONE[role.id] ?? (stage === 'plan' ? 'plan' : 'arch')}${off}${inactive}">
+    return `<div class="role role-${roleTone(role.id, stage)}${off}${inactive}">
   <div class="head">${switched
       ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${frozen ? ' disabled' : ''}
            title="${escapeHtml(tickHelp(dormant, last))}">
@@ -2469,21 +2462,6 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-background);
   }
-  /* The role palette, taken from the sibling product's own token set
-     (creds/src_vs_code/src/entityFormStyles.ts): a charts token with the hex it falls back to, so a
-     theme that defines them wins and one that does not still gets the intended colour. */
-  :root {
-    --tone-plan: var(--vscode-charts-purple, #c586c0);
-    /* Conventions takes yellow: it reads as "check this first", and the four code roles
-       then span the palette instead of crowding blue-orange-green. */
-    --tone-conv: var(--vscode-charts-yellow, #d7ba7d);
-    --tone-arch: var(--vscode-charts-blue, #569cd6);
-    --tone-sec: var(--vscode-charts-orange, #ce9178);
-    --tone-uxdx: var(--vscode-charts-green, #b5cea8);
-    --tone-limits: var(--vscode-charts-yellow, #d7ba7d);
-    --tone-keys: var(--vscode-charts-red, #f14c4c);
-    --tone-code: var(--vscode-widget-border, #454545);
-  }
   /* One framed group per CALLER, modelled on .role rather than on .vendor: its neighbours here are
      fields in a section, not cards in a list, so it takes the role box's tighter metrics. The edge
      colour arrives inline, per caller; the width and the fallback are here, so a row without a
@@ -2501,12 +2479,8 @@ const CSS = `
      that no longer applies. The name stays at full strength so the box is still findable. */
   .role.off .field { opacity: .5; }
   .role.off .name { opacity: .7; }
-  .role-plan { border-left-color: var(--tone-plan); }
-  .role-arch { border-left-color: var(--tone-arch); }
-  .role-sec { border-left-color: var(--tone-sec); }
-  .role-uxdx { border-left-color: var(--tone-uxdx); }
-  .role-conv { border-left-color: var(--tone-conv); }
-  .role-code { border-left-color: var(--tone-code); }
+
+${ROLE_TONE_CSS}
   .tabs { display: flex; gap: 4px; margin: 0 0 8px; }
   .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);
          background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border);

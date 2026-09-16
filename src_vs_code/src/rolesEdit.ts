@@ -49,7 +49,8 @@ function stored(rows: readonly RoleRow[], forget: readonly string[] = []): RowsO
 export function rowsAfter(current: readonly RoleRow[], command: RolesCommand): RowsOutcome {
   // `text` is a FILE and `restorePrompt` deletes one; zoom is a different setting entirely. All
   // three are the host's, and none of them touches a row.
-  if (command.kind === 'ignore' || command.kind === 'zoom' || command.kind === 'restorePrompt') {
+  if (command.kind === 'ignore' || command.kind === 'zoom' || command.kind === 'restorePrompt'
+      || command.kind === 'tab') {
     return UNCHANGED;
   }
   if (command.kind === 'editPrompt' && command.field === 'text') {
@@ -113,7 +114,7 @@ function removed(current: readonly RoleRow[], id: string): RowsOutcome {
 /** Everything that edits one existing row — or creates the override row that will hold the edit. */
 function onRow(
   current: readonly RoleRow[],
-  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'add' | 'remove' | 'restorePrompt' }>,
+  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' }>,
 ): RowsOutcome {
   const mine = current.find((r) => r.id === command.id);
   const known = mine ?? (isBuiltIn(command.id) ? { id: command.id } : undefined);
@@ -137,7 +138,7 @@ function onRow(
 /** One row, edited — returned as a one-row outcome so a refusal can carry its sentence out. */
 function changed(
   row: RoleRow,
-  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'add' | 'remove' | 'restorePrompt' }>,
+  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' }>,
   all: readonly RoleRow[],
 ): RowsOutcome {
   if (command.kind === 'edit') {

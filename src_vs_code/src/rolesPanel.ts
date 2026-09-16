@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
 import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './roles';
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
-import { roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
+import { DEFAULT_ROLE_TAB, nextTab, roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
@@ -26,6 +26,21 @@ const SECTION = 'coai';
 const KEY = 'roles';
 
 let panel: vscode.WebviewPanel | undefined;
+
+/**
+ * Which of the three sections is open.
+ *
+ * <p>Held HERE rather than on the page, because a redraw replaces `panel.webview.html` wholesale —
+ * a new document, with no memory of anything the last one knew. Every shape-changing action
+ * redraws: add a prompt, add a role, a switch, a stage, a remove, a restore. A page-local tab would
+ * mean pressing "Add a prompt" on an architecture role and being thrown back to the plan tab, with
+ * the prompt just added on a tab you can no longer see.</p>
+ *
+ * <p>A module variable, not a stored setting: it outlives the panel, so closing and reopening the
+ * page in the same window keeps it, and there is nothing on disk to validate or migrate. Which tab
+ * somebody was last looking at is not worth a key in their settings.</p>
+ */
+let tab: string = DEFAULT_ROLE_TAB;
 let context: vscode.ExtensionContext | undefined;
 
 function config(): vscode.WorkspaceConfiguration {
@@ -187,6 +202,7 @@ async function render(): Promise<void> {
       texts: await texts(),
       serverVersion,
       perSide: config().get('perSideSettings') === true,
+      tab,
       uiScale: currentUiScale(),
     },
     nonce(),
@@ -250,6 +266,15 @@ function fieldOf(command: RolesCommand): string | undefined {
  * of the page — a role added or removed, a switch, a stage — does.</p>
  */
 async function apply(command: RolesCommand): Promise<boolean> {
+  // The whole rule is `nextTab`, a pure function next to the page that draws it, so that pressing a
+  // tab and then adding a role is something a test can execute rather than read.
+  tab = nextTab(tab, command);
+  if (command.kind === 'tab') {
+    // No redraw: the page switched on the press, without waiting for this. Replacing the document
+    // now would be a second, slower switch that also moved the caret out of whatever was being
+    // typed in the tab left behind.
+    return false;
+  }
   if (command.kind === 'ignore') {
     return false;
   }

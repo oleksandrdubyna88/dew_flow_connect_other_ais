@@ -1,6 +1,7 @@
 import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, type RoleRow } from './roles';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { escapeHtml } from './webviewHtml';
+import { ROLE_TONE_CSS, roleTone } from './roleTone';
 
 /**
  * The tab where a person writes a review role.
@@ -29,6 +30,44 @@ import { escapeHtml } from './webviewHtml';
  */
 const PROMPT_ROWS = 10;
 
+/** The three tabs this page is divided into, in the order they are drawn. */
+export const ROLE_TABS: readonly string[] = ['plan', 'code', 'documents'];
+
+/** Where a page with no choice yet opens: the first section. */
+export const DEFAULT_ROLE_TAB = 'plan';
+
+/**
+ * Which tab is open after a command — the whole rule, in one pure function.
+ *
+ * <p>It lives here rather than in `rolesPanel` because that module needs a VS Code host no test in
+ * this suite can build, and `.agents/PROJECT.md` refuses a new behavioural assertion over source
+ * text. The host keeps the variable; this decides what goes in it.</p>
+ *
+ * <p><b>Adding a ROLE moves you; adding a PROMPT does not.</b> A new role always joins the code
+ * bucket of the result stage, so one created from the plan tab would land somewhere the person
+ * cannot see — which is the complaint this page is being changed for. A prompt is created inside a
+ * role they are already looking at, and moving the page under them would be the same defect with
+ * the roles and the prompts swapped.</p>
+ */
+export function nextTab(current: string, command: RolesCommand): string {
+  if (command.kind === 'tab') {
+    return tabShown(command.id);
+  }
+
+  return command.kind === 'add' ? 'code' : tabShown(current);
+}
+
+/**
+ * The tab to DRAW, whatever was asked for.
+ *
+ * <p>The host outlives the page and can be older or newer than it, so the value arriving here is
+ * not trusted to be one this page has a section for. Exactly one tab is open in every case: there
+ * is no arrangement in which a person is shown three sections at once, or none.</p>
+ */
+export function tabShown(tab: string): string {
+  return ROLE_TABS.includes(tab) ? tab : DEFAULT_ROLE_TAB;
+}
+
 export interface RolesPageState {
   /** The rows as stored — a person's own roles and their edits to the shipped ones. */
   readonly rows: readonly RoleRow[];
@@ -50,6 +89,16 @@ export interface RolesPageState {
   readonly perSide: boolean;
 
   readonly uiScale: number;
+
+  /**
+   * Which of the three tabs is open, held by the HOST rather than by the page.
+   *
+   * <p>Optional, and anything unrecognised is the default — the page is handed this value by a host
+   * that may be older than it, and it must draw exactly one tab open whatever arrives. There is
+   * nothing stored to migrate: it is a module variable in `rolesPanel`, alive for as long as the
+   * window is.</p>
+   */
+  readonly tab?: string;
 }
 
 /** Every message this page can send, decided without a host so a test can reach the decision. */
@@ -62,6 +111,8 @@ export type RolesCommand =
   | { readonly kind: 'editPrompt'; readonly id: string; readonly promptId: string; readonly field: PromptField; readonly value: string }
   | { readonly kind: 'restorePrompt'; readonly id: string; readonly promptId: string }
   | { readonly kind: 'zoom'; readonly delta: number }
+  /** Which of the three sections is open — decided on the page, remembered by the host. */
+  | { readonly kind: 'tab'; readonly id: string }
   | { readonly kind: 'ignore' };
 
 const IGNORE: RolesCommand = { kind: 'ignore' };
@@ -104,6 +155,14 @@ export function roleEdit(message: unknown): RolesCommand {
   }
   if (type === 'add') {
     return { kind: 'add' };
+  }
+  if (type === 'tab') {
+    // Against the LIST, so a word this page has no section for is never stored. The drawing side
+    // normalises too — two halves, neither trusting the other, because a retained webview can be
+    // older or newer than the extension it is talking to.
+    const wanted = idOf(said['id']);
+
+    return ROLE_TABS.includes(wanted) ? { kind: 'tab', id: wanted } : IGNORE;
   }
 
   const id = idOf(said['id']);
@@ -212,7 +271,7 @@ function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpos
   const shipped = isShippedPrompt(role.id, prompt.id);
   const text = texts[prompt.id] ?? '';
 
-  return `  <div class="prompt" data-prompt="${escapeHtml(prompt.id)}">
+  return `  <div class="prompt${shipped ? '' : ' mine'}" data-prompt="${escapeHtml(prompt.id)}">
     <div class="head">
       <input type="text" data-field="label" value="${escapeHtml(prompt.label ?? prompt.id)}" placeholder="What the picker shows"${shipped ? ' readonly' : ''}>
       <input type="text" class="purpose" data-field="purpose" value="${escapeHtml(prompt.purpose ?? '')}" placeholder="The picker's tooltip"${shipped ? ' readonly' : ''}>
@@ -232,7 +291,7 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
   const stage = stageOf(role);
   const prompts = (role.prompts ?? []).map((p) => promptBlock(role, p, texts)).join('\n');
 
-  return `<details class="role${on ? '' : ' off'}" data-id="${escapeHtml(role.id)}"${on ? ' open' : ''}>
+  return `<details class="role role-${roleTone(role.id, stage)}${on ? '' : ' off'}" data-id="${escapeHtml(role.id)}"${on ? ' open' : ''}>
   <summary>
     <span class="title">${escapeHtml(role.name ?? role.id)}</span>
     <span class="id">${escapeHtml(role.id)}</span>
@@ -335,8 +394,23 @@ function stageIsFull(all: readonly RoleRow[]): boolean {
   return activeCount(all, RESULT_CODE) >= MAX_ACTIVE_PER_BUCKET;
 }
 
+/** What each tab is called — the headings they replace, so nothing was renamed out from under anyone. */
+const TAB_NAMES: Readonly<Record<string, string>> = {
+  plan: 'Plan review',
+  code: 'Code review',
+  documents: 'Document review',
+};
+
+/** The three tabs, with the open one marked. */
+function tabStrip(open_: string): string {
+  return ROLE_TABS
+    .map((id) => `<button type="button" class="tab${id === open_ ? ' on' : ''}" data-tab="${id}">${TAB_NAMES[id]}</button>`)
+    .join('');
+}
+
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
+  const open_ = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
   // By BUCKET, not by "plan and everything else". That filter was right while there were two
   // kinds of round, and drew a document role under a heading that was wrong about it the moment
   // there were three.
@@ -363,17 +437,22 @@ ${styles(state.uiScale)}
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
 
-<h2>Plan review</h2>
+<div class="tabs">${tabStrip(open_)}</div>
+
+<section data-section="plan"${open_ === 'plan' ? '' : ' hidden'}>
 <p class="note">Roles that read the plan, before any code exists.</p>
 ${[...plan, ...waiting].map((r) => roleBlock(all, r, state.texts)).join('\n')}
+</section>
 
-<h2>Code review</h2>
+<section data-section="code"${open_ === 'code' ? '' : ' hidden'}>
 <p class="note">Roles that read the change itself.</p>
 ${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+</section>
 
-<h2>Document review</h2>
+<section data-section="documents"${open_ === 'documents' ? '' : ' hidden'}>
 <p class="note">Roles that read a document rather than a diff — what <code>review_document</code> runs. A role here never sees a checkout or a change.</p>
 ${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+</section>
 
 <button type="button" class="add role" data-add="role">Add a role</button>
 ${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}
@@ -391,9 +470,18 @@ body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
 header { display: flex; align-items: baseline; gap: 12px; }
 h1 { font-size: 1.4em; }
 h2 { font-size: 1.1em; margin: 20px 0 2px; }
+${ROLE_TONE_CSS}
+/* The rounds log's strip, the same class names and the same metrics: two pages of this product
+   with tabs that look different would be two products. */
+.tabs { display: flex; gap: 6px; margin: 10px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+.tabs .tab { background: transparent; color: var(--vscode-foreground); border: none;
+  border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
+.tabs .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
 .lead, .note { opacity: 0.8; margin: 2px 0 10px; }
 .note { font-size: 0.9em; }
-.role { border-left: 3px solid var(--vscode-charts-blue, #3794ff); background: var(--vscode-textBlockQuote-background);
+/* The edge colour arrives from the .role-* rules above, which are the palette the sidebar spends
+   on these same seven roles. It was one fixed blue here for as long as this page has existed. */
+.role { border-left: 3px solid var(--tone-code); background: var(--vscode-textBlockQuote-background);
   padding: 6px 10px; margin: 8px 0; }
 .role.off { opacity: 0.55; }
 .role > summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
@@ -405,6 +493,11 @@ h2 { font-size: 1.1em; margin: 20px 0 2px; }
 .fields .flag { gap: 4px; }
 .hint { flex-basis: 100%; font-size: 0.85em; opacity: 0.75; margin: 0; }
 .prompt { border-left: 2px solid var(--vscode-panel-border); padding: 4px 8px; margin: 6px 0; }
+/* A prompt of your own: framed on every side, and it STAYS framed. It is not a highlight of the
+   last thing added — it is what the block is. Yours are the ones whose label, purpose and text are
+   all editable; a shipped one has two readonly fields and a Restore. Until this, an added prompt
+   landed among the shipped ones looking identical to them, which is issue #293's second picture. */
+.prompt.mine { border: 1px solid var(--vscode-charts-green, #b5cea8); border-radius: 3px; }
 .prompt .head { display: flex; gap: 6px; margin-bottom: 4px; }
 .prompt input { flex: 1; }
 .prompt .purpose { flex: 2; }
@@ -452,6 +545,23 @@ function script(nonce: string): string {
   document.addEventListener('click', function (event) {
     const pressed = event.target;
     if (!pressed || typeof pressed.closest !== 'function') { return; }
+    // The tab, FIRST and with its own return: this is the one control on the page that acts here
+    // rather than only asking the host. It switches now so the page does not wait on a round trip,
+    // and it posts so the next repaint — which every add and every switch causes — keeps it.
+    const tab = pressed.closest('[data-tab]');
+    if (tab && tab.dataset) {
+      const which = tab.dataset.tab;
+      const strip = document.querySelectorAll('[data-tab]');
+      for (let i = 0; i < strip.length; i += 1) {
+        strip[i].className = strip[i].dataset.tab === which ? 'tab on' : 'tab';
+      }
+      const sections = document.querySelectorAll('[data-section]');
+      for (let i = 0; i < sections.length; i += 1) {
+        sections[i].hidden = sections[i].dataset.section !== which;
+      }
+      vscode.postMessage({ type: 'tab', id: which });
+      return;
+    }
     if (pressed.closest('[data-add="role"]')) { vscode.postMessage({ type: 'add' }); return; }
     const addPrompt = pressed.closest('[data-add-prompt]');
     if (addPrompt) { vscode.postMessage({ type: 'addPrompt', id: addPrompt.dataset.addPrompt }); return; }

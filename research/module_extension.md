@@ -4394,6 +4394,40 @@ settings editor as a wall of JSON with their own writing inside it. `promptFile`
 is not a slug rather than sanitising one — a caller holding a refused id is a caller whose id came
 from somewhere it should not have, and writing `....escaped.md` would hide that.
 
+**Three tabs, remembered by the host (2026-09-16, issue #293).** The page was one column of
+everything: seven roles, each with up to six prompt boxes ten rows high, under three `<h2>`
+headings on one scroll. Those headings are now a tab strip, and the sections carry `data-section`.
+
+The tab is held in a module variable in `rolesPanel.ts`, **not on the page**, and that is the part
+that is not decoration. `apply` returns whether the page must be redrawn, and a redraw replaces
+`panel.webview.html` wholesale — a new document with no memory of anything. Every shape-changing
+action redraws: add a prompt, add a role, a switch, a stage, a remove, a restore. A page-local tab
+would mean pressing *Add a prompt* on an architecture role and being thrown back to the plan tab,
+with the prompt just added on a tab you can no longer see. So the page switches instantly on the
+press **and** posts `{ type: 'tab', id }`; the host keeps it and hands it back on every render.
+
+The whole rule is **`nextTab(current, command)`**, a pure function in `rolesPage.ts`: a `tab`
+command moves to that tab, `add` moves to `code` (a new role always joins the code bucket of the
+result stage, so one created from the plan tab would land where nobody is looking), and everything
+else — `addPrompt` included — leaves it alone. It lives beside the page rather than in the host
+because `rolesPanel.ts` needs a VS Code host no unit test here can build, and `.agents/PROJECT.md`
+refuses a new behavioural assertion over source text. Both ends normalise: `roleEdit` refuses to
+store a tab id it has no section for, and `tabShown` draws the default for one anyway, so exactly
+one tab is open whatever the host is holding. It is a module variable rather than a stored setting
+— it outlives the panel, and which tab somebody was last on is not worth a key in their settings.
+
+**A prompt you added is framed in green, and stays framed.** `.prompt.mine`, on the same condition
+that already chose *Remove* over *Restore*: `isShippedPrompt` is false. Not a highlight of the last
+thing added — it is what the block IS, the one whose label, purpose and text are all editable. A
+shipped prompt you have overridden is still shipped: it keeps its grey edge and its *Restore*.
+
+**`roleTone.ts` is the one palette (2026-09-16).** The sidebar has given each role its own colour
+since the settings panel was written; this page gave every role the same blue. The map and the
+`--tone-*` block moved out of `panelView.ts` into `roleTone.ts`, which both views now import — one
+`roleTone(roleId, stage)`, one `ROLE_TONE_CSS`. A role a person added takes its stage's tone, which
+means it shares a colour with a shipped role: matching the sidebar means matching it where it is
+arbitrary too. `.role` keeps its `border-left` and the `.role-*` rules that follow it set the
+colour, so the cascade decides it in exactly one place.
 **What the page will not offer**, each with a twin in `RoleComposition` because a page is not a
 boundary: a shipped role cannot be renamed, removed, or have a shipped prompt deleted (its id keys
 settings, open sessions and every recorded round; its text is embedded, so there would be nothing to
