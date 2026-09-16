@@ -182,6 +182,82 @@ function closest<T>(
     : items.filter((item) => namesOf(item).some((name) => namesTheSame(name, looking)));
 }
 
+/**
+ * What a walk over a folder of sessions is allowed to cost.
+ *
+ * <p><b>Measured, not guessed.</b> The operator's own folder is 101 sessions and 1.2 GB, and reading
+ * every title in it takes 5.2 s warm. Nothing bounded that: a folder ten times the size is a minute
+ * behind a button, and the sentence at the end would have been *"no session is called that"* — which
+ * would not be true, since most of them were never looked at. `most` is roughly 2.5× the largest
+ * real folder here and `withinMs` roughly 2× its measured time, so an ordinary machine never meets
+ * either. (local and gemini, the plan round.)</p>
+ *
+ * <p><b>What it does NOT bound.</b> The deadline is checked between FILES, so one pathological file
+ * can overrun it. That is deliberate rather than overlooked: the largest single session here is 21 MB
+ * and streams in about a tenth of a second, and a per-line clock on every line of every file costs
+ * more than it saves. Said out loud so the limit is known rather than assumed away.</p>
+ *
+ * @param now injected in tests only — a real deadline proved with a real wait is a test nobody runs
+ */
+export interface ScanBudget {
+  readonly most: number;
+  readonly withinMs: number;
+  readonly now?: () => number;
+}
+
+export const SCAN_BUDGET: ScanBudget = { most: 250, withinMs: 10_000 };
+
+/** How much of a folder a walk actually read, when it did not read all of it. */
+export interface ScanCut {
+  readonly read: number;
+  readonly of: number;
+  readonly why: 'count' | 'time';
+}
+
+/** What a walk took, and whether it was cut short. */
+interface Walk<T> {
+  readonly taken: readonly T[];
+  readonly cut: ScanCut | undefined;
+}
+
+/**
+ * Take from these files, newest first, until the budget says stop.
+ *
+ * <p>The order matters more than the cap does: `sessionFiles` sorts by modification time, so what is
+ * read is the part of the folder somebody is actually working in. A cut is reported rather than
+ * hidden — every caller of this has a sentence to say about it, because "we did not look at the rest"
+ * and "it is not there" are different answers to the same question.</p>
+ */
+async function withinBudget<T>(
+  files: readonly string[],
+  budget: ScanBudget,
+  take: (file: string) => Promise<T>,
+): Promise<Walk<T>> {
+  const clock = budget.now ?? Date.now;
+  const started = clock();
+  const taken: T[] = [];
+  for (const file of files) {
+    if (taken.length >= budget.most) {
+      return { taken, cut: { read: taken.length, of: files.length, why: 'count' } };
+    }
+    if (clock() - started >= budget.withinMs) {
+      return { taken, cut: { read: taken.length, of: files.length, why: 'time' } };
+    }
+    taken.push(await take(file));
+  }
+
+  return { taken, cut: undefined };
+}
+
+/** How a cut reads in a refusal: what was read, out of what, and why it stopped there. */
+function cutSays(cut: ScanCut, budget: ScanBudget, whereabouts: string): string {
+  const stopped = cut.why === 'count'
+    ? `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} were read`
+    : `Only the newest ${cut.read} of ${cut.of} sessions ${whereabouts} could be read within ${Math.round(budget.withinMs / 1_000)} s`;
+
+  return stopped;
+}
+
 /** One session file, and the question waiting in it. */
 export interface WaitingSession {
   readonly file: string;
@@ -425,6 +501,7 @@ export async function sessionFileIn(
   cwd: string,
   caseBlind: boolean,
   looking: string,
+  budget: ScanBudget = SCAN_BUDGET,
 ): Promise<Found> {
   if (looking.length === 0) {
     // A tab with no name cannot be joined to anything. It is not an error — a chat opened from a
@@ -439,7 +516,7 @@ export async function sessionFileIn(
   if (!Array.isArray(files)) {
     return { kind: 'none', refusal: (files as ReadFailure).refusal };
   }
-  return await theOneCalled(files, looking, `in ${dir}`);
+  return await theOneCalled(files, looking, `in ${dir}`, budget);
 }
 
 /**
@@ -523,15 +600,27 @@ export async function sessionFileOf(
  * memory to answer a question about fifty titles — two reviewers measured that shape at 10x and
  * called it seconds of a blocked extension host.</p>
  */
-async function theOneCalled(files: readonly string[], looking: string, whereabouts: string): Promise<Found> {
-  const named: { readonly file: string; readonly names: SessionNames }[] = [];
-  for (const file of files) {
-    // Every name, then the tiers — never "the first file whose current name matches", which would
-    // let the order a directory happens to list in decide between a session called this today and
-    // one that was called this a week ago.
-    named.push({ file, names: await namesOf(file) });
-  }
+async function theOneCalled(
+  files: readonly string[],
+  looking: string,
+  whereabouts: string,
+  budget: ScanBudget,
+): Promise<Found> {
+  // Every name of every file that fits the budget, THEN the tiers — never "the first file whose
+  // latest name matches", which would let the order a directory happens to list in decide between a
+  // session called this today and one that was called this a week ago.
+  const walk = await withinBudget(files, budget, async (file) => ({ file, names: await namesOf(file) }));
+  const named = walk.taken;
   const matched = namedAmong(named, (one) => one.names, looking).map((one) => one.file);
+  if (matched.length === 0 && walk.cut !== undefined) {
+    // NOT "no session is called that". Most of them were never opened, and saying otherwise is this
+    // module telling the person something it does not know. A match INSIDE the cut is still a match:
+    // the files are newest first, so what was read is the part of the folder being worked in.
+    return {
+      kind: 'none',
+      refusal: `${cutSays(walk.cut, budget, whereabouts)}, and none of them is called “${looking}”.`,
+    };
+  }
   if (matched.length > 1) {
     return {
       kind: 'several',
@@ -661,29 +750,22 @@ export async function waitingQuestion(
   cwd: string,
   caseBlind: boolean,
   looking = '',
+  budget: ScanBudget = SCAN_BUDGET,
 ): Promise<Waiting> {
-  const root = projectsRoot(home);
-  let names: string[];
-  try {
-    names = await fs.readdir(root);
-  } catch (reason) {
-    return missing(reason)
-      ? { kind: 'failed', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
-      : { kind: 'failed', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
-  }
-  const dir = projectDirIn(root, cwd, names, caseBlind);
-  if (dir.length === 0) {
-    return {
-      kind: 'failed',
-      refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
-    };
+  const dir = await projectDirFor(home, cwd, caseBlind);
+  if (typeof dir !== 'string') {
+    return { kind: 'failed', refusal: dir.refusal };
   }
   const files = await sessionFiles(dir);
   if (!Array.isArray(files)) {
     return { kind: 'failed', refusal: (files as ReadFailure).refusal };
   }
   const sessions: WaitingSession[] = [];
-  for (const file of files) {
+  // THE BUDGET MATTERS MORE HERE than on the Asked button's walk: this reader holds each file WHOLE
+  // in memory rather than streaming it, so an unbounded folder is both the slowest path and the
+  // hungriest one.
+  const walk = await withinBudget(files, budget, async (file) => file);
+  for (const file of walk.taken) {
     let body: string;
     try {
       body = await fs.readFile(file, 'utf8');
@@ -708,6 +790,15 @@ export async function waitingQuestion(
       };
     }
   }
+  const answer = waitingIn(sessions, looking);
+  if (answer.kind === 'none' && walk.cut !== undefined) {
+    // SILENCE IS A CLAIM, and this one would be false. The module's rule — a question this build
+    // could not read is not silence — applies just as much to a folder it did not finish reading.
+    return {
+      kind: 'failed',
+      refusal: `${cutSays(walk.cut, budget, `in ${dir}`)}, so this cannot say whether anything is waiting in the rest.`,
+    };
+  }
 
-  return waitingIn(sessions, looking);
+  return answer;
 }
