@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -68,7 +69,7 @@ public sealed record RuleOrder
     /// correct and costs nothing, it simply has no room to act yet. What would give it room is
     /// rule modularization or the resolver, both recorded as follow-ups.
     /// <c>research/RESULTS_rules_selection_budget.md</c> carries the numbers and
-    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsNothing_AndSaysSoOutLoud</c> fails the day this
+    /// <c>StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule_AndSaysSoOutLoud</c> fails the day this
     /// changes.</para>
     /// <para><b>Why SHA-256 and not <see cref="object.GetHashCode"/>.</b> .NET randomises string
     /// hashing per PROCESS, so a GetHashCode-ordered tail would differ between two rounds of one fix
@@ -141,8 +142,13 @@ public sealed record RuleOrder
     /// written wrong.</para>
     /// <para>Entries are mount-relative and matched EXACTLY, so one entry names one rule; a name the
     /// table has never heard of ranks last and is ordered alphabetically rather than dropped.</para>
+    /// <para><b>Public because a second copy of this list is the defect it would cause.</b> A code
+    /// round found the canary in <c>StageRulesTests</c> classifying rules against a hand-typed tier
+    /// assembled from <c>StageRules.Plan</c> - a DIFFERENT stage's tier - so a genuinely reachable
+    /// tail rule was read as tier and never counted. Anything that must tell tier from tail asks
+    /// <see cref="IsTier"/> rather than keeping its own list.</para>
     /// </remarks>
-    private static readonly string[] Tiers =
+    public static ImmutableArray<string> TierRules { get; } =
     [
         "csharp/doctrine.md",
         "rust/doctrine.md",
@@ -154,6 +160,9 @@ public sealed record RuleOrder
         "common/knowledge-base.md",
     ];
 
+    /// <summary>Whether a mount-relative rule name is a tier rule, by the comparison the order uses.</summary>
+    public static bool IsTier(string withinMount) => Tier(withinMount) < TierRules.Length;
+
     /// <remarks>
     /// <para>One comparison rule for the whole pipeline: <c>RuleFiles.FolderFiles</c> de-duplicates
     /// and sorts its candidates with <see cref="StringComparer.OrdinalIgnoreCase"/>, so a
@@ -164,9 +173,9 @@ public sealed record RuleOrder
     /// </remarks>
     private static int Tier(string withinMount)
     {
-        var rank = Array.FindIndex(Tiers, entry => entry.Equals(withinMount, StringComparison.OrdinalIgnoreCase));
+        var rank = TierRules.IndexOf(withinMount, 0, TierRules.Length, StringComparer.OrdinalIgnoreCase);
 
-        return rank < 0 ? Tiers.Length : rank;
+        return rank < 0 ? TierRules.Length : rank;
     }
 
     /// <summary>
@@ -199,7 +208,7 @@ public sealed record RuleOrder
     /// hash-ordered <c>Walk</c> was a walk in name only.</para>
     /// </remarks>
     private static string TailKey(string branch, string withinMount) =>
-        branch.Length == 0 || Tier(withinMount) < Tiers.Length
+        branch.Length == 0 || IsTier(withinMount)
             ? string.Empty
             : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{branch}\0{withinMount}")));
 }
