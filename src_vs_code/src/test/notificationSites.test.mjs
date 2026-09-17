@@ -44,12 +44,23 @@ test('the count is internally consistent, which the hand-written one was not', (
 /**
  * How many places this extension speaks to a person.
  *
- * <p>It started at 109 and is 110: S3 SURFACES something never shown before — the server's own
- * list of settings it could not understand, which crossed the wire on every probe and was dropped
- * by the parser. A new message rather than a routed one, and that is the only sanctioned way this
- * number moves up.</p>
+ * <p>It started at 109 and is 111.</p>
+ *
+ * <ul>
+ *   <li><b>110</b> — S3 SURFACES something never shown before: the server's own list of settings it
+ *       could not understand, which crossed the wire on every probe and was dropped by the parser.
+ *       A new message rather than a routed one.</li>
+ *   <li><b>111</b> — the rebase onto main, 2026-09-17. Another lane shipped the copy
+ *       acknowledgement's catch while this branch was routing, so main arrived carrying a message
+ *       that had never been through the funnel. The ratchet went red on the rebase and named the
+ *       file, which is the entire purpose of counting: a branch cannot quietly re-open the hole it
+ *       is closing, and neither can the branch merging into it.</li>
+ * </ul>
+ *
+ * <p>A new message is the only sanctioned way this number moves up, and each rise is written here
+ * with its reason.</p>
  */
-const PLACES_THIS_SPEAKS = 110;
+const PLACES_THIS_SPEAKS = 111;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

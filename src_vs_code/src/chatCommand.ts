@@ -3085,8 +3085,19 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
   // empty catch, and `coding-style.md` is explicit that an error is never silently swallowed; a
   // second inline `showWarningMessage` beside the first is how one of them ends up without the
   // other's wording.
+  //
+  // It goes through the funnel rather than to `vscode.window` directly, because this is the one
+  // sentence in the object that appears while the person is looking somewhere ELSE by definition:
+  // what they were waiting for is a tick on a control that simply never came. A toast nobody was
+  // facing is the case the notifications ledger exists for.
   const warn = (message: string): void => {
-    void vscode.window.showWarningMessage(message);
+    void notify({
+      as: 'warning',
+      class: 'failure',
+      source: 'chatPage',
+      code: 'copy-not-acknowledged-on-the-page',
+      title: message,
+    });
   };
   // ONE copier for both controls on an answer, so the whole and the part cannot disagree about what
   // happens when the clipboard refuses — and so two quick presses land in the order they were made.
