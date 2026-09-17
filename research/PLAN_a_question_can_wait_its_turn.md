@@ -283,15 +283,20 @@ measurement; they are written here so that changing them is a decision somebody 
       disabled while a turn runs, and that is a feature" paragraph, which this change makes false.
 - [x] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
 
-## Open questions for the operator
+## The two questions the operator answered (2026-09-17)
 
-Neither blocks the build.
+Both were open when this shipped and both were put to them; neither blocked the build. Recorded
+here rather than closed silently, because the next person to read this will wonder whether anybody
+chose or whether it just came out that way.
 
-1. **Should the queue survive a window reload?** The plan says no, for the reason above. If the real
-   working pattern is "queue three and close the laptop", that answer is wrong and it becomes a
-   `CONVERSATION_VERSION` bump.
-2. **Are 8 questions and 64 KB the right ceiling?** They are a judgement. The only thing measured is
-   that no ceiling at all is wrong.
+1. **Should the queue survive a window reload? — NO.** *"это ок, что не переживает перезагрузку."*
+   So the design above stands as written: the queue is runtime state on `Thread`, deliberately not
+   part of `ConversationRecord`, and "nothing typed is silently dropped" stays a promise about a
+   window that lives. No `CONVERSATION_VERSION` bump, and nothing restores a row whose promise
+   died with the host.
+2. **Are 8 questions and 64 KB the right ceiling? — YES, 8 is fine.** *"8 устраивается."* The
+   numbers stay where they are, and they stay written down as a judgement so that moving them is
+   somebody deciding rather than somebody drifting.
 
 ### The suites, as run
 
