@@ -31,6 +31,8 @@ interface Posted {
   readonly id?: number;
   readonly open?: boolean;
   readonly delta?: number;
+  /** The zoom and tone controls are SHARED, and they post a field this page never fills. */
+  readonly field?: string;
 }
 
 /**
@@ -124,6 +126,27 @@ class Toggle {
   }
 }
 
+/**
+ * The descriptive part of a summary line — the severity, the title, the state word.
+ *
+ * <p>It exists to be CLICKED, and what it answers `closest` with is decided by where the page put
+ * it: inside the disclosure button, or merely inside the row beside it. That is the difference
+ * between a whole summary line that opens the pair and one where only the method name does.</p>
+ */
+class Line {
+  readonly id = '';
+
+  constructor(readonly key: string, private readonly within: Toggle | Row) {}
+
+  getAttribute(): string | null {
+    return null;
+  }
+
+  closest(selector: string): Toggle | Row | null {
+    return this.within.closest(selector);
+  }
+}
+
 /** A row's code, hidden until somebody asks for it. */
 class Region {
   hidden: boolean;
@@ -205,12 +228,13 @@ interface Page {
   readonly boxes: readonly Box[];
   readonly toggles: readonly Toggle[];
   readonly regions: readonly Region[];
+  readonly lines: readonly Line[];
   readonly zoom: readonly Knob[];
   readonly tone: readonly Knob[];
   readonly style: Style;
   readonly host: Host;
   readonly controls: Readonly<Record<string, Control>>;
-  click(what: Box | Control | Toggle): void;
+  click(what: Box | Control | Toggle | Line): void;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
   showing(findingId: number): boolean;
 }
@@ -248,6 +272,21 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     .map((m) => new Region(m[1]!, m[2] === undefined));
   const toggles = [...html.matchAll(/data-toggle="(\d+)"\s+aria-expanded="(true|false)"/g)]
     .map((m) => new Toggle(m[1]!, m[2] === 'true', rowFor(m[1]!)));
+  // The severity/title line and the state word, with the element they are actually INSIDE. Whether
+  // that is the disclosure button or merely the row is the whole of the defect a code reviewer
+  // found — the first version wrapped only the chevron and the symbol, so pressing the title did
+  // nothing — and it is a containment question, which is why the parent is computed from the
+  // markup rather than asserted about it.
+  const lines = toggles.map((toggle) => {
+    const opens = html.indexOf(`data-toggle="${toggle.key}"`);
+    const shuts = html.indexOf('</button>', opens);
+    const inside = html.slice(opens, shuts);
+
+    return new Line(toggle.key,
+      inside.includes('class="said"') && inside.includes('class="state ')
+        ? toggle
+        : rowFor(toggle.key));
+  });
   const zoom = [...html.matchAll(/data-zoom="(-?\d+)"/g)].map((m) => new Knob('zoom', m[1]!));
   const tone = [...html.matchAll(/data-tone="(-?\d+)"/g)].map((m) => new Knob('tone', m[1]!));
   const controls: Record<string, Control> = {
@@ -313,6 +352,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     posted,
     boxes,
     toggles,
+    lines,
     regions,
     zoom,
     tone,
@@ -332,6 +372,14 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
 /** The toggle for one pair, by the id it belongs to — never by its position in the list. */
 function toggleFor(page: Page, findingId: number): Toggle {
   const found = page.toggles.find((t) => t.key === String(findingId));
+  assert.ok(found !== undefined, `no pair ${findingId} is on this page`);
+
+  return found;
+}
+
+/** The severity/title/state part of one pair's summary line. */
+function lineFor(page: Page, findingId: number): Line {
+  const found = page.lines.find((l) => l.key === String(findingId));
   assert.ok(found !== undefined, `no pair ${findingId} is on this page`);
 
   return found;
@@ -490,6 +538,27 @@ test('pressing a row shows its code and tells the panel which row', () => {
     [{ type: 'expand', id: 2, open: true }]);
 });
 
+/**
+ * The WHOLE summary line opens the pair, not just the method name.
+ *
+ * <p>The first version of this story put the severity, the title and the state word OUTSIDE the
+ * disclosure button while its own stylesheet claimed the line was the button — so pressing any of
+ * them did nothing at all, on the part of the row a person is most likely to aim at, since it is
+ * the part that says what the defect IS. A code reviewer found it (codex, UX). The shim computes
+ * each line's parent from the markup rather than assuming it, so moving those spans back out of
+ * the button turns this red.</p>
+ */
+test('pressing the severity and title opens the pair, like pressing its name', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(lineFor(page, 2));
+
+  assert.equal(page.showing(2), true, 'the part of the row that says what the defect is is dead');
+  assert.equal(page.showing(1), false);
+  assert.deepEqual(page.posted.filter((m) => m.type === 'expand'),
+    [{ type: 'expand', id: 2, open: true }]);
+});
+
 test('pressing it again closes it, and the panel is told that too', () => {
   const page = run([pair(1)]);
 
@@ -612,7 +681,7 @@ test('the zoom control posts a press and applies what the host pushes back', () 
   assert.equal(page.zoom.length, 2, 'the ± pair is on the page');
   page.zoom.find((k) => k.dataset['zoom'] === '1')!.press();
   assert.deepEqual(page.posted.filter((m) => m.type === 'zoom').at(-1),
-    { type: 'zoom', delta: 1, field: '' } as unknown as Posted);
+    { type: 'zoom', delta: 1, field: '' });
 
   page.host.push({ type: 'uiScale', px: 17.29, label: '+3' });
 
@@ -627,7 +696,7 @@ test('the tone control posts a press and applies both colours the host pushes ba
   assert.equal(page.tone.length, 2);
   page.tone.find((k) => k.dataset['tone'] === '-1')!.press();
   assert.deepEqual(page.posted.filter((m) => m.type === 'tone').at(-1),
-    { type: 'tone', delta: -1, field: '' } as unknown as Posted);
+    { type: 'tone', delta: -1, field: '' });
 
   page.host.push({ type: 'textTone', color: 'rgb(1 2 3)', read: 'rgb(4 5 6)', label: '−2' });
 

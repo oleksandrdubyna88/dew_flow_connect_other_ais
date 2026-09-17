@@ -4,20 +4,18 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 124,
-  "direct": 1,
+  "sites": 123,
+  "direct": 0,
   "modal": 18,
-  "events": 106,
+  "events": 105,
   "inTheFunnel": 3,
   "routed": 123,
   "byApi": {
     "showInformationMessage": 0,
-    "showWarningMessage": 1,
+    "showWarningMessage": 0,
     "showErrorMessage": 0
   },
-  "perFile": {
-    "src/helpPanel.ts": 1
-  },
+  "perFile": {},
   "codes": [
     "a-review-is-waiting",
     "add-a-server-that-could-not-be-checked",
@@ -27,7 +25,6 @@
     "bugs-keys-action-failed",
     "bugz-decision-not-saved",
     "bugz-decisions-partly-written",
-    "bugz-view-setting-not-saved",
     "catalog-could-not-be-read",
     "catalog-is-empty",
     "catalog-offered-unusable-ids",

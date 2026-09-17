@@ -287,6 +287,16 @@ above rather than accepting them, and three of its findings changed the plan:
 | **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | blocked on two decisions |
 
+### Carried out of story 1.1's code round, rejected there and owed somewhere
+
+Two reviewers, independently, said the decision path has **no visible in-flight state**: pressing
+*Keep selected* clears the selection, disables the buttons and then runs the server binary with
+nothing on screen saying so. I rejected both for this story — the decide path is shipped code a
+presentation-only story does not touch — but the observation is right, and it is bigger than a
+spinner: CLAUDE.md §8 says a status-changing action must reflect its real state across a reload, and
+a decision that is written by a child process is exactly that shape. It belongs with **epic 2.1**,
+which is already opening `Pairs()`, or in a story of its own. It is not a story 1.1 omission.
+
 **Epic 4's preconditions are decisions, not code**: the five comment questions (size, charset, PII
 — *scan* or *local only*, server-first, version negotiation, retention) and the ranking-picker
 disclosure answer. Story 7 is therefore neither an epic nor a story: it is the same question asked of

@@ -7234,6 +7234,24 @@ screen; the panel owns what survives the next redraw.
 element that does not carry it — after which a second press can never close what the first one
 opened. The suite is red for exactly that mutation.
 
+**The whole summary line is the button** — the method name, the severity/category/title line and the
+state word are all inside it, as spans, because a `<button>` takes phrasing content and a `<div>` in
+one is invalid markup browsers merely tolerate. The first version wrapped only the chevron and the
+name while the stylesheet beside it claimed otherwise, so pressing the part of the row that says
+what the defect IS did nothing at all. (Code round, codex.)
+
+**One helper now reports a failed view-settings write, for every page.** `helpPanel.ts` had a private
+one over `showWarningMessage` and this panel grew a second over `notify`; three reviewers across two
+providers named the duplication in one round. `settingWrite.ts` is the extracted half — and because
+it routes through the funnel, it also retired the **last direct notification call in the extension**:
+the census ratchet went from one permitted direct call to zero.
+
+**The webview message boundary is a union, parsed once.** `asReviewMessage` turns raw data into one
+of four shapes or into nothing, and `received` switches over it. A plain lookup table answered
+`handlers['__proto__']` with something truthy and uncallable; `null` threw on the first field read;
+and a `NaN` delta reached `clampScale`, which answers 0 for anything non-finite — so a junk press
+would have silently reset somebody's zoom rather than doing nothing.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

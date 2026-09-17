@@ -289,6 +289,7 @@ of every wire field this product has shipped out of step.
 | `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success |
 | `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
 | `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
+| `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
 source text, and story 4 earned that ruling: a model picker matched every regex written about it
@@ -312,6 +313,24 @@ both verified by mutation: rendering rows expanded (ten tests) and widening `clo
 to `closest('[data-row]')` — the latter caught by *pressing it again closes it*, since the row cannot
 report the state the button carries. Keying the open set by position instead of `findingId` is caught
 by the reorder test.
+
+**The shim decides a containment question rather than asserting about it.** Whether a summary line
+opens its pair depends on whether the severity/title spans are INSIDE the disclosure button, and no
+regex over markup is a behavioural assertion about that. So `run()` slices the button's own markup
+and parents each `Line` to the button or to the row accordingly — the fixture is derived from what
+the page rendered, exactly as the boxes are, and moving those spans back out turns *pressing the
+severity and title opens the pair* red with "the part of the row that says what the defect is is
+dead". Verified by mutation.
+
+**`bugzReviewWiring.test.ts` covers the one seam the page tests structurally cannot.** The page tests
+inject `expanded` straight into `reviewPageHtml`; if `received()` stopped recording an `expand`, or
+`draw()` stopped passing the panel's set, every one of them would stay green while the open row
+collapsed after the next decision. `bugzReviewPanel.ts` imports `vscode`, so no test here can import
+it — the constraint `noticesDoNotBlock.test.ts` documents for the same file — and what is left is
+reading the source with its comments stripped. TypeScript's own `noUnusedLocals` already catches the
+crudest break (dropping the argument leaves `keptOpen` unused); this file catches passing the WRONG
+thing, verified by making `draw()` intersect against an empty list. What it does not prove is that a
+row reopens after a decision: that needs an extension host, which this suite still does not have.
 
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
