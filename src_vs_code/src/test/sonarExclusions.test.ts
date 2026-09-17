@@ -25,12 +25,45 @@ const SOURCE = path.join(HERE, 'src');
 const WORKFLOW = path.join(HERE, '..', '.github', 'workflows', 'sonarcloud.yml');
 const CI = path.join(HERE, '..', '.github', 'workflows', 'ci.yml');
 
-/** Every module in `src` that imports the editor, and therefore cannot run under `node --test`. */
-const needsAHost = (): readonly string[] =>
-  fs.readdirSync(SOURCE)
-    .filter((name) => name.endsWith('.ts'))
-    .filter((name) => /from 'vscode'/u.test(fs.readFileSync(path.join(SOURCE, name), 'utf8')))
-    .sort();
+/**
+ * Every module in `src` that cannot run under `node --test`, directly OR through what it imports.
+ *
+ * <p><b>Transitive, and that correction was earned.</b> This asked only whether a module named
+ * `vscode` itself, which is not the question the comment above it poses. A module that imports a
+ * module that imports the editor is just as unloadable — `require('vscode')` throws at the first
+ * hop, wherever that hop is. Three modules of the chat command split are exactly that shape:
+ * `chatPersist` reaches it through `chatPanel`, and `chatRegistry` and `chatFollow` through
+ * `chatPersist`, `chatCapture` and `chatRoots`. Left out of the list they arrived at the quality
+ * gate as 0 % of the new code they contributed and failed the pull request — which is precisely the
+ * number-about-the-analysis this entry exists to stop.</p>
+ */
+const needsAHost = (): readonly string[] => {
+  const files = fs.readdirSync(SOURCE).filter((name) => name.endsWith('.ts'));
+  const text = new Map(files.map((name) => [name, fs.readFileSync(path.join(SOURCE, name), 'utf8')]));
+  const importsOf = (name: string): readonly string[] =>
+    [...(text.get(name) ?? '').matchAll(/from\s+'\.\/([^']+)'/gu)]
+      .map((found) => `${found[1]}.ts`)
+      .filter((one) => text.has(one));
+
+  const reaches = new Map<string, boolean>();
+  const walk = (name: string, seen: ReadonlySet<string>): boolean => {
+    const known = reaches.get(name);
+    if (known !== undefined) {
+      return known;
+    }
+    if (seen.has(name)) {
+      // A cycle is not an answer; whichever member names the editor decides for all of them.
+      return false;
+    }
+    const answer = /from 'vscode'/u.test(text.get(name) ?? '')
+      || importsOf(name).some((next) => walk(next, new Set([...seen, name])));
+    reaches.set(name, answer);
+
+    return answer;
+  };
+
+  return files.filter((name) => walk(name, new Set())).sort();
+};
 
 /** What the scanner is told not to measure, as the workflow spells it. */
 const excluded = (): readonly string[] => {
