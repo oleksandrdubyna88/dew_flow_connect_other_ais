@@ -55,7 +55,7 @@ test('the POPULATION does not fall while the work proceeds', () => {
  * and never to rise: a new direct call makes the drift test above red, and lowering this constant
  * is the only sanctioned way to change it.
  */
-const MOST_DIRECT_CALLS_ALLOWED = 32;
+const MOST_DIRECT_CALLS_ALLOWED = 1;
 
 test('no call site is added outside the funnel — the count only ever falls', () => {
   const counted = count();

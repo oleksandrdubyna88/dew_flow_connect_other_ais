@@ -42,8 +42,17 @@ export interface Notice {
   readonly detail?: string;
   /** What to do about it, in this product's own words. */
   readonly cure?: string;
-  /** The button, when there is one. Only `notifyAndAsk` waits for it. */
+  /** The button, when there is one. Only `notifyAndAsk` and `notifyThen` wait for it. */
   readonly action?: string;
+  /**
+   * The buttons, when there is more than one.
+   *
+   * <p>Added because a real call site needed it rather than for symmetry: the `.wslconfig` modal
+   * offers *Copy `wsl --shutdown`* and *Put it back to nat*, and collapsing that to one button
+   * would have changed what a person can do. `action` stays for the overwhelmingly common single
+   * case; giving both is a programming error and `actions` wins.</p>
+   */
+  readonly actions?: readonly string[];
   /**
    * Whether this is a modal question rather than a toast.
    *
@@ -97,6 +106,15 @@ export function noticeRecord(notice: Notice, run: string, pid: number, at: Date)
 /** The same record, with what the person pressed — an answer is the event a question produces. */
 export function answered(record: NotificationRecord, answer: string | undefined): NotificationRecord {
   return { ...record, answer: answer ?? 'dismissed' };
+}
+
+/** Every button this notice offers, in order. Empty when it offers none. */
+export function buttonsOf(notice: Notice): readonly string[] {
+  if (notice.actions !== undefined) {
+    return notice.actions;
+  }
+
+  return notice.action === undefined ? [] : [notice.action];
 }
 
 /**

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
-import { Notice, answered, gapSentence, noticeRecord } from './notice';
+import { Notice, answered, buttonsOf, gapSentence, noticeRecord } from './notice';
 import { NotificationRecord } from './notifications';
 import { recordNotification } from './notificationsFile';
 
@@ -84,7 +84,7 @@ function show(notice: Notice): Thenable<string | undefined> {
     ...(notice.modal === true ? { modal: true } : {}),
     ...(notice.detail === undefined ? {} : { detail: notice.detail }),
   };
-  const actions = notice.action === undefined ? [] : [notice.action];
+  const actions = buttonsOf(notice);
 
   if (notice.as === 'error') {
     return vscode.window.showErrorMessage(notice.title, options, ...actions);
@@ -147,7 +147,7 @@ export async function notifyAndAsk(notice: Notice): Promise<string | undefined> 
   const asked = noticeRecord(notice, RUN, process.pid, new Date());
   await write(asked);
   const chosen = await show(notice);
-  if (notice.action !== undefined || notice.modal === true) {
+  if (buttonsOf(notice).length > 0 || notice.modal === true) {
     await write(answered(asked, chosen));
   }
 
