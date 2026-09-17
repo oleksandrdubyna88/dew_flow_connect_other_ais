@@ -132,6 +132,15 @@ export interface DbConsultation {
    * given, so an `open` consultation from an old server still reads `open`. (issue #309.)</p>
    */
   readonly outcome?: string | undefined;
+  /**
+   * WHO said so — `caller`, `person`, the server's own `server`, or nothing.
+   *
+   * <p>Optional for the same reason as `outcome` and one release later: a server that predates the
+   * column sends nothing, and nothing is not an author. A verdict with no author is still a verdict
+   * — every record written before the field existed is in that state — so this is shown beside the
+   * word when it is there and simply absent when it is not, never guessed at from the status.</p>
+   */
+  readonly outcomeBy?: string | undefined;
   readonly problem: string;
   readonly advice: string;
   readonly alert: string;

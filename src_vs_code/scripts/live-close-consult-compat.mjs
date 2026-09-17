@@ -38,6 +38,18 @@ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readdirSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+/**
+ * Every child here gets a deadline, and none of them had one.
+ *
+ * <p>This script is run by a person at a terminal, which is exactly why it matters: `gh` waiting on
+ * an auth prompt, a download stalled behind a proxy, or a server build that hangs on a lock all
+ * looked identical to "still working", for ever. A check whose failure mode is silence is a check
+ * nobody trusts the green of. The two numbers are different because they are different waits: a
+ * release download crosses the network, a one-shot mode is one small local write.</p>
+ */
+const NETWORK_MS = 180_000;
+const LOCAL_MS = 60_000;
+
 const REPO = 'oleksandrdubyna88/dew_flow_connect_other_ais';
 const HERE = path.join(import.meta.dirname, '..', '..');
 
@@ -55,11 +67,19 @@ function run(exe, args, dataDir) {
     const child = spawn(exe, args, { shell: false, env: { ...process.env, COAI_DATA_DIR: dataDir } });
     let out = '';
     let err = '';
+    // KILLED at the deadline rather than waited on: a one-shot mode that has not answered in a
+    // minute is not going to, and the whole tree goes because a released build may have spawned a
+    // child of its own before it stopped.
+    const deadline = setTimeout(() => {
+      err += `\n(no answer within ${LOCAL_MS / 1000}s — killed)`;
+      child.kill('SIGKILL');
+    }, LOCAL_MS);
+    deadline.unref();
     child.stdin.end();
     child.stdout.on('data', (chunk) => { out += String(chunk); });
     child.stderr.on('data', (chunk) => { err += String(chunk); });
-    child.on('error', (reason) => resolve({ code: -1, out, err: String(reason) }));
-    child.on('close', (code) => resolve({ code: code ?? -1, out, err }));
+    child.on('error', (reason) => { clearTimeout(deadline); resolve({ code: -1, out, err: String(reason) }); });
+    child.on('close', (code) => { clearTimeout(deadline); resolve({ code: code ?? -1, out, err }); });
   });
 }
 
@@ -82,7 +102,7 @@ function oldServer(into) {
     return process.env['COAI_OLD_SERVER'];
   }
   const listed = spawnSync('gh', ['release', 'list', '--repo', REPO, '--limit', '40', '--json', 'tagName'], {
-    encoding: 'utf8', shell: false,
+    encoding: 'utf8', shell: false, timeout: NETWORK_MS,
   });
   if (listed.status !== 0) {
     return '';
@@ -99,7 +119,7 @@ function oldServer(into) {
     ? `*win-${process.arch === 'arm64' ? 'arm64' : 'x64'}.zip`
     : `*${process.platform === 'darwin' ? 'osx' : 'linux'}-${process.arch === 'arm64' ? 'arm64' : 'x64'}.tar.gz`;
   const got = spawnSync('gh', ['release', 'download', tag, '--repo', REPO, '--pattern', asset, '--dir', into], {
-    encoding: 'utf8', shell: false,
+    encoding: 'utf8', shell: false, timeout: NETWORK_MS,
   });
   if (got.status !== 0) {
     console.log(`could not download ${tag}: ${got.stderr}`);
@@ -112,18 +132,7 @@ function oldServer(into) {
   }
   const unpacked = path.join(into, 'old');
   mkdirSync(unpacked, { recursive: true });
-  // TWO unpackers, because one of them cannot do the job. Git Bash ships GNU tar, which answers
-  // "This does not look like a tar archive" for a zip — and given a Windows path it reads the
-  // leading `C:` as a remote host first. So a zip goes through PowerShell, which every Windows
-  // this runs on has, and a tarball goes through tar with relative paths from the destination.
-  const opened = archive.endsWith('.zip')
-    ? spawnSync(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-Command',
-        `Expand-Archive -LiteralPath '${path.join(into, archive)}' -DestinationPath '${unpacked}' -Force`],
-      { encoding: 'utf8' },
-    )
-    : spawnSync('tar', ['-xzf', path.join('..', archive)], { cwd: unpacked, encoding: 'utf8' });
+  const opened = unpack(path.join(into, archive), unpacked);
   if (opened.status !== 0) {
     console.log(`could not unpack ${archive}: ${opened.stderr}`);
 
@@ -133,6 +142,39 @@ function oldServer(into) {
   const found = readdirSync(unpacked, { recursive: true }).find((one) => String(one).endsWith(exe));
 
   return found === undefined ? '' : path.join(unpacked, String(found));
+}
+
+/**
+ * Opening the archive, with the unpacker named by its ABSOLUTE path on Windows.
+ *
+ * <p><b>`tar` is two different programs and the difference decides whether this works.</b> Windows
+ * has shipped <b>bsdtar</b> as <code>%SystemRoot%\System32\tar.exe</code> since 2018, and bsdtar
+ * reads a zip and takes a drive-lettered path. Git Bash puts <b>GNU tar</b> earlier on PATH, and
+ * that one answers "This does not look like a tar archive" for a zip — and reads the leading
+ * <code>C:</code> of a Windows path as a REMOTE HOST before it gets that far. So the bare word
+ * `tar` is a coin toss decided by whichever shell a person happens to be in, and the absolute path
+ * is not. (codex, the code round; the first draft routed zips through PowerShell to dodge this,
+ * which worked and left the coin toss in place for the tarball.)</p>
+ *
+ * <p>PowerShell remains the fallback for a Windows old enough to lack bsdtar, and every unpacker
+ * gets the network deadline: an archive is arriving from a temp directory, but a wedged child is
+ * still a terminal that never comes back.</p>
+ */
+function unpack(archive, into) {
+  const bsdtar = process.platform === 'win32'
+    ? path.join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'tar.exe')
+    : 'tar';
+  if (process.platform !== 'win32' || existsSync(bsdtar)) {
+    // `-xf`, not `-xzf`: bsdtar reads the format off the file, and a zip is not gzip.
+    return spawnSync(bsdtar, ['-xf', archive, '-C', into], { encoding: 'utf8', timeout: NETWORK_MS });
+  }
+
+  return spawnSync(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-Command',
+      `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${into}' -Force`],
+    { encoding: 'utf8', timeout: NETWORK_MS },
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -210,6 +252,9 @@ say(oldRow?.status === 'closed', 'with the status this build wrote', `status: ${
 const newAfter = await run(built, ['--log'], data);
 const newRow = JSON.parse(newAfter.out || '{}').consultations?.find((one) => one.id === id);
 say(newRow?.outcome === 'solved', 'this build reads the outcome back', `outcome: ${newRow?.outcome}`);
+// The AUTHOR crosses the same boundary and is its own column, so it is its own assertion: a
+// migration that added one of the two would pass every check above.
+say(newRow?.outcomeBy === 'person', 'and who recorded it', `outcomeBy: ${newRow?.outcomeBy}`);
 console.log('');
 if (broken.length === 0) {
   console.log('The boundary holds, both ways.');

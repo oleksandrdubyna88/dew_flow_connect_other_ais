@@ -33,10 +33,42 @@ public static class ConsultationOutcomes
     /// </summary>
     /// <remarks>
     /// Empty is the absence of a verdict, and so is <see cref="Lapsed"/>. Both may therefore be
-    /// replaced by one; a verdict may not. Every record written before this field existed carries
+    /// replaced by one; anything else may not. Every record written before this field existed carries
     /// empty, which is why that half matters as much as the other.
+    ///
+    /// <para><b>Anything else INCLUDES a word this build has never heard of.</b> A newer server may
+    /// write a fifth outcome, and a build that asked "is it one of mine?" would read that as nobody
+    /// having decided and overwrite it — durable state from a build that knows more than this one,
+    /// lost in silence. The question is therefore "is it the absence of a verdict?", which has two
+    /// known answers and no guessing. (codex SecurityReliability, the code round.)</para>
     /// </remarks>
-    public static bool IsVerdict(string outcome) => Verdicts.Contains(outcome);
+    public static bool IsVerdict(string outcome) => outcome.Length > 0 && outcome != Lapsed;
+}
+
+/// <summary>Who supplied an outcome. A closed set, beside the words themselves.</summary>
+/// <remarks>
+/// <para>Three doors and three different claims: an AI that verified its own advice, a person who
+/// decided, and the clock. Kept as a FIELD on the record rather than a sentence inside
+/// <c>Reason</c> — which is deliberately never overwritten, so a verdict recorded over a lapsed
+/// consultation would otherwise land beside a line about the budget with no author at all.</para>
+/// <para>A named set rather than three literals, for the reason <see cref="ConsultationOutcomes"/>
+/// is one: the same words are written by the service, by the sweep's <c>Lapse</c>, by the panel that
+/// reads them back and by <c>shared/consultation-outcomes.json</c>, which both halves assert their
+/// own catalogue against. (codex Architecture, the code round of issue #309.)</para>
+/// </remarks>
+public static class ConsultationSources
+{
+    /// <summary>The AI that opened the consultation, through the <c>close_consult</c> tool.</summary>
+    public const string Caller = "caller";
+
+    /// <summary>A human, through the panel's own one-shot <c>--close-consult</c> door.</summary>
+    public const string Person = "person";
+
+    /// <summary>Nobody said anything and the clock ran out. Only ever beside <c>lapsed</c>.</summary>
+    public const string Server = "server";
+
+    /// <summary>All three, in the order the shared catalogue lists them.</summary>
+    public static readonly string[] All = [Caller, Person, Server];
 }
 
 /// <summary>
@@ -95,7 +127,7 @@ public static class ConsultationClosing
     public static ConsultationRecord Lapse(ConsultationRecord record) =>
         ConsultationOutcomes.IsVerdict(record.Outcome)
             ? record
-            : record with { Outcome = ConsultationOutcomes.Lapsed };
+            : record with { Outcome = ConsultationOutcomes.Lapsed, OutcomeBy = ConsultationSources.Server };
 
     /// <summary>
     /// Would this close CHANGE the record? A repeat of the same outcome would not.

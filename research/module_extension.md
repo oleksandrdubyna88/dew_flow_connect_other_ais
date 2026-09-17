@@ -2064,6 +2064,35 @@ close that failed silently reads as a button that does nothing.
 > REQUIRED parameters now, so the compiler refuses a table built without them, and the panel renders
 > the tab itself — `consultationsTab`, beside `usageTab`, because the rates live there.
 
+### What the code round changed here
+
+**The row says WHO recorded the outcome**, muted beside the word: *by the AI*, *by hand*, and
+nothing at all beside `ran out`, which already says the clock did it. The server keeps the author as
+a field precisely so that nothing has to read a person's free-text note to learn it, and showing the
+word without it would throw that away one layer before the eye. An author this build does not
+recognise renders as nothing, on the same rule `outcomeSaid` follows for a fifth word.
+
+**The close runs under a progress notification.** It is not instant: the run waits on the
+consultation's own repository lock, which a turn in that checkout can hold for the length of a
+vendor call. Without one the picker closes, nothing moves, and the only feedback for up to twenty
+seconds is a table that has not changed.
+
+**And exit 64 has its own sentence.** `.agents/PROJECT.md` reserves that code for "this binary has
+never heard of that mode", so it is the one failure whose cure is a version rather than a different
+click — the live boundary check observes the previous release answering exactly that. Showing its
+argument parser's complaint instead would send somebody to debug a request that was never read.
+
+**The four words are asserted against `shared/consultation-outcomes.json`**, a file neither half
+owns, rather than written down twice and hoped over. `OUTCOMES`, `CLOSE_CHOICES` and
+`outcomeBySaid` are each held against it — both directions, because a word this half learned and
+nobody wrote down is a button whose only outcome is a refusal.
+
+**And the control is tested by RUNNING the page.** `closeAConsultation.test.ts` captures the
+listener the page registers and clicks the button through it, which is the only way to see that the
+message leaves with the id on it. The precedent is `forgetAChatRow.test.ts`, where the markup was
+perfect and the page dropped half the message; this control shipped with markup assertions alone
+until the code round said the same thing again.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's

@@ -25,6 +25,8 @@ public sealed record ConsultationRow(
     string Reason,
     /// <summary>solved / not_solved / abandoned / lapsed, or empty for one nobody spoke about.</summary>
     string Outcome,
+    /// <summary>caller / person / server, or empty wherever <see cref="Outcome"/> is.</summary>
+    string OutcomeBy,
     string StartedUtc,
     string EndedUtc,
     double Seconds,

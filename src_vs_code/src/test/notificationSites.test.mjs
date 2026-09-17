@@ -139,7 +139,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
  * <p>A new message is the only sanctioned way this number moves up, and each rise is written here
  * with its reason.</p>
  */
-const PLACES_THIS_SPEAKS = 111;
+// 111 → 115 on 2026-09-17, issue #309: ending a consultation by hand is a flow that did not exist,
+// and it speaks four times — no server installed, a consultation swept out of the log, a server too
+// old for the mode, and the server's own refusal. Every one of them is a REASON a button a person
+// just pressed did nothing, which is the shape this funnel was bought for.
+const PLACES_THIS_SPEAKS = 115;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
