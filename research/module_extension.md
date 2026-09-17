@@ -786,11 +786,34 @@ left against each workspace root and checks the RESULT is still inside before op
 reference that resolves nowhere is reported to the tab rather than opened somewhere else. The page
 is a surface; the host is the boundary.
 
-**Containment is not a prefix, and that is the boundary's real shape.** `isInside` compares against
-the root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json`
-starts with it and belongs to a different project. It is case-SENSITIVE on purpose — folding case
-would be a guess about the filesystem underneath, wrong on one of the two this product runs on, and
-the cheap direction to be wrong in is refusing a reference a model can simply write again.
+**Containment is not a prefix, and that is the boundary's real shape.** A comparison against the
+root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
+with it and belongs to a different project.
+
+**And it is not a comparison over the path AS WRITTEN either — that was a defect, fixed 2026-09-17.**
+`openWorkspaceFile` used `isInside(folder.uri.path, target.path)`, which decides on the spelling, and
+then called `stat` and `showTextDocument`, both of which follow links. A workspace holding
+`docs -> /home/me/.ssh` therefore passed the check and opened the file outside it — reached from a
+link in a model's answer, which is an untrusted input by definition. It now calls
+`insideReally(folder.uri.fsPath, target.fsPath)`, which requires containment of the WRITTEN pair and
+the CANONICAL pair and returns nothing when either cannot be resolved.
+
+**That check was not written for this.** `claudeSessions` had already been through the same shape at
+two gate rounds — `staysInside` for the two pairs, `realOf` failing closed because *“a security check
+answering yes because it could not run”* had shipped once already — and composed them inline at its
+own call site. `insideReally` is that composition named so the second caller reuses it; a second
+implementation of a containment check is the one kind of duplicate that gets fixed in one place and
+left wrong in the other. It hands back the CANONICAL path rather than a yes, because the older
+caller needs it, and a first draft that returned a boolean quietly changed that caller's answer to
+the path as written.
+
+**Two limits, stated rather than implied.** `showTextDocument` re-opens by PATH, so a local writer
+can still replace the file between the check and the open; the API takes a `Uri` rather than a file
+descriptor, so there is no no-follow handle and the race cannot be closed from here. It is bounded
+by the attacker already being able to write inside the workspace — far smaller than “anything a
+model can put in a link”, which is the set removed. And `dataCommands.ts` still carries a SECOND,
+private containment check, injected as a parameter; it is person-driven rather than model-reachable,
+so it is recorded rather than unified.
 
 **One grammar for what a file reference is.** The renderer used to demand a dot before it would
 offer a link while the host's own check did not, so `Dockerfile`, `LICENSE` and `Makefile` were never

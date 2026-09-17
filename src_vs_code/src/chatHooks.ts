@@ -15,11 +15,10 @@ import { chatInstruction, openingTurn, reinstructed, reinstructedHead, stillOurs
 import { chatSettingsFrom } from './chatSettings';
 import { carriedFrom, carryMark } from './chatCarry';
 import { imageFileName, imageRefusal, pastedImage } from './chatImage';
-import { isInside } from './chatMessages';
 import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { coaiDataDir } from './dataDir';
-import { promptsFrom } from './claudeSessions';
+import { insideReally, promptsFrom } from './claudeSessions';
 import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
 import { notify } from './notify';
 import { withdraw } from './chatQueue';
@@ -593,8 +592,26 @@ function tellThePage(
  *
  * <p>The renderer checked the shape and `chatCommandOf` checked it again, and neither is enough: a
  * string can look confined and still leave through a folder that merely starts with the same
- * letters. So the path is resolved against each workspace root and the RESULT is what
- * `isInside` decides on — a boundary at a separator, not a prefix.</p>
+ * letters. So the path is resolved against each workspace root and the RESULT is what is judged.</p>
+ *
+ * <p><b>Judged by where it LEADS, and that is a correction.</b> Until 2026-09-17 this compared the
+ * path AS WRITTEN — `isInside(folder.uri.path, target.path)` — and then called `stat` and
+ * `showTextDocument`, both of which follow links. A workspace holding `docs -> /home/me/.ssh`
+ * therefore passed the check and opened the file outside it, from a link in a model's answer.
+ * `leadsInside` requires containment of the written pair AND the canonical pair, and fails closed
+ * when either cannot be canonicalised. It is `claudeSessions`' own check, which had been through
+ * two gate rounds over exactly this shape — not a second implementation of one.</p>
+ *
+ * <p><b>`fsPath`, not `path`.</b> A URI path (`/d:/rsd/x`) compared against what `realpath` returns
+ * (`d:\rsd\x`) refuses everything on Windows, which is a security fix that looks like it works
+ * because nothing opens.</p>
+ *
+ * <p><b>The race this does NOT close, stated rather than implied.</b> `showTextDocument` re-opens by
+ * PATH, so between the check and the open a local writer can replace the file or one of its parent
+ * components. VS Code's API takes a `Uri` rather than a file descriptor, so there is no no-follow
+ * handle to hand it and the race cannot be closed from here. What it IS bounded by: the attacker
+ * must already be able to write inside the workspace — a far smaller set than "anything a model can
+ * put in a link", which is the set this removes. The check runs immediately before the open.</p>
  *
  * <p>A reference that resolves nowhere is SAID rather than swallowed: a link that quietly does
  * nothing is a link a person presses twice.</p>
@@ -607,7 +624,7 @@ async function openWorkspaceFile(
 ): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     const target = vscode.Uri.joinPath(folder.uri, requested);
-    if (!isInside(folder.uri.path, target.path)) {
+    if ((await insideReally(folder.uri.fsPath, target.fsPath)) === undefined) {
       continue;
     }
     try {
