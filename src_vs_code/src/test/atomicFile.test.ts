@@ -182,3 +182,51 @@ test('many writes racing for one destination all succeed — Windows EPERM is re
     'a temporary survived: a retry that gave up must still clean up after itself',
   );
 });
+
+/**
+ * BYTES, and the guarantee a pasted picture needed from this.
+ *
+ * <p><b>What it was written for.</b> `attachPicture` deleted the picture already attached and THEN
+ * wrote the replacement straight to its final name. A full or unwritable disk left the conversation
+ * with no image and nothing to retry from — the failure destroyed the state it was meant to replace.
+ * The fix is this helper, which writes beside the destination and renames over it, so the old file
+ * survives anything that goes wrong on the way; it took `string` only, and a picture is a
+ * `Buffer`.</p>
+ *
+ * <p><b>And a claim about it that was measured and dropped.</b> The first draft branched on the type
+ * so that `'utf8'` was passed only for a string, on the reasoning that handing an encoding to a
+ * buffer write mangles it. It does not — Node ignores the encoding for a buffer, and the case below
+ * passes with that branch removed. The branch went; the case stayed, because a type widened to accept
+ * bytes is exactly where a silent re-encoding would otherwise hide.</p>
+ */
+
+test('bytes survive the round trip, and are not read as text on the way', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-atomic-bytes-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'picture.png');
+  // The first eight bytes of a real PNG, including the 0x89 that no UTF-8 encoding survives.
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  await writeFileAtomically(file, png);
+
+  assert.deepEqual([...fs.readFileSync(file)], [...png],
+    'the bytes came back changed on the way through the atomic write');
+});
+
+test('a write that fails leaves the file that was already there', async (t) => {
+  // THE GUARANTEE THE PICTURE PATH NEEDED. Replacing an attachment used to delete first and write
+  // second; this is the shape that makes deleting unnecessary, because the old bytes are still the
+  // ones at that path until the new ones have fully landed.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-atomic-bytes-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'picture.png');
+  const before = Buffer.from([1, 2, 3, 4]);
+  await writeFileAtomically(file, before);
+
+  // A directory where the temporary would go cannot be written: the write throws, the rename never
+  // happens, and the destination is untouched.
+  await assert.rejects(writeFileAtomically(path.join(dir, 'picture.png', 'nested'), Buffer.from([9])));
+
+  assert.deepEqual([...fs.readFileSync(file)], [...before],
+    'a failed replacement destroyed the file that was already attached');
+});

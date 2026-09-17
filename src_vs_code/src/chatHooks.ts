@@ -18,6 +18,7 @@ import { imageFileName, imageRefusal, pastedImage } from './chatImage';
 import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { coaiDataDir } from './dataDir';
+import { writeFileAtomically } from './atomicFile';
 import { insideReally, promptsFrom } from './claudeSessions';
 import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
 import { notify } from './notify';
@@ -670,8 +671,16 @@ function forgetPicture(thread: Thread): void {
     try {
       fs.rmSync(thread.attachedPath, { force: true });
     } catch {
-      // A file that cannot be removed is not worth a sentence to the person: it is in a temp
-      // directory the tab's own close sweeps, and saying so would explain nothing they can act on.
+      // A file that cannot be removed is not worth a sentence to the person: the conversation stops
+      // naming it either way, and saying so would explain nothing they can act on.
+      //
+      // THE OLD COMMENT HERE WAS FALSE and is worth recording rather than simply deleting. It said
+      // this lived in “a temp directory the tab's own close sweeps”. `pictureDir` is
+      // `coaiDataDir()/pictures/<id>` — persistent data, not temp — and NOTHING removes it: measured
+      // 2026-09-17, `pictureDir` has exactly one caller and no sweep reaches that tree. One directory
+      // per conversation that ever held a picture, kept for ever. That retention is real work with a
+      // real decision in it (when is a conversation's pictures collectable?) and is recorded in
+      // `todo/PLAN_the_tail_of_the_command_split.md` rather than invented here.
     }
   }
   thread.attached = '';
@@ -698,18 +707,36 @@ async function attachPicture(entry: ChatEntry, thread: Thread, dataUrl: string):
 
     return;
   }
-  forgetPicture(thread);
+  // THE OLD ONE IS KEPT UNTIL THE NEW ONE HAS LANDED, which is the whole fix. This used to call
+  // `forgetPicture` FIRST — deleting the file and clearing the fields — and then write. A full or
+  // unwritable disk therefore left the conversation with no image and nothing to retry from: the
+  // failure destroyed the state it was meant to replace.
   const dir = pictureDir(entry.id.toString());
+  const was = thread.attachedPath;
+  let file = '';
   try {
-    await fs.promises.mkdir(dir, { recursive: true });
-    const file = path.join(dir, imageFileName(picture.type, thread.turn + 1));
-    await fs.promises.writeFile(file, Buffer.from(picture.base64, 'base64'));
-    thread.attached = dataUrl;
-    thread.attachedPath = file;
+    file = path.join(dir, imageFileName(picture.type, thread.turn + 1));
+    // Written BESIDE its destination and renamed over it, by the same helper the store uses — which
+    // learned to take bytes for this. A picture replacing one of the same name is then a rename
+    // rather than a truncate-and-write, so there is no moment where the file exists and is empty.
+    await writeFileAtomically(file, Buffer.from(picture.base64, 'base64'));
   } catch {
-    show(entry, thread.running, 'The picture could not be written to disk, so nothing was attached.');
+    show(entry, thread.running, 'The picture could not be written to disk, so nothing was attached.'
+      + (was.length > 0 ? ' The picture that was already attached is still there.' : ''));
 
     return;
+  }
+  // ONLY NOW. The new file is on disk, so the reference moves to it and the old one goes — and only
+  // if it is a different file, since a replacement of the same name has already taken its place.
+  thread.attached = dataUrl;
+  thread.attachedPath = file;
+  if (was.length > 0 && was !== file) {
+    try {
+      fs.rmSync(was, { force: true });
+    } catch {
+      // Nothing to say and nothing to do: the conversation now names the new picture, and what is
+      // left behind is a file in this conversation's own directory.
+    }
   }
   show(entry, thread.running, '');
 }

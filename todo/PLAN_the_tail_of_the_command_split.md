@@ -268,6 +268,19 @@ calls `forgetPicture` (`chatHooks.ts:623`) before writing the replacement.
 **The symptom.** A full or unwritable disk leaves the conversation with **no image and nothing to
 retry from** — the failure destroys the state it was meant to replace.
 
+> **SHIPPED 2026-09-17 — the destructive order reversed — and the sweep half is NOT done, with a
+> finding behind that.** `forgetPicture`'s own comment said its files live in *“a temp directory the
+> tab's own close sweeps”*. Measured: `pictureDir` is `coaiDataDir()/pictures/<id>` — persistent data,
+> not temp — it has exactly ONE caller, and **nothing anywhere removes it**. One directory per
+> conversation that ever held a picture, kept for ever. The comment is corrected in place.
+>
+> The retention that would fix it is not a widening of the store sweep, because this is not the
+> store's tree: it is a new policy with a real decision in it — when is a conversation's pictures
+> directory collectable? When the conversation is deleted, or after an age? Who runs it? That is its
+> own work and is recorded here rather than invented in a story about a destructive replace. **Third
+> comment in this plan found describing behaviour the code does not have** (with story 3's laziness
+> and story 2's escalation), which is now a pattern rather than three accidents.
+
 **Almost all of this is already written, and the consultation is what found that.** The gate asked
 for a same-filesystem temp-and-rename, a deterministic temporary name, and an age-bounded sweep. All
 three exist:
