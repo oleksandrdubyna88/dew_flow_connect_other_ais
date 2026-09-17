@@ -324,7 +324,9 @@ test('no process is started until the first question after a restore', () => {
   // The stop condition of the plan, as a test. A window with five restored tabs must spawn nothing:
   // the process behind each of them died with the window, and most restored tabs are never spoken to
   // again. `reopened` is what opens one, and it runs inside a turn.
-  const command = source('chatCommand.ts');
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const command = source('chatCommand.ts') + source('chatTurn.ts');
   const restore = command.slice(command.indexOf('export function restoreConversation'));
 
   assert.doesNotMatch(restore.slice(0, 2_000), /started\(/,
@@ -371,7 +373,9 @@ test('a push that changed nothing writes nothing', () => {
 });
 
 test('a question refused by a dead conversation comes back to the composer', () => {
-  const command = source('chatCommand.ts');
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const command = source('chatCommand.ts') + source('chatTurn.ts');
   const guard = command.slice(command.indexOf('const refused = await reopened(thread);'));
 
   assert.match(guard.slice(0, 600), /pushChatDraft\(entry, text\)/,

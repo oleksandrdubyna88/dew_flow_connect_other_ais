@@ -35,7 +35,9 @@ test('the gesture that has always been there now does something', () => {
 });
 
 test('NOTHING IS SWITCHED until the old conversation is provably finished AND FILED', () => {
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const reset = between(command, 'async function freshening(', 'function keepTheOldOne(');
 
   // 1. The slate moves FIRST, before anything is stopped. A question queued behind the running
@@ -68,7 +70,9 @@ test('the new slate is WRITTEN before its id is published', () => {
   // still queued leaves a crash in between restoring a tab that names a conversation nothing ever
   // wrote. A crash BEFORE the publish leaves the tab on the id it already had — an archived
   // conversation, which is still there and still opens. (codex, the code round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const publish = between(command, 'async function publish(', 'async function ended(');
 
   const slate = publish.indexOf('Object.assign(thread, slate)');
@@ -89,7 +93,9 @@ test('the new slate is WRITTEN before its id is published', () => {
 });
 
 test('the ending is stop, WAIT, drain, dispose, release — in that order', () => {
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const ending = between(command, 'async function ended(', 'async function archiveConversation(');
 
   const stop = ending.indexOf('thread.session.stop()');
@@ -111,7 +117,9 @@ test('a reset that FAILED leaves the conversation live AND usable, and archives 
   // A half-performed reset that reports success is the one outcome worse than no reset. And "live"
   // is not enough on its own: if the session was disposed before the failure, a conversation left
   // pointing at it is one the next question cannot use. (codex, the plan round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const branch = between(command, 'function keepTheOldOne(', 'async function publish(');
 
   assert.match(branch, /closedSession\(reloadedNote\(thread\.modelId\)\)/u, 'the conversation is left holding a session that may be gone');
@@ -126,7 +134,9 @@ test('the disposal and the release run whatever went wrong before them', () => {
   // Written as one try for all four, a stop that threw returned before either cleanup — and the
   // thread was then handed a stub, with the real session unreferenced and still running, writing
   // into a directory nothing would collect. (codex, the code round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const ending = between(command, 'async function ended(', 'type Archived =');
   const caught = ending.indexOf('stopped = asText(reason);');
 
@@ -143,7 +153,9 @@ test('a question typed WHILE the slate is being wiped goes back to the composer'
   // The generation has already moved by then, so the guard inside the turn lets such a question
   // through as the NEW conversation's — and it runs against a session being disposed and is dropped
   // at the end, with the words gone. (gemini, the code round.)
-  const command = source('chatCommand.ts');
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const command = source('chatTurn.ts');
   const queue = between(command, 'function ask(entry: ChatEntry', 'function chatLanguage(');
   // THE WHOLE GUARD, so an arm disabled in place is as red as an arm deleted.
   const latched = queue.indexOf('if (thread.resetting) {');
@@ -154,7 +166,9 @@ test('a question typed WHILE the slate is being wiped goes back to the composer'
 });
 
 test('a turn knows which conversation it was ASKED in, and cannot write into another', () => {
-  const command = source('chatCommand.ts');
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const command = source('chatTurn.ts');
 
   // Captured as the turn JOINS the chain, which is the whole point: a question queued behind an
   // answer waits, and *New chat* pressed while it waits means its author is no longer in the
@@ -185,7 +199,9 @@ test('EVERY field of a thread is decided about, and the compiler is what checks 
   // cannot prove the other direction. A per-conversation field added to `Thread` and forgotten would
   // simply survive the reset, carrying the old conversation into the new one with nothing to say so.
   // The partition below makes that a build failure that names the field. (codex, both code rounds.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
 
   assert.match(command, /type Unclassified = Exclude<keyof Thread, keyof Freshened \| KeptByAReset>;/u,
     'nothing works out which thread fields a reset has not been told about');
@@ -203,7 +219,9 @@ test('a conversation with nowhere to be archived is NOT wiped', () => {
   // have gone — "archived, never deleted" broken in the one case where the deletion is total. And
   // the empty check comes first, because a conversation with nothing in it needs no store to be
   // archived correctly. (codex, the second code round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const archive = between(command, 'async function archiveConversation(', 'function whyNotClosed(');
 
   const empty = archive.indexOf('thread.messages.length === 0');
@@ -217,7 +235,9 @@ test('DRAINED IS NOT SAVED: the id is published only once the disk has the recor
   // The write chain is built so it cannot reject — which is what makes awaiting it safe — so a save
   // that failed still lets the drain resolve. `rev` is the disk's own answer: zero until the store
   // has accepted this record. (codex and gemini, the second code round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const publish = between(command, 'async function publish(', 'async function ended(');
   const drained = publish.indexOf('await thread.writes;');
   const asked = publish.indexOf('thread.rev === 0');
@@ -235,7 +255,9 @@ test('one reset at a time, per conversation', () => {
   // The gesture is a button and the work takes as long as ending a turn takes, so two presses are
   // ordinary. Two resets at once would dispose the same session twice, archive the same record
   // twice, and publish two different fresh ids for one tab. (Two vendors, the plan round.)
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const thread = source('chatThread.ts');
   const start = between(command, 'async function freshStart(', 'async function freshening(');
 
@@ -251,7 +273,9 @@ test('one reset at a time, per conversation', () => {
 });
 
 test('the slate is applied as ONE value, and the disk marks are deleted rather than emptied', () => {
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const publish = between(command, 'async function publish(', 'async function ended(');
 
   // One statement, so a field added to `Freshened` is applied here by construction rather than by
@@ -263,7 +287,9 @@ test('the slate is applied as ONE value, and the disk marks are deleted rather t
 });
 
 test('a conversation nobody said anything in is not archived, and the dead session is written once', () => {
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
   const archive = between(command, 'async function archiveConversation(', 'const MODEL_SWITCH');
 
   assert.match(archive, /thread\.messages\.length === 0/u, 'resetting an untouched tab leaves an empty conversation in Recent');
@@ -272,7 +298,9 @@ test('a conversation nobody said anything in is not archived, and the dead sessi
   assert.doesNotMatch(archive, /forget\(/u, 'the old conversation is deleted rather than archived');
   // And the dead stub both the reload and the reset need is written once rather than twice.
   assert.match(command, /function closedSession\(note: string\): ChatSession \{/u);
-  assert.match(command, /const closed = closedSession\(reloadedNote\(saved\.modelId\)\);/u,
+  // THE CALLER is still in the command file: the reload path is an entry point, and it reaches for
+  // the one stub rather than building a second.
+  assert.match(source('chatCommand.ts'), /const closed = closedSession\(reloadedNote\(saved\.modelId\)\);/u,
     'the reload path still builds its own copy of the dead session');
 });
 
@@ -284,7 +312,9 @@ test('the page is told in its own message — and the SENTENCE travels with the 
   // (gemini, twice, the code round.)
   const panel = source('chatPanel.ts');
   const page = source('chatPage.ts');
-  const command = source('chatCommand.ts');
+  // The reset feature moved to `chatArchive.ts` when the command file was split; what it must do,
+  // and the ORDER it must do it in, are unchanged.
+  const command = source('chatArchive.ts');
 
   assert.match(panel, /entry\.panel\.post\(\{ type: 'fresh', id \}\)/u, 'the fresh message still carries a sentence of its own');
   const handler = page.slice(page.indexOf("data.type === 'fresh'"), page.indexOf("if (data.type !== 'state')"));
