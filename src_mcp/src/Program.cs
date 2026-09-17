@@ -108,6 +108,16 @@ internal static class Program
         Providers,
 
         /// <summary>
+        /// Record how a consultation ended, for the panel, and leave — what `close_consult` does.
+        /// </summary>
+        /// <remarks>
+        /// The panel has no other way to ask: it never speaks MCP to this binary, only these modes.
+        /// Without it the close control on a consultation card is a button with nothing behind it.
+        /// (issue #309, named on the plan round.)
+        /// </remarks>
+        CloseConsult,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -176,6 +186,7 @@ internal static class Program
                 "--upload-pairs" => Startup.UploadPairs,
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
+                "--close-consult" => Startup.CloseConsult,
                 _ => Startup.Usage,
             };
 
@@ -237,6 +248,9 @@ internal static class Program
             case Startup.Providers:
                 return await ProvidersJsonAsync();
 
+            case Startup.CloseConsult:
+                return await CloseConsultAsync(args);
+
             default:
                 return await ServeAsync();
         }
@@ -290,6 +304,65 @@ internal static class Program
             // non-zero exit as "asked and could not answer", which is right — but a person at a
             // terminal deserves a sentence rather than a stack trace. Raised on epic 3's code round.
             Note($"could not read this machine's provider configuration: {e.Message}");
+
+            return 74; // EX_IOERR
+        }
+    }
+
+    /// <summary>
+    /// Records how a consultation ended, for the PANEL — which has no other way to ask.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a one-shot mode at all.</b> The extension never speaks MCP to this binary; it
+    /// drives modes selected from <c>args[0]</c> before any transport opens — the same door
+    /// <c>--log</c>, <c>--findings-many</c> and <c>--providers</c> use. The close control on a
+    /// consultation card would otherwise be a button with nothing behind it. (issue #309, named on
+    /// the plan round.)</para>
+    /// <para><b>This door is the PERSON's</b>, so it is not subject to the caller check: it runs on
+    /// their own machine against their own data directory, which is a stronger position than another
+    /// AI's rather than a weaker one. The record keeps which door was used.</para>
+    /// <para>The answer is JSON on stdout — safe here and only here, because this mode does not speak
+    /// the protocol — and the exit code is what the panel reads: 0 recorded, 65 refused with a
+    /// sentence, 64 the arguments were wrong.</para>
+    /// </remarks>
+    private static async Task<int> CloseConsultAsync(string[] args)
+    {
+        var flags = Flags(args);
+        flags.TryGetValue("--repo", out var repo);
+        flags.TryGetValue("--id", out var id);
+        flags.TryGetValue("--outcome", out var outcome);
+        flags.TryGetValue("--note", out var note);
+        if (string.IsNullOrWhiteSpace(repo) || string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(outcome))
+        {
+            Note("--close-consult needs --repo <path> --id <consultation> --outcome <solved|not_solved|abandoned> [--note <text>]");
+
+            return 64; // EX_USAGE
+        }
+
+        try
+        {
+            var configuration = Server.SettingsFile.Layer(
+                Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+                Environment.GetEnvironmentVariable);
+            var settings = Server.PanelSettings.FromEnvironment(configuration);
+            var launcher = new Runners.Processes.ProcessLauncher();
+            var keys = await new Server.KeyVault(launcher)
+                .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
+            var service = new Server.PanelService(
+                settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None);
+
+            var answer = await service.CloseConsultByHandAsync(repo, id, outcome, note ?? string.Empty);
+            await Console.Out.WriteLineAsync(answer);
+
+            // A REFUSAL is an answer, not a crash: the sentence is on stdout for the panel to show,
+            // and the code says it did not happen. 65 is EX_DATAERR — the input named something the
+            // server would not do, as against 74 for a disk that would not answer.
+            return answer.Contains("\"error\"", StringComparison.Ordinal) ? 65 : 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                                       or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            Note($"the consultation could not be closed: {e.Message}");
 
             return 74; // EX_IOERR
         }
