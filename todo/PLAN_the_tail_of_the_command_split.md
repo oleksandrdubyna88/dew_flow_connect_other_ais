@@ -173,8 +173,12 @@ using**. The stated symptom, a leaked vendor process, survives a fix that only r
 statements. *(codex, the plan round.)*
 
 **The fix.** Each cleanup gets its own `try`, the release in a `finally`, **and** a failed dispose
-kills the process tree through the shared launcher rather than being logged and left. Both errors are
-reported, not one swallowed by the other (`coding-style.md`: never silently swallow errors).
+escalates through the SESSION rather than through a pid — `ChatSession.stop()`, for the reason story 8
+gives at length: only the session knows whether stopping means killing a local process, cancelling at
+a remote vendor, or telling a Team server to drop the job. An earlier draft of this line said “kills
+the process tree through the shared launcher”, which was the same wrong layer story 8 was corrected
+for; it is fixed here rather than left as two stories disagreeing. Both errors are reported, not one
+swallowed by the other (`coding-style.md`: never silently swallow errors).
 
 **The test.** A thread whose `session.dispose` throws. Red: `home.release` was not called and the
 child is still alive. Green: the release ran, the tree was killed, and both facts are asserted — the
@@ -325,7 +329,10 @@ and asserts exactly one turn goes out. So the dependency looked dissolved.
 **It is not, and the reason is worth more than the conclusion was.** That harness runs WEBVIEW page
 scripts, and this picker is not one. `conversationPickerCommand.ts:197` calls
 `vscode.window.createQuickPick<Item>()` — a NATIVE control, and the file's own header records that it
-is the repository's first `createQuickPick` against six `showQuickPick` sites. Pushing a refusal into
+is the repository's first `createQuickPick` against six `showQuickPick` sites. (Measured on
+2026-09-17: still the ONLY `createQuickPick` call in `src`, and the `showQuickPick` count has since
+risen to **seven** — quoted here as the header states it, corrected beside it, because a number in
+prose is stale the day after it is typed.) Pushing a refusal into
 the bundled page would prove the page renders a message; it would prove nothing about the path from
 `chatFollow` through a native QuickPick, which is the path that is broken.
 
@@ -718,11 +725,20 @@ That is the point of this plan being separate. The parent series proved *nothing
 construction, and could not test any of this. Here each item is a behaviour change, so each gets the
 test the parent could not write.
 
-**Four stories now have a second test that a naive fix would pass**, and they are the ones the gate
-earned: story 2 (the tree was killed, not just the release ordered), story 8 (a late completion
-changes nothing), story 10 (two presses make one capture), story 4 (the stored reference survives a
-crash between the write and the swap). Where a story has such a test, **it is the one that decides**
-— the first test only proves the obvious half.
+**Five stories now have a second test that a naive fix would pass**, and they are what the two
+rounds and the consultation earned:
+
+| story | the first test | the one that DECIDES |
+|---|---|---|
+| 2 | `home.release` ran | the session was asked to stop, so the child does not outlive the tab |
+| 8 | `ended` returned within its budget | an old save resolving afterwards leaves the replacement's `rev` untouched |
+| 12 | the warning is still on the console | the replacement's `running` and its page are untouched |
+| 10 | progress was shown before the await | two presses during one probe make ONE capture |
+| 4 | the old image survives a failed write | it survives a failed RENAME, and the sweep spares a `.tmp` younger than `DEBRIS_AGE_MS` |
+
+The first test only ever proves the obvious half. **Story 4's second test changed at the
+consultation** — it used to assert that a persisted reference survived a crash, and there is no
+persisted reference, so it would have passed by doing nothing at all.
 
 Two constraints from the parent carry over:
 
@@ -733,7 +749,8 @@ Two constraints from the parent carry over:
   and [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) is the backlog for
   the 224 that exist. A test here that reads a file's text instead of running it is a twelfth.
 
-The whole suite runs before each pull request — `npm test` (3 343 tests) plus the pre-run (37 in one
+The whole suite runs before each pull request — `npm test` (**3 377** on 2026-09-17, and rising
+under a parallel line of work, so read it rather than quoting this) plus the pre-run (37 in one
 batch, then `theBundleLoads.test.mjs` alone, 39 in all) plus the family checks, which `npm test` does
 **not** include.
 
