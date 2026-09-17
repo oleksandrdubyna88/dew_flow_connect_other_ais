@@ -3,6 +3,12 @@
 > Status: **IMPLEMENTED, 2026-09-16.** Built as one unit and reviewed through the gate; the plan
 > round's findings are folded in below where they changed the answer.
 >
+> **Released `bugs-v0.1.0` 2026-09-16 and DEPLOYED 2026-09-17.** `https://bugs.remsoft.dev/health`
+> answers, `/ingest` refuses an unauthenticated request with 401, and the no-client-address promise
+> has been checked against real internet traffic rather than a test. The first deployment found four
+> defects no review round could have — they are the last section of this document, and what they have
+> in common is worth more than any one of them.
+>
 > **The boundary with [PLAN_the_corpus_tail.md](../todo/PLAN_the_corpus_tail.md)**, named there as well as
 > here: this plan builds the release line, the vhost and the deploy notes. The tail plan keeps the
 > ranking pass's transport, the `Math.random()` nonce, and the AUTOMATED post-deploy log check —
@@ -92,15 +98,43 @@ The smoke is why the line is worth having:
 The archive carries the binary, `e_sqlite3`, the deploy notes and the vhost. An operator holding the
 binary without them has a server recording every contributor.
 
-## What this deliberately does NOT do
+## What this deliberately did NOT do — and what has happened since
 
-- **It does not deploy anything.** There is no `bugs.remsoft.dev` and no DNS record; the notes name
-  that host because the file must name one, and the first machine to run it makes the file a record
-  rather than a plan.
-- The post-deploy log check is a recipe for a person. It cannot be automated until there is a
-  deployment to run it against, and it stays in the tail plan.
+- ~~**It does not deploy anything.** There is no `bugs.remsoft.dev` and no DNS record~~ — **it does
+  now.** `bugs-v0.1.0` was released on 2026-09-16 and deployed on 2026-09-17; the file became the
+  record it said the first machine would make it.
+- The post-deploy log check was a recipe for a person, and it has been **run**: a request from the
+  public internet left no address anywhere. The only IPv4 in the service journal is `127.0.0.1`,
+  there were zero `the edge sent` warnings — so both halves of the boundary agree, in production and
+  not only in a test — and the shared nginx access log holds no mention of `bugs.remsoft.dev` and no
+  `/health` or `/ingest` line. Automating it stays in the tail plan; what changed is that it is no
+  longer unrunnable.
 - `KeyFor` still scans every active key row — rejected three times now on scale rather than
   principle: hand-issued keys, tens of rows.
+
+## What the FIRST DEPLOYMENT changed, which no review round could have
+
+Three defects, and they share something the review rounds could not reach: each one was a
+difference between what the deployment *did* and what every document about it *said*. A reviewer
+reads the intent; only the host knows.
+
+- **The deploy account could not authenticate at all.** `BUGS_DEPLOY_KEY` held a passphrase, which
+  an unattended deploy has nobody to type. It arrived as `Permission denied (publickey,password)` —
+  one message for five causes, none of them named. `deploy-bugs.yml` now prints the fingerprint the
+  run is offering and separates a passphrase from a damaged paste, because telling them apart
+  otherwise needs root on the host.
+- **The notes named a `systemctl` the host does not have.** sudo resolves through `secure_path` to
+  `/usr/bin/systemctl`; a rule naming `/bin/systemctl` authorises nothing. And `is-active --quiet`
+  needs its own entry, because sudoers matches arguments exactly and the canary passes `--quiet`.
+  The live host only worked because somebody had corrected both by hand.
+- **The copy undid the setgid on the line after it was granted.** `cp -a "$found/." "$RELEASE/"`
+  applies the source directory's mode and group to the destination, so the service reached its
+  binary through the WORLD bits — the exact thing the setgid bit had been added to prevent. Measured
+  on the host: `mkdir` under the 2750 parent gives `coai-bugs 2755`, and after the copy the same
+  directory reads `root 755`.
+- **And the unit was `disabled`** — installed, deployed, serving, and gone after the next reboot.
+  Nothing reports this state: `systemctl is-active` says `active` either way, and so does the
+  canary, which asks whether the service answers rather than whether it will exist tomorrow.
 
 ## What the review round changed after this was written
 
