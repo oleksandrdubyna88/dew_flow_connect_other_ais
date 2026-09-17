@@ -202,12 +202,15 @@ test('a write that never settles does not hold the window open, and says so', as
 `, 'a notification', { chain: 'notifications' });
     }
 
-    const began = Date.now();
+    // The RESULT, not the clock. An earlier version timed the call with Date.now() and asserted it
+    // returned inside two seconds, which is a wall-clock read in a test: it flaked once already,
+    // under load from its own queue, and CodeRabbit named the pattern. The boolean is the contract
+    // and it is deterministic - the unbounded version returned true here, after waiting 13.4s for a
+    // queue it had been given 1ms for. What is no longer asserted is HOW LONG it took; the suite's
+    // own timeout is what would catch a drain that never returns at all.
     const drained = await flushLedgers(1);
-    const took = Date.now() - began;
 
     assert.equal(drained, false, 'it gave up, and said so instead of reporting a clean drain');
-    assert.ok(took < 2_000, `the drain returned in ${took}ms rather than waiting for the whole queue`);
 
     // And nothing is corrupted by giving up: the writes were not cancelled, only un-awaited.
     assert.equal(await flushLedgers(30_000), true, 'the rest lands, and a complete drain says true');

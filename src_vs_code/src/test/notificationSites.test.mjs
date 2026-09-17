@@ -59,13 +59,65 @@ test('the count is internally consistent, which the hand-written one was not', (
   const byApi = Object.values(counted.byApi).reduce((total, n) => total + n, 0);
 
   assert.equal(byApi, counted.direct, 'the per-API split must sum to the calls still made directly');
-  assert.equal(
-    counted.direct + counted.routed,
-    counted.sites,
-    'the population is what is routed plus what is not, and it must not shrink as work proceeds',
-  );
-  assert.equal(counted.events, counted.sites - counted.modal, 'events are the sites that are not modal questions');
   assert.ok(counted.sites > 0, 'a counter that finds nothing would pass every other assertion here');
+});
+
+test('the totals are what a person counting by hand would get', () => {
+  // The three assertions this replaces restated the definitions: `sites` IS `direct + routed` and
+  // `events` IS `sites - modal`, so asserting those equalities could not fail whatever the counter
+  // did to the inputs. A shared aggregation error would have sailed through all three. (CodeRabbit.)
+  //
+  // So the numbers here are written by hand from a fixture small enough to count by eye: two direct
+  // calls in one file, three routed calls in another, one of them a modal question.
+  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  try {
+    writeFileSync(join(here, 'old.ts'), [
+      'void vscode.window.showWarningMessage("one");',
+      'void vscode.window.showErrorMessage("two");',
+      '',
+    ].join('\n'));
+    writeFileSync(join(here, 'new.ts'), [
+      "void notify({ as: 'warning', class: 'failure', source: 'x', code: 'a-thing-failed' });",
+      "void notifyOnce({ as: 'information', class: 'outcome', source: 'x', code: 'a-thing-landed' });",
+      "void notifyAndAsk({ as: 'warning', class: 'confirmation', source: 'x', code: 'really', modal: true });",
+      '',
+    ].join('\n'));
+
+    const counted = count(here);
+
+    assert.equal(counted.direct, 2);
+    assert.equal(counted.routed, 3);
+    assert.equal(counted.sites, 5);
+    assert.equal(counted.modal, 1);
+    assert.equal(counted.events, 4);
+    assert.equal(counted.byApi.showWarningMessage, 1);
+    assert.equal(counted.byApi.showErrorMessage, 1);
+    assert.equal(counted.byApi.showInformationMessage, 0);
+    assert.deepEqual([...counted.codes].sort(), ['a-thing-failed', 'a-thing-landed', 'really']);
+  } finally {
+    rmSync(here, { recursive: true, force: true });
+  }
+});
+
+test('a `code` belongs to a notice, and an object that merely has a `code` property does not', () => {
+  // Two maps in this tree have a `code` key and nothing to do with notifications: TAB_NAMES in
+  // `rolesPage.ts` holds 'Code review', and LANGUAGES in `settingsShape.ts` holds de/en/es/ru/uk.
+  // The first pattern collected the one, the shape-constrained second collected the other five -
+  // into a list the artefact calls the suppression key space. Anchoring on the `source` that always
+  // precedes a notice's `code` tells them apart. (CodeRabbit found the second.)
+  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  try {
+    writeFileSync(join(here, 'maps.ts'), [
+      "const TAB_NAMES = { plan: 'Plan review', code: 'Code review' };",
+      "const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'uk', label: 'Ukrainian' }];",
+      "void notify({ as: 'warning', class: 'failure', source: 'real', code: 'the-only-one' });",
+      '',
+    ].join('\n'));
+
+    assert.deepEqual([...count(here).codes], ['the-only-one']);
+  } finally {
+    rmSync(here, { recursive: true, force: true });
+  }
 });
 
 /**

@@ -315,6 +315,10 @@ test('the map of counted keys is bounded by the write budget, not by a guessed c
   // What replaced the LRU. Nothing is evicted now, which is only affordable because a key enters the
   // map when a record for it is WRITTEN and writes are already capped. This asserts the arithmetic
   // rather than trusting the paragraph that states it.
+  //
+  // It uses an ordinary class deliberately. A QUESTION bypasses the budget by design and is still
+  // counted, so the arithmetic below holds for everything except questions — and that term is
+  // bounded by how many a person answers rather than by a number in this file.
   const bounds = suppressor('r', 1);
   for (let n = 0; n < RUN_BUDGET * 3; n += 1) {
     bounds.admit(complaint({ class: 'refusal', subject: `path-${n}` }), new Date(START));

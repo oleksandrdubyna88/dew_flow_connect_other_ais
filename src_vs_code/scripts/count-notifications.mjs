@@ -71,6 +71,17 @@ export function everySourceFile(dir) {
   return found.sort();
 }
 
+/**
+ * A `code` that belongs to a NOTICE, told apart by the `source` that always precedes it.
+ *
+ * <p>Bounded repetition throughout: this runs over every shipped file on every test run. The gap
+ * between the two fields is whitespace ONLY, so nothing but blank space can sit inside a match --
+ * but it has to be generous, because a docstring between them leaves its blank lines behind when
+ * comments are stripped. Measured across this tree: 8 finds 59 of the codes, 40 finds all 104,
+ * and it does not move again at 120 or 400. 120, with the headroom stated rather than guessed.</p>
+ */
+const CODE_OF_A_NOTICE = /\bsource:\s{0,4}'[^']{1,80}',\s{0,120}code:\s{0,4}'([^']{1,120})'/gu;
+
 /** The funnel itself, which is allowed — indeed required — to call the API directly. */
 const FUNNEL = 'notify.ts';
 
@@ -165,13 +176,19 @@ function readOneFile(file) {
     // Every `code` literal this file can emit. It is the KEY a repeat is counted on, so it has two
     // jobs beyond being counted: `notifications.test.ts` asserts that redaction is a no-op on each
     // one — a code the redactor would rewrite is a row that cannot be grouped with its own repeats —
-    // and a reader gets the list of everything the product can say without grepping for it. The
-    // pattern takes a kebab-case LITERAL only, which is the convention it also describes: a composed
-    // code mints a fresh key per occurrence, and that is the defect this whole plan turns on. The
-    // shape matters for a second reason - `code:` is an ordinary property name, and `rolesPage.ts`
-    // has a TAB_NAMES map whose `code` key holds 'Code review'. Requiring the shape tells the two
-    // apart without this script having to understand which object it is looking at.
-    codes: [...text.matchAll(/\bcode:\s*'([a-z][a-z0-9-]{1,120})'/gu)].map((hit) => hit[1]),
+    // and a reader gets the list of everything the product can say without grepping for it.
+    //
+    // IT IS ANCHORED ON `source:`, not on the shape of the literal, and that took two attempts.
+    // `code` is an ordinary property name: the first pattern took any `code: '...'` and collected
+    // 'Code review' out of a TAB_NAMES map in `rolesPage.ts`; requiring kebab-case fixed that one
+    // and quietly collected `de`, `en`, `es`, `ru`, `uk` out of the LANGUAGES map in
+    // `settingsShape.ts` instead — five language ids sitting in a list the artefact calls the
+    // suppression key space. (CodeRabbit found the second.) Every `Notice` carries `source`
+    // immediately before `code`, and nothing else in this tree does, so the PAIR identifies a
+    // notice where neither half alone can. It also means the shape of a code is no longer a
+    // condition, so a code spelled unusually is still covered by the guard rather than missed by
+    // it.
+    codes: [...text.matchAll(CODE_OF_A_NOTICE)].map((hit) => hit[1]),
     // The funnel's own `modal: true` is how it PASSES the flag on, not a question it asks. Counting
     // it moved the event total from 93 to 92 the moment the funnel landed, which is the shape of
     // error this whole script exists to stop.
