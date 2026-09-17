@@ -64,11 +64,17 @@ const argv = process.argv.slice(2);
 // have been lost" path and leave the ratchet silently dead. Whether the file exists is a fact CI
 // establishes with `git cat-file -e`, so CI is what says so.
 const baseAbsent = argv.includes('--base-absent');
-const [currentPath, basePath] = argv.filter((a) => !a.startsWith('--'));
-if (currentPath === undefined || basePath === undefined) {
-  console.error('usage: baseline-only-grows.mjs <current.json> <base.json> [--base-absent]');
+// Count them, rather than checking two destructured values against `undefined`. SonarCloud called
+// the old shape a bug — by type those values are strings, so the comparison reads as always false —
+// and the condition it forced is stronger than the one it replaced: this takes EXACTLY two paths, so
+// a stray third used to be dropped without a word.
+const paths = argv.filter((a) => !a.startsWith('--'));
+if (paths.length !== 2) {
+  console.error('usage: baseline-only-grows.mjs <current.json> <base.json> [--base-absent]\n'
+    + `expected exactly two paths, got ${paths.length}.`);
   process.exit(2);
 }
+const [currentPath, basePath] = paths;
 
 let current;
 let base;

@@ -214,3 +214,25 @@ test('CI declares the absence rather than letting the script guess it', () => {
   assert.match(step, /--base-absent/,
     'the branch that wrote {} because the object does not exist is the branch that says so');
 });
+
+test('a third path is refused rather than quietly ignored', () => {
+  // The check used to be `currentPath === undefined || basePath === undefined`, which SonarCloud
+  // called a bug that always evaluates false — by type, since the destructured values are strings.
+  // It is right that the shape was wrong, and the honest condition is stronger than the one it
+  // replaced: this takes exactly two paths, so a stray third was silently dropped before.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  try {
+    const one = path.join(dir, 'a.json');
+    fs.writeFileSync(one, JSON.stringify({ Server: ['0.28.0'] }), 'utf8');
+
+    for (const argv of [[one], [one, one, one], []]) {
+      const ran = spawnSync(process.execPath, [script, ...argv],
+        { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
+
+      assert.equal(ran.status, REFUSED,
+        `${argv.length} path(s) is not two, and guessing which was meant is how a check stops checking`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
