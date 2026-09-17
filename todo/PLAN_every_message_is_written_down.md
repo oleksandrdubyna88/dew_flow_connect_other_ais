@@ -884,6 +884,7 @@ goes into each plan below in the same task.
 | Page tests that run the page | the new page ships this way from the start | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the backlog of existing source-text assertions |
 | Notification text in five languages | not done | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns staleness; translation is out of scope until it lands |
 | The Team server's refusal vocabulary | not touched | [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md) owns `src_server` |
+| The SIZE of `roundsLog.ts` (1945) and `panelView.ts` (2795) | not touched here — the new page is under 400 lines a module from its first commit, so it joins no backlog | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) owns the split and is **blocked until S8 finishes**: S5 adds a fourth live region to `panelView.ts` and S6 changes `roundsLog.ts`, and a thousand-line move rebased across them throws away the review both are getting. Operator, 2026-09-17 |
 | Where the server resolves its data dir | S8 depends on it | [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md) goes first |
 
 ## Build order
@@ -1024,6 +1025,13 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
    the measurement shows it is needed at all — never now.
 2. **The 100 storm threshold and the 1000 ceiling.** Chosen, not measured. The first real storm says
    whether the alert fires early enough and whether the ceiling is ever reached in ordinary use.
+3. **ANSWERED, 2026-09-17: split them, after every step of this plan.** The operator's words:
+   «как закончишь все шаги - раздели». The work is planned in
+   [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md), which measured the two
+   files before proposing anything and found that most of their length is not logic — 806 of
+   `roundsLog.ts`'s lines are one template literal, 322 of `panelView.ts`'s are one CSS constant.
+   The original question, kept because the reasoning is still the reasoning:
+
 3. **`roundsLog.ts` is far past the 800-line ceiling** and the new page deliberately does not inherit
    its shape. Should it be split — a separate task, not this one?
 4. ~~**Whether `O_APPEND` holds on this machine's NAS path.**~~ **Answered, 2026-09-16**: it does —
