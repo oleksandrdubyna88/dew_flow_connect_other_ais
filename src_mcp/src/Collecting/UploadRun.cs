@@ -43,23 +43,22 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         // idle button, and a second Send starts a second process against the same pairs. It is
         // written HERE rather than by the caller so that every way of starting a send — the one-shot
         // by hand, the extension's button, a future scheduler — records it. (Plan round, all three.)
-        // SWEPT FIRST, then asked. A run abandoned by a killed process would otherwise fence every
-        // later send for ever, and the sweep is what tells an abandoned run from a live one.
+        // SWEPT FIRST. A run abandoned by a killed process would otherwise fence every later send
+        // for ever, and the heartbeat is what tells an abandoned run from a live one.
         db.SweepAbandonedUploads();
-        var already = db.LastUploadRun();
-        if (already.Running)
+
+        // AND THE LEASE IS TAKEN, not asked for. Reading the last run and then inserting was two
+        // statements with a gap: two processes both read idle, both inserted, and both offered the
+        // same waiting pairs. The insert refuses itself when a run is live, which is one statement
+        // and therefore atomic. (Code round 2, gemini and codex, independently.)
+        var runId = Guid.NewGuid().ToString("N");
+        if (!db.StartUploadRun(runId, server.ToString(), offered: 0))
         {
-            // The panel checks this too, and cannot make it atomic: it reads the row, then starts a
-            // process, and two presses inside that window both see an idle row. Here the check and
-            // the write are one connection apart, which is as close to atomic as this gets.
-            // (Code round, codex, twice.)
+            var already = db.LastUploadRun();
             Say($"a send started {already.StartedUtc} is still running; nothing was sent");
 
             return new UploadSummary(Trouble: "another send is already running");
         }
-
-        var runId = Guid.NewGuid().ToString("N");
-        db.StartUploadRun(runId, server.ToString(), offered: 0);
 
         var total = new UploadSummary();
         try

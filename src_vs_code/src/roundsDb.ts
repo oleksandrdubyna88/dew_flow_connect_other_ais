@@ -535,11 +535,14 @@ export interface BugCorpus {
    * How many kept pairs are UNSENT — the number a send would actually offer.
    *
    * <p>Not `funnel.collected`, which counts every pair ever kept and is therefore unchanged by a
-   * successful send. A button reading that offers to send what has already gone. A server too old
-   * to say sends no key at all, and this is then 0 — which reads as "nothing to send", the safe
-   * direction: a Send that refuses is a nuisance, and one that offers an empty batch is a lie.</p>
+   * successful send: a button reading that offers to send what has already gone.</p>
+   *
+   * <p><b>UNDEFINED means the server did not say</b>, which is a different thing from zero and has
+   * to stay different. An older `coai-mcp` emits no `sendable` key, and collapsing that into 0
+   * disabled the Send button for ever — so the person never pressed it, never reached the exit-64
+   * answer, and never learned that the thing to do was update the server. (Code round 2, codex.)</p>
    */
-  readonly sendable: number;
+  readonly sendable: number | undefined;
   /**
    * The vendors THIS server will accept for a ranking pass.
    *
@@ -585,8 +588,15 @@ const NO_FUNNEL: BugFunnel = {
 };
 
 /** Nothing known — which the section renders as "not asked yet", not as "no material". */
-export const EMPTY_CORPUS: BugCorpus =
-  { funnel: NO_FUNNEL, lastRun: NO_RUN, lastSend: NO_SEND, sendable: 0, rankingVendors: [], read: false };
+export const EMPTY_CORPUS: BugCorpus = {
+  funnel: NO_FUNNEL,
+  lastRun: NO_RUN,
+  lastSend: NO_SEND,
+  // Nothing has been asked, so nothing is known — which is not the same as a queue of zero.
+  sendable: undefined,
+  rankingVendors: [],
+  read: false,
+};
 
 /**
  * The states that mean a send is over, spelled the way the server writes them.
@@ -673,7 +683,9 @@ export function parseBugs(text: string): BugCorpus {
       // whether a BUTTON is disabled, so a number where its `state` belongs would throw inside
       // `sending()` and take the whole section's repaint with it.
       lastSend: readSend(raw.lastSend),
-      sendable: typeof raw.sendable === 'number' ? raw.sendable : 0,
+      // Absent stays ABSENT. See the field's own note: an older server saying nothing must not read
+      // as "nothing to send".
+      sendable: typeof raw.sendable === 'number' ? raw.sendable : undefined,
       // Absent means a server too old to say, NOT a server that allows nothing — the difference
       // decides whether the picker falls back to its own list or offers nothing at all.
       rankingVendors: Array.isArray(raw.rankingVendors) ? raw.rankingVendors : [],

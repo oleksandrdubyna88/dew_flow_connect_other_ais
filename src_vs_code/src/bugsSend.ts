@@ -120,11 +120,16 @@ function queue(corpus: BugCorpus): Refusal | undefined {
  * <p>It read `funnel.collected`, which counts every pair this machine has ever KEPT — so it was
  * unchanged by a successful send, and the button went on offering to send what had already gone
  * while the preflight let a run start that would offer nothing. Seven code-round findings across
- * three providers said the same sentence. The server counts the real predicate now, and this reads
- * that.</p>
+ * three providers said the same sentence. The server counts the real predicate now.</p>
+ *
+ * <p><b>A server too old to say falls back to what was kept</b>, which is the old upper bound — and
+ * deliberately optimistic. Reading an absent count as zero disabled the button for ever, so the send
+ * was never attempted, the CLI never answered 64, and nobody was ever told to update the server. An
+ * optimistic number sends the person into the one path that CAN explain itself. (Code round 2,
+ * codex.)</p>
  */
 export function waiting(corpus: BugCorpus): number {
-  return corpus.sendable;
+  return corpus.sendable ?? corpus.funnel.collected;
 }
 
 /** What a finished send came to, in the words the section shows. */

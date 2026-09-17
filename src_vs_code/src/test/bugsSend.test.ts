@@ -214,6 +214,23 @@ test('the button says what is happening, with the denominator when there is one'
   assert.equal(sendLabel(send(), corpus({ sendable: 0 })), 'Send');
 });
 
+/**
+ * A SERVER TOO OLD TO SAY must not read as an empty queue.
+ *
+ * <p>Collapsing an absent count into zero disabled the Send button for ever: the send was never
+ * attempted, the CLI never answered 64, and nobody was ever told that the thing to do was update the
+ * server. The fallback is deliberately optimistic, because it sends the person into the one path
+ * that can explain itself. (Code round 2, codex.)</p>
+ */
+test('a server too old to count falls back to what was kept, so the send can still be tried', () => {
+  const old = corpus({ funnel: { ...EMPTY_CORPUS.funnel, collected: 7 }, sendable: undefined });
+
+  assert.equal(waiting(old), 7);
+  assert.equal(mayStart({ server: 'https://bugs.example', key: 'k', corpus: old }), undefined,
+    'the run must be allowed to start so that exit 64 can say what is wrong');
+  assert.equal(sendLabel(send(), old), 'Send 7 pair(s)');
+});
+
 /** THE ONE SEVEN FINDINGS WERE ABOUT: what is waiting is what a send would OFFER. */
 test('what is waiting is the unsent count, not everything ever kept', () => {
   assert.equal(waiting(corpus()), 4);

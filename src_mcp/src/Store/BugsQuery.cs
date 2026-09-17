@@ -305,17 +305,12 @@ public static class BugsQuery
     private static UploadRunRow LastSend(SqliteConnection db) => UploadRuns.Last(db);
 
     /// <summary>How many pairs a send would offer right now.</summary>
-    /// <remarks>The same three conditions <see cref="RoundsDb.Sendable"/> selects on.</remarks>
-    private static int Sendable(SqliteConnection db)
-    {
-        using var read = db.CreateCommand();
-        read.CommandText = """
-            SELECT COUNT(*) FROM collect_pairs
-             WHERE keep = 1 AND sent_utc = '' AND send_refusal = ''
-            """;
-
-        return Convert.ToInt32(read.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
-    }
+    /// <remarks>
+    /// Through <see cref="SendablePairs"/>, which is where the predicate lives. It was spelled out
+    /// here as well for one commit — the same three conditions, written twice — and that is how a
+    /// button comes to show a number the run does not use. (Code round 2, gemini and codex.)
+    /// </remarks>
+    private static int Sendable(SqliteConnection db) => SendablePairs.Count(db);
 
     private static BugFunnel Funnel(SqliteConnection db)
     {

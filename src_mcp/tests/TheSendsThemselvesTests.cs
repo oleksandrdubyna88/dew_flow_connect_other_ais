@@ -158,6 +158,72 @@ public sealed class TheSendsThemselvesTests : IDisposable
         db.LastUploadRun().Running.Should().BeTrue("two minutes of work is not an abandoned run");
     }
 
+    /// <summary>
+    /// A SECOND send cannot start while one is running, and the refusal is the INSERT itself.
+    /// </summary>
+    /// <remarks>
+    /// It read the last run, found it idle, and then inserted — two statements with a gap, and two
+    /// processes inside that gap both read idle and both inserted, each with its own id, and both
+    /// then offered the same waiting pairs. One connection is not a lock. The insert refuses itself
+    /// now. (Code round 2, gemini and codex, independently.)
+    /// </remarks>
+    [Fact]
+    public void ASecondSendCannotTakeTheLeaseWhileOneIsRunning()
+    {
+        using var db = Db();
+
+        db.StartUploadRun("s1", "https://bugs.example", offered: 5).Should().BeTrue();
+        db.StartUploadRun("s2", "https://bugs.example", offered: 5).Should().BeFalse(
+            "a second send would offer the same waiting pairs a second time");
+
+        db.LastUploadRun().Id.Should().Be("s1", "and the first one is untouched");
+    }
+
+    [Fact]
+    public void TheLeaseIsFreeAgainOnceTheSendHasEnded()
+    {
+        using var db = Db();
+        db.StartUploadRun("s1", "https://bugs.example", offered: 5);
+        db.EndUploadRun("s1", UploadRunState.Done, offered: 5, sent: 5, duplicate: 0, refused: 0,
+            trouble: string.Empty);
+
+        db.StartUploadRun("s2", "https://bugs.example", offered: 2).Should().BeTrue();
+    }
+
+    /// <summary>And a swept run does not fence the next send either.</summary>
+    [Fact]
+    public void ASweptSendDoesNotHoldTheLease()
+    {
+        using var db = Db();
+        db.StartUploadRun("s1", "https://bugs.example", offered: 5);
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        db.SweepAbandonedUploads();
+
+        db.StartUploadRun("s2", "https://bugs.example", offered: 5).Should().BeTrue(
+            "an abandoned run that fences every later send is the deadlock the sweep exists for");
+    }
+
+    /// <summary>A finished run is never swept, whatever its heartbeat says.</summary>
+    /// <remarks>
+    /// `EndUploadRun` writes the state and `finished_utc` together, so `state = 'running'` is enough
+    /// today — and only while that stays true, and while nobody adds a state this sweep has never
+    /// heard of. Naming the column costs nothing. (Code round 2, local.)
+    /// </remarks>
+    [Fact]
+    public void AFinishedSendSurvivesASweepWithAnOldHeartbeat()
+    {
+        using var db = Db();
+        db.StartUploadRun("s1", "https://bugs.example", offered: 5);
+        db.EndUploadRun("s1", UploadRunState.Done, offered: 5, sent: 5, duplicate: 0, refused: 0,
+            trouble: string.Empty);
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        db.SweepAbandonedUploads();
+
+        db.LastUploadRun().State.Should().Be(UploadRunState.Done, "a done send is not an abandoned one");
+    }
+
     /// <summary>Starting the same run twice is one run — the id is the identity.</summary>
     [Fact]
     public void TheSameRunStartedTwiceIsStillOneRun()
