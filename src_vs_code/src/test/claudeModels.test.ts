@@ -12,7 +12,7 @@ import {
   modelThatAnswered,
   stillGood,
 } from '../claudeModels';
-import { CURATED_CLAUDE_MODELS, modelsProvenance } from '../models';
+import { CURATED_CLAUDE_MODELS, modelsFor, modelsProvenance } from '../models';
 
 /**
  * Asking the CLI which Claude models this machine can reach.
@@ -189,4 +189,42 @@ test('a caption with no probe behind it does not claim the CLI was asked', () =>
 
   assert.ok(!said.includes('answered'), `nothing was asked; it said "${said}"`);
   assert.match(said, /not been asked/, 'so it says so, rather than stating a resolution as fact');
+});
+
+test('a probe that confirmed nothing is not reported as never asked', () => {
+  // The CLI DID run. Saying it was not asked hides the one thing a person can act on: the request
+  // was made and no family answered as itself — a spent allowance looks exactly like this.
+  const spent = {
+    cliVersion: '2.0.44',
+    checkedUtc: '2026-09-16T08:00:00.000Z',
+    models: [
+      { asked: 'haiku', answered: '', verified: false },
+      { asked: 'sonnet', answered: '', verified: false },
+    ],
+  };
+  const said = modelsProvenance('claude', [], undefined, [], undefined, spent);
+
+  assert.ok(!said.includes('not been asked'), `the CLI was asked; it said "${said}"`);
+  assert.match(said, /2026-09-16/, 'and when it was asked is the fact a person acts on');
+});
+
+test('a probe from one installation does not label a row that runs another', () => {
+  // Two Claude CLIs at one version are two installations, very possibly two accounts. The record
+  // carries its executable; nothing compared it outside the panel, so a chat row on B took B's
+  // labels from A — and choosing an alias B does not know silently runs B's default. (CodeRabbit.)
+  const mine = {
+    cliVersion: '2.0.44',
+    executable: 'C:/tools/claude.cmd',
+    checkedUtc: '2026-09-16T08:00:00.000Z',
+    models: [{ asked: 'sonnet', answered: 'claude-sonnet-5', verified: true }],
+  };
+  const labelOf = (list: readonly { id: string; label: string }[]): string =>
+    list.find((m) => m.id === 'sonnet')?.label ?? '';
+
+  assert.match(labelOf(modelsFor('claude', [], '', undefined, [], [], mine, 'C:/tools/claude.cmd')),
+    /claude-sonnet-5/, 'the row that runs THIS binary gets what it answered');
+  assert.match(labelOf(modelsFor('claude', [], '', undefined, [], [], mine, 'D:/other/claude.exe')),
+    /not asked yet/, 'and a row that runs another binary is told nothing was asked FOR IT');
+  assert.match(labelOf(modelsFor('claude', [], '', undefined, [], [], mine, '')),
+    /claude-sonnet-5/, 'a caller that names no binary is not second-guessed');
 });

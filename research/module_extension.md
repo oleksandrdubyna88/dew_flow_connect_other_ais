@@ -1882,6 +1882,17 @@ question the shape cannot: a run that did not reach every candidate is dated for
 other failure. Without it, hiding the panel once left two families saying *not asked yet* until the
 editor restarted.
 
+**The probe belongs to the BINARY that produced it, everywhere — not only in the panel.**
+`probeFor` withholds a record taken from another executable, and `modelsFor` takes the binary its
+caller will run: a reviewer card passes its row’s, a consultant row its own, and the chat picker the
+row it resolved. Without it a row on one installation wore another account’s labels, and picking an
+alias that installation does not know runs its DEFAULT in silence. A caller holding no executable, and
+a record written before the field existed, are both left alone — neither has made a claim.
+
+**And a probe that RAN and confirmed nothing says so.** It used to fall into “not asked yet”, which
+hid the one fact a person can act on: the request was made, on that date, and no family answered as
+itself — which is exactly what a spent allowance looks like.
+
 **And the dating happens where a THROW is visible.** It was done inside the try, so an exception
 left nothing dated and the edge trigger never asked again for the rest of the session - the very hole
 the dating exists to close. `probeSucceeded` is the predicate, in `claudeProbe.ts` where a test can

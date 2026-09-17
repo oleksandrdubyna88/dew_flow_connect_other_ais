@@ -27,8 +27,25 @@ export const LONGEST_FIELD = 200;
 /** Far more entries than there are candidate families, and far fewer than a file can hold. */
 export const MOST_ENTRIES = 64;
 
+/**
+ * The most text this file may be before it is even decoded.
+ *
+ * <p>Sixty-four entries of a few dozen bytes is under four kilobytes; sixty-four kilobytes is two
+ * orders of margin and still nothing. The bound has to be taken on the BYTES rather than on the
+ * parsed value, which is what it used to be: `MOST_ENTRIES` applies after `JSON.parse`, so a
+ * cache grown by something else was fully materialised in the extension host before anything
+ * said it was too big — and the data directory is one a person chooses and other things write.
+ * (CodeRabbit, PR #335.)</p>
+ */
+export const LONGEST_FILE = 64 * 1024;
+
 /** Everything read back, or nothing — a file that cannot be understood is not an answer. */
 export function parseProbe(text: string): ProbeResult | undefined {
+  // Before the decode and before the parse. A file this size was not written by this product, and
+  // finding that out after materialising it is finding it out too late.
+  if (text.length > LONGEST_FILE) {
+    return undefined;
+  }
   try {
     return probeFrom(JSON.parse(text));
   } catch {
@@ -72,6 +89,10 @@ export function probeFrom(parsed: unknown): ProbeResult | undefined {
     models: models
       .filter((m): m is Record<string, unknown> => m !== null && typeof m === 'object')
       .filter((m) => typeof m['asked'] === 'string' && (m['asked'] as string).length > 0)
+      // Each STRING as well as the file: a model id longer than any this product writes is not one,
+      // and an entry carrying one is dropped on its own rather than taking the others with it.
+      .filter((m) => (m['asked'] as string).length <= LONGEST_FIELD
+        && (typeof m['answered'] === 'string' ? m['answered'].length : 0) <= LONGEST_FIELD)
       .map((m) => {
         const asked = m['asked'] as string;
         const answered = typeof m['answered'] === 'string' ? m['answered'] : '';

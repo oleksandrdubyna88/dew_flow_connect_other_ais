@@ -8,6 +8,7 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
+import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
@@ -1018,6 +1019,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const remote = vendor.runtime === 'remote';
   const models = modelsFor(
     vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
+    executableFor(vendor),
   );
   const endpoint = endpointField(vendor, id, local, remote);
   // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`

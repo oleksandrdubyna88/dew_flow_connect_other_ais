@@ -893,7 +893,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         .filter((one) => onRuntime(one, 'local'))
         .map((one) => (one as Extract<ResolvedConsultant, { kind: 'definition' }>).baseUrl),
     )];
-    this.windowsSideThisPass = undefined;
+    // ITS OWN memo, not the reviewer pass's. This pass is detached — a render starts it and does
+    // not await it — so clearing one shared field at its start and end reaches into a reviewer pass
+    // sitting between two rows, and the next `windowsSideOnce()` there launches the interop again.
+    // (CodeRabbit, PR #335.)
+    let windowsSide: Promise<string> | undefined = undefined;
+    const windowsSideHere = (): Promise<string> => (windowsSide ??= windowsSideEngine());
     for (const endpoint of wanted) {
       const cached = this.consultEngines[endpoint];
       // An answer that found NOTHING is not kept, exactly as the reviewer probe does not keep one:
@@ -904,10 +909,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // eslint-disable-next-line no-await-in-loop -- one engine at a time, like the reviewer pass.
         this.consultEngines[endpoint] = endpoint.length > 0
           ? await probeEngine(openAiBaseOf(endpoint))
-          : await discoverEngine(undefined, undefined, () => this.windowsSideOnce());
+          : await discoverEngine(undefined, undefined, windowsSideHere);
       }
     }
-    this.windowsSideThisPass = undefined;
 
     return Object.fromEntries(wanted.flatMap((e) => {
       const engine = this.consultEngines[e];

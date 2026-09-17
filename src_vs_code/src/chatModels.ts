@@ -2,6 +2,7 @@ import { ChatModelChoice } from './chatPage';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
 import type { ProbeResult } from './claudeModels';
 import { LocalEngine } from './localEngines';
+import { executableFor } from './vendorTerminal';
 import { allowedModelsFor, ModelChoice, modelsFor } from './models';
 import { REMOTE_TURNS } from './remoteAsk';
 import { TeamServerState } from './teamServerView';
@@ -301,6 +302,9 @@ export function chatProvidersFrom(
       catalog.discoveredAgy,
       allowedModelsFor(vendor, catalog.teamServers).models,
       catalog.claudeProbe,
+      // The binary THIS row runs. Without it a row on one Claude installation wore the labels of
+      // another's account, and picking an alias it does not know runs its default in silence.
+      executableFor(vendor),
     ).filter((model) => routableOn(vendor.runtime, model.id)),
   }));
   const refused = enabled.filter((vendor) => !canChat(vendor)).map((vendor): RefusedModel => ({
@@ -556,6 +560,7 @@ export function chatProvidersFromPresets(
         catalog.discoveredAgy,
         allowedModelsFor(spec, catalog.teamServers).models,
         catalog.claudeProbe,
+        executableFor(spec),
       ).filter((model) => routableOn(preset.runtime, model.id)),
     };
   });
