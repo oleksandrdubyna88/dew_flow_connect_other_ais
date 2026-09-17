@@ -4,6 +4,7 @@ import { coaiDataDir } from './dataDir';
 import { Notice, answered, buttonsOf, gapSentence, noticeRecord } from './notice';
 import { NotificationRecord } from './notifications';
 import { recordNotification } from './notificationsFile';
+import { Suppressor, suppressor } from './suppression';
 
 /**
  * The one door every message this extension shows a person goes through.
@@ -44,6 +45,15 @@ import { recordNotification } from './notificationsFile';
  * observer.</p>
  */
 const RUN = randomBytes(6).toString('hex');
+
+/**
+ * What bounds this run's share of the ledger.
+ *
+ * <p>One per host, minted beside the run id because that is exactly its lifetime: every bound it
+ * enforces is per run, and a restart is a new observer with a fresh count. It bounds what is
+ * WRITTEN and never what is shown — see `suppression.ts`.</p>
+ */
+const BOUNDS: Suppressor = suppressor(RUN, process.pid);
 
 /** How many records this run could not write, and when that started. Never a notification. */
 let lost = 0;
@@ -97,14 +107,75 @@ function show(notice: Notice): Thenable<string | undefined> {
 }
 
 /**
+ * Put one occurrence down, unless this run's bounds have already had enough of it.
+ *
+ * <p>Returns what was written, or nothing when the bounds refused it — a caller that has an answer
+ * to record later needs the asking it belongs to, and a question whose asking was never written must
+ * not leave an answer behind with nothing to answer.</p>
+ *
+ * <p>The occurrence goes down before its meta-alert, so the file reads in the order things happened:
+ * the thousandth repeat, then the row saying the thousandth was the last one kept.</p>
+ */
+async function record(notice: Notice, at: Date): Promise<{
+  readonly seq: number;
+  readonly kept: NotificationRecord | undefined;
+}> {
+  const verdict = BOUNDS.admit(notice, at);
+  const kept = verdict.write
+    ? { ...noticeRecord(notice, RUN, process.pid, at), seq: verdict.seq }
+    : undefined;
+  if (kept !== undefined) {
+    await write(kept);
+  }
+  if (verdict.storm !== undefined) {
+    await write(verdict.storm);
+  }
+
+  return { seq: verdict.seq, kept };
+}
+
+/**
+ * This condition has ended, so its next occurrence is news rather than a repeat.
+ *
+ * <p>The counterpart of `serverSettingsSync.ts:171`, which clears its own once-per-version guard on
+ * a successful write because *"the situation is over; a stand-down after this is news, not a
+ * repeat."* Without it a fault that comes back after being fixed is a silent increment on a counter
+ * nobody is reading, which is the shape of the incident this whole ledger exists for.</p>
+ */
+export function notifyResolved(code: string, subject?: string): void {
+  BOUNDS.resolved(code, subject);
+}
+
+/**
  * Record it, then show it — and do not wait for the person.
  *
  * <p>Returns once the record is on disk. The toast outlives the call, which is what every fire-and
  * forget call site did before the funnel and what keeps a caller holding a lock safe.</p>
  */
 export async function notify(notice: Notice): Promise<void> {
-  await write(noticeRecord(notice, RUN, process.pid, new Date()));
+  await record(notice, new Date());
   void show(notice);
+}
+
+/**
+ * Record every occurrence; show only the first of each `(code, subject)` in this run.
+ *
+ * <p>For a call site whose condition is polled rather than raised — the panel asks the server what
+ * it could not understand on every probe, and the same complaint comes back every few seconds. Those
+ * sites already suppressed themselves, each with its own `Set` or flag; this is that guard, written
+ * once, and it is strictly more honest than what it replaces: `panelProvider`'s `notesSaid` showed
+ * the sentence once and recorded NOTHING, so a complaint arriving four thousand times looked exactly
+ * like one arriving twice.</p>
+ *
+ * <p>It is not a fourth policy. The funnel never suppresses a toast on its own initiative — this
+ * door exists because a caller asked for it, which is the only sanctioned way a message stops being
+ * shown.</p>
+ */
+export async function notifyOnce(notice: Notice): Promise<void> {
+  const { seq } = await record(notice, new Date());
+  if (seq === 1) {
+    void show(notice);
+  }
 }
 
 /**
@@ -119,10 +190,11 @@ export async function notifyThen(
   notice: Notice,
   chosen: (answer: string | undefined) => void,
 ): Promise<void> {
-  const asked = noticeRecord(notice, RUN, process.pid, new Date());
-  await write(asked);
+  const { kept } = await record(notice, new Date());
   void show(notice).then(async (answer) => {
-    await write(answered(asked, answer));
+    if (kept !== undefined) {
+      await write(answered(kept, answer));
+    }
     chosen(answer);
   });
 }
@@ -144,11 +216,10 @@ export async function notifyThen(
  * <p><b>Never call this while holding a lock.</b> It waits for a human.</p>
  */
 export async function notifyAndAsk(notice: Notice): Promise<string | undefined> {
-  const asked = noticeRecord(notice, RUN, process.pid, new Date());
-  await write(asked);
+  const { kept } = await record(notice, new Date());
   const chosen = await show(notice);
-  if (buttonsOf(notice).length > 0 || notice.modal === true) {
-    await write(answered(asked, chosen));
+  if (kept !== undefined && (buttonsOf(notice).length > 0 || notice.modal === true)) {
+    await write(answered(kept, chosen));
   }
 
   return chosen;

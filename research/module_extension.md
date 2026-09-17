@@ -17,8 +17,9 @@ settings-mirror stand-down warned once, nobody saw it, and eleven code rounds ra
 deleted thirty-eight minutes earlier. Plan, two gate rounds deep:
 [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
 
-**What exists after steps S1 and S2** — the record, the ledgers, and the funnel in front of them.
-The routing of the call sites has begun and is not finished: see *the ratchet* below.
+**What exists after steps S1 to S4** — the record, the ledgers, the funnel in front of them, and the
+bounds on what one run may write. The routing of the call sites has begun and is not finished: see
+*the ratchet* below. Nothing reads any of it on screen yet; that is S5.
 
 | Module | What it holds |
 |---|---|
@@ -26,16 +27,24 @@ The routing of the call sites has begun and is not finished: see *the ratchet* b
 | `notificationsFile.ts` | `notifications.jsonl` (this side) and `server-notices.jsonl` (`coai-mcp`), **two files merged at read time** |
 | `notice.ts` | the pure half of the funnel: what a caller says, and the record it becomes |
 | `notify.ts` | the host half — the only module allowed to call `window.show*Message` |
+| `suppression.ts` | how much of one repeating fault is kept, and when the meta-alert fires. Pure |
 | `credentialWords.ts` | the credential word list, extracted from `consultantWrite.ts` rather than copied |
 | `scripts/count-notifications.mjs` | the site count, DERIVED — with `notification-sites.json` checked in and a test that goes red on drift |
 
-**Three doors, and which one a call site takes is not a matter of taste.**
+**Four doors, and which one a call site takes is not a matter of taste.**
 
-| | waits for the disk | waits for the PERSON | use it when |
-|---|---|---|---|
-| `notify` | yes | **no** | the ordinary case, and the only safe one inside a lock |
-| `notifyThen` | yes | no — the answer arrives in a callback | there is a button and the caller cannot wait, e.g. `reportStandDown` |
-| `notifyAndAsk` | yes | yes | a modal question, called only from outside any critical section |
+| | waits for the disk | waits for the PERSON | shows | use it when |
+|---|---|---|---|---|
+| `notify` | yes | **no** | always | the ordinary case, and the only safe one inside a lock |
+| `notifyThen` | yes | no — the answer arrives in a callback | always | there is a button and the caller cannot wait, e.g. `reportStandDown` |
+| `notifyAndAsk` | yes | yes | always | a modal question, called only from outside any critical section |
+| `notifyOnce` | yes | no | **first of its `(code, subject)` this run** | a POLLED condition, which arrives again every few seconds for as long as it lasts |
+
+`notifyOnce` is not a fourth policy the funnel applies on its own — the funnel never decides to stop
+showing something. It is the guard those call sites already kept by hand, written once: the panel's
+`notesSaid` `Set` is gone, and what replaces it is strictly more honest, because the `Set` showed the
+sentence once and recorded **nothing**. A complaint arriving four thousand times looked exactly like
+one arriving twice, and the storm that ought to fire at a hundred could never fire at all.
 
 `notifyAndAsk` inside a critical section is a deadlock and not a slow path: `show*Message` with a
 button does not resolve until somebody clicks, so a stand-down raised inside `serverSettingsSync`'s
@@ -47,7 +56,7 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. **109 of the 110 sites are routed** and the constant
+test that matches nothing passes for ever. **110 of the 111 sites are routed** and the constant
 stands at **1**. The one that is left is `helpPanel.ts`'s settings refusal, held back on purpose:
 defect 3 rewires it through `reportRefusal`, and touching that line twice is worse than touching it
 once.
@@ -63,12 +72,67 @@ It would **not** have caught the 2026-09-16 incident — that role was accepted 
 and its complaint came at round time — and saying so is the point: it closes a real gap, not the one
 that prompted the work.
 
+## What one run may write down (S4)
+
+`suppression.ts` bounds the LEDGER and never the toast. Nothing in it can stop a message being shown,
+so a suppressed record is a record the file does not keep — not a message the person does not get.
+At the ceiling the person is still being told a hundred times over, which is why the meta-alert is a
+row rather than a hundred-and-first toast on a screen already full of them.
+
+| Bound | What it is | Why that one |
+|---|---|---|
+| `CEILING` = 1000 | per `(code, subject)`, per run | exact below it, explicitly truncated above it, never ambiguous between. 400 KB is the whole cost of not lying |
+| `STORM_AT` = 100 | the meta-alert fires | a fault that has repeated a hundred times is news in itself |
+| `RUN_BUDGET` = 5000 | records beyond each code's first, run-wide | ~2 MB, and the number that makes this file's growth a bound rather than a hope |
+| `FAULT_RESERVE` = 1000 | what only `failure` and `stand-down` may spend | so a churn loop cannot cost the settings refusal that arrives after it |
+| `KEYS_REMEMBERED` = 512 | the LRU of counted keys | `code` is finite, `subject` is a path or a server name and is not |
+
+**No sampling.** The plan's first draft wrote the 1st, 10th, 100th and so on. The consultation killed
+it with one sentence that cannot be worked around: *10 occurrences and 99 occurrences produce an
+identical ledger*, while the design claimed a reader could see exactly how far it went.
+
+**Keyed on the situation, not on a clock.** A 60-second window folds a fault recurring in forty
+seconds together and separates one recurring in an hour — backwards for the question anybody asks.
+`notifyResolved(code, subject)` is the counterpart of `serverSettingsSync.ts:171`, which clears its
+own guard on a successful write because *"the situation is over; a stand-down after this is news, not
+a repeat"*. That is what makes "it came back" visible, and what a clock window destroys.
+
+**The run budget is charged per CODE, and the plan said per `(code, subject)`.** The plan named the
+hole — *"a loop churning 512 distinct subjects evicts its own counter and writes for ever"* — and the
+bound it chose does not close it: an evicted key returns looking like a first occurrence, a first
+occurrence is never charged, so the budget never engages. Measured with the plan's own rule restored,
+a churn loop of 15 000 occurrences wrote **15 000 records**. Codes are string literals at call sites,
+so charging against each code's first is finite, never evicted, and cannot be reset by the churn it
+exists to stop. The cost is that a genuinely new `(code, subject)` of an ordinary class is dropped
+once the budget is spent — which is what the reserve above is for, and why it is load-bearing rather
+than a nicety.
+
+**Counting is counting ROWS, at read time.** Never `seq`, never the in-memory map. A map can be
+evicted and a process can die, and a number on screen a reader cannot re-derive from the file is a
+number that will be wrong one day. `seq` is on the record as a diagnostic and nothing a reader sees
+is derived from it.
+
+**The once-only promise for a storm is a READ-time invariant.** There is no test-and-set on an
+append-only file, so two windows crossing the same threshold for the same fault each write one. The
+record carries `bound`, and the page groups `(code, subject, bound)` into a single row — which is why
+the threshold is a field rather than a sentence inside `detail`. A storm title carries **no number**,
+or it would mint a fresh key per occurrence and be uncollapsible itself; the count and the rate live
+in `detail`, which nothing groups on.
+
 **The counter reports a population and a remainder, and the distinction is load-bearing.** `sites`
 is every place this extension speaks to a person, routed or not, and it does not fall — it is what
 the completeness promise is made over. `direct` is what is left, and it is the only number the
 ratchet watches. An earlier version conflated the two, and the first routed modal moved the event
 total from 93 to 89: the population appearing to shrink because the work was going well. A test now
-pins the population at 109.
+pins the population at **111**, and every rise is written beside the constant with its reason: 110 for
+what S3 surfaced, 111 for a message that arrived from `main` on a rebase and had never been through
+the funnel. That rise is the count doing its job in the direction nobody plans for — a branch cannot
+quietly re-open the hole it is closing, and neither can the branch merging into it.
+
+The same test caught the opposite slip on the same day. `notifyOnce` was added and the counter's
+pattern did not know the name, so routing a call site through it took the population **down** to 110:
+the number that must never fall, falling because the work was going well. A door missing from that
+pattern reads as a message that stopped existing.
 
 A wiring test moved with them and got stronger rather than looser: `chatGotoWiring` used to assert
 that the moved-conversation path contains `showWarningMessage(`, which says nothing about WHICH

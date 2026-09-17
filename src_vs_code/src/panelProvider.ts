@@ -142,7 +142,7 @@ import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { asText } from './asText';
-import { notify, notifyAndAsk } from './notify';
+import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
@@ -642,19 +642,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The last answer from `--providers`, when it was taken, and which binary gave it. */
   private providersCache: ProvidersAnswer = { reported: {}, asked: false, answered: false, notes: NO_NOTES };
 
-  /**
-   * Which of the server's own complaints have already been written down this session.
-   *
-   * <p>The probe is cached for ten seconds and re-run on every render, so without this the same
-   * unreadable `COAI_ROLES` would be recorded every ten seconds for as long as it stayed
-   * unreadable. Keyed by the sentence, so a DIFFERENT complaint is news — and the same complaint
-   * after a restart is news too, which is right: a new host is a new observer.</p>
-   *
-   * <p>This is the local form of the suppression S4 generalises. It mirrors `discoveryWarned` and
-   * `promptWriteFailed`, which this class already keeps for the same reason.</p>
-   */
-  private notesSaid = new Set<string>();
-
   private providersAt = 0;
 
   /**
@@ -672,11 +659,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private sayWhatTheServerSaid(answer: ProvidersAnswer): void {
     for (const sentence of answer.notes.unrecognised) {
-      if (this.notesSaid.has(sentence)) {
-        continue;
-      }
-      this.notesSaid.add(sentence);
-      void notify({
+      // `notifyOnce`, not a `Set` here. The probe is cached for ten seconds and re-run on every
+      // render, so an unreadable `COAI_ROLES` arrives every ten seconds for as long as it stays
+      // unreadable; the person is told once. What changed in S4 is that every arrival is now
+      // RECORDED — the Set this replaces showed the sentence once and wrote nothing, so a complaint
+      // arriving four thousand times looked exactly like one arriving twice, and the storm that
+      // ought to fire at a hundred could never fire at all.
+      void notifyOnce({
         as: 'warning',
         class: 'failure',
         source: 'coai-mcp',
