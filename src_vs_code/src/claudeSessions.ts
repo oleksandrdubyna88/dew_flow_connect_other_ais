@@ -858,15 +858,13 @@ export async function sessionFileOf(
   // LINK: anything on this machine can drop a `<valid-uuid>.jsonl` into the project directory
   // pointing at a file elsewhere, and both `resolve` and `access` are perfectly happy with it.
   // (codex, the plan round, as a security finding.)
-  const realDir = await realOf(dir);
-  const realFile = await realOf(file);
-  if (realDir === undefined || realFile === undefined || !staysInside(dir, file, { dir: realDir, file: realFile })) {
+  const real = await insideReally(dir, file);
+  if (real === undefined) {
     return { kind: 'none', why: 'unreadable', refusal: 'This conversation names a session file that leads outside Claude Code’s own folder.' };
   }
-  const real = { dir: realDir, file: realFile };
 
   // An id needs no scan at all, so nothing about this answer is unverified.
-  return { kind: 'one', file: real.file, complete: true };
+  return { kind: 'one', file: real, complete: true };
 }
 
 /**
@@ -975,6 +973,44 @@ async function realOf(target: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Both halves of the question, composed once: is this path inside that directory, as written AND as
+ * it really leads?
+ *
+ * <p><b>Named because a second caller arrived.</b> The two functions above were composed inline at
+ * one call site in this file, which is fine while there is one. `openWorkspaceFile` in
+ * `chatHooks.ts` needs the same decision over a path a MODEL supplied, and it had the lexical half
+ * only — so it accepted `docs/secrets -> /home/me/.ssh` and opened the file outside the workspace.
+ * Copying the four lines there would have been a second implementation of a security check, which is
+ * the one kind of duplicate that gets fixed in one place and left wrong in the other.</p>
+ *
+ * <p>It fails CLOSED in every direction: a directory that cannot be canonicalised, a target that
+ * cannot be canonicalised, or a pair that leaves — all of them are nothing. A path that resolves
+ * nowhere could not have been opened anyway, so nothing is lost by refusing it.</p>
+ *
+ * <p><b>It hands back the canonical path rather than a yes.</b> One caller needs only the verdict and
+ * the other needs the resolved file, and a predicate would have made the second resolve it a second
+ * time — or, as a first draft of this did, quietly return the path as WRITTEN where the code before
+ * it returned the canonical one. A behaviour change smuggled in by a refactor is exactly what the
+ * series this came out of spent thirteen commits proving it had not done.</p>
+ *
+ * <p><b>Feed it OS paths.</b> A URI path (`/d:/rsd/x`) compared against what `realpath` returns
+ * (`d:\rsd\x`) makes this refuse everything on Windows — a check that looks like it works because
+ * nothing opens. Callers holding a `Uri` pass `fsPath`, never `path`.</p>
+ *
+ * @returns where the file really is, when that is still inside `dir`; otherwise nothing.
+ */
+export async function insideReally(dir: string, file: string): Promise<string | undefined> {
+  const realDir = await realOf(dir);
+  const realFile = await realOf(file);
+
+  return realDir !== undefined
+    && realFile !== undefined
+    && staysInside(dir, file, { dir: realDir, file: realFile })
+    ? realFile
+    : undefined;
 }
 
 /** Whether a path is still there to be read. */
