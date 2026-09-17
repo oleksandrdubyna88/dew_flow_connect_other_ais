@@ -1,3 +1,4 @@
+import { LedgerGlance, NOT_LOOKED, countSentence, openLabel } from './notificationsCount';
 import {
   TeamServerState,
   teamServersBody,
@@ -62,6 +63,14 @@ import { reviewsDocuments, Vendor } from './vendors';
  */
 
 export interface PanelState {
+  /**
+   * What the last look at the notification ledgers found.
+   *
+   * <p>Optional because every existing fixture predates it and a required field would make each of
+   * them a compile error for no gain; absent reads as `NOT_LOOKED`, which is the honest state
+   * before the first glance lands rather than a zero pretending to be one.</p>
+   */
+  readonly notifications?: LedgerGlance;
   readonly settings: CoaiSettings;
   /**
    * The Team servers this machine knows, with whatever their catalogs last said.
@@ -392,6 +401,10 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('side', 'This side', open, sideBody(state)),
     section('server', 'MCP server', open, serverBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id))}</div>`),
+    // `notifications`, lowercase, because `panelView.test.ts` scans the rendered html with
+    // /data-section="([a-z]\+)" open/ and a capital letter would make this section invisible to
+    // the test that proves which sections a person has open.
+    section('notifications', 'Notifications', open, `<div id="live-notifications">${notificationsBody(state)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -573,6 +586,7 @@ ${body}
   let lastQuestions = document.getElementById('live-questions')?.innerHTML ?? '';
   let lastRounds = document.getElementById('live-rounds')?.innerHTML ?? '';
   let lastConsultations = document.getElementById('live-consultations')?.innerHTML ?? '';
+  let lastNotifications = document.getElementById('live-notifications')?.innerHTML ?? '';
   window.addEventListener('message', (event) => {
     const message = event.data;
     // A phrase that reached the clipboard, said on the button that was pressed. It arrives AFTER the
@@ -620,7 +634,17 @@ ${body}
       lastConsultations = message.consultations;
       consultations.innerHTML = message.consultations;
     }
-    // The answer buttons live inside the patched HTML, so they are re-bound here.
+    const notifications = document.getElementById('live-notifications');
+    if (notifications !== null && typeof message.notifications === 'string' && message.notifications !== lastNotifications) {
+      lastNotifications = message.notifications;
+      notifications.innerHTML = message.notifications;
+    }
+    // The answer buttons live inside the patched HTML, so they are re-bound here. The notifications
+    // button is patched in too, so it is bound the same way or it stops working the first time the
+    // count changes.
+    for (const el of document.querySelectorAll('#live-notifications [data-command]')) {
+      el.addEventListener('click', () => vscode.postMessage({ type: 'command', command: el.dataset.command }));
+    }
     for (const el of document.querySelectorAll('#live-questions [data-command]')) {
       el.addEventListener('click', () =>
         vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
@@ -795,6 +819,24 @@ function section(id: string, title: string, open: readonly string[], body: strin
   <summary>${escapeHtml(title)}</summary>
 ${body}
 </details>`;
+}
+
+/**
+ * The count, and the button that opens the page.
+ *
+ * <p>A LIVE REGION rather than part of `staticKey`, and that is the whole point of it. The
+ * escalation watcher calls `onChanged` unconditionally every 5000 ms, so a moving number inside
+ * `staticKey` would mean a full `webview.html` reassignment every five seconds in every window —
+ * under a repeating fault, which is the case this feature exists for. `withholdsRepaint` does not
+ * save it: it is capped absolutely at 30 s, it tracks only `[data-setting]` elements, so a person
+ * dragging to select an error message out of THIS very section holds no focus at all, and a
+ * rebuild drops the sidebar scroll position.</p>
+ */
+function notificationsBody(state: PanelState): string {
+  const glance = state.notifications ?? NOT_LOOKED;
+
+  return `<p class="status">${escapeHtml(countSentence(glance))}</p>`
+    + `<p><button type="button" data-command="showNotifications">${escapeHtml(openLabel(glance))}</button></p>`;
 }
 
 /**
@@ -2254,11 +2296,12 @@ ${reviewers}</div>`;
 export function liveRegions(
   state: PanelState,
   nowMs: number = Date.now(),
-): { questions: string; rounds: string; consultations: string } {
+): { questions: string; rounds: string; consultations: string; notifications: string } {
   return {
     questions: questionsSection(state.questions),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
+    notifications: notificationsBody(state),
   };
 }
 
@@ -2372,6 +2415,10 @@ const CSS = `
   .sec-bugz      > summary { color: var(--tone-sec); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }
+  /* Notifications take the reliability tone, because that is what every record in them is
+     about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
+     own reliability role says the two are asking the same question of different subjects. */
+  .sec-notifications > summary { color: var(--tone-sec); }
   .section > summary::-webkit-details-marker { display: none; }
   /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
      Explorer's weight, scales with the text, and points the right way in both states with no
@@ -2650,6 +2697,7 @@ ${LOOKING_CSS}
  * not in this list.</p>
  */
 export const PANEL_COMMANDS = [
+  'showNotifications',
   'answer',
   'addVendor',
   'removeVendor',
@@ -2729,6 +2777,7 @@ export const VSCODE_COMMAND_FOR = {
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',
+  showNotifications: 'coai.showNotifications',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {

@@ -326,6 +326,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'notifications',
+    en: {
+      title: "Notifications: every message this extension has shown you",
+      whatItIs:
+        "A page with every message ConnectOtherAIs has put on your screen, kept after the toast has gone: what it said, when, from where, what to do about it, and how many times it has happened. **Notifications** in the panel says how many are new and opens it.",
+      why:
+        "A message you were not looking at is a message that never happened. On 2026-09-16 a role deleted at 19:05 went on being reviewed against for eleven rounds, because the settings mirror had stood down at 18:27 and said so exactly once, in a toast nobody saw. Ninety minutes of a person's day went into finding that out. Every message now goes into a file first and onto the screen second, so the answer to \"what did it say?\" is somewhere other than in somebody's memory.",
+      setup:
+        "Nothing to set up. Both halves write as they speak: this extension into `notifications.jsonl` and the MCP server into `server-notices.jsonl` beside it, in the same data folder as everything else. Moving that folder moves them with it.",
+      usage:
+        "The panel's **Notifications** section says how many are new since you last looked and opens the page. On it, a tab per KIND — a failure, a refusal, a stand-down, a storm, a question you answered — and one row per thing that happened, however many times it happened.\n\n**A row is a fault, not an occurrence.** If one thing went wrong four hundred times, that is one row saying four hundred, with how fast they arrived beside it. Sort on any column; blanks sort last in both directions, so a rate that could not be measured never floats to the top. Search finds any word on the row, including the message itself.\n\nOpening the page marks the records it loaded as read. **While a filter is on it marks nothing** — three rows on screen must not claim three thousand were read — and the line above the table says which of the two is happening. **Mark everything read** is the button for a history you do not intend to walk back through.",
+      whatCanGoWrong:
+        "**A repeating fault is bounded, and says so rather than pretending.** One thing can be recorded a thousand times in one run of the window; past that the file stops and the row reads *1000+*, never a number nobody can know. Three windows that each hit that shows as *1000+ in each of 3 runs*, because three windows in trouble is not one incident three times the size.\n\n**The page shows the newest few thousand, not the file.** When there are older ones it says so, and they stay unread until you go to them or press **Mark everything read**.\n\n**A count that could not be read says so instead of showing zero.** *Nothing has been written down yet*, *the notifications could not be read* and *nothing new* are three different sentences on purpose: a broken read rendering as a clean zero is how a person learns to stop trusting a counter — and this one exists because somebody missed one message.\n\n**Secrets are taken out on the way in.** A password, a token or a key in a URL or in an error message is replaced before the line reaches the file, and the file keeps everything else. Two data folders can exist on one machine, one for Windows and one for WSL; the page names the one it is reading, because *it is empty* and *you are looking at the other one* are different problems.",
+    },
+  },
+  {
     id: 'what-each-ai-has-used',
     en: {
       title: 'What each AI has used: tokens, money and time',

@@ -1,3 +1,4 @@
+import { NotificationsPanel } from './notificationsPanel';
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
@@ -66,6 +67,10 @@ import { vendorsFrom } from './vendors';
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // One per window, kept for the window's life: the page is cheap to redraw and expensive to
+  // rebuild, and `retainContextWhenHidden` means a reopened tab keeps its scroll and its tab.
+  const notifications = new NotificationsPanel();
+
   // BEFORE even that: WHERE this window keeps its data. Every line below that resolves a path — the
   // two watchers immediately after this, the chat store, the panel — asks `dataDir.ts`, and until
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
@@ -393,6 +398,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // setting, and only the context says which side this window is.
     vscode.commands.registerCommand('coai.editRoles', () => { openRoles(context); }),
     vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
+    // The page every notification has been going into since S1. One panel for the window, so a
+    // second press reveals the one already open rather than stacking another over it.
+    vscode.commands.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
     // The same question the first install on a side asks, reachable afterwards. One flow: two ways
     // of asking it would be two ways of answering it differently.
     vscode.commands.registerCommand('coai.changeDataDirectory', async () => {

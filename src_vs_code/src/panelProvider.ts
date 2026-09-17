@@ -1,3 +1,5 @@
+import { LedgerGlance, NOT_LOOKED } from './notificationsCount';
+import { glanceAtLedgers } from './notificationsGlance';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
@@ -712,6 +714,61 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private providersInFlight = false;
 
+  /** What the last look at the notification ledgers found. Rendered; never awaited by a render. */
+  private notificationsGlance: LedgerGlance = NOT_LOOKED;
+
+  /** One read in flight at a time, and which one it is. */
+  private glanceInFlight = false;
+
+  /**
+   * Which look this is.
+   *
+   * <p><b>Single-flight with a generation, because "coalesced" was not enough.</b> The escalation
+   * watcher ticks every 5000 ms and a read from a NAS can take longer than that, so reads overlap —
+   * and an older completion landing after a newer one would overwrite the count with a staler
+   * number, silently, most likely under exactly the load this feature exists to show. A completion
+   * whose generation is no longer current is discarded rather than rendered. (codex, the S5 plan
+   * round.)</p>
+   */
+  private glanceGeneration = 0;
+
+  /**
+   * Look at the ledgers, and repaint if what they say has changed.
+   *
+   * <p><b>Started by a render and never awaited by one</b>, on `refreshTeamServers`' precedent: this
+   * touches two files and a watermark, and awaiting it inside `render` would hold the whole panel
+   * for as long as a slow disk takes. It repaints when the answer lands, and the freshness check is
+   * what stops the loop — the render it triggers starts nothing.</p>
+   *
+   * <p>It is also never called from `notify`'s own stack: `panelProvider` already raises warnings
+   * from the render path, so render → notify → render is a loop that exists today and would close
+   * the moment a count read from the ledger triggered a render.</p>
+   */
+  private lookAtNotifications(): void {
+    if (this.glanceInFlight) {
+      return;
+    }
+    this.glanceInFlight = true;
+    this.glanceGeneration += 1;
+    const mine = this.glanceGeneration;
+
+    void glanceAtLedgers(coaiDataDir()).then(async (found) => {
+      this.glanceInFlight = false;
+      // A stale completion is DROPPED, not rendered: it is an older answer to a question that has
+      // already been asked again.
+      if (mine !== this.glanceGeneration) {
+        return;
+      }
+      if (JSON.stringify(found) !== JSON.stringify(this.notificationsGlance)) {
+        this.notificationsGlance = found;
+        await this.render();
+      }
+    }, (reason: unknown) => {
+      this.glanceInFlight = false;
+      console.error('ConnectOtherAIs: the notification ledgers could not be counted', reason);
+    });
+  }
+
   /**
    * What the SERVER says it can run — the last answer, never a wait.
    *
@@ -1062,6 +1119,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.readConsultPrompt(),
       consultations: this.consultations?.running ?? [],
+      // Read from the cache and NEVER awaited here; the look is started below, after the html
+      // has gone out, so a slow disk delays the count and not the panel.
+      notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
       // The consultant's own engines, keyed by ENDPOINT: since story C5 the section holds no
       // reviewer rows, so there is none to borrow one from, and a row whose endpoint nobody probed
@@ -1122,6 +1182,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (live === undefined) {
       return;
     }
+
+    // Started here rather than inside the state assembly: it is two files and a watermark, and a
+    // render that waited for them would be a panel that hangs on a NAS. It repaints itself when
+    // the answer lands and only if the answer changed, which is what stops the loop.
+    this.lookAtNotifications();
 
     const key = staticKey(state);
     // A third answer, between the two: WITHHOLD. Assigning the html rebuilds the document, and a
@@ -2038,6 +2103,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // chat half. It is in the shared vocabulary because that is where every `data-command` this
       // product emits is declared, and the exhaustiveness check below then demands a case here.
       case 'forgetChat':
+        break;
+      case 'showNotifications':
+        // The same shape as every other button that opens a tab: the page is a registered
+        // command that owns its own panel, and this button's job is only to reach it. The count
+        // beside it is a live region, so pressing this does not repaint the sidebar.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.showNotifications);
         break;
       case 'installServer':
         // The panel has no business downloading anything itself: the command that does it is
