@@ -433,7 +433,13 @@ test('an issuance nobody heard the answer to points at the newest row', () => {
 
   assert.match(page.html, /may have been issued/u);
   assert.match(page.html, /NEWEST row/u);
-  assert.ok(page.html.includes('https://bugs.example'), 'and which server it was asked of');
+  // Asserted INSIDE the orphan block and in its sentence, rather than as a substring of the whole
+  // page: `html.includes('https://…')` is the shape of an incomplete URL check, and CodeQL's
+  // js/incomplete-url-substring-sanitization read this test as one. It was never sanitising
+  // anything — but a test that makes a scanner cry wolf on every run costs more than it is worth,
+  // and pinning the sentence is a stronger assertion anyway.
+  assert.match(page.html, /The request was sent to\s+https:\/\/bugs\.example for "the tuesday workshop"/u,
+    'and which server it was asked of');
 
   page.click(page.control('dismiss'));
   assert.deepEqual(page.posted.map((m) => m.type), ['ready', 'dismiss']);
