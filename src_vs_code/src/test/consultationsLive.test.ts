@@ -11,6 +11,18 @@ import {
 import { consultationCost } from '../usage';
 import { CONSULTATIONS_SHOWN, consultationsHtml } from '../roundsLog';
 import { EMPTY_LOG, parseLog } from '../roundsDb';
+import type { DbLog } from '../roundsDb';
+import type { PriceLookup } from '../usage';
+import type { Vendor } from '../vendors';
+
+/**
+ * The table as the PRODUCT builds it, with nothing that knows a price.
+ *
+ * <p>A helper rather than three bare arguments at every call: what these cases are about is the
+ * rows, and the rates only matter to the two that say so below.</p>
+ */
+const priced = (log: DbLog, vendors: readonly Vendor[] = [], listed: PriceLookup = () => undefined): string =>
+  consultationsHtml(log, vendors, listed);
 
 /**
  * What the sidebar says while a consultation is running, and what the log says once it is over.
@@ -128,7 +140,7 @@ test('a repository path is escaped like every other value that came off a disk',
 // The log page's side of it
 
 test('the log lists a consultation with what was stuck and what was advised', () => {
-  const html = consultationsHtml({
+  const html = priced({
     ...EMPTY_LOG,
     consultations: [{
       id: 'abc', callerKind: 'codex', repoPath: 'D:/rsd/repo', branch: 'main', vendor: 'claude',
@@ -147,7 +159,7 @@ test('the log lists a consultation with what was stuck and what was advised', ()
 });
 
 test('a consultation that ended normally is not painted as a failure', () => {
-  const of = (status: string): string => consultationsHtml({
+  const of = (status: string): string => priced({
     ...EMPTY_LOG,
     consultations: [{
       id: 'abc', callerKind: 'claude', repoPath: 'D:/repo', branch: 'main', vendor: 'codex', model: '',
@@ -167,18 +179,18 @@ test('a full page says it is the newest N rather than letting the rest not exist
     turns: 1, status: 'closed', reason: '', startedUtc: '2026-09-13T09:00:00.000Z', endedUtc: '',
     seconds: 1, tokensIn: 0, tokensOut: 0, costUsd: null, problem: 'p', advice: 'a', alert: '',
   });
-  const full = consultationsHtml({
+  const full = priced({
     ...EMPTY_LOG,
     consultations: Array.from({ length: CONSULTATIONS_SHOWN }, (_, i) => one(`c${i}`)),
   });
 
   assert.match(full, new RegExp(`Showing the newest ${CONSULTATIONS_SHOWN}`));
-  assert.ok(!consultationsHtml({ ...EMPTY_LOG, consultations: [one('c0')] }).includes('Showing the newest'));
+  assert.ok(!priced({ ...EMPTY_LOG, consultations: [one('c0')] }).includes('Showing the newest'));
 });
 
 test('an empty list says how a consultation happens at all', () => {
-  assert.match(consultationsHtml(EMPTY_LOG), /No consultations yet/);
-  assert.match(consultationsHtml(EMPTY_LOG), /Consultant/);
+  assert.match(priced(EMPTY_LOG), /No consultations yet/);
+  assert.match(priced(EMPTY_LOG), /Consultant/);
 });
 
 test('a server too old to have the table answers a log with no consultations, never an error', () => {
@@ -253,15 +265,57 @@ test('the person is offered the three verdicts, and never the server\'s own word
     'a picker of bare words leaves a person choosing between them with nothing to choose ON');
 });
 
-test('a running consultation carries a close control, and a finished one is not on the card at all', () => {
-  const running = consultationsBody([record({ status: 'open' })], NOW);
+test('the SIDEBAR carries no close control — it is present tense', () => {
+  // Built on the card first, and moved. Two reasons, and the second is the deciding one: a control
+  // about how something ENDED does not belong in a section that shows only what is happening now
+  // (the 2026-09-05 ruling), and the card shows only LIVE consultations — so the moment one lapses
+  // it leaves the sidebar and takes the control with it, which is exactly the state the issue
+  // describes. The log lists every consultation, so that is where it went. (Operator, 2026-09-17.)
+  assert.doesNotMatch(consultationsBody([record({ status: 'open' })], NOW), /closeConsultation/);
+  assert.doesNotMatch(consultationsBody([record({ status: 'asking' })], NOW), /closeConsultation/);
+});
 
-  assert.match(running, /data-command="closeConsultation"/,
-    'the card had no way to end the consultation it is about');
-  assert.match(running, /data-id="b8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5"/,
-    'a control that does not name its consultation would close whichever was first');
+test('the LOG offers it for a consultation nobody decided, and withholds it once somebody has', () => {
+  const row = {
+    id: 'abc', callerKind: 'codex', repoPath: 'D:/rsd/repo', branch: 'main', vendor: 'codex',
+    model: 'gpt-6', turns: 1, status: 'closed', reason: 'idle', outcome: '',
+    startedUtc: '2026-09-15T22:30:59.000Z', endedUtc: '2026-09-15T22:40:00.000Z',
+    seconds: 36.8, tokensIn: 100, tokensOut: 20, costUsd: null,
+    problem: 'stuck', advice: 'try this', alert: '',
+  };
+  const table = (outcome: string, status = 'closed'): string =>
+    priced({ ...EMPTY_LOG, consultations: [{ ...row, outcome, status }] });
 
-  // The sidebar is present tense — the 2026-09-05 ruling — so a closed one is in the log, and the
-  // control goes with it rather than being drawn disabled.
-  assert.doesNotMatch(consultationsBody([record({ status: 'closed' })], NOW), /closeConsultation/);
+  assert.match(table(''), /data-command="closeConsultation"/, 'a record nobody spoke about');
+  assert.match(table('lapsed'), /data-command="closeConsultation"/,
+    'and one the CLOCK ended — `lapsed` is not a verdict, so it can still be answered');
+  assert.match(table(''), /data-id="abc"/, 'a control that does not name its consultation would close another');
+
+  assert.doesNotMatch(table('solved'), /closeConsultation/, 'a verdict is not rewritten');
+  assert.doesNotMatch(table('', 'failed'), /closeConsultation/,
+    'a failed consultation produced no advice, so there is nothing to have a verdict about');
+});
+
+test('the TABLE prices a consultation whose vendor reported no money', () => {
+  // The assertion the first version of this change did not have, and its absence is why the product
+  // went on showing a dash while every unit test passed: `consultationCost` was right and nothing
+  // called it with a rate. This goes through `consultationsHtml` exactly as the panel does.
+  const row = {
+    id: 'abc', callerKind: 'codex', repoPath: 'D:/rsd/repo', branch: 'main', vendor: 'codex',
+    model: 'gpt-6-astra', turns: 1, status: 'open', reason: '', outcome: '',
+    startedUtc: '2026-09-15T22:30:59.000Z', endedUtc: '',
+    seconds: 36.8, tokensIn: 200_000, tokensOut: 45_700, costUsd: null,
+    problem: 'which is better, C# or Java?', advice: 'it depends on the team.', alert: '',
+  };
+  const vendors = [{
+    id: 'codex', runtime: 'codex' as const, model: 'gpt-6-astra', baseUrl: '', executablePath: '',
+    enabled: true, plan: true, code: true, pricePerMillionIn: 1.25, pricePerMillionOut: 10,
+  }];
+
+  const withRates = priced({ ...EMPTY_LOG, consultations: [row] }, vendors);
+  assert.match(withRates, /~\$/, 'the reported symptom: 245.7k tokens beside a dash');
+  assert.match(withRates, /class="num cost est"/, 'and an estimate wears the class that says so');
+
+  // With nothing that knows a price it is still a dash, which is the honest answer rather than zero.
+  assert.doesNotMatch(priced({ ...EMPTY_LOG, consultations: [row] }), /~\$/);
 });

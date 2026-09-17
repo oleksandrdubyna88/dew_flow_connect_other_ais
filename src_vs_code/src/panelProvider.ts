@@ -147,6 +147,7 @@ import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } f
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
+import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn } from './consultations';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
@@ -611,6 +612,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if ((['day', 'week', 'month', 'year'] as readonly string[]).includes(window)) {
       this.usageWindow = window as Window;
     }
+  }
+
+  /**
+   * The consultations tab of the rounds log page, priced.
+   *
+   * <p>Beside {@link usageTab} and for the same reason: the rates live HERE — a person's typed
+   * per-vendor price and the published lists this panel fetches — so the page asks for the rendered
+   * tab rather than being handed a table and a bag of inputs. The first version of this change let
+   * the page build the table itself with no rates at all, and the column went on showing the dash
+   * the change exists to remove while every unit test passed. (issue #309.)</p>
+   */
+  async consultationsTab(log: DbLog): Promise<string> {
+    const vendors = this.vendorsHere();
+    const prices = await this.modelPrices(vendors);
+
+    return consultationsHtml(log, vendors, (model: string) => prices[model]);
   }
 
   /**
@@ -2547,7 +2564,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * silently would leave the card exactly as it was, which reads as a button that does nothing.
    * (issue #309.)</p>
    */
-  private async closeConsultation(id: string): Promise<void> {
+  async closeConsultation(id: string): Promise<void> {
     if (id.length === 0) {
       return;
     }
@@ -2576,7 +2593,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return; // Escape on the note is Escape on the whole thing
     }
 
-    const repo = this.repoPathForConsultations();
+    // THE CONSULTATION'S OWN checkout, read from the row, not this window's first folder. The log
+    // lists consultations from every repository a person has reviewed, so a close made from it must
+    // take the repository lock on the one it belongs to — a lock on whatever happens to be open
+    // would guard nothing and could block something unrelated. (The review pass, 2026-09-17.)
+    const repo = (await this.roundsLog()).consultations.find((one) => one.id === id)?.repoPath ?? '';
+    if (repo.length === 0) {
+      await vscode.window.showWarningMessage(
+        `Consultation ${id} is not in the log any more — it may have been swept.`);
+
+      return;
+    }
     const { code, output } = await serverRun(server.fsPath)(
       ['--close-consult', '--repo', repo, '--id', id, '--outcome', chosen.outcome,
         ...(note.trim().length > 0 ? ['--note', note.trim()] : [])],
@@ -2593,17 +2620,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */
   private static readonly CLOSE_CONSULT_CAP_MS = 20_000;
-
-  /**
-   * Which checkout the close is made from.
-   *
-   * <p>The server resolves the caller from this path, and the person's door does not use that — but
-   * the lock it takes is per repository, so it must be the checkout the consultation belongs to.
-   * This window's first workspace folder is what the panel already uses everywhere else.</p>
-   */
-  private repoPathForConsultations(): string {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
-  }
 
   private async collectBugs(): Promise<void> {
     const server = serverPath(this.context.globalStorageUri);

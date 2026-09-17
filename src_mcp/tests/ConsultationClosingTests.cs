@@ -126,4 +126,21 @@ public sealed class ConsultationClosingTests
 
         already.Outcome.Should().Be(ConsultationOutcomes.Solved);
     }
+
+    /// <summary>A close while a TURN is running is refused, naming the cure.</summary>
+    /// <remarks>
+    /// <c>asking</c> means a vendor is being asked right now. A close that landed then would be
+    /// overwritten by that turn's own write a moment later — the status visibly flapping from closed
+    /// back to open — so it is refused in the same shape <see cref="ConsultationRules"/> already uses
+    /// to refuse a follow-up on an <c>asking</c> record. (Operator decision, 2026-09-17.)
+    /// </remarks>
+    [Fact]
+    public void AConsultationWithATurnInFlightIsRefused()
+    {
+        ConsultationClosing.Refusal(Record(status: ConsultationStatuses.Asking), "caller-a", ConsultationOutcomes.Solved, byPerson: false)
+            .Should().Contain("wait for its answer");
+        ConsultationClosing.Refusal(Record(status: ConsultationStatuses.Asking), string.Empty, ConsultationOutcomes.Solved, byPerson: true)
+            .Should().Contain("wait for its answer", "the person's door is not an override of physics");
+    }
+
 }

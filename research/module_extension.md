@@ -2016,6 +2016,54 @@ it lived in the file that renders the panel, so anything else needing the same a
 webview renderer to get it. It now sits beside `modelsFor`, which consumes what it returns, and
 beside `RemoteProvenance`, which was already declared there.
 
+## A consultation costs money, and it can be ended (2026-09-17, issue #309)
+
+Two complaints about the **Consultations** tab, and neither half was broken where it looked.
+
+**The Cost column was a dash beside 245.7k tokens**, and everything on the way there behaved as
+designed: the row ran on codex, which prints no price; `UsageParser` deliberately refuses to ship a
+price table (*"estimating prices for vendors that do not would mean shipping a price table that is
+wrong within a month"*); and the server returns `null` rather than a zero that would read as free.
+**The column simply never asked.** `priceOf` / `priceOfLine` / `estimated` already price the
+reviewers' tokens and the chat's with the rates a person typed, and this was the one table that did
+not call them. `consultationCost` keeps the three states three — real money unmarked, an estimate
+wearing its tilde (*"this is not what anybody billed"*), and a dash when there is neither a price nor
+a rate, because a zero is a measurement and this is the absence of one.
+
+The estimate is **recalculated, not snapshotted**: edit a vendor's rate next year and the number
+moves, exactly as it does for every reviewer round and every conversation in the ledger. Storing a
+rate per consultation would make this table disagree with the two beside it.
+
+**And a consultation could not be ended.** The outcome is now its own column, next to the status
+rather than inside it — the first draft of the plan had them merged, which would have reported a
+still-RUNNING consultation as finished. `outcomeSaid` is the rule: an absent outcome renders as a
+dash, and so does a word this build does not recognise, because a newer server may write a fifth one
+and guessing at it is the same mistake a release later. **Absent is never a verdict**, and there is
+no migration that invents one.
+
+**The LOG gained a close control**, because the AI that asked may never come back to say. It was
+built on the sidebar card first and moved, for two reasons of which the second decided it: a control
+about how something ENDED does not belong in a section that shows only what is happening now (the
+2026-09-05 ruling), and **the card shows only LIVE consultations** — so the moment one lapses it
+leaves the sidebar and takes the control with it, which is precisely the state the issue's screenshot
+reaches within a day. The log lists every consultation, lapsed ones included.
+
+It is offered for an empty outcome and for `lapsed` — the two ways of saying nobody decided — and
+withheld once somebody has, because a verdict is not rewritten and a control promising to is one that
+will be refused. VS Code's own picker is the selector rather than a modal built in the webview: it
+brings the confirmation, the cancellation, the keyboard and the screen-reader behaviour with it.
+Three choices, not four: `lapsed` is the server's own word. **The repository comes from the ROW**,
+not from the window — the log lists consultations from every checkout a person has reviewed, so the
+lock must be taken on the one it belongs to. The server is reached through `--close-consult`, because
+**the extension does not speak MCP to it**; a refusal comes back on stdout and is SHOWN, since a
+close that failed silently reads as a button that does nothing.
+
+> **The wiring is the part that nearly shipped broken.** The first version added `consultationCost`
+> and left `extension.ts` calling `consultationsHtml(fresh)` with no rates at all: every unit test
+> passed and the column went on showing the dash this change exists to remove. The inputs are
+> REQUIRED parameters now, so the compiler refuses a table built without them, and the panel renders
+> the tab itself — `consultationsTab`, beside `usageTab`, because the rates live there.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's

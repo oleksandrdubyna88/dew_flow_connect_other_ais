@@ -67,6 +67,12 @@ public static class ConsultationClosing
             ? $"consultation {record.Id} belongs to another caller session — you may only close your own"
         : record.Status == ConsultationStatuses.Failed
             ? $"consultation {record.Id} failed ({record.Reason}) and produced no advice — there is no outcome to record"
+        // A TURN IS IN FLIGHT. A close landing now is overwritten by that turn's own write a moment
+        // later and the status flaps from closed back to open, so it is refused rather than raced —
+        // the same shape `ConsultationRules` uses to refuse a follow-up on an `asking` record. The
+        // person's door is not exempt: this is about the write, not about who may write.
+        : record.Status == ConsultationStatuses.Asking
+            ? $"consultation {record.Id} is still running a turn — wait for its answer, then record how it ended"
         // A VERDICT is immutable, and a repeat of the same one is not a change. `lapsed` and empty
         // are both the absence of a verdict, so either may still be answered — which is the whole
         // point of the human close: the consultation in the issue's own screenshot is in exactly

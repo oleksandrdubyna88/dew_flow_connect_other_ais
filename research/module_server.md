@@ -17,6 +17,88 @@
 | `status` | persisted session + round trail | no session |
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
+| `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
+
+## A consultation ends with an outcome — the tenth tool (2026-09-17)
+
+Issue #309, two symptoms with one cause between them: **nothing on this surface ended a
+consultation.** Nine tools, and `resolve` records decisions for a review ROUND's findings and cannot
+touch one — so a consultation sat at `open` until a sweep took it. `ConsultationStatuses.Closed`
+existed, but only a spent budget or an idle timeout reached it, and `Reason` beside it answers *why
+it stopped* rather than *whether it worked*. A consultation that did its job and one that was
+useless ended identically.
+
+**So what was missing is an OUTCOME, not a status.** `ConsultationRecord.Outcome` is the second
+question, and `ConsultationClosing` is the table that decides who may answer it — beside
+`ConsultationRules` and for the reason that file gives: every refusal names its cure, and a rule
+inside an async service is a rule no test reaches.
+
+| outcome | written by | means |
+|---|---|---|
+| `solved` | the caller, or a person | the advice was verified and it worked |
+| `not_solved` | the caller, or a person | it was verified and it did not |
+| `abandoned` | the caller, or a person | nobody is going to act on it |
+| `lapsed` | **the server only** | the budget ran out or it sat idle |
+
+**`lapsed` is not a verdict, and that distinction carries the whole design.** It says the clock ran
+out, which is a fact about time rather than about the advice — so flattening it into `abandoned`
+would put words in somebody's mouth, and a person may still record what they found over it. An EMPTY
+outcome is the same case, which is what every record written before this field carries. A verdict
+somebody actually reached is immutable: repeating it succeeds and rewrites nothing (the answer to a
+reply lost on the way back, where a second `EndedUtc` would move the moment the consultation ended
+to whenever the network failed), and a different one is refused naming what is on the record.
+
+**Both automatic paths go through one `Lapse`.** The sweep in `ConsultationStore` and the spent
+budget in `ConsultationService` are written in two files, which would otherwise be two chances to
+leave the field empty. It never overwrites a verdict: a caller that closed its consultation and then
+let the clock run out keeps what it said.
+
+**`Reason` is never overwritten either.** Why it stopped and how it ended are two facts, so a
+consultation the cap closed keeps its sentence about the budget and gains a verdict beside it.
+
+**A close while a turn is RUNNING is refused.** `asking` means a vendor is being asked at that
+moment, and a close landing then would be overwritten by that turn's own write — the status visibly
+flapping from closed back to open. It is refused in the same shape `ConsultationRules` already uses
+to refuse a follow-up on an `asking` record, and the person's door is not exempt: this is a fact
+about the write, not about who may write.
+
+### The panel cannot call an MCP tool, so there is a one-shot mode
+
+The extension never speaks MCP to this binary — it drives modes selected from `args[0]` before any
+transport opens, the same door `--log`, `--findings-many` and `--providers` use. So the close control
+on a consultation card reaches the server through **`--close-consult`** and through nothing else; the
+plan promised the control and did not name the door until the plan round asked.
+
+That door is the PERSON's and is not subject to the caller check, deliberately: it runs on their own
+machine against their own data directory, which is a stronger trust position than another AI's rather
+than a weaker one — and a consultation whose session has gone is exactly the one nobody else can
+close. The exit code is what the panel reads: **0** recorded, **64** the arguments were wrong,
+**65** refused with a sentence on stdout to show.
+
+### Two defects older than this change, found by its scenario
+
+Neither could surface in a unit test, which is what the scenario requirement is for.
+
+- **A record from an older build read back with NULL strings.** The source-generated deserializer
+  skips property initialisers for members the JSON does not carry — the `PersistedSession` precedent
+  this record already named for its collections — and every string on it had the identical hole. A
+  file written before a field existed came back with that field null and the first `.Length`
+  downstream threw. All seven string accessors normalise now.
+- **`ProcessIsAlive` took the whole binary down.** A record left at `asking` with pid 0 — what a
+  torn write or an older build leaves — made Windows answer `Win32Exception (5): Access is denied`,
+  because pid 0 is the idle process and nobody may open it. It is called from the consultation sweep
+  and the sweep runs at STARTUP, so this was not a failed sweep but a process that died before
+  answering anything. Every failure to ask is not-alive now, which is the safe direction for a sweep.
+
+### The boundary, checked against the release rather than argued
+
+`src_vs_code/scripts/live-close-consult-compat.mjs`, run by hand, downloads the previous release and
+runs both binaries on one data directory. Against **coai-mcp 0.28.0, 2026-09-17**: the old binary
+refuses `--close-consult` as an unknown argument with a sentence rather than appearing to succeed;
+this build reads a record written without the field and closes it; and **the old binary still reads a
+database this build has MIGRATED**, answering the consultation with the extra column and all. That
+last one is the one worth having — a migration is one-way, so a schema change the un-updated binary
+cannot read strands a person until they update.
 
 ## The consultant — the ninth tool (2026-09-12)
 
