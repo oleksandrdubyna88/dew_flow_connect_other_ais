@@ -6488,7 +6488,22 @@ nothing — and filters by an inclusive date range on the UTC day a round starte
 table over every round of every session — when, repository, branch, stage, round, subject, status,
 verdict, gating, findings, duration, tokens in/out, cost, reviewers — with a sort on every column,
 a select per facet (repository, branch, stage, status, verdict, vendor), a search box over subject,
-branch, repository and reviewer lines, and a row that expands to its reviewers. It replaced
+branch, repository, the reviewer lines **and the Reviewers cell's own sentence**, and a row that
+expands to its reviewers.
+
+**Its tab handler DERIVES its sections** (S6, 2026-09-17). Each of the four `<section id="tab-*">`
+carries `data-section="<tab>"` and the handler hides every one whose marker is not the chosen tab,
+rather than naming ids one at a time — under which a fifth section added tomorrow would render and
+never be un-hidden, with nothing red. **The derived loop runs BEFORE the table's own line, which
+follows and wins**: `tab-rounds` is the one section that answers to TWO tabs, `rounds` and
+`conversations`, and its line also carries the clearing of the facets a conversation cannot answer.
+The general rule gets that one wrong, so the exception runs last; the other way round the table
+vanishes the moment somebody chooses conversations.
+
+**And the search reaches what the row SAYS.** `rowMatches` joins `answered` — the sentence the
+Reviewers column renders, "all 3 reviewers answered" or the one model a conversation was with — into
+its haystack. Without it, typing a role's name did not find the rounds whose Reviewers cell says it,
+which is the `Role2` incident itself: a role nobody could find. It replaced
 `rounds.md`, a markdown file written under the data directory, opened as a text document and
 rewritten every five seconds while its tab was open. The toolbar's three actions — **Today**,
 **All dates**, **Clear** — take the page's bare `button` rule, the primary blue every other action

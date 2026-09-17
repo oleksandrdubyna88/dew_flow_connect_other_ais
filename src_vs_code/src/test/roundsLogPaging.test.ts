@@ -73,6 +73,8 @@ interface Stub {
 
 interface Page {
   readonly at: (id: string) => Stub;
+  /** Which selectors the page asked for — how "found by marker" is observed rather than read. */
+  readonly asked: readonly string[];
   readonly click: (target: unknown) => void;
   readonly deliver: (message: unknown) => void;
   readonly posted: unknown[];
@@ -125,9 +127,25 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
       return stub;
     });
   };
+  const askedFor: string[] = [];
   const serve = (selector: string): Stub[] => {
+    askedFor.push(selector);
     if (selector === '[data-filter]') { return byAttribute('data-filter'); }
     if (selector === '[data-tab]') { return byAttribute('data-tab'); }
+    // Keyed by the element's OWN id, not by the attribute value, so that the section the table
+    // lives in is the SAME stub `getElementById('tab-rounds')` answers. It answers to two tabs and
+    // is toggled by a line of its own, so whether the derived loop runs before or after that line
+    // decides whether the table survives the conversations tab — and two separate stubs would make
+    // that ordering unobservable, which is the shape of test that passes against a broken page.
+    if (selector === '[data-section]') {
+      return [...html.matchAll(/<section id="(tab-[a-z]+)"[^>]*\sdata-section="([^"]*)"[^>]*>/gu)]
+        .map((found) => {
+          const stub = at(found[1] as string);
+          stub.getAttribute = (asked: string) => (asked === 'data-section' ? found[2] ?? null : null);
+
+          return stub;
+        });
+    }
     if (selector === 'th[data-sort]') { return byAttribute('data-sort', 'th'); }
     const one = /^\[data-filter="([\w-]+)"\]$/.exec(selector);
     if (one !== null) { return byAttribute('data-filter').filter((s) => s.getAttribute('data-filter') === one[1]); }
@@ -170,6 +188,7 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
 
   return {
     at,
+    asked: askedFor,
     posted,
     click: (target) => clicks.forEach((one) => one({ target })),
     deliver: (message) => messages.forEach((one) => one({ data: message })),
@@ -867,4 +886,81 @@ test('the facets a conversation cannot answer are off the screen in its view', (
   for (const facet of ['status', 'vendor']) {
     assert.ok(!hidden(facet), `the conversations view hid the ${facet} filter, which it can answer`);
   }
+});
+
+test('a tab drives every section the page MARKED, not three ids the handler was told', () => {
+  // The handler named `tab-consultations`, `tab-usage` and `tab-spots` one at a time. A fourth
+  // section added tomorrow renders and is never un-hidden, with nothing red — the defect the
+  // notifications page avoided by deriving, and the reason S6 exists. RED today: nothing in the
+  // page asks for [data-section] at all.
+  const page = open([row()]);
+
+  toTab(page, 'usage');
+
+  assert.equal(page.at('tab-usage').hidden, false, 'the chosen section is shown');
+  assert.equal(page.at('tab-spots').hidden, true, 'and every other one is hidden');
+  assert.equal(page.at('tab-consultations').hidden, true);
+
+  toTab(page, 'spots');
+
+  assert.equal(page.at('tab-spots').hidden, false, 'it follows the choice');
+  assert.equal(page.at('tab-usage').hidden, true, 'in both directions');
+
+  // And it found them BY THE MARKER. Without this the test passes against the three literal ids,
+  // because the harness serves a section under the same id either way — which is exactly the shape
+  // of test that cannot see the defect it was written for.
+  assert.ok(
+    page.asked.includes('[data-section]'),
+    'the page never asked for [data-section], so it is still naming its sections one at a time',
+  );
+});
+
+test('the table survives the conversations tab, which no general rule about sections would give it', () => {
+  // `tab-rounds` is the ONE section that answers to two tabs, and it is toggled by a line of its
+  // own. So the derived loop has to run BEFORE that line — after it, the loop would hide the table
+  // the moment somebody chose conversations, and the page would be blank. This is the assertion
+  // that watches the ordering rather than trusting it.
+  const page = open([row()]);
+
+  toTab(page, 'conversations');
+
+  assert.equal(page.at('tab-rounds').hidden, false, 'the table is what the conversations tab shows');
+  assert.equal(page.at('tab-usage').hidden, true, 'and the three that are not tables are hidden');
+  assert.equal(page.at('tab-spots').hidden, true);
+  assert.equal(page.at('tab-consultations').hidden, true);
+
+  toTab(page, 'spots');
+
+  assert.equal(page.at('tab-rounds').hidden, true, 'and it goes when a real section is chosen');
+});
+
+test('every tab section carries the marker the handler finds it by', () => {
+  // Deriving only helps while the marker is there: a section added without it is invisible again,
+  // and the test above would stay green through it. This is the invariant that closes that door.
+  const html = roundsLogHtml([row()], [], 'n0nce', 'usage', 'spots', TOTALS);
+  const sections = [...html.matchAll(/<section id="tab-([a-z]+)"([^>]*)>/gu)];
+
+  assert.ok(sections.length >= 3, 'the page renders its tab sections');
+  for (const found of sections) {
+    assert.match(
+      found[2] ?? '',
+      new RegExp(`data-section="${found[1] as string}"`),
+      `tab-${found[1] as string} renders without the marker the handler hides it by`,
+    );
+  }
+});
+
+test('a search finds what the Reviewers cell SAYS, not only the names behind it', () => {
+  // Typing Role2 did not find the rounds whose Reviewers cell reads "Role2 did not answer": the
+  // haystack carried `reviewers` and left out `answered`, which is the sentence that cell renders.
+  // The incident this whole plan is about is a role nobody could find by name. RED today.
+  const page = open([row({ answered: 'Role2 did not answer', subject: 'a scope nobody typed' })]);
+
+  search(page, 'Role2');
+
+  assert.match(page.at('pageinfo').textContent, /of 1 /u, 'the row its cell names is found');
+
+  search(page, 'a phrase on no row at all');
+
+  assert.equal(page.at('pageinfo').textContent, 'nothing to show', 'and the control: a real miss still misses');
 });

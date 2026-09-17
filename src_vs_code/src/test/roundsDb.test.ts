@@ -190,7 +190,11 @@ test('the page has the third tab, and it is not the one it opens on', () => {
 
   assert.match(html, /data-tab="spots"/);
   assert.match(html, /id="tab-spots"/);
-  assert.match(html, /<section id="tab-spots" hidden>/, 'the rounds tab is what opens');
+  // The ATTRIBUTES are not the assertion — that it renders hidden is. Pinning their exact order
+  // made this red when S6 added the `data-section` marker the tab handler now derives from,
+  // which is a change to how sections are found and not to whether this one opens closed.
+  assert.match(html, /<section id="tab-spots"[^>]*\shidden>/, 'the rounds tab is what opens');
+  assert.match(html, /<section id="tab-spots"[^>]*\sdata-section="spots"/, 'and it carries the marker');
   assert.match(html.slice(html.indexOf('<script')), /message\.type === 'spots'/, 'and it is pushed live like the rest');
 });
 
