@@ -767,6 +767,53 @@ itself, which round 1 added: a build whose output is hidden is a result that pro
   suites can all pass while the deployed binary, the SecretStorage wiring and the webview fail
   together.
 
+#### What story 4's plan round changed (round 1 of 1, verdict `good_enough`)
+
+All three reviewers answered, 12 findings: **11 accepted, 1 rejected**. The round paid for itself
+twice over, and the biggest change is one nobody had asked for.
+
+**The root helper is gone.** The plan proposed a second root-owned script on the host —
+`coai-bugs-admin-check`, installed by hand with its own sudoers line — so the post-deploy check could
+read the key out of `/etc/coai-bugs/env` rather than putting one in a runner. FOUR findings, from all
+three reviewers, said the same thing about it: a manual install that somebody forgets makes the check
+silently never run, for ever, which defeats the only purpose it has. They were right, and the
+objection I had raised against the simpler design was weaker than I had stated: the runner ALREADY
+holds the list, because delivering it is the step above. So the check is now a verb on the forced
+command that reads one key on stdin — no new root helper, no manual step, and it always runs.
+
+**And the empty-list contradiction.** The plan said an absent variable is legitimate AND that the
+workflow refuses when it is unset. Both are kept, because they are different layers, and the plan now
+says which is which: the SERVER may be run with no administrators by anybody; this REPOSITORY'S
+deployment exists to carry them, so an empty secret box here is a mistake rather than a configuration.
+
+The rest of the accepted findings are the details that make the two ends agree: `IFS= read` under
+`set -e` aborting on a missing second line (so the helper reads a bounded blob and `sed -n` splits
+it); the first usable key having to be EXTRACTED from the decoded list with the same comment and
+blank-line rule `AdminKeys.Lines` uses; the curl credential going through a 0600 file a trap removes
+rather than an argument; a bounded retry because the unit was restarted moments earlier; the refusal
+message naming carriage returns, which a Windows editor adds invisibly; and `.agents/PROJECT.md`
+already documenting the variable as "one key per line" — a correction, not a registration.
+
+**The one rejection, verified rather than argued.** codex asked for an atomic rollout of binary and
+environment together, because an old binary meeting a base64 value reads it as one administrator and
+a new binary meeting a raw one exits 78. Real in general, impossible here: `git cat-file -e
+bugs-v0.2.0:src_bugs/src/AdminKeys.cs` fails — the released and deployed binary has NO admin surface
+and reads no `COAI_BUGS_ADMIN_KEYS` at all, so there is no code for the first half to happen in. Nor
+can it arise later: the admin surface has never shipped, so every released binary that reads this
+variable will carry the base64 rule from its first release. The remaining direction is loud and safe —
+a new binary meeting a raw value exits 78, the canary refuses the deploy and restores 0.2.0, which
+ignores the variable. The cheap half of the fix was taken anyway: the refusal names the variable and
+the command, the README says the secret must be base64 before the first deploy carrying the admin
+surface, and the check that always runs is what makes a wrong value loud instead of silent.
+
+#### And one decision the round did not raise
+
+**A failed admin check does NOT roll back.** The rollback step's condition was `failure()` after a
+successful deploy, which would now retreat a perfectly good build because a KEY was wrong — and the
+previous release has no admin surface at all, so the retreat fixes nothing and takes a working server
+out of service. The condition names the edge check specifically, which is the one thing a rollback
+actually repairs.
+
 ### Story 5 — the extension can actually send *(Opus)*
 
 > **Added 2026-09-17, by operator decision, sequenced AFTER story 4.** Not part of the original
@@ -866,16 +913,18 @@ authenticated `/admin/keys` afterwards. The send path's own tests, per story 5.
       issue, list, audit, active, revoke, the revoked key really refused, an out-of-range admin
       limit exiting 78, and the variable absent.
 
-**Stories 3–5 — not started.**
+**Story 3 — SHIPPED 2026-09-17 (PR #363). Story 4 — in this branch. Story 5 — not started.**
 
-- [ ] Users tab: key-entry command and states, copy-before-dismiss, confirmed revoke, failures shown,
+- [x] Users tab: key-entry command and states, copy-before-dismiss, confirmed revoke, failures shown,
       page tested by RUNNING it, and it says what it cannot show — keys, and admin credentials.
-- [ ] The three remaining "a counter without a clock" remarks rewritten, with a test pinning the
-      phrase against a column that has one.
-- [ ] That an admin credential dies only on a successful redeploy is written in the deploy notes and
+- [x] The three remaining "a counter without a clock" remarks rewritten, with a test pinning the
+      phrase against a column that has one — `ThePromiseMatchesTheSchemaTests`, conditional on the
+      column so that removing it makes the old sentence true again.
+- [x] That an admin credential dies only on a successful redeploy is written in the deploy notes and
       shown in the tab.
-- [ ] Both admin settings in `.agents/PROJECT.md`; the deploy delivers them and verifies an
-      authenticated admin call.
+- [x] Both admin settings in `.agents/PROJECT.md` — they were already there, and the entry for
+      `COAI_BUGS_ADMIN_KEYS` was CORRECTED rather than added: it said "one key per line", which the
+      base64 rule makes wrong. The deploy delivers them and verifies an authenticated admin call.
 - [ ] Story 5: the extension can SEND, and the stored ingest-server address is read by something
       other than a button label.
 

@@ -240,7 +240,10 @@ public sealed partial class TheBuiltBinariesTests
         how.Environment["COAI_DATA_DIR"] = data;
         // Never inherited from the machine: a developer's own setting must not decide a scenario.
         how.Environment[RatePerMinute.Variable] = rate.Length > 0 ? rate : null;
-        how.Environment[AdminKeys.Variable] = admins.Length > 0 ? admins : null;
+        // Base64, exactly as `deploy/bugs/install-env.sh` writes it into /etc/coai-bugs/env: this
+        // scenario exists to run the REAL binary with the REAL environment, and an unencoded value
+        // would be neither.
+        how.Environment[AdminKeys.Variable] = admins.Length > 0 ? Delivery.AdminKeys(admins) : null;
         how.Environment[RatePerMinute.Surface.Administrator.Variable] = adminRate.Length > 0 ? adminRate : null;
         if (key.Length > 0)
         {

@@ -153,6 +153,16 @@ internal sealed class Program
             return new Startup.Refused(unusableAdminRate.Why);
         }
 
+        // The administrators arrive BASE64 — one line, because a systemd EnvironmentFile assignment
+        // cannot hold a newline and the list is newline-separated. An unusable value is refused here
+        // rather than falling back to the raw text: the two shapes overlap, so a fallback would
+        // start this server with the WRONG administrators and nothing would say so.
+        var admins = AdminKeys.Read(Environment.GetEnvironmentVariable(AdminKeys.Variable), secret);
+        if (admins is AdminKeys.Configured.Refused unusableAdmins)
+        {
+            return new Startup.Refused(unusableAdmins.Why);
+        }
+
         var keywords = SkeletonKeywords.From(Keywords());
 
         return WhyUnusable(keywords) is { Length: > 0 } unusable
@@ -162,7 +172,7 @@ internal sealed class Program
                 keywords,
                 ((RatePerMinute.Parsed.Rate)rate).Value,
                 ((RatePerMinute.Parsed.Rate)adminRate).Value,
-                AdminKeys.Read(Environment.GetEnvironmentVariable(AdminKeys.Variable), secret));
+                ((AdminKeys.Configured.Admins)admins).Keys);
     }
 
     private static async Task<int> RefuseAsync(string why)

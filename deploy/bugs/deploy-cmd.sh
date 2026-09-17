@@ -34,7 +34,8 @@
 # Accepted, and nothing else:
 #   deploy <version>      install that RELEASE's linux-x64 artefact and switch to it
 #   deploy --rollback     pop one deployment off the trail
-#   secret                read one line from stdin into /etc/coai-bugs/env, print nothing
+#   secret                read two lines from stdin into /etc/coai-bugs/env, print nothing
+#   admin-check           read one admin key from stdin, ask the local server, print the status code
 #   health                what the unit answers — a REPORT, never a verdict
 # ---------------------------------------------------------------------------
 set -eu
@@ -68,6 +69,43 @@ case "$VERB" in
     # owned by root — never executed out of this checkout, which the deploy account can write.
     # stdin passes straight through; nothing here reads the secret. (CodeRabbit, #328.)
     exec sudo -n /usr/local/sbin/coai-bugs-install-env
+    ;;
+
+  admin-check)
+    # IS ADMINISTRATION ACTUALLY WORKING on the build that is now serving?
+    #
+    # `/health` is public and says nothing about it, so a release can start perfectly and answer 401
+    # to every admin call — which is exactly what this deployment did, with nothing anywhere
+    # noticing. The only thing that proves otherwise is one authenticated request, and it is made
+    # HERE, on loopback, rather than from the runner against the edge.
+    #
+    # The key arrives on STDIN, never as an argument: an argument is in `ps`, in
+    # /proc/<pid>/cmdline and in the auth log. It reaches curl through a config file, because
+    # `-H "Authorization: ..."` is an argument too — `umask` makes it 0600 and a trap removes it on
+    # every exit path, including a signal.
+    KEY=$(head -c 4096 | head -1 | tr -d '\r\n')
+    [ -n "$KEY" ] || refuse "no key arrived on stdin"
+
+    umask 077
+    CONF=$(mktemp)
+    trap 'rm -f "$CONF"' EXIT INT TERM HUP
+    printf 'header = "Authorization: Bearer %s"\n' "$KEY" > "$CONF"
+
+    # The unit was restarted moments ago by `deploy`, so the first attempt can arrive before it is
+    # listening: `000` is curl saying it never connected, which is not an answer to report. Bounded
+    # at ten seconds, and it still REPORTS rather than deciding — the workflow decides.
+    ATTEMPT=0
+    CODE=000
+    while [ "$ATTEMPT" -lt 10 ]; do
+      CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 --config "$CONF" \
+             'http://127.0.0.1:8110/admin/keys?limit=1' 2>/dev/null || printf '000')
+      [ "$CODE" = "000" ] || break
+      ATTEMPT=$((ATTEMPT + 1))
+      sleep 1
+    done
+
+    printf '%s\n' "$CODE"
+    exit 0
     ;;
 
   health)

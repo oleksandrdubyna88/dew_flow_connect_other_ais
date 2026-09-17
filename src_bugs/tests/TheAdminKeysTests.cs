@@ -27,7 +27,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void AnAbsentVariableConfiguresNobody()
     {
-        var admins = AdminKeys.Read(null, Secret);
+        var admins = AdminKeys.Of(string.Empty, Secret);
 
         admins.None.Should().BeTrue();
         admins.Count.Should().Be(0);
@@ -39,7 +39,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void AVariableOfOnlyCommentsConfiguresNobody()
     {
-        AdminKeys.Read("# alice\n\n   \n# bob", Secret).None.Should().BeTrue();
+        AdminKeys.Of("# alice\n\n   \n# bob", Secret).None.Should().BeTrue();
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void BlankLinesAndCommentsAreNotCredentials()
     {
-        var admins = AdminKeys.Read("# alice's key\r\nkey-one\r\n\r\n  key-two  \n# bob is away\n", Secret);
+        var admins = AdminKeys.Of("# alice's key\r\nkey-one\r\n\r\n  key-two  \n# bob is away\n", Secret);
 
         admins.Count.Should().Be(2);
         admins.Match("key-one", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>();
@@ -73,7 +73,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void TheLastKeyInTheListIsFoundToo()
     {
-        var admins = AdminKeys.Read("one\ntwo\nthree\nfour\nfive", Secret);
+        var admins = AdminKeys.Of("one\ntwo\nthree\nfour\nfive", Secret);
 
         admins.Count.Should().Be(5);
         admins.Match("five", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>()
@@ -86,7 +86,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void AKeyNobodyHoldsIsNobody()
     {
-        AdminKeys.Read("one\ntwo", Secret)
+        AdminKeys.Of("one\ntwo", Secret)
             .Match("three", Secret)
             .Should().BeOfType<AdminKeys.Presented.Unknown>();
     }
@@ -102,7 +102,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void TheSameKeyUnderADifferentSecretIsNobody()
     {
-        var admins = AdminKeys.Read("one", Secret);
+        var admins = AdminKeys.Of("one", Secret);
 
         admins.Match("one", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>();
         admins.Match("one", "a-different-server-secret").Should().BeOfType<AdminKeys.Presented.Unknown>();
@@ -112,7 +112,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void AnAdministratorIsNamedByItsOwnKey()
     {
-        var admins = AdminKeys.Read("one\ntwo", Secret);
+        var admins = AdminKeys.Of("one\ntwo", Secret);
 
         var one = admins.Match("one", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>().Subject;
         var two = admins.Match("two", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>().Subject;
@@ -120,7 +120,7 @@ public sealed class TheAdminKeysTests
         one.Id.Value.Should().StartWith("admin-").And.HaveLength("admin-".Length + 8);
         one.Id.Should().NotBe(two.Id, "two administrators must not be one row in the audit");
         one.Id.Should().Be(
-            AdminKeys.Read("one", Secret).Match("one", Secret)
+            AdminKeys.Of("one", Secret).Match("one", Secret)
                 .Should().BeOfType<AdminKeys.Presented.Administrator>().Subject.Id,
             "the id is derived, so the same key is the same administrator on every start");
     }
@@ -134,7 +134,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void NothingKeepsTheKeyItself()
     {
-        var admins = AdminKeys.Read("alices-key\nbobs-key", Secret);
+        var admins = AdminKeys.Of("alices-key\nbobs-key", Secret);
 
         var stored = admins.GetType()
             .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -223,8 +223,8 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void WithNoAdministratorsTheComparisonStillHappens()
     {
-        var none = AdminKeys.Read(null, Secret);
-        var one = AdminKeys.Read("the-only-administrator", Secret);
+        var none = AdminKeys.Of(string.Empty, Secret);
+        var one = AdminKeys.Of("the-only-administrator", Secret);
 
         none.Probed.Should().HaveCount(
             one.Probed.Count,
@@ -247,7 +247,7 @@ public sealed class TheAdminKeysTests
     [Fact]
     public void TheStandInIsNotACredential()
     {
-        var none = AdminKeys.Read("# nobody", Secret);
+        var none = AdminKeys.Of("# nobody", Secret);
         var standIn = Encoding.UTF8.GetString(none.Probed[0]);
 
         none.Match(standIn, Secret).Should().BeOfType<AdminKeys.Presented.Unknown>();

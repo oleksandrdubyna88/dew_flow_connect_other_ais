@@ -350,9 +350,29 @@ did, and the catalogue said otherwise.
 
 **And one level below that: two real processes.** `BothHalvesTests` hosts the server's ASSEMBLIES, which cannot see a publish-layout, trimming or embedded-resource defect — and this story's whole reason for existing is a keyword file read from a directory no release has. `TheBuiltBinariesTests` starts the built `coai-bugs` on a real port, mints a key through the real `--issue-key`, uploads through the real `coai-mcp --upload-pairs`, and reads the result back through the real `--waiting`. It is on `COAI_CONTRACT_EXE`, the seam the release workflow already sets, so the same scenario is a fast check here and the release smoke there.
 
-**The admin API's four suites, and why each is at the layer it is at.**
+**The admin API's suites, and why each is at the layer it is at.**
 
-`TheAdminKeysTests` is the credential store: what `COAI_BUGS_ADMIN_KEYS` parses to (comments, blank
+`TheAdminKeysAreBase64Tests` is the WIRE: the variable arrives base64 and anything else is refused.
+It exists because the two shapes overlap — a hex key is inside the base64 alphabet and base64
+decoding ignores whitespace — so "it decoded" proves nothing, and a server that fell back to the raw
+list would start with administrators nobody holds. Each of the three rules that separate them has a
+test (no whitespace in the encoded value, strict UTF-8, no control characters), and two of them were
+proved by deletion: removing the whitespace rule makes wrapped base64 pass, and removing the control
+character rule accepts a payload that decodes to nonsense. The red that started it was measured
+against the unfixed server: a base64 list of two keys configured **one** administrator whose key was
+the whole blob.
+
+**Both harnesses now feed the encoded form**, through one `Delivery.AdminKeys` — the in-process
+`BugsServer` and the real-binary scenario. A fixture that set the raw text would test a shape no host
+produces, and every admin test would pass while the deployed server refused to start.
+
+`ThePromiseMatchesTheSchemaTests` guards the WORDING against the schema: while `api_keys` has
+`last_seen_month` on it, no live surface may still say `submissions` is a counter with no clock. It
+is deliberately conditional rather than a banned word — drop the column and the old sentence becomes
+true again — and it scans the server, its tests, the edge vhost and the module docs while leaving
+`research/PLAN_*.md` alone, because a plan that was right in July is a record and not a claim.
+
+`TheAdminKeysTests` is the credential store: what the key list parses to (comments, blank
 lines, `\r\n`, surrounding spaces), that the LAST configured key matches — which an early return
 would break while every first-key test passed — and that the same key under a different secret is
 nobody, which is what proves the lines are hashed rather than compared as text. One test reads the

@@ -47,9 +47,10 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
     /// otherwise, so a variable in the machine's environment cannot leak into a test.
     /// </param>
     /// <param name="adminKeys">
-    /// The value of <c>COAI_BUGS_ADMIN_KEYS</c> — newline-separated. **Null means the variable is
-    /// ABSENT**, which is a legitimate way to run this server: every `/admin/*` call then answers
-    /// 401, indistinguishably from a wrong credential, and a test asserts exactly that.
+    /// The administrator list, newline-separated as the operator writes it — this fixture ENCODES it
+    /// the way the deploy does, so a test never has to think about the wire. **Null means the
+    /// variable is ABSENT**, which is a legitimate way to run this server: every `/admin/*` call then
+    /// answers 401, indistinguishably from a wrong credential, and a test asserts exactly that.
     /// </param>
     /// <param name="adminRatePerMinute">
     /// The ADMIN limit, which is its own setting. Unset means the server's default of 120; the
@@ -63,7 +64,10 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
         Set("COAI_BUGS_SECRET", Secret);
         Set("COAI_BUGS_DATA", DataDir);
         Set(RatePerMinute.Variable, ratePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        Set(AdminKeys.Variable, adminKeys);
+        // ENCODED, because that is what a host carries: the list is newline-separated and an
+        // EnvironmentFile assignment cannot hold a newline. A fixture setting the raw text would
+        // test a shape no deployment produces.
+        Set(AdminKeys.Variable, Delivery.AdminKeys(adminKeys));
         Set(
             RatePerMinute.Surface.Administrator.Variable,
             adminRatePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
