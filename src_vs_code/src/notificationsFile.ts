@@ -125,6 +125,74 @@ export async function readNewest(
   return (await readNewestPlaced(path, limit, windowBytes)).records.map((placed) => placed.record);
 }
 
+/**
+ * How many whole records a ledger has gained since `from`, without parsing one of them.
+ *
+ * <p><b>This is the panel's count, and it had to be cheap.</b> `EscalationWatcher` re-renders every
+ * window every five seconds whatever happened, so a count that meant "read the newest three
+ * thousand records" would be ~1.2 MB of JSON parsing per window per tick, from a directory that may
+ * be a NAS. The plan specified the watermark and never said how a number came out of it; this is
+ * the answer.</p>
+ *
+ * <p>It counts NEWLINE BYTES. The number of `\n` in `[from, size)` is exactly the number of
+ * complete lines beginning at or after `from`, as long as `from` is itself a line start — and it
+ * always is, because it comes from a `to` that was recorded just past one. A half-written final
+ * line has no newline yet and is therefore not counted, which is the same rule the reader uses.</p>
+ *
+ * <p>It walks BACKWARDS and stops as soon as it has `cap` of them, so a person who is up to date
+ * reads nothing and a person who is far behind reads one window more than the cap needs. `more` is
+ * true when it stopped at the cap rather than at `from`: the panel says "3000+" and does not
+ * pretend to a number it would have to spend a megabyte to earn.</p>
+ */
+export async function countSince(
+  path: string,
+  from: number,
+  cap: number,
+): Promise<{ readonly count: number; readonly more: boolean }> {
+  const none = { count: 0, more: false };
+  if (cap <= 0) {
+    return none;
+  }
+
+  let handle;
+  try {
+    handle = await open(path, 'r');
+  } catch (reason: unknown) {
+    if ((reason as { code?: unknown } | null)?.code !== 'ENOENT') {
+      console.error('ConnectOtherAIs: a notifications ledger could not be opened to be counted', reason);
+    }
+
+    return none;
+  }
+
+  try {
+    const size = (await stat(path)).size;
+    let offset = Math.max(size, from);
+    let count = 0;
+    while (offset > from) {
+      const take = Math.min(WINDOW, offset - from);
+      offset -= take;
+      const buffer = Buffer.alloc(take);
+      await handle.read(buffer, 0, take, offset);
+      for (const byte of buffer) {
+        if (byte === NEWLINE_BYTE) {
+          count += 1;
+          if (count >= cap) {
+            return { count, more: true };
+          }
+        }
+      }
+    }
+
+    return { count, more: false };
+  } finally {
+    await handle.close();
+  }
+}
+
+/** The one byte this counts. Spelled rather than escaped: an escape here once reached disk RAW. */
+const NEWLINE_BYTE = 10;
+
 /** One record and the byte offset its line begins at. */
 export interface PlacedRecord {
   readonly record: NotificationRecord;
