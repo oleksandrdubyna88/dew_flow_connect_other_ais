@@ -42,6 +42,10 @@ is the test that says so, and it must stay green through every story here.
 
 ## Story 1 — the page can be read at all *(presentation only)*
 
+> Split into **1.1** (collapse, zoom, tone — **shipped 2026-09-17**), **1.2** (highlighting, after the
+> `.vsix` size measurement) and **1.3** (the diff). Four features and a measurement fork cannot pass
+> one review-fix-doc-commit cycle as a unit.
+
 Nothing new is fetched; this is rendering.
 
 - **Every row collapsed by default**, expandable, with **Collapse all** and **Expand all** at the top.
@@ -257,16 +261,39 @@ So this story is two questions for the operator before it is any code at all:
 Widening the dropdown without answering those offers choices the collector refuses — which is the
 failure this page already has too much of.
 
-## Build order
+## Build order — four epics, ten stories
 
-1. **Story 1**, alone and first. It ships value with no new data and no new risk, and it is the one
-   the operator will feel immediately.
-2. **Story 2**, then **story 3's cause-and-fix half** — both are the same wider SELECT.
-3. **Story 3's revision half**, once the four actions are built and the hash is shown.
-4. **Story 4**, after its measurement.
-5. **Story 5**.
-6. **Story 6**, last of the code, after its decision.
-7. **Story 7** is a question, not a queue position.
+The split was made separately, by a model asked to do nothing else, because deciding what the epics
+and stories ARE is the judgement that shapes everything after it. It re-arranged the seven stories
+above rather than accepting them, and three of its findings changed the plan:
+
+- **There is no un-anonymised text stored anywhere.** `collect_pairs` holds
+  `symbol_name, language, skeleton_before, skeleton_after, written_utc, keep` (`Schema.cs:308-319`)
+  and the corpus plan records that the raw text is computed and thrown away. So story 5 is **not a
+  view toggle** — it is a new one-shot mode that re-runs the collector's locate path without
+  `Normalise` and stores nothing. The class name has the same gap and the same answer, so it moves
+  there from story 3.
+- **Widening `StoredPair` would drag the new columns through the UPLOAD's own type** and break
+  `OnlyThreeFieldsLeaveTests`' fixture. The wider SELECT returns a NEW page-facing record;
+  `StoredPair`, `Sendable()` and `Wire()` are untouched until the comment story.
+- **The worktree is a growth surface with no size, owner or sweep** — `planning-docs.md` requires the
+  budget, and the plan did not have it. The in-place `git checkout` of somebody's own tree is **sized
+  out**: if it is ever wanted it is a new story carrying all five preconditions, never a widening.
+
+| Epic | Stories | Model | State |
+|---|---|---|---|
+| **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **1.1 shipped** |
+| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | not started |
+| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
+| **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | blocked on two decisions |
+
+**Epic 4's preconditions are decisions, not code**: the five comment questions (size, charset, PII
+— *scan* or *local only*, server-first, version negotiation, retention) and the ranking-picker
+disclosure answer. Story 7 is therefore neither an epic nor a story: it is the same question asked of
+another pass. If the answer is **no**, the picker stays `["local"]` and "make that legible" is a
+one-line hint change folded into 4.2; if **yes**, it is a NEW plan, because the ranking pass has no
+transport and `RankingModels.IsAllowed` refuses anything named and non-local — widening the dropdown
+alone offers a choice the collector refuses.
 
 ## Test plan
 

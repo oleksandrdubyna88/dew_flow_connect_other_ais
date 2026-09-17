@@ -296,6 +296,23 @@ while being wired to nothing. The boxes the test drives are built from the ids t
 rendered — a hand-written fixture handed to the shim would pass with no checkbox on the page at all,
 which is the mistake its first version made.
 
+**The shim answers `closest` about ANCESTORS, not only about itself** (2026-09-17, story 1.1). Its
+elements used to each answer only for their own attribute, and a shim shaped that way is green
+through the one mutation this page is most likely to grow: a branch widened from the control to the
+row it sits in. Each pair's controls are now built inside a `Row` object, so `closest` walks the way
+it does in a browser.
+
+**Which mutations the collapse tests are actually red for — measured, not assumed.** PROJECT.md says
+to ask what an assertion would see if the behaviour were deleted, and asking produced a surprise
+worth recording: **removing the disclosure branch's early `return` changes nothing** (24 of 24 green
+both ways), because every branch below it compares `target.id` and neither the twist button nor the
+checkbox has one. The `roundsLog.ts` lesson does not transfer to this page unaltered, and the
+`return` stays as house style rather than as something a test defends. What the suite IS red for,
+both verified by mutation: rendering rows expanded (ten tests) and widening `closest('[data-toggle]')`
+to `closest('[data-row]')` — the latter caught by *pressing it again closes it*, since the row cannot
+report the state the button carries. Keying the open set by position instead of `findingId` is caught
+by the reorder test.
+
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
 pairs. And the ranking has no transport, so `Ranking.Order` is exercised and nothing produces a real

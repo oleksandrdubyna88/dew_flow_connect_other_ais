@@ -28,23 +28,49 @@ interface Posted {
   readonly type: string;
   readonly keep?: number;
   readonly ids?: number[];
+  readonly id?: number;
+  readonly open?: boolean;
+  readonly delta?: number;
+}
+
+/**
+ * The `<tr>` a pair's controls sit inside — which is what makes `closest` mean anything here.
+ *
+ * <p>A shim whose elements answer `closest` only about THEMSELVES cannot see the defect this page
+ * is most likely to grow: a branch that matches the ROW rather than the control, so that ticking a
+ * box also opens the code under it. That is the `roundsLog.ts` failure PROJECT.md records, and a
+ * flat shim is green through it.</p>
+ */
+class Row {
+  constructor(readonly key: string) {}
+
+  /** A `<tr>` has no `id` attribute here, and neither do the controls in it. */
+  readonly id = '';
+
+  getAttribute(name: string): string | null {
+    return name === 'data-row' ? this.key : null;
+  }
+
+  closest(selector: string): Row | null {
+    return selector === '[data-row]' ? this : null;
+  }
 }
 
 /** A checkbox the script can find, tick and read back. */
 class Box {
   checked = false;
-  readonly id: string;
 
-  constructor(id: string) {
-    this.id = id;
-  }
+  /** No `id` attribute, like the real one — an `id` here would answer branches it must not. */
+  readonly id = '';
+
+  constructor(readonly key: string, private readonly row: Row) {}
 
   getAttribute(name: string): string | null {
-    return name === 'data-pick' ? this.id : null;
+    return name === 'data-pick' ? this.key : null;
   }
 
-  closest(selector: string): Box | null {
-    return selector === '[data-pick]' ? this : null;
+  closest(selector: string): Box | Row | null {
+    return selector === '[data-pick]' ? this : this.row.closest(selector);
   }
 }
 
@@ -61,6 +87,109 @@ class Control {
   }
 }
 
+/**
+ * A row's disclosure button, which the click handler finds with `closest` — because the press can
+ * land on the chevron inside it and an `id` test would miss that entirely.
+ */
+class Toggle {
+  private showing: boolean;
+
+  /** No `id` attribute, like the real button. */
+  readonly id = '';
+
+  constructor(readonly key: string, open: boolean, private readonly row: Row) {
+    this.showing = open;
+  }
+
+  get open(): boolean {
+    return this.showing;
+  }
+
+  getAttribute(name: string): string | null {
+    if (name === 'data-toggle') {
+      return this.key;
+    }
+
+    return name === 'aria-expanded' ? String(this.showing) : null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    if (name === 'aria-expanded') {
+      this.showing = value === 'true';
+    }
+  }
+
+  closest(selector: string): Toggle | Row | null {
+    return selector === '[data-toggle]' ? this : this.row.closest(selector);
+  }
+}
+
+/** A row's code, hidden until somebody asks for it. */
+class Region {
+  hidden: boolean;
+
+  constructor(readonly key: string, open: boolean) {
+    this.hidden = !open;
+  }
+
+  getAttribute(name: string): string | null {
+    return name === 'data-detail' ? this.key : null;
+  }
+
+  closest(): null {
+    return null;
+  }
+}
+
+/** One button of the ± zoom or ± tone control: it listens for itself rather than being dispatched to. */
+class Knob {
+  private pressed: (() => void) | undefined;
+  readonly dataset: Record<string, string>;
+
+  constructor(kind: string, delta: string) {
+    this.dataset = { [kind]: delta };
+  }
+
+  addEventListener(kind: string, handler: () => void): void {
+    if (kind === 'click') {
+      this.pressed = handler;
+    }
+  }
+
+  press(): void {
+    assert.ok(this.pressed !== undefined, 'the control was rendered but never wired');
+    this.pressed();
+  }
+}
+
+/** `document.body.style`, as much of it as the two shared scripts write to. */
+class Style {
+  fontSize = '';
+  color = '';
+  readonly custom: Record<string, string> = {};
+
+  setProperty(name: string, value: string): void {
+    this.custom[name] = value;
+  }
+}
+
+/** The host's side of the conversation: what `pushUiScaleTo` / `pushTextToneTo` post into the page. */
+class Host {
+  private readonly heard: ((event: { data: unknown }) => void)[] = [];
+
+  addEventListener(kind: string, handler: (event: { data: unknown }) => void): void {
+    if (kind === 'message') {
+      this.heard.push(handler);
+    }
+  }
+
+  push(data: unknown): void {
+    for (const handler of this.heard) {
+      handler({ data });
+    }
+  }
+}
+
 /** The page's own script, cut out of the page it ships in. */
 function pageScript(html: string): string {
   const open = html.lastIndexOf('<script');
@@ -74,27 +203,63 @@ function pageScript(html: string): string {
 interface Page {
   readonly posted: readonly Posted[];
   readonly boxes: readonly Box[];
+  readonly toggles: readonly Toggle[];
+  readonly regions: readonly Region[];
+  readonly zoom: readonly Knob[];
+  readonly tone: readonly Knob[];
+  readonly style: Style;
+  readonly host: Host;
   readonly controls: Readonly<Record<string, Control>>;
-  click(what: Box | Control): void;
+  click(what: Box | Control | Toggle): void;
+  /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
+  showing(findingId: number): boolean;
+}
+
+/** What the page is drawn with, beyond the pairs — every field optional, as the page has it. */
+interface Options {
+  readonly trouble?: string;
+  readonly expanded?: ReadonlySet<number>;
+  readonly uiScale?: number;
+  readonly textTone?: number;
 }
 
 /**
  * Run the page over its own rows.
  *
- * <p>The boxes are built from the ROWS THE PAGE RENDERED, by reading the `data-pick` ids out of its
- * markup — not from a list the test invented. A fixture handed to the shim would pass with no
- * checkbox on the page at all, which is the mistake the Bugz section test made first.</p>
+ * <p>Every element is built from the MARKUP THE PAGE RENDERED — the `data-pick` ids, the
+ * `data-detail` rows and whether each one came out `hidden`, the `aria-expanded` each toggle was
+ * given — not from a list the test invented. A fixture handed to the shim would pass with no
+ * checkbox on the page at all, which is the mistake the Bugz section test made first; the same
+ * argument makes the collapse tests read their initial state from the page rather than assume it.</p>
  */
-function run(pairs: readonly ReviewPair[], trouble = ''): Page {
-  const html = reviewPageHtml(pairs, 'test-nonce', trouble);
-  const ids = [...html.matchAll(/data-pick="(\d+)"/g)].map((m) => m[1]!);
-  const boxes = ids.map((id) => new Box(id));
+function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
+  const html = reviewPageHtml({ pairs, nonce: 'test-nonce', ...options });
+  // One `<tr>` per pair, and the controls of a pair are INSIDE it — so `closest` walks the same
+  // way it does in a browser and a branch that matches the row is visible to these tests.
+  const rows = new Map([...html.matchAll(/data-row="(\d+)"/g)].map((m) => [m[1]!, new Row(m[1]!)]));
+  const rowFor = (key: string): Row => {
+    const found = rows.get(key);
+    assert.ok(found !== undefined, `the page rendered a control for pair ${key} outside any row`);
+
+    return found;
+  };
+  const boxes = [...html.matchAll(/data-pick="(\d+)"/g)].map((m) => new Box(m[1]!, rowFor(m[1]!)));
+  const regions = [...html.matchAll(/data-detail="(\d+)"( hidden)?>/g)]
+    .map((m) => new Region(m[1]!, m[2] === undefined));
+  const toggles = [...html.matchAll(/data-toggle="(\d+)"\s+aria-expanded="(true|false)"/g)]
+    .map((m) => new Toggle(m[1]!, m[2] === 'true', rowFor(m[1]!)));
+  const zoom = [...html.matchAll(/data-zoom="(-?\d+)"/g)].map((m) => new Knob('zoom', m[1]!));
+  const tone = [...html.matchAll(/data-tone="(-?\d+)"/g)].map((m) => new Knob('tone', m[1]!));
   const controls: Record<string, Control> = {
     keep: new Control('keep'),
     drop: new Control('drop'),
     clear: new Control('clear'),
     picked: new Control('picked'),
     pickall: new Control('pickall'),
+    expandAll: new Control('expandAll'),
+    collapseAll: new Control('collapseAll'),
+    zoomOffset: new Control('zoomOffset'),
+    toneOffset: new Control('toneOffset'),
   };
   // Only the explanation the page ACTUALLY rendered exists, so a test can ask which one it got
   // without reading the markup for it.
@@ -105,24 +270,41 @@ function run(pairs: readonly ReviewPair[], trouble = ''): Page {
   }
 
   const posted: Posted[] = [];
+  const style = new Style();
+  const host = new Host();
   let onClick: ((event: { target: unknown }) => void) | undefined;
 
+  const byAttribute: Record<string, readonly (Box | Region | Toggle | Knob)[]> = {
+    '[data-pick]': boxes,
+    '[data-detail]': regions,
+    '[data-toggle]': toggles,
+    'button[data-zoom]': zoom,
+    'button[data-tone]': tone,
+  };
   const document = {
     addEventListener: (kind: string, handler: (event: { target: unknown }) => void) => {
       if (kind === 'click') {
         onClick = handler;
       }
     },
-    querySelectorAll: (selector: string): readonly Box[] =>
-      (selector === '[data-pick]' ? boxes : []),
+    querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
+    querySelector: (selector: string): Region | Toggle | undefined => {
+      const one = /^\[data-(detail|toggle)="(\d+)"]$/.exec(selector);
+      assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
+      const among = one[1] === 'detail' ? regions : toggles;
+
+      return (among as readonly (Region | Toggle)[]).find((e) => e.key === one[2]);
+    },
     getElementById: (id: string): Control | undefined => controls[id],
+    body: { style },
   };
 
   // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test.
-  const body = new Function('acquireVsCodeApi', 'document', pageScript(html));
+  const body = new Function('acquireVsCodeApi', 'document', 'window', pageScript(html));
   body(
     () => ({ postMessage: (m: Posted) => posted.push(m) }),
     document,
+    host,
   );
 
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
@@ -130,9 +312,29 @@ function run(pairs: readonly ReviewPair[], trouble = ''): Page {
   return {
     posted,
     boxes,
+    toggles,
+    regions,
+    zoom,
+    tone,
+    style,
+    host,
     controls,
     click: (what) => onClick!({ target: what }),
+    showing: (findingId) => {
+      const region = regions.find((r) => r.key === String(findingId));
+      assert.ok(region !== undefined, `no pair ${findingId} is on this page`);
+
+      return !region.hidden;
+    },
   };
+}
+
+/** The toggle for one pair, by the id it belongs to — never by its position in the list. */
+function toggleFor(page: Page, findingId: number): Toggle {
+  const found = page.toggles.find((t) => t.key === String(findingId));
+  assert.ok(found !== undefined, `no pair ${findingId} is on this page`);
+
+  return found;
 }
 
 test('the page script is a program, not a string that looks like one', () => {
@@ -266,6 +468,187 @@ test('the selection is cleared on deciding, and no state is painted as saved', (
 });
 
 // --------------------------------------------------------------------------------------------
+// Collapsed by default, and opened one row at a time.
+// --------------------------------------------------------------------------------------------
+
+test('every row opens collapsed, and says so where a screen reader can hear it', () => {
+  const page = run([pair(1), pair(2), pair(3)]);
+
+  assert.equal(page.regions.length, 3, 'a pair with no detail row has nothing to collapse');
+  assert.deepEqual(page.regions.map((r) => r.hidden), [true, true, true]);
+  assert.deepEqual(page.toggles.map((t) => t.open), [false, false, false]);
+});
+
+test('pressing a row shows its code and tells the panel which row', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(toggleFor(page, 2));
+
+  assert.equal(page.showing(2), true, 'the row a person pressed is the row that opened');
+  assert.equal(page.showing(1), false, 'and no other row opened with it');
+  assert.deepEqual(page.posted.filter((m) => m.type === 'expand'),
+    [{ type: 'expand', id: 2, open: true }]);
+});
+
+test('pressing it again closes it, and the panel is told that too', () => {
+  const page = run([pair(1)]);
+
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 1));
+
+  assert.equal(page.showing(1), false);
+  assert.deepEqual(page.posted.filter((m) => m.type === 'expand').at(-1),
+    { type: 'expand', id: 1, open: false });
+});
+
+/**
+ * Ticking a pair selects it and leaves it shut — the two controls in one row are independent.
+ *
+ * <p><b>Which mutation this is red for, measured rather than assumed.</b> PROJECT.md's own rule says
+ * to ask what an assertion would SEE if the behaviour were deleted, so I asked, by deleting it.</p>
+ *
+ * <p>The obvious answer was wrong. Removing the early `return` from this page's disclosure branch
+ * changes NOTHING — every branch below it compares `target.id`, and neither the twist button nor the
+ * checkbox has one, so the fall-through reaches no branch at all: 24 of 24 green both ways. The
+ * `return` stays because the house pattern is worth keeping, not because a test defends it, and the
+ * `roundsLog.ts` lesson PROJECT.md records does not transfer to this page unaltered.</p>
+ *
+ * <p>What the suite IS red for, both verified: rendering rows expanded (ten tests, this one
+ * included), and widening `closest('[data-toggle]')` to `closest('[data-row]')` — one character's
+ * edit, after which the branch reads the expanded state off an element that does not carry it and
+ * a second press can never close what the first one opened. That second mutation is why the shim's
+ * elements answer `closest` about their ANCESTORS rather than only about themselves; a flat shim
+ * is green straight through it.</p>
+ */
+test('ticking a pair selects it and does not open it', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(page.boxes[0]!);
+
+  assert.equal(page.showing(1), false, 'the code opened under a box that was only ticked');
+  assert.equal(page.posted.filter((m) => m.type === 'expand').length, 0);
+  assert.match(page.controls['picked']!.textContent, /1 selected/, 'and the tick still counted');
+});
+
+test('opening a row decides nothing and keeps the selection intact', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(page.boxes[0]!);
+  page.click(toggleFor(page, 1));
+
+  assert.equal(page.posted.filter((m) => m.type === 'decide').length, 0,
+    'opening a row is not a decision about it');
+  assert.match(page.controls['picked']!.textContent, /1 selected/,
+    'the selection survived the row being opened');
+  assert.equal(page.controls['keep']!.disabled, false);
+});
+
+test('expand all opens every row, and collapse all shuts them', () => {
+  const page = run([pair(1), pair(2), pair(3)]);
+
+  page.click(page.controls['expandAll']!);
+  assert.deepEqual(page.regions.map((r) => r.hidden), [false, false, false]);
+  assert.deepEqual(page.toggles.map((t) => t.open), [true, true, true]);
+  assert.deepEqual(page.posted.at(-1), { type: 'expandAll', ids: [1, 2, 3], open: true });
+
+  page.click(page.controls['collapseAll']!);
+  assert.deepEqual(page.regions.map((r) => r.hidden), [true, true, true]);
+  assert.deepEqual(page.toggles.map((t) => t.open), [false, false, false]);
+  assert.deepEqual(page.posted.at(-1), { type: 'expandAll', ids: [1, 2, 3], open: false });
+});
+
+// --------------------------------------------------------------------------------------------
+// The key is the findingId. These three are the tests a positional key passes anyway.
+// --------------------------------------------------------------------------------------------
+
+/**
+ * A redraw that REORDERS keeps the open row open — the same row.
+ *
+ * <p>Every decision redraws, and a redraw reads the server afresh; nothing promises the rows come
+ * back in the order they went out. An index would re-open whatever now sits in that position, which
+ * is worse than forgetting: it shows somebody else's method under the heading they opened.</p>
+ */
+test('a redraw in a different order re-opens the same pair, not the same position', () => {
+  const before = run([pair(1), pair(2), pair(3)], { expanded: new Set([3]) });
+  assert.deepEqual(before.regions.map((r) => r.key), ['1', '2', '3']);
+  assert.equal(before.showing(3), true);
+
+  const after = run([pair(3), pair(1), pair(2)], { expanded: new Set([3]) });
+
+  assert.deepEqual(after.regions.map((r) => r.key), ['3', '1', '2'], 'the fixture really did reorder');
+  assert.equal(after.showing(3), true, 'the pair that was open is the pair that is open');
+  assert.equal(after.showing(1), false);
+  assert.equal(after.showing(2), false);
+});
+
+test('a redraw without the open pair opens nothing in its place', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([3]) });
+
+  assert.deepEqual(page.regions.map((r) => r.hidden), [true, true],
+    'an id that is no longer on the page must not open the row that took its slot');
+});
+
+test('two pairs with the same title are still two pairs', () => {
+  const twins = [
+    { ...pair(1), title: 'a race', symbolName: 'Same' },
+    { ...pair(2), title: 'a race', symbolName: 'Same' },
+  ];
+  const page = run(twins);
+
+  page.click(toggleFor(page, 2));
+
+  assert.equal(page.showing(2), true);
+  assert.equal(page.showing(1), false, 'they are told apart by id, not by what they say');
+});
+
+// --------------------------------------------------------------------------------------------
+// Zoom and tone, with a collapsed row present — the two features have to coexist, not merely
+// each work on a page where the other is absent.
+// --------------------------------------------------------------------------------------------
+
+test('the zoom control posts a press and applies what the host pushes back', () => {
+  const page = run([pair(1)], { uiScale: 2 });
+
+  assert.equal(page.zoom.length, 2, 'the ± pair is on the page');
+  page.zoom.find((k) => k.dataset['zoom'] === '1')!.press();
+  assert.deepEqual(page.posted.filter((m) => m.type === 'zoom').at(-1),
+    { type: 'zoom', delta: 1, field: '' } as unknown as Posted);
+
+  page.host.push({ type: 'uiScale', px: 17.29, label: '+3' });
+
+  assert.equal(page.style.fontSize, '17.29px');
+  assert.equal(page.controls['zoomOffset']!.textContent, '+3');
+  assert.equal(page.showing(1), false, 'and the row is still collapsed underneath it');
+});
+
+test('the tone control posts a press and applies both colours the host pushes back', () => {
+  const page = run([pair(1)], { textTone: -1 });
+
+  assert.equal(page.tone.length, 2);
+  page.tone.find((k) => k.dataset['tone'] === '-1')!.press();
+  assert.deepEqual(page.posted.filter((m) => m.type === 'tone').at(-1),
+    { type: 'tone', delta: -1, field: '' } as unknown as Posted);
+
+  page.host.push({ type: 'textTone', color: 'rgb(1 2 3)', read: 'rgb(4 5 6)', label: '−2' });
+
+  assert.equal(page.style.custom['--coai-text'], 'rgb(1 2 3)');
+  // BOTH, because the skeletons are `--vscode-editor-foreground` and would otherwise ignore the
+  // tone entirely — which is the text somebody dimming their screen at night is reading.
+  assert.equal(page.style.custom['--coai-read'], 'rgb(4 5 6)');
+  assert.equal(page.controls['toneOffset']!.textContent, '−2');
+  assert.equal(page.showing(1), false);
+});
+
+test('a row opened by the person survives a tone the host pushes afterwards', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(toggleFor(page, 1));
+  page.host.push({ type: 'textTone', color: 'rgb(1 2 3)', read: 'rgb(4 5 6)', label: '−2' });
+
+  assert.equal(page.showing(1), true, 'a pushed setting repaints colours, not the disclosure state');
+});
+
+// --------------------------------------------------------------------------------------------
 // The page's pure decisions.
 // --------------------------------------------------------------------------------------------
 
@@ -293,7 +676,7 @@ test('an empty corpus and a failed read are told apart', () => {
   assert.ok(empty.controls['nothing'] !== undefined, 'the page says the corpus is empty');
   assert.ok(empty.controls['trouble'] === undefined);
 
-  const failed = run([], 'the server exited 74');
+  const failed = run([], { trouble: 'the server exited 74' });
   assert.equal(failed.boxes.length, 0);
   assert.ok(failed.controls['trouble'] !== undefined,
     'a read that failed must not be rendered as a corpus that is empty');

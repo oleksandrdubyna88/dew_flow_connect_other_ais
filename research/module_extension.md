@@ -7204,6 +7204,36 @@ unrelated repainted the panel.
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
 
+### Collapsed by default, and the page can be sized (2026-09-17, story 1.1)
+
+Two hundred pairs each showing two skeletons is a page nobody scrolls. **Every row now opens
+collapsed** — a summary line per pair, its code behind a disclosure button — with *Expand all* and
+*Collapse all* in the bar, and the ± zoom and ± tone controls every other page here carries
+(`zoomControl.ts` / `textTone.ts` on the page, `uiScaleHost.ts` / `textToneHost.ts` on this side,
+both hooks disposed with the panel).
+
+**A pair is two `<tr>`s, not one row with hidden cells.** Cells sized for skeletons leave a collapsed
+table as a column of empty space wider than the text beside it, so the summary and the detail are
+separate rows and the detail carries `hidden`. The pair's bottom border moves to whichever of the two
+is last, so an open pair reads as one block.
+
+**Which rows are open lives on the PANEL, keyed by `findingId`.** `draw()` replaces `webview.html`
+wholesale and the new document remembers nothing — `rolesPanel.ts` holds its open tab for the same
+reason — and every decision redraws, so without this a person who opened four rows and decided about
+one would be thrown back to a fully collapsed list. A position would be worse than forgetting: a
+redraw can reorder rows or drop the one that was open, and an index then re-opens somebody else's
+method. The set is pruned to what still exists on each SUCCESSFUL read only; pruning against a failed
+read would collapse everything the moment the server timed out once.
+
+**The gesture is painted by the page and merely reported to the panel.** A redraw runs the server
+binary, so a round trip per click would make opening a row cost a process. The page owns what is on
+screen; the panel owns what survives the next redraw.
+
+**The disclosure branch matches the BUTTON, never the row.** `closest('[data-toggle]')` rather than
+`closest('[data-row]')` is one character, and the wider version reads the expanded state off an
+element that does not carry it — after which a second press can never close what the first one
+opened. The suite is red for exactly that mutation.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
