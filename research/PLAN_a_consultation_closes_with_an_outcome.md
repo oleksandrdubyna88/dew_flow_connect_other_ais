@@ -29,7 +29,13 @@
 >    opens `Mode=ReadOnly` so the schema steps never run for it, and naming a new column threw the
 >    WHOLE page away — rounds, blind spots and totals — for a data directory written by the previous
 >    release. Found by writing the test for it.
-> 7. **The live boundary check ran against coai-mcp 0.27.1** and is recorded below.
+> 7. **The close reads the record BEFORE it takes a lock.** The plan said the close runs under the
+>    same lock as a turn and left which lock unexamined. Two code rounds settled it: locking the
+>    supplied path and then comparing it with the record is not enough, because SamePath resolves
+>    links and RepositoryLock.Normalise does not — two spellings of one checkout would take two
+>    different locks. The lock comes from the record own RepoPath, and the record is re-read under
+>    it.
+> 8. **The live boundary check ran against coai-mcp 0.27.1** and is recorded below.
 >
 > Issue: [#309](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/309).
 > Related docs: [module_server.md](module_server.md),
