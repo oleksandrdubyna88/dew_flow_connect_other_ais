@@ -4,6 +4,7 @@ import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
   countSince,
+  missingRatherThanBroken,
   notificationsPath,
   serverNoticesPath,
 } from './notificationsFile';
@@ -23,15 +24,15 @@ import { olderRemain, readSeen, readSoFar, tailBegins } from './notificationsSee
  * that needs two modules belongs beside neither.</p>
  */
 
-/** How many bytes a file holds, or nothing when it is not there or cannot be asked. */
+/** How many bytes a file holds, or nothing when it exists and cannot be asked. */
 async function sizeOf(path: string): Promise<number | undefined> {
   try {
     return (await stat(path)).size;
   } catch (reason: unknown) {
-    // A missing file is an ordinary first run and answers zero. Anything else is a fact about the
-    // disk, and the caller must be able to tell the two apart — "nothing has happened yet" and
-    // "this could not be read" are different sentences on the panel.
-    return (reason as { code?: unknown } | null)?.code === 'ENOENT' ? 0 : undefined;
+    // The same decision `countSince` makes, from the same function: a missing file is an ordinary
+    // first run and answers zero, anything else is a fact about the disk. Two copies of this test
+    // would be two chances to answer "nothing new" for a share that stopped responding.
+    return missingRatherThanBroken(reason) ? 0 : undefined;
   }
 }
 

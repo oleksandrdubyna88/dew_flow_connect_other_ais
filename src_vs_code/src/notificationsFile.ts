@@ -148,8 +148,8 @@ export async function countSince(
   path: string,
   from: number,
   cap: number,
-): Promise<{ readonly count: number; readonly more: boolean }> {
-  const none = { count: 0, more: false };
+): Promise<Counted> {
+  const none = { count: 0, more: false, readable: true };
   if (cap <= 0) {
     return none;
   }
@@ -158,33 +158,49 @@ export async function countSince(
   try {
     handle = await open(path, 'r');
   } catch (reason: unknown) {
-    if ((reason as { code?: unknown } | null)?.code !== 'ENOENT') {
-      console.error('ConnectOtherAIs: a notifications ledger could not be opened to be counted', reason);
+    // A MISSING file is an ordinary first run and answers zero. Anything else — a permission
+    // error, a share that stopped answering — is a different fact, and answering zero for it would
+    // render as "Nothing new": a broken read showing as a clean zero, which is the one thing this
+    // whole feature exists to stop. It cost ninety minutes once. (codex, the S5 code round.)
+    if (missingRatherThanBroken(reason)) {
+      return none;
     }
+    console.error('ConnectOtherAIs: a notifications ledger could not be opened to be counted', reason);
 
-    return none;
+    return { count: 0, more: false, readable: false };
   }
 
   try {
+    // The WHOLE walk, not only the open. On Windows a directory where a file should be opens
+    // cleanly and fails at the first read; on a share the failure can arrive at any window. A
+    // count that reported readable because `open` happened to succeed would be the same clean
+    // zero one line later.
     const size = (await stat(path)).size;
     let offset = Math.max(size, from);
     let count = 0;
+    // ONE buffer, re-used. Allocating a fresh 64 KB per window churned ~1.2 MB of short-lived
+    // buffers per tick per window for somebody far behind — on the five-second path, in every
+    // window. (gemini, the S5 code round.)
+    const buffer = Buffer.alloc(WINDOW);
     while (offset > from) {
       const take = Math.min(WINDOW, offset - from);
       offset -= take;
-      const buffer = Buffer.alloc(take);
       await handle.read(buffer, 0, take, offset);
-      for (const byte of buffer) {
+      for (const byte of buffer.subarray(0, take)) {
         if (byte === NEWLINE_BYTE) {
           count += 1;
           if (count >= cap) {
-            return { count, more: true };
+            return { count, more: true, readable: true };
           }
         }
       }
     }
 
-    return { count, more: false };
+    return { count, more: false, readable: true };
+  } catch (reason: unknown) {
+    console.error('ConnectOtherAIs: a notifications ledger could not be counted', reason);
+
+    return { count: 0, more: false, readable: false };
   } finally {
     await handle.close();
   }
@@ -192,6 +208,33 @@ export async function countSince(
 
 /** The one byte this counts. Spelled rather than escaped: an escape here once reached disk RAW. */
 const NEWLINE_BYTE = 10;
+
+/**
+ * Whether a failure to reach a ledger means "not there yet" or "could not be read".
+ *
+ * <p>The whole distinction this feature turns on, in one place. A MISSING file is an ordinary first
+ * run and answers zero; anything else — a permission error, a share that stopped answering, a
+ * directory where a file should be — is a fact about the disk, and reporting zero for it would
+ * render as "Nothing new". A broken read showing as a clean zero is what cost ninety minutes on
+ * 2026-09-16, and it would be perverse for the feature built from that to commit it.</p>
+ *
+ * <p>Pure, and exported, because the filesystem will not reliably produce the other case on demand:
+ * on Windows a directory in the ledger's place OPENS cleanly and fails at the first read, and a
+ * path inside a file answers ENOENT rather than ENOTDIR. Both were measured. So the decision is
+ * tested directly and the ENOENT path is tested for real.</p>
+ */
+export function missingRatherThanBroken(reason: unknown): boolean {
+  return (reason as { code?: unknown } | null)?.code === 'ENOENT';
+}
+
+/** What a count found, and whether it could look at all. */
+export interface Counted {
+  readonly count: number;
+  /** Whether it stopped at the cap rather than at the watermark. */
+  readonly more: boolean;
+  /** False only for a file that EXISTS and could not be opened. A missing file is readable. */
+  readonly readable: boolean;
+}
 
 /** One record and the byte offset its line begins at. */
 export interface PlacedRecord {
@@ -229,7 +272,7 @@ export async function readNewestPlaced(
   try {
     handle = await open(path, 'r');
   } catch (reason: unknown) {
-    if ((reason as { code?: unknown } | null)?.code !== 'ENOENT') {
+    if (!missingRatherThanBroken(reason)) {
       console.error('ConnectOtherAIs: the notifications ledger exists but could not be opened', reason);
     }
 

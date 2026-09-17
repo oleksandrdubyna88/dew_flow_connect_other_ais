@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
-import { Arrival, group } from './notificationsRead';
+import { Arrival, ReadPerLedger, group } from './notificationsRead';
 import { NOTIFICATIONS_FILE, SERVER_NOTICES_FILE, notificationsPath, readNewestPlaced, serverNoticesPath } from './notificationsFile';
 import { PageState, notificationsPageHtml } from './notificationsPage';
 import { Span, acknowledge, olderRemain, readSeen, readSoFar } from './notificationsSeen';
@@ -87,10 +87,12 @@ export class NotificationsPanel {
       ...mine.records.map((placed) => ({ ...placed, ledger: 'extension' as const })),
       ...theirs.records.map((placed) => ({ ...placed, ledger: 'server' as const })),
     ];
-    const read = [
-      ...(soFar.get(NOTIFICATIONS_FILE) ?? []),
-      ...(soFar.get(SERVER_NOTICES_FILE) ?? []),
-    ];
+    // Kept APART. A byte offset means nothing without the file it indexes, and one flat list made
+    // this side's offsets mark the server's records read.
+    const read: ReadPerLedger = {
+      extension: soFar.get(NOTIFICATIONS_FILE) ?? [],
+      server: soFar.get(SERVER_NOTICES_FILE) ?? [],
+    };
 
     const state: PageState = {
       rows: group(arrivals, read),

@@ -1,3 +1,4 @@
+import { CEILING as RUN_CEILING } from './suppression';
 import { NotificationRecord, isKnownClass } from './notifications';
 import { PlacedRecord } from './notificationsFile';
 import { Span, alreadyRead } from './notificationsSeen';
@@ -32,6 +33,24 @@ import { Span, alreadyRead } from './notificationsSeen';
 
 /** Which ledger a record came out of. The page says so; the watermark is keyed on it. */
 export type Ledger = 'extension' | 'server';
+
+/**
+ * What has been read of EACH ledger, kept apart.
+ *
+ * <p><b>A byte offset means nothing without the file it is an offset into</b>, and flattening the
+ * two into one list was a blocking defect: a 10 KB range acknowledged in `notifications.jsonl`
+ * marked every `server-notices.jsonl` record below 10 KB read — and the server's file is the small
+ * one, so in practice it marked nearly all of them. `notificationsSeen.ts` keys its ranges by
+ * ledger for exactly this reason, and the caller threw that away. A type with one field per ledger
+ * makes flattening them impossible rather than merely wrong. (gemini, the S5 code round.)</p>
+ */
+export interface ReadPerLedger {
+  readonly extension: readonly Span[];
+  readonly server: readonly Span[];
+}
+
+/** Nothing acknowledged, in either. */
+export const NOTHING_READ: ReadPerLedger = { extension: [], server: [] };
 
 /** One record, with where it came from and where it sits. */
 export interface Arrival extends PlacedRecord {
@@ -73,11 +92,14 @@ export interface Grouped {
 /**
  * How many occurrences of one `(code, subject)` one run may write before the ledger stops.
  *
- * <p>Imported as a NUMBER rather than from `suppression.ts` so that this module stays free of the
- * writing half — but it is the same bound, and a row that reached it says "1000+" instead of a
- * total it cannot know.</p>
+ * <p><b>The writer's own constant, imported.</b> The first version copied the number here with a
+ * rationale about keeping the reader free of the writing half, and the code round was right that
+ * the rationale was not worth the drift: lower the writer's ceiling and this module would render a
+ * capped run as an exact total, or call a capped 1500-record run uncapped. Silently, and only on
+ * the day somebody changed the bound.</p>
  */
-export const RUN_CEILING = 1000;
+export { CEILING as RUN_CEILING } from './suppression';
+
 
 /** A row's identity. JSON so that a subject containing any separator cannot forge another key. */
 export function keyOf(kind: string, code: string, subject: string): string {
@@ -134,7 +156,7 @@ function runsOf(arrivals: readonly Arrival[]): readonly RunTally[] {
  * <p>The order inside a row is by time; the order OF the rows is the caller's, because sorting is
  * a column the person clicks and belongs to the page.</p>
  */
-export function group(arrivals: readonly Arrival[], read: readonly Span[]): readonly Grouped[] {
+export function group(arrivals: readonly Arrival[], read: ReadPerLedger): readonly Grouped[] {
   const byKey = new Map<string, Arrival[]>();
   for (const arrival of arrivals) {
     const key = keyOf(arrival.record.class, arrival.record.code, arrival.record.subject ?? '');
@@ -167,7 +189,7 @@ export function group(arrivals: readonly Arrival[], read: readonly Span[]): read
       // A row counts as read only when EVERY occurrence in it does. One unread repeat of a fault
       // somebody acknowledged last week is news, and hiding it under "read" is how the acknowledged
       // watermark would start lying.
-      read: inOrder.every((arrival) => alreadyRead(arrival.at, read)),
+      read: inOrder.every((arrival) => alreadyRead(arrival.at, read[arrival.ledger])),
     };
   });
 }
