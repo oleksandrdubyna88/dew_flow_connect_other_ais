@@ -385,6 +385,18 @@ always true, so a missing `sh` fails there and skips on a Windows checkout — t
 `StageRulesTests.RequireTheMount`, and for its reason. The same principle applies to any check that
 moves into a workflow: a condition nothing executes is a condition nobody has read.
 
+**`changelogNamesTheRelease.test.ts` is the fifth, and it belongs to the extension suite rather than
+this one** — same class of code, other language. `.github/scripts/changelog-names-the-release.mjs`
+refuses an `mcp-v*` tag whose release has no changelog entry, and it runs in `mcp-draft` after the
+checkout and before the draft, where a refusal costs nothing. Its cases **spawn the script and assert
+the EXACT exit code**: 0 documented, 1 missing, 2 cannot check. `notEqual(code, 0)` was the first
+shape and it proves nothing — a crash, a bad argument and a script that is not there all satisfy
+it. Two of the cases are about the guard's own blind spots rather than its contract: one runs every
+version in `.github/changelog-baseline.json` against the real changelog, because a check that only
+examines the tag being released cannot notice a release DELETING an older note; the other runs the
+baseline against `git tag`, because entries were once written for `0.26.0` and `0.27.0`, versions
+that live in the manifest and were never tagged at all.
+
 **It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 
 **The story-1 suites (2026-09-17): a schema that ships, a limit that is a setting, and a promise
