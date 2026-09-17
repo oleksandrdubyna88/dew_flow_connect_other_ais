@@ -48,9 +48,16 @@ export interface PageState {
   readonly unreadable?: string;
 }
 
-/** Every distinct source in the rows, for the facet. Derived, never a list somebody maintains. */
+/**
+ * Every distinct source in the rows, for the facet. Derived, never a list somebody maintains.
+ *
+ * <p>Ordered by `localeCompare`, not by the default sort. A bare `.sort()` orders by UTF-16 code
+ * unit, so every capital comes before every lowercase — `CoaiMcp` above `serverSettingsSync` and
+ * `rolesPanel` below it — in a dropdown somebody scans for a name they half remember. The page's
+ * table comparator has always done this; this one list did not. (SonarCloud S2871.)</p>
+ */
 export function sourcesOf(rows: readonly Grouped[]): readonly string[] {
-  return [...new Set(rows.map((row) => row.source))].sort();
+  return [...new Set(rows.map((row) => row.source))].sort((a, b) => a.localeCompare(b));
 }
 
 function filters(rows: readonly Grouped[]): string {

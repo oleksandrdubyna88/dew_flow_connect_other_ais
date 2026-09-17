@@ -520,3 +520,14 @@ test('the source facet is derived from the rows, never a list somebody maintains
     ['a', 'b'],
   );
 });
+
+test('the facet is in the order a PERSON reads, not in code-point order', () => {
+  // A bare `.sort()` orders by UTF-16 code unit, so every capital sorts before every lowercase:
+  // `CoaiMcp` lands above `serverSettingsSync` while `rolesPanel` lands below it, in a dropdown
+  // somebody scans for a name they half remember. Sources are module names and they are mixed case.
+  // (SonarCloud S2871, on the pull request — a real defect and not a style note.)
+  assert.deepEqual(
+    sourcesOf([row({ source: 'Zebra' }), row({ source: 'apple' }), row({ source: 'Mango' })]),
+    ['apple', 'Mango', 'Zebra'],
+  );
+});
