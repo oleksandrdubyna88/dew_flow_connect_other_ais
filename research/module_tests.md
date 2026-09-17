@@ -366,6 +366,25 @@ the whole blob.
 `BugsServer` and the real-binary scenario. A fixture that set the raw text would test a shape no host
 produces, and every admin test would pass while the deployed server refused to start.
 
+`TheDeliveryAgreesWithTheServerTests` is the contract between the shell and the server: it runs the
+REAL `deploy/bugs/first-key.sh` through `sh`, over a table of lists an operator might plausibly write
+— an indented comment, a key with a trailing space, a tab, CRLF — and asserts that whatever the host
+picks is a credential `AdminKeys` admits. It exists because a code round found the two parsers
+disagreeing (the shell dropped comments before trimming, so `  # alice` became the "key" and the
+deploy failed on a list the server was happy with) AND found that nothing would have noticed: every
+other test here builds the environment in C#, so the shell could say anything and the suite would
+stay green. Its teeth were proved by putting the old filter order back and watching five of its cases
+go red. The harness is `TheArchiveCheckTests`'s — on CI a missing `sh` fails the job, on a Windows
+checkout without git's `sh` it skips.
+
+**What is NOT covered, and why it is written down rather than skipped quietly:** `install-env.sh`'s
+two-record framing has no automated test. It writes a `root:coai-bugs 0640` file under `/etc`, and
+the only ways to drive it are to run the suite as root or to give it an override for its destination
+— and a root-owned writer that takes its path from the environment is a privilege escalation in a
+checkout the deploy account can write. It was exercised by hand over six shapes of stdin (both lines,
+an empty administrator line, an absent one, an unterminated one, three lines, an unterminated third)
+using a harness built from the script itself.
+
 `ThePromiseMatchesTheSchemaTests` guards the WORDING against the schema: while `api_keys` has
 `last_seen_month` on it, no live surface may still say `submissions` is a counter with no clock. It
 is deliberately conditional rather than a banned word — drop the column and the old sentence becomes

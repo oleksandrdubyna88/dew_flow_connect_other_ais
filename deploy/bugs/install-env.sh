@@ -45,18 +45,35 @@ IFS= read -r SECRET || SECRET=''
 SECRET=$(printf '%s' "$SECRET" | tr -d '\r')
 [ -n "$SECRET" ] || { printf 'no secret arrived on stdin\n' >&2; exit 1; }
 
+# THE VALUE DECIDES, and the status only breaks the tie. `read` returns non-zero at EOF, which is how
+# an ABSENT record is told from an EMPTY one — but a record that arrived WITHOUT a trailing newline
+# also returns non-zero while setting the variable, and refusing that would be refusing a delivery
+# that is perfectly complete. So: read it, and ask whether anything came. (Code round, codex.)
+ADMINS=''
 if IFS= read -r ADMINS; then
-  ADMINS=$(printf '%s' "$ADMINS" | tr -d '\r')
+  ARRIVED=yes
+elif [ -n "$ADMINS" ]; then
+  ARRIVED=yes
 else
+  ARRIVED=no
+fi
+
+if [ "$ARRIVED" = no ]; then
   printf 'the administrator line is missing. Send two lines: the secret, then the base64 key list (empty for none)\n' >&2
   exit 1
 fi
+
+ADMINS=$(printf '%s' "$ADMINS" | tr -d '\r')
 
 # NOTHING AFTER IT. A base64 value pasted without `-w0` wraps at 76 columns, and everything after the
 # first chunk would arrive here as a third line and be thrown away — leaving a value that decodes to
 # a PREFIX of the list. The first key would work, later administrators would not, and the deployment
 # check, which tests the first key, would pass. (Code round, codex.)
-if IFS= read -r EXTRA; then
+#
+# The same tie-break as above, for the same reason in reverse: an unterminated third chunk sets EXTRA
+# and returns non-zero, and taking the status alone would have discarded it in silence.
+EXTRA=''
+if IFS= read -r EXTRA || [ -n "$EXTRA" ]; then
   printf 'more than two lines arrived. The key list must be base64 on ONE line: `base64 -w0`\n' >&2
   exit 1
 fi

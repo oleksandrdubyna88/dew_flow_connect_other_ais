@@ -227,7 +227,9 @@ list to the host's forced command as `admin-check`; the HOST decodes it, takes t
 makes one authenticated `GET /admin/keys?limit=1` on loopback and prints only the status code.
 Anything but `200` fails the run. The extraction is on the host rather than in the runner so that
 one implementation decides which line is a key — a copy in the workflow would drift from the
-server's, and a check that tests a key the server does not hold reports a failure nobody can find. It deliberately does NOT roll back: a wrong key is a configuration failure and
+server's, and a check that tests a key the server does not hold reports a failure nobody can find.
+That implementation is `deploy/bugs/first-key.sh`, and `TheDeliveryAgreesWithTheServerTests` runs it
+against the server's own parser so the two cannot part company quietly. It deliberately does NOT roll back: a wrong key is a configuration failure and
 the previous release has no admin surface at all, so retreating would take a good build out of
 service to fix nothing. Fix the secret and deploy again.
 

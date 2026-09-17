@@ -872,6 +872,45 @@ failure this story is about, and this repository already settled that argument o
 still describes the raw format, in a paragraph that reads, in the finding's own words, *"the diff
 fixes it"*.
 
+#### And what round 2 changed (round 2 of 2, verdict `good_enough`)
+
+All three reviewers answered, 9 findings: **5 accepted, 4 rejected**. Two of the accepted ones are
+the same defect the first round had already taught: **two parsers, one rule, and nothing watching
+them.**
+
+- **The host extraction disagreed with the server.** `AdminKeys.Lines` trims a line and THEN asks
+  whether it starts with `#`, so an indented `  # alice` is a comment; the shell filtered before
+  trimming, so it became the "key" — and the character check refused it, failing a deployment over a
+  list the server was perfectly happy with. A key written with a trailing space failed the same way.
+- **And nothing would have caught that.** Every other test hands the server an environment built in
+  C#, so the shell could have said anything. Both findings are answered by the same change: the rule
+  moved into `deploy/bugs/first-key.sh`, ONE file, and `TheDeliveryAgreesWithTheServerTests` runs
+  that file through `sh` over a table of lists an operator plausibly writes, asserting that whatever
+  it picks is a credential the server admits. Putting the old filter order back turns five of its
+  cases red.
+- **The two-record framing now reads the VALUE, not only the status.** `read` returns non-zero at EOF
+  — which is how an absent record is told from an empty one — but it also returns non-zero for a
+  record that arrived without a trailing newline, while setting the variable. Taking the status alone
+  refused a complete delivery in one direction and, worse, silently DISCARDED an unterminated third
+  record in the other: exactly the wrapped-base64 truncation the third-record check exists to catch.
+
+**What has no automated test, said here rather than left to be discovered:** `install-env.sh`'s
+framing. It writes a `root:coai-bugs 0640` file under `/etc`, so driving it means running the suite
+as root or giving the script an override for its destination — and a root-owned writer taking its
+path from the environment is a privilege escalation in a checkout the deploy account can write. It
+was exercised by hand over six shapes of stdin with a harness built from the script itself, and every
+one behaved: both records, an empty administrator record, an absent one, an unterminated one, three
+records, an unterminated third.
+
+**Four rejections.** One said `read` needs `|| ADMINS=''` or an empty second line would be mistaken
+for a missing one — the opposite of what `read` does, and the probe shows an empty line returning
+zero and an absent one returning non-zero, which is the whole basis of the framing. One said the
+extraction could fail silently when a list holds no key, where `|| true` and an explicit refusal are
+both there and the message is *"the key list holds no key: every line is blank or a comment"*. One
+asked whether a CRLF marker line would be refused — it is not, because the first line is trimmed, and
+that is now pinned by a test rather than left to a reader. And one reported the environment variable
+being read twice in `Program.cs`, in a paragraph that notes the second read was replaced.
+
 ### Story 5 — the extension can actually send *(Opus)*
 
 > **Added 2026-09-17, by operator decision, sequenced AFTER story 4.** Not part of the original
