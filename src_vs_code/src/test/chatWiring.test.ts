@@ -124,7 +124,12 @@ test('a conversation that changes its model replaces its memory rules with it', 
   // the model that was just thrown away. `memoryOf` is the one rule; what this asserts is that BOTH
   // places that start a session take it from there, so adding a fifth field to it cannot be applied
   // in one place and forgotten in the other. (codex, the code round.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // ALL THREE modules a session is started or replaced in, since the command file was split: the
+  // new conversation is still an entry point, a restored one is reopened by the turn, and a switch
+  // is the launch. Reading one of them is how this guard stops guarding the omission it exists for.
+  const text = ['chatCommand.ts', 'chatTurn.ts', 'chatLaunch.ts']
+    .map((one) => read(join('src', one)))
+    .join('\n');
 
   // SPREAD, in both places, so the object is taken whole. Reading one field out of it would be the
   // same defect wearing a function call: the next field added to `memoryOf` would reach the new
@@ -183,7 +188,9 @@ test('a stopped turn is written into the transcript before the conversation is c
   // that into a fresh process hands the next model a question nobody answered and no sign that it was
   // abandoned — and the turn after it appends a second `you` on top of the first. (gemini, the plan
   // round, Blocking.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const text = read(join('src', 'chatTurn.ts'));
 
   assert.match(
     text,
@@ -207,7 +214,7 @@ test('a retry goes to the model that failed, or it is not offered at all', () =>
   // before the archive, the turn, the launch and the hooks, all of which call it.
   // The `canRetry` arm went with the page push; the failing branch that writes the pair down is
   // still in the command file until the turn comes out.
-  const text = read(join('src', 'chatCommand.ts')) + read(join('src', 'chatShow.ts'));
+  const text = read(join('src', 'chatTurn.ts')) + read(join('src', 'chatShow.ts'));
 
   assert.match(
     text,
@@ -237,7 +244,9 @@ test('a retry leaves the carry exactly as the failure left it', () => {
   // Structural, because nothing observable at this level tells "left alone" apart from "recomputed
   // to the same value" — and pinned at BOTH ends so it cannot survive its own break: the function
   // must still be found, and it must still derive its question from the transcript.
-  const text = read(join('src', 'chatCommand.ts'));
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const text = read(join('src', 'chatTurn.ts'));
   const retry = /async function oneRetry\([\s\S]*?\n\}/u.exec(text);
 
   assert.ok(retry, 'oneRetry was renamed or removed, and this guard stopped guarding anything');
@@ -343,7 +352,16 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
   // The finding that this file exists for, in its newest shape: a slice unit test proves the
   // function is right, and proves nothing about whether the Team server calls it. A consumer left
   // behind re-sends the subject the person marked away from, and is billed for it every turn.
-  const text = read(join('src', 'chatCommand.ts'));
+  // EVERY module the command file was split into, because the count below is the assertion and a
+  // handover that moved out of this file is a handover this test stopped watching. Named rather than
+  // globbed: `chatFresh.ts` and `chatStoreImport.ts` carry the word without handing anything over.
+  const text = [
+    'chatCommand.ts',
+    'chatArchive.ts',
+    'chatLaunch.ts',
+    'chatTurn.ts',
+    'chatLaunch.ts',
+  ].map((one) => read(join('src', one))).join('\n');
 
   // The five places a conversation is handed to a model that has not heard it. Each is named by the
   // event rather than by its line, so this says what broke when it breaks.
@@ -403,7 +421,9 @@ test('a re-ask brings the mark back with the transcript it truncated', () => {
   // A re-ask drops the rejected answer and its question. Clamping at each use keeps that turn
   // honest, but the STORED mark would stay past the end and point at an unrelated message once the
   // conversation grew again. (gemini, the code round.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // The turn moved to `chatTurn.ts` when the command file was split — a re-ask and a retry still
+  // go THROUGH `oneTurn` rather than beside it, which is what these assert.
+  const text = read(join('src', 'chatTurn.ts'));
 
   assert.match(
     text,
