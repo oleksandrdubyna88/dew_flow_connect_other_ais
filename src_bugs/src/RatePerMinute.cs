@@ -6,9 +6,10 @@ namespace CoaiBugs;
 /// How many requests a minute one key may make — a setting, validated once at startup.
 /// </summary>
 /// <remarks>
-/// <para><c>COAI_BUGS_RATE_PER_MINUTE</c>; default <see cref="Default"/>; <c>0</c> DISABLES the limit,
-/// and the disabling is tested, because a limit nobody can switch off takes the service down at
-/// 03:00.</para>
+/// <para><c>COAI_BUGS_RATE_PER_MINUTE</c>; default <see cref="Default"/> when the variable is ABSENT
+/// — a present-but-blank one is a value, and is refused like any other that is not a whole number;
+/// <c>0</c> DISABLES the limit, and the disabling is tested, because a limit nobody can switch off
+/// takes the service down at 03:00.</para>
 /// <para><b>Capped at <see cref="Most"/>, and a value past the cap is REFUSED rather than clamped.</b>
 /// A reviewer computed that an unvalidated rate times the caller ceiling is a billion timestamps in
 /// memory. A clamp would be a silent fallback; the doctrine says an illegal value fails naming the
@@ -37,7 +38,10 @@ public sealed record RatePerMinute
     /// <summary>Reads the setting, or says why it cannot be used.</summary>
     public static Parsed Parse(string? raw)
     {
-        if (string.IsNullOrWhiteSpace(raw))
+        // Only ABSENT is the default. `COAI_BUGS_RATE_PER_MINUTE=` in a unit's environment file is a
+        // value somebody meant to fill in, and it is refused with the range rather than quietly
+        // becoming 10. (Code round, gemini.)
+        if (raw is null)
         {
             return new Parsed.Rate(new RatePerMinute(Default));
         }

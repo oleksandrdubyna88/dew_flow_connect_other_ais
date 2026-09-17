@@ -32,14 +32,28 @@ public sealed class TheIngestTests : IDisposable
         };
     }
 
-    private Corpus Open() => Corpus.Open(Path.Combine(_dir, "coai-bugs.db"));
+    private static readonly KeyId Key = new("key-1");
+
+    private static readonly DateTimeOffset Sixteenth = new(2026, 9, 16, 10, 0, 0, TimeSpan.Zero);
+
+    private readonly FrozenClock _clock = new(Sixteenth);
+
+    /// <summary>A corpus with the batch's key issued: `Accept` checks the key is in force before it writes.</summary>
+    private Corpus Open()
+    {
+        var corpus = Corpus.Open(Path.Combine(_dir, "coai-bugs.db"));
+        corpus.Issue(Key, "a-hash", string.Empty, Audit.By(AdminId.Cli, _clock));
+
+        return corpus;
+    }
 
     private static readonly UploadedPair Good =
         new("CSharp", "method_1(var_1) { }", "method_1(var_1) { lock (var_2) { } }");
 
-    /// <summary>The batch's results, which is all any test here reads.</summary>
+    /// <summary>The batch's results, through the real batch transaction, which is all any test here reads.</summary>
     private IReadOnlyList<UploadResult> Take(Corpus corpus, params UploadedPair[] items) =>
-        Ingest.Take(corpus, items, _keywords, "key-1", "2026-09-16T10:00:00Z").Items!;
+        corpus.Accept(Key, UtcMonth.Of(Sixteenth), scope => Ingest.Take(scope, items, _keywords))
+            .Should().BeOfType<Accepted<UploadAnswer>.Stored>().Subject.Answer.Items!;
 
     [Fact]
     public void AGoodPairIsAccepted()
@@ -204,7 +218,7 @@ public sealed class TheIngestTests : IDisposable
     {
         using var corpus = Open();
         var id = Take(corpus, Good)[0].EntryId;
-        corpus.Promote(id, "2026-09-16T11:00:00Z").Should().BeTrue();
+        corpus.Promote(id, UtcInstant.Of(Sixteenth.AddHours(1))).Should().BeTrue();
 
         Take(corpus, Good)[0].Took.Should().Be("duplicate");
 

@@ -60,12 +60,12 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
     /// fixture that wrote its own hash would pass while the real hashing was wrong. Audited as the
     /// CLI would audit it, on the frozen clock, so a test can read the audit back exactly.
     /// </remarks>
-    public (string Key, string Id) IssueKey(string note = "a test")
+    public (string Key, KeyId Id) IssueKey(string note = "a test")
     {
         using var corpus = Corpus.Open(Path.Combine(DataDir, "coai-bugs.db"));
         var key = "test-key-" + Guid.NewGuid().ToString("N");
-        var id = Guid.NewGuid().ToString("N")[..16];
-        corpus.Issue(id, Corpus.HashOf(key, Secret), note, Audit.By(AdminIdentity.Cli, Clock));
+        var id = new KeyId(Guid.NewGuid().ToString("N")[..16]);
+        corpus.Issue(id, Corpus.HashOf(key, Secret), note, Audit.By(AdminId.Cli, Clock));
 
         return (key, id);
     }

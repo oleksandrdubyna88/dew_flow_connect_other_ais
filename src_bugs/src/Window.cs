@@ -51,7 +51,15 @@ internal sealed class Window
     }
 
     /// <summary>Whether no stamp is inside the window any more — what the sweep evicts on.</summary>
-    public bool IsIdle(long now, long length) => Live(now, length).Length == 0;
+    /// <remarks>
+    /// The newest stamp is last, so ONE comparison answers for all of them. It sliced the live stamps
+    /// to count them — an allocation per key per sweep, on the call the sweep makes for every key
+    /// every minute — and a code round asked why.
+    /// </remarks>
+    public bool IsIdle(long now, long length) => _stamps.Length == 0 || _stamps[^1] <= now - length;
+
+    /// <summary>The window without its newest stamp — for a request admitted and then refused by the corpus.</summary>
+    public Window WithoutNewest() => _stamps.Length == 0 ? this : new Window(_stamps[..^1]);
 
     /// <summary>The stamps still inside the window, i.e. newer than <c>now - length</c>.</summary>
     private long[] Live(long now, long length)

@@ -21,13 +21,16 @@ public sealed class TheLimitIsASettingTests
     private static string Refusal(string? raw) =>
         RatePerMinute.Parse(raw).Should().BeOfType<RatePerMinute.Parsed.Refused>().Subject.Why;
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void UnsetMeansTheDefault(string? raw)
+    /// <summary>Only an ABSENT variable is the default. A present-but-empty one is a value, and a wrong one.</summary>
+    /// <remarks>
+    /// The first version treated blank as unset, and a code round pointed out what that hides: an
+    /// operator who writes <c>COAI_BUGS_RATE_PER_MINUTE=</c> in the unit's environment file, meaning
+    /// to fill it in, gets the default silently instead of a refusal naming the range.
+    /// </remarks>
+    [Fact]
+    public void UnsetMeansTheDefault()
     {
-        var rate = Rate(raw);
+        var rate = Rate(null);
 
         rate.Value.Should().Be(RatePerMinute.Default);
         rate.Disabled.Should().BeFalse();
@@ -54,11 +57,24 @@ public sealed class TheLimitIsASettingTests
     [InlineData("5.0")]
     [InlineData(" 5")]
     [InlineData("ten")]
+    [InlineData("")]
+    [InlineData("   ")]
     public void AnythingElseIsRefusedNamingTheLegalValues(string raw)
     {
         var why = Refusal(raw);
 
-        why.Should().Contain(raw, "the sentence must say what it read");
+        // An EMPTY value is refused too — that is the point of this case — but `Contain("")` throws
+        // in FluentAssertions rather than passing vacuously, so the sentence is checked for the word
+        // that describes it instead of for the value itself.
+        if (raw.Length == 0)
+        {
+            why.Should().Contain("''", "a variable set to nothing is refused, not silently defaulted, and the sentence shows the nothing it read");
+        }
+        else
+        {
+            why.Should().Contain(raw, "the sentence must say what it read");
+        }
+
         why.Should().Contain(RatePerMinute.Variable, "and which variable it read it from");
         why.Should().Contain("0 (no limit)").And.Contain("1000", "and the range that would have been accepted");
     }

@@ -12,7 +12,7 @@ namespace CoaiBugs.Tests;
 /// </summary>
 /// <remarks>
 /// <para>Through the real server on the frozen clock the harness injects, so a month boundary is
-/// two assignments and the STORED value is what is asserted — against <see cref="LastSeenMonth.Shape"/>
+/// two assignments and the STORED value is what is asserted — against <see cref="UtcMonth.Shape"/>
 /// and against the month the clock said. The month is a promise about what the server records, so
 /// each way of NOT being an accepted ingest — a 401, a 429, a malformed body, an administrative
 /// call — has its own test.</para>
@@ -47,12 +47,21 @@ public sealed class TheLastSeenMonthTests
     private static Task<HttpResponseMessage> Ingest(HttpClient http, object? body = null) =>
         http.PostAsJsonAsync("/ingest", body ?? OnePair, TestContext.Current.CancellationToken);
 
-    private static KeyUsage UsageOf(BugsServer server, string id)
+    private static Usage UsageOf(BugsServer server, KeyId id)
     {
         using var corpus = server.Reading();
 
         return corpus.UsageOf(id);
     }
+
+    /// <summary>What a key has done, in the shape <see cref="Corpus.UsageOf"/> answers.</summary>
+    /// <remarks>
+    /// An empty month is <see cref="LastSeen.Never"/> rather than a blank string — `UtcMonth.Read`
+    /// makes that distinction, and writing it here once keeps every assertion below a single line.
+    /// </remarks>
+    private static Usage Used(int submissions, string month) =>
+        new Usage.Known(new SubmissionCount(submissions), UtcMonth.Read(month));
+
 
     [Fact]
     public async Task AnAcceptedIngestStampsTheUtcMonthAndNothingFiner()
@@ -65,29 +74,39 @@ public sealed class TheLastSeenMonthTests
         (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         var september = UsageOf(server, id);
-        september.LastSeenMonth.Should().MatchRegex(LastSeenMonth.Shape().ToString(), "a month, never a day or an hour");
-        september.Should().Be(new KeyUsage(1, "2026-09"), "one second before midnight on the 30th is still September");
+        september.Month().Should().MatchRegex(UtcMonth.Shape().ToString(), "a month, never a day or an hour");
+        september.Should().Be(Used(1, "2026-09"), "one second before midnight on the 30th is still September");
 
         server.Clock.Set(StartOfOctober);
         (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        UsageOf(server, id).Should().Be(new KeyUsage(2, "2026-10"), "and midnight on the 1st is October");
+        UsageOf(server, id).Should().Be(Used(2, "2026-10"), "and midnight on the 1st is October");
     }
 
-    /// <summary>The write is conditional: a same-month ingest leaves the month column alone.</summary>
+    /// <summary>Every accepted ingest counts, and the month is whatever the clock last said.</summary>
+    /// <remarks>
+    /// <para><b>This test used to assert that a same-month ingest did NOT rewrite the row</b>, through
+    /// a `MonthAdvanced` flag on the answer. The code round refuted the saving that justified it: the
+    /// counter update rewrites the same row on every single ingest, so a conditional month update
+    /// avoided no page write at all — it only bought a second statement and a second B-tree lookup on
+    /// the server's hottest path. The two are one `UPDATE` now, the flag has no subject, and asserting
+    /// it would be asserting a claim that was never true.</para>
+    /// <para>What IS true is kept and still asserted: three accepted ingests count three, and the
+    /// month follows the clock across a boundary.</para>
+    /// </remarks>
     [Fact]
-    public void ASameMonthIngestDoesNotRewriteTheRow()
+    public void EveryAcceptedIngestCountsAndTheMonthFollowsTheClock()
     {
         using var server = new BugsServer();
         var (_, id) = server.IssueKey();
         using var corpus = server.Reading();
-        var month = LastSeenMonth.Of(EndOfSeptember);
+        var september = UtcMonth.Of(EndOfSeptember);
 
-        corpus.Ingesting(id, month, () => 0).MonthAdvanced.Should().BeTrue("from never to September");
-        corpus.Ingesting(id, month, () => 0).MonthAdvanced.Should().BeFalse("a busy key rewrites its row at most once a month");
-        corpus.Ingesting(id, LastSeenMonth.Of(StartOfOctober), () => 0).MonthAdvanced.Should().BeTrue();
+        corpus.Accept(id, september, _ => 0).Should().BeOfType<Accepted<int>.Stored>();
+        corpus.Accept(id, september, _ => 0).Should().BeOfType<Accepted<int>.Stored>();
+        corpus.Accept(id, UtcMonth.Of(StartOfOctober), _ => 0).Should().BeOfType<Accepted<int>.Stored>();
 
-        corpus.UsageOf(id).Should().Be(new KeyUsage(3, "2026-10"), "the counter moved every time; the month twice");
+        corpus.UsageOf(id).Should().Be(Used(3, "2026-10"), "the counter moved every time; the month is the last one");
     }
 
     [Fact]
@@ -98,7 +117,7 @@ public sealed class TheLastSeenMonthTests
         server.Clock.Set(EndOfSeptember);
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminIdentity.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
         }
 
         using var revoked = Client(server, key);
@@ -106,7 +125,7 @@ public sealed class TheLastSeenMonthTests
         using var none = server.CreateClient();
         (await Ingest(none)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        UsageOf(server, id).Should().Be(new KeyUsage(0, string.Empty), "a refused request records nothing about the key");
+        UsageOf(server, id).Should().Be(Used(0, string.Empty), "a refused request records nothing about the key");
     }
 
     [Fact]
@@ -124,7 +143,7 @@ public sealed class TheLastSeenMonthTests
 
         refused.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
         refused.Headers.RetryAfter!.Delta.Should().Be(TimeSpan.FromSeconds(30), "the September stamp leaves the window in thirty seconds");
-        UsageOf(server, id).Should().Be(new KeyUsage(1, "2026-09"), "the refused October request moved neither the count nor the month");
+        UsageOf(server, id).Should().Be(Used(1, "2026-09"), "the refused October request moved neither the count nor the month");
     }
 
     [Fact]
@@ -144,7 +163,7 @@ public sealed class TheLastSeenMonthTests
         };
         (await Ingest(http, tooMany)).StatusCode.Should().Be(HttpStatusCode.BadRequest, "over the batch cap");
 
-        UsageOf(server, id).Should().Be(new KeyUsage(0, string.Empty));
+        UsageOf(server, id).Should().Be(Used(0, string.Empty));
     }
 
     /// <summary>An administrator's call is about the administrator, and moves nothing on the key's usage.</summary>
@@ -156,10 +175,10 @@ public sealed class TheLastSeenMonthTests
         server.Clock.Set(EndOfSeptember);
 
         Admin.Run(["--waiting"], BugsServer.Secret, server.DataDir, server.Clock).Should().Be(0);
-        Admin.Run(["--revoke", "--id", id], BugsServer.Secret, server.DataDir, server.Clock).Should().Be(0);
+        Admin.Run(["--revoke", "--id", id.Value], BugsServer.Secret, server.DataDir, server.Clock).Should().Be(0);
 
         UsageOf(server, id).Should().Be(
-            new KeyUsage(0, string.Empty), "issuing, listing and revoking are audited about the administrator, not stamped on the key");
+            Used(0, string.Empty), "issuing, listing and revoking are audited about the administrator, not stamped on the key");
         using var corpus = server.Reading();
         corpus.AuditCount().Should().Be(2, "the issue and the revoke, with their exact times, on the administrator's side");
     }
@@ -182,6 +201,6 @@ public sealed class TheLastSeenMonthTests
         var replies = await Task.WhenAll(Enumerable.Range(0, AtOnce).Select(_ => Ingest(http)));
 
         replies.Select(reply => reply.StatusCode).Should().AllBeEquivalentTo(HttpStatusCode.OK);
-        UsageOf(server, id).Submissions.Should().Be(AtOnce, "every accepted ingest was counted, none lost to a race");
+        UsageOf(server, id).Count().Should().Be(AtOnce, "every accepted ingest was counted, none lost to a race");
     }
 }

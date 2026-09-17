@@ -33,9 +33,9 @@ public sealed class TheAuditTests : IDisposable
 
     private Corpus Open() => Corpus.Open(DbPath);
 
-    private Audit Cli() => Audit.By(AdminIdentity.Cli, _clock);
+    private Audit Cli() => Audit.By(AdminId.Cli, _clock);
 
-    private static string AnId() => Guid.NewGuid().ToString("N")[..16];
+    private static KeyId AnId() => new(Guid.NewGuid().ToString("N")[..16]);
 
     [Fact]
     public void IssuingAndRevokingAreAuditedWithExactTimes()
@@ -47,20 +47,40 @@ public sealed class TheAuditTests : IDisposable
         _clock.Advance(TimeSpan.FromMinutes(7));
         corpus.Revoke(id, Cli()).Should().BeTrue();
 
+        // NEWEST FIRST: the revoke happened seven minutes after the issue, so it is the first row.
         corpus.AuditTrail(10).Should().SatisfyRespectively(
-            issued =>
-            {
-                issued.AdminId.Should().Be(AdminIdentity.Cli);
-                issued.Action.Should().Be("issue");
-                issued.Target.Should().Be(id);
-                issued.AtUtc.Should().Be("2026-09-17T12:30:15.0000000Z", "an exact time — this is a log about an administrator");
-            },
             revoked =>
             {
-                revoked.Action.Should().Be("revoke");
+                revoked.Who.Should().Be(AdminId.Cli);
+                revoked.Action.Should().Be(AuditAction.Revoke);
                 revoked.Target.Should().Be(id);
-                revoked.AtUtc.Should().Be("2026-09-17T12:37:15.0000000Z");
+                revoked.At.Stored.Should().Be("2026-09-17T12:37:15.0000000Z", "an exact time — this is a log about an administrator");
+            },
+            issued =>
+            {
+                issued.Action.Should().Be(AuditAction.Issue);
+                issued.Target.Should().Be(id);
+                issued.At.Stored.Should().Be("2026-09-17T12:30:15.0000000Z");
             });
+    }
+
+    /// <summary>The trail reads newest first: the page an administrator opens is recent history, not the first deployment.</summary>
+    /// <remarks>
+    /// Oldest-first paging meant page one was the first day of the deployment and recent history cost
+    /// an offset scan across everything before it. Newest first, paged by the id before which to
+    /// read, so every page is one indexed range whatever the table has grown to.
+    /// </remarks>
+    [Fact]
+    public void TheTrailReadsNewestFirst()
+    {
+        using var corpus = Open();
+        var id = AnId();
+        corpus.Issue(id, "hash", string.Empty, Cli());
+        _clock.Advance(TimeSpan.FromMinutes(1));
+        corpus.Revoke(id, Cli()).Should().BeTrue();
+
+        corpus.AuditTrail(10).Select(row => row.Action).Should().Equal(
+            [AuditAction.Revoke, AuditAction.Issue], "the newest action comes first");
     }
 
     [Fact]
@@ -72,7 +92,7 @@ public sealed class TheAuditTests : IDisposable
         corpus.Revoke(id, Cli()).Should().BeTrue();
 
         corpus.Revoke(id, Cli()).Should().BeFalse("already revoked");
-        corpus.Revoke("no-such-key", Cli()).Should().BeFalse();
+        corpus.Revoke(new KeyId("no-such-key"), Cli()).Should().BeFalse();
 
         corpus.AuditCount().Should().Be(2, "there was no mutation to leave unaudited");
     }
@@ -95,9 +115,9 @@ public sealed class TheAuditTests : IDisposable
         rows.Should().HaveCount(2);
         foreach (var row in rows)
         {
-            verbs.Should().Contain(row.Action, "action is a verb from the closed set, derived from the enum rather than retyped");
-            row.Target.Should().MatchRegex("^[0-9a-f]{16}$", "target is a key id and nothing else");
-            var everything = string.Join('\n', row.AdminId, row.Action, row.Target, row.AtUtc);
+            verbs.Should().Contain(row.Action.Word(), "action is a verb from the closed set, derived from the enum rather than retyped");
+            row.Target.Value.Should().MatchRegex("^[0-9a-f]{16}$", "target is a key id and nothing else");
+            var everything = string.Join('\n', row.Who.Value, row.Action.Word(), row.Target.Value, row.At.Stored);
             everything.Should().NotContain(Note, "the note is OUR record of why a key exists, and stays on the key");
             everything.Should().NotContain(Key, "the key is printed once and stored nowhere");
             everything.Should().NotContain(hash, "nor its hash");
@@ -112,15 +132,17 @@ public sealed class TheAuditTests : IDisposable
         var ids = Enumerable.Range(0, 7).Select(_ => AnId()).ToList();
         foreach (var id in ids)
         {
-            corpus.Issue(id, "hash-" + id, string.Empty, Cli());
+            corpus.Issue(id, "hash-" + id.Value, string.Empty, Cli());
         }
 
-        corpus.SweepAudit(keep: 5);
+        corpus.TrimAuditTo(keep: 5);
 
         var kept = corpus.AuditTrail(10);
         kept.Should().HaveCount(5);
-        kept.Select(row => row.Id).Should().Equal([3, 4, 5, 6, 7], "the two oldest went, and ids are not renumbered");
-        kept.Select(row => row.Target).Should().Equal(ids.Skip(2), "the newest five actions, in order");
+        kept.Select(row => row.Id).Should().Equal(
+            [7, 6, 5, 4, 3], "the two oldest went, ids are not renumbered, and the trail reads newest first");
+        kept.Select(row => row.Target).Should().Equal(
+            ids.Skip(2).Reverse(), "the newest five actions, newest first");
     }
 
     /// <summary>The REAL bound, crossed by the production path over a seeded table.</summary>
@@ -147,9 +169,10 @@ public sealed class TheAuditTests : IDisposable
         corpus.Issue(second, "hash-2", string.Empty, Cli());
 
         corpus.AuditCount().Should().Be(Corpus.MostAudit, "two writes crossed the mark and two rows went");
-        corpus.AuditTrail(1).Single().Id.Should().Be(3, "the two oldest seeded rows (ids 1 and 2) are the ones that went");
-        corpus.AuditTrail(2, skip: Corpus.MostAudit - 2).Select(row => row.Target)
-            .Should().Equal([first, second], "and the newest two are the issuances that ran the sweep");
+        TestSql.Scalar(DbPath, "SELECT MIN(id) FROM admin_audit").Should().Be(
+            "3", "the two oldest seeded rows (ids 1 and 2) are the ones that went");
+        corpus.AuditTrail(2).Select(row => row.Target).Should().Equal(
+            [second, first], "the newest two are the issuances that ran the sweep, newest first");
     }
 
     /// <summary>A mutation that cannot be audited does not happen: the two commit together or not at all.</summary>
@@ -168,7 +191,10 @@ public sealed class TheAuditTests : IDisposable
 
         issuing.Should().Throw<SqliteException>("the audit insert has nowhere to write");
 
-        corpus.UsageOf(id).Should().Be(new KeyUsage(0, string.Empty), "the key row was rolled back with the audit that failed");
+        corpus.UsageOf(id).Should().BeOfType<Usage.NoSuchKey>(
+            "the key row was rolled back with the audit that failed, so there is NO SUCH KEY — not a "
+            + "key that has sent nothing. The old read model could not tell those apart; this one can, "
+            + "and the distinction is the whole point of the union.");
         corpus.KeyFor("k", "s").Should().BeEmpty("and it cannot authenticate");
     }
 

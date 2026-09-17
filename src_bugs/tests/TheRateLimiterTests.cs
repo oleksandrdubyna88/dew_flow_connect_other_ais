@@ -106,10 +106,10 @@ public sealed class TheRateLimiterTests
     {
         var hash = Corpus.HashOf("an-admin-key", "secret");
         var admin = LimiterSubject.Administrator(hash);
-        var lookalike = LimiterSubject.Contributor(AdminIdentity.Of(hash));
+        var lookalike = LimiterSubject.Contributor(AdminId.Of(hash).Value);
         var (limiter, _) = At(1);
 
-        admin.Key.Should().Be(AdminIdentity.Of(hash)).And.StartWith("admin-");
+        admin.Key.Should().Be(AdminId.Of(hash).Value).And.StartWith("admin-");
         lookalike.Key.Should().NotBe(admin.Key, "the contributor prefix keeps even a spoofed id apart");
 
         limiter.Admit(admin).Admitted.Should().BeTrue();
