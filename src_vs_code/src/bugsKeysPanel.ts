@@ -21,12 +21,14 @@ import {
   afterFailedIssue,
   afterRevoke,
   back,
+  confirmDiscard,
   confirmRevoke,
   faceOf,
   forward,
   here,
 } from './bugsKeysFlow';
-import { Users, usersPageHtml } from './bugsKeysPage';
+import { Users, usersPageHtml, withControls } from './bugsKeysPage';
+import { Turns } from './bugsKeysTurns';
 import { notify, notifyAndAsk } from './notify';
 
 /**
@@ -71,11 +73,26 @@ export class BugsKeysPanel {
   /** The cursor the page on screen offered for the NEXT page, or empty at the end. */
   private nextCursor = '';
 
-  /** Whether an action is in flight, so the page can disable what would queue another. */
-  private busy = false;
+  /** The page as it was last PAINTED, so the controls can be taken and given back without asking. */
+  private lastPaint: Users | undefined;
 
-  /** Posts and redraws in order; two actions in flight would race the redraw between them. */
-  private inFlight: Promise<void> = Promise.resolve();
+  /**
+   * One action at a time, and the repaints that begin and end each of them.
+   *
+   * <p><b>Every door into this panel goes through it.</b> Two did not: opening the tab and the
+   * command that sets the key both drew straight out, so a listing fetched before an issuance
+   * completed could land after it and paint a page with no pending key on it — hiding the only copy
+   * of a live credential behind a redraw nobody asked for.</p>
+   *
+   * <p><b>And the flag lives with the repaint</b>, because owning one without the other is how the
+   * page ended up disabled for ever: the flag dropped in a `finally` and the page on screen had been
+   * painted before that, with Refresh disabled like everything else. (Code round 2, codex.)</p>
+   */
+  private readonly turns = new Turns({
+    started: () => this.showControls(true),
+    settled: () => this.showControls(false),
+    failed: (reason: unknown) => this.tellOfFailure(reason),
+  });
 
   constructor(
     private readonly secrets: Secrets,
@@ -99,24 +116,38 @@ export class BugsKeysPanel {
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: { type?: string; id?: string }) => {
-        this.queue(m.type ?? '', m.id ?? '');
+        void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
       });
     }
 
-    await this.draw();
+    await this.turns.run(() => this.draw());
     this.panel?.reveal(vscode.ViewColumn.Active);
   }
 
   /**
-   * Asks for the key and stores it, from the command as well as from the tab.
+   * The door the COMMAND comes through — and it waits its turn like everything else.
    *
-   * <p>The redraw afterwards is a no-op when no panel is open, which is what makes it safe to share
-   * ONE instance between the command and the section button. Two instances was the defect the code
-   * round found: setting the key through the command left an open tab sitting on its rejected face
-   * until somebody pressed Refresh, because the key went into one object and the webview belonged
-   * to another. (Code round, codex.)</p>
+   * <p>It used to do the work itself, which put it outside the one-at-a-time coordinator: setting
+   * the key while an issuance was in flight could interleave two redraws and paint away the pending
+   * key. Round 1's defect is still fixed by the same object serving both doors — setting the key
+   * through the command left an open tab on its rejected face until somebody pressed Refresh,
+   * because the key went into one object and the webview belonged to another — and the redraw
+   * beneath is still a no-op when no panel is open, which is what makes sharing one instance safe.
+   * (Code round 1 and 2, codex.)</p>
    */
   async askForKey(): Promise<void> {
+    await this.turns.run(() => this.askForKeyNow());
+  }
+
+  /**
+   * The key, asked for and stored.
+   *
+   * <p>The redraw afterwards stays on the page the administrator was ON. It used to walk back to the
+   * newest, which threw away a position in the listing for nothing: the cursors are a walk through
+   * one listing and there is a single admin surface, so a new key sees the same rows in the same
+   * order. (Code round 2, gemini.)</p>
+   */
+  private async askForKeyNow(): Promise<void> {
     const typed = await vscode.window.showInputBox({
       title: 'The bugs admin key',
       prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
@@ -128,24 +159,7 @@ export class BugsKeysPanel {
     }
 
     await setAdminKey(this.secrets, typed);
-    await this.draw(START);
-  }
-
-  /** One action at a time, then a redraw from the server. */
-  private queue(type: string, id: string): void {
-    this.inFlight = this.inFlight
-      .then(() => this.act(type, id))
-      .catch(async (error_: unknown) => {
-        this.busy = false;
-        await notify({
-          as: 'error',
-          class: 'failure',
-          source: 'bugsKeys',
-          code: 'bugs-keys-action-failed',
-          title: `The Users tab could not finish that: ${String(error_)}`,
-          detail: String(error_),
-        });
-      });
+    await this.draw();
   }
 
   /**
@@ -156,7 +170,7 @@ export class BugsKeysPanel {
    */
   private async act(type: string, id: string): Promise<void> {
     const doing: Readonly<Record<string, () => Promise<void>>> = {
-      setkey: () => this.askForKey(),
+      setkey: () => this.askForKeyNow(),
       refresh: () => this.draw(START),
       next: () => this.step('next'),
       back: () => this.step('back'),
@@ -167,20 +181,10 @@ export class BugsKeysPanel {
       dismiss: () => this.dismissOrphan(),
     };
 
-    const what = doing[type];
-    if (what === undefined) {
-      // `ready`, and anything a future page posts that this build has never heard of.
-      return;
-    }
+    // `ready`, and anything a future page posts that this build has never heard of, do nothing.
+    const what = doing[type] ?? (() => Promise.resolve());
 
-    this.busy = true;
-    try {
-      await what();
-    } finally {
-      // A failure must not leave every control disabled for ever; `queue` reports it and the next
-      // draw is honest about what is there.
-      this.busy = false;
-    }
+    await what();
   }
 
   /**
@@ -318,6 +322,23 @@ export class BugsKeysPanel {
       return;
     }
 
+    // Discarding REVOKES, and this button sits one press from Copy. The table's Revoke asks first
+    // and so does this, through the same funnel — a destructive action confirmed in one place and
+    // not in another is a rule nobody can rely on. (Code round 2, gemini.)
+    const pressed = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'bugsKeys',
+      code: 'discard-a-pending-key',
+      subject: pending.id,
+      modal: true,
+      title: confirmDiscard(pending.note),
+      action: 'Discard and revoke it',
+    });
+    if (pressed !== 'Discard and revoke it') {
+      return;
+    }
+
     await this.discard(pending);
   }
 
@@ -375,7 +396,7 @@ export class BugsKeysPanel {
       return;
     }
 
-    this.panel.webview.html = usersPageHtml(users, nonce());
+    this.paint(users);
     // Cleared only now, and only because it has just been rendered: every face carries `said`, so
     // reaching this line means the sentence was shown.
     this.said = '';
@@ -389,7 +410,7 @@ export class BugsKeysPanel {
     const around = {
       ...(pending === undefined ? {} : { pending }),
       ...(attempt === undefined ? {} : { orphaned: attempt }),
-      busy: this.busy,
+      busy: this.turns.busy,
     };
 
     if (held.length === 0) {
@@ -407,6 +428,45 @@ export class BugsKeysPanel {
     }
 
     return { view: faceOf(answer, this.trail, this.said, here(wanted).length > 0), ...around };
+  }
+
+  /**
+   * Takes the controls away, or gives them back, on the page ALREADY on screen.
+   *
+   * <p>No server call: this is the same page repainted, and the coordinator calls it at both ends of
+   * every action. {@link withControls} answers nothing when what is on screen already says what it
+   * should, so an action that painted nothing — a cancelled dialog, a message this build does not
+   * know — leaves the tab exactly as it was.</p>
+   */
+  private async showControls(busy: boolean): Promise<void> {
+    const changed = withControls(this.lastPaint, busy);
+    if (changed !== undefined) {
+      this.paint(changed);
+    }
+
+    await Promise.resolve();
+  }
+
+  /** The one place a page is written, and the one place that records what is on screen. */
+  private paint(users: Users): void {
+    if (this.panel === undefined) {
+      return;
+    }
+
+    this.panel.webview.html = usersPageHtml(users, nonce());
+    this.lastPaint = users;
+  }
+
+  /** An action threw. Never silently, and never leaving the tab to be guessed at. */
+  private async tellOfFailure(reason: unknown): Promise<void> {
+    await notify({
+      as: 'error',
+      class: 'failure',
+      source: 'bugsKeys',
+      code: 'bugs-keys-action-failed',
+      title: `The Users tab could not finish that: ${String(reason)}`,
+      detail: String(reason),
+    });
   }
 }
 

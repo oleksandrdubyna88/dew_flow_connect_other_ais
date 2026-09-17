@@ -147,7 +147,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // before revoking a contributor key — naming the note and the last-use month rather than the id,
 // because hex ids look alike and the action is immediate and final — and it says so when an action
 // could not be finished at all. Both are new flows rather than routed ones.
-const PLACES_THIS_SPEAKS = 117;
+// 117 → 118 on 2026-09-17, story 3's code round: discarding a pending key ASKS first. Discard sits
+// one press from Copy and it revokes — the same irreversible act the table's Revoke button already
+// confirmed — so the two are confirmed the same way rather than one of them being a rule nobody can
+// rely on.
+const PLACES_THIS_SPEAKS = 118;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

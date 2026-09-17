@@ -9,6 +9,7 @@ import {
   afterRevoke,
   back,
   canGoBack,
+  confirmDiscard,
   confirmRevoke,
   faceOf,
   forward,
@@ -196,6 +197,27 @@ test('a key nobody has used is confirmed as never used, not as a blank', () => {
 
 test('a key with no note is still nameable', () => {
   assert.match(confirmRevoke(key({ note: '   ' })), /key with no note/u);
+});
+
+/**
+ * Discarding is confirmed too, and it names BOTH losses.
+ *
+ * <p>It sits one press away from Copy and it revokes, which is the same irreversible act the table's
+ * Revoke button asks about first. The two losses are different and a person needs both: the key
+ * stops working for whoever already has it, and the copy on this machine is gone whatever they
+ * answer, because the server says a key exactly once. (Code round 2, gemini.)</p>
+ */
+test('the discard confirmation says the key is revoked AND that it cannot be read back', () => {
+  const asked = confirmDiscard('the tuesday workshop');
+
+  assert.ok(asked.includes('the tuesday workshop'), 'the note is what a person recognises');
+  assert.match(asked, /REVOKES/u, 'a discard that only sounded like forgetting would be pressed for that');
+  assert.match(asked, /cannot be undone/u);
+  assert.match(asked, /need a new one/u, 'whoever is waiting for it has to be told something');
+});
+
+test('a discarded key with no note is still nameable', () => {
+  assert.match(confirmDiscard('   '), /key with no note/u);
 });
 
 /** A trail is a value: taking a step must not edit the one held by the caller. */

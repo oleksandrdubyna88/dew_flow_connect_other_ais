@@ -6961,6 +6961,31 @@ the listing and cleared after every draw, so the one most worth keeping — *a k
 ask again, look at the newest row* — was thrown away precisely when the server was unwell and a
 different face appeared.
 
+**One action at a time, and one place that owns the flag.** `bugsKeysTurns.ts` is a coordinator with
+no editor import: it serialises the actions and it repaints at BOTH ends of each one. The two halves
+have to live together, because owning either alone is a defect this tab shipped twice in one round.
+The page disables every control while something is in flight — Refresh included, deliberately, since
+a second Issue is a second live key — but nothing painted when an action BEGAN, so the ten seconds
+that matter had every button live; and the flag then dropped in a `finally` after the page had
+already been painted with it, leaving a tab where nothing could be pressed at all and only closing it
+helped. `bugzReviewPanel.ts` carries a comment about being caught by the same shape from the other
+end. The repaints ask the server nothing: `withControls` hands back the page already on screen with
+its controls changed, or nothing when they already are, so a cancelled dialog leaves the tab exactly
+as it was.
+
+**Every door into the panel goes through that coordinator** — the page's messages, opening the tab,
+and the command that sets the key. The last two used to draw straight out, so a listing fetched
+before an issuance completed could land after it and paint a page with no pending key on it, hiding
+the only copy of a live credential behind a redraw nobody asked for. Setting the key also stays on
+the page the administrator was ON: the cursors are a walk through one listing and there is a single
+admin surface, so a new key sees the same rows and walking them back to the newest threw away a
+position for nothing.
+
+**Discarding asks first.** It sits one press from Copy and it REVOKES, which is the same
+irreversible act the table's own Revoke button confirms — and the question names both losses,
+because they are different: the key stops working for whoever already holds it, and the copy on this
+machine is gone whatever is answered.
+
 **Not in this tab yet:** `/admin/audit` and `/admin/active`. Both ship with no reader, which is
 recorded rather than discovered; whichever story takes them inherits the cursor rule above.
 

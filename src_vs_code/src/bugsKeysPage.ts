@@ -108,6 +108,22 @@ export interface Users {
   readonly busy?: boolean;
 }
 
+/**
+ * The same page with its controls disabled or given back — or nothing when it already is.
+ *
+ * <p>Both ends of one defect. A request here may take ten seconds, and the page was painted only
+ * when the action ENDED: nothing said anything was happening while it ran, so Issue pressed twice
+ * queued two issuances — and the page it then painted was the one carrying `busy`, which disables
+ * every control including Refresh. A tab nothing could be pressed on, for ever. So the panel
+ * repaints what is already on screen at both moments, without asking the server again, and this
+ * says when there is anything to repaint. (Round 1 found the silence, round 2 the dead tab.)</p>
+ */
+export function withControls(painted: Users | undefined, busy: boolean): Users | undefined {
+  return painted === undefined || (painted.busy === true) === busy
+    ? undefined
+    : { ...painted, busy };
+}
+
 /** `yyyy-MM`, or the word for a key nobody has used. */
 export function lastSeen(row: KeyRow): string {
   return row.lastSeenMonth === undefined || row.lastSeenMonth.length === 0

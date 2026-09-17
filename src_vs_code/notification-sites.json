@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 117,
+  "sites": 118,
   "direct": 1,
-  "modal": 17,
+  "modal": 18,
   "events": 100,
   "inTheFunnel": 3,
-  "routed": 116,
+  "routed": 117,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 1,
@@ -56,6 +56,7 @@
     "data-directory-moved",
     "delete-refused-the-old-folder-changed",
     "delete-the-old-data-folder",
+    "discard-a-pending-key",
     "discovered-models-not-stored",
     "export-many-rounds",
     "file-from-an-answer-not-opened",

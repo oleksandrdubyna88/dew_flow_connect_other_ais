@@ -471,6 +471,16 @@ go, a pending key offers copy AND discard and says discarding revokes, the rejec
 server's words while **refusing to name a cause**, an unreachable server says it is not the key, and
 a note that is markup is escaped.
 
+`bugsKeysTurns.test.ts` drives the coordinator that serialises the tab's actions — that a second
+action waits, that the page is told at the START of one and told again at the END, and that neither a
+failed action, a failed repaint nor a failed reporter can poison the chain and leave a panel silently
+answering nothing. `bugsKeysWiring.test.ts` pins the half no unit test can reach: `bugsKeysPanel.ts`
+imports `vscode`, so what is asserted is its SOURCE — that every door goes through the coordinator,
+that the coordinator is built with both repaints, that setting the key does not reset the trail and
+that discarding asks first. That is the house pattern of `chatFreshWiring.test.ts`, and it strips
+comments before matching, because a structural assertion that reads prose goes red on a sentence
+explaining why the code is the way it is.
+
 `bugsAdminWire.test.ts` is the boundary: every success body read field by field, because the cast
 it replaced let a `201` without a `key` through — and that key is the one thing this product cannot
 ask for twice. It also holds `mayCarryAKey`, which decides the addresses a credential may cross:

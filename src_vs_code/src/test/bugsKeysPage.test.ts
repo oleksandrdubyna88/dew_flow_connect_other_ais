@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { KeyRow } from '../bugsAdminApi';
-import { Users, View, lastSeen, live, safe, standing, usersPageHtml } from '../bugsKeysPage';
+import { Users, View, lastSeen, live, safe, standing, usersPageHtml, withControls } from '../bugsKeysPage';
 
 /**
  * The Users tab, RUN — because a list with a Revoke button is exactly where wiring goes wrong.
@@ -359,6 +359,49 @@ test('every control is disabled while an action is in flight', () => {
 
   assert.match(page.html, /data-revoke="aaaa1111" disabled/u, 'least of all a revoke');
   assert.match(page.html, /id="busy"/u, 'and it must SAY that something is happening');
+});
+
+/**
+ * And the page that gives them BACK, which is the other half of the same defect.
+ *
+ * <p>The flag dropped when the action ended and nothing painted again, so the disabled page above
+ * stayed on screen — with Refresh disabled like everything else, which left no button able to
+ * recover it. What follows is the page the coordinator repaints at that moment, RUN. (Code round 2,
+ * codex.)</p>
+ */
+test('the page a finished action repaints has its controls back', () => {
+  const working: Users = {
+    view: {
+      kind: 'keys',
+      rows: [key('aaaa1111', 'alice')],
+      total: 1,
+      hasNext: true,
+      hasBack: true,
+      said: 'A key was issued. Copy it now.',
+      pagedPastTheEnd: false,
+    },
+    busy: true,
+  };
+
+  const done = withControls(working, false);
+  assert.ok(done !== undefined, 'a disabled page is left disabled when its action ends');
+
+  const page = run(done);
+  for (const id of ['issue', 'refresh', 'back', 'next']) {
+    assert.doesNotMatch(page.html, new RegExp(`id="${id}" disabled`, 'u'), `${id} is dead after the action finished`);
+  }
+
+  assert.doesNotMatch(page.html, /id="busy"/u, 'it still says something is happening when nothing is');
+  assert.ok(page.html.includes('A key was issued'), 'what the action said is repainted with the page');
+});
+
+/** A repaint replaces the whole page, so one that changes nothing costs a scroll position. */
+test('nothing is repainted when what is on screen already says what it should', () => {
+  const live: Users = { view: { kind: 'no-key', said: '' } };
+
+  assert.equal(withControls(live, false), undefined, 'a live page is repainted for nothing');
+  assert.equal(withControls(undefined, true), undefined, 'there is nothing on screen to repaint');
+  assert.ok(withControls(live, true) !== undefined, 'an action began and the page still looks pressable');
 });
 
 /** The sentence an action produced is shown above every face, not only the listing. */
