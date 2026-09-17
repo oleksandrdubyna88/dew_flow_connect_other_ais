@@ -441,6 +441,18 @@ is sequenced after story 13 for that reason.
 A lock clears; a permission does not, so the retries are a second of waiting that was never going to
 help, and the person is told nothing either way.
 
+> **MEASURED 2026-09-17, and this story's premise was wrong too.** “A permission failure is retried
+> five times” — it is not. `chatStoreLock.ts:179` returns `false` only on `EEXIST` and THROWS for
+> anything else, so a permission error becomes `failed`, and `follow`'s `failed` arm returns at once
+> without entering the retry. The classification this story was written to add **already exists, one
+> layer down**, and was designed there deliberately.
+>
+> What IS true is the second half: *“the person is told nothing either way”*. That is story 6's
+> mechanism, on the same file, so the two shipped as ONE change on 2026-09-17 — `followReport` and a
+> guard around `index.refresh()`. Three of this plan's premises have now been wrong on measurement
+> (stories 7, 8 twice), and all three were wrong the same way: they described a missing DISTINCTION
+> where what was missing was a missing VOICE.
+
 **Read it beside the rejection it survived.** The gate over the split claimed *"`follow`'s retry can
 hang the extension host"* and that was rejected with a measurement — five tries at 200 ms is one
 second, in a detached call nothing awaits, and a test pins the bound. That rejection stands. **The

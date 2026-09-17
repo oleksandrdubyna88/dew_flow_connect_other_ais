@@ -8,6 +8,8 @@ import { keepQueued } from './chatPersist';
 import { NAMES_ARE_CASE_BLIND, asUri, filedFor, fsPathOf, reorigin } from './chatRoots';
 import { heldConversationIds } from './chatRegistry';
 import { Moved, followable, movedTo, prepareMoves } from './chatSource';
+import { followReport } from './followReport';
+import { notify } from './notify';
 
 /**
  * A conversation follows the file it was opened from.
@@ -68,6 +70,10 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
   }
   void (async () => {
     let touched = 0;
+    // COUNTED, so the person hears ONE sentence about a folder refactor rather than one per
+    // conversation. Every failure on this path used to reach the console and nowhere else.
+    let couldNot = 0;
+    let refreshFailed = false;
     for (const meta of index.entries({ kind: 'everywhere' })) {
       try {
         // ASKED NOW, not from a set taken before any awaiting began. A conversation that closed while
@@ -83,18 +89,44 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
         }
         if (await follow(onDisk, meta.id, meta.source, sourceOfFile(moved))) {
           touched += 1;
+        } else {
+          couldNot += 1;
         }
       } catch (reason) {
         // PER UNIT, as `reliability.md` requires of a loop over independent things: one conversation
         // that cannot be followed must not stop every other conversation following the same rename.
         console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${meta.id}`, reason);
+        couldNot += 1;
       }
     }
     if (touched > 0) {
       // The picker reads the INDEX, not the disk. Without this the rows go on naming the file they
       // left and sitting in the folder they left — and a second rename would compare against that
       // stale source and follow nothing. (gemini, the code round, three times.)
-      await index.refresh();
+      //
+      // ITS OWN GUARD since 2026-09-17. It was inside the outer catch, which only logs — and this is
+      // the one failure on this path where the DATA is right and the SCREEN is wrong: the records
+      // moved, the list that finds them did not, and every row on it is then a name that no longer
+      // exists. That is not a console matter.
+      try {
+        await index.refresh();
+      } catch (reason) {
+        refreshFailed = true;
+        console.error('ConnectOtherAIs: the conversation index could not be refreshed after a rename', reason);
+      }
+    }
+    // SAID, at last. Both of this path's failures were console-only: a conversation that could not
+    // be refiled, and a list that could not be re-read after some were. One sentence, chosen by
+    // `followReport`, so a folder refactor is not a wall of notifications.
+    const report = followReport({ moved: touched, couldNot, refreshFailed });
+    if (report !== undefined) {
+      void notify({
+        as: report.severity,
+        class: 'outcome',
+        source: 'chat',
+        code: 'rename-not-followed',
+        title: report.title,
+      });
     }
   })().catch((reason: unknown) => {
     console.error('ConnectOtherAIs: following a renamed file threw', reason);
