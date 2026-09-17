@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { flushLedgers } from '../jsonlLedger';
-import { countSince } from '../notificationsFile';
+import { countSince, missingRatherThanBroken } from '../notificationsFile';
 import {
   SEEN_FILE,
   Span,
@@ -140,8 +140,8 @@ test('the count asks how many are new without parsing one of them', async () => 
     writeFileSync(path, rows.join(NEWLINE) + NEWLINE);
     const upTo = rows.slice(0, 9).reduce((total, row) => total + Buffer.byteLength(row, 'utf8') + 1, 0);
 
-    assert.deepEqual(await countSince(path, upTo, 100), { count: 3, more: false }, 'three since the watermark');
-    assert.deepEqual(await countSince(path, 0, 100), { count: 12, more: false }, 'all of them from the start');
+    assert.deepEqual(await countSince(path, upTo, 100), { count: 3, more: false, readable: true }, 'three since the watermark');
+    assert.deepEqual(await countSince(path, 0, 100), { count: 12, more: false, readable: true }, 'all of them from the start');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -156,7 +156,7 @@ test('a person who is up to date is counted without reading anything', async () 
 
     assert.deepEqual(
       await countSince(path, Buffer.byteLength(text, 'utf8'), 100),
-      { count: 0, more: false },
+      { count: 0, more: false, readable: true },
       'the watermark is the end of the file, so there is nothing after it',
     );
   } finally {
@@ -172,9 +172,9 @@ test('far behind, the count stops at the cap and says there are more', async () 
     const path = join(dir, 'n.jsonl');
     writeFileSync(path, Array.from({ length: 500 }, (_, n) => `row ${n}`).join(NEWLINE) + NEWLINE);
 
-    assert.deepEqual(await countSince(path, 0, 50), { count: 50, more: true });
-    assert.deepEqual(await countSince(path, 0, 500), { count: 500, more: true }, 'the cap reached exactly still says more');
-    assert.deepEqual(await countSince(path, 0, 501), { count: 500, more: false }, 'one above it does not');
+    assert.deepEqual(await countSince(path, 0, 50), { count: 50, more: true, readable: true });
+    assert.deepEqual(await countSince(path, 0, 500), { count: 500, more: true, readable: true }, 'the cap reached exactly still says more');
+    assert.deepEqual(await countSince(path, 0, 501), { count: 500, more: false, readable: true }, 'one above it does not');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -186,7 +186,7 @@ test('a half-written last line is not a record yet, and is not counted', async (
     const path = join(dir, 'n.jsonl');
     writeFileSync(path, `one${NEWLINE}two${NEWLINE}{"utc":"2026-09`);
 
-    assert.deepEqual(await countSince(path, 0, 100), { count: 2, more: false });
+    assert.deepEqual(await countSince(path, 0, 100), { count: 2, more: false, readable: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -195,7 +195,7 @@ test('a half-written last line is not a record yet, and is not counted', async (
 test('a ledger that is not there counts zero rather than throwing', async () => {
   const dir = home();
   try {
-    assert.deepEqual(await countSince(join(dir, 'absent.jsonl'), 0, 100), { count: 0, more: false });
+    assert.deepEqual(await countSince(join(dir, 'absent.jsonl'), 0, 100), { count: 0, more: false, readable: true });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -204,4 +204,35 @@ test('a ledger that is not there counts zero rather than throwing', async () => 
 test('the acknowledgement file is named where the data-directory move can find it', () => {
   assert.equal(SEEN_FILE, 'notifications-seen.jsonl');
   assert.ok(seenPath('/data').endsWith(SEEN_FILE));
+});
+
+test('a missing ledger and an unreadable one are different facts', () => {
+  // The distinction this whole feature turns on, tested where it is DECIDED. A missing file is an
+  // ordinary first run and answers zero; anything else is a fact about the disk, and answering
+  // zero for it renders as "Nothing new" - a broken read showing as a clean zero, which is what
+  // cost ninety minutes on 2026-09-16. countSince used to catch every open failure alike.
+  // (codex, the S5 code round.)
+  assert.equal(missingRatherThanBroken({ code: 'ENOENT' }), true, 'not there yet');
+  assert.equal(missingRatherThanBroken({ code: 'EACCES' }), false, 'a permission error is not an absence');
+  assert.equal(missingRatherThanBroken({ code: 'EISDIR' }), false, 'nor is a directory in its place');
+  assert.equal(missingRatherThanBroken({ code: 'EIO' }), false, 'nor is a share that stopped answering');
+  assert.equal(missingRatherThanBroken(new Error('no code at all')), false, 'and an error with no code is not an absence');
+  assert.equal(missingRatherThanBroken(null), false);
+  assert.equal(missingRatherThanBroken(undefined), false);
+});
+
+test('a ledger that is NOT THERE reports readable, because an absence is not a failure', async () => {
+  // The other half, end to end. What no test here does is produce a real permission failure: on
+  // Windows a directory in the ledger's place OPENS cleanly and fails at the first read, and a
+  // path inside a file answers ENOENT rather than ENOTDIR - both measured. The decision above is
+  // where that case is pinned, and this is where the everyday one is.
+  const dir = home();
+  try {
+    const counted = await countSince(join(dir, 'absent.jsonl'), 0, 100);
+
+    assert.equal(counted.readable, true, 'a first run is not a failure');
+    assert.equal(counted.count, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

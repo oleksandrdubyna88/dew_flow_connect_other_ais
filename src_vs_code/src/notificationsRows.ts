@@ -1,4 +1,5 @@
 import { escapeHtml } from './escapeHtml';
+import { CLASS_ORDER } from './notifications';
 import { Grouped, UNKNOWN_TAB, repeatsSaid, tabOf } from './notificationsRead';
 
 /**
@@ -37,10 +38,16 @@ export const COLUMNS: readonly Column[] = [
   { key: 'subject', label: 'Where' },
 ];
 
-/** Every tab the page offers, in the order the classes are declared plus one for the unknown. */
-export const TABS: readonly string[] = [
-  'failure', 'refusal', 'stand-down', 'storm', 'confirmation', 'offer', 'outcome', UNKNOWN_TAB,
-];
+/**
+ * Every tab the page offers: the one class catalog, plus one for what this build does not know.
+ *
+ * <p>DERIVED, never listed again. `tabOf` decides membership through `isKnownClass`, which reads
+ * the same catalog, so a class added to the parser gets a tab by arriving rather than by somebody
+ * remembering. Listing them here a second time meant a new class would be 'known' — so not sent
+ * to `other` — and have no tab of its own either: its rows would simply not appear, with nothing
+ * red. (codex, the S5 code round, from two roles.)</p>
+ */
+export const TABS: readonly string[] = [...CLASS_ORDER, UNKNOWN_TAB];
 
 /** A rate as a figure, or an em dash where no window worth measuring was observed. */
 export function rateSaid(row: Grouped): string {

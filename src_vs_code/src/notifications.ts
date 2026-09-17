@@ -38,9 +38,20 @@ export type NotificationClass =
   | 'stand-down'
   | 'storm';
 
-const CLASSES: ReadonlySet<string> = new Set<NotificationClass>([
-  'refusal', 'failure', 'confirmation', 'outcome', 'offer', 'stand-down', 'storm',
-]);
+/**
+ * Every class, in the order a reader meets them: what needs acting on first, what is merely news.
+ *
+ * <p><b>The one catalog.</b> The page's tab strip is derived from this rather than listing the
+ * classes again — a second list is a defect from the moment it compiles, and this one would drift
+ * silently in the worst direction: a class added to the parser would be 'known', so it would not go
+ * to the `other` tab, and it would have no tab of its own either. Its rows would simply not appear.
+ * (codex, the S5 code round, from two roles.)</p>
+ */
+export const CLASS_ORDER: readonly NotificationClass[] = [
+  'failure', 'refusal', 'stand-down', 'storm', 'confirmation', 'offer', 'outcome',
+];
+
+const CLASSES: ReadonlySet<string> = new Set<NotificationClass>(CLASS_ORDER);
 
 /** Everything a record can carry. Four fields are required; a later field is added optional. */
 export interface NotificationRecord {

@@ -7,11 +7,12 @@ import {
   RUN_CEILING,
   group,
   keyOf,
+  NOTHING_READ,
+  ReadPerLedger,
   ratePerMinute,
   repeatsSaid,
   tabOf,
 } from '../notificationsRead';
-import { Span } from '../notificationsSeen';
 
 /**
  * The rows the page shows, decided without a disk.
@@ -64,7 +65,7 @@ test('a hundred occurrences of one fault are ONE row that says a hundred', () =>
   // records; rendering a thousand identical rows would undo that at the other end.
   const rows = group(
     Array.from({ length: 100 }, (_, n) => arrival({ at: n * 100, ms: n * 60_000 })),
-    [],
+    NOTHING_READ,
   );
 
   assert.equal(only(rows).repeats, 100);
@@ -79,7 +80,7 @@ test('one code raised as two classes is two rows, not one that moves between tab
   const rows = group([
     arrival({ class: 'refusal', at: 0, ms: 0 }),
     arrival({ class: 'failure', at: 100, ms: 1000 }),
-  ], []);
+  ], NOTHING_READ);
 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => tabOf(row)).sort(), ['failure', 'refusal']);
@@ -90,7 +91,7 @@ test('a subject separates two faults from one call site', () => {
     arrival({ subject: 'V:/one', at: 0 }),
     arrival({ subject: 'V:/two', at: 100 }),
     arrival({ subject: 'V:/one', at: 200, ms: 1000 }),
-  ], []);
+  ], NOTHING_READ);
 
   assert.equal(rows.length, 2);
   assert.equal(rows.find((row) => row.subject === 'V:/one')?.repeats, 2);
@@ -103,7 +104,7 @@ test('`when` is the LATEST occurrence and `first` is the earliest, whatever orde
     arrival({ at: 0, ms: 60_000 }),
     arrival({ at: 100, ms: 0 }),
     arrival({ at: 200, ms: 30_000 }),
-  ], []));
+  ], NOTHING_READ));
 
   assert.equal(row.when, new Date(AT + 60_000).toISOString());
   assert.equal(row.first, new Date(AT).toISOString());
@@ -113,7 +114,7 @@ test('the row carries the NEWEST wording, because a sentence can be reworded bet
   const row = only(group([
     arrival({ at: 0, ms: 0, title: 'the old words' }),
     arrival({ at: 100, ms: 1000, title: 'the words it says now' }),
-  ], []));
+  ], NOTHING_READ));
 
   assert.equal(row.title, 'the words it says now');
 });
@@ -129,7 +130,7 @@ test('three runs that each hit the ceiling are not one incident of three thousan
     }
   }
 
-  const row = only(group(arrivals, []));
+  const row = only(group(arrivals, NOTHING_READ));
 
   assert.equal(row.runs.length, 3);
   assert.ok(row.runs.every((run) => run.ceilinged));
@@ -139,11 +140,11 @@ test('three runs that each hit the ceiling are not one incident of three thousan
 test('one run at the ceiling says 1000+, and a modest one says its number', () => {
   const capped = only(group(
     Array.from({ length: RUN_CEILING }, (_, n) => arrival({ at: n * 10, ms: n * 1000 })),
-    [],
+    NOTHING_READ,
   ));
   const modest = only(group(
     Array.from({ length: 4 }, (_, n) => arrival({ at: n * 10, ms: n * 1000 })),
-    [],
+    NOTHING_READ,
   ));
 
   assert.equal(repeatsSaid(capped), `${RUN_CEILING}+`);
@@ -155,7 +156,7 @@ test('two runs below the ceiling are named as two runs', () => {
     arrival({ run: 'run-a', at: 0, ms: 0 }),
     arrival({ run: 'run-a', at: 10, ms: 1000 }),
     arrival({ run: 'run-b', at: 20, ms: 2000 }),
-  ], []));
+  ], NOTHING_READ));
 
   assert.equal(repeatsSaid(row), '3 in 2 runs');
 });
@@ -167,7 +168,7 @@ test('a record written before `run` existed is its own run, named as unknown', (
   const row = only(group([
     withoutRun(arrival({ at: 0, ms: 0 })),
     arrival({ run: 'run-a', at: 100, ms: 1000 }),
-  ], []));
+  ], NOTHING_READ));
 
   assert.equal(row.runs.length, 2);
   assert.ok(row.runs.some((run) => run.run === ''), 'the record with no run is its own');
@@ -187,7 +188,7 @@ test('a rate needs a window worth measuring, and says nothing otherwise', () => 
 test('a row is read only when EVERY occurrence in it is', () => {
   // One unread repeat of a fault somebody acknowledged last week is news. Marking the row read
   // because its older occurrences were is how an honest watermark starts lying.
-  const read: readonly Span[] = [{ from: 0, to: 150 }];
+  const read: ReadPerLedger = { extension: [{ from: 0, to: 150 }], server: [] };
   const half = only(group([arrival({ at: 0 }), arrival({ at: 200, ms: 1000 })], read));
   const whole = only(group([arrival({ at: 0 }), arrival({ at: 100, ms: 1000 })], read));
 
@@ -198,7 +199,7 @@ test('a row is read only when EVERY occurrence in it is', () => {
 test('a class this build has never heard of is shown, not dropped', () => {
   // The forward-compatibility bargain the parser already takes: a newer build writing a class this
   // one does not know must not make its records vanish from an older reader.
-  const row = only(group([arrival({ class: 'something-new' as never, at: 0 })], []));
+  const row = only(group([arrival({ class: 'something-new' as never, at: 0 })], NOTHING_READ));
 
   assert.equal(tabOf(row), 'other');
   assert.equal(row.repeats, 1);
@@ -208,7 +209,7 @@ test('the two ledgers merge into one set of rows, and a row remembers which it c
   const rows = group([
     arrival({ at: 0, code: 'from-the-extension' }),
     { ...arrival({ at: 0, code: 'from-the-server' }), ledger: 'server' } as Arrival,
-  ], []);
+  ], NOTHING_READ);
 
   assert.equal(rows.length, 2);
   assert.equal(rows.find((row) => row.code === 'from-the-server')?.ledger, 'server');
@@ -218,4 +219,21 @@ test('the two ledgers merge into one set of rows, and a row remembers which it c
 test('a key cannot be forged by a subject that contains a separator', () => {
   assert.notEqual(keyOf('failure', 'a', 'b-c'), keyOf('failure', 'a-b', 'c'));
   assert.notEqual(keyOf('failure', 'a', ''), keyOf('failure', '', 'a'));
+});
+
+test('one ledger acknowledged does not mark the OTHER ledger read', () => {
+  // The blocking finding of the code round. Both ledgers are byte-addressed and the offsets
+  // overlap by construction - server-notices.jsonl is the SMALL file, so nearly every record in it
+  // sits below whatever has been acknowledged in the busy one. Flattening the two lists made this
+  // side's watermark mark the server's records read, which is the per-ledger rule the whole
+  // watermark design rests on, thrown away by the caller. (gemini.)
+  const read: ReadPerLedger = { extension: [{ from: 0, to: 10_000 }], server: [] };
+
+  const mine = only(group([arrival({ at: 500, code: 'from-the-extension' })], read));
+  const theirs = only(group([
+    { ...arrival({ at: 500, code: 'from-the-server' }), ledger: 'server' },
+  ], read));
+
+  assert.equal(mine.read, true, 'this side acknowledged its own byte 500');
+  assert.equal(theirs.read, false, 'and said nothing at all about the server file');
 });
