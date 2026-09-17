@@ -8,7 +8,9 @@
 > `chatPersist.ts`, `chatCapture.ts`, `chatSessionJoin.ts`, `chatThread.ts`. Three predate it and
 > are reached anyway: `chatStoreWrite.ts` (story 3 changes `nextAfterSave`, which lives there rather
 > than in `chatPersist`), `chatPage.ts` and `chatModels.ts` (story 11 moves a type out from under
-> both). One is new: `chatContracts.ts`.
+> both). One is new: `chatContracts.ts`. The second round added two more that are EXTENDED rather
+> than fixed: `atomicFile.ts` (story 4 teaches `writeFileAtomically` to take bytes) and
+> `chatStoreSweep.ts` (story 4 widens the sweep's reach to `pictures/<id>`).
 >
 > **The first draft listed eight and missed four**, which is worth leaving on the record rather than
 > quietly correcting: it named the module each story's *Where* line quotes and forgot the ones the
@@ -45,10 +47,29 @@ Nothing here is a regression of the split. Each item names the file and line it 
 the first thing any story does is re-read that line — the parent series moved these lines once, and
 a line reference in a plan is worth what it is verified against.
 
-**This plan went through its own gate round on 2026-09-17** — three reviewers, 23 findings, 18
-accepted and 5 rejected with measurements. What they changed is marked in place, because a plan that
-hides its own revision is a plan whose reasoning cannot be checked. The largest change is the build
-order: it was **wrong**, and in a way the first draft had already written down without noticing.
+**This plan has been through two gate rounds and one consultation, all on 2026-09-17**, and what they
+changed is marked in place — a plan that hides its own revision is a plan whose reasoning cannot be
+checked.
+
+| | reviewers | findings | accepted | rejected |
+|---|---|---|---|---|
+| round 1 | 3 | 23 | 18 | 5 |
+| round 2 | 3 | 17 | 11 | 6 |
+
+**Round 1's largest change was the build order**: it was wrong, and in a way the first draft had
+already written down without noticing.
+
+**Round 2's accepted findings pushed three stories from “small fix” into “design a persistence or
+cancellation protocol” — and the consultation that followed showed that most of those protocols are
+already in this repository.** That is the single most useful thing either round produced, because the
+gate cannot tell you what you already own; it reads the plan, not the tree. Reuse found: `abreast`
+(bounded concurrency), `atomicFile` (write-beside-and-rename with a collision-proof temporary name),
+`DEBRIS_AGE_MS` (the retention constant), `ChatStoreFile.refile` (per-record replay safety),
+`ChatSession.stop` (vendor-aware cancellation), `Thread.generation` (the epoch). What is left as
+genuinely new is one persistence surface, in story 5, and it is named there as such.
+
+**The consultation also cost me two of my own conclusions, and found a twelfth defect.** Both are
+recorded where they belong — story 6 and story 12 — rather than smoothed over here.
 
 ---
 
@@ -182,26 +203,41 @@ calls `forgetPicture` (`chatHooks.ts:623`) before writing the replacement.
 **The symptom.** A full or unwritable disk leaves the conversation with **no image and nothing to
 retry from** — the failure destroys the state it was meant to replace.
 
-**Three things the gate added, and the first is why "temp-and-swap" is not a fix by itself:**
+**Almost all of this is already written, and the consultation is what found that.** The gate asked
+for a same-filesystem temp-and-rename, a deterministic temporary name, and an age-bounded sweep. All
+three exist:
 
-1. **The swap must be atomic, which means same-filesystem.** A rename is atomic only when source and
-   destination share a filesystem. Writing the temporary file into a temp directory and renaming it
-   into the picture directory is a **copy** across a boundary, which can fail halfway. The temporary
-   file goes in the **destination directory**, under a neighbouring name. *(local, the plan round.)*
-2. **The stored reference moves before the old file goes.** If the thread's in-memory and persisted
-   state still names the old picture after it is deleted, every later read is a file-not-found — and a
-   crash between the two leaves a conversation pointing at nothing. Record the new path first, delete
-   second. *(gemini, the plan round.)*
-3. **An interrupted attempt leaves an orphan, and somebody owns it.** A process killed between the
-   write and the swap leaves a temporary file for every attempt. A bounded sweep of abandoned
-   temporaries runs where the pictures are already managed — the per-conversation directory whose
-   lifetime `pictureDir` already makes a contract — with a stated retention. *(codex, the plan
-   round.)*
+| asked for | already in the repository |
+|---|---|
+| write beside the destination, rename, retry a transient failure, clean up on failure | `atomicFile.ts:120`, `writeFileAtomically` |
+| a deterministic temporary name that does not collide | `atomicFile.ts:56`, `besideName` — `<destination>.<pid>.<sequence>.tmp` |
+| “how old is debris rather than a write in flight” | `chatStoreSweep.ts:66`, `DEBRIS_AGE_MS`, one hour, already a named constant |
+
+**So the fix is to EXTEND one helper, not to design a protocol.** `writeFileAtomically(path, text:
+string)` takes a string and a picture is bytes, so it takes `string | Uint8Array`; the write goes
+through it; the old attachment is retained until the new one has landed; and the sweep's reach is
+widened to `pictures/<id>`, which the store sweep's survey does not currently cover. A fixed
+temporary name would be a **regression** — `besideName` carries the pid and a sequence precisely so
+two windows writing at once do not collide, and the gate's “deterministic name” is already satisfied
+in a stronger form.
+
+**One accepted finding shrank when it was checked, and that is recorded rather than quietly
+dropped.** A reviewer required that *“the stored reference moves before the old file goes”*, and it
+was accepted. **There is no stored reference.** `recordOf` (`chatPersist.ts:49`) writes version, rev,
+id, title, passage, modelId, messages, fromSession, carryFrom, source, workspace, createdAt,
+updatedAt — and no attachment; `grep -rn "attached\|picture" chatStoreFile.ts chatPersist.ts`
+returns nothing. The picture lives only on the in-memory `Thread`. Honouring that finding literally
+would mean **adding attachment persistence**, which is new functionality inside a plan whose whole
+premise is fixing defects. The problem the finding is really about is kept — a failed replacement
+must not destroy the image that was there — and the crash-consistency half is dropped with this
+measurement beside it. *(Accepting a finding commits you to the PROBLEM, not to the fix somebody
+proposed for it.)*
 
 **The test.** A write that fails: red, the old image is gone; green, it is still attached and the
-failure is reported. A rename that fails after the write: green, the old image is still attached and
-no orphan survives the sweep. A crash between the write and the swap, simulated: the stored reference
-still names a file that exists.
+failure is reported. A rename that fails after the write: green, the old image is still attached.
+Then the sweep: an aged `.tmp` under `pictures/<id>` is removed and one younger than `DEBRIS_AGE_MS`
+is left alone — the second half matters, because a sweep that deletes a write in flight is a worse
+defect than the debris it collects.
 
 ---
 
@@ -213,8 +249,18 @@ at [chatFollow.ts:71](../src_vs_code/src/chatFollow.ts#L71).
 **The symptom.** Strictly sequential, each record with up to five 200 ms retries. Ten thousand
 records is **hours**, with nothing on screen and a stale picker until the final refresh.
 
-**The fix.** Bounded concurrency — a small fixed width, not unbounded `Promise.all`, because the
-retries exist for a store that is already contended.
+**The pool already exists — do not write a second one.** `abreast(jobs, width)` (`abreast.ts:14`)
+runs jobs a few at a time and returns results in the jobs' own order. Its own header records that it
+was written inside the migration, found inline in the store's listing, and **moved here rather than
+copied a third time** — the reuse rule's second move, already performed. Story 5's “bounded
+concurrency, a small fixed width, not unbounded `Promise.all`” was this plan specifying a helper the
+repository had already factored out.
+
+**And replay safety is already there too, one layer down.** `ChatStoreFile.refile()`
+(`chatStoreFile.ts:465`) claims the conversation, re-reads it, checks its source against `was`, and
+commits the transcript before the metadata. Refiling A→B twice therefore leaves B alone rather than
+corrupting it, and a `partial` outcome means the transcript committed while the index did not — which
+the next `read()` repairs. **Idempotence per record is not this story's to build.**
 
 **Progress that moves while it works, not at the end.** An indicator that only updates when the batch
 finishes is the same silence in a different colour: report every N records. *(local, the plan round.)*
@@ -226,6 +272,14 @@ stays wrong for ever — a worse end state than the slow one this story is fixin
 therefore a **persisted, idempotent job**: it survives a restart, it resumes rather than restarting,
 and a partial failure is reported rather than dropped. Reconciliation at the next startup or the next
 follow is what makes "resume" true rather than hoped for. *(codex, the plan round.)*
+
+**What is genuinely missing, once the two halves above are subtracted:** a persisted rename INTENT,
+per-item progress beside it, and worker OWNERSHIP. The existing locks cover an individual mutation
+and **expire after thirty seconds** — they are not renewable job leases, so a batch that outlives one
+cannot rely on it, and a startup reconciliation overlapping a live `follow` could otherwise claim the
+same record twice. The sweep's daily marker must not be borrowed as that ownership either: its
+read-then-write claim can race. **This is the one new persistence surface in the whole plan**, and it
+is new because nothing here already does it — not because it sounded thorough.
 
 **The test.** A store of N records with a counting clock: the pure scheduling half is extracted and
 tested as a value (`coding-style.md`: extract a named unit), so the width, the bound and the progress
@@ -245,15 +299,29 @@ logs, so the person sees a working picker full of paths that no longer exist.
 **The fix.** Its own guard, and on failure a visible refusal rather than a silent log — the records
 moved, so the state on screen is known-wrong and must say so.
 
-**The test, and this is the one the gate made harder.** A unit test over the callback can pass while
-the bundled page renders nothing, which leaves exactly the stale picker the story claims to fix — a
-test that proves the call was made, not that anybody was told. So this story needs a scenario in the
-**running-page harness** of
-[PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md): reject `index.refresh`,
-assert the rendered refusal and the stale-state message, and catalogue the flow in
-`research/module_tests.md`. *(codex, the plan round.)* **This is the one dependency this plan has on
-another plan** — if that harness is not ready, the story waits rather than settling for the weaker
-test.
+**The test, and this is where two rounds of review and one consultation all landed somewhere
+different.** A unit test over the callback passes while nobody is actually told, which leaves exactly
+the stale picker the story claims to fix.
+
+The second round said: use the running-page harness of
+[PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md). Then the consultation
+found that a harness already exists here — `src/test/bundledPage.test.ts`, 24 tests that bundle the
+page with esbuild, **minify** it and execute it against a stub DOM, including a case that presses Send
+and asserts exactly one turn goes out. So the dependency looked dissolved.
+
+**It is not, and the reason is worth more than the conclusion was.** That harness runs WEBVIEW page
+scripts, and this picker is not one. `conversationPickerCommand.ts:197` calls
+`vscode.window.createQuickPick<Item>()` — a NATIVE control, and the file's own header records that it
+is the repository's first `createQuickPick` against six `showQuickPick` sites. Pushing a refusal into
+the bundled page would prove the page renders a message; it would prove nothing about the path from
+`chatFollow` through a native QuickPick, which is the path that is broken.
+
+**So the honest statement is:** this story's visible half needs an extension-host harness, which this
+repository does not have and which `research/module_tests.md` already records as its largest single
+gap. It is **not** blocked on the page-tests plan — that plan governs a different surface. What this
+story ships without one: the guard, the classification of the failure, and a unit test that the
+refusal is RAISED. What it cannot yet prove is that the refusal is SEEN, and that limit is written
+into the story rather than papered over with a test of the wrong surface.
 
 ---
 
@@ -296,20 +364,81 @@ vendor process keeps its memory and its handles, and its late completion can sti
 thread that has since been replaced, which is a corruption the original hang could not produce.
 *(gemini and codex, the plan round.)*
 
+**“Kill the process tree through the shared launcher” was the wrong primitive at the wrong layer, and
+the consultation is what caught it.** `chatArchive.ts` has no business reaching for a pid: a session
+may be a local CLI, a remote vendor keeping the conversation in its own store, or a Team server
+holding no conversation at all, and only the session knows which. `ChatSession.stop()`
+(`chatSession.ts:93`) is **already** that contract, and its header spells out all three cases — a
+process that HOLDS the conversation is killed and reports `contextLost` so the caller re-sends the
+transcript; a vendor that keeps it resumes by id and loses nothing; a Team server is only told to drop
+the job. Story 8 calls `stop()`.
+
 **The fix, in three parts, none of them optional:**
 
 1. A budget on each wait, and a terminal state when it expires that names which one did not finish —
    CLAUDE.md §8: never stick on an in-flight state.
-2. The abandoned operation is **cancelled and its process tree killed**, through the shared launcher,
-   not left to run.
-3. Any completion that arrives after the budget is **refused rather than applied**, so a late turn
-   cannot write into the conversation that replaced it. Where a kill is not possible, the turn is
-   quarantined for the existing orphan sweep, which is machinery this repository already has.
+2. The abandoned turn is stopped through **`ChatSession.stop()`**, not through a pid. **Residual,
+   stated rather than implied:** `stop()` does not report CONFIRMED termination, so the plan claims
+   the turn was ASKED to stop and no more. A kill that silently failed must not read as a kill that
+   worked — that is the same shape as the security check that answered “yes” because it could not run.
+3. Any completion arriving after the budget is **refused rather than applied**, and the plan now names
+   exactly which path is unfenced. `chatTurn.ts` already carries TWO fences, a generation check and a
+   `sameSlate(mySlate, thread.saveId)` check. **`chatPersist.ts` carries none** — `grep -n
+   "sameSlate\|generation" chatPersist.ts` returns nothing on the write path. `keepQueued` chains
+   `keepOnDisk` onto `thread.writes`, which reads `thread.saveId` at execution time, and `settle()`
+   (`chatPersist.ts:111`) then assigns `thread.rev = next.rev` to whatever thread it is holding. So an
+   old save resolving after a replacement stamps the REPLACEMENT with the old save's revision. Fence
+   the queued execution and the post-await effect, and leave `forkOnDisk`'s own legitimate `saveId`
+   change (`chatPersist.ts:145`) alone. *(the consultation, verified by reading both paths.)*
 
 **The test.** A thread whose `turns` never settles. Red: `ended` never returns. Green: it returns
-within the budget with a reason naming the turn, **the process was killed**, and a completion
-delivered afterwards changes nothing in the replacement thread. The last two are what a
-timeout-only fix fails.
+within the budget with a reason naming the turn, and `stop()` was called on the session. Then the one
+that decides: hold an old `store.save()` pending, replace the conversation, resolve the old save with
+`{kind:'ok', rev:7}` — red, the replacement's `rev` becomes 7; green, it is untouched and the stale
+outcome is dropped.
+
+---
+
+## Story 12 — an abandoned turn repaints the conversation that replaced it
+
+> Numbered twelve because it was found last; placed here because it is story 8's mechanism seen from
+> the other end, and the two are one change.
+
+**Where:** [chatTurn.ts:443-460](../src_vs_code/src/chatTurn.ts#L443-L460).
+
+**Found by the consultation, after I had inspected this exact function and said it was fine.** That
+is the whole reason it is written down this way: I read to line 452, saw the `sameSlate` guard and the
+comment recording that reviewers designed it at an earlier plan round, and reported to the consultant
+that the fencing was already there. It answered that I had stopped five lines early. It was right.
+
+**The symptom.** When a turn resolves after a reset has replaced the conversation, two mutations reach
+the NEW thread before the stale branch returns:
+
+```ts
+thread.running = false;                       // 443 — before the check
+if (!sameSlate(mySlate, thread.saveId)) {
+  console.warn(...);
+  show(entry, false, '');                     // 457 — inside the stale branch
+  return;
+}
+```
+
+`thread` is the replacement by then. Line 443 clears the replacement's `running` flag, and line 457
+paints the replacement idle — so a conversation that is mid-answer can be shown as finished by a turn
+belonging to a conversation the person already discarded.
+
+**The comment above it is accurate about what it covers and silent about this.** It says *“Nothing is
+recorded anywhere, ledger included”*, and that is true: the ledger write is below the return. The
+guard was built to stop a stale answer being RECORDED, and it does. Nobody asked whether the two
+statements around it also touch the new conversation.
+
+**The fix.** The identity check moves ABOVE the `running` mutation, and the stale branch returns
+without repainting. A turn that no longer owns the thread touches nothing on it.
+
+**The test.** Start a replacement turn, then resolve the abandoned one. Red: the replacement's
+`running` is false and its page was told the turn ended. Green: both untouched, and the warning is
+still on the console — the existing behaviour that is correct must survive, or the fix has traded one
+silence for another.
 
 ---
 
@@ -453,8 +582,10 @@ useful finding of the round, because it is a contradiction the document containe
 somebody imagined.)*
 
 1. **Story 1** — security. Its own pull request, first, alone.
-2. **Stories 8, 9, 10** — the progress-and-error surface: a budget that also stops what it abandons, a
-   scope that closes in a `finally`, a single-entry latch. Everything after this posts into it.
+2. **Stories 8, 12, 9, 10** — the progress-and-error surface. Stories 8 and 12 are **one change**: a
+   turn abandoned by a reset must neither write into the replacement (8) nor repaint it (12), and both
+   are the same identity check applied at two points. Then a scope that closes in a `finally`, then a
+   single-entry latch. Everything after this posts into the surface these four settle.
 3. **Stories 2, 6, 7** — the three failures that are currently invisible, now written against a
    surface that has settled. Story 6 additionally waits on the running-page harness.
 4. **Stories 3, 4, 5** — the three data-shaped changes (a supplier, an atomic replace with a sweep, a
@@ -505,8 +636,15 @@ new test that drives the build gets its own invocation.
       sibling-directory case (`/ws-secret` beside `/ws`) asserted rather than assumed.
 - [ ] Story 1's residual race is **written into the code's own header**, not only into this plan — the
       next reader must find the reason, as `realOf` does one module over.
-- [ ] Stories 2–11 shipped in the five groups above, each with its own RED observation recorded, and
+- [ ] Stories 2–12 shipped in the five groups above, each with its own RED observation recorded, and
       each of the four second tests present and observed failing against a naive fix.
+- [ ] Story 8's fence proved on the WRITE path, not only the turn path: an old save resolved after a
+      replacement leaves the replacement's `rev` untouched.
+- [ ] Story 12's fix leaves the console warning in place — the existing correct behaviour survives.
+- [ ] Nothing was re-implemented that the repository already has. Story 4 EXTENDS `atomicFile`, story 5
+      USES `abreast` and `refile`, story 8 CALLS `ChatSession.stop` — and any deviation from that says
+      in its commit why reuse failed.
+- [ ] Story 6 says in the code what it cannot prove, rather than testing the wrong surface.
 - [ ] The six Sonar findings on moved lines closed, and `chatHost.ts`'s three `export let` reports
       left standing with their reason.
 - [ ] `importCycles.test.mjs`'s `KNOWN` ratchet is **eight entries, not nine** — `chatModels ↔
@@ -519,8 +657,38 @@ new test that drives the build gets its own invocation.
 
 ## What the gate rejected, and on what measurement
 
-Five of the 23 findings were rejected in round one rather than accepted to be agreeable — an accepted
-finding rewrites the plan, so accepting a wrong one makes the next round worse, not better.
+Eleven rejections across two rounds, each on something checkable rather than on taste. Rejecting is
+not rudeness to a reviewer: an accepted finding rewrites the plan, so accepting a wrong one hands the
+next round fresh text to object to and the count never falls.
+
+### Round two — six, and two of them were about a different document
+
+**Two findings quoted text this plan does not contain.** They described a promotion sequence —
+*“the `git mv` goes LAST”*, an edit-then-move ordering, a `git add` that might fail — and analysed how
+it breaks. Measured: `grep -c` over this file returns **0** for `git mv`, **0** for `goes last`
+(case-insensitive), **0** for `git add` and `git commit`. Promotion appears once, as a Definition-of-
+Done checkbox. The reviewer critiqued `planning-docs.md` or the promote-plan skill and attributed it
+here. A finding about the failure mode of a procedure a document does not contain cannot be applied
+to it, however sound the reasoning is about the procedure.
+
+**Two more were the same finding, byte for byte, from one provider** — *“story 11 risks breaking
+imports if the new module is not created first”*, twice. Both rejected for one reason: a missing
+export or a misplaced module is caught by `tsc`, which `npm test` runs before any suite. A plan step
+instructing you to verify that a file you were just told to create exists is ceremony a compiler
+already performs.
+
+**One was re-raised from round one unchanged** — the `importCycles` ratchet described as a false
+positive. The tool's own rule is that a reasoned rejection is discounted unless a reviewer brings a
+genuinely new argument, and none came. A ratchet going red when the cycle is removed without its
+`KNOWN` entry is the mechanism, not a malfunction.
+
+**One asserted a mechanism it could not locate** — that story 9's indicator might not be visible
+because “the UI update is not synchronised with the scope closure”. Story 9's defect and its fix are
+both about WHEN the scope closes relative to `await thread.writes`, and the claim names no call, no
+file and no API where a different desynchronisation would occur. Accepting it would commit the story
+to a problem nobody can point at.
+
+### Round one — five
 
 - *"Story 11 risks a circular dependency if the test file is updated separately."* —
   `importCycles.test.mjs` is in this repository and the plan already requires the `KNOWN` entry to be
