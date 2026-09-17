@@ -6893,6 +6893,14 @@ exports and one 326-line function. It is **543** now, in fifteen modules under
 [PLAN_the_command_file_is_too_big.md](PLAN_the_command_file_is_too_big.md), with no behaviour change
 anywhere in the series.
 
+**That constraint is also why this section has a backlog attached to it.** A series whose whole proof
+is that every moved line is verbatim may not fix anything, so the eleven pre-existing defects read
+while the file was being carved up were left exactly where they were — including a workspace
+containment check in `chatHooks.ts` that is lexical in front of two calls that follow symlinks, which
+`claudeSessions.ts` already canonicalises against. They are
+[../todo/PLAN_the_tail_of_the_command_split.md](../todo/PLAN_the_tail_of_the_command_split.md), with
+the six SonarCloud findings on lines that count as new only because they moved.
+
 | Module | What it owns | Imports `vscode` |
 |---|---|---|
 | `chatThread.ts` | the `Thread` type and the `threads` registry | **no** |
