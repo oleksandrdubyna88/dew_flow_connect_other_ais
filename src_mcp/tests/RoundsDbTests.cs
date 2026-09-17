@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
+using CoaiMcp.Storage;
 using CoaiMcp.Store;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
@@ -534,7 +535,10 @@ public sealed class RoundsDbTests : IDisposable
             "CREATE TABLE IF NOT EXISTS t (a TEXT);",
             "ALTER TABLE t ADD COLUMN b TEXT; THIS IS NOT SQL;",
         };
-        var migrating = () => RoundsDb.Migrate(db, halfBad);
+        // The runner itself, through the same step seam `RoundsDb.Migrate(db, steps)` used to
+        // expose: it moved to `CoaiMcp.Storage` when `coai-bugs.db` needed it too, and this test
+        // moved its call rather than keeping a second overload alive for its own sake.
+        var migrating = () => SqliteMigrator.Migrate(db, halfBad);
 
         migrating.Should().Throw<SqliteException>("the step is broken, and a broken step must be loud");
         Query("PRAGMA user_version").Single().Values.Single().Should().Be(
