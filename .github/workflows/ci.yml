@@ -41,6 +41,12 @@ jobs:
         with:
           global-json-file: global.json
 
+      # BEFORE the build: a formatting complaint is cheaper to read than a build log, and it
+      # costs seconds. `--verify-no-changes` REPORTS and never rewrites — CI must not push a
+      # reformat into somebody's branch, it must say the branch is not formatted and stop.
+      - name: Formatted
+        run: dotnet format dew_flow_connect_other_ais.slnx --verify-no-changes --no-restore
+
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release
 
