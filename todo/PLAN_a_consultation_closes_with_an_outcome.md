@@ -70,7 +70,7 @@ refusal stands and this plan does not touch it.
 | | |
 |---|---|
 | `close_consult` — a tenth tool | the verb the surface has never had: the caller that opened a consultation records how it ended |
-| `ConsultationRecord.Outcome` | `solved` / `not_solved` / `abandoned`, beside the existing `Reason`, which keeps answering *why it stopped* |
+| `ConsultationRecord.Outcome` | `solved` / `not_solved` / `abandoned` / `lapsed` — the closed set below — beside the existing `Reason`, which keeps answering *why it stopped* |
 | the **How it ended** column | says the outcome when there is one, and stays honest when there is not |
 | the **Cost** column | `~$…` from `priceOfLine`, marked as an estimate, when the vendor reported no money |
 | a human close | the *Consultant* section's running-consultation card gets a close control, because an AI that has crashed or moved on will never call the verb |
@@ -81,6 +81,48 @@ consultationId"* — so the verb is the primary path. The human control exists f
 cannot cover: a session that ended without calling it, which is exactly the state the issue's own
 screenshot is in.
 
+## The outcome — the closed set, who may write it, and what every path leaves
+
+Four values and nothing else, validated at the tool boundary before anything is written:
+
+| outcome | written by | means |
+|---|---|---|
+| `solved` | the caller, or a person | the advice was verified and it worked |
+| `not_solved` | the caller, or a person | it was verified and it did not |
+| `abandoned` | the caller, or a person | nobody is going to act on it |
+| `lapsed` | **the server only** | the budget ran out or it sat idle — nobody said anything about it |
+
+`lapsed` is the answer to *"automatic closures still produce no outcome"*. Leaving those empty was
+the first draft, and it fails the issue's own words — *something must be recorded*. But a spent
+budget is not a verdict, so it gets its own value rather than being flattened into `abandoned`: the
+column can then say *it ran out* rather than implying somebody decided. **A record from before this
+field existed still carries nothing, and nothing is not `lapsed` either** — see the boundary table.
+
+**Ownership reuses the rule that already exists.** `ConsultationService` identifies a caller with
+`CallerOf(repoPath)` and `ConsultationRules` already *"refuses a follow-up whose caller differs"*
+(`ConsultationService.cs:92`). `close_consult` refuses on exactly that comparison — a second AI
+cannot close the first one's consultation — and the test names the case.
+
+**The person is a different door, deliberately.** The panel does not speak MCP; it drives the server
+through one-shot CLI modes (below), which run on the person's own machine against their own data
+directory. That is a stronger trust position than another AI's, not a weaker one, so the human close
+is not subject to the caller check — and the record says which door was used, so *the AI said it
+worked* is never confused with *a person marked it closed*.
+
+**An outcome is immutable once written.** A retry carrying the SAME outcome succeeds and rewrites
+nothing (the answer to a lost response); a different one is refused as a conflict and says so. The
+one permitted transition is filling an ABSENT outcome on a record the server closed — that is the
+human close of a lapsed consultation, which is exactly the state the issue's screenshot is in.
+
+## The panel cannot call an MCP tool — the bridge, named
+
+The extension never speaks MCP to this server. It drives one-shot CLI modes selected from `args[0]`
+before any transport opens — `--log`, `--findings`, `--findings-many`, `--providers`, `--bugs-json`
+(`src_mcp/src/Program.cs:162-178`), through `serverRun` in `roundsDbRead.ts:313`. So the human close
+needs its **own one-shot mode**, `--close-consult`, taking the id and the outcome and answering by
+exit code, exactly as `--findings-many` does. Without this the close control is a button that cannot
+run; the first draft promised the control and never named the door. (gemini, plan round.)
+
 ## The boundary, both ways (MANDATORY — the halves ship on their own clocks)
 
 The extension and the server are separate artefacts and the person updates them separately; this is
@@ -89,12 +131,23 @@ and the lesson [module_server.md] records from the `remoteVendor` field that thr
 
 | | new extension | old extension |
 |---|---|---|
-| **new server** | the outcome is written and shown | the column shows `closed`, as it does today; the extra field is ignored by a parser that rebuilds every entry |
-| **old server** | no `outcome` on any record → the column says **`closed`** and nothing about an outcome; it must NEVER invent `solved` from `Status == closed`, because *the budget ran out* is not *it worked* | unchanged |
+| **new server** | the outcome is written and shown beside the status | the extra field is ignored by a parser that rebuilds every entry; the column reads as it does today |
+| **old server** | **the STATUS is preserved and the outcome is simply absent** — an `open` record still reads `open`, a `closed` one still reads `closed`, and neither gains a verdict | unchanged |
 | **old server, `close_consult` called** | the tool is absent; the caller gets the MCP "unknown tool" error, which names what to update | — |
+| **old server, the human close pressed** | `--close-consult` is not a mode that binary has; it answers its own "unknown argument" and exits non-zero, and the panel says the server is too old rather than failing silently | — |
 
-The one rule the table exists to fix in advance: **absent is not `not_solved`.** A record with no
-outcome is a consultation nobody said anything about, and the column says exactly that.
+Two rules the table exists to fix in advance, and the first is the one the first draft got wrong:
+
+1. **An absent outcome never changes the STATUS.** The draft said an outcome-less record "shows
+   `closed`", which would have reported a still-running consultation as finished. The status is the
+   server's and it is shown as given; the outcome is a second, separate column.
+2. **Absent is not `not_solved`, and it is not `lapsed` either.** A record with no outcome is one
+   nobody said anything about — including one this build's own sweep closed before the field existed.
+   It renders as an em dash, never as a verdict, and there is NO migration that invents one.
+
+**This is local to `src_mcp`, and that was checked rather than assumed.** A consultation is a file in
+`<dataDir>/consultations/<id>.json`; `src_server` — the Team server — contains **zero** references to
+`Consultation` (measured 2026-09-17). No Team-server schema, wire contract or deploy is involved.
 
 ## Build order
 
@@ -111,7 +164,16 @@ outcome is a consultation nobody said anything about, and the column says exactl
 6. The human close in the *Consultant* section.
 7. **Teeth**: delete the absent-is-not-not_solved guard and watch the boundary test go red; remove
    the estimate's tilde and watch the cost test go red.
-8. `cd src_vs_code && rm -rf out && npm run compile && node scripts/run-tests.mjs`; the server suite;
+8. The `--close-consult` one-shot mode, and the panel's outcome picker: the control opens a choice
+   of the three human outcomes with a confirm and a cancel, and reports the server's refusal — a
+   conflict, a stale record, a binary too old — rather than closing optimistically.
+9. **The live counterpart check**, because no unit test can prove the two-sided claim: a script that
+   runs the PREVIOUS released server binary and the new extension's reader against one data
+   directory, asserting an old record parses with no outcome and its status intact, and that
+   `--close-consult` against the old binary fails the way the table says. `npm run test:claude-models`
+   is the precedent — hand-run, catalogued, not in CI.
+10. `cd src_vs_code && npm run clean && npm run compile && npm test` — the repository's own
+   platform-safe scripts, rather than a shell `rm -rf`; then the server suite; then
    `node .agents/conventions/tools/plan-lifecycle.mjs`.
 
 ## Test plan
@@ -120,6 +182,9 @@ outcome is a consultation nobody said anything about, and the column says exactl
   asserted by running the page; the decisions are asserted by calling them.
 - The server's refusals are unit-tested against a real record on disk, as `ConsultationService`'s
   existing suites are.
+- **Every new flow is catalogued in `research/module_tests.md`** with what it does and does not
+  prove — the AI close, the human close, a retry, and the old-server refusal. A unit test and a page
+  test cannot see broken tool wiring or a dead button, which is the gap that catalogue exists to name.
 - Unchanged and must stay green: `consultationsLive.test.ts`, `consultant.test.ts`,
   `roundsLogPaging.test.ts`, the server's consultation suites.
 
@@ -129,6 +194,12 @@ outcome is a consultation nobody said anything about, and the column says exactl
   refusal is right; the estimate is the extension's, made where the rates a person typed already live.
 - **It does not change what `Reason` means.** *Why it stopped* and *whether it worked* are two
   questions and this plan adds the second rather than overloading the first.
+- **It does not freeze the estimate.** A consultation priced from a rate typed today shows a
+  different number if that rate is edited next year, because the estimate is RECALCULATED from the
+  rows and lists as they stand — which is what `priceOfLine` already does for every reviewer round and
+  every conversation in the ledger. Storing a rate snapshot per consultation would make this table
+  disagree with the two beside it; the tilde is what says the number is an estimate rather than a
+  bill. Stated here because the plan round asked, and the answer is "deliberately current".
 - **It does not sweep or expire anything differently.** The existing budget and idle paths still
   close a consultation; they simply leave the outcome empty, which the column will say.
 
@@ -136,7 +207,15 @@ outcome is a consultation nobody said anything about, and the column says exactl
 
 - [ ] A RED test observed failing before each half, naming the real symptom.
 - [ ] A `closed` record with no outcome never reads as `not_solved` — asserted, and proved by breaking it.
-- [ ] A consultation whose vendor reported no money shows a marked estimate, not a dash, when a rate exists.
+- [ ] A consultation whose vendor reported no money shows a marked estimate when a rate exists, the
+      real money unmarked when the vendor reported one, and the dash when there is neither.
+- [ ] An absent outcome renders as a dash and leaves the STATUS untouched — asserted for an `open`
+      record and a `closed` one, and proved by breaking it.
+- [ ] A repeat of the same outcome succeeds; a different one is refused as a conflict; a person may
+      fill an absent outcome on a lapsed record.
+- [ ] The human close reaches the server through `--close-consult` and surfaces its refusal.
+- [ ] The live counterpart check exists, was RUN against the previous released binary, and its result
+      is recorded here.
 - [ ] `close_consult` refuses another caller's id and an unknown outcome, and is idempotent.
 - [ ] The two-sided table above is true of the code, both rows.
 - [ ] Whole extension suite green from a cleaned `out/`; the server suite green; `plan-lifecycle.mjs` clean.
