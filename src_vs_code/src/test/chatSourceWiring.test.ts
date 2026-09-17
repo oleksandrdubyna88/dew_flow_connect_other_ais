@@ -178,11 +178,16 @@ test('the follow writes a live conversation through its thread and a closed one 
   // Asked AT THE MOMENT the store pass reaches each record, never from a set taken before any
   // awaiting began: a conversation that closes while the loop runs is no longer followed by its
   // thread, and a stale snapshot would have said it was — so its rename would be followed by neither.
-  assert.match(follow, /if \(heldConversationIds\(panels\)\.includes\(meta\.id\) \|\| !followable\(meta\.source\)\)/u,
+  // The store pass became CONCURRENT on 2026-09-17, so the two halves of this are asserted
+  // separately: what a rename touches is decided up front, and whether a conversation is OPEN is
+  // asked inside each job. Hoisting the second out of the loop is the regression this refuses, and
+  // it caught exactly that on the day the concurrency landed.
+  const live = follow.indexOf('heldConversationIds(panels).includes(');
+  assert.ok(live >= 0 && live > follow.indexOf('await abreast('),
     'the store pass decides from a snapshot of what was open, so a conversation closing mid-loop loses its rename');
-  assert.doesNotMatch(follow, /const held = new Set/u, 'the live set is still snapshotted before the awaiting starts');
+  assert.doesNotMatch(follow, /const held = /u, 'the live set is snapshotted before the awaiting starts');
   assert.match(follow, /keepQueued\(entry, thread\);/u, 'a live conversation’s new source is never written');
-  assert.match(follow, /follow\(onDisk, meta\.id, meta\.source, sourceOfFile\(moved\)\)/u, 'a closed conversation is not followed at all');
+  assert.match(follow, /follow\(onDisk, one\.id, one\.was, one\.now\)/u, 'a closed conversation is not followed at all');
   // A busy claim is an ordinary concurrent save, not a verdict: a rename happens once and is never
   // replayed, so giving up on the first one loses it for ever. (Four reviewers, the code round.)
   const one = command.slice(command.indexOf('export async function follow(onDisk'));

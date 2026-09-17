@@ -335,6 +335,29 @@ at [chatFollow.ts:71](../src_vs_code/src/chatFollow.ts#L71).
 **The symptom.** Strictly sequential, each record with up to five 200 ms retries. Ten thousand
 records is **hours**, with nothing on screen and a stale picker until the final refresh.
 
+> **MEASURED 2026-09-17, and “hours” is wrong by two orders of magnitude.** Against a real store on
+> this disk: **5.76 ms per refile**, 200 records in 1 152 ms. Ten thousand SEQUENTIALLY is therefore
+> about **58 seconds**, not hours. The plan's figure assumed every record hitting the five-try,
+> 200 ms retry path — which happens only when another window holds every lock at once, not when a
+> folder is renamed.
+>
+> **So the lease apparatus is out of proportion and is NOT built.** A persisted job with a schema,
+> state transitions, a heartbeat shorter than a thirty-second expiry, a fencing token and a recovery
+> owner is the right answer for work that runs for hours. For a job of about a minute — ten seconds
+> with the pool — it is a storage surface, a migration and a class of bug bought to solve a problem
+> the measurement says is not there. What shipped is `abreast` at width 8 and the notice stories 6
+> and 7 added.
+>
+> **What is left open, honestly:** a rename interrupted mid-way still leaves records split, and
+> nothing revisits them. The exposure is now ten seconds rather than hours, which is why it is
+> recorded rather than engineered around. If the store ever grows an order of magnitude, re-measure
+> BEFORE building the lease — that is the whole lesson of this note.
+>
+> **And making the loop concurrent reintroduced a fixed defect, which a test caught.** Hoisting
+> `heldConversationIds` out of the per-record job is the snapshot an earlier code round removed: a
+> conversation that CLOSES mid-run is no longer followed by its thread, so a stale snapshot has its
+> rename followed by neither half. `chatSourceWiring` refused it within the minute.
+
 **The pool already exists — do not write a second one.** `abreast(jobs, width)` (`abreast.ts:14`)
 runs jobs a few at a time and returns results in the jobs' own order. Its own header records that it
 was written inside the migration, found inline in the store's listing, and **moved here rather than

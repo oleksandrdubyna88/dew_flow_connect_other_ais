@@ -790,6 +790,19 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**A rename follows a few conversations at a time, and the number behind that is measured.** The
+store pass was strictly sequential. Against a real store on 2026-09-17: **5.76 ms per refile**, so
+ten thousand conversations sequentially is about **58 seconds** — not the hours the plan estimated,
+which assumed every record hitting the five-try retry path. `abreast` at width 8 (the pool this
+repository already had) brings that to roughly ten. The width is small on purpose: the retries exist
+for a store that is already contended, so a wide fan would be one window competing with itself for
+locks it is about to wait on.
+
+**Whether a conversation is OPEN is still asked inside each job, never hoisted.** That is the
+difference between a rename being followed and being followed by neither half: a conversation that
+closes mid-run stops being followed by its thread, so a set taken before the awaiting begins is
+wrong by the time it is read. Making the loop concurrent reintroduced exactly that hoist, and
+`chatSourceWiring.test.ts` refused it.
 **Replacing an attached picture no longer destroys the one that was there.** `attachPicture` called
 `forgetPicture` FIRST — deleting the file and clearing the fields — and then wrote the replacement
 straight to its final name, so a full or unwritable disk left the conversation with no image and
