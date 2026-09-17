@@ -1529,8 +1529,12 @@ The characters seen changing were `\` `:` `.` and `_`. Checked against the folde
 afterwards: the new rule names an existing folder for all six repositories here, the old one for
 exactly one — so *Asked*, *Take the question* and *go to conversation* had never once worked in a
 `dew_flow_*` checkout. What is still unknown is what becomes of a letter outside A–Z, because no
-measured path has one; `projectDirIn` therefore looks for the older spelling as well, so a folder
-written under either rule is found rather than reported as no sessions at all.
+measured path has one — so `projectDirNames` offers **three** spellings and the lookup tries each:
+letters kept (Cyrillic and CJK included), A–Z0–9 only, and the one this extension produced until
+today. And because two spellings can both exist after an upgrade, the folder that actually HOLDS a
+transcript wins over an empty one that merely sorts first. Measured against Claude Code 2.1.272; the
+rule is Anthropic's and undocumented, so when a folder stops being found the measurement is re-run —
+each transcript's own `cwd` paired with the folder it sits in — before anybody edits the regex.
 
 **A session wears MORE THAN ONE name, and until 2026-09-16 this read one of them.** There is a second
 row — `{"type":"custom-title","customTitle":"…","sessionId":"…"}` — which is what the tab wears when a

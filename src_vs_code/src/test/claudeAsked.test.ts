@@ -15,6 +15,7 @@ import {
   pinnable,
   promptsFrom,
   projectDirName,
+  projectDirNames,
   SCAN_BUDGET,
   sessionFileIn,
   sessionFileOf,
@@ -1248,6 +1249,80 @@ test('a folder spelled the OLD way is still found, because the rule is somebody 
 
     assert.strictEqual(found.kind, 'one',
       'a folder written under the older spelling was reported as no sessions at all');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('each character the rule touches is pinned on its own, not as one happy path', () => {
+  // A table rather than a sentence, because "84 of 84 pairs" is an inspection that happened once and
+  // this is the thing that runs. Every character the measurement saw changing gets its own line, and
+  // the three the old rule already handled get theirs, so a later edit that fixes one and breaks
+  // another cannot pass. (codex, the plan round.)
+  const cases: readonly (readonly [string, string])[] = [
+    ['a_b', 'a-b'],
+    ['a.b', 'a-b'],
+    ['a\\b', 'a-b'],
+    ['a/b', 'a-b'],
+    ['a:b', 'a-b'],
+    ['a b', 'a-b'],
+    ['a-b', 'a-b'],
+    ['abc123', 'abc123'],
+    // No collapsing: a drive letter really does become TWO dashes, measured on this machine.
+    ['D:\\rsd', 'D--rsd'],
+  ];
+  for (const [path, expected] of cases) {
+    assert.strictEqual(projectDirName(path), expected, `“${path}” is not spelled the way Claude Code spells it`);
+  }
+});
+
+test('a folder named in another alphabet is looked for BOTH ways', () => {
+  // The one thing the measurement cannot settle: no path on this machine has a letter outside A–Z,
+  // so whether Claude Code keeps a Cyrillic letter or dashes it is unknown. Both spellings are
+  // looked for, which is why the unknown costs nothing. (gemini, the plan round.)
+  const spellings = projectDirNames('D:\\rsd\\проект_один');
+
+  assert.ok(spellings.includes('D--rsd-проект-один'), 'a folder that keeps its letters is not looked for');
+  // Every letter of 'проект_один' dashed: eleven characters, eleven dashes.
+  assert.ok(spellings.includes(`D--rsd-${'-'.repeat(11)}`),
+    'a folder whose letters were dashed is not looked for');
+  assert.ok(spellings.includes('D--rsd-проект_один'), 'the spelling this extension used until today is not looked for');
+});
+
+test('an EMPTY folder under the new name does not shadow the old one that holds the sessions', async () => {
+  // An upgrade leaves the old folder where it was and Claude Code starts writing the new one, so both
+  // exist and the preferred one can be empty. Answering with it would keep the very refusal this
+  // change is about. (gemini and codex, the plan round, independently.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const root = join(home, '.claude', 'projects');
+    mkdirSync(join(root, 'D--rsd-dew-flow-benchmark'), { recursive: true });
+    const older = join(root, 'D--rsd-dew_flow_benchmark');
+    mkdirSync(older, { recursive: true });
+    writeFileSync(join(older, 'one.jsonl'), `${titled('Where the sessions really are')}\n${said('here')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\rsd\\dew_flow_benchmark', true, 'Where the sessions really are');
+
+    assert.strictEqual(found.kind, 'one',
+      'an empty folder under the newer spelling hid the transcripts in the older one');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('Take the question reads the same folder rule as the Asked button', async () => {
+  // Both go through one resolver, and this is what says so from the outside: the second flow, on a
+  // path with an underscore, which is the shape that was broken. (codex, the plan round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--rsd-dew-flow-benchmark');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('A waiting one')}\n`, 'utf8');
+
+    const answer = await waitingQuestion(home, 'D:\\rsd\\dew_flow_benchmark', true, '');
+
+    assert.notStrictEqual(answer.kind, 'failed',
+      'Take the question still cannot find the folder for a path with an underscore');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
