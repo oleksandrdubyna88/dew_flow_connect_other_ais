@@ -432,6 +432,31 @@ socket against the built binary, confirms the revoked key really stops ingesting
 configurations an operator actually hits: an out-of-range admin limit exiting 78, and the variable
 ABSENT — where the server must still boot, still collect, and refuse every admin route.
 
+**A port that was free a moment ago is not a port you hold.** `TheBuiltBinariesTests` asks the OS
+for a free port, releases it, and hands the NUMBER to a server process that binds it a moment later
+— and anything on the machine may take it in between: another test in this suite, another suite on a
+shared runner, an ephemeral outbound connection. Nine call sites took that number straight to a
+server with no second chance, so it was nine opportunities per run for a green suite to go red about
+something no change had touched. `Serving` now walks candidates until one is really held, bounded at
+ten so a machine out of ports is a failure rather than a hang.
+
+Two things make that more than a retry loop. The server's output is **kept** rather than drained into
+nothing, so a startup failure arrives with the server's own sentence instead of fifteen seconds of
+polling and "must reach the point of listening" — and `Listening` stops the moment the process has
+exited, which is what makes a lost port cost tens of milliseconds instead of the full timeout. And
+the classifier is **narrow on purpose**: retrying on any early exit would turn a missing keyword list
+into ten attempts and a sentence blaming ports, so anything unrecognised fails at once, carrying what
+the server said.
+
+It is asserted by provocation rather than by luck. `APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun`
+holds a port with an ordinary socket and offers it as the first candidate; `ARealCollisionIsRecognisedOnThisPlatform`
+starts the real server on a held port and asserts that what THIS platform prints is something the
+classifier recognises — a platform whose wording is missing reddens there and names the text, which
+is how that list is meant to grow. Both borrow their shape from `src_mcp/tests/LoopbackStub`, which
+closed the same race for an in-process listener; the code is deliberately not shared, because that
+one catches an exception carrying an errno and this one can only observe that a separate process
+exited and what it printed.
+
 **Three suites that exist because the code round moved the code out from under them.**
 
 `TheEdgeIsWatchedTests` drives the real server and asserts on **what it logged**, because the edge
