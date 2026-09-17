@@ -220,3 +220,90 @@ test('it reads the release lines from the guard, not from a second copy of them'
   assert.match(source, /from '\.\/changelog-names-the-release\.mjs'/,
     'the extractor imports the registry rather than declaring its own');
 });
+
+test('a heading that merely STARTS with a release word does not end the section', () => {
+  // `NEXT_RELEASE` first matched `## ` followed by a known word or a digit, which four reviewers
+  // said would truncate a note at its own `## Server compatibility` or `## 1. Migration notes`.
+  // A release heading carries a VERSION; that is the whole difference.
+  const withTraps = [
+    '# Changelog',
+    '',
+    '## Server 0.28.0 — 2026-09-17',
+    '',
+    'Opening line.',
+    '',
+    '## Server compatibility',
+    '',
+    'Still 0.28.0.',
+    '',
+    '## 1. Migration notes',
+    '',
+    'Also still 0.28.0.',
+    '',
+    '## Server 0.27.1 — 2026-09-16',
+    '',
+    'The previous one.',
+    '',
+  ].join('\n');
+
+  const { out } = section('mcp-v0.28.0', withTraps);
+
+  assert.match(out, /Still 0\.28\.0/, '"## Server compatibility" is not a release');
+  assert.match(out, /Also still 0\.28\.0/, 'nor is "## 1. Migration notes"');
+  assert.doesNotMatch(out, /The previous one/, 'but a real release heading still ends it');
+});
+
+test('a line documented by a bare numeric heading is found', () => {
+  // 51 extension releases are headed `## 0.31.0 — <date>` with no word at all. Asking for
+  // `Extension 0.31.0` finds none of them, so every one would have published the fallback although
+  // its notes were right there.
+  const { code, out } = section('extension-v0.31.0', CHANGELOG);
+
+  assert.equal(code, 0);
+  assert.match(out, /The form the early extension releases used/,
+    'the bare form belongs to the extension line and the registry says so');
+});
+
+test('a bare heading does not answer a line that does not use that form', () => {
+  // The hazard of accepting bare numbers everywhere: `## 0.31.0` is an EXTENSION release, and
+  // `mcp-v0.31.0` must not be handed somebody else's notes.
+  const { code, out } = section('mcp-v0.31.0', CHANGELOG);
+
+  assert.equal(code, 0);
+  assert.equal(out.trim(), FALLBACK, 'one number can belong to two lines');
+});
+
+test('an unknown flag is refused, not ignored', () => {
+  const { code, said } = section('mcp-v0.28.0', CHANGELOG, ['--fallbcak', 'typo']);
+
+  assert.equal(code, 2, 'a mistyped flag that is ignored silently generates the wrong notes');
+  assert.match(said, /--fallbcak/, 'and it says which one it did not know');
+});
+
+test('a flag with no value is refused rather than defaulted', () => {
+  const { code } = section('mcp-v0.28.0', CHANGELOG, ['--out']);
+
+  assert.equal(code, 2, 'falling back to a default here writes the notes somewhere nobody looks');
+});
+
+test('two tags are refused rather than one of them silently winning', () => {
+  const { code, said } = section('mcp-v0.28.0', CHANGELOG, ['mcp-v0.27.1']);
+
+  assert.equal(code, 2);
+  assert.match(said, /mcp-v0\.27\.1|one tag/i);
+});
+
+test('an empty fallback is refused, because a release with an empty body is not a release', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogsection-'));
+  try {
+    const file = path.join(dir, 'CHANGELOG.md');
+    fs.writeFileSync(file, CHANGELOG, 'utf8');
+    const ran = spawnSync(process.execPath,
+      [script, 'mcp-v0.99.0', '--changelog', file, '--fallback', ''],
+      { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
+
+    assert.equal(ran.status, 2, 'it promises every result has a body; an empty one breaks that');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

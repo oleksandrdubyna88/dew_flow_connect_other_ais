@@ -25,6 +25,23 @@
 
 import * as fs from 'node:fs';
 
+/**
+ * Whether this is a baseline at all: an object whose every property is an array of strings.
+ *
+ * <p>Valid JSON is not a valid baseline, and the difference matters because the two answers are
+ * different exit codes. `[]`, `"text"`, `42`, `{"Server": "0.28.0"}` and `{"Server": [1]}` all parse;
+ * some of them used to throw out of `filter` or `Set` and exit 1, which in this script means "a
+ * release lost its note" — a specific and wrong accusation. `null` is the sharpest case:
+ * `JSON.parse("null")` succeeds and `Object.entries(null)` throws.</p>
+ */
+export function isBaseline(value) {
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && Object.values(value).every((versions) => Array.isArray(versions)
+      && versions.every((v) => typeof v === 'string'));
+}
+
 /** Every version the base protected that the current file no longer does, by line. */
 export function lost(base, current) {
   const gone = {};
@@ -56,9 +73,20 @@ try {
   process.exit(2);
 }
 
+for (const [what, value] of [['current', current], ['base', base]]) {
+  if (!isBaseline(value)) {
+    console.error(`the ${what} baseline is not a baseline: expected an object whose every property `
+      + `is an array of version strings, got ${JSON.stringify(value)?.slice(0, 120) ?? 'undefined'}.`);
+    process.exit(2);
+  }
+}
+
 if (Object.keys(base).length === 0) {
-  console.log('the base commit records no baseline, so nothing can have been lost — '
-    + 'this is the first one.');
+  // Absent and EMPTY are different accidents and this says which it saw. A base that is literally
+  // `{}` can also be a file somebody truncated, so the message does not claim more than it knows.
+  console.log(`the base baseline at ${basePath} is empty — it records no releases, so nothing can `
+    + 'have been lost. That is expected for the commit that introduces the file; if the base was '
+    + 'supposed to hold entries, this check just passed on a truncated file.');
   process.exit(0);
 }
 

@@ -127,3 +127,45 @@ test('CI runs it against the pull request\'s own base commit', () => {
   assert.match(step, /if:\s*github\.event_name == 'pull_request'/,
     'only on a pull request — on main it would compare a commit with itself');
 });
+
+test('a baseline that is not an object of string arrays is refused', () => {
+  // Valid JSON is not a valid baseline. Some of these threw from `filter` or `Set` and exited 1,
+  // which reads as "a release lost its note" — the wrong answer to "this file is malformed".
+  for (const malformed of [[], 'text', 42, { Server: 'not-an-array' }, { Server: [1, 2] }]) {
+    const { code } = compare({ Server: ['0.28.0'] }, malformed);
+
+    assert.equal(code, REFUSED,
+      `${JSON.stringify(malformed)} is not a baseline, and saying so is not the same as saying a `
+      + 'release lost its note');
+  }
+});
+
+test('a null baseline is refused rather than crashing', () => {
+  // `JSON.parse("null")` is null, and `Object.entries(null)` throws — an uncaught exception exits 1,
+  // which this check spends 1 on saying something specific.
+  const { code } = compare({ Server: ['0.28.0'] }, null);
+
+  assert.equal(code, REFUSED);
+});
+
+test('an empty base says whether it was absent or merely empty', () => {
+  const { said } = compare({ Server: ['0.28.0'] }, {});
+
+  assert.match(said, /empty|absent|no baseline|first/i,
+    'a base emptied by accident and a base that never existed deserve different words');
+});
+
+test('CI proves the base file is ABSENT before treating it as empty', () => {
+  // `git show ... || echo '{}'` converts ANY git failure into an empty baseline, and an empty
+  // baseline is this check's pass. A transport error, a corrupted object or a bad SHA would then
+  // wave through the very deletion the step exists to refuse. Only genuine absence may produce `{}`.
+  const ci = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8')
+    .replace(/\r\n/g, '\n');
+  const at = ci.indexOf('baseline-only-grows.mjs');
+  const step = ci.slice(ci.lastIndexOf('- name:', at), at + 400);
+
+  assert.match(step, /git cat-file -e/,
+    'absence is established by asking whether the object exists, not by any command failing');
+  assert.doesNotMatch(step, /git show[^\n]*\|\|\s*echo/,
+    'a blanket `|| echo {}` turns every git error into a pass');
+});
