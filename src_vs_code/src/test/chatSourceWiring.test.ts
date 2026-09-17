@@ -131,15 +131,19 @@ test('the write queue is ONE queue, so the pin cannot race the page', () => {
 });
 
 test('a tab snapshot carries the document’s uri, from the SAME read as its scheme', () => {
+  // Both halves moved to `chatCapture.ts` when the command file was split — one module for what this
+  // side reads out of the editor, the tabs and the clipboard — so this follows them there. The third
+  // assertion stays on the command file, where a new conversation is still given its source.
+  const capture = source('chatCapture.ts');
   const command = source('chatCommand.ts');
-  const snap = command.slice(command.indexOf('function snapshots('), command.indexOf('function snapshots(') + 1_400);
+  const snap = bodyOf(capture, 'export function snapshots(');
 
   assert.match(snap, /uri: input\?\.uri === undefined \? '' : input\.uri\.toString\(\)/u, 'a file tab has no identity to be found by');
   // And it is the MATCHED tab's uri, not whatever is focused. From the chat panel itself — which is
   // how *add the question* is used — the active tab is a webview with no document, while the match
   // falls back through every tab to the editor. Reading the active one there gave the conversation no
   // source at all. Still out of the SAME snapshot, so the two cannot disagree about the tabs.
-  assert.match(command, /uri: all\.find\(\(tab\) => tab\.key === matched\?\.key\)\?\.uri \?\? '',/u,
+  assert.match(capture, /uri: all\.find\(\(tab\) => tab\.key === matched\?\.key\)\?\.uri \?\? '',/u,
     'the uri comes from the focused tab rather than the matched one, so a chat opened from the panel has no source');
   assert.match(command, /source: fromSession \? \{ kind: 'none' \} : sourceOfFile\(sourceUri\),/u, 'a new conversation is not given its source');
 });
