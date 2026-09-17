@@ -137,11 +137,11 @@ export function enqueue(entry: ChatEntry, thread: Thread, text: string, ready: (
   // while it waits means the person who typed it is no longer in the conversation they typed it in.
   const began = thread.generation;
   const mine = thread.turns
-    .then(() => {
-      ready();
-
-      return oneTurn(entry, text, began, joined.id);
-    })
+    // `ready` is handed to the TURN rather than run in front of it. Run here it would fire for a
+    // question that has been withdrawn, for one whose conversation has been reset, and for one the
+    // cap is about to refuse — each of those mutating what the NEXT turn is handed. It belongs
+    // inside the guards, which is where `oneTurn` puts it. (codex, the second code round.)
+    .then(() => oneTurn(entry, text, began, joined.id, ready))
     .catch((reason: unknown) => {
       // Including the flag: a turn that threw is not a turn still running, and leaving it set would
       // make every later switch claim to be waiting for an answer that will never arrive.
@@ -239,7 +239,10 @@ export async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> 
   //
   // A re-ask is a switch by another name — the same question, a different model — so the mark
   // applies to it exactly as it applies to one.
-  void enqueue(entry, thread, again.question, () => {
+  // AWAITED, so this keeps the contract its callers already had: when it resolves, the turn it
+  // asked for is done. `void` made it resolve while the question was still queued, which anything
+  // awaiting it would read as an answer that has arrived. (codex, the second code round.)
+  await enqueue(entry, thread, again.question, () => {
     thread.carry = carriedFrom(again.said, thread.carryFrom);
   });
 }
@@ -294,12 +297,28 @@ export async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Pr
   // Through the queue, and its own mark applied as its own turn begins — both for the reasons the
   // re-ask above gives. Clamped there rather than here for the same reason it is clamped at all: a
   // stored mark past the end would point at an unrelated message as soon as the conversation grew.
-  void enqueue(entry, thread, again, () => {
+  // Awaited for the reason the re-ask above gives.
+  await enqueue(entry, thread, again, () => {
     thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
   });
 }
 
-export async function oneTurn(entry: ChatEntry, text: string, began: number, questionId: string): Promise<void> {
+export async function oneTurn(
+  entry: ChatEntry,
+  text: string,
+  began: number,
+  questionId: string,
+  /**
+   * What belongs to THIS turn alone, run once every refusal has been passed.
+   *
+   * <p>A re-ask and a retry each rewrite what the next model is handed. Doing that when the button
+   * was pressed set it for whichever turn ran next — behind a queued question, somebody else's — and
+   * doing it at the front of the chain would still fire for a question that was withdrawn, reset
+   * away or refused by the cap. Both are the same mistake one step apart: the work is the turn's, so
+   * it happens where the turn does. (codex, both code rounds.)</p>
+   */
+  ready: () => void = () => {},
+): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
     return;
@@ -333,6 +352,8 @@ export async function oneTurn(entry: ChatEntry, text: string, began: number, que
 
     return;
   }
+  // EVERY REFUSAL IS BEHIND US, so what belongs to this turn can be done. See `ready`.
+  ready();
   // A conversation that came back from a reload has no process yet. It is opened HERE, on the first
   // question and not before, so a window with five restored tabs starts nothing until one of them is
   // spoken to — and the transcript is already in `carry`, so the model that answers is handed the

@@ -11,6 +11,8 @@ import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened } from './chatFres
 import { reloadedNote } from './chatTabs';
 import { carriedFrom } from './chatCarry';
 import { pushChatFresh } from './chatPanel';
+import { drained } from './chatQueue';
+import { pushChatDraft } from './chatPanel';
 
 /**
  * New chat: ending the conversation a tab holds, filing it, and opening a clean one in its place.
@@ -107,6 +109,15 @@ export async function freshStart(entry: ChatEntry): Promise<void> {
 
 /** The reset itself, with the latch held. */
 export async function freshening(entry: ChatEntry, thread: Thread): Promise<void> {
+  // 0. THE WORDS COME BACK FIRST, before the slate moves and takes their questions with it. Three
+  // reviewers objected to losing typed words from three directions, and this codebase already has
+  // the answer: they go back to the composer, which is where they were typed. All of them, oldest
+  // first — a count on its own is not a recovery. The page APPENDS each one below what is there,
+  // which is `pushChatDraft`'s own rule and not a second copy of it here. (issue #288.)
+  for (const unasked of drained(thread.waiting)) {
+    pushChatDraft(entry, unasked);
+  }
+  thread.waiting = [];
   // 1. THE SLATE MOVES FIRST, before anything is stopped. A question queued behind the answer that
   // is running would otherwise begin a whole new turn after the stop — the reset would wait it out,
   // and it would append what somebody typed into a transcript that is about to be replaced.
