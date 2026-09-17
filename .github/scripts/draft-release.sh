@@ -21,16 +21,26 @@
 # matrix legs racing this would have produced six drafts holding one asset each.
 set -euo pipefail
 
-TAG=${1:?usage: draft-release.sh <tag> <title> <notes>}
-TITLE=${2:?usage: draft-release.sh <tag> <title> <notes>}
-NOTES=${3:?usage: draft-release.sh <tag> <title> <notes>}
+TAG=${1:?usage: draft-release.sh <tag> <title> <notes-file>}
+TITLE=${2:?usage: draft-release.sh <tag> <title> <notes-file>}
+NOTES_FILE=${3:?usage: draft-release.sh <tag> <title> <notes-file>}
+
+# A FILE, not a string. The body is a release's changelog section: multiline markdown that can begin
+# a line with `-`. As an argument it is word-split, cut at the first newline, or read as a flag by
+# whatever parses it next — so `changelog-section.mjs --out` writes it and this takes the path.
+[ -r "$NOTES_FILE" ] || { echo "notes file not readable: $NOTES_FILE"; exit 1; }
 
 # Reused only while it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release too, so
 # a re-run against a tag somebody had published by hand would otherwise send every leg uploading
 # into a release clients can already see — the exact window this whole shape removes.
 if EXISTING=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
   if [ "$EXISTING" = "true" ]; then
-    echo "$TAG is already a draft; reusing it"
+    # Reuse the draft — and REWRITE its notes. Raised on the plan round: run one drafts with
+    # whatever body it had and then fails; run two reuses that draft. Without this the release is
+    # eventually published carrying the body of the failed attempt, however often it is retried,
+    # and nothing anywhere says so.
+    echo "$TAG is already a draft; reusing it and refreshing its notes"
+    gh release edit "$TAG" --notes-file "$NOTES_FILE"
     exit 0
   fi
 
@@ -39,5 +49,5 @@ if EXISTING=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null)
   exit 1
 fi
 
-gh release create "$TAG" --draft --title "$TITLE" --notes "$NOTES"
+gh release create "$TAG" --draft --title "$TITLE" --notes-file "$NOTES_FILE"
 echo "drafted $TAG"

@@ -107,6 +107,19 @@ jobs:
         working-directory: src_vs_code
         run: npm run test:seam
 
+      # The changelog baseline is what lets the release guard notice a note going MISSING, but it
+      # lives in the repository it guards — so one commit deleting a note AND its baseline row would
+      # pass everything. Pinned to the pull request's own base commit: `origin/main` does not exist
+      # in a shallow checkout, and on main the comparison would be a commit against itself.
+      - name: The changelog baseline only grows
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth 1 origin "$BASE_SHA"
+          git show "$BASE_SHA:.github/changelog-baseline.json" > "$RUNNER_TEMP/base-baseline.json"             || echo '{}' > "$RUNNER_TEMP/base-baseline.json"
+          node .github/scripts/baseline-only-grows.mjs             .github/changelog-baseline.json "$RUNNER_TEMP/base-baseline.json"
+
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
 
