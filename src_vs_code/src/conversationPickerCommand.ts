@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
+import { asText } from './asText';
 import { openConversations, restoreConversation, revealBound, whereConversationSits } from './chatCommand';
+import { notify } from './notify';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
 import { ConversationMeta, ConversationRecord } from './chatStore';
@@ -307,7 +309,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
       // ASKED THIS WINDOW FIRST, and only then declined: between the list being drawn and the row
       // being pressed the other window may have closed and this one adopted it, and refusing on the
       // strength of a heartbeat read seconds ago would refuse a tab that is right here.
-      void vscode.window.showWarningMessage(openElsewhere(row.label));
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'conversationPicker',
+        code: 'conversation-open-elsewhere',
+        subject: row.id,
+        title: openElsewhere(row.label),
+      });
 
       return false;
     }
@@ -326,13 +335,29 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
         // Off the list as well as said out loud, or the row is still there on the next keystroke and
         // the person presses it again.
         deps.index.drop(row.id);
-        void vscode.window.showWarningMessage(answer.message);
+        void notify({
+          as: 'warning',
+          class: 'refusal',
+          source: 'conversationPicker',
+          code: 'conversation-gone',
+          subject: row.id,
+          title: answer.message,
+        });
 
         return false;
       case 'refused':
         // It is there and could not be read. The row STAYS: nothing has been lost, and a permissions
         // error or a record a newer build wrote must not hide a conversation from the list.
-        void vscode.window.showWarningMessage(answer.message);
+        // A different CODE from 'gone' on purpose: one row disappears from the list and the other
+        // stays, so they are two conditions however alike the two sentences look.
+        void notify({
+          as: 'warning',
+          class: 'refusal',
+          source: 'conversationPicker',
+          code: 'conversation-unreadable',
+          subject: row.id,
+          title: answer.message,
+        });
 
         return false;
       default: {
@@ -404,7 +429,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
         // The outer edge of a detached call, and therefore a catch that says something: the store
         // answers in outcomes and never rejects, so anything arriving here is a defect.
         console.error('ConnectOtherAIs: a conversation could not be opened from the picker', reason);
-        void vscode.window.showWarningMessage('That conversation could not be opened.');
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'conversationPicker',
+          code: 'conversation-not-opened',
+          title: 'That conversation could not be opened.',
+          detail: asText(reason),
+        });
         settle(false);
       });
   });
@@ -423,7 +455,16 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
   const forget = async (row: PickerRow | undefined): Promise<void> => {
     const decided = mayForget(row);
     if (decided.kind === 'refuse') {
-      void vscode.window.showWarningMessage(decided.message);
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'conversationPicker',
+        code: 'conversation-not-forgettable',
+        // Narrowed, not cast: only a `conversation` row has an id, and the union is shaped that way
+        // on purpose so a widget cannot so much as try to open a notice.
+        ...(row?.kind === 'conversation' ? { subject: row.id } : {}),
+        title: decided.message,
+      });
 
       return;
     }
@@ -438,7 +479,14 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
       removing = false;
     }));
     if (done.kind === 'failed') {
-      void vscode.window.showWarningMessage(done.message);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'conversationPicker',
+        code: 'conversation-not-forgotten',
+        ...(row?.kind === 'conversation' ? { subject: row.id } : {}),
+        title: done.message,
+      });
       // Redrawn anyway, because the row is still there and the list must go on saying so.
       draw();
 
@@ -458,7 +506,16 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps, narrow
   const forgetRow = (row: PickerRow | undefined): void => {
     void forget(row).catch((reason: unknown) => {
       console.error('ConnectOtherAIs: a conversation could not be forgotten from the picker', reason);
-      void vscode.window.showWarningMessage('That conversation could not be forgotten.');
+      // The same CODE as the refusal above: "it could not be forgotten" is one condition, and this
+      // is the path where the reason was a throw rather than an answer.
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'conversationPicker',
+        code: 'conversation-not-forgotten',
+        title: 'That conversation could not be forgotten.',
+        detail: asText(reason),
+      });
     });
   };
 
