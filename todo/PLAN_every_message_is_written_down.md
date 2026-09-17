@@ -987,7 +987,7 @@ and will find it — `panelsAreSearchable.test.ts`, `theLogRefusesToOpen.test.ts
 `theTabWearsAnIcon.test.ts`.
 
 **S6 — the rounds log brought into line** (operator, 2026-09-16). **Owned by
-[PLAN_the_rounds_log_in_line.md](PLAN_the_rounds_log_in_line.md)**, which carries the measured
+[PLAN_the_rounds_log_in_line.md](../research/PLAN_the_rounds_log_in_line.md)**, which carries the measured
 references; the paragraph below is kept for the reasoning and its line numbers were all stale — the
 handler is at `:1782-1784`, the haystack at `:807`, and there are FOUR `<section id="tab-*">`, the
 fourth being the table, which answers to two tabs and is toggled by a line of its own. Two changes

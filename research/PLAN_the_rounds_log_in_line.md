@@ -1,17 +1,30 @@
 # PLAN — S6: the rounds log brought into line
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `src_vs_code/src/roundsLog.ts`
-> and its tests. Nothing else.
+> Status: **IMPLEMENTED, 2026-09-17.** Scope: `src_vs_code/src/roundsLog.ts` and its tests.
 >
-> Related: [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md) (this is
-> its S6), [module_extension.md](../research/module_extension.md),
-> [module_tests.md](../research/module_tests.md).
+> **Deviations, and the one that matters.** This plan's first draft said there are THREE
+> `<section id="tab-*">` and that the tab strip's five tabs map onto them. There are FOUR, and the
+> fourth is the table — which answers to two tabs and is toggled by a line of its own. The invariant
+> test, written before any code, went red naming it. The design changed as a result: the derived
+> loop runs BEFORE the table's line rather than replacing it. Everything else shipped as written.
+>
+> The code round then added two things this plan did not ask for: a section marked and nothing else,
+> spliced into the page the harness runs, because every real section is reachable by a literal id
+> too and the other tests would have passed against a dead query; and a marker-vs-tab agreement in
+> the invariant, because a section marked `audit-log` while the strip says `auditLog` is a section
+> nothing can ever show. The scan also parses attributes in any order and ids with hyphens — the
+> first version matched neither, and the HARNESS had the same hole, which is why the marker-only
+> test failed the first time it ran.
+>
+> Related: [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md)
+> (this is its S6), [module_extension.md](module_extension.md),
+> [module_tests.md](module_tests.md).
 
 ## Who builds what
 
 | Slice | Owner | Order |
 |---|---|---|
-| The ledger, the funnel, the panel count, the notifications page, the durable write gap | [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), S1–S5 | shipped 2026-09-17 |
+| The ledger, the funnel, the panel count, the notifications page, the durable write gap | [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md), S1–S5 | shipped 2026-09-17 |
 | **The rounds log's tab handler and its search** | **this plan (S6)** | **after S5, before S7** |
 | Three extension-side defects, including `helpPanel.ts` | the sibling plan, S7 | after this |
 | The server half of the ledger | the sibling plan, S8 | after S7; needs a `coai-mcp` release |
@@ -98,7 +111,7 @@ matters: a stale `out/` runs both names after a rename and inflates the count.
 - [ ] The whole suite is green.
 - [ ] Any existing assertion that had to change is named in the summary, with why, and with the
       statement that it was not weakened.
-- [ ] The stale references in [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md)
+- [ ] The stale references in [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md)
       are corrected in the same change, and its S6 paragraph points here.
 - [ ] `research/module_extension.md` records that the rounds log derives its sections and that its
       search reaches the Reviewers sentence; `research/module_tests.md` gains the new tests and says
@@ -106,7 +119,7 @@ matters: a stale `out/` runs both names after a rename and inflates the count.
 - [ ] **Promotion, in this order** (`common/planning-docs.md`): rewrite the status line to
       `IMPLEMENTED <date>` with the deviations; fix the relative links in both directions; update the
       inbound references in the sibling plan and in any `.cs`/`.ts` comment; update the *Currently
-      open* table in [README.md](README.md); `git mv` the file to `research/` LAST; then run
+      open* table in [README.md](../todo/README.md); `git mv` the file to `research/` LAST; then run
       `node .agents/conventions/tools/plan-lifecycle.mjs`.
 - [ ] The plan went through `review_plan` and the code through `review_code`.
 

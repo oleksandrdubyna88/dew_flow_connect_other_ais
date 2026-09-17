@@ -81,8 +81,13 @@ interface Page {
 }
 
 /** Runs the page script of a freshly built page and hands back the levers a person has. */
-function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
-  const html = roundsLogHtml(rows, [], 'n0nce', 'usage', 'spots', totals);
+function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra = ''): Page {
+  // `extra` splices a section the page never rendered into the markup the script runs over. It is
+  // the only way to prove the handler DRIVES what the marker finds rather than merely asking for
+  // it: every real section is also reachable by a literal id, so a build that kept the three
+  // getElementById lines and added a dead query would satisfy every other assertion here.
+  const built = roundsLogHtml(rows, [], 'n0nce', 'usage', 'spots', totals);
+  const html = extra === '' ? built : built.replace('<script', extra + '<script');
   const tag = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
   const body = tag.slice(tag.indexOf('>') + 1);
 
@@ -137,8 +142,8 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS): Page {
     // is toggled by a line of its own, so whether the derived loop runs before or after that line
     // decides whether the table survives the conversations tab — and two separate stubs would make
     // that ordering unobservable, which is the shape of test that passes against a broken page.
-    if (selector === '[data-section]') {
-      return [...html.matchAll(/<section id="(tab-[a-z]+)"[^>]*\sdata-section="([^"]*)"[^>]*>/gu)]
+    if (selector === 'section[data-section]') {
+      return [...html.matchAll(/<section id="(tab-[^"]+)"[^>]*\sdata-section="([^"]*)"[^>]*>/gu)]
         .map((found) => {
           const stub = at(found[1] as string);
           stub.getAttribute = (asked: string) => (asked === 'data-section' ? found[2] ?? null : null);
@@ -910,8 +915,8 @@ test('a tab drives every section the page MARKED, not three ids the handler was 
   // because the harness serves a section under the same id either way — which is exactly the shape
   // of test that cannot see the defect it was written for.
   assert.ok(
-    page.asked.includes('[data-section]'),
-    'the page never asked for [data-section], so it is still naming its sections one at a time',
+    page.asked.includes('section[data-section]'),
+    'the page never asked for section[data-section], so it is still naming its sections one at a time',
   );
 });
 
@@ -934,20 +939,48 @@ test('the table survives the conversations tab, which no general rule about sect
   assert.equal(page.at('tab-rounds').hidden, true, 'and it goes when a real section is chosen');
 });
 
-test('every tab section carries the marker the handler finds it by', () => {
-  // Deriving only helps while the marker is there: a section added without it is invisible again,
-  // and the test above would stay green through it. This is the invariant that closes that door.
+test('every tab section carries the marker, whatever its id looks like or where the marker sits', () => {
+  // Deriving only helps while the marker is there: a section added without one is invisible again,
+  // and the behaviour tests would stay green through it. The first version of this scan matched
+  // `<section id="tab-([a-z]+)"` — so `tab-audit-log` would not have matched at all, and neither
+  // would a section whose class came before its id. It parses every section now and reads the two
+  // attributes out of whatever order they are in. (codex, the S6 code round, from three roles.)
   const html = roundsLogHtml([row()], [], 'n0nce', 'usage', 'spots', TOTALS);
-  const sections = [...html.matchAll(/<section id="tab-([a-z]+)"([^>]*)>/gu)];
+  const attribute = (tag: string, name: string): string | undefined =>
+    new RegExp(`\\s${name}="([^"]*)"`, 'u').exec(tag)?.[1];
+  const tabs = new Set([...html.matchAll(/<button[^>]*\sdata-tab="([^"]*)"/gu)].map((f) => f[1]));
+  const sections = [...html.matchAll(/<section[^>]*>/gu)]
+    .map((found) => found[0])
+    .filter((tag) => (attribute(tag, 'id') ?? '').startsWith('tab-'));
 
-  assert.ok(sections.length >= 3, 'the page renders its tab sections');
-  for (const found of sections) {
-    assert.match(
-      found[2] ?? '',
-      new RegExp(`data-section="${found[1] as string}"`),
-      `tab-${found[1] as string} renders without the marker the handler hides it by`,
-    );
+  assert.ok(sections.length >= 4, `the page renders its tab sections — found ${sections.length}`);
+  assert.ok(tabs.size >= 5, 'and its tab strip');
+  for (const tag of sections) {
+    const id = attribute(tag, 'id') as string;
+    const marker = attribute(tag, 'data-section');
+
+    assert.equal(marker, id.slice('tab-'.length), `${id} renders without its own marker`);
+    // AND the marker is a tab somebody can press. A section marked `audit-log` while the strip
+    // says `auditLog` is a section nothing will ever show, and the scan above would not see it.
+    assert.ok(tabs.has(marker), `${id} is marked ${String(marker)}, which is not a tab on the strip`);
   }
+});
+
+test('a section the page never rendered is driven by its marker alone', () => {
+  // The assertion the other tests cannot make. Every real section is reachable by a literal id too,
+  // so a build that kept the three getElementById lines and added a dead querySelectorAll would
+  // pass all of them and still leave a newly marked section stuck. This one is marked and nothing
+  // else: if the derived node list is not what sets `hidden`, it never moves.
+  const page = open([row()], TOTALS, '<section id="tab-audit-log" data-section="audit-log" hidden></section>');
+
+  toTab(page, 'audit-log');
+
+  assert.equal(page.at('tab-audit-log').hidden, false, 'its own tab shows it');
+  assert.equal(page.at('tab-usage').hidden, true, 'and the others go');
+
+  toTab(page, 'usage');
+
+  assert.equal(page.at('tab-audit-log').hidden, true, 'and it goes when another tab is chosen');
 });
 
 test('a search finds what the Reviewers cell SAYS, not only the names behind it', () => {
