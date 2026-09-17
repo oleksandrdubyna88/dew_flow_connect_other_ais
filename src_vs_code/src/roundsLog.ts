@@ -762,7 +762,12 @@ export function inView(row: LogRow, view: LogView): boolean {
   return view === 'conversations' ? row.kind === 'conversation' : row.kind !== 'conversation';
 }
 
-/** Whether a row survives the selects and the search box. A blank search is no search. */
+/** Whether a row survives the selects and the search box. A blank search is no search. *
+ * <p>The haystack carries `answered` — the sentence the REVIEWERS column renders, "all 3 reviewers
+ * answered" or the one model a conversation was with. Leaving it out meant typing a role's name
+ * did not find the rounds whose Reviewers cell says it, which is the incident this whole plan is
+ * about: a role nobody could find. It is present on both kinds of row, so nothing is conditional.</p>
+ */
 export function rowMatches(row: LogRow, filters: LogFilters, search: string): boolean {
   if (filters.kind && row.kind !== filters.kind) {
     return false;
@@ -804,7 +809,11 @@ export function rowMatches(row: LogRow, filters: LogFilters, search: string): bo
   if (needle.length === 0) {
     return true;
   }
-  const haystack = [row.subject, row.branch, row.repoPath, row.repoName].concat(row.reviewers).join(' ').toLowerCase();
+  // NO BACKTICKS IN THIS BODY, comments included: it is pasted into the page by toString() and the
+  // page script lives inside a template literal. The reason the reviewers sentence is in the
+  // haystack is in the docstring above, where backticks are safe.
+  const haystack = [row.subject, row.branch, row.repoPath, row.repoName, row.answered]
+    .concat(row.reviewers).join(' ').toLowerCase();
   return haystack.indexOf(needle) >= 0;
 }
 
@@ -1369,7 +1378,7 @@ export function roundsLogHtml(
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
 <div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
-<section id="tab-rounds" class="view-rounds">
+<section id="tab-rounds" data-section="rounds" class="view-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
       <label>From <input id="from" type="datetime-local" step="60"></label>
@@ -1397,9 +1406,9 @@ export function roundsLogHtml(
 <div id="recorded" class="hint"></div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
-<section id="tab-consultations" hidden><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
-<section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
-<section id="tab-spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
+<section id="tab-consultations" data-section="consultations" hidden><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
+<section id="tab-usage" data-section="usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
+<section id="tab-spots" data-section="spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
 <script nonce="${nonce}">
 (function () {
   // A page that fails must say so on the page. The first release of this page came up as a header
@@ -1709,6 +1718,16 @@ export function roundsLogHtml(
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
       }
+      // DERIVED from the markup, never a list of ids. Three named one at a time meant a section
+      // added tomorrow would render and never be un-hidden, with nothing red — which is the defect
+      // the notifications page was deliberately built without, and the reason this step exists.
+      var sections = document.querySelectorAll('[data-section]');
+      for (var s = 0; s < sections.length; s++) {
+        sections[s].hidden = sections[s].getAttribute('data-section') !== which;
+      }
+      // BEFORE the table's own line, which follows and wins. One section answers to TWO tabs, so
+      // the general rule gets it wrong for conversations and the exception has to run last; the
+      // other way round the table would vanish the moment somebody chose conversations.
       // ONE section serves both halves of the table, so it stays on screen for either tab and wears
       // the view as a class. Everything a conversation has no answer for is hidden by that class,
       // rather than shown as a row of blanks under a round's headers.
@@ -1735,9 +1754,6 @@ export function roundsLogHtml(
         firstPage();
         render();
       }
-      document.getElementById('tab-consultations').hidden = which !== 'consultations';
-      document.getElementById('tab-usage').hidden = which !== 'usage';
-      document.getElementById('tab-spots').hidden = which !== 'spots';
       return;
     }
     var button = target.closest('[data-command]');

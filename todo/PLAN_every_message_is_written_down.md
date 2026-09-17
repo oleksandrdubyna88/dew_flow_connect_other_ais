@@ -986,10 +986,15 @@ as a **top-level literal** and subscribe to `onDidDispose`; **three** structural
 and will find it — `panelsAreSearchable.test.ts`, `theLogRefusesToOpen.test.ts` and
 `theTabWearsAnIcon.test.ts`.
 
-**S6 — the rounds log brought into line** (operator, 2026-09-16). Two changes and no others: the tab
-handler derives its sections from `[data-section]` instead of naming four ids literally
-([roundsLog.ts:1585-1588](../src_vs_code/src/roundsLog.ts)); and `rowMatches`' haystack
-([roundsLog.ts:820](../src_vs_code/src/roundsLog.ts)) — which joins `subject`, `branch`, `repoPath`,
+**S6 — the rounds log brought into line** (operator, 2026-09-16). **Owned by
+[PLAN_the_rounds_log_in_line.md](PLAN_the_rounds_log_in_line.md)**, which carries the measured
+references; the paragraph below is kept for the reasoning and its line numbers were all stale — the
+handler is at `:1782-1784`, the haystack at `:807`, and there are FOUR `<section id="tab-*">`, the
+fourth being the table, which answers to two tabs and is toggled by a line of its own. Two changes
+and no others: the tab
+handler derives its sections from `[data-section]` instead of naming them literally
+([roundsLog.ts:1782](../src_vs_code/src/roundsLog.ts)); and `rowMatches`' haystack
+([roundsLog.ts:807](../src_vs_code/src/roundsLog.ts)) — which joins `subject`, `branch`, `repoPath`,
 `repoName` and the per-reviewer lines and leaves out `answered` — gains the summary sentence, so that
 typing `Role2` finds the rounds whose Reviewers cell says `Role2`. Its existing tests must stay green,
 unedited — **and that is not evidence, so each change gets a RED-first test of its own**: a newly
