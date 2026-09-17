@@ -230,15 +230,21 @@ test('an ordinary labelled value is left alone, because a redaction that fires o
 test('a URL survives being written down, because a sentence that loses its endpoint is useless', () => {
   // The cheap version of the labelled rule — anything before a colon — eats `https://host`. This is
   // the assertion that says it does not: the scheme is not a credential word, so nothing matches.
+  const said = 'could not reach https://coai.example.com:8443/api/v1/rounds';
   const line = notificationLine({
     utc: '2026-09-16T17:05:39.812Z',
     class: 'failure',
     source: 'coai-mcp',
     code: 'server-refused',
-    title: 'could not reach https://coai.example.com:8443/api/v1/rounds',
+    title: said,
   });
 
-  assert.ok(line.includes('https://coai.example.com:8443/api/v1/rounds'), line);
+  // The whole field, compared exactly, rather than a substring of the line. Stronger - a redaction
+  // that mangled the sentence AROUND the URL would slip past an includes() - and it also stops
+  // CodeQL reading this as a URL check written the unsafe way, which it raised as a high-severity
+  // alert on this PR. It was never a sanitiser, but the shape it objects to is the shape a real one
+  // gets wrong, and the exact comparison is the better assertion regardless.
+  assert.equal((JSON.parse(line) as { readonly title: string }).title, said);
 });
 
 test('a field a newer writer adds survives an older reader', () => {
