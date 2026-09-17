@@ -82,8 +82,9 @@ node .agents/conventions/tools/pin-check.mjs
   (prints the key once, stores only its hash), `--revoke --id`, `--promote --entry`,
   `--waiting [--limit n] [--skip n]`. Without them a deployment is an empty key table and a
   quarantine nothing leaves. Configured by environment only: `COAI_BUGS_SECRET` (required; 78
-  without it), `COAI_BUGS_DATA`, `COAI_BUGS_KEYWORDS`; the client’s key is `COAI_BUGS_KEY` or
-  `--key-file`, **never** `--key`.
+  without it), `COAI_BUGS_DATA`, `COAI_BUGS_KEYWORDS`, `COAI_BUGS_RATE_PER_MINUTE` (per KEY, never
+  per address; `10` unset, `0` off, 78 past `1000`); the client’s key is `COAI_BUGS_KEY` or
+  `--key-file`, **never** `--key`. Details: `deploy/bugs/README.md`.
 - **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
   handed to VS Code as text, so a substring assertion over that text cannot see a control wired to
   the wrong branch — the string contains everything it was supposed to contain. This repository has

@@ -1,9 +1,11 @@
 # PLAN — who holds a key, and what they have sent
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_bugs` (schema, rate limit, admin API),
-> `src_vs_code` (the Bugz section's Users tab), and the privacy promise in
-> `research/module_server.md` and `deploy/bugs/README.md`, which this change **deliberately
-> rewrites**.
+> Status: **in progress — story 1 (the schema, the audit, a limit that is a setting) shipped
+> 2026-09-17 on `feat/a-limit-that-is-a-setting`; stories 2–4 not started.** Scope: `src_bugs`
+> (schema, rate limit, admin API), `src_vs_code` (the Bugz section's Users tab), and the privacy
+> promise in `research/module_server.md` and `deploy/bugs/README.md`, which this change
+> **deliberately rewrites**. Story 1's deviations from the text below are recorded at the end of its
+> section.
 >
 > Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_a_corpus_of_real_defects.md](../research/PLAN_a_corpus_of_real_defects.md),
@@ -63,9 +65,13 @@ admin actions audited · `/admin` published normally · issuing through the API 
 
 ## Facts that close three questions before they are asked
 
-**There is no production database yet** — `coai-bugs` is not deployed and `bugs-v0.1.0` is not cut.
-No backfill exists or is needed. The migration discipline is still required: the first release must
-not be the one that makes an unversioned `ALTER` normal.
+**There IS a production database now** — this paragraph said the opposite when the plan was written,
+and it stopped being true before story 1 began: `bugs-v0.1.0` was released on 2026-09-16 and deployed
+on 2026-09-17, and `/opt/coai-bugs/data/coai-bugs.db` exists with the released tables and
+`user_version = 0`. It holds no content yet (no keys issued, nothing in quarantine), so no backfill is
+needed — but its SHAPE is in the field, which is exactly the case the migration discipline exists
+for: step 1 is that shape, frozen against the released tree, and a test migrates a file written by
+step 1 only.
 
 **One process, one Kestrel**, on loopback behind nginx, not load-balanced. The limiter is
 per-service, and **resets on restart by design** — a deploy rolls the limiter back too, which is
@@ -112,10 +118,14 @@ draft's "no retention policy" broke that rule outright):
 | Table | Rate | Budget | Retirement |
 |---|---|---|---|
 | `api_keys` | issued by hand, tens per year | ~200 B/row | none — revoked rows are the audit trail |
-| `admin_audit` | one row per administrative action | ~150 B/row | **swept to the newest 50 000 rows** after each write that crosses the mark |
+| `admin_audit` | one row per administrative action | ~150 B/row | **swept to the newest 50 000 rows** in the same transaction as each write that crosses the mark |
+| the limiter's `ConcurrentDictionary<string, Window>` (memory, one process) | one window per key that sent in the last minute; a window holds at most `limit` stamps | 8 B a stamp: ~80 B a window at the default 10, ~8 KB at the cap of 1 000. **Worst case is every issued key active inside one minute at the cap** — 200 keys ≈ 1.6 MB, 1 000 keys ≈ 8 MB | a `PeriodicTimer` sweep every 60 s drops windows with no stamp inside the minute; bounded STRUCTURALLY because subjects are authenticated key ids (the 401 comes before the limiter), so it can hold no more entries than `api_keys` has live rows plus configured administrators — a flood of invented credentials fills nothing |
 
 50 000 rows is ~7 MB and decades of hand-driven administration; the sweep is four lines and exists
-from the first write rather than as a CLI mode nobody will ask for.
+from the first write rather than as a CLI mode nobody will ask for. The dictionary's row was added by
+story 1 when a reviewer named it as a growth surface (finding 22): it is the one bound here that
+lives in memory, and it is stated per process because there is exactly one — see the serve lock
+below.
 
 **The rate limit:**
 
@@ -139,6 +149,40 @@ from the first write rather than as a CLI mode nobody will ask for.
 conditional `last_seen_month` update commit in **one transaction**, so a kill between them cannot
 leave an accepted pair with a stale month. The update is conditional
 (`... AND last_seen_month <> @month`), so a busy key rewrites its row at most once a month.
+
+**What story 1 shipped, and where it deviates from the text above (2026-09-17).**
+
+- **The runner is shared, not copied.** "`PRAGMA user_version` + ordered steps, as `Schema.cs` does
+  it" became ONE runner, `CoaiMcp.Storage.SqliteMigrator`, extracted from `RoundsDb.Migrate` and
+  referenced by both binaries; the gate ruled against a second copy. Not in `CoaiMcp.Core`, which is
+  declared pure.
+- **Step 1 is frozen against the RELEASE, not against itself.**
+  `src_bugs/tests/fixtures/corpus-schema-step1-bugs-v0.1.0.sql` is the SQL `f7e5170b` evaluates, and
+  `TheSchemaIsFrozenTests` holds the constant to it. `TheMigrationTests` migrates a file written by
+  step 1 only, and the scenario over the real binary migrates the same shape.
+- **A rate past 1 000 is refused at startup (78), not clamped** — a clamp is a silent fallback, and
+  the doctrine says an illegal value fails naming the legal ones.
+- **The limiter is immutable windows and compare-and-swap, not a locked ring.** Two findings said
+  a `ConcurrentDictionary` protects the dictionary and not the `Window` inside it; admit and eviction
+  are each one atomic dictionary operation, and two threaded races assert it.
+- **"One process" is enforced, not assumed.** `ServeLock`, an exclusive open of `coai-bugs.serving`
+  in the data directory, held for the server's lifetime; a second server exits 78; the one-shots do
+  not take it. A restart still resets the limiter, by design.
+- **The audit is written from story 1, not story 2.** `--issue-key` and `--revoke` audit as `cli`, in
+  the same transaction as the mutation and the sweep — a table nothing writes to has a sweep nothing
+  exercises. The sweep is an INDEXED cutoff on the primary key, never `NOT IN (SELECT …)`.
+- **`/admin/*` has its limiter identity now**: `LimiterSubject.Administrator(hash)` →
+  `admin-` + 8 hex, the spelling story 2 must use, so admin routes cannot land in the contributor
+  bucket.
+- **The order on `/ingest` is 401 → 429 → 400 → work**, stated in code and tested: a malformed body
+  from an authenticated key consumes a slot; nothing but an accepted ingest touches the key's row.
+- **The unit gains `UMask=0027`** (finding 13), so the `.db`, `-wal` and `-shm` this process creates
+  are not world-readable by construction; the directory's `0750` stays the primary boundary, and the
+  file the earlier unit created needs one `chmod`.
+- **Left to story 4:** the four-place promise rewrite with the test that pins it. Story 1 rewrote
+  `research/module_server.md`, `deploy/bugs/README.md` and the `Program.cs` remark because the new
+  column made their old wording false; the nginx vhost's header comment and the pinning test are
+  story 4's.
 
 ### Story 2 — admin keys and the admin API *(Fable)*
 
