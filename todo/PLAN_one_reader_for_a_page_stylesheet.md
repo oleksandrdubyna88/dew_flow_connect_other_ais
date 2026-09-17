@@ -113,6 +113,8 @@ nothing under `src/`.
 - [ ] `chatPage.test.ts` contains no `.split('}')` stylesheet reader.
 - [ ] The arrow-hiding test ranks by specificity, not by array position, and its teeth check is recorded.
 - [ ] The suite's pass set is unchanged.
-- [ ] The boundary tables above are mirrored in
-      [PLAN_a_copy_you_can_see_landing.md](../research/PLAN_a_copy_you_can_see_landing.md) and
+- [ ] The boundary tables above are mirrored in all three:
+      [PLAN_a_copy_that_says_so_in_green.md](../research/PLAN_a_copy_that_says_so_in_green.md) (#322,
+      where the tail originates),
+      [PLAN_a_copy_you_can_see_landing.md](../research/PLAN_a_copy_you_can_see_landing.md) (#313) and
       [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md).
