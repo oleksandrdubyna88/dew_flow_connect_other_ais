@@ -106,4 +106,24 @@ public sealed class ConsultationClosingTests
         ConsultationClosing.Refusal(Record(string.Empty, ConsultationStatuses.Failed), "caller-a", ConsultationOutcomes.Solved, byPerson: false)
             .Should().Contain("failed");
     }
+
+    [Fact]
+    public void AConsultationThatRanOutOfTurnsSaysSo()
+    {
+        // The issue asks for something to be recorded, and an empty field records nothing. But a
+        // spent budget is not a verdict either — hence its own word rather than `abandoned`.
+        var last = ConsultationClosing.Lapse(Record(status: ConsultationStatuses.Open));
+
+        last.Outcome.Should().Be(ConsultationOutcomes.Lapsed);
+    }
+
+    [Fact]
+    public void LapsingNeverOVERWRITESAVerdictSomebodyReached()
+    {
+        // A caller that closed its consultation as `solved` and then let the clock run out must
+        // keep its verdict: the sweep runs later and would otherwise erase it.
+        var already = ConsultationClosing.Lapse(Record(ConsultationOutcomes.Solved));
+
+        already.Outcome.Should().Be(ConsultationOutcomes.Solved);
+    }
 }

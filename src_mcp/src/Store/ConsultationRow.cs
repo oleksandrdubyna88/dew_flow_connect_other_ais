@@ -23,6 +23,8 @@ public sealed record ConsultationRow(
     int Turns,
     string Status,
     string Reason,
+    /// <summary>solved / not_solved / abandoned / lapsed, or empty for one nobody spoke about.</summary>
+    string Outcome,
     string StartedUtc,
     string EndedUtc,
     double Seconds,

@@ -131,6 +131,14 @@ public sealed record ResolveAnswer(string Stage, bool AwaitingResolve, int Recor
 /// <summary>A refusal or error, as data — the sentence is the interface.</summary>
 public sealed record ErrorAnswer(string Error);
 
+/// <summary>What a consultation looks like once it has been closed, and what it was closed as.</summary>
+/// <remarks>
+/// <c>Recorded</c> is false for a repeat that changed nothing, so a caller retrying after a lost
+/// reply can tell "it went through this time" from "it had already gone through" — both successes,
+/// and the difference matters to whoever is reading the log afterwards. (issue #309.)
+/// </remarks>
+public sealed record CloseAnswer(string Id, string Outcome, bool Recorded, string Said);
+
 /// <summary>One round a batch findings read is asked about, as it arrives in the keys file.</summary>
 /// <remarks>
 /// <c>SessionId</c> rather than <c>Session</c>: the answer side (<c>LoggedRoundOfMany</c>), the query
@@ -171,6 +179,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(ReviewAnswer))]
 [JsonSerializable(typeof(ResolveAnswer))]
 [JsonSerializable(typeof(ErrorAnswer))]
+[JsonSerializable(typeof(CloseAnswer))]
 [JsonSerializable(typeof(HumanAnswer))]
 [JsonSerializable(typeof(ConsultAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]

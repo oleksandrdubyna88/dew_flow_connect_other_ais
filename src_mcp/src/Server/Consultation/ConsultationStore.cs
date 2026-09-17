@@ -228,7 +228,9 @@ public sealed partial class ConsultationStore(
 
     /// <summary>A conversation nobody came back to: closed, and its vendor handle dropped.</summary>
     private static ConsultationRecord Idled(ConsultationRecord record, DateTime nowUtc, TimeSpan idle) =>
-        record with
+        // Through `Lapse`, so this path and the spent-budget one in the service reach the same
+        // decision rather than being two chances to leave the outcome empty. (issue #309.)
+        ConsultationClosing.Lapse(record) with
         {
             Status = ConsultationStatuses.Closed,
             Reason = $"idle for {idle.TotalMinutes:0} minutes — the vendor's conversation handle was dropped",

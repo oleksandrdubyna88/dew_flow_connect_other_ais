@@ -31,7 +31,7 @@ internal static class Schema
     internal static readonly string[] Steps =
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
-        TheRunsThemselves, ThePairsThemselves, WhatWasSent,
+        TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded,
     ];
 
     internal const string Tables = """
@@ -334,5 +334,18 @@ internal static class Schema
     internal const string WhatWasSent = """
         ALTER TABLE collect_pairs ADD COLUMN sent_utc     TEXT NOT NULL DEFAULT '';
         ALTER TABLE collect_pairs ADD COLUMN send_refusal TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>How a consultation ended, as against why it stopped.</summary>
+    /// <remarks>
+    /// <para>Its own column beside <c>reason</c> because they answer two different questions and one
+    /// string was answering only the first: a consultation that did its job and one that was useless
+    /// both ended <c>closed</c> with a sentence about the budget. (issue #309.)</para>
+    /// <para><b>The default is empty and empty is not a verdict.</b> Every row already in the table
+    /// gets it, and every one of those is a consultation nobody said anything about — a reader that
+    /// inferred <c>solved</c> from a closed status would turn a spent budget into a success.</para>
+    /// </remarks>
+    internal const string HowItEnded = """
+        ALTER TABLE consultations ADD COLUMN outcome TEXT NOT NULL DEFAULT '';
         """;
 }
