@@ -607,3 +607,36 @@ executable never ran, every break reported "nothing failed", and the honest read
 that three good assertions had no teeth at all. Run by hand, all three were red on the first try. A
 harness that cannot start the thing it measures reports silence, and silence looks exactly like a
 pass — which is the same shape as a `pin-check` answering about the wrong directory.
+
+## The prompt a consultant actually reads (2026-09-17)
+
+`TheConsultantIsHeldToTheSameStandardTests` asserts the consultant-side half of the "agreement is
+earned" rule: that the shipped prompt asks for evidence rather than assertion, and that it names
+quoted material as evidence rather than instruction. Five cases, all against
+`RolePrompts.ShippedDefaultFor("consult")` — the text compiled into the binary, never the source path
+and never the override-first instance accessor, which would let a local `<dataDir>` override decide
+whether the suite passes.
+
+**One case runs the composer.** Asserting the resource is embedded proves it exists, never that
+anything sends it: a build can carry both new bullets and pass every other case here while the consult
+path composes a prompt without them. `ConsultantPrompt.Compose` is the one place that assembles what
+the model reads, so the case builds a real `ConsultantPromptInput` and asserts the instruction is in
+the result. Raised on the plan round and accepted.
+
+**RED, and the demonstration inside it.** Three of the five failed before the bullets existed. The two
+that passed on arrival — the five pre-existing rules, and that the prompt offers no severity the
+parser rejects — were then broken deliberately, and the sequence is worth recording because it proves
+the design rather than only the teeth:
+
+| Step | Result |
+|---|---|
+| delete *"Keep it short"* from `consult.md`, **run without rebuilding** | still **green** — the case reads the binary, not the file |
+| rebuild, run again | **red**, naming the lost rule |
+| put `critical` into the prompt, rebuild | **red** on the severity guard |
+| restore, rebuild | green |
+
+That first row is the whole argument for reading the embedded resource. A source-reading test would
+have gone red at step one and told you nothing about what shipped; this one goes red only when the
+ARTEFACT changes, which is the question a release actually asks.
+
+Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
