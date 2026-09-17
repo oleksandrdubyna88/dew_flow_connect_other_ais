@@ -99,8 +99,15 @@ async function keepOnDisk(entry: ChatEntry, thread: Thread, began: string): Prom
   // containment check on a refusal — and `show` runs on every push that changes anything. Building
   // an array of every message's text before knowing whether a conflict even happened is an
   // allocation per turn for a comparison that almost never runs. (gemini and local, the code round.)
+  //
+  // AND THAT IS TRUE SINCE 2026-09-17 AND WAS NOT BEFORE IT. This was passed as `ours()` — invoked
+  // here — into a parameter typed `readonly string[]`, so the function shape gave the APPEARANCE of
+  // laziness with none of the effect. A gate reviewer reported it as a type mismatch and that was
+  // rejected with a measurement: the types agreed perfectly. The defect was this comment describing
+  // behaviour the call did not have, which is worse than a wrong type — a compiler catches one, and
+  // every reader carries the other forward.
   const ours = (): readonly string[] => thread.messages.map((message) => message.text);
-  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours());
+  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours);
   if (next.kind === 'adopt') {
     // Our own record, from a session before this window ever wrote. Take the number the disk reports
     // and save once more against it; a SECOND refusal has no innocent reading left and forks.
@@ -112,7 +119,7 @@ async function keepOnDisk(entry: ChatEntry, thread: Thread, began: string): Prom
     if (next.began !== undefined) {
       thread.createdAt = next.began;
     }
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours()), began);
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours), began);
 
     return;
   }
@@ -198,7 +205,7 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   // the fork is the fact that matters, and the disk is a detail underneath it.
   let note = CONTINUED_ELSEWHERE;
   if (store !== undefined) {
-    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0, ours0(thread));
+    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0, () => ours0(thread));
     if (next.kind === 'kept') {
       thread.rev = next.rev;
       note = next.note === undefined ? note : `${note} ${next.note}`;
