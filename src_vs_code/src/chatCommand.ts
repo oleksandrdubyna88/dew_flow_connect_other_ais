@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
-import { notify, notifyAndAsk } from './notify';
+import { notify } from './notify';
 import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
@@ -12,9 +12,6 @@ import { spendLabel, spendSoFar } from './chatSpend';
 import {
   ModelPreset,
   PromptPreset,
-  chatModelPresetsFrom,
-  chatPromptPresetsFrom,
-  chatRunSpec,
   mainModel,
   mainPrompt,
   presetInForce,
@@ -30,22 +27,30 @@ import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite'
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { Thread, threads } from './chatThread';
 import { memory, pulse, store } from './chatHost';
+import {
+  NAMES_ARE_CASE_BLIND,
+  asUri,
+  conversationWorkspace,
+  everyFolder,
+  filedFor,
+  fsPathOf,
+  originOf,
+  reorigin,
+  whereToLook,
+} from './chatRoots';
+import { Ready, chatCatalogFrom, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf, vendorFor } from './chatConfig';
+import { CANCELLED, fromTheEditor, matchedSource, passageFor, snapshots } from './chatCapture';
 import { ChatSession, TurnResult } from './chatSession';
-import { AnsweredBy, ChatModelChoice, ChatPageState } from './chatPage';
+import { AnsweredBy, ChatPageState } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import {
-  ChatCatalog,
   LegacyPick,
-  ChatProvider,
-  chatModelsFrom,
   chatProvidersFromPresets,
   isRemote,
-  legacyPick,
   memoryOf,
   modelToRun,
   openingModel,
-  resolveChatPick,
 } from './chatModels';
 import { remoteIsFull } from './remoteAsk';
 import { remoteChatFor } from './chatRemote';
@@ -56,15 +61,11 @@ import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
 import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
-import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatCopied, pushChatDraft, pushChatFresh, pushChatNote, pushChatState, setChatDraft } from './chatPanel';
-import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
-import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
 import { chatProcessFor } from './chatProcess';
-import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import {
   CARRY_BUDGET,
@@ -78,14 +79,13 @@ import {
   stillOurs,
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
-import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession } from './sessionKey';
 import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
-import { Moved, filedUnder, followable, knownFolder, movedTo, prepareMoves, sameRoot, sessionIdOf } from './chatSource';
+import { Moved, filedUnder, followable, movedTo, prepareMoves, sameRoot, sessionIdOf } from './chatSource';
 import { askedAsText } from './claudeQuestion';
 import {
   Asked,
   Found,
-  foldersToSearch,
   oneAnswerFrom,
   pinnable,
   promptsFrom,
@@ -94,7 +94,6 @@ import {
   severalMatch,
   waitingQuestion,
 } from './claudeSessions';
-import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { OpenConversation } from './conversationPicker';
 import { Vendor } from './vendors';
@@ -110,103 +109,6 @@ import { Vendor } from './vendors';
  * reason `chatPanel.ts` is thin — what cannot be tested should be small.</p>
  */
 
-
-/**
- * One question asked of every folder this window has open, at once.
- *
- * <p>EVERY folder, never the first that answers: a workspace with two roots, each holding a session
- * by this tab's name, would otherwise be shown whichever VS Code happened to list first. What to do
- * with the answers is `oneAnswerFrom`'s to decide.</p>
- */
-async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promise<T>): Promise<readonly T[]> {
-  const caseBlind = NAMES_ARE_CASE_BLIND;
-
-  return await Promise.all(whereToLook().map((folder) => ask(folder, caseBlind)));
-}
-
-/**
- * The folders a session may be in — the workspace's, or the home directory when it has none.
- *
- * <p>`foldersToSearch` is where the decision lives, in the module with no `vscode` in it, because a
- * decision inside this file is one no unit test can reach — and this one was wrong in two readers at
- * once until an operator with no folder open found it.</p>
- */
-/**
- * Whether this filesystem treats two spellings of one name as the same name.
- *
- * <p>Windows and macOS do; Linux does not. It was already the rule the session search used, in two
- * places, and it is now also the rule paths are COMPARED by — folding case on a case-sensitive
- * filesystem would make /work/App and /work/app one folder, picking the wrong root for a conversation
- * and applying a rename to an unrelated one. One constant, so the answers cannot drift apart.
- * (CodeRabbit, on the pull request.)</p>
- */
-const NAMES_ARE_CASE_BLIND = process.platform === 'win32' || process.platform === 'darwin';
-
-function whereToLook(): readonly string[] {
-  return foldersToSearch(
-    (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
-    os.homedir(),
-  );
-}
-
-/**
- * The workspace a conversation is FILED under in the store: the first folder `whereToLook` gives,
- * so a conversation is filed where its Claude session is; empty for a window with none at all.
- *
- * <p>ONE function, and exported, because three writers must agree on it or a picker filtered on
- * this workspace shows two of the three: the dual write here, the migration of the memento, and
- * the serializer's memento fallback. Story C1 is what teaches a record which root it really belongs
- * to; until then every writer gives this answer, and the boundary is named in that story's row.</p>
- */
-export function conversationWorkspace(): string {
-  return whereToLook()[0] ?? '';
-}
-
-/**
- * The root a conversation with THIS source is filed under — the host's half of {@link filedUnder}.
- *
- * <p>A file says where it is; a Claude session does not, so its folder is carried from the search
- * that found it and this is not the path that files one (see {@link pinSession}). Anything else
- * falls back to the first root, which is what every record had before story C1.</p>
- */
-function filedFor(source: ConversationSource): string {
-  return filedUnder(knownFolder(source, fsPathOf), whereToLook(), conversationWorkspace(), NAMES_ARE_CASE_BLIND);
-}
-
-/**
- * A conversation's durable origin, as ONE value: what it was opened from and where that is filed.
- *
- * <p>The two are one fact written in two fields, and nothing in the types made them move together —
- * a later repair that set `source` and forgot `workspace` would leave *go to* matching by the new
- * origin while the picker went on filtering by the old root. Every path that establishes an origin
- * goes through this, so the pair cannot be set by halves. (codex, the code round.)</p>
- */
-function originOf(source: ConversationSource): { readonly source: ConversationSource; readonly workspace: string } {
-  return { source, workspace: filedFor(source) };
-}
-
-/** Give a live conversation a new origin — both fields, from the one value. */
-function reorigin(thread: Thread, source: ConversationSource): void {
-  const origin = originOf(source);
-  thread.source = origin.source;
-  thread.workspace = origin.workspace;
-}
-
-/** A uri as a filesystem path, or empty for one that names no file. The host's spelling, so rules need none. */
-function fsPathOf(uri: string): string {
-  try {
-    const parsed = vscode.Uri.parse(uri, true);
-
-    return parsed.scheme === 'file' ? parsed.fsPath : '';
-  } catch {
-    // A source a person could not have produced, or one from a build that spelled them differently.
-    // It names no file here, which is the honest answer and not a failure — but it is SAID, because
-    // nothing else would ever mention it and the conversation quietly files under the fallback root.
-    console.warn(`ConnectOtherAIs: a conversation names a source this build cannot read as a uri: ${uri}`);
-
-    return '';
-  }
-}
 
 /**
  * Where this tab's session is, however the window was opened.
@@ -623,9 +525,6 @@ function didNotAnswer(one: Found): boolean {
   }
 }
 
-/** A filesystem path as a uri, the way a record spells one. The host's, so `chatSource.ts` needs none. */
-const asUri = (path: string): string => vscode.Uri.file(path).toString();
-
 /**
  * Everything *go to* needs to know, gathered from the host — the other half of `chatGoto.ts`.
  *
@@ -806,52 +705,6 @@ export function revealConversation(panels: ChatPanels, id: string): boolean {
   return false;
 }
 
-/**
- * This extension host, so the chat can read the settings of the side it is actually on.
- *
- * <p>The same bind-once shape as `rememberChatsIn` above and as `chatOrphans.openLedger`, and for the
- * same reason: an extension host has ONE context for its whole life, and threading it from `activate`
- * through the command, the conversation, the picker and the model switch would put a parameter on six
- * signatures to carry a value that never changes.</p>
- *
- * <p>A worry raised on the plan round — that this could go stale across a workspace switch — does not
- * arise: `ExtensionContext` is made once per extension host, and a different workspace is a different
- * host. What CAN change between two invocations is the settings themselves, which is why the reader
- * below is built per call rather than kept here.</p>
- */
-let hostContext: vscode.ExtensionContext | undefined;
-
-/** Bind the host whose settings this chat reads. Called once, from `activate`. */
-export function chatReadsThisSide(context: vscode.ExtensionContext): void {
-  hostContext = context;
-}
-
-
-/** The tabs, narrowed to what `sessionKey` judges on. */
-function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
-  const all: TabSnapshot[] = [];
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      const input = tab.input as { viewType?: unknown; uri?: vscode.Uri } | undefined;
-      all.push({
-        key: tab,
-        label: tab.label,
-        viewType: typeof input?.viewType === 'string' ? input.viewType : '',
-        // A `TabInputText` carries the document's uri and no viewType; a webview carries the
-        // reverse. Reading both is what lets one snapshot answer for both doors.
-        scheme: typeof input?.uri?.scheme === 'string' ? input.uri.scheme : '',
-        // And the WHOLE uri, which is what a conversation opened from this tab is filed under and
-        // later found by. `toString()` rather than `fsPath`, because that is the spelling a record
-        // keeps and the one `sameSource` compares.
-        uri: input?.uri === undefined ? '' : input.uri.toString(),
-      });
-    }
-  }
-  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
-
-  return { active: all.find((tab) => tab.key === activeTab), all };
-}
-
 /** A directory with nothing in it, and the way to take it away. See `cliChatLaunch` for both. */
 function emptyTempDir(): ChatHome {
   return chatHome(
@@ -861,31 +714,6 @@ function emptyTempDir(): ChatHome {
     // would be worse than the leak. The extension host's own log is where this belongs.
     (failure) => console.warn(`[coai] ${failure}`),
   );
-}
-
-/**
- * Run the copy helper, and say how it finished.
- *
- * <p><b>The same launch on both sides of the machine, and that is measured rather than hoped.</b> In
- * a Remote-WSL window this is a Linux process starting a Windows one: `spawn` resolves a bare name
- * through the PATH, WSL's interop puts the Windows directories on it, and binfmt hands the PE over.
- * The extension host's own environment was inspected on the operator's machine — 33 Windows entries
- * including `WindowsPowerShell/v1.0`, `WSL_INTEROP` set — and the whole helper ran in 1.07 s against
- * the 6 s cap.</p>
- *
- * <p>`os.tmpdir()` is `/tmp` there, and it is the FASTER of the two candidates: 1.07 s against 1.4–1.9 s
- * from `/mnt/c`. So this line is unchanged, deliberately — a reviewer reading it should not take it
- * for an oversight. It matters not at all to the script, which is handed no path: `COPY_SCRIPT`
- * travels base64-encoded, opens nothing and takes no argument.</p>
- */
-function pressCopy(): Promise<RunOutcome> {
-  const child = launch('powershell.exe', argvFor(COPY_SCRIPT), { cwd: os.tmpdir() });
-
-  return ran(child, (ms, run) => {
-    const handle = setTimeout(run, ms);
-
-    return () => clearTimeout(handle);
-  });
 }
 
 /**
@@ -1908,94 +1736,6 @@ function ledger(
 }
 
 /**
- * Everything needed to start one conversation, or the sentence saying why it cannot start.
- *
- * <p>Two arms rather than one shape with an empty field. The single-shape version had to put
- * SOMETHING in `vendor` on the refusal path and reached for `vendors[0] as Vendor` — a cast that is
- * `undefined` whenever the person has no vendors configured at all, and a promise to keep a shape
- * by hand that comes due the first time somebody reads the field before checking the sentence.
- * The compiler keeps that promise instead. (gemini, the code round.)</p>
- */
-type Ready =
-  | {
-    readonly ok: true;
-    readonly vendor: Vendor;
-    readonly models: readonly ChatModelChoice[];
-    /** Every row that can answer, each with its own models — what the picker offers. */
-    readonly providers: readonly ChatProvider[];
-    /** The row that answers. */
-    readonly providerId: string;
-    /** Which of that row's models, or empty for whatever the row is set to. */
-    readonly modelId: string;
-  }
-  | { readonly ok: false; readonly refusal: string };
-
-/**
- * What each row may be pointed at.
- *
- * <p><b>Discovery is not here, and that is the honest limit of this step.</b> Three of the four
- * sources are FETCHED rather than read: a local engine's models and the codex and agy CLIs' own
- * lists are discovered by asking the machine, and a Team server's allowlist is fetched from the
- * server. All three live in the panel, which has already done that work and holds the answers; the
- * chat command has no such state and starting subprocesses or HTTP calls to open a tab would trade
- * the operator's complaint for a slower one.</p>
- *
- * <p>So a row whose list must be fetched offers the model it is CONFIGURED to and nothing else —
- * exactly what the flat list offered before, which makes this strictly not worse. What gains a real
- * choice today is the one source that needs no fetching: Claude's curated three. Handing the panel's
- * discovered lists to this function is the plan's open tail, and it is written down as one.</p>
- */
-/**
- * What a row can be pointed at, with the panel's discoveries in it.
- *
- * <p>This used to pass every discovered list EMPTY, with a comment saying the fetches live in the
- * panel — true, and harmless while the panel offered a flat list of rows. The moment the panel
- * offered a two-step picker over those discoveries it became a defect: somebody picks a model that
- * exists only in what `agy models` answered, and this catalog has never heard of it, so the
- * conversation opens on the row's own model instead. The panel leaves what it found in
- * `DISCOVERY_KEY`; this reads it back. Nothing is fetched here — a command must not wait on three
- * probes to open a tab.</p>
- */
-function chatCatalogFrom(config: vscode.WorkspaceConfiguration): ChatCatalog {
-  const discovery = hostContext === undefined
-    ? EMPTY_DISCOVERY
-    : discoveryFrom(hostContext.globalState.get(DISCOVERY_KEY));
-
-  return catalogUsing(discovery, teamServersFrom(config.get('teamServers')));
-}
-
-/**
- * The saved prompts, carrying the migration with them.
- *
- * <p>One reader, because two call sites reading the same settings is two places to forget the second
- * argument — and the second argument IS the migration: without it a person's own prompt, the one
- * they have been editing since the chat shipped, simply does not appear.</p>
- */
-function savedPrompts(config: vscode.WorkspaceConfiguration): readonly PromptPreset[] {
-  const legacy = config.get('chatPrompt');
-
-  return chatPromptPresetsFrom(
-    config.get('chatPromptPresets'),
-    typeof legacy === 'string' ? legacy : '',
-  );
-}
-
-function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
-  return chatModelPresetsFrom(config.get('chatModelPresets'));
-}
-
-/**
- * The ROLE this conversation's model carries, or none.
- *
- * <p>A model preset's starting prompt — "you are an architect of distributed systems" — is a
- * standing fact about who is answering, so it belongs to the model rather than to a turn, and it is
- * read from the model in force rather than remembered separately.</p>
- */
-function roleOf(config: vscode.WorkspaceConfiguration, providerId: string): string {
-  return savedModels(config).find((one) => one.id === providerId)?.startingPrompt ?? '';
-}
-
-/**
  * Put this conversation's instruction into its composer, around the passage it is about.
  *
  * <p>The two rows of buttons are the same gesture with different halves — a prompt chooses the TASK,
@@ -2107,220 +1847,6 @@ function instructionOf(thread: Thread, config: vscode.WorkspaceConfiguration): s
 }
 
 /**
- * The prompt a conversation OPENS on: the one ticked main, or the first when nothing is ticked.
- *
- * <p>A preset list is the configuration now — *"Пресет И ЕСТЬ конфиг"* — so "which prompt does a
- * capture use" is answered by the tick in that list and not by a separate setting. A tab that opened
- * on none of them showed a row of buttons with nothing pressed and sent something the row did not
- * name.</p>
- */
-function openingPrompt(config: vscode.WorkspaceConfiguration): string {
-  return mainPrompt(savedPrompts(config))?.id ?? '';
-}
-
-/**
- * The TASK this conversation is asking for: the prompt button pressed in it, or the panel's choice.
- */
-function taskOf(config: vscode.WorkspaceConfiguration, promptId: string, fallback: string): string {
-  if (promptId.length === 0) {
-    return fallback;
-  }
-
-  return savedPrompts(config).find((one) => one.id === promptId)?.text ?? fallback;
-}
-
-/**
- * A value saved before the pair existed, read as the pair it always was.
- *
- * <p>`coai.chatModel` and a restored tab's `modelId` have always held a ROW id — both predate the
- * two-step choice — so passing either as a MODEL would look for a model of that name and find
- * nothing. `legacyPick` is the pure half's function for exactly this, and it is called through one
- * place so the two callers cannot drift.</p>
- */
-function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const specs = savedModels(config).map(chatRunSpec);
-
-  return legacyPick(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), specs, saved);
-}
-
-/**
- * The row that will answer, and which of its models.
- *
- * <p>A PROVIDER is a vendor row, not a runtime, and that was settled by measurement rather than by
- * preference: three vendors' reviewers independently overturned the plan's recommendation on the
- * pure half's round. The row carries the runtime, the executable, the base URL, the price and — for
- * a Team server — the server and the vendor name on it, so it is the identity a saved choice stores
- * and the identity resolution looks up.</p>
- *
- * <p>A row the person NAMED and which cannot answer is refused BY NAME — never quietly replaced by
- * another vendor's, which is somebody else's model, billed, in a voice nobody chose.</p>
- */
-function readyToChat(
-  config: vscode.WorkspaceConfiguration,
-  askedProvider: string,
-  askedModel: string,
-): Ready {
-  const specs = savedModels(config).map(chatRunSpec);
-  const list = chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config));
-  const pick = resolveChatPick(specs, list, askedProvider, askedModel);
-  if (!pick.ok) {
-    return { ok: false, refusal: pick.refusal };
-  }
-
-  const refusal = chatRuntimeRefusal(pick.row);
-
-  return refusal.length > 0
-    ? { ok: false, refusal }
-    : {
-      ok: true,
-      vendor: pick.row,
-      models: chatModelsFrom(specs).offered,
-      providers: list.providers,
-      providerId: pick.row.id,
-      modelId: pick.model,
-    };
-}
-
-/** The clipboard, as `selectionCapture` wants it. VS Code answers a Thenable, not a Promise. */
-const hostClipboard = {
-  read: async (): Promise<string> => vscode.env.clipboard.readText(),
-  write: async (value: string): Promise<void> => {
-    await vscode.env.clipboard.writeText(value);
-  },
-};
-
-/**
- * Where the passage comes from, and a status line while it is being fetched.
- *
- * <p>The keybinding path takes about 1.7 seconds — PowerShell's own startup, mostly — and until the
- * tab appears there is nothing at all to see. A person who presses a shortcut and watches nothing
- * happen presses it again, which is how one question becomes two. The menu path is instant and says
- * nothing.</p>
- *
- * <p>The reach is asked once, here, and handed down: `captureSelection` is pure enough to be tested
- * against every side of the machine precisely because it does not go looking for one. Through interop
- * the round trip is ~1 s rather than the ~1.7 s this label was written for, so the label and the cap
- * both stand as they are.</p>
- */
-async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
-  if (path === 'menu') {
-    return hostClipboard.read().then((text) => ({ text, failure: '' }));
-  }
-  const reach = await windowsReach();
-
-  return vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Window, title: 'Copying the selection…' },
-    () => captureSelection(pressCopy, hostClipboard, reach),
-  );
-}
-
-
-/** A refusal nobody needs to read: the person just cancelled the question that caused it. */
-const CANCELLED = '\u0000';
-
-/**
- * The passage from the active editor — and the one question this door asks before it sends.
- *
- * <p>A SELECTION goes without a word, however large: choosing it was the choice. An empty selection
- * sends the whole document, which the operator chose over a refusal — but over a bound it asks
- * first, because the accident this guards against is the chord pressed to focus a window, in a
- * minified bundle, becoming a paid turn nobody meant. Cancelling is not an error and says nothing
- * more: the person has just been asked and has just answered.</p>
- */
-async function fromTheEditor(): Promise<{ text: string; failure: string }> {
-  const editor = editorText();
-  const passage = passageFromEditor(editor);
-  if (!passage.ok) {
-    return { text: '', failure: passage.refusal };
-  }
-  if (!passage.whole || editor === undefined) {
-    return { text: passage.text, failure: '' };
-  }
-  const ask = confirmWholeFile(editor);
-  if (ask.length === 0) {
-    return { text: passage.text, failure: '' };
-  }
-  const said = await notifyAndAsk({
-    as: 'warning',
-    class: 'confirmation',
-    source: 'chat',
-    code: 'send-the-whole-passage',
-    modal: true,
-    title: ask,
-    action: 'Send all of it',
-  });
-  if (said === 'Send all of it') {
-    return { text: passage.text, failure: '' };
-  }
-
-  // CANCELLED, which is not a failure and needs no sentence: the person was asked a question one
-  // second ago and answered it. A refusal here showed an empty warning box. (codex, the code round.)
-  return { text: '', failure: CANCELLED };
-}
-
-/**
- * Which conversation this belongs to, over ONE snapshot of the tabs.
- *
- * <p>Both doors judged from the same list, rather than two lookups that could see the tabs in two
- * states — and it is one function because two commands ask the same question now. `claude` is
- * `undefined` when the source is a file, which is what tells the caller where the passage comes
- * from. (gemini, the code round.)</p>
- */
-function matchedSource(panels: ChatPanels): {
-  claude: ReturnType<typeof sourceSession>;
-  source: ReturnType<typeof sourceSession>;
-  /** The active document's uri, from the SAME snapshot — what a file conversation is filed under. */
-  uri: string;
-} {
-  const { active, all } = snapshots();
-  const known = panels.known();
-  const claude = sourceSession(active, all, known);
-
-  const matched = claude ?? sourceSession(active, all, known, isOrdinaryEditorTab);
-
-  return {
-    claude,
-    source: matched,
-    // THE MATCHED TAB'S uri, not the active one's. They are the same tab only when a person presses
-    // from the editor; from the chat panel itself — which is how *add the question* is used — the
-    // active tab is a webview with no document, while the match falls back through `all` to the
-    // editor. Reading `active` there filed the conversation with no source at all, leaving it
-    // unmatchable by *go to* and unfollowable by a rename. Still from THIS snapshot, so the two
-    // cannot see the tabs in two states. (gemini, the code round.)
-    uri: all.find((tab) => tab.key === matched?.key)?.uri ?? '',
-  };
-}
-
-/**
- * The active editor, narrowed to the two strings the decision needs — and only when it is the tab
- * the conversation is being keyed to.
- *
- * <p>`matchedSession` reads the active TAB and this reads the active EDITOR, and in a split with the
- * focus somewhere else those are two different documents. Then the conversation would be named after
- * one file and carry the text of another. They are checked against each other rather than assumed
- * equal. (gemini, the code round.)</p>
- */
-function editorText(): EditorText | undefined {
-  const editor = vscode.window.activeTextEditor;
-  if (editor === undefined) {
-    return undefined;
-  }
-  const tab = vscode.window.tabGroups.activeTabGroup.activeTab?.input as { uri?: { toString?: () => string } } | undefined;
-  const named = typeof tab?.uri?.toString === 'function' ? tab.uri.toString() : '';
-  if (named.length > 0 && named !== editor.document.uri.toString()) {
-    return undefined;
-  }
-
-  return {
-    whole: editor.document.getText(),
-    selected: editor.document.getText(editor.selection),
-    // The file name rather than the path: it is for a sentence a person reads, and the path is
-    // already in the tab they are looking at.
-    name: editor.document.uri.path.split('/').pop() ?? 'this file',
-  };
-}
-
-/**
  * A vendor process in an empty directory of its own, and the directory, held together.
  *
  * <p>The launch is built per TURN rather than once, because a vendor that keeps no process needs a
@@ -2406,20 +1932,6 @@ async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: stri
 }
 
 /** The vendor row behind a model id, read fresh — the person may have edited settings since. */
-/**
- * How to RUN the preset with this id — built from the preset itself, never from a reviewer row.
- *
- * <p>This looked the id up in `coai.vendors`, which is what made the chat depend on the review gate:
- * a reviewer switched off, renamed or removed took a conversation with it. A preset carries its own
- * vendor, model, CLI path and endpoint, and `chatRunSpec` shapes them into the `Vendor` every
- * launcher, session and Team-server client here was already written against.</p>
- */
-function vendorFor(presetId: string): Vendor | undefined {
-  const preset = savedModels(vscode.workspace.getConfiguration('coai')).find((one) => one.id === presetId);
-
-  return preset === undefined ? undefined : chatRunSpec(preset);
-}
-
 /**
  * The person chose a different model in the open tab.
  *

@@ -8,15 +8,15 @@ import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
 import { ChatPanels } from './chatPanels';
 import {
-  chatReadsThisSide,
   chatWithOtherAi,
-  conversationWorkspace,
   followRenames,
   heldConversationIds,
   noteChatDoor,
   takeTheQuestion,
 } from './chatCommand';
 import { keepChatsIn, pulseChatsThrough, rememberChatsIn, retireMemento } from './chatHost';
+import { chatReadsThisSide } from './chatConfig';
+import { conversationWorkspace } from './chatRoots';
 import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
 import { goToConversation } from './chatGotoCommand';
 import { ChatTabMemory } from './chatTabs';
