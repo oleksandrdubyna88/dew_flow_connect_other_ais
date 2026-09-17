@@ -171,6 +171,20 @@ export function describe(note: string): string {
 }
 
 /**
+ * The sentence a DISCARD is confirmed with.
+ *
+ * <p>Discarding is one press away from Copy and it revokes — the same irreversible act the table's
+ * Revoke button asks about first. Both halves of what is lost are said, because they are different
+ * losses: the key stops working for anybody who already has it, and the copy on this machine is
+ * gone whatever is answered. (Code round 2, gemini.)</p>
+ */
+export function confirmDiscard(note: string): string {
+  return `Discard ${describe(note).toLowerCase()}? Discarding REVOKES it, which cannot be undone, `
+    + 'and the key itself is gone from this machine either way — it cannot be read back, so anybody '
+    + 'waiting for it will need a new one.';
+}
+
+/**
  * The sentence a revoke is confirmed with.
  *
  * <p>It names the note and the last-use month rather than the id, because the plan says so and the

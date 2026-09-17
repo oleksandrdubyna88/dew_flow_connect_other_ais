@@ -675,6 +675,55 @@ the validator, and `importCycles` went red with the sentence that says why it is
 taste — *it will bundle and fail at runtime*. The shapes now live in `bugsAdminShapes.ts`,
 underneath both.
 
+#### And what round 2 changed (round 2 of 2, verdict `good_enough`)
+
+All three reviewers answered, 10 findings: **4 accepted, 6 rejected**. The rounds were exhausted, so
+the verdict is the policy's rather than the reviewers' — which makes reading them properly the whole
+point of the setting.
+
+The three accepted gating ones are all the same defect seen from different sides: **the panel owned a
+flag without owning the repaint that clears it.**
+
+- **The tab could be left dead.** `busy` disables every control, Refresh included — deliberately,
+  because a second Issue is a second live key. The flag dropped in a `finally`, and the page on
+  screen had been painted before that. Nothing repainted, and nothing on the page could be pressed to
+  make it. Only closing the tab helped. (codex)
+- **And it said nothing while it worked.** The other end of the same thing, and a defect round 1's
+  own fix introduced: nothing painted when an action BEGAN, so during the ten seconds that matter
+  every control was live and Issue pressed twice still queued two issuances.
+- **Two doors bypassed the serializer.** Opening the tab and the key command drew straight out, so a
+  listing fetched before an issuance completed could land after it and paint a page with no pending
+  key on it — hiding the only copy of a live credential behind a redraw nobody asked for. (codex)
+
+Both now live in `bugsKeysTurns.ts`, a coordinator with no editor import, which is what makes them
+testable at all: the panel imports `vscode` and cannot be loaded by a test. The repaints ask the
+server nothing — `withControls` hands back the page already on screen with its controls changed, or
+nothing when they already are.
+
+The other two:
+
+- **Setting the key walked the administrator back to the newest page** (gemini). The cursors are a
+  walk through one listing and there is one admin surface, so a new key sees the same rows: the reset
+  bought nothing and cost a position.
+- **Discarding revoked without asking** (gemini), while the table's Revoke button confirms. Now it
+  asks, through the same funnel, naming both losses — the key stops working for whoever holds it, and
+  the local copy is gone whatever is answered.
+
+**Six were rejected, and three of those were gating**, which is the reason to verify rather than
+comply: one described a race in `discard()` and then, mid-paragraph, read the code again and
+described the fix that is already there; one asked for a disposal check that `draw()` performs twice,
+before and after its only await; and one said the **Who holds a key** button reaches an unregistered
+command, when it is not a command at all — it is a `PanelCommand` whose switch has an exhaustiveness
+`never` that would fail the build if it were unhandled. The other three were naming and speculative
+generality.
+
+**And one thing this round is on record as NOT finding.** The break-it check for the repaint was run
+twice: the first attempt left an unused parameter, `tsc` refused to emit under `noEmitOnError`, and
+the suite ran the PREVIOUS build and reported 28 green — a test with no teeth looking exactly like a
+test with teeth. It was caught by the numbers being identical, and the second attempt went red with
+*issue is dead after the action finished*. The lesson is in the same family as `noEmitOnError`
+itself, which round 1 added: a build whose output is hidden is a result that proves nothing.
+
 ### Story 4 — the promise, the deployment, and the scenario *(Opus)*
 
 - The promise's REMAINING wording — "four places" is no longer the count. Story 1 already rewrote it
