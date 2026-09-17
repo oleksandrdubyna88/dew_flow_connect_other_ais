@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { bodyOf } from './sourceReading';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -29,20 +30,6 @@ const everySource = (): string => fs.readdirSync(path.join(__dirname, '..', '..'
   .map((one) => source(one))
   .join('\n');
 
-/**
- * One function's text, from its opening line to the next top-level declaration.
- *
- * <p>The same helper `chatSourceWiring.test.ts` carries, for the same reason: a fixed character
- * width goes red for the length of a paragraph somebody added rather than for anything about the
- * code. The end is found rather than guessed.</p>
- */
-const bodyOf = (text: string, opening: string): string => {
-  const at = text.indexOf(opening);
-  assert.ok(at >= 0, `there is no ${opening} to read`);
-  const after = text.indexOf('\n}', at);
-
-  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
-};
 
 test('a conversation is written to the store, and to the memento until the migration has retired it', () => {
   const host = source('chatHost.ts');

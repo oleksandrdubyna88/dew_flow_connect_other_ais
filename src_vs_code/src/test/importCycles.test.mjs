@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { cyclesIn, graphOf, importsOf } from '../../scripts/import-graph.mjs';
@@ -84,14 +86,39 @@ test('only the extension’s own modules count: node: and vscode are not cycles'
     "import { b } from '../beta';",
   ].join('\n'));
 
-  assert.deepEqual(found, ['alpha', '../beta'], 'a built-in or a package was read as a local module');
+  assert.deepEqual(found, ['./alpha', '../beta'], 'a built-in or a package was read as a local module');
 });
 
 test('a re-export and a dynamic import are edges too', () => {
   // `export … from` and `import('…')` both make the other module load, so both can close a ring.
   const found = importsOf("export { a } from './alpha';\nvoid import('./beta');");
 
-  assert.deepEqual(found, ['alpha', 'beta'], 'a re-export or a dynamic import was missed, so a cycle through one is invisible');
+  assert.deepEqual(found, ['./alpha', './beta'],
+    'a re-export or a dynamic import was missed, so a cycle through one is invisible');
+});
+
+test('both quote styles are edges, because a guard must not depend on house style', () => {
+  // The first version matched single quotes only — this repository's own style, and therefore
+  // exactly the wrong thing to rely on. (codex, the code round.)
+  const found = importsOf('import { a } from "./alpha";\nimport { b } from \'./beta\';');
+
+  assert.deepEqual(found, ['./alpha', './beta'], 'a double-quoted import is invisible to the cycle check');
+});
+
+test('a module in a subfolder is scanned, and its relative imports resolve', () => {
+  // `src/` is flat today. A check that assumed it would stay flat would report no cycle for two
+  // modules put in a subfolder tomorrow — silence that reads exactly like safety.
+  const here = mkdtempSync(join(tmpdir(), 'coai-graph-'));
+  try {
+    mkdirSync(join(here, 'inner'));
+    writeFileSync(join(here, 'top.ts'), "import { a } from './inner/deep';\n");
+    writeFileSync(join(here, 'inner', 'deep.ts'), "import { b } from '../top';\n");
+
+    assert.deepEqual(cyclesIn(graphOf(here)), [['inner/deep', 'top']],
+      'a cycle through a subfolder was not seen, so a future layout hides one');
+  } finally {
+    rmSync(here, { recursive: true, force: true });
+  }
 });
 
 test('a two-module ring is found, and reported as a set rather than a rotation', () => {

@@ -186,7 +186,16 @@ if (ref !== undefined && originalPath !== undefined) {
     name: one,
     text: readFileSync(join(import.meta.dirname, '..', one), 'utf8'),
   }));
-  const declared = Number(process.env.PROVE_MOVE_REGIONS ?? '0');
+  // REQUIRED, not optional. Left to default, the run reports zero residue and skips the budget
+  // entirely — so a reordering that keeps every line would exit 0 and read as a clean move, which is
+  // the exact failure the ordered walk was added to catch. A guard with an off switch that nobody
+  // has to touch is off. (codex, the code round.)
+  const declared = Number(process.env.PROVE_MOVE_REGIONS ?? '');
+  if (!Number.isInteger(declared) || declared <= 0) {
+    console.error('PROVE_MOVE_REGIONS must be the number of regions this extraction cut, as a'
+      + ' positive integer. Without it the run cannot tell a move from a reordering.');
+    process.exitCode = 2;
+  } else {
   const { checked, residue, runs } = movedVerbatim(original, modules);
   console.log(`against ${originalPath} at ${sha}${sha.startsWith(ref) ? '' : ` (${ref})`}`);
   console.log(`${checked} body lines across ${modules.length} modules, in ${runs} contiguous run(s)`);
@@ -199,10 +208,11 @@ if (ref !== undefined && originalPath !== undefined) {
   // function. A move cuts a known number of regions, so the caller declares it and the walk has to
   // fit. Without a budget the tool would have to guess what "too fragmented" means, and a guess in
   // a guard is a guard nobody trusts.
-  const tooMany = declared > 0 && runs > declared;
-  if (tooMany) {
-    console.log(`runs ${runs} exceeds the ${declared} regions declared in PROVE_MOVE_REGIONS —`
-      + ' something was reordered, or cut into more pieces than the caller thinks');
+    const tooMany = runs > declared;
+    if (tooMany) {
+      console.log(`runs ${runs} exceeds the ${declared} regions declared in PROVE_MOVE_REGIONS —`
+        + ' something was reordered, or cut into more pieces than the caller thinks');
+    }
+    process.exitCode = residue.length === 0 && !tooMany ? 0 : 1;
   }
-  process.exitCode = residue.length === 0 && !tooMany ? 0 : 1;
 }

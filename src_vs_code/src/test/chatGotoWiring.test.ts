@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { bodyOf } from './sourceReading';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -21,20 +22,6 @@ const between = (text: string, from: string, to: string): string =>
 
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
-
-/**
- * One function's text, from its opening line to the next top-level declaration.
- *
- * <p>The helper `chatSourceWiring.test.ts` carries, for the same reason: a fixed character width
- * goes red for the length of a paragraph somebody added rather than for anything about the code.</p>
- */
-const bodyOf = (text: string, opening: string): string => {
-  const at = text.indexOf(opening);
-  assert.ok(at >= 0, `there is no ${opening} to read`);
-  const after = text.indexOf('\n}', at);
-
-  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
-};
 
 
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {

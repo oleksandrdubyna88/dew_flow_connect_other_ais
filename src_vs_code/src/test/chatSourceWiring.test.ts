@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { bodyOf } from './sourceReading';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -76,20 +77,6 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
   );
 });
 
-/**
- * One function's text, from its opening line to the next top-level declaration.
- *
- * <p>A fixed width was what these assertions used, and a comment added inside a function pushed the
- * line being asserted past the end of the slice — a test that went red for the length of a paragraph
- * rather than for anything about the code. The end is found rather than guessed.</p>
- */
-const bodyOf = (text: string, opening: string): string => {
-  const at = text.indexOf(opening);
-  assert.ok(at >= 0, `there is no ${opening} to read`);
-  const after = text.indexOf('\n}', at);
-
-  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
-};
 
 test('the Asked button asks the session ID before it asks the name', () => {
   // The identity was on the record all along and nothing used it: a reload empties the remembered
