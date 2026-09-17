@@ -42,7 +42,7 @@ const DEFAULT_CHANGELOG = path.resolve(here, '..', '..', 'src_vs_code', 'CHANGEL
  * `C++` would silently build either an invalid pattern or one that matches the wrong thing. Escaping
  * at the boundary costs a line; noticing it later costs a release with the wrong notes.</p>
  */
-const quoted = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+const quoted = (text) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 
 /** The words this changelog heads its releases with, longest first so `Team server` wins. */
 const WORDS = [...new Set(LINES.map((l) => l.word).filter(Boolean))]
@@ -89,7 +89,7 @@ export function sectionFor(changelog, line, version) {
   }
   const heading = new RegExp(String.raw`^## (?:${shapes.join('|')})`, 'm');
 
-  const body = changelog.replace(/\r\n/g, '\n');
+  const body = changelog.replaceAll('\r\n', '\n');
   const at = body.search(heading);
   if (at === -1) {
     return undefined;
