@@ -109,6 +109,8 @@ function newConversation(
       promptId: openingPrompt(config),
       running: false,
       capped: false,
+      // Nor anything waiting: a queue is a thing that forms while an answer is running.
+      waiting: [],
       // Nothing is in flight on a page that has just opened, so there is no turn to stop.
       turn: 0,
       failure: '',
@@ -132,6 +134,8 @@ function newConversation(
   // which can move under a live conversation. That distinction cost a whole code round.
   threads.set(entry.id, {
     session,
+    // a queue is a thing that forms while an answer is running.
+    waiting: [],
     home: first.home,
     passage: state.passage,
     models: ready.models,

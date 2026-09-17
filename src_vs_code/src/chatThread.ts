@@ -4,6 +4,7 @@ import { ChatMessage, ChatModelChoice } from './chatPage';
 import { ChatSession } from './chatSession';
 import { ConversationSource } from './chatStore';
 import { TurnSpend } from './chatSpend';
+import type { WaitingQuestion } from './chatPage';
 
 /**
  * What a conversation IS while a window holds it, and where the window holds them.
@@ -140,6 +141,21 @@ export interface Thread extends ChatMemory {
   sessionFile: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
+  /**
+   * Questions typed and not yet asked, oldest first.
+   *
+   * <p>NOT the transcript, and the distinction is the one thing that must not blur: `messages` is
+   * what was actually said, and it is what a forgetful model is handed as `carry`. A question
+   * appended here before it is asked would be re-sent to the model answering the turn in FRONT of
+   * it, as though somebody had said two things at once — and billed for. It joins the transcript in
+   * `oneTurn`, when its own turn begins. (issue #288.)</p>
+   *
+   * <p>Runtime state, deliberately: it is not part of `ConversationRecord` and does not survive a
+   * reload. A reload kills the extension host, so the turn a question was waiting behind died with
+   * it and the promise that would have run the question died too — restoring the row would show
+   * somebody a question that can never run.</p>
+   */
+  waiting: readonly WaitingQuestion[];
   /**
    * Which pair the last turn FAILED under, as `provider/model`, or empty when nothing is retryable.
    *

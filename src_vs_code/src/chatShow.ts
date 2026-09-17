@@ -45,6 +45,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
     messages: thread.messages,
     carryFrom: thread.carryFrom,
     running,
+    waiting: thread.waiting,
     // Built in epic 2 and set for the first time here: a remote conversation stops at three turns
     // and the page offers the local model that has a memory instead.
     capped: thread.forgetful && remoteIsFull(thread.asked),
