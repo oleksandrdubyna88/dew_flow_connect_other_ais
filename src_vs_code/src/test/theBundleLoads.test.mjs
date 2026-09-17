@@ -191,7 +191,13 @@ test('a test that runs the build gets a node --test invocation to itself', () =>
     // A file that spawns npm against the real root drives the build, and the build is what
     // rewrites the tree. Read the files rather than naming them, so a SECOND such test is caught
     // the day it is written rather than the day it flakes.
-    const builders = batch.filter((file) => /execFileSync\(\s*'npm'/u.test(readFileSync(join(ROOT, file), 'utf8')));
+    // Every shape node offers for starting a process, and both quote styles — `'npm'` for the argv
+    // form and `'npm ` for the one-string one. Narrow enough that a comment mentioning npm does not
+    // force a pointless split, wide enough that the next author need not guess which single spelling
+    // this test happens to know.
+    const builders = batch.filter((file) =>
+      /(?:execFileSync|execSync|execFile|exec|spawnSync|spawn)\(\s*['"]npm['" ]/u
+        .test(readFileSync(join(ROOT, file), 'utf8')));
     if (builders.length === 0) {
       continue;
     }
