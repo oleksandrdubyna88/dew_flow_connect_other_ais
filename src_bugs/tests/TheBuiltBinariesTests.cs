@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -89,17 +90,12 @@ public sealed class TheBuiltBinariesTests : IDisposable
         MustExist(BugsExe);
         MustExist(McpExe);
 
-        var port = FreePort();
         var key = IssueKey();
         key.Should().NotBeEmpty("--issue-key prints the key once, on stdout");
 
-        using var server = Start(BugsExe, $"--urls http://127.0.0.1:{port}", _dir);
+        var (server, port) = await Serving(string.Empty);
         try
         {
-            (await Listening(port)).Should().BeTrue(
-                $"{BugsExe} must reach the point of listening — if it cannot find its embedded "
-                + "keyword list it throws during startup instead, which is the defect this exists for");
-
             SeedOneKeptPair();
             var upload = Run(
                 McpExe,
@@ -121,6 +117,103 @@ public sealed class TheBuiltBinariesTests : IDisposable
         waiting.Code.Should().Be(0);
         waiting.Err.Should().Contain("1 waiting", "the pair really landed in the real database");
         waiting.Out.Should().Contain("method_1", "and `--waiting` shows a person the skeleton");
+    }
+
+    /// <summary>
+    /// A candidate port taken between the probe and the bind costs the candidate, not the run.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The race, made deterministic.</b> <c>FreePort</c> asks the OS for a port, releases
+    /// it, and hands the number to a process that binds it a moment later; anything on the machine
+    /// may take it in between. Waiting for that to happen by luck is how a flake is "investigated",
+    /// so the port is held by an ordinary socket and offered as the FIRST candidate — the same
+    /// shape `AStubSurvivesALostPortTests` uses for the in-process listener, and the same reason.</para>
+    /// <para>It is held by a plain <see cref="TcpListener"/> rather than by a second copy of the
+    /// server, because that is what the real collision looks like: whatever takes the port on a
+    /// loaded runner is somebody else's socket, not another `coai-bugs`.</para>
+    /// </remarks>
+    [Fact]
+    public async Task APortTakenBeforeTheBind_CostsTheCandidateAndNotTheRun()
+    {
+        MustExist(BugsExe);
+        var thief = new TcpListener(IPAddress.Loopback, 0);
+        thief.Start();
+        var taken = ((IPEndPoint)thief.LocalEndpoint).Port;
+
+        try
+        {
+            var (server, port) = await Serving(FreePorts().Prepend(taken), string.Empty);
+
+            try
+            {
+                port.Should().NotBe(
+                    taken, "the port was held, so the server must have taken another one");
+                server.Process.HasExited.Should().BeFalse("and it must really be serving on it");
+
+                using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+                (await http.GetAsync("/health", TestContext.Current.CancellationToken))
+                    .StatusCode.Should().Be(
+                        HttpStatusCode.OK,
+                        "answering on the port it actually got is the whole point — a scenario "
+                        + "pointed at a port somebody else holds talks to a stranger");
+            }
+            finally
+            {
+                Stop(server);
+            }
+        }
+        finally
+        {
+            thief.Stop();
+        }
+    }
+
+    /// <summary>
+    /// What THIS platform prints when the port is taken is something the retry recognises.
+    /// </summary>
+    /// <remarks>
+    /// The classifier is a list of sentences, and a list of sentences is a guess until somebody
+    /// provokes the real thing. So this takes a port, starts the real server on it, and asserts
+    /// that what the server actually said is recognised — a platform whose wording is missing
+    /// reddens here and names the text, which is how the list is meant to grow. Without it the
+    /// retry above could pass while recognising nothing, because its stand-in port is released
+    /// before the second attempt either way.
+    /// </remarks>
+    [Fact]
+    public async Task ARealCollisionIsRecognisedOnThisPlatform()
+    {
+        MustExist(BugsExe);
+        var thief = new TcpListener(IPAddress.Loopback, 0);
+        thief.Start();
+        var taken = ((IPEndPoint)thief.LocalEndpoint).Port;
+
+        try
+        {
+            var server = Start(BugsExe, $"--urls http://127.0.0.1:{taken}", _dir);
+
+            try
+            {
+                (await Listening(server, taken)).Should().BeFalse(
+                    "the port is held, so it cannot have started — and it must not take fifteen "
+                    + "seconds to say so, which is what watching for the exit buys");
+                server.Process.HasExited.Should().BeTrue();
+
+                var said = server.Text;
+                said.Should().NotBeEmpty(
+                    "a server that could not bind says why, and this suite now keeps it");
+                LostToARace(said).Should().BeTrue(
+                    $"this platform's wording for a taken port must be one the retry recognises, "
+                    + $"or every collision here becomes an unexplained failure. It said: {said}");
+            }
+            finally
+            {
+                Stop(server);
+            }
+        }
+        finally
+        {
+            thief.Stop();
+        }
     }
 
     /// <summary>An unknown mode exits 64, which is how a caller detects an old binary.</summary>
@@ -163,11 +256,9 @@ public sealed class TheBuiltBinariesTests : IDisposable
         var database = Path.Combine(_dir, "coai-bugs.db");
         TheMigrationTests.WriteAFileFromStepOneOnly(database);
 
-        var port = FreePort();
-        using var server = Start(BugsExe, $"--urls http://127.0.0.1:{port}", _dir, rate: "2");
+        var (server, port) = await Serving(string.Empty, rate: "2");
         try
         {
-            (await Listening(port)).Should().BeTrue("the server must migrate the field's file and come up");
             TestSql.Scalar(database, "PRAGMA user_version").Should().Be(
                 CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture),
                 "the REAL binary ran the migration on the shape the field has");
@@ -231,13 +322,9 @@ public sealed class TheBuiltBinariesTests : IDisposable
     {
         MustExist(BugsExe);
         const string adminKey = "an-administrators-key-for-this-scenario";
-        var port = FreePort();
-        using var server = Start(
-            BugsExe, $"--urls http://127.0.0.1:{port}", _dir, admins: $"# alice\n{adminKey}");
+        var (server, port) = await Serving(string.Empty, admins: $"# alice\n{adminKey}");
         try
         {
-            (await Listening(port)).Should().BeTrue("the real binary must come up with administrators configured");
-
             using var stranger = Talking(port, string.Empty);
             (await stranger.GetAsync("/admin/keys", TestContext.Current.CancellationToken))
                 .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "over a real socket, with no credential");
@@ -275,14 +362,10 @@ public sealed class TheBuiltBinariesTests : IDisposable
     public async Task TheRealServerStartsWithNoAdministratorsAndRefusesThemAll()
     {
         MustExist(BugsExe);
-        var port = FreePort();
         var key = IssueKey();
-        using var server = Start(BugsExe, $"--urls http://127.0.0.1:{port}", _dir);
+        var (server, port) = await Serving(string.Empty);
         try
         {
-            (await Listening(port)).Should().BeTrue(
-                "a deployment whose admin secret was never filled in must still boot and still collect");
-
             using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
             (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK, "contributors are unaffected");
@@ -493,8 +576,111 @@ public sealed class TheBuiltBinariesTests : IDisposable
         return port;
     }
 
-    /// <summary>Waits for the server to actually answer, rather than assuming it started.</summary>
-    private static async Task<bool> Listening(int port)
+    /// <summary>
+    /// An endless supply of ports that were free a moment ago — the strongest claim anything can
+    /// make about a port it does not hold.
+    /// </summary>
+    private static IEnumerable<int> FreePorts()
+    {
+        while (true)
+        {
+            yield return FreePort();
+        }
+    }
+
+    /// <summary>How many candidates may be lost to a race before this is called a failure.</summary>
+    private const int Attempts = 10;
+
+    /// <summary>Starts the server and waits for it to answer, on a port it really got.</summary>
+    private Task<(Running Server, int Port)> Serving(string args, string admins = "", string rate = "") =>
+        Serving(FreePorts(), args, admins, rate);
+
+    /// <summary>
+    /// The same, over a caller's candidates — which is what makes a lost port testable.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The race this closes.</b> <see cref="FreePort"/> asks the OS for a port, releases
+    /// it, and hands the NUMBER to a process that binds it a moment later. Anything on the machine
+    /// may take it in between — another test in this suite, another suite on a shared runner, an
+    /// ephemeral outbound connection — and the server then exits without ever listening. Nine call
+    /// sites took that number straight to a server, so this was nine chances per run for a green
+    /// suite to go red about something no change had touched.</para>
+    /// <para>`src_mcp/tests/LoopbackStub` closes the same race for its in-process listener, and
+    /// this is deliberately NOT sharing its code: that one binds an `HttpListener` here and catches
+    /// an exception carrying an errno, while this one launches a SEPARATE PROCESS and can observe
+    /// only that it exited and what it printed. The retry loop looks alike; the detection has
+    /// nothing in common, and the only genuinely shared part is the six lines of
+    /// <see cref="FreePorts"/>. Linking one file between two test projects — there is no precedent
+    /// for it here, and no shared test project to put it in — is more machinery than it removes.
+    /// What IS reused is the DOCTRINE: a narrow classifier, a bounded retry, and a test that
+    /// provokes the real collision rather than arguing about it.</para>
+    /// <para>The bound matters as much as the retry. Ten lost candidates is a machine with no ports
+    /// or a server that cannot start for its own reasons, and retrying for ever would turn either
+    /// into a hang; so it stops, and the message carries what the server actually SAID.</para>
+    /// </remarks>
+    private async Task<(Running Server, int Port)> Serving(
+        IEnumerable<int> candidates, string args, string admins = "", string rate = "")
+    {
+        var lost = new List<int>();
+
+        foreach (var port in candidates)
+        {
+            var server = Start(
+                BugsExe, $"--urls http://127.0.0.1:{port} {args}".TrimEnd(), _dir, rate: rate, admins: admins);
+
+            if (await Listening(server, port))
+            {
+                return (server, port);
+            }
+
+            var said = server.Text;
+            Stop(server);
+
+            LostToARace(said).Should().BeTrue(
+                $"the server on port {port} stopped without listening, and not because the port was "
+                + $"taken — so retrying would only lose the reason. It said: {said}");
+
+            lost.Add(port);
+            lost.Count.Should().BeLessThan(
+                Attempts,
+                $"{Attempts} candidates lost in a row is a machine out of ports, not a race; "
+                + $"lost {string.Join(", ", lost)}");
+        }
+
+        throw new InvalidOperationException(
+            $"no candidate port was left to try; lost {string.Join(", ", lost)}");
+    }
+
+    /// <summary>
+    /// Whether a server that stopped without listening stopped because its port was taken.
+    /// </summary>
+    /// <remarks>
+    /// <para>Narrow on purpose, and for the reason `LoopbackStub` gives for its own errno list:
+    /// retrying on ANY early exit would turn a missing keyword list or an unwritable data directory
+    /// into ten attempts and a sentence blaming ports — wrong, and ten times slower to be wrong.
+    /// So anything this does not recognise fails immediately, carrying what the server said.</para>
+    /// <para>The markers are the two halves of what Kestrel prints: its own sentence, which names
+    /// the address, and the platform's, which is where the dialects differ — `address already in
+    /// use` on Linux and macOS, and on Windows the `Only one usage of each socket address` wording
+    /// of `WSAEADDRINUSE`. <see cref="ARealCollisionIsRecognisedOnThisPlatform"/> provokes a real
+    /// one and asserts that whatever this platform prints is in this set, which is how the list is
+    /// meant to grow rather than by guessing.</para>
+    /// </remarks>
+    private static bool LostToARace(string said) =>
+        said.Contains("Failed to bind to address", StringComparison.OrdinalIgnoreCase)
+        || said.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
+        || said.Contains("Only one usage of each socket address", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Waits for the server to actually answer — and stops waiting the moment it has died.
+    /// </summary>
+    /// <remarks>
+    /// It polled for the full fifteen seconds whatever happened, so a server that had already
+    /// exited was waited out and then reported as one that "must reach the point of listening".
+    /// Watching for the exit is what makes a lost port cheap to retry: Kestrel refuses a taken
+    /// address in tens of milliseconds, so the retry costs that rather than fifteen seconds a turn.
+    /// </remarks>
+    private static async Task<bool> Listening(Running server, int port)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         for (var attempt = 0; attempt < 60; attempt++)
@@ -513,6 +699,11 @@ public sealed class TheBuiltBinariesTests : IDisposable
                 // Not up yet, which is the ordinary case for the first few attempts.
             }
 
+            if (server.Process.HasExited)
+            {
+                return false;
+            }
+
             await Task.Delay(250, TestContext.Current.CancellationToken);
         }
 
@@ -527,21 +718,63 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// writing and then stops running. The server logs to its console sink on every request, so it
     /// would reach that buffer and hang there — looking exactly like a server that never came up.
     /// </remarks>
-    private static Process Start(
+    private static Running Start(
         string exe, string args, string data, string key = "", string rate = "",
         string admins = "", string adminRate = "")
     {
         var how = Prepared(exe, args, data, key, rate, admins, adminRate);
         var started = Process.Start(how)!;
+        var said = new StringBuilder();
 
         // Drained on their own threads, because the SERVER is left running: nobody calls
         // `ReadToEnd` on a process that never exits, and an undrained pipe stops it dead.
-        started.OutputDataReceived += (_, _) => { };
-        started.ErrorDataReceived += (_, _) => { };
+        //
+        // KEPT rather than discarded, which it was. A server that dies during startup says why on
+        // stderr — the address already in use, the keyword list missing, the data directory
+        // unwritable — and throwing that away left every startup failure looking identical from
+        // here: fifteen seconds of polling and then "must reach the point of listening", about a
+        // process that had explained itself in the first fifty milliseconds.
+        started.OutputDataReceived += (_, line) => Keep(said, line.Data);
+        started.ErrorDataReceived += (_, line) => Keep(said, line.Data);
         started.BeginOutputReadLine();
         started.BeginErrorReadLine();
 
-        return started;
+        return new Running(started, said);
+    }
+
+    /// <summary>Appends a drained line under the lock the two handler threads share.</summary>
+    private static void Keep(StringBuilder said, string? line)
+    {
+        if (line is null)
+        {
+            return;
+        }
+
+        lock (said)
+        {
+            said.AppendLine(line);
+        }
+    }
+
+    /// <summary>A started server and everything it has said so far.</summary>
+    /// <remarks>
+    /// The two travel together because the interesting moment is the one where the process is gone:
+    /// a <see cref="Process"/> that has exited still answers <see cref="Process.ExitCode"/> but its
+    /// streams are closed, so whatever it said has to have been kept as it was said.
+    /// </remarks>
+    private sealed record Running(Process Process, StringBuilder Said)
+    {
+        /// <summary>What it has printed, as one block of text.</summary>
+        public string Text
+        {
+            get
+            {
+                lock (Said)
+                {
+                    return Said.ToString();
+                }
+            }
+        }
     }
 
     /// <summary>Runs one to completion and collects what it said.</summary>
@@ -603,14 +836,14 @@ public sealed class TheBuiltBinariesTests : IDisposable
         return how;
     }
 
-    private static void Stop(Process server)
+    private static void Stop(Running server)
     {
         try
         {
-            if (!server.HasExited)
+            if (!server.Process.HasExited)
             {
-                server.Kill(entireProcessTree: true);
-                server.WaitForExit(10_000);
+                server.Process.Kill(entireProcessTree: true);
+                server.Process.WaitForExit(10_000);
             }
         }
         catch (InvalidOperationException)
@@ -618,7 +851,7 @@ public sealed class TheBuiltBinariesTests : IDisposable
             // Already gone, which is the outcome this was asking for.
         }
 
-        server.Dispose();
+        server.Process.Dispose();
     }
 
     public void Dispose() => Scratch.Delete(_dir);
