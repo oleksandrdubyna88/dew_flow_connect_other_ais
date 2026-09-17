@@ -1,3 +1,7 @@
+import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
+import { escapeHtml } from './webviewHtml';
+import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+
 /**
  * The review page: every collected pair, and what a person decided about it.
  *
@@ -11,6 +15,16 @@
  * needs an early `return` or the control also opens the row it sits in, and no source assertion can
  * see a missing one. The plan's first draft called this the first multi-select in the codebase and a
  * plan reviewer corrected it.</p>
+ *
+ * <p><b>Every row is collapsed when the page opens</b> (`PLAN_the_review_page_can_be_read.md`,
+ * story 1.1). Two hundred pairs each showing two skeletons is a page nobody scrolls; what a person
+ * needs to see at once is the LIST, and the code when they ask for it. Which rows are open is held
+ * by the panel and handed back in {@link ReviewView.expanded}, because a redraw replaces the whole
+ * document — `rolesPanel.ts` holds its tab for the same reason and says so at length.</p>
+ *
+ * <p>Pure, and free of `node:` and `vscode` imports, like `zoomControl.ts` and `textTone.ts` beside
+ * it: a page module that reaches for either fails the bundle test, and a decision inside one is a
+ * decision no unit test can run.</p>
  */
 
 /** One pair as the server hands it over. */
@@ -25,6 +39,25 @@ export interface ReviewPair {
   readonly severity: string;
   readonly category: string;
   readonly title: string;
+}
+
+/**
+ * Everything the page is drawn from, as one argument.
+ *
+ * <p>`renderHelpHtml`'s shape, for the same reason it has it: this went from three positional
+ * parameters to six in one story, and the fourth one along would have been a boolean nobody could
+ * read at a call site. The two offsets are the SETTINGS' values, read by the host at paint —
+ * the page never computes its own.</p>
+ */
+export interface ReviewView {
+  readonly pairs: readonly ReviewPair[];
+  readonly nonce: string;
+  /** What the server said when it could not answer. Empty is not the same as an empty corpus. */
+  readonly trouble?: string;
+  /** The `findingId`s whose code is showing. Keyed by id, never by position — see {@link row}. */
+  readonly expanded?: ReadonlySet<number>;
+  readonly uiScale?: number;
+  readonly textTone?: number;
 }
 
 export const UNDECIDED = -1;
@@ -49,20 +82,49 @@ export function decision(keep: number): string {
 export const undecided = (pairs: readonly ReviewPair[]): number =>
   pairs.filter((p) => p.keep === UNDECIDED).length;
 
-const escape = (text: string): string =>
-  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+/** An ARIA boolean is a lowercase STRING, which `${true}` also spells but by accident. */
+const aria = (yes: boolean): string => (yes ? 'true' : 'false');
 
-function row(pair: ReviewPair): string {
-  return `<tr class="pair" data-row="${pair.findingId}">
-  <td class="pick"><input type="checkbox" data-pick="${pair.findingId}"></td>
+/**
+ * One pair: the line you always see, and the code you asked for.
+ *
+ * <p><b>Two `<tr>`s, not one row with hidden cells.</b> A collapsed pair must take the height of a
+ * line, and cells sized for skeletons leave a collapsed table as a column of empty space wider than
+ * the text beside it. The detail row carries the id it belongs to so a redraw can find it, and
+ * `hidden` rather than a class so the browser's own default hides it before any stylesheet loads.</p>
+ *
+ * <p><b>The key is `findingId` everywhere</b> — `data-row`, `data-pick`, `data-toggle`,
+ * `data-detail` and the element id. A position would pass every test written in one order and lose
+ * the open row the moment a redraw reorders or removes anything, which is what the three tests named
+ * in the plan exist to catch.</p>
+ */
+function row(pair: ReviewPair, open: boolean): string {
+  const id = pair.findingId;
+  const said = `${escapeHtml(pair.severity)} · ${escapeHtml(pair.category)} — ${escapeHtml(pair.title)}`;
+
+  return `<tr class="pair" data-row="${id}">
+  <td class="pick"><input type="checkbox" data-pick="${id}"></td>
   <td class="what">
-    <div class="sym">${escape(pair.symbolName)}</div>
-    <div class="said">${escape(pair.severity)} · ${escape(pair.category)} — ${escape(pair.title)}</div>
+    <button type="button" class="twist" data-toggle="${id}"
+            aria-expanded="${aria(open)}" aria-controls="detail-${id}">
+      <span class="chev" aria-hidden="true">▸</span><span class="sym">${escapeHtml(pair.symbolName)}</span>
+    </button>
+    <div class="said">${said}</div>
     <div class="state ${decision(pair.keep)}">${decision(pair.keep)}</div>
   </td>
-  <td class="code"><pre>${escape(pair.skeletonBefore)}</pre></td>
-  <td class="code"><pre>${escape(pair.skeletonAfter)}</pre></td>
+</tr>
+<tr class="detail" id="detail-${id}" data-detail="${id}"${open ? '' : ' hidden'}>
+  <td class="pick"></td>
+  <td>
+    <div class="sides">
+      <div class="side">
+        <div class="sideName">Before</div><pre>${escapeHtml(pair.skeletonBefore)}</pre>
+      </div>
+      <div class="side">
+        <div class="sideName">After</div><pre>${escapeHtml(pair.skeletonAfter)}</pre>
+      </div>
+    </div>
+  </td>
 </tr>`;
 }
 
@@ -76,7 +138,7 @@ function row(pair: ReviewPair): string {
  */
 function body(pairs: readonly ReviewPair[], rows: string, trouble: string): string {
   if (trouble.length > 0) {
-    return `<p class="empty" id="trouble">The pairs could not be read: ${escape(trouble)}</p>`;
+    return `<p class="empty" id="trouble">The pairs could not be read: ${escapeHtml(trouble)}</p>`;
   }
 
   if (pairs.length === 0) {
@@ -87,7 +149,7 @@ function body(pairs: readonly ReviewPair[], rows: string, trouble: string): stri
   return `<table>
 <thead><tr>
   <th class="pick"><input type="checkbox" id="pickall" title="Select every pair"></th>
-  <th>Method</th><th>Before</th><th>After</th>
+  <th>Method</th>
 </tr></thead>
 <tbody>
 ${rows}
@@ -103,9 +165,10 @@ ${rows}
  * timed out sends them somewhere else entirely. Four reviewers of the code round found the first
  * version saying the former for both.</p>
  */
-export function reviewPageHtml(
-  pairs: readonly ReviewPair[], nonce: string, trouble = ''): string {
-  const rows = pairs.map(row).join('\n');
+export function reviewPageHtml(view: ReviewView): string {
+  const { pairs, nonce, trouble = '', uiScale = 0, textTone = 0 } = view;
+  const expanded = view.expanded ?? new Set<number>();
+  const rows = pairs.map((pair) => row(pair, expanded.has(pair.findingId))).join('\n');
   const waiting = undecided(pairs);
 
   return `<!DOCTYPE html>
@@ -118,13 +181,21 @@ export function reviewPageHtml(
   *, *::before, *::after { box-sizing: border-box; }
   :root { color-scheme: light dark; }
   body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
+    font-family: var(--vscode-font-family);
     color: var(--vscode-foreground); background: var(--vscode-editor-background);
     margin: 0; padding: 12px 16px;
+    /* Both INSIDE the rule. A tone fragment written above it silently drops the whole body rule —
+       the trap chatPage.ts documents and a test parses for. */
+    ${zoomStyle(uiScale)} ${toneStyle(textTone)}
   }
-  h1 { font-size: 15px; margin: 0 0 4px; }
-  .hint { opacity: .7; font-size: 12px; margin: 0 0 12px; }
+${ZOOM_CSS}
+${TONE_CSS}
+  h1 { font-size: 1.15em; margin: 0 0 4px; }
+  .hint { opacity: .7; font-size: .92em; margin: 0 0 12px; }
   .bar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
+  /* Pushes the view controls to the far end: what a person presses often and what they set once
+     should not sit in one undifferentiated row of buttons. */
+  .bar .spacer { flex: 1 1 auto; }
   button {
     background: var(--vscode-button-background); color: var(--vscode-button-foreground);
     border: none; border-radius: 2px; padding: 5px 12px; cursor: pointer;
@@ -133,22 +204,43 @@ export function reviewPageHtml(
   button:disabled { opacity: .5; cursor: default; }
   button.quiet { background: none; color: var(--vscode-textLink-foreground); text-decoration: underline; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  th { text-align: left; font-size: .85em; text-transform: uppercase; letter-spacing: .06em;
        opacity: .7; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
-  td { vertical-align: top; padding: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+  td { vertical-align: top; padding: 8px; }
+  /* The border belongs to the PAIR, and a pair is two rows: drawn under the summary when it is
+     closed and under the detail when it is open, so an expanded pair reads as one block rather
+     than as two rows that happen to be adjacent. */
+  tr.pair > td { border-bottom: 1px solid var(--vscode-panel-border); }
+  tr.pair:has(+ tr.detail:not([hidden])) > td { border-bottom: none; }
+  tr.detail > td { border-bottom: 1px solid var(--vscode-panel-border); padding-top: 0; }
+  /* Explicit rather than trusting the UA sheet to outrank a display we might add later. */
+  tr[hidden] { display: none; }
   /* The tick column is as narrow as a box and must not take the click target of the row with it. */
   th.pick, td.pick { width: 1%; padding-right: 0; }
   th.pick input, td.pick input { cursor: pointer; margin: 0; }
-  td.what { width: 22%; }
+  /* The whole summary line is the button, so the target is the line and not a glyph. It keeps the
+     page's own text colour: a button coloured as a button would make every method look pressable
+     in the accent colour and drown the state words underneath. */
+  button.twist {
+    background: none; color: inherit; padding: 0; text-align: left; width: 100%;
+    display: flex; align-items: baseline; gap: 6px; font: inherit;
+  }
+  .chev { display: inline-block; opacity: .6; transition: transform .1s; font-size: .9em; }
+  button.twist[aria-expanded="true"] .chev { transform: rotate(90deg); }
   .sym { font-weight: 600; }
-  .said { opacity: .7; font-size: 11px; margin-top: 2px; }
-  .state { font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  .said { opacity: .7; font-size: .85em; margin-top: 2px; }
+  .state { font-size: .85em; margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
   .state.kept { color: var(--vscode-charts-green); }
   .state.dropped { color: var(--vscode-charts-red); }
   .state.undecided { opacity: .5; }
-  td.code { width: 39%; }
+  /* Without min-width: 0, a long unbroken token makes a flex child refuse to shrink and the table
+     grows a horizontal scrollbar instead of wrapping. */
+  .sides { display: flex; gap: 16px; align-items: flex-start; }
+  .side { flex: 1 1 0; min-width: 0; }
+  .sideName { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; opacity: .55;
+              margin-bottom: 3px; }
   pre {
-    margin: 0; font-family: var(--vscode-editor-font-family); font-size: 11px;
+    margin: 0; font-family: var(--vscode-editor-font-family); font-size: .85em;
     white-space: pre-wrap; word-break: break-word; opacity: .9;
   }
   .empty { opacity: .7; padding: 24px 0; }
@@ -162,6 +254,10 @@ export function reviewPageHtml(
   <button type="button" id="drop" disabled>Drop selected</button>
   <button type="button" class="quiet" id="clear">Clear selection</button>
   <span class="hint" id="picked"></span>
+  <span class="spacer"></span>
+  <button type="button" class="quiet" id="expandAll">Expand all</button>
+  <button type="button" class="quiet" id="collapseAll">Collapse all</button>
+  ${zoomControlHtml(uiScale)}${toneControlHtml(textTone)}
 </div>
 ${body(pairs, rows, trouble)}
 <script nonce="${nonce}">
@@ -199,6 +295,33 @@ ${body(pairs, rows, trouble)}
     paint();
   }
 
+  // Opening a row is painted HERE and the panel is merely told. A redraw runs the server — one
+  // process per click is what a round trip would cost — so the page owns the gesture and the panel
+  // owns what survives the next redraw. Nothing about the corpus changes either way.
+  function show(id, open) {
+    // By the data attribute rather than by the element id, so opening one row and opening all of
+    // them look the same thing up the same way. The element id exists for aria-controls, which
+    // needs a real target; a second lookup path would be a second place for the two to disagree.
+    var detail = document.querySelector('[data-detail="' + id + '"]');
+    if (detail) { detail.hidden = !open; }
+    var twist = document.querySelector('[data-toggle="' + id + '"]');
+    if (twist) { twist.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+  }
+
+  function showAll(open) {
+    var details = document.querySelectorAll('[data-detail]');
+    var ids = [];
+    for (var i = 0; i < details.length; i++) {
+      details[i].hidden = !open;
+      ids.push(Number(details[i].getAttribute('data-detail')));
+    }
+    var twists = document.querySelectorAll('[data-toggle]');
+    for (var j = 0; j < twists.length; j++) {
+      twists[j].setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    vscode.postMessage({ type: 'expandAll', ids: ids, open: open });
+  }
+
   document.addEventListener('click', function (event) {
     var target = event.target;
     // ABOVE anything that acts on the row, and it RETURNS: a tick-box that falls through would
@@ -211,6 +334,19 @@ ${body(pairs, rows, trouble)}
       paint();
       return;
     }
+    // closest() and not an id test, because the press can land on the chevron inside the button.
+    // The selector is deliberately the BUTTON and not the row: matching the row would take the
+    // whole line, tick-box included, and would read the expanded state off an element that does
+    // not carry it — so a second press could never close what the first one opened. The suite
+    // goes red on exactly that mutation.
+    var twisting = target.closest ? target.closest('[data-toggle]') : null;
+    if (twisting) {
+      var rowId = twisting.getAttribute('data-toggle');
+      var opening = twisting.getAttribute('aria-expanded') !== 'true';
+      show(rowId, opening);
+      vscode.postMessage({ type: 'expand', id: Number(rowId), open: opening });
+      return;
+    }
     if (target.id === 'pickall') {
       var boxes = document.querySelectorAll('[data-pick]');
       var everyOne = boxes.length > 0 && count() === boxes.length;
@@ -221,10 +357,16 @@ ${body(pairs, rows, trouble)}
       paint();
       return;
     }
+    if (target.id === 'expandAll' || target.id === 'collapseAll') {
+      showAll(target.id === 'expandAll');
+      return;
+    }
     if (target.id === 'keep') { decide(1); return; }
     if (target.id === 'drop') { decide(0); return; }
     if (target.id === 'clear') { selected = {}; paint(); return; }
   });
+${zoomScript()}
+${toneScript()}
 
   paint();
   vscode.postMessage({ type: 'ready' });

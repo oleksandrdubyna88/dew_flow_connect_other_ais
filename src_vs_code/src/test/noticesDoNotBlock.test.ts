@@ -60,10 +60,16 @@ test('the review panel never waits for a person before it redraws', () => {
   );
   // The companion. Without it this file could stop notifying altogether and the assertion above
   // would go on passing for ever.
+  //
+  // 3 → 4 on 2026-09-17, story 1.1 of PLAN_the_review_page_can_be_read: the panel gained the ±
+  // zoom and ± tone controls, and a settings write that fails now says so. It is on the same
+  // footing as the other three — raised and not waited on — which is why it belongs behind the
+  // same import assertion rather than reaching for `notifyAndAsk`.
   assert.equal(
     (text.match(/\bawait notify\(/gu) ?? []).length,
-    3,
-    'the three places this panel speaks: the refusal, the partial write, and the catch',
+    4,
+    'the four places this panel speaks: the refusal, the partial write, the catch, and a view '
+    + 'setting that could not be saved',
   );
 });
 

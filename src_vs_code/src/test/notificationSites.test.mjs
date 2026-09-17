@@ -167,7 +167,14 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // picker goes on offering names that have moved and nothing else on screen says so. ONE site, not
 // one per conversation: a folder refactor moves many at once, so the counts are gathered and
 // `followReport` chooses a single sentence.
-const PLACES_THIS_SPEAKS = 123;
+// 122 → 123 on 2026-09-17, story 1.1 of PLAN_the_review_page_can_be_read: the review panel gained
+// the ± zoom and ± tone controls, and a settings write that fails now says so. Every other page
+// carrying those controls drops that failure into a discarded promise or a `console.error`; this
+// one goes through the funnel, because a control that silently does nothing is read as a broken
+// control. `helpPanel.ts` has the same helper privately over `showWarningMessage` — the duplication
+// is named in the story's summary as a proposal rather than unified in a change about collapsing
+// rows.
+const PLACES_THIS_SPEAKS = 124;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
