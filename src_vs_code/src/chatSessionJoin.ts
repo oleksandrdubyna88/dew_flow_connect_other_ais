@@ -85,9 +85,13 @@ export async function resolveAndPin(entry: ChatEntry, mine: Thread): Promise<Ask
   // it is one of them, since that is where this session was found the day it was pinned. (gemini,
   // the plan round.)
   const own = byId.find((one) => one.found.kind === 'one' && sameRoot(one.folder, mine.workspace, NAMES_ARE_CASE_BLIND));
-  const kept = own ?? (pinnable(byId.map((one) => one.found))
+  // Two questions, two statements. They were one nested expression — `own ?? (pinnable ? find :
+  // undefined)` — which reads as though the fallback were a default rather than a second search
+  // with its own precondition. Behaviour is unchanged; what the reader has to hold at once is not.
+  const anywhere = pinnable(byId.map((one) => one.found))
     ? byId.find((one) => one.found.kind === 'one')
-    : undefined);
+    : undefined;
+  const kept = own ?? anywhere;
   if (kept !== undefined) {
     // Nothing is written: the id is already on the record, and the path is deliberately not.
     mine.sessionFile = (kept.found as Extract<Found, { kind: 'one' }>).file;
@@ -264,9 +268,20 @@ export async function askedForGoto(
     )
     : { found: [] as readonly Found[], unsure: false };
   const one = walked.found.find((answer) => answer.kind === 'one');
-  const source = kind === 'claude' && pinnable(walked.found)
-    ? sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : ''))
-    : kind === 'claude' ? { kind: 'none' as const } : sourceOfFile(tab?.uri ?? '');
+  // THREE outcomes, asked in order rather than as a ternary inside a ternary. The nested form said
+  // `kind === 'claude'` twice and made the middle case — a Claude tab whose walk matched nothing —
+  // the hardest of the three to find, which is the one a reader is usually looking for.
+  const sourceFor = (): ConversationSource => {
+    if (kind !== 'claude') {
+      return sourceOfFile(tab?.uri ?? '');
+    }
+    if (!pinnable(walked.found)) {
+      return { kind: 'none' as const };
+    }
+
+    return sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : ''));
+  };
+  const source = sourceFor();
 
   const asked: GotoAsked = {
     tab: { kind, label: tab?.label ?? '', path },

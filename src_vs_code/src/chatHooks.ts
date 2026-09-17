@@ -19,6 +19,7 @@ import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { coaiDataDir } from './dataDir';
 import { writeFileAtomically } from './atomicFile';
+import { pictureDir } from './pictureStore';
 import { insideReally, promptsFrom } from './claudeSessions';
 import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
 import { notify } from './notify';
@@ -653,17 +654,6 @@ async function openWorkspaceFile(
   refuse(`There is no ${requested} in this workspace.`);
 }
 
-/**
- * Where a conversation's pictures live: one directory per conversation, under the extension's own.
- *
- * <p>The vendor process OPENS these files — that is the mechanism phase 0 measured — so they are
- * real files with a real path, and their lifetime is a contract rather than a detail. One directory
- * per conversation is what makes forgetting them possible: the tab closing removes it whole, the
- * way `chatOrphans.ts` ends the processes.</p>
- */
-function pictureDir(id: string): string {
-  return path.join(coaiDataDir(), 'pictures', id.replace(/[^\w-]/g, ''));
-}
 
 /** Take the picture off, and take the FILE with it — a file nobody will open is a file left behind. */
 function forgetPicture(thread: Thread): void {
@@ -711,7 +701,11 @@ async function attachPicture(entry: ChatEntry, thread: Thread, dataUrl: string):
   // `forgetPicture` FIRST — deleting the file and clearing the fields — and then write. A full or
   // unwritable disk therefore left the conversation with no image and nothing to retry from: the
   // failure destroyed the state it was meant to replace.
-  const dir = pictureDir(entry.id.toString());
+  // THE CONVERSATION, not `entry.id.toString()`. `ChatEntry.id` is typed `object` — the opaque
+  // identity a WeakMap is keyed on — so that call gave `"[object Object]"` for every conversation
+  // there has ever been, and every one of them shared ONE directory. `pictureStore` takes the
+  // conversation now, so the call that caused it does not compile.
+  const dir = pictureDir(coaiDataDir(), thread);
   const was = thread.attachedPath;
   let file = '';
   try {

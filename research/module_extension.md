@@ -790,6 +790,22 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**Every conversation's pictures shared ONE directory, and a SonarCloud nit is what found it.** The
+call was `pictureDir(entry.id.toString())`. `ChatEntry.id` is typed `object` — the opaque identity a
+`WeakMap` is keyed on — so `toString()` returned `"[object Object]"` for every conversation there has
+ever been, sanitising to `objectObject`. The file inside is named from the image type and the turn
+number, so two conversations attaching a picture on the same turn wrote the same path and one
+silently replaced the other's.
+
+Sonar reported it as a LATENT risk — *“stringifies as `[object Object]` if anything ever puts it in a
+template”* — and the plan carried it that way, as one of six cosmetic findings. Reading the type of
+`ChatEntry.id` is what turned it into a real one. `pictureStore.pictureDir` now takes the
+CONVERSATION rather than a string, so the call that caused it does not compile, and it refuses an id
+with nothing usable in it rather than putting every window's pictures in `pictures/` itself.
+
+Its old header also claimed that *“the tab closing removes it whole”*. Nothing removes it — the
+fourth comment in this series found describing behaviour the code does not have. Corrected in place;
+the retention itself is open work.
 **One import of one four-field interface was a whole import cycle.** `chatModels.ts:1` took
 `ChatModelChoice` from `chatPage.ts`, and the page takes `ChatProvider` back — so `chatModels ↔
 chatPage` sat in the frozen list `importCycles.test.mjs` keeps. That import was the ENTIRE return
