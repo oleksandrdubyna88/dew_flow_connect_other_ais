@@ -177,7 +177,13 @@ test('a turn knows which conversation it was ASKED in, and cannot write into ano
   // conversation they typed it in.
   const queue = between(command, 'function ask(entry: ChatEntry', 'function chatLanguage(');
   assert.match(queue, /const began = thread\.generation;/u, 'a queued turn does not remember which conversation it was typed in');
-  assert.match(queue, /oneTurn\(entry, text, began\)/u, 'the turn is not told which conversation it belongs to');
+  // BOTH of what the turn is told, because since issue #288 there are two things it must not be
+  // able to lose: which conversation the question was typed in, and WHICH QUESTION it is. The
+  // second is what a withdrawal acts on — the callback that will run it cannot be un-chained, so
+  // the turn asks the queue by name at the moment it begins, and a turn given only the generation
+  // would run a question somebody had taken back.
+  assert.match(queue, /oneTurn\(entry, text, began, joined\.id\)/u,
+    'the turn is not told which conversation it belongs to, or which question it is');
 
   const turn = between(command, 'async function oneTurn(', 'function outcomeOf(');
   // Refused before ANYTHING, so a queued question is never sent and the reset is not held waiting

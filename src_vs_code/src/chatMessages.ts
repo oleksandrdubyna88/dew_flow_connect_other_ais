@@ -47,6 +47,14 @@ export interface PageMessage {
 export type ChatCommand =
   | { readonly kind: 'send'; readonly text: string }
   /**
+   * Take a question OUT of the queue before it runs — by id, never by text.
+   *
+   * <p>The same words typed twice is an ordinary thing to do, and a withdrawal keyed on them would
+   * cancel the wrong one. The id is minted by the host when the question joins, travels to the page
+   * on the waiting row, and comes back here. (issue #288.)</p>
+   */
+  | { readonly kind: 'withdraw'; readonly id: string }
+  /**
    * A different model answers from now on — the PAIR, because the page sends both halves.
    *
    * <p>It used to be one `id`, from before a provider and a model were two questions. The page was
@@ -314,6 +322,13 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       const said = text(message.text).trim();
 
       return said.length === 0 ? IGNORE : { kind: 'send', text: said };
+    }
+    case 'withdraw': {
+      const id = text(message.id).trim();
+
+      // An empty id names nothing, and a withdrawal that names nothing must not be allowed to mean
+      // "the first one" — a stale retained webview will post exactly this.
+      return id.length === 0 ? IGNORE : { kind: 'withdraw', id };
     }
     case 'pick': {
       const provider = text(message.provider);

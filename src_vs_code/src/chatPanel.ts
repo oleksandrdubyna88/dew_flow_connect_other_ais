@@ -7,6 +7,7 @@ import {
   ChatModelChoice,
   ChatPageState,
   TurnMarks,
+  WaitingQuestion,
   chatCappedHtml,
   chatFailureHtml,
   chatMessagesHtml,
@@ -14,6 +15,7 @@ import {
   chatPickerHtml,
   chatPresetRowsHtml,
   chatStatusHtml,
+  chatWaitingHtml,
 } from './chatPage';
 import { ChatProvider } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
@@ -48,6 +50,8 @@ import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost'
 export interface ChatPanelHooks {
   /** The person pressed send. */
   readonly onSend: (id: object, text: string) => void;
+  /** Take a queued question back before it runs. */
+  readonly onWithdraw: (id: object, questionId: string) => void;
   /**
    * The person chose a different PAIR — already checked against what this conversation offers.
    *
@@ -149,6 +153,8 @@ export interface ChatPushState {
   readonly messages: readonly ChatMessage[];
   readonly running: boolean;
   readonly capped: boolean;
+  /** Typed and not yet asked, oldest first. Empty for every conversation that is idle. */
+  readonly waiting: readonly WaitingQuestion[];
   readonly failure: string;
   readonly models: readonly ChatModelChoice[];
   /** Every row that can answer, each with its own models — what the picker offers. */
@@ -314,6 +320,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       hooks.onSend(id, command.text);
 
       return;
+    case 'withdraw':
+      hooks.onWithdraw(id, command.id);
+
+      return;
     case 'pick':
       // A page can post any pair it likes — a stale retained webview certainly will, and a tampered
       // one might. Choosing a model is choosing who gets paid, so the host checks the name against
@@ -447,6 +457,10 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     running: state.running,
     capped: state.capped,
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
+    // What is typed and not yet asked. Its own region rather than part of the thinking line: the
+    // line is replaced on every push and carries the stop control, and a queue that came and went
+    // with it would take the focus off a cross somebody was reaching for. (issue #288.)
+    waitingHtml: chatWaitingHtml(state.waiting),
     cappedHtml: chatCappedHtml(state.capped),
     // THE SAME BUILDER the first render uses. This expression lived here and in `regionsOf`, and a
     // retry button added to one of them would have shipped on one of the two paths.
