@@ -21,7 +21,7 @@ import {
   serverNoticesPath,
 } from '../notificationsFile';
 import { SEEN_FILE, seenLine, tailBegins } from '../notificationsSeen';
-import { forgetSeen, readSoFarCheaply } from '../notificationsSeenCache';
+import { SEAM, forgetSeen, readSoFarCheaply } from '../notificationsSeenCache';
 
 /**
  * The cheap look, and the sentence it becomes.
@@ -134,6 +134,54 @@ test('the two ledgers share ONE count budget, and cannot together exceed the cap
  */
 
 
+test('a ROTATED ledger does not report zero new, on the cheap path as on the page', async () => {
+  // The page clamps a stale range to the file that is on disk now; this path did not, and passed
+  // the old `to` straight to `countSince`. The walk then starts past the end of the replacement
+  // file, finds nothing, and the panel says "Nothing new" while the new ledger is full of records
+  // nobody has seen — a broken read rendering as a clean zero, which is the one thing this whole
+  // feature exists to prevent. (codex, the second S5 code round.)
+  const dir = home();
+  forgetSeen();
+  try {
+    ledger(notificationsPath(dir), 5);
+    acknowledged(dir, NOTIFICATIONS_FILE, 0, 400_000);
+
+    const glance = await glanceAtLedgers(dir);
+
+    assert.equal(glance.unread, 5, 'the replacement ledger is unread, not silently zero');
+    assert.equal(glance.readable, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a seen ledger REPLACED by another of the same size is not the file that was cached', async () => {
+  // Restoring a backup over it truncates in place: same path, same inode, same birth time, same
+  // length if the backup is the same age. Nothing about the FILE says it changed, so the cache has
+  // to check the bytes it consumed rather than trust that they are still there.
+  const dir = home();
+  forgetSeen();
+  try {
+    const path = join(dir, SEEN_FILE);
+    acknowledged(dir, NOTIFICATIONS_FILE, 100_000, 200_000);
+    const held = await readSoFarCheaply(dir);
+
+    assert.equal(tailBegins(held?.get(NOTIFICATIONS_FILE) ?? []), 200_000);
+
+    // The same number of digits, so the same number of bytes.
+    writeFileSync(path, seenLine({ utc: 'u', ledger: NOTIFICATIONS_FILE, from: 100_001, to: 200_001 }));
+    const after = await readSoFarCheaply(dir);
+
+    assert.deepEqual(
+      [...(after?.get(NOTIFICATIONS_FILE) ?? [])],
+      [{ from: 100_001, to: 200_001 }],
+      'what the file says now, not what it said before',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the acknowledgements are read once and then only where they GREW', async () => {
   const dir = home();
   forgetSeen();
@@ -164,37 +212,44 @@ test('the bytes already consumed are never read again — observed, not assumed'
   // the first range because it parsed it once; a reader that re-read the file would lose it. Without
   // this, the "only where it grew" test passes against an implementation that reads everything every
   // time, and the finding it answers would be unfixed with a green suite.
+  //
+  // The corruption is deliberately kept clear of the last SEAM bytes, which the cache re-reads to
+  // prove the file is still the file. Those two mechanisms are not in tension: the seam says "this
+  // is the same file", and everything below it is then taken as already read.
   const dir = home();
   forgetSeen();
   try {
-    acknowledged(dir, NOTIFICATIONS_FILE, 0, 100);
     const path = join(dir, SEEN_FILE);
+    for (const from of [0, 1000, 2000, 3000]) {
+      acknowledged(dir, NOTIFICATIONS_FILE, from, from + 100);
+    }
     const held = await readSoFarCheaply(dir);
 
-    assert.equal(tailBegins(held?.get(NOTIFICATIONS_FILE) ?? []), 100);
+    assert.equal((held?.get(NOTIFICATIONS_FILE) ?? []).length, 4, 'four ranges, none touching');
+    const consumed = statSync(path).size;
+    assert.ok(consumed > SEAM + 60, 'the first line has to sit outside the seam for this to probe anything');
 
-    const wasThere = statSync(path).size;
     const fd = openSync(path, 'r+');
     try {
-      const rubbish = Buffer.alloc(wasThere - 1, 0x58);
+      const rubbish = Buffer.alloc(40, 0x58);
       writeSync(fd, rubbish, 0, rubbish.length, 0);
     } finally {
       closeSync(fd);
     }
-    acknowledged(dir, NOTIFICATIONS_FILE, 100, 250);
+    acknowledged(dir, NOTIFICATIONS_FILE, 4000, 4100);
     const after = await readSoFarCheaply(dir);
 
     assert.deepEqual(
-      [...(after?.get(NOTIFICATIONS_FILE) ?? [])],
-      [{ from: 0, to: 250 }],
+      [...(after?.get(NOTIFICATIONS_FILE) ?? [])].map((span) => span.from),
+      [0, 1000, 2000, 3000, 4000],
       'the first range survives, so its bytes were not re-read',
     );
     forgetSeen();
     const cold = await readSoFarCheaply(dir);
 
     assert.deepEqual(
-      [...(cold?.get(NOTIFICATIONS_FILE) ?? [])],
-      [{ from: 100, to: 250 }],
+      [...(cold?.get(NOTIFICATIONS_FILE) ?? [])].map((span) => span.from),
+      [1000, 2000, 3000, 4000],
       'and the control: a cold read of that same file really has lost the first line',
     );
   } finally {

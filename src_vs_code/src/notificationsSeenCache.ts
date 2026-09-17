@@ -1,4 +1,4 @@
-import { open, stat } from 'node:fs/promises';
+import { FileHandle, open, stat } from 'node:fs/promises';
 import { NEWLINE_BYTE, missingRatherThanBroken } from './notificationsFile';
 import { Span, merge, parseSeen, readSoFar, seenPath } from './notificationsSeen';
 
@@ -18,12 +18,20 @@ import { Span, merge, parseSeen, readSoFar, seenPath } from './notificationsSeen
  * change, so the merged ranges computed from them cannot change either. Merging is associative, so
  * yesterday's merged spans plus today's appended lines are the same answer as parsing the lot.</p>
  *
- * <h2>The two ways it refuses to trust itself</h2>
+ * <h2>The three ways it refuses to trust itself</h2>
  *
  * <p>A file SHORTER than what was already consumed is not this file any more — it was rotated,
- * restored, or replaced — so the cache is thrown away and it is read from the start. And only
- * complete lines are consumed: `readTo` always lands just past a newline, so a line that was half
- * written when this read happened is read whole on the next tick rather than parsed in two halves.</p>
+ * restored, or replaced — so the cache is thrown away and it is read from the start.</p>
+ *
+ * <p>A file that is NOT shorter is still checked rather than believed: the last bytes consumed are
+ * re-read and compared, because a file replaced in place keeps its path, its inode and its birth
+ * time, and keeps its length too if the replacement happens to be the same size. That check is what
+ * turns "assumes append-only" into "verifies append-only", and it costs one seek — on a tick that
+ * already opens both ledgers to count them.</p>
+ *
+ * <p>And only complete lines are consumed: `readTo` always lands just past a newline, so a line that
+ * was half written when this read happened is read whole on the next tick rather than parsed in two
+ * halves.</p>
  */
 
 /** What is remembered about one acknowledgement file between ticks. */
@@ -32,7 +40,21 @@ interface Remembered {
   readonly readTo: number;
   /** The merged ranges those bytes amount to, per ledger. */
   readonly spans: ReadonlyMap<string, readonly Span[]>;
+  /** The last bytes consumed, re-read whenever the file changed to prove it is still the same file. */
+  readonly seam: Buffer;
 }
+
+/**
+ * How many bytes before the watermark are checked before the cache is believed.
+ *
+ * <p>Nothing about a RESTORED file says it changed. Copying a backup over
+ * `notifications-seen.jsonl` truncates it in place, so the path, the inode and the birth time are
+ * all the ones that were cached, and if the backup is a similar age the length is too — the size
+ * check catches a file that got shorter and nothing catches one that did not. So the cache re-reads
+ * the last 128 bytes it consumed and compares them: bounded, one seek, and it turns "assumes
+ * append-only" into "verifies append-only". (local, the second S5 code round.)</p>
+ */
+export const SEAM = 128;
 
 /**
  * How much of the tail one call will take.
@@ -53,6 +75,19 @@ export function forgetSeen(): void {
 }
 
 const NOTHING: ReadonlyMap<string, readonly Span[]> = new Map();
+const EMPTY = Buffer.alloc(0);
+
+/** The last `SEAM` bytes before `readTo`, which is what proves the prefix is still the prefix. */
+async function seamAt(handle: FileHandle, readTo: number): Promise<Buffer> {
+  const want = Math.min(SEAM, readTo);
+  if (want <= 0) {
+    return EMPTY;
+  }
+  const buffer = Buffer.alloc(want);
+  await handle.read(buffer, 0, want, readTo - want);
+
+  return buffer;
+}
 
 /** Yesterday's ranges and today's, per ledger, merged. */
 function joined(
@@ -89,15 +124,6 @@ export async function readSoFarCheaply(
   }
 
   const held = remembered.get(path);
-  const base: Remembered = held !== undefined && size >= held.readTo
-    ? held
-    : { readTo: 0, spans: NOTHING };
-  if (size === base.readTo) {
-    remembered.set(path, base);
-
-    return base.spans;
-  }
-
   let handle;
   try {
     handle = await open(path, 'r');
@@ -107,19 +133,40 @@ export async function readSoFarCheaply(
     return undefined;
   }
   try {
+    // Something changed, so the cache is checked rather than trusted: are the bytes we consumed
+    // still the bytes that are there? A file replaced in place keeps its path, its inode and its
+    // birth time, so this is the only question that distinguishes it from one that was appended to.
+    const sameFile = held !== undefined
+      && size >= held.readTo
+      && (await seamAt(handle, held.readTo)).equals(held.seam);
+    const base: Remembered = sameFile && held !== undefined
+      ? held
+      : { readTo: 0, spans: NOTHING, seam: EMPTY };
+    if (size === base.readTo) {
+      // Nothing new, and this is the common case by far: twelve ticks a minute against a file
+      // somebody appends to a few times a day. Nothing is parsed and nothing is allocated.
+      remembered.set(path, base);
+
+      return base.spans;
+    }
+
     const length = Math.min(size - base.readTo, TAIL_CAP);
-    const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, base.readTo);
+    const buffer = length > 0 ? Buffer.alloc(length) : EMPTY;
+    if (length > 0) {
+      await handle.read(buffer, 0, length, base.readTo);
+    }
     const lastNewline = buffer.lastIndexOf(NEWLINE_BYTE);
     if (lastNewline < 0) {
-      // Nothing complete arrived yet. The bytes stay unconsumed and are read whole next time.
+      // Nothing complete beyond the watermark. The bytes stay unconsumed and are read whole next
+      // time; the stamps are recorded so a half-written line is not re-read on every tick.
       remembered.set(path, base);
 
       return base.spans;
     }
     const complete = buffer.subarray(0, lastNewline + 1);
     const spans = joined(base.spans, readSoFar(parseSeen(complete.toString('utf8'))));
-    remembered.set(path, { readTo: base.readTo + complete.length, spans });
+    const readTo = base.readTo + complete.length;
+    remembered.set(path, { readTo, spans, seam: await seamAt(handle, readTo) });
 
     return spans;
   } catch (reason: unknown) {

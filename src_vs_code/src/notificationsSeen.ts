@@ -164,19 +164,39 @@ export function tailBegins(spans: readonly Span[]): number {
 }
 
 /**
- * Ranges cut down to the ledger that is actually on disk now.
+ * Only the ranges that are about the ledger on disk NOW.
  *
- * <p>A ledger can get SHORTER. It is rotated, restored from a backup, or replaced by hand, and the
- * acknowledgements written against the old one then cover bytes the new file does not have. Left
- * alone, `[0, 400000)` against a 900-byte file marks every record in it read and hides the very
- * first fault after the rotation — and the person has no way to know why the page is empty. Cutting
- * the ranges to the file's current end errs toward UNREAD: a record may be shown twice, which is
- * the harmless direction. (codex, the S5 code round.)</p>
+ * <p>A ledger can get SHORTER — rotated, restored from a backup, replaced by hand — and the
+ * acknowledgements written against the old one then reach past the end of the new file. Left alone,
+ * `[0, 400000)` against a 45-byte file starts the count beyond the file, finds nothing, and renders
+ * as "Nothing new" while the replacement is full of records nobody has seen.</p>
+ *
+ * <p>A range that does not fit is DROPPED, not cut down. Cutting was the first fix and it was the
+ * same bug wearing a hat: `[0, 400000)` cut to `[0, 45)` claims every record in the new file has
+ * been read, which is exactly the claim the whole watermark exists to prevent — quieter, and
+ * therefore worse. After a rotation there is no correspondence between the old offsets and the new
+ * file's bytes, so the only honest answer is that nothing is known to have been read. That errs
+ * toward UNREAD: a record may be shown twice, which is the harmless direction.
+ * (Found by making the rotation test pass for the wrong reason.)</p>
+ *
+ * <p>No LEGITIMATE range can exceed the size, which is what makes the rule safe: an acknowledgement
+ * is written with `to` at the end of the last COMPLETE line, and a file only grows past that.</p>
  */
-export function clampTo(spans: readonly Span[], size: number): readonly Span[] {
-  return spans
-    .map((span) => ({ from: Math.min(span.from, size), to: Math.min(span.to, size) }))
-    .filter((span) => span.to > span.from);
+export function onlyWithin(spans: readonly Span[], size: number): readonly Span[] {
+  return spans.filter((span) => span.to <= size);
+}
+
+/**
+ * Whether a range is ALREADY acknowledged, so appending it again would say nothing new.
+ *
+ * <p>An acknowledgement is a line on an append-only file, so a redundant one is not wrong — the
+ * union is the same union — it is WASTE, and it is waste that accumulates in the one file the cheap
+ * path has to read. *Mark everything read* writes `[0, end)` and then redraws, and the redrawn page
+ * dutifully offers the window it was given; every reopen of an unchanged page did the same. That is
+ * one line a time for an answer already on the disk. (codex, the second S5 code round.)</p>
+ */
+export function covers(spans: readonly Span[], span: Span): boolean {
+  return merge(spans).some((held) => held.from <= span.from && held.to >= span.to);
 }
 
 /** Whether one record's line start has already been acknowledged. What the PAGE marks rows with. */

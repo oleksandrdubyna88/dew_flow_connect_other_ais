@@ -23,9 +23,12 @@ test compares. This paragraph used to carry `109` and the artefact said `111`, w
 the script exists to prevent, committed by the document describing the script. (codex, the code
 round.) The counts quoted further down are historical — they are dated, and each says what moved it.
 
-**What exists after steps S1 to S4** — the record, the ledgers, the funnel in front of them, and the
-bounds on what one run may write. The routing of the call sites has begun and is not finished: see
-*the ratchet* below. Nothing reads any of it on screen yet; that is S5.
+**What exists after steps S1 to S5** — the record, the ledgers, the funnel in front of them, the
+bounds on what one run may write, and now the two things that READ them: a live panel section that
+says how many are new, and a page that shows what they were. The routing of the call sites has begun
+and is not finished: see *the ratchet* below. S6 brings the rounds log into line, S7 is three
+extension-side defects, and S8 is the server half — `server-notices.jsonl` is read today and not yet
+written.
 
 | Module | What it holds |
 |---|---|
@@ -39,7 +42,10 @@ bounds on what one run may write. The routing of the call sites has begun and is
 | `notificationsCount.ts` | the one line the panel says, and the three states that must not collapse |
 | `notificationsGlance.ts` | the cheap look: two stats and a newline count, no record parsed |
 | `notificationsPage.ts` + `notificationsRows.ts` + `notificationsPageStyle.ts` | the page, pure |
-| `notificationsPanel.ts` | the host — a webview, a message, and the one write |
+| `notificationsSeenCache.ts` | the acknowledgement file read once and then only where it grew — with the seam checked |
+| `notificationsPanel.ts` | the host — a webview, two messages, and the one write |
+| `writeGap.ts` | what the ledger could not keep, and over what window. Pure arithmetic |
+| `withinTheClock.ts` | waiting for something, but not for ever. One of these, shared with `jsonlLedger` |
 | `pageTables.ts` | `PAGE_SIZE`, `compareRows`, `asInstant`, shared with the rounds log |
 | `credentialWords.ts` | the credential word list, extracted from `consultantWrite.ts` rather than copied |
 | `scripts/count-notifications.mjs` | the site count, DERIVED — with `notification-sites.json` checked in and a test that goes red on drift |
@@ -176,6 +182,41 @@ without a number, which is what keeps the walk bounded by the tail in every case
 **The refresh is single-flight with a GENERATION.** A NAS read can outlive the 5000 ms tick, so
 reads overlap; a completion whose generation is stale is discarded rather than rendered, or an older
 answer would overwrite a newer count silently.
+
+**Nothing is marked read until the PAGE says it was shown.** The host does not acknowledge because
+it sent markup; the page posts `shown`, carrying the generation it was drawn for and whether a filter
+narrows it, and only then is a range written down. One message answers four things at once: the host
+cannot otherwise know the webview rendered at all, a stale page cannot acknowledge the snapshot that
+replaced it, a filtered view cannot claim a window it is not showing, and a failure notice has a
+moment the page is known to be listening — a message posted to a webview that has not finished
+loading can be dropped. An acknowledgement already covered by one on disk is not written again: it
+would be correct and useless, and it would grow the one file the five-second path has to read.
+
+**A range that reaches past the end of its ledger is DROPPED, not cut down.** A ledger can be
+rotated, restored or replaced, and the ranges recorded against the old one then reach past the end of
+the new file. Cutting `[0, 400000)` down to `[0, 45)` was the first fix and it was the same bug
+wearing a hat — it claims every record in the replacement has been read. After a rotation there is no
+correspondence between the old offsets and the new bytes, so nothing is known to have been read.
+
+**The acknowledgement file is read once and then only where it grew, and the cache checks its own
+seam.** It gains a line every time somebody opens the page, so on a year-old machine re-parsing all
+of it twelve times a minute in every window was the one part of the cheap path that was not cheap.
+Append-only is what makes the incremental read safe — but a file RESTORED over keeps its path, its
+inode, its birth time and, if the backup is a similar age, its length, so nothing about the file says
+it changed. The last 128 bytes consumed are re-read and compared each time, which turns "assumes
+append-only" into "verifies append-only" for one seek, on a tick that already opens both ledgers.
+
+**Both ledgers share ONE count budget.** Two caps of 3000 could walk 6000 newlines and report "6000
+new" — a number above the cap the sentence documents, earned by twice the work the cap exists to
+bound. What is left after the first ledger is what the second may spend.
+
+**The gap the ledger could not keep is written INTO the ledger.** The live counter is a state and a
+state dies with its host: a reloaded window reports no gap while the records it lost are still
+missing. It cannot go into a second file in the data directory, because the directory is what failed
+— the write documenting the failed write fails too, and the argument is circular. So the next append
+that LANDS carries a record of its own saying how many were lost and between which two instants, and
+the counter is SUBTRACTED by exactly what reached the disk rather than zeroed: a notice can be lost
+while the earlier losses are being reported, and zeroing would swallow those.
 
 **A filtered page acknowledges nothing**, and says which of the two is happening. Three rows on
 screen must not claim three thousand were read. *Mark everything read* is the one thing that covers

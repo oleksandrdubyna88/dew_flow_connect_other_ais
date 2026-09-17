@@ -1,5 +1,6 @@
-import { LedgerGlance, NOT_LOOKED } from './notificationsCount';
+import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
 import { glanceAtLedgers } from './notificationsGlance';
+import { withinTheClock } from './withinTheClock';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
@@ -754,19 +755,32 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.glanceGeneration += 1;
     const mine = this.glanceGeneration;
 
-    void glanceAtLedgers(coaiDataDir()).then(async (found) => {
+    const look = glanceAtLedgers(coaiDataDir());
+    // IN FLIGHT until the disk answers, not until we stop waiting for it. Nothing cancels a
+    // filesystem read, so a share that has stopped responding leaves this one pending — and
+    // starting another every five seconds would fill Node's four-thread filesystem pool and stall
+    // every other read the extension makes. The ceiling below decides what to SHOW; this decides
+    // when it is safe to ask again, and they are not the same question.
+    const done = (): void => {
       this.glanceInFlight = false;
+    };
+    void look.then(done, done);
+
+    void withinTheClock(look, GLANCE_CEILING_MS).then(async (raced) => {
       // A stale completion is DROPPED, not rendered: it is an older answer to a question that has
       // already been asked again.
       if (mine !== this.glanceGeneration) {
         return;
       }
+      // A directory that did not answer in two ticks is SAID, not left showing the last number it
+      // gave: a count that quietly stops moving is a count somebody trusts while it is wrong.
+      // (local, the second S5 code round — the only path without a ceiling.)
+      const found = raced.inTime ? raced.value : UNREADABLE_GLANCE;
       if (JSON.stringify(found) !== JSON.stringify(this.notificationsGlance)) {
         this.notificationsGlance = found;
         await this.render();
       }
     }, (reason: unknown) => {
-      this.glanceInFlight = false;
       console.error('ConnectOtherAIs: the notification ledgers could not be counted', reason);
     });
   }

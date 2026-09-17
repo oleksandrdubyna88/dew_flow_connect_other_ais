@@ -42,8 +42,33 @@ export const NOT_LOOKED: LedgerGlance = {
   older: false,
 };
 
+/**
+ * Nothing could be looked at.
+ *
+ * <p>Never a zero. It is a separate constant rather than a literal in each place that answers it,
+ * because the whole feature turns on this state being distinguishable from "up to date", and two
+ * copies of it are two chances for one of them to grow an `unread: 0, readable: true`.</p>
+ */
+export const UNREADABLE_GLANCE: LedgerGlance = {
+  readable: false,
+  anyRecords: false,
+  unread: 0,
+  more: false,
+  older: false,
+};
+
 /** How many new records the badge may name before it stops counting and says "+". */
 export const COUNT_CAP = 3000;
+
+/**
+ * How long the panel waits for a glance before it says the ledgers could not be read.
+ *
+ * <p>Two watcher ticks. Nothing cancels a filesystem read, so this is not a cancellation — it is
+ * how long a person waits before being TOLD, rather than being shown a count that quietly stopped
+ * moving. The caller keeps its single-flight until the read really settles, so a hung share costs
+ * one pending read rather than one per tick. (local, the second S5 code round.)</p>
+ */
+export const GLANCE_CEILING_MS = 10_000;
 
 function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;

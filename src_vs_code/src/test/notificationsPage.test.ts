@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Grouped } from '../notificationsRead';
-import { PageState, notificationsPageHtml, sourcesOf, waitingPageHtml } from '../notificationsPage';
+import {
+  ACKNOWLEDGING,
+  NOT_ACKNOWLEDGING,
+  PageState,
+  notificationsPageHtml,
+  sourcesOf,
+  waitingPageHtml,
+} from '../notificationsPage';
 import { asInstant, compareRows } from '../pageTables';
 
 /**
@@ -261,13 +268,16 @@ test('a filter turns the acknowledgement OFF, and says which of the two is happe
   // a person knows which it is.
   const shim = run(state([row()]));
 
-  assert.equal(shim.byId['ack-note']?.textContent, 'Opening this page marks the loaded records read.');
+  assert.equal(shim.byId['ack-note']?.textContent, ACKNOWLEDGING);
+  // And it says what LOADED covers, because the page renders every row it was given and pages
+  // through them: a person owed 3000 records marked read is owed the sentence that says so.
+  assert.match(ACKNOWLEDGING, /later pages and in other tabs/u);
 
   const find = shim.byId['find'] as Node;
   find.value = 'mirror';
   find.fire('input');
 
-  assert.equal(shim.byId['ack-note']?.textContent, 'A filter is on, so nothing is being marked read.');
+  assert.equal(shim.byId['ack-note']?.textContent, NOT_ACKNOWLEDGING);
 });
 
 test('a range whose end is before its start filters nothing, and says why', () => {
