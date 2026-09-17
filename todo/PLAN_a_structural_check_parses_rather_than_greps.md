@@ -87,8 +87,22 @@ whether you read it with a parser or with `IndexOf`.
    anchors-must-exist rule survives translation — a method that no longer parses to that shape fails
    loudly rather than passing vacuously.
 4. **Convert `TheDocblocksAreAttachedTests`.** It becomes: no member carries two
-   `DocumentationCommentTriviaSyntax` in its leading trivia. This is strictly stronger than the line
-   scan, which cannot see a member whose two blocks are separated by an attribute.
+   `DocumentationCommentTriviaSyntax`. This is strictly stronger than the line scan, which cannot
+   see a member whose two blocks are separated by an attribute — **and that case is also the trap in
+   the obvious implementation**, so it is written down before anyone writes it.
+
+   `member.GetLeadingTrivia()` is the leading trivia of the member's FIRST TOKEN. When the member
+   carries an attribute that token is `[`, and the C# spec puts a documentation comment *before* the
+   attribute section — so a second block written after the attribute is trivia on the DECLARATION
+   token instead, and a count of the member's leading trivia finds one block where there are two.
+   The conversion would then pass its own break-prover while seeing nothing, which is precisely the
+   hollow guard this plan exists to stop.
+
+   So the count is per-token, not per-member: each attribute list's leading trivia, plus the leading
+   trivia of the first declaration token after the attribute lists. **Do not concatenate the member's
+   leading trivia with the attribute lists'** — the member's own includes the first attribute list's,
+   so the first block is counted twice and the one after the attributes is still missed. Two wrongs
+   that look like a fix. (CodeRabbit, on the pull request that opened this plan.)
 5. **Delete the comment-stripping helper** and the `//`-aware reasoning around it, and say in
    `research/module_tests.md` what replaced it and why.
 
@@ -108,7 +122,13 @@ conversion, because a rewritten assertion is an unproven assertion:
   stays **green**. Both of today's failures are this case; if it is not asserted, the next one is
   not caught either.
 - **Two doc blocks separated by an attribute** — `/// <summary>a</summary>` `[Obsolete]`
-  `/// <summary>b</summary>` on one member. Red, which the line scan cannot manage.
+  `/// <summary>b</summary>` on one member. Red, which the line scan cannot manage **and which the
+  obvious Roslyn implementation cannot manage either** — see step 4. This break is the one that
+  decides whether the conversion was done properly, so it is run against the finished code and not
+  taken on trust: an implementation counting `member.GetLeadingTrivia()` stays green here.
+- **One doc block on a member that HAS an attribute**, the ordinary shape. Green — a count that
+  concatenates the member's leading trivia with each attribute list's sees this one twice and
+  reddens, which is the other half of the trap.
 - The whole `CoaiBugs.Tests` suite, Debug and Release, since the test project gains a dependency.
 
 ## Definition of done
