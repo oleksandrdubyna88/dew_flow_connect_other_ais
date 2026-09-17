@@ -113,6 +113,11 @@ Three things then decide it:
 **What this costs if it is ever regretted:** one module, `highlight(code, language): string`. The page
 calls that and nothing else, so the engine behind it can be swapped without touching `bugzReviewPage.ts`.
 
+**Shipped, and the prediction checked against the real package.** The estimate above was made by
+deflating a probe bundle; the `.vsix` actually built afterwards came to **664,353 B — +98,763,
++17.5 %** against the predicted +96,010, +17.0 %. Close enough that the estimate was worth making,
+and reported here because a prediction nobody checks is a number, not a measurement.
+
 **`BugzReviewPanel.draw()` replaces the entire HTML**, so collapse state, zoom and tone must live
 somewhere a repaint does not destroy — the panel's state, not the DOM.
 

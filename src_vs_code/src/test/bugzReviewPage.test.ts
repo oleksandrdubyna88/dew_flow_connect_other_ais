@@ -627,6 +627,42 @@ test('expand all opens every row, and collapse all shuts them', () => {
 });
 
 // --------------------------------------------------------------------------------------------
+// The code is coloured, and a skeleton still cannot become markup once it is IN the page.
+// --------------------------------------------------------------------------------------------
+
+test('a pair\'s code arrives coloured by its own language', () => {
+  const html = reviewPageHtml({ pairs: [pair(1)], nonce: 'test-nonce', expanded: new Set([1]) });
+
+  assert.match(html, /var\(--coai-hl-token-/u, 'the skeletons reached the page as plain text');
+  // And the palette that resolves those variables came with them, or every token is an empty colour.
+  assert.match(html, /--coai-hl-token-keyword:/u);
+});
+
+/**
+ * The module escapes; this asks whether the PAGE does.
+ *
+ * <p>`codeHighlight.test.ts` proves `highlight()` cannot emit markup. That is a different claim from
+ * "the page cannot", because the page is where the decision was made to stop calling `escapeHtml` on
+ * the skeletons — the call moved INTO the highlighter, and a later edit that renders a skeleton
+ * anywhere else on this page would reintroduce exactly what was removed. The corpus is code out of
+ * somebody's repository, and this page is what a person reads before deciding what leaves the
+ * machine, so it is worth asserting at both levels.</p>
+ */
+test('a skeleton full of markup cannot close the page\'s script or restyle it', () => {
+  const nasty = {
+    ...pair(1),
+    skeletonBefore: 'var a = "</script><style>.pair{display:none}</style>";',
+    skeletonAfter: 'var b = "<img src=x onerror=alert(1)>";',
+  };
+  const html = reviewPageHtml({ pairs: [nasty], nonce: 'test-nonce', expanded: new Set([1]) });
+  const rows = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+
+  assert.ok(!rows.includes('</script>'), 'a pair could end the page\'s own script early');
+  assert.ok(!/<style[\s>]/iu.test(rows), 'a pair could hide the rows around it');
+  assert.ok(!/<img[\s>]/iu.test(rows), 'a pair could add an element to the page');
+});
+
+// --------------------------------------------------------------------------------------------
 // The key is the findingId. These three are the tests a positional key passes anyway.
 // --------------------------------------------------------------------------------------------
 
