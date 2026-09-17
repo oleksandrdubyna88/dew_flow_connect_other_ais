@@ -656,7 +656,7 @@ enforces needs the run-wide budget beside it, since eviction would otherwise res
 - Reuse (`reuse-first.md` step 2): `PAGE_SIZE` and `compareRows` are **extracted** into a shared
   module. Two mechanics to get right — `compareRows` ([roundsLog.ts:679](../src_vs_code/src/roundsLog.ts))
   is typed on `LogRow`/`SortKey` and must be genericised; and `PAGE_SIZE` is interpolated into the page
-  **script text** (`roundsLog.ts:1331`), so the shared module must survive that `.toString()`-into-script
+  **script text** (`roundsLog.ts:1403`), so the shared module must survive that `.toString()`-into-script
   path — the minifier hazard this repository has shipped broken twice. `roundsLog.ts` is the only
   module that paginates or sorts, so the enumeration is complete.
 - The UTC→local range conversion goes into the **same** extraction: two pages that must agree about
@@ -884,7 +884,7 @@ goes into each plan below in the same task.
 | Page tests that run the page | the new page ships this way from the start | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the backlog of existing source-text assertions |
 | Notification text in five languages | not done | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns staleness; translation is out of scope until it lands |
 | The Team server's refusal vocabulary | not touched | [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md) owns `src_server` |
-| The SIZE of `roundsLog.ts` (1945) and `panelView.ts` (2795) | not touched here — the new page is under 400 lines a module from its first commit, so it joins no backlog | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) owns the split and is **blocked until S8 finishes**: S5 adds a fourth live region to `panelView.ts` and S6 changes `roundsLog.ts`, and a thousand-line move rebased across them throws away the review both are getting. Operator, 2026-09-17 |
+| The SIZE of `roundsLog.ts` (2016) and `panelView.ts` (2850) | not touched here — the new page is under 400 lines a module from its first commit, so it joins no backlog | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) owns the split and is **blocked until S8 finishes**: S5 adds a fourth live region to `panelView.ts` and S6 changes `roundsLog.ts`, and a thousand-line move rebased across them throws away the review both are getting. Operator, 2026-09-17 |
 | Where the server resolves its data dir | S8 depends on it | [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md) goes first |
 
 ## Build order

@@ -18,6 +18,7 @@ import {
   parseSeenLine,
   readSeen,
   readSoFar,
+  readSoFarWithin,
   seenPath,
   tailBegins,
 } from '../notificationsSeen';
@@ -229,6 +230,32 @@ test('a range about a ledger that is no longer there is DROPPED, never cut down 
   assert.deepEqual(onlyWithin([span(0, 45)], 45), [span(0, 45)], 'a range that ends exactly at the end fits');
   assert.deepEqual(onlyWithin([span(0, 100), span(100, 9000)], 100), [span(0, 100)], 'one fits, one does not');
   assert.deepEqual(onlyWithin([span(0, 100)], 0), [], 'and an empty file has had nothing read');
+});
+
+test('an acknowledgement written AFTER a rotation is not swallowed by the stale one beside it', () => {
+  // The acknowledgement file is append-only, so the line written against the old, larger ledger is
+  // still there when a new one is written against its replacement. Merging the two first produces
+  // [0, 400000) and dropping that whole takes the valid [0, 45) with it — on every read, for ever.
+  // The page would show everything unread after a rotation and *Mark everything read* would never
+  // stick. (CodeRabbit, on the pull request.)
+  const ledger = 'notifications.jsonl';
+  const ranges = [
+    { utc: 'old', ledger, from: 0, to: 400_000 },
+    { utc: 'new', ledger, from: 0, to: 45 },
+  ];
+
+  const spans = readSoFarWithin(ranges, new Map([[ledger, 45]])).get(ledger) ?? [];
+
+  assert.deepEqual([...spans], [span(0, 45)], 'what the replacement ledger really says is read');
+});
+
+test('a ledger nobody gave a size for keeps its ranges rather than losing them to a guess', () => {
+  const ranges = [{ utc: 'u', ledger: 'somebody-elses.jsonl', from: 0, to: 900 }];
+
+  assert.deepEqual(
+    [...(readSoFarWithin(ranges, new Map()).get('somebody-elses.jsonl') ?? [])],
+    [span(0, 900)],
+  );
 });
 
 test('the acknowledgement file is named where the data-directory move can find it', () => {

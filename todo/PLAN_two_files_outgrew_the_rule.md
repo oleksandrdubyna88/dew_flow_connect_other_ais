@@ -1,8 +1,14 @@
 # PLAN — the two files that outgrew the rule
 
 > Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `src_vs_code/src/roundsLog.ts`
-> (1945 lines) and `src_vs_code/src/panelView.ts` (2795 lines), against the 800 that
+> (2016 lines) and `src_vs_code/src/panelView.ts` (2850 lines), against the 800 that
 > `common/coding-style.md` allows.
+>
+> **Every figure below was re-measured on 2026-09-17** and the ones this plan was written with were
+> already stale — 1945 and 2795, from a tree several days old, with every derived line range shifted
+> by the same drift. A plan whose ranges name the wrong code is a plan that cuts in the wrong place,
+> and this one is nothing BUT ranges. (CodeRabbit, on the S5 pull request, which found it by
+> checking.) Re-measure again before the first cut: two sessions ship into this repository.
 >
 > **Blocked until [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md)
 > finishes S8.** The operator asked for the split on 2026-09-17, *after* all of that plan's steps —
@@ -18,15 +24,15 @@ it:
 
 | File | Lines | Exports | Imported by |
 |---|---|---|---|
-| `panelView.ts` | **2795** | 21 | **32 modules** |
-| `roundsLog.ts` | **1945** | 25 | 18 modules |
+| `panelView.ts` | **2850** | 21 | **32 modules** |
+| `roundsLog.ts` | **2016** | 25 | 18 modules |
 
 `coding-style.md` names 800 as the ceiling and 200–400 as typical. Both have been over it long
 enough that new work now asks whether to imitate them, which is how a rule stops being one: the
 notifications page (S5 of the sibling plan) deliberately does NOT inherit their shape, and that
 divergence was recorded as a question rather than answered by copying. This plan is the answer.
 
-**Why it matters beyond the number.** A 2795-line module is one a reader opens and closes again.
+**Why it matters beyond the number.** A 2850-line module is one a reader opens and closes again.
 The practical cost already showed up twice this month: `escapeHtml` had a **fourth private copy**
 written inside `panelView.ts` because importing the real one would have been a cycle — the comment
 at `panelView.ts:2297-2300` says so in as many words — and the S5 plan round had to ask whether the
@@ -39,25 +45,25 @@ of the length is not logic.**
 
 ### `roundsLog.ts` — one template literal is 41% of the file
 
-The page builder `roundsLogHtml` (`:1108`) opens a template literal at **`:1137` that runs to
-`:1943` — 806 lines**, and it divides cleanly:
+The page builder `roundsLogHtml` (`:1180`) opens a template literal at **`:1209` that runs to
+`:2015` — 807 lines**, and it divides cleanly:
 
 | Lines | What | Size |
 |---|---|---|
-| 1144–1293 | `<style>` | 149 |
-| 1295–1330 | the body markup | 36 |
-| **1331–1941** | **`<script nonce>`** | **610** |
+| 1216–1365 | `<style>` | 150 |
+| 1366–1402 | the body markup | 37 |
+| **1403–2013** | **`<script nonce>`** | **611** |
 
 The rest of the file is four groups that barely reference each other:
 
 | Group | Symbols | Roughly |
 |---|---|---|
-| Rows and money | `LogRow` `:37`, `SortKey` `:166`, `LogFilters` `:172`, `rowsFrom` `:204`, `newestFirst` `:242`, `mergedRows` `:260`, `chatRows` `:277`, `repoNameOf` `:632`, `money` `:691`, `cost3` `:710`, `costTitle` `:721`, `Money` `:737`, `Costed` `:740`, `LogView` `:743`, `inView` `:760`, `rowMatches` `:765` | 37–815 |
-| Sections | `questionsHtml` `:815`, `usageTabHtml` `:842`, `ROUND_ONLY_FACETS` `:913`, `consultationsHtml` `:968`, `blindSpotsHtml` `:1025` | 815–1106 |
-| The page | `roundsLogHtml` `:1108` and its literal | 1108–1943 |
-| Embedded in the page | `askedByHtml` `:427` | — |
+| Rows and money | `LogRow` `:38`, `SortKey` `:167`, `LogFilters` `:173`, `rowsFrom` `:205`, `newestFirst` `:243`, `mergedRows` `:261`, `chatRows` `:278`, `repoNameOf` `:633`, `money` `:692`, `cost3` `:711`, `costTitle` `:722`, `Money` `:738`, `Costed` `:741`, `LogView` `:744`, `inView` `:761`, `rowMatches` `:766` | 38–815 |
+| Sections | `questionsHtml` `:816`, `usageTabHtml` `:843`, `ROUND_ONLY_FACETS` `:914`, `consultationsHtml` `:969`, `blindSpotsHtml` `:1097` | 816–1178 |
+| The page | `roundsLogHtml` `:1180` and its literal | 1180–2015 |
+| Embedded in the page | `askedByHtml` `:428` | — |
 
-### `panelView.ts` — a 322-line CSS constant sits in the middle of it
+### `panelView.ts` — a 327-line CSS constant sits in the middle of it
 
 | Lines | What | Size |
 |---|---|---|

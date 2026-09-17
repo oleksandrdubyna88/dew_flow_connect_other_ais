@@ -8,7 +8,7 @@ import {
   notificationsPath,
   serverNoticesPath,
 } from './notificationsFile';
-import { olderRemain, onlyWithin, tailBegins } from './notificationsSeen';
+import { olderRemain, tailBegins } from './notificationsSeen';
 import { readSoFarCheaply } from './notificationsSeenCache';
 
 /**
@@ -39,28 +39,30 @@ async function sizeOf(path: string): Promise<number | undefined> {
 
 /** What the panel says, gathered without reading a record. */
 export async function glanceAtLedgers(dataDir: string): Promise<LedgerGlance> {
-  const [mine, theirs, soFar] = await Promise.all([
+  const [mine, theirs] = await Promise.all([
     sizeOf(notificationsPath(dataDir)),
     sizeOf(serverNoticesPath(dataDir)),
-    // Only where it GREW. The acknowledgement file gains a line per page open and is read twelve
-    // times a minute in every window; re-parsing all of it every time was the one part of the cheap
-    // path that was not cheap. (gemini, the S5 code round.)
-    readSoFarCheaply(dataDir),
   ]);
-
-  if (mine === undefined || theirs === undefined || soFar === undefined) {
+  if (mine === undefined || theirs === undefined) {
+    return UNREADABLE_GLANCE;
+  }
+  // Only where it GREW, and each range measured against the file it indexes BEFORE anything is
+  // merged. A rotated ledger leaves ranges reaching past the end of its replacement; one of those
+  // passed to `countSince` starts the walk beyond the file, finds nothing, and renders as "Nothing
+  // new" while the new ledger is full of records nobody has seen. The page had that check and this
+  // path did not, which was the worse half: this is the one that runs every five seconds.
+  // (gemini and codex, the S5 code rounds; the ORDER of filter and merge, CodeRabbit on the PR.)
+  const soFar = await readSoFarCheaply(dataDir, new Map([
+    [NOTIFICATIONS_FILE, mine],
+    [SERVER_NOTICES_FILE, theirs],
+  ]));
+  if (soFar === undefined) {
     return UNREADABLE_GLANCE;
   }
 
-  // Only the ranges that are about the files on disk NOW, exactly as the page path does it. A
-  // rotated ledger leaves ranges reaching past the end of its replacement; passing one of those to
-  // `countSince` starts the walk beyond the file, finds nothing, and renders as "Nothing new" while
-  // the new ledger is full of records nobody has seen. The page had this and the cheap path did
-  // not, which is the worse half: this is the one that runs every five seconds.
-  // (codex, the second S5 code round.)
   const each = [
-    { path: notificationsPath(dataDir), spans: onlyWithin(soFar.get(NOTIFICATIONS_FILE) ?? [], mine) },
-    { path: serverNoticesPath(dataDir), spans: onlyWithin(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs) },
+    { path: notificationsPath(dataDir), spans: soFar.get(NOTIFICATIONS_FILE) ?? [] },
+    { path: serverNoticesPath(dataDir), spans: soFar.get(SERVER_NOTICES_FILE) ?? [] },
   ];
 
   let unread = 0;

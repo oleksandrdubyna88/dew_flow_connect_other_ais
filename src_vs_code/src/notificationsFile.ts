@@ -1,4 +1,4 @@
-import { open, stat } from 'node:fs/promises';
+import { FileHandle, open, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { appendLine, readLedger } from './jsonlLedger';
 import { NotificationRecord, notificationLine, parseNotifications } from './notifications';
@@ -87,6 +87,47 @@ export function readServerNotices(dataDir: string): Promise<readonly Notificatio
  * a page wanting a few hundred records touches a few hundred kilobytes rather than a history.
  */
 const WINDOW = 64 * 1024;
+
+/** One positional read: how many bytes really arrived, which is not always how many were asked for. */
+export type ReadInto = (buffer: Buffer, into: number, length: number, at: number) => Promise<number>;
+
+/**
+ * Fill `length` bytes at `at`, looping over SHORT reads, and answer how many really arrived.
+ *
+ * <p>A positional read may return fewer bytes than it was asked for. It is rare on a local file and
+ * it is not rare on a network share, which is what the operator's data directory is — and both
+ * callers below got it wrong in their own way. The counter reuses ONE buffer, so a short read left
+ * the tail of the previous window in place and its newlines were counted again; the reader
+ * allocates a fresh buffer, so a short read left NUL bytes in the middle of the text it then
+ * decoded. Both also advanced their offset by what they ASKED for, so the unread remainder was
+ * skipped rather than retried.</p>
+ *
+ * <p>Takes the read as a function so that a short one can be REPRODUCED in a test rather than
+ * assumed: a real file will not do it on demand. (CodeRabbit, on the pull request.)</p>
+ */
+export async function fillWindow(
+  read: ReadInto,
+  buffer: Buffer,
+  length: number,
+  at: number,
+): Promise<number> {
+  let filled = 0;
+  while (filled < length) {
+    const arrived = await read(buffer, filled, length - filled, at + filled);
+    if (arrived <= 0) {
+      // End of file, or a share that has stopped answering. What is there is what is scanned.
+      break;
+    }
+    filled += arrived;
+  }
+
+  return filled;
+}
+
+/** The real read, as the shape above wants it. */
+function intoTheBuffer(handle: FileHandle): ReadInto {
+  return async (buffer, into, length, at) => (await handle.read(buffer, into, length, at)).bytesRead;
+}
 
 /**
  * How many WHOLE records the accumulated windows hold.
@@ -184,9 +225,12 @@ export async function countSince(
     const buffer = Buffer.alloc(WINDOW);
     while (offset > from) {
       const take = Math.min(WINDOW, offset - from);
-      offset -= take;
-      await handle.read(buffer, 0, take, offset);
-      for (const byte of buffer.subarray(0, take)) {
+      const start = offset - take;
+      const filled = await fillWindow(intoTheBuffer(handle), buffer, take, start);
+      offset = start;
+      // Only the bytes that ARRIVED: this buffer is re-used, so anything past `filled` is the tail
+      // of the previous window and its newlines have already been counted once.
+      for (const byte of buffer.subarray(0, filled)) {
         if (byte === NEWLINE_BYTE) {
           count += 1;
           if (count >= cap) {
@@ -294,10 +338,13 @@ export async function readNewestPlaced(
     // which is exactly what the first version of this did, and what its test caught.
     while (offset > 0 && complete(lines) < limit) {
       const take = Math.min(windowBytes, offset);
-      offset -= take;
+      const start = offset - take;
       const buffer = Buffer.alloc(take);
-      await handle.read(buffer, 0, take, offset);
-      held = Buffer.concat([buffer, held]);
+      const filled = await fillWindow(intoTheBuffer(handle), buffer, take, start);
+      offset = start;
+      // Only what arrived: a fresh buffer is zeroed, so concatenating the unfilled tail would put
+      // NUL bytes into the middle of the text this then decodes.
+      held = Buffer.concat([buffer.subarray(0, filled), held]);
       lines = held.toString('utf8').split('\n');
     }
 
@@ -307,12 +354,27 @@ export async function readNewestPlaced(
     // off-by-one a second time, one step further along.
     const dropped = offset > 0 ? 1 : 0;
     const kept = lines.slice(dropped);
+    if (dropped === 0) {
+      return placeThem(kept, 0, limit);
+    }
 
-    const skipped = dropped === 0
-      ? 0
-      : Buffer.byteLength(lines[0] ?? '', 'utf8') + 1;
+    // The dropped fragment is measured in BYTES, from the buffer — NEVER by re-encoding the decoded
+    // text. A window boundary that lands inside a multi-byte character truncates it, V8 decodes the
+    // remainder as U+FFFD, and `Buffer.byteLength` of that is 3 whatever the one or two bytes really
+    // were. Every offset after it then drifts by the difference: measured on a 7270-byte ledger of
+    // Russian prose read in 31-byte windows, `end` came back 7272 — two bytes PAST the end of the
+    // file, which is the acknowledgement past the last complete newline this function's own
+    // docstring forbids, and it marks a record read that was never rendered. (CodeRabbit, on the
+    // pull request; the first version of the test could not see it, because a limit equal to the
+    // record count reaches offset zero where there is nothing to drop.)
+    const firstNewline = held.indexOf(NEWLINE_BYTE);
+    if (firstNewline < 0) {
+      // Not one complete line in everything that was read, so there is nothing to place and
+      // nothing that may be acknowledged.
+      return nothing;
+    }
 
-    return placeThem(kept, offset + skipped, limit);
+    return placeThem(kept, offset + firstNewline + 1, limit);
   } finally {
     await handle.close();
   }

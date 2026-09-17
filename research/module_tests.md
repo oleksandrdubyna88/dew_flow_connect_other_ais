@@ -736,15 +736,22 @@ is likewise a request to systemd, read back with `stat` on the host rather than 
 | `notificationsSnapshot.test.ts` | the decisions one draw makes, extracted out of the host to be run | a draw that could not read claiming its window anyway; a rotated ledger's range marking the replacement read; "older" missed when the window starts past the beginning of the file |
 | `writeGap.test.ts` | the arithmetic of the ledger's own hole | a flush that ZEROES the counter and swallows the notices lost while it was reporting the earlier ones |
 | `theGapReachesTheLedger.test.ts` | the two wiring rules, against the source | a gap record written after a FAILED append, which counts its own failure and grows the number it reports; a gap sent through the funnel write, which recurses |
-| `liveRegionsRebind.test.ts` | the panel's live-region binding, against the source | a handler re-bound on every five-second tick, so one click posts a dozen messages and opens a dozen windows |
+| `liveRegionsRebind.test.ts` | the panel's script RUN over its own live regions | a handler re-bound on every five-second tick — measured: after six ticks one press posted six messages |
 
-**Three of those read SOURCE rather than running anything, and say so in their own headers.**
-`panelView.ts` renders its script as text inside 2795 lines and `notify.ts` imports `vscode`, so
-neither can be imported by a test here. What they pin is a specific pairing — this call inside that
-branch — never the presence of a word, because a structural assertion matching a fragment survives
-its own break. What they do not prove is that anything happens; `notificationsPage.test.ts` RUNS its
-page for exactly that reason, and `writeGap.test.ts` exists so the one piece of `notify.ts` worth
-asserting could be moved somewhere a test can reach it.
+**One of those reads SOURCE rather than running anything, and says so in its own header.**
+`theGapReachesTheLedger.test.ts` pins two wiring rules in `notify.ts`, which imports `vscode` and
+can therefore not be imported by any test here; what it asserts is a specific pairing — this call
+inside that branch — never the presence of a word, because a structural assertion matching a
+fragment survives its own break. Everything worth running was MOVED somewhere it can be:
+`writeGap.test.ts` exists because the arithmetic came out of `notify.ts`, and
+`notificationsSnapshot.test.ts` because the decisions came out of `notificationsPanel.ts`.
+
+**`liveRegionsRebind.test.ts` used to be a third, and that was wrong twice.** Its own header claimed
+nothing here could run the panel's script — `panelStorageScript.test.ts` already did — and
+`.agents/PROJECT.md` refuses new behavioural assertions over page source text outright. The
+structural version could not have seen the defect it was written for: two listeners on one node
+leave every statement exactly where it was. Running it shows the number instead — six ticks, one
+press, six messages. (CodeRabbit, on the S5 pull request.)
 
 **The page test builds its shim FROM the rendered markup and throws on a selector it does not
 understand.** Both halves of that are earned: a hand-written fixture handed to a shim passes with no

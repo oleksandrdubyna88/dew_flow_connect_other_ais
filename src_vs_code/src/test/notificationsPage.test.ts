@@ -70,6 +70,24 @@ class Node {
   textContent = '';
   style: Record<string, string> = {};
   readonly children: Node[] = [];
+
+  /** Set when this node is put into another. The script needs it to find a row's own tbody. */
+  parentNode: Node | null = null;
+
+  /**
+   * The DOM's own semantics: appending a node that is ALREADY a child MOVES it to the end.
+   *
+   * <p>That is the whole mechanism a table sort uses, and modelling it as "push" would let a page
+   * that never reorders anything pass. (CodeRabbit, on the pull request.)</p>
+   */
+  appendChild(child: Node): void {
+    const already = this.children.indexOf(child);
+    if (already >= 0) {
+      this.children.splice(already, 1);
+    }
+    this.children.push(child);
+    child.parentNode = this;
+  }
   readonly dataset: Record<string, string>;
   private readonly listeners = new Map<string, Array<() => void>>();
   private readonly attributes = new Map<string, string>();
@@ -148,7 +166,7 @@ function shimFor(html: string): {
         for (const cell of cells.matchAll(/<td[^>]*data-sort="([^"]*)"/gu)) {
           tr.children.push(new Node({ sort: cell[1] as string }));
         }
-        node.children.push(tr);
+        node.appendChild(tr);
       }
 
       return node;
@@ -336,6 +354,27 @@ test('clicking a column sorts, and clicking it again turns it round', () => {
     shim.heads.filter((th) => th !== repeats).every((th) => th.getAttribute('aria-sort') === 'none'),
     'exactly one column says it is sorted',
   );
+});
+
+test('clicking a column REORDERS the rows on screen, not only the arrow on the header', () => {
+  // `style.order` is a flexbox property and a tbody is not a flex container, so setting it on a row
+  // does nothing at all: the header said "sorted ascending" while the rows sat in ledger order. The
+  // sort test that existed asserted `aria-sort` and could not see it. (CodeRabbit, on the PR.)
+  const shim = run(state([
+    row({ code: 'oldest', when: new Date(AT).toISOString() }),
+    row({ code: 'newest', subject: 'V:/b', when: new Date(AT + 120_000).toISOString() }),
+    row({ code: 'middle', subject: 'V:/c', when: new Date(AT + 60_000).toISOString() }),
+  ]));
+  const codesOnScreen = (): readonly string[] =>
+    shown(shim, 'failure').map((tr) => (tr.dataset['find'] ?? '').split(' ').pop() ?? '');
+
+  assert.deepEqual(codesOnScreen(), ['newest', 'middle', 'oldest'], 'the page opens newest first');
+
+  const when = shim.heads.find((th) => th.dataset['key'] === 'when') as Node;
+  (when.querySelector('.sort') as Node).fire('click');
+
+  assert.equal(when.getAttribute('aria-sort'), 'ascending');
+  assert.deepEqual(codesOnScreen(), ['oldest', 'middle', 'newest'], 'and the rows follow the header');
 });
 
 test('Clear empties every filter and comes back to the first page', () => {

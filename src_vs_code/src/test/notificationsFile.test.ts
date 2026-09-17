@@ -10,6 +10,7 @@ import {
   SERVER_NOTICES_FILE,
   notificationsPath,
   readNewest,
+  fillWindow,
   readNewestPlaced,
   readNotifications,
   readServerNotices,
@@ -108,6 +109,83 @@ test('a multi-byte character split by a window boundary survives the backwards r
       assert.equal(back.length, 12, `window ${window} lost records`);
       for (const row of back) {
         assert.equal(row.detail, detail, `window ${window} corrupted the text`);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a SHORT positional read is filled rather than believed', async () => {
+  // A positional read may return fewer bytes than it was asked for — rare on a local file, not rare
+  // on the network share this data directory can be. A real file will not do it on demand, which is
+  // why the read is a function here: the fake below returns one byte at a time, and then nothing.
+  // Both callers got this wrong in their own way. The counter re-uses ONE buffer, so the tail of the
+  // previous window survived and its newlines were counted twice; the reader allocates a fresh one,
+  // so the unfilled tail was NUL bytes in the middle of the text it decoded. And both advanced by
+  // what they ASKED for, so the remainder was skipped rather than retried.
+  // (CodeRabbit, on the pull request.)
+  const source = Buffer.from('abcdefghij', 'utf8');
+  const oneByteAtATime = async (into: Buffer, at: number, length: number, from: number):
+  Promise<number> => {
+    if (from >= source.length) {
+      return 0;
+    }
+    into[at] = source[from] as number;
+
+    return Math.min(1, length);
+  };
+
+  const buffer = Buffer.alloc(10, 0x2e);
+  const filled = await fillWindow(oneByteAtATime, buffer, 10, 0);
+
+  assert.equal(filled, 10, 'it kept asking until the window was full');
+  assert.equal(buffer.toString('utf8'), 'abcdefghij', 'and every byte landed where it belongs');
+
+  // Past the end there is nothing, and what arrived is what is reported — never the length asked
+  // for, which is the number a caller would then scan stale bytes over.
+  const shortOne = Buffer.alloc(4, 0x2e);
+
+  assert.equal(await fillWindow(oneByteAtATime, shortOne, 4, 8), 2, 'two bytes were left in the file');
+  assert.equal(shortOne.toString('utf8'), 'ij..', 'and the rest of the buffer is untouched');
+  assert.equal(await fillWindow(oneByteAtATime, shortOne, 4, 99), 0, 'past the end, nothing arrives');
+});
+
+test('the OFFSETS survive a window boundary inside a multi-byte character', async () => {
+  // The test above proves the TEXT survives; this is the half it cannot see. The leading fragment
+  // of the oldest window is dropped, and it was measured by re-encoding the DECODED text — but a
+  // truncated UTF-8 sequence decodes to U+FFFD, which re-encodes to three bytes rather than the one
+  // or two really there. Every offset after it drifts by the difference, `end` included, and an
+  // `end` past the last complete newline is the acknowledgement this function forbids in its own
+  // docstring: it would mark a record read that was never rendered. (CodeRabbit, on the PR.)
+  const dir = home();
+  try {
+    const detail = 'наступила ошибка — «стенд» не ответил ✔';
+    // MORE records than the limit, so the walk stops with file still behind it and the leading
+    // fragment really is dropped. A limit equal to the record count reaches offset zero, where
+    // there is nothing to drop and nothing to measure — which is why the first version of this test
+    // passed against the defect.
+    const lines = Array.from({ length: 40 }, (_, i) =>
+      notificationLine(record({ code: `c${i}`, detail })));
+    const text = lines.join('');
+    const path = notificationsPath(dir);
+    writeFileSync(path, text);
+    const bytes = Buffer.from(text, 'utf8');
+
+    for (const window of [7, 13, 31, 64, 128, 512]) {
+      const read = await readNewestPlaced(path, 5, window);
+
+      assert.equal(read.records.length, 5, `window ${window} lost records`);
+      assert.equal(read.end, bytes.length, `window ${window}: end is not the last complete newline`);
+      assert.ok(read.start > 0, `window ${window}: this fixture must stop short of the start`);
+      assert.equal(bytes[read.start - 1], 10, `window ${window}: start ${read.start} is not a line start`);
+      for (const one of read.records) {
+        assert.equal(
+          one.at === 0 || bytes[one.at - 1] === 10,
+          true,
+          `window ${window}: ${one.record.code} sits at ${one.at}, which is not a line start`,
+        );
+        assert.equal(one.record.detail, detail, `window ${window} corrupted the text`);
       }
     }
   } finally {
