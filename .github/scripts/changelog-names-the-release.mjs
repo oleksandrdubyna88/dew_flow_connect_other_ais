@@ -55,10 +55,15 @@ import { fileURLToPath } from 'node:url';
  * two and left `changelog-section.mjs` — which needs the word to find a release's notes, for every
  * line — with nothing to read. Measured from the file: 52 `## Extension`, 18 `## Server`, 1
  * `## Team server`, and ZERO headings mentioning coai-bugs, which is why `bugs-v` has no word.</p>
+ *
+ * <p><b>`bare` is the third field, and only one line may carry it.</b> 51 extension releases are
+ * headed `## 0.31.0 — <date>` with no word at all, so asking for `Extension 0.31.0` finds none of
+ * them. A bare number cannot be shared: `## 0.31.0` would otherwise answer an `mcp-v0.31.0` with
+ * somebody else's notes, so exactly one line is allowed to own that shape.</p>
  */
 export const LINES = [
   { prefix: 'mcp-v', word: 'Server', guarded: true },
-  { prefix: 'extension-v', word: 'Extension', guarded: false },
+  { prefix: 'extension-v', word: 'Extension', bare: true, guarded: false },
   { prefix: 'server-v', word: 'Team server', guarded: false },
   { prefix: 'bugs-v', guarded: false },
 ];

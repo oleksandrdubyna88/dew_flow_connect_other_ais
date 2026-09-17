@@ -116,8 +116,13 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          set -euo pipefail
           git fetch --depth 1 origin "$BASE_SHA"
-          git show "$BASE_SHA:.github/changelog-baseline.json" > "$RUNNER_TEMP/base-baseline.json"             || echo '{}' > "$RUNNER_TEMP/base-baseline.json"
+          if git cat-file -e "$BASE_SHA:.github/changelog-baseline.json" 2>/dev/null; then
+            git show "$BASE_SHA:.github/changelog-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
+          else
+            echo '{}' > "$RUNNER_TEMP/base-baseline.json"
+          fi
           node .github/scripts/baseline-only-grows.mjs             .github/changelog-baseline.json "$RUNNER_TEMP/base-baseline.json"
 
       - name: Plan lifecycle

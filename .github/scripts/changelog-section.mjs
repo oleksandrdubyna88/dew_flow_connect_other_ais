@@ -34,16 +34,24 @@ import { LINES, lineOf } from './changelog-names-the-release.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHANGELOG = path.resolve(here, '..', '..', 'src_vs_code', 'CHANGELOG.md');
 
+/** The words this changelog heads its releases with, longest first so `Team server` wins. */
+const WORDS = [...new Set(LINES.map((l) => l.word).filter(Boolean))]
+  .sort((a, b) => b.length - a.length);
+
 /**
  * Where one release's section stops.
  *
  * <p>At the next RELEASE heading, never at the next `## `. A note may legitimately carry its own
  * `## Breaking changes` subheading, and cutting there would truncate the body at the first
- * subheading anybody writes. The alternation is built from the registry's own words plus a digit,
- * which is the bare `## 0.31.0 — …` form the early extension releases used.</p>
+ * subheading anybody writes.</p>
+ *
+ * <p><b>A release heading carries a VERSION, and that is the whole difference.</b> An earlier draft
+ * matched `## ` followed by a known word or a digit, which four reviewers said would end the section
+ * at `## Server compatibility` or `## 1. Migration notes` and silently drop the rest of the note
+ * from the published release. The number is required now.</p>
  */
-const NEXT_RELEASE = new RegExp(String.raw`^## (?:${[...new Set(LINES.map((l) => l.word)
-  .filter(Boolean))].join('|')}|\d)`, 'm');
+const NEXT_RELEASE = new RegExp(
+  String.raw`^## (?:(?:${WORDS.join('|')}) )?\d+(?:\.\d+)*(?=\s|$)`, 'm');
 
 /**
  * The lines of this release's section, or nothing when the changelog does not document it.
@@ -54,11 +62,21 @@ const NEXT_RELEASE = new RegExp(String.raw`^## (?:${[...new Set(LINES.map((l) =>
  * does, for the reason spelt out in the guard: a trailing `rc1` or `-beta.1` is a different
  * release.</p>
  */
-export function sectionFor(changelog, word, version) {
+export function sectionFor(changelog, line, version) {
+  const { word } = line;
   const v = version.replace(/\./g, String.raw`\.`);
-  const heading = new RegExp(
-    String.raw`^## (?:(?:[^\r\n]*? · )?${word} ${v}(?=\s|$)|[^\r\n]*\(${word.toLowerCase()} ${v}\))`,
-    'm');
+  const shapes = [
+    // `## Server 0.28.0 — …`, and the joint `## Extension 0.32.3 · Server 0.18.17 — …`.
+    String.raw`(?:[^\r\n]*? · )?${word} ${v}(?=\s|$)`,
+    // `## 0.31.0 — 2026-09-06 (server 0.18.3)`.
+    String.raw`[^\r\n]*\(${word.toLowerCase()} ${v}\)`,
+  ];
+  if (line.bare === true) {
+    // Only the line that OWNS the bare form, or `## 0.31.0` would hand an mcp release the
+    // extension's notes. One number belongs to two lines otherwise.
+    shapes.push(String.raw`${v}(?=\s|$)`);
+  }
+  const heading = new RegExp(String.raw`^## (?:${shapes.join('|')})`, 'm');
 
   const body = changelog.replace(/\r\n/g, '\n');
   const at = body.search(heading);
@@ -107,35 +125,86 @@ export function verdict(tag, read, fallback) {
     return { code: 2, said: `the changelog could not be read: ${error.message}` };
   }
 
-  return { code: 0, body: sectionFor(changelog, line.word, version) ?? fallback };
+  return { code: 0, body: sectionFor(changelog, line, version) ?? fallback };
+}
+
+/**
+ * The command line, parsed strictly.
+ *
+ * <p>Every deviation is an exit 2 rather than a default: a mistyped `--fallbcak` that is ignored
+ * generates the wrong notes and says nothing, and a `--out` with no value writes them where nobody
+ * looks. A release is not a place to be forgiving about arguments.</p>
+ */
+export function parseArgv(argv) {
+  const FLAGS = new Set(['--changelog', '--fallback', '--out']);
+  const values = {};
+  let tag;
+
+  for (let at = 0; at < argv.length; at += 1) {
+    const argument = argv[at];
+
+    if (!argument.startsWith('--')) {
+      if (tag !== undefined) {
+        return { error: `two tags were given, "${tag}" and "${argument}" — this takes exactly one.` };
+      }
+      tag = argument;
+      continue;
+    }
+    if (!FLAGS.has(argument)) {
+      return { error: `unknown option "${argument}". Known: ${[...FLAGS].join(', ')}.` };
+    }
+    if (argument in values) {
+      return { error: `"${argument}" was given twice.` };
+    }
+    if (argv[at + 1] === undefined || argv[at + 1].startsWith('--')) {
+      return { error: `"${argument}" needs a value.` };
+    }
+    values[argument] = argv[at + 1];
+    at += 1;
+  }
+
+  return { tag, values };
 }
 
 const self = fileURLToPath(import.meta.url);
 if (process.argv[1] && path.resolve(process.argv[1]) === self) {
-  const argv = process.argv.slice(2);
-  const FLAGS = ['--changelog', '--fallback', '--out'];
-  const valueOf = (flag, fallback) => {
-    const at = argv.indexOf(flag);
+  // Everything below is wrapped: a throw would exit 1, which in this script's vocabulary means
+  // "there is no entry" — the one answer it must never give by accident.
+  try {
+    const { tag, values, error } = parseArgv(process.argv.slice(2));
+    if (error !== undefined) {
+      console.error(`${error}\nusage: changelog-section.mjs <tag> `
+        + '[--changelog <path>] [--fallback <text>] [--out <path>]');
+      process.exit(2);
+    }
 
-    return at === -1 || argv[at + 1] === undefined ? fallback : argv[at + 1];
-  };
-  const tag = argv.find((argument, at) => !argument.startsWith('--')
-    && !FLAGS.includes(argv[at - 1]));
+    const fallback = values['--fallback'] ?? '';
+    if (fallback.trim() === '') {
+      // A release whose body is empty is not a release with short notes; it is a release that looks
+      // like a mistake. The caller says what the sentence is, and it must say something.
+      console.error('--fallback is required and must not be empty: every release gets a body, and '
+        + 'a release with no changelog entry gets this sentence.');
+      process.exit(2);
+    }
 
-  const changelogPath = valueOf('--changelog', DEFAULT_CHANGELOG);
-  const out = valueOf('--out', undefined);
-  const { code, body, said } = verdict(tag,
-    () => fs.readFileSync(changelogPath, 'utf8'), valueOf('--fallback', ''));
+    const changelogPath = values['--changelog'] ?? DEFAULT_CHANGELOG;
+    const out = values['--out'];
+    const { code, body, said } = verdict(tag,
+      () => fs.readFileSync(changelogPath, 'utf8'), fallback);
 
-  if (code !== 0) {
-    console.error(said);
-    process.exit(code);
+    if (code !== 0) {
+      console.error(said);
+      process.exit(code);
+    }
+    if (out === undefined) {
+      process.stdout.write(`${body}\n`);
+    } else {
+      fs.writeFileSync(out, `${body}\n`, 'utf8');
+      console.log(`wrote ${body.length} characters of notes to ${out}`);
+    }
+    process.exit(0);
+  } catch (error) {
+    console.error(`the notes could not be worked out: ${error.stack ?? error.message}`);
+    process.exit(2);
   }
-  if (out === undefined) {
-    process.stdout.write(`${body}\n`);
-  } else {
-    fs.writeFileSync(out, `${body}\n`, 'utf8');
-    console.log(`wrote ${body.length} characters of notes to ${out}`);
-  }
-  process.exit(0);
 }

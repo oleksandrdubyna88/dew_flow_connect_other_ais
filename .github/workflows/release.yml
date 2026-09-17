@@ -152,11 +152,9 @@ jobs:
       - name: The notes are what somebody wrote
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_NOTES_FALLBACK: "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
-        run: >-
-          node .github/scripts/changelog-section.mjs "$RELEASE_TAG"
-          --fallback "$RELEASE_NOTES_FALLBACK"
-          --out "$RUNNER_TEMP/release-notes.md"
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          node .github/scripts/changelog-section.mjs "$RELEASE_TAG"             --fallback "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/$OWNER/coai-server:${GITHUB_REF_NAME#server-v}."             --out "$RUNNER_TEMP/release-notes.md"
 
       - name: Create it, once
         env:
