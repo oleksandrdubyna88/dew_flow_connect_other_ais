@@ -2703,6 +2703,9 @@ export const PANEL_COMMANDS = [
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on
   // every keystroke by the repaint the Collect button needs.
+  // Ending a consultation by hand: the AI that asked may never come back to say, and until
+  // this existed a consultation simply lapsed with nothing recorded about whether it helped.
+  'closeConsultation',
   'collectBugs',
   'reviewBugs',
   'setBugsServer',

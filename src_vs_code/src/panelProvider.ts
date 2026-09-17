@@ -147,6 +147,7 @@ import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } f
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
+import { CLOSE_CHOICES, refusalIn } from './consultations';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
 import {
@@ -2084,6 +2085,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.teamCheckedAt = 0;
         await this.render();
         break;
+      case 'closeConsultation':
+        await this.closeConsultation(id ?? '');
+        break;
       case 'collectBugs':
         await this.collectBugs();
         break;
@@ -2527,6 +2531,78 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.bugzCache = server === undefined ? EMPTY_CORPUS : await readBugs(server.fsPath);
 
     return this.bugzCache;
+  }
+
+  /**
+   * Ends a consultation by hand, because the AI that asked may never come back to say.
+   *
+   * <p><b>VS Code's own picker is the selector</b>, rather than a modal built in the webview: it
+   * brings the confirmation, the cancellation (Escape), the keyboard and the screen-reader behaviour
+   * with it, and a hand-made one in a panel this size would be a second, worse copy of all four. The
+   * note is optional and is what a person reads months later when deciding whether consulting this
+   * vendor was worth the money.</p>
+   *
+   * <p><b>The server is reached through its one-shot mode</b>, not through MCP — the extension does
+   * not speak it. A refusal comes back on stdout with exit 65 and is SHOWN: a close that failed
+   * silently would leave the card exactly as it was, which reads as a button that does nothing.
+   * (issue #309.)</p>
+   */
+  private async closeConsultation(id: string): Promise<void> {
+    if (id.length === 0) {
+      return;
+    }
+    const server = serverPath(this.context.globalStorageUri);
+    if (server === undefined) {
+      await vscode.window.showWarningMessage(
+        'The MCP server is not installed yet, so there is nothing to record this with.');
+
+      return;
+    }
+
+    const chosen = await vscode.window.showQuickPick(
+      CLOSE_CHOICES.map((one) => ({ label: one.label, detail: one.detail, outcome: one.outcome })),
+      { title: 'How did this consultation end?', placeHolder: 'Escape leaves it open' },
+    );
+    if (chosen === undefined) {
+      return; // cancelled, and a cancelled close changes nothing
+    }
+
+    const note = await vscode.window.showInputBox({
+      title: `Recording '${chosen.label}'`,
+      prompt: 'One sentence for the log — what you did, or why it was dropped. Optional.',
+      placeHolder: 'leave empty to record the outcome alone',
+    });
+    if (note === undefined) {
+      return; // Escape on the note is Escape on the whole thing
+    }
+
+    const repo = this.repoPathForConsultations();
+    const { code, output } = await serverRun(server.fsPath)(
+      ['--close-consult', '--repo', repo, '--id', id, '--outcome', chosen.outcome,
+        ...(note.trim().length > 0 ? ['--note', note.trim()] : [])],
+      PanelProvider.CLOSE_CONSULT_CAP_MS);
+
+    if (code !== 0) {
+      // The SENTENCE the server wrote, not a code: it names what is already on the record, or the
+      // word it would have taken. `refusalIn` reads the JSON and falls back to the raw text.
+      await vscode.window.showErrorMessage(`The consultation was not closed: ${refusalIn(output)}`);
+    }
+
+    await this.render();
+  }
+
+  /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */
+  private static readonly CLOSE_CONSULT_CAP_MS = 20_000;
+
+  /**
+   * Which checkout the close is made from.
+   *
+   * <p>The server resolves the caller from this path, and the person's door does not use that — but
+   * the lock it takes is per repository, so it must be the checkout the consultation belongs to.
+   * This window's first workspace folder is what the panel already uses everywhere else.</p>
+   */
+  private repoPathForConsultations(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   }
 
   private async collectBugs(): Promise<void> {

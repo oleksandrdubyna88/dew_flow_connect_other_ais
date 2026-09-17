@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Consultation, consultationsBody, isLive, outcomeSaid, parseConsultation } from '../consultations';
+import {
+  CLOSE_CHOICES,
+  Consultation,
+  consultationsBody,
+  isLive,
+  outcomeSaid,
+  parseConsultation,
+} from '../consultations';
 import { consultationCost } from '../usage';
 import { CONSULTATIONS_SHOWN, consultationsHtml } from '../roundsLog';
 import { EMPTY_LOG, parseLog } from '../roundsDb';
@@ -233,4 +240,28 @@ test('the cost is still a dash when nothing knows a price', () => {
     { text: '—', estimated: false },
     'a rate over no tokens is not a price either',
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// Closing one by hand (issue #309)
+
+test('the person is offered the three verdicts, and never the server\'s own word', () => {
+  // `lapsed` says the clock ran out. Offering it to a person would be asking them to state somebody
+  // else's fact, and the server refuses it from this door anyway.
+  assert.deepEqual(CLOSE_CHOICES.map((one) => one.outcome), ['solved', 'not_solved', 'abandoned']);
+  assert.ok(CLOSE_CHOICES.every((one) => one.label.length > 0 && one.detail.length > 0),
+    'a picker of bare words leaves a person choosing between them with nothing to choose ON');
+});
+
+test('a running consultation carries a close control, and a finished one is not on the card at all', () => {
+  const running = consultationsBody([record({ status: 'open' })], NOW);
+
+  assert.match(running, /data-command="closeConsultation"/,
+    'the card had no way to end the consultation it is about');
+  assert.match(running, /data-id="b8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5"/,
+    'a control that does not name its consultation would close whichever was first');
+
+  // The sidebar is present tense — the 2026-09-05 ruling — so a closed one is in the log, and the
+  // control goes with it rather than being drawn disabled.
+  assert.doesNotMatch(consultationsBody([record({ status: 'closed' })], NOW), /closeConsultation/);
 });
