@@ -3,8 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import Module from 'node:module';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 /**
  * The shipped bundle can be LOADED, and `activate` is there to be called.
@@ -186,6 +187,17 @@ test('a test that runs the build gets a node --test invocation to itself', () =>
     .map((step) => step.slice('node --test'.length).trim().split(/\s+/u).filter(Boolean));
 
   assert.ok(batches.length > 0, 'the test script no longer runs node --test at all');
+
+  // THIS file has to be in the script, or everything below is vacuous: take it out and no batch has
+  // a builder, every batch is skipped by the `continue`, and the case passes having asserted
+  // nothing — a test that survives its own break. Derived from `import.meta.url` rather than typed,
+  // so a rename goes red here instead of quietly emptying the check. (CodeRabbit, PR #356, and it
+  // was right: the first version asked only whether SOME batch existed.)
+  const self = relative(ROOT, fileURLToPath(import.meta.url)).replaceAll('\\', '/');
+
+  assert.ok(batches.some((batch) => batch.includes(self)),
+    `${self} is not in the test script's node --test batches at all, so the isolation this case `
+    + 'checks is not in force — and every assertion below it would pass by skipping.');
 
   for (const batch of batches) {
     // A file that spawns npm against the real root drives the build, and the build is what
