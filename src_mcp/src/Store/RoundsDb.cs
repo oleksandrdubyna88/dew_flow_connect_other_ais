@@ -3,6 +3,7 @@ using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Gate;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
+using CoaiMcp.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace CoaiMcp.Store;
@@ -73,7 +74,7 @@ public sealed class RoundsDb : IDisposable
             // So this is a statement of intent that outlives that default, not the fix it looked
             // like; the loss the gate feared does not reproduce.
             var db = new SqliteConnection(
-                $"Data Source={Path.Combine(dataDir, FileName)};Pooling=False;Default Timeout=5");
+                $"Data Source={Path.Combine(dataDir, FileName)};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
             db.Open();
             Migrate(db);
 
@@ -94,55 +95,19 @@ public sealed class RoundsDb : IDisposable
     /// Brings the file up to the schema this build expects.
     /// </summary>
     /// <remarks>
-    /// <para><c>CREATE TABLE IF NOT EXISTS</c> alone is not a migration and the gate was right to
-    /// say so: it creates nothing when the table already exists, so a column added later is missing
-    /// on every database an older build created — and a best-effort writer would swallow the error
-    /// for ever. <c>user_version</c> records where the file has got to, and each step is applied in
-    /// order, once.</para>
-    /// <para>A step must be additive. Adding a column belongs here; anything that cannot be
-    /// expressed as one is a reason to delete the file instead — it is a projection, and the
-    /// sessions it projects are still on disk.</para>
-    /// <para><b>A step and the number it bumps to are ONE transaction.</b> SQLite makes DDL
-    /// transactional, and an <c>ALTER TABLE ADD COLUMN</c> is not idempotent the way
-    /// <c>CREATE TABLE IF NOT EXISTS</c> is: a process killed between the alter and the
-    /// <c>user_version</c> bump would re-run the step on the next open, answer
-    /// <c>duplicate column name</c>, and — because <see cref="Open"/> answers null to ANY
-    /// exception — leave a database that never opens again, with nothing here able to repair it.
-    /// Raised by codex on the #174 plan round.</para>
+    /// <para>Through <see cref="SqliteMigrator"/>, the one runner every database in this repository
+    /// shares. It was private here — <c>CREATE TABLE IF NOT EXISTS</c> alone is not a migration, the
+    /// gate was right to say so, and the runner is what makes each step run once, in order, as ONE
+    /// transaction with its <c>user_version</c> bump. It moved out the day <c>coai-bugs.db</c>
+    /// reached a host and needed the same discipline, because the gate ruled against a second copy.
+    /// What the runner guarantees, and why a step and its bump must be atomic, is written on it; the
+    /// test that proves the transaction is real (<c>AStepThatFailsPartWay…</c>) drives the runner
+    /// directly through its step seam, exactly as it drove this class's own overload before.</para>
+    /// <para>A step must be additive. Adding a column belongs in <see cref="Schema.Steps"/>; anything
+    /// that cannot be expressed as one is a reason to delete the file instead — it is a projection,
+    /// and the sessions it projects are still on disk.</para>
     /// </remarks>
-    private static void Migrate(SqliteConnection db) => Migrate(db, Schema.Steps);
-
-    /// <param name="steps">
-    /// The schema, as ordered steps — <see cref="Schema.Steps"/> everywhere but the test that
-    /// proves the transaction is real.
-    /// </param>
-    /// <remarks>
-    /// The seam exists because the claim above cannot be tested without a step that FAILS after an
-    /// earlier statement in the same step has succeeded, and every real step succeeds. CodeRabbit
-    /// asked for the defect-reproducing test on the pull request and was right that
-    /// <c>TheMigrationRunsOnce…</c> does not detect a missing transaction: it passes either way.
-    /// </remarks>
-    internal static void Migrate(SqliteConnection db, IReadOnlyList<string> steps)
-    {
-        Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
-        Run(db, "PRAGMA busy_timeout=5000");
-        var version = Version(db);
-        for (var step = version; step < steps.Count; step++)
-        {
-            using var applying = db.BeginTransaction();
-            Run(db, steps[step]);
-            Run(db, $"PRAGMA user_version={step + 1}");
-            applying.Commit();
-        }
-    }
-
-    private static int Version(SqliteConnection db)
-    {
-        using var read = db.CreateCommand();
-        read.CommandText = "PRAGMA user_version";
-
-        return Convert.ToInt32(read.ExecuteScalar() ?? 0);
-    }
+    private static void Migrate(SqliteConnection db) => SqliteMigrator.Migrate(db, Schema.Steps);
 
     /// <summary>
     /// One finished round, with its reviewers and the findings it produced.

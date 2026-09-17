@@ -34,6 +34,9 @@
          ones no language here parses; see the pruning target below. -->
     <ProjectReference Include="..\normalizer\CoaiMcp.Normalizer.csproj" />
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+    <!-- The one migration runner, shared with `coai-bugs`. It was private to RoundsDb; the gate
+         ruled against a second copy the day the other database reached a host. -->
+    <ProjectReference Include="..\storage\CoaiMcp.Storage.csproj" />
   </ItemGroup>
 
   <ItemGroup>
