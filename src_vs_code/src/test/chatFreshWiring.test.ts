@@ -58,8 +58,16 @@ test('NOTHING IS SWITCHED until the old conversation is provably finished AND FI
   // 3. ARCHIVING IS PART OF THE ALL-OR-NOTHING. The first draft said a sentence and carried on, which
   // left the old record open on disk while the page said it was archived and the new slate sat over
   // it. Five findings from two vendors named the same gap. (The code round.)
-  assert.match(reset, /failed\.length > 0 \? \{ kind: 'refused', reason: failed \} : archiveConversation\(thread\)/u,
+  // Matched across lines since 2026-09-17, when the whole branch moved INSIDE the progress callback:
+  // the shape being pinned is that both outcomes become ONE `Archived`, not how it is laid out.
+  assert.match(reset,
+    /const done: Archived = failed\.length > 0[\s\S]{0,120}?: await archiveConversation\(thread\)/u,
     'the ending and the archive are not one answer, so one of them can fail unnoticed');
+  // AND THE NEW SLATE'S WRITE IS INSIDE THE SAME NOTIFICATION. It used to close after the archive,
+  // leaving `publish`'s own `await thread.writes` with nothing on screen — on a slow store the
+  // indicator was gone and the new conversation had not appeared yet.
+  assert.ok(reset.indexOf('publish(entry, thread, done.note)') < reset.indexOf('  );'),
+    'the new slate is written after the progress notification has gone');
   const refused = reset.indexOf("done.kind === 'refused'");
   const publish = reset.indexOf('publish(entry, thread, done.note)');
   assert.ok(refused >= 0 && refused < publish, 'the reset publishes a new slate without asking whether the old one was filed');

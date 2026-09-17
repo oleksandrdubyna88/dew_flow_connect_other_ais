@@ -604,6 +604,14 @@ Two presses arriving while `windowsReach` is awaiting both pass the entry point 
 capture. The indicator makes the wait legible; it does not make the path single-entry. *(local and
 codex, the plan round — the finding that keeps this story from shipping as decoration.)*
 
+> **SHIPPED 2026-09-17, and it grew one item.** The latch is `oneAtATime` in its own module rather
+> than a flag in `chatCapture`, because this repository already has THREE hand-rolled latches —
+> `chatGotoCommand`, `chatStoreCache`, `bugzReviewPanel` — and a fourth written in place would be a
+> fourth `finally` to get wrong. As a value its rules are asserted: refused not queued, taken
+> synchronously before the first await, released on a throw. **Converting those three to it is new
+> open work**, recorded here rather than done in passing (`reuse-first.md`: name it, propose it,
+> ask).
+
 **The fix.** An **in-progress latch set before the first `await`**, so a second press is refused or
 queued rather than racing; progress shown before the probe; and both the latch and the scope cleared
 in a `finally` on every outcome, including a throw.
