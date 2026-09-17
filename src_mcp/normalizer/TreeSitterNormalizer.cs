@@ -397,4 +397,4 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     /// </remarks>
     private static bool NamesSomething(string kind) =>
         kind.Contains("identifier", StringComparison.Ordinal) || kind == "implicit_parameter";
-    }
+}

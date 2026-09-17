@@ -137,7 +137,8 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
         var store = new SessionStore(_dir);
         var opened = DateTime.UtcNow.AddHours(-2);
         var session = new PersistedSession(
-            new SessionState("s1", "D:/repo", "main", new PanelConfig()), []) { OpenedUtc = opened };
+            new SessionState("s1", "D:/repo", "main", new PanelConfig()), [])
+        { OpenedUtc = opened };
 
         store.Save(session);
         store.Save(store.Load("D:/repo", "main")! with { PlanText = "a later save" });

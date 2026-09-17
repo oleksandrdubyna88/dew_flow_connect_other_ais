@@ -174,7 +174,8 @@ public sealed class UsageLedger(string dataDir)
 
     /// <summary>Never throws: a spending record that can fail a review is worse than one with a gap.</summary>
     private void Append(UsageEntry entry)
-    {        try
+    {
+        try
         {
             Directory.CreateDirectory(dataDir);
             var line = System.Text.Encoding.UTF8.GetBytes(

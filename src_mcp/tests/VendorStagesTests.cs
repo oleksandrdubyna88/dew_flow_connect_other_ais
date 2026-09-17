@@ -127,7 +127,10 @@ public sealed class VendorStagesTests
         {
             var plans = Service(data, new ProviderSettings("codex")
             {
-                Enabled = true, Plan = true, Code = false, ExecutablePath = fake,
+                Enabled = true,
+                Plan = true,
+                Code = false,
+                ExecutablePath = fake,
             });
             await plans.OpenAsync(repo, "feature");
 

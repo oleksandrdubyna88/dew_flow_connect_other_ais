@@ -486,7 +486,7 @@ public sealed partial class PanelService
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses)));
             })
-            { RolesPerVendor = 1 },
+        { RolesPerVendor = 1 },
             ct);
     }
 
@@ -636,7 +636,7 @@ public sealed partial class PanelService
                 // round is written down the call that computed it has returned.
                 return built with { BaseRef = collected.ComparedAgainst };
             })
-            { RolesPerVendor = PanelConfig.CodeRoleNames.Length },
+        { RolesPerVendor = PanelConfig.CodeRoleNames.Length },
             ct);
     }
 
