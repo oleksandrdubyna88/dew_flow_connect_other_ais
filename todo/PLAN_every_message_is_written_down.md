@@ -394,9 +394,24 @@ newline**, because a snapshot can end halfway through a line another process is 
 **It acknowledges only the range actually loaded.** The page shows the newest N, not the file — so
 acknowledging the ledger's *end* offset would claim the person read 5000 records when 3000 were
 rendered, and the 2000 they never saw would leave the unread count without ever appearing. The
-acknowledgement carries the **start and end offsets of the contiguous range that was rendered**, and
-the unread count is what lies outside every acknowledged range. A person who wants the older ones
-counted as read scrolls to them.
+acknowledgement carries the **start and end offsets of the contiguous range that was LOADED**, and
+the unread count is what lies outside every acknowledged range.
+
+**And it acknowledges NOTHING while a filter narrows the view** (operator, 2026-09-17). Loaded is
+not rendered once filters exist, and the plan used the two words interchangeably. A person who
+filters to `class=storm` sees three rows; acknowledging the loaded range would mark three thousand
+records read on the strength of three — which is the same "claim they read what they did not see"
+the interval design exists to prevent, arriving through a different door. While any filter, search
+or date bound is active the page says it is not marking anything read, and says why. The cost is
+that somebody who always works filtered never acknowledges anything, and that is what the button
+below is for.
+
+**One button marks everything read** (operator, 2026-09-17). It appends an interval covering
+`[0, end)` — everything the ledger holds at that instant. Without it the count cannot realistically
+reach zero on a machine with history: the page acknowledges the newest 3000 of, say, 40 000, and
+reaching the rest means hundreds of page-turns. The button is a PERSON's explicit act, which is
+exactly what makes it acceptable where the page deciding the same thing for itself would not be —
+the page may only claim what it showed; a person may say "I do not need the rest".
 
 **An acknowledgement that could not be WRITTEN is not an acknowledgement.** If the append fails —
 a read-only file, a directory that has gone away, a full disk — the unread state is NOT cleared in
@@ -409,8 +424,29 @@ acknowledgement, everything unread, which is correct. An unparseable line is dro
 maximum stands, which errs toward "unread" — the safe direction. A file that exists and cannot be read
 at all shows **"not read yet"** (the Bugz precedent), never 0 and never everything.
 
+**The COUNT is the unacknowledged TAIL, and that is what makes it cheap.** The plan specified the
+watermark and never said how the panel computes a number from it — which matters more than it
+sounds, because `EscalationWatcher` re-renders every window every five seconds, and a count that
+meant "parse the newest 3000 records" would be 1.2 MB of parsing per window per tick, from a
+directory that may be a NAS. Single-flight bounds the concurrency and does nothing about the cost.
+
+So the count walks BACKWARDS from the last complete newline and stops at the first byte that is
+already acknowledged. When the person is up to date that is zero records and one 64 KB window at
+worst. Records lying below an acknowledged interval — the older region a page-open did not cover —
+are NOT counted: they are reported as "+ older" with no number. That keeps the walk bounded by the
+tail in every case, and it is honest in the same way "1000+" is honest: a number that would cost a
+megabyte to compute is not worth more than the words that replace it.
+
+The intervals still do their work on the PAGE, which knows which rows fall inside an acknowledged
+range. The count uses only the high-water point of their union. Two readings of one file, each as
+expensive as it needs to be.
+
 One machine, one person: a window that opens the page clears the count for every window, and that is a
-stated decision, not an accident.
+stated decision, not an accident. **With the data directory on a NAS that reads "one INSTALLATION,
+one person"** — `V:\connectOtherAis` is reachable from more than one machine, so the watermark is
+shared by every window that reads that directory, whatever machine it runs on. Which is right for a
+single operator and would be wrong for a team; the Team server is where a team's state lives, and
+this file is not it.
 
 ### D. The panel section is a LIVE REGION
 
@@ -519,8 +555,13 @@ listed in this plan as a defect source. The page and the section **group by `(co
 and show one row.** The first draft's "exactly one, never a third" could only have passed in a
 single-process fixture.
 
+**A record with no `run` is its own run, named as unknown.** The field arrived with S1 and the
+ledger is kept for ever, so a file will hold records from before it. Folding them all into one
+pseudo-run would invent a session that never existed and produce a "1000+ in 1 run" that is the sum
+of a year; they group under an explicit "run unknown" instead, which reads as what it is.
+
 **Counting happens at read time, by counting rows** — group by **`(run, code, subject)`** first, then
-present the runs together under one `(code, subject)` row. Never from `seq`, and never from an
+present the runs together under one `(class, code, subject)` row. Never from `seq`, and never from an
 in-memory counter: a map can be evicted and a process can die, and a number on screen that a reader
 cannot re-derive from the file is a number that will be wrong one day.
 
@@ -552,6 +593,30 @@ enforces needs the run-wide budget beside it, since eviction would otherwise res
   [rolesPage.ts:407](../src_vs_code/src/rolesPage.ts) and `:440-457` (`role="tablist"`/`tab`/
   `tabpanel`, `aria-controls`, `aria-selected`), the handler at `:555-575`, with the hidden sections
   **derived from `[data-section]`** rather than named literally.
+- **A ROW IS A GROUP, not a record** (operator, 2026-09-17). One row per
+  `(class, code, subject)`, carrying how many times it happened and how fast. That is what the whole
+  suppression design was for: a page of a thousand identical rows is the thing the ledger already
+  refuses to WRITE, and it would be perverse to render it instead.
+
+  Four things follow, and each is a decision rather than an accident:
+
+  - **The key carries the CLASS.** Tabs are per class, so a row must belong to exactly one tab, and
+    `code` alone does not guarantee that — nothing in the funnel stops one code being raised as a
+    `refusal` at one call site and a `failure` at another. Putting the class in the key makes the
+    tab membership true by construction; a code that changed class shows as two rows, which is
+    honest, rather than as one row that appears under whichever tab the newest record happened to
+    land in.
+  - **Order: filter → group → sort → slice.** Grouping AFTER filtering is what keeps the count
+    meaningful: filtered to yesterday, `Repeats` says how many times it happened yesterday, which
+    is the question the filter asked. The column header says so while a filter narrows the view.
+  - **`When` is the LATEST occurrence**, because "when did this last happen" is what a person opens
+    this page to find out, and sorting on `When` sorts on that. The group also carries its FIRST
+    occurrence — the rate needs both, and the row says "since" with it.
+  - **Pagination is 200 GROUPS.** With grouping, 3000 loaded records can collapse to forty rows, so
+    the page will often show one page and say that older records are in the file. That is the
+    honest reading and not a bug: the alternative is a page that looks full of information and is
+    one fault repeated.
+
 - **Columns**: When · Class · Source · What happened · What to do · Repeats · Rate · Where. Sorting on
   every data column, blanks last both ways, sticky header — the `COLUMNS` shape at
   [roundsLog.ts:879](../src_vs_code/src/roundsLog.ts).
@@ -598,8 +663,11 @@ enforces needs the run-wide budget beside it, since eviction would otherwise res
   "is this instant in range" is exactly `utc-timestamps.md`'s one-place-per-comparison rule.
 - `zoomControl.ts`, and `jsonForScript` + the apostrophe-escaping `escapeHtml` (`webviewHtml.ts:113`,
   `:163`), are taken as they are. `zoomControl` is its own module, not part of `webviewHtml.ts`.
-- **File budget**: `notificationsPage.ts` stays under 400 lines by splitting rows, filters and the tab
-  strip into their own units. It deliberately does **not** inherit `roundsLog.ts`'s shape, which is
+- **File budget**: **no module in this step exceeds 400 lines** — `notificationsPage.ts` splits rows,
+  filters and the tab strip into their own units, and the budget is per module rather than for the
+  page alone. Said that way because "the page is under 400 lines" is satisfiable by a 400-line page
+  beside a 900-line helper, which would be the same file this rule exists to avoid with a different
+  name on it. It deliberately does **not** inherit `roundsLog.ts`'s shape, which is
   far past `coding-style.md`'s 800-line ceiling. Whether *that* file should be split is a question for
   the operator, asked in *Open questions* rather than answered by imitation.
 
@@ -654,17 +722,29 @@ that lies in exactly the situation it exists for:
   "an append is microseconds"; on a NAS it is tens of milliseconds, and a queued storm would delay a
   chat-turn record behind it and make `deactivate` wait for the backlog — after which VS Code kills the
   host and the tail is lost anyway. `flushLedgers` awaits both chains.
-- **The write-gap survives a reload, and is visible from the other window.** S1 counts what the
+- **The write-gap is flushed INTO the ledger, on the next write that succeeds.** S1 counts what the
   disk refused and surfaces it as a STATE rather than another notification — a notification about a
   notification that could not be written is an infinite regress with a disk error at the bottom.
   That counter lives in memory, so a reloaded host reports no gap while the records are still
-  missing. S5 makes it durable, and **not** as a number in `globalState`: two hosts both reading 4
-  and both writing 5 lose a failure, and each extension host holds its own in-memory copy of
-  `globalState`, so a gap recorded in one window is invisible in the other until a reload. It
-  becomes an **append-only record of gap EVENTS, summed on read** — the same storage discipline as
-  everything else here, which removes the read-modify-write and gives cross-window visibility at
-  once. When the data directory is what failed, this host's in-memory count still shows, labelled as
-  this host's. (codex and gemini, the S5 plan round, from two directions.)
+  missing. S5 makes it durable: the next append that LANDS carries a record of its own saying *"14
+  records could not be written, between 09:12:44Z and 09:30:58Z"*, and the counter resets.
+
+  **This reverses a finding of the S5 plan round that was accepted and should not have been.** The
+  round asked for an append-only file of gap events beside the ledgers, on the argument — correct in
+  itself — that a single number in `globalState` cannot be incremented safely by two hosts and is
+  not visible across windows until a reload. Both true. But a second file in the data directory is
+  unreachable **in exactly the circumstance it exists to record**: the directory is what failed, so
+  the write that documents the failed write fails too. The reasoning was circular and accepting it
+  was a mistake; the operator settled it on 2026-09-17.
+
+  Flushing into the ledger has none of that. It is durable because the ledger is; it needs no second
+  file, no second budget and no second parser; it cannot fail while the disk is down because it
+  simply waits for the disk; and it is visible to every window because every window reads that file.
+  It also lands in the right place for a reader — the gap appears in the page, in time order, beside
+  the records that surround the hole, which is where somebody asking "what happened at 09:20" is
+  already looking. The in-memory counter remains the LIVE surface for the window that is currently
+  failing, labelled as this window's, because until the disk answers there is nowhere else for it to
+  be.
 - **A killed process leaves no record at all.** SIGKILL, OOM, power loss: no `catch`, no `deactivate`.
   Both halves write a **run-start marker** and clear it on clean exit; the next start finds a stale
   marker and appends an unclean-exit record. The server already has the machinery — `running/{pid}.json`
@@ -698,7 +778,7 @@ draft missed.
 | `notifications.jsonl` | ~400 B/record. The rate is **not measured** — see *Open questions*; at a hand-estimated 20–50/day that is 3–7 MB/year | **Nobody: kept for ever. This is a NEW decision for this file, taken here.** The 2026-09-10 ruling on `chat-usage.jsonl` is the precedent for the *shape* — keep rather than trim, and its docstring refuses trimming by count by name — but a ruling about spending history does not settle retention for notifications, and citing it as if it did would be the third time this plan leant on a record for something it does not cover. **If a bound is ever wanted it is a roll-up**, and the record shape already carries what one needs | Nothing to interrupt: append-only, no rewrite, no compaction |
 | `server-notices.jsonl` (S8) | `PanelService.Error` covers every refusal to the calling AI, so its rate is **not the extension's**; S8 measures it over a week before any sampling is considered for it | same | same |
 | `notifications-seen.jsonl` | one ~96 B line per **page-open**, not per refresh — a page left open appends nothing while it sits there; a few hundred lines a year | kept; compactable at any time by rewriting the union of the intervals, which is safe precisely because the file is append-only | nothing to interrupt — a torn last line is dropped and the intervals already read stand, which errs toward "unread" |
-| The write-gap record | one line per FAILED ledger write, which is already bounded by the run budget above | kept with the ledgers | append-only, so a torn line costs itself |
+| The write-gap record | one line per RECOVERY, not per failed write — a run of failures collapses into a single "N records lost between T1 and T2" written when the disk answers again | it is a record in `notifications.jsonl`, so it is kept exactly as every other record is | nothing to interrupt: if the recovery write fails too, the counter keeps counting and the next one carries it |
 | Per-`(code, subject)` counters (memory) | `code` is finite — a string literal per call site — but **`subject` is not**: a path or a server name is unbounded, so the map is an **LRU capped at 512 entries**. Eviction is safe for *counts* (those are counted from rows, never from this map) but **not** for the ceiling — see the row below | process exit | nothing a reader sees is derived from it |
 | `storm` records | at most 2 per `(code, subject)` per run | — | — |
 | Records per repeating fault | **Two bounds, because one is evictable.** A per-`(code, subject)` ceiling of 1000 per run, *and* a **run-wide budget of 5000 records beyond each code's first** that no eviction can reset — otherwise a loop churning 512 distinct subjects evicts its own counter and writes for ever. (The budget was first written as one on `(code, subject)` repeats, which does **not** close that hole — see *E*.4; measured at 15 000 of 15 000 written.) At either bound one record says which was hit, and writing of that kind stops until recovery | — | resets per run, by design (see *E*) |
@@ -910,6 +990,14 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 | 14 | **Each run's marker is its own.** Two runs share a data directory, one is killed, the other exits cleanly: the next start still records the crash. | A singleton marker erases exactly the crash the mechanism exists for, and a single-window fixture never sees it. |
 | 15 | **Role deletion survives a kill between every pair of steps** — tombstone, row, prompt files, each of the four settings — and the id stays reserved until the sweep finishes it. Plus: a tombstone stranded by a permanent stand-down can be finished by hand from the roles page. | The ordering is the fix; a test that only kills at the end would pass on the broken order. |
 | 16 | **The published count cannot drift.** `scripts/count-notifications.mjs` writes a checked-in inventory file; a test regenerates it and fails when it differs, and the plan, the README row and the DoD quote that file. | Otherwise the script says 110 while three documents say 109 and every test is green. |
+| 17 | **A group whose records carry two classes is two rows.** One `code` raised as a `refusal` at one site and a `failure` at another. | Tabs are per class; a single row would appear under whichever tab the NEWEST record happened to fall into, and move between tabs as records arrive. |
+| 18 | **filter → group → sort → slice, in that order**, and `Repeats` counts within the filter. | Grouping before filtering makes `Repeats` answer a question nobody asked — how often it happened in all of history, under a heading that says "yesterday". |
+| 19 | **`When` is the LATEST occurrence**, and sorting on it sorts on that; the row also carries the first, because the rate needs both. | A column that shows one and sorts by the other is the kind of defect nobody reports and everybody works around. |
+| 20 | **A page opened with a filter active acknowledges NOTHING**, and says so on screen. | Three rows on screen must not mark three thousand records read — the interval design's own rule, arriving through the filter door. |
+| 21 | ***Mark all as read* covers `[0, end)` at that instant, and a record written afterwards is unread.** | A button that acknowledged the future would silently swallow the next fault, which is the one that matters. |
+| 22 | **The panel's count parses only the unacknowledged tail.** Up to date: it reads no records. Far behind with an acknowledged interval above older unacknowledged ones: it stops at the tail and says "+ older" rather than walking to the start of the file. | The watcher re-renders every window every five seconds; a count that meant "parse 3000 records" would be 1.2 MB per window per tick, from a directory that may be a NAS. |
+| 23 | **A gap is flushed by the next append that LANDS**, once, carrying the count and the window it spans; if that append fails too the counter keeps counting. | A recovery record that never lands, or lands twice, is a hole in the one mechanism that reports holes. |
+| 24 | **A record with no `run` groups as "run unknown"**, not into one invented session. | The field arrived with S1 and the ledger is kept for ever, so "1000+ in 1 run" would one day be the sum of a year. |
 
 ## What this plan deliberately does not do
 
@@ -991,6 +1079,15 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 - [ ] `research/module_extension.md`, `research/module_server.md` and **`research/module_tests.md`**
       updated — the last gains the notifications page row and says what it does not prove — and
       `research/architecture.md` gains the ledger under *The one interface neither container owns*.
+- [ ] A row is a group keyed `(class, code, subject)`; `When` is the latest occurrence; the order
+      is filter → group → sort → slice, and `Repeats` counts within the filter.
+- [ ] A filtered view acknowledges nothing and says so; *Mark all as read* is the only thing that
+      acknowledges what was never rendered, and it is a person's act.
+- [ ] The panel's count reads only the unacknowledged TAIL; older unacknowledged records are
+      reported as "+ older" rather than counted.
+- [ ] A write gap is flushed into the ledger by the next append that lands, not into a second
+      file in the directory that failed.
+- [ ] No module added by S5 exceeds 400 lines.
 - [x] The reciprocal boundary line is in all six sibling plans, not only in this one. *(Done
       2026-09-17, one section per plan above its Definition of Done. The reconciliation the
       `rowMatches` row asked for was done at the same time: this plan said `roundsLog.ts:820`,
