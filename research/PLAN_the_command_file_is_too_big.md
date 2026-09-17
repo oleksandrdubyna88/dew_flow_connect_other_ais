@@ -268,6 +268,24 @@ diff nobody can review. They are below with what each rests on. The security one
 - **`ChatModelChoice` lives in `chatPage.ts`**, so the configuration layer compiles through the page
   renderer. A neutral contracts module would be tidier.
 
+### Reported by SonarCloud on moved lines
+
+The gate passed — 100 % coverage on new code, no hotspots, no duplication — with **11 issues, and
+the interesting thing is which**. Two were mine and are fixed: `chatLaunch.ts` imported
+`./chatSession` on two lines. Three are the `export let` bindings in `chatHost.ts`, kept deliberately
+with the reason in that module's own header. The other six are **pre-existing lines that Sonar counts
+as new because they moved into a new file** — the same trap this repository has recorded before:
+
+- `chatTurn.ts` — `oneTurn`'s cognitive complexity is 17 against the 15 allowed. Unchanged from main,
+  and the seam that would reduce it is the one the module header already says is the honest next
+  move.
+- `chatHooks.ts` — two places that would read better as an optional chain, and one `entry.id` that
+  would stringify as `[object Object]` if anything ever put it in a template.
+- `chatSessionJoin.ts` — two nested ternaries in `resolveAndPin`.
+
+None is a behaviour change and none is introduced here, so none was fixed in a series that may not
+change behaviour. They are worth an afternoon together.
+
 ### Noticed while moving
 
 - **`keepOnDisk` maps the whole transcript on every save while its own comment says it does not.**
