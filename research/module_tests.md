@@ -397,6 +397,24 @@ examines the tag being released cannot notice a release DELETING an older note; 
 baseline against `git tag`, because entries were once written for `0.26.0` and `0.27.0`, versions
 that live in the manifest and were never tagged at all.
 
+**Three more joined it, and together they cover the whole release path.**
+`changelogSection.test.ts` runs `.github/scripts/changelog-section.mjs`, which turns a tag into the
+section somebody wrote — the answer to a measurement that made the guard half useless: every
+release body was a LITERAL in the workflow, so 65 `mcp-v*` releases carried byte-identical text and
+the entry the guard forces was written for nobody. `draftReleaseNotes.test.ts` runs the real
+`draft-release.sh` with a stub `gh` first on PATH, and proves two things: the body reaches `gh`
+through a FILE, because a release note is multiline markdown that can begin a line with `-`; and a
+RE-RUN over an existing draft REWRITES its notes, because that script deliberately reuses a draft it
+already made and would otherwise publish the body of a failed first attempt for ever. It needs a
+POSIX shell, on the same terms as `TheArchiveCheckTests`. `baselineOnlyGrows.test.ts` covers the
+other direction of the ratchet: the baseline lives in the repository it guards, so one commit
+deleting a note AND its baseline row would pass everything.
+
+**What the release path still does not prove.** None of these runs on GitHub's runners, so the shape
+of a release is asserted by reading `release.yml` — that each drafting job extracts its notes,
+writes them to a file, passes the path, and declares the Node it runs on. The first real proof of
+any of it is the next release, and that is worth saying rather than implying.
+
 **It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 
 **The story-1 suites (2026-09-17): a schema that ships, a limit that is a setting, and a promise

@@ -83,6 +83,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
       # BEFORE the draft, and it cannot run earlier than this: the step needs the checkout to read
       # CHANGELOG.md at all. A refusal here costs nothing — no draft exists, no asset has been
       # uploaded, nothing is published — and the repair is to write the entry and push the tag again.
@@ -102,6 +106,20 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node .github/scripts/changelog-names-the-release.mjs "$RELEASE_TAG"
 
+      # The body of a release is the section somebody wrote in CHANGELOG.md, not a fixed
+      # sentence. Written to a FILE and passed by path: a release note is multiline markdown
+      # that can begin a line with `-`, which no shell argument survives. When this release
+      # has no entry the extractor prints the sentence below instead, which is how the 51
+      # extension and 5 server releases with no note keep shipping.
+      - name: The notes are what somebody wrote
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_NOTES_FALLBACK: "Native AOT builds of the ConnectOtherAIs MCP server."
+        run: >-
+          node .github/scripts/changelog-section.mjs "$RELEASE_TAG"
+          --fallback "$RELEASE_NOTES_FALLBACK"
+          --out "$RUNNER_TEMP/release-notes.md"
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -109,7 +127,7 @@ jobs:
         run: >-
           .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
           "coai-mcp ${GITHUB_REF_NAME#mcp-v}"
-          "Native AOT builds of the ConnectOtherAIs MCP server."
+          "$RUNNER_TEMP/release-notes.md"
 
 
   server-draft:
@@ -122,6 +140,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      # The body of a release is the section somebody wrote in CHANGELOG.md, not a fixed
+      # sentence. Written to a FILE and passed by path: a release note is multiline markdown
+      # that can begin a line with `-`, which no shell argument survives. When this release
+      # has no entry the extractor prints the sentence below instead, which is how the 51
+      # extension and 5 server releases with no note keep shipping.
+      - name: The notes are what somebody wrote
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_NOTES_FALLBACK: "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
+        run: >-
+          node .github/scripts/changelog-section.mjs "$RELEASE_TAG"
+          --fallback "$RELEASE_NOTES_FALLBACK"
+          --out "$RUNNER_TEMP/release-notes.md"
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -129,7 +165,7 @@ jobs:
         run: >-
           .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
           "coai-server ${GITHUB_REF_NAME#server-v}"
-          "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
+          "$RUNNER_TEMP/release-notes.md"
 
 
   mcp-binaries:
@@ -941,6 +977,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      # The body of a release is the section somebody wrote in CHANGELOG.md, not a fixed
+      # sentence. Written to a FILE and passed by path: a release note is multiline markdown
+      # that can begin a line with `-`, which no shell argument survives. When this release
+      # has no entry the extractor prints the sentence below instead, which is how the 51
+      # extension and 5 server releases with no note keep shipping.
+      - name: The notes are what somebody wrote
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_NOTES_FALLBACK: "Native AOT builds of the ConnectOtherAIs corpus ingest server. Deploy notes, and the nginx rules that keep its no-client-address promise, are in deploy/bugs/README.md."
+        run: >-
+          node .github/scripts/changelog-section.mjs "$RELEASE_TAG"
+          --fallback "$RELEASE_NOTES_FALLBACK"
+          --out "$RUNNER_TEMP/release-notes.md"
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -948,7 +1002,7 @@ jobs:
         run: >-
           .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
           "coai-bugs ${GITHUB_REF_NAME#bugs-v}"
-          "Native AOT builds of the ConnectOtherAIs corpus ingest server. Deploy notes, and the nginx rules that keep its no-client-address promise, are in deploy/bugs/README.md."
+          "$RUNNER_TEMP/release-notes.md"
 
   bugs-binaries:
     name: coai-bugs (${{ matrix.rid }})

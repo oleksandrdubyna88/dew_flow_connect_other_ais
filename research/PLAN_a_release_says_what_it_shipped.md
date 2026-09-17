@@ -1,15 +1,16 @@
 # PLAN — A release says what it shipped, and the guard finishes the job it started
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `.github/workflows/ci.yml`
-> (one checkout input), `.github/scripts/draft-release.sh`, the three `*-draft` jobs in
-> `.github/workflows/release.yml`, and tests for each. No product code.
+> Status: **IMPLEMENTED, 2026-09-17.** Scope: `.github/workflows/ci.yml`, `release.yml` (three
+> drafting jobs), `.github/scripts/changelog-section.mjs` and `baseline-only-grows.mjs` (both
+> new), `draft-release.sh`, the `LINES` registry in `changelog-names-the-release.mjs`, and four
+> test files. No product code.
 >
-> Related docs: [PLAN_the_server_line_gets_its_notes_back.md](../research/PLAN_the_server_line_gets_its_notes_back.md),
-> [module_tests.md](../research/module_tests.md).
+> Related docs: [PLAN_the_server_line_gets_its_notes_back.md](PLAN_the_server_line_gets_its_notes_back.md),
+> [module_tests.md](module_tests.md).
 
 ## Where this comes from
 
-[The Server line gets its notes back](../research/PLAN_the_server_line_gets_its_notes_back.md)
+[The Server line gets its notes back](PLAN_the_server_line_gets_its_notes_back.md)
 shipped a guard that refuses an `mcp-v*` release whose changelog entry is missing, and a baseline so
 the line cannot lose a note it already has. Re-reading it against the repository turned up three
 things that plan did not see. One is a defect **in the work just done**, and it fails CI rather than
@@ -174,14 +175,14 @@ row together.
 
 ## Definition of Done
 
-- [ ] The phantom-tag case passes in CI for the right reason, and refuses to report on a checkout
+- [x] The phantom-tag case passes in CI for the right reason, and refuses to report on a checkout
       that cannot answer it.
-- [ ] A release body for a documented release is that release's changelog section.
-- [ ] A release with no entry still drafts, carrying the literal sentence.
-- [ ] Every new behaviour was observed RED before it was implemented, and the RED message is quoted
+- [x] A release body for a documented release is that release's changelog section.
+- [x] A release with no entry still drafts, carrying the literal sentence.
+- [x] Every new behaviour was observed RED before it was implemented, and the RED message is quoted
       in the summary.
-- [ ] `npm test` green; family checks green; MTP count still 2147.
-- [ ] Symptom 3 is CLOSED by story 3: a commit removing a baseline row is refused.
+- [x] `npm test` green (3290); family checks green; MTP count still 2147.
+- [x] Symptom 3 is CLOSED by story 3: a commit removing a baseline row is refused.
 
 ## Decisions taken, 2026-09-17
 
@@ -199,6 +200,72 @@ reopen:
    legitimate convention. Guarding them would make many historical releases retroactively
    unshippable for no gain.
 3. **Story 3 is taken**, so the ratchet’s remaining hole is closed rather than documented.
+
+## Deviations from the plan as written
+
+**`draft-release.sh` DOES change, and the plan said twice that it would not.** The plan argued that
+markdown handling does not belong in a bash file shared by three release lines — still true, and the
+extraction is still a separate Node script. What the plan got wrong is the transport: it had the
+extractor print to stdout and the workflow pass that output as an argument. Three reviewers
+independently said a release body cannot travel as a shell argument — multiline, quotes, backticks,
+and a line beginning with `-` that an argument parser reads as a flag. So the body is written to a
+file and `draft-release.sh` takes a PATH and uses `gh release create --notes-file`.
+
+**A re-run over an existing draft now rewrites its notes, which the plan never considered.** Raised
+by one reviewer, and it is the finding worth the round: `draft-release.sh` deliberately reuses a
+draft it has already made rather than creating a second one. A first run that drafted with the
+fallback and then failed would leave that body on the release for ever, however often it was
+retried. It calls `gh release edit --notes-file` on the reused draft now.
+
+**The three drafting jobs gained `actions/setup-node`.** They call `node` and named no version, so
+they ran on whatever the runner image happened to ship — an undeclared dependency on a job whose
+failure mode is a release with no notes. That was already true of the guard shipped earlier the same
+day; this is where it got fixed.
+
+**Story 3's base revision is the pull request's own `base.sha`, not `origin/main`.** Two reviewers
+called the plan's `origin/main` Blocking, independently and for two different reasons: a shallow CI
+checkout has no such ref at all, and once a deletion has landed on main the comparison is a commit
+against itself. It runs only on `pull_request`, and a base carrying no baseline is a PASS —
+otherwise the commit introducing the file could never merge.
+
+**The section ends at the next RELEASE heading, not at the next `## `.** Measured first: every `## `
+in this changelog today IS a release heading, so the naive rule is not yet wrong. It would break on
+the first note carrying its own `## Breaking changes`, which costs nothing to prevent now.
+
+**`word` and `guarded` became orthogonal in the registry.** Giving `extension-v` and `server-v` a
+heading word does not start guarding them — the operator's decision that they stay unguarded is
+unchanged, and a test asserts exactly that, because "it now has a word" is the shape of an accident
+that would start blocking 51 releases.
+
+## What was built
+
+| | |
+|---|---|
+| `.github/scripts/changelog-section.mjs` | a tag → its changelog section, or the fallback sentence |
+| `.github/scripts/baseline-only-grows.mjs` | the ratchet's other direction |
+| `draft-release.sh` | `--notes-file`, and a reused draft has its notes refreshed |
+| `release.yml` | three jobs: `setup-node`, extract to a file, pass the path |
+| `ci.yml` | `fetch-tags: true`; the baseline-shrink check on pull requests |
+| `changelog-names-the-release.mjs` | `LINES` exported, `word` for every documented line |
+
+Tests: `changelogSection.test.ts` (12), `draftReleaseNotes.test.ts` (5, running the real script
+against a stub `gh`), `baselineOnlyGrows.test.ts` (9), plus two cases in
+`changelogNamesTheRelease.test.ts`. RED observed for every one before it was implemented: 12/12, 4/5
+and 9/9 failing respectively.
+
+## Verification
+
+- `npm test` — **3290 passed, 0 failed**, 1 skipped, from a cleaned `out/`
+- `plan-lifecycle`, `pin-check`, `adapter-check` — green
+- `CoaiMcp.Tests.exe` — **2147 total, 0 failed**, unchanged: nothing here touches `src_mcp`
+- `release.yml` and `ci.yml` parse as YAML, and the step order was read back per job
+
+## The limit worth stating
+
+None of this runs on GitHub's runners before it is merged. The shape of a release is asserted by
+READING `release.yml`; the first real proof that a release body is now its changelog section is the
+next release. That is the honest status, and it is why `draft-release.sh` is exercised by running the
+real script against a stub `gh` rather than by reading it.
 
 ## The open tail
 

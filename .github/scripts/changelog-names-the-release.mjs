@@ -48,11 +48,18 @@ import { fileURLToPath } from 'node:url';
  * different kind: a patch release beside a documented one, which is this changelog's long-standing
  * and legitimate convention. Guarding them is a policy decision about those lines, and it is made by
  * setting `guarded` here and recording their baseline.</p>
+ *
+ * <p><b>`word` and `guarded` are orthogonal, and keeping them apart is the point.</b> `word` says
+ * which heading this line's entries carry in the changelog; `guarded` says whether a missing entry
+ * blocks the release. An earlier draft gave a `word` only to the guarded line, which conflated the
+ * two and left `changelog-section.mjs` — which needs the word to find a release's notes, for every
+ * line — with nothing to read. Measured from the file: 52 `## Extension`, 18 `## Server`, 1
+ * `## Team server`, and ZERO headings mentioning coai-bugs, which is why `bugs-v` has no word.</p>
  */
-const LINES = [
+export const LINES = [
   { prefix: 'mcp-v', word: 'Server', guarded: true },
-  { prefix: 'extension-v', guarded: false },
-  { prefix: 'server-v', guarded: false },
+  { prefix: 'extension-v', word: 'Extension', guarded: false },
+  { prefix: 'server-v', word: 'Team server', guarded: false },
   { prefix: 'bugs-v', guarded: false },
 ];
 
