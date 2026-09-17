@@ -597,6 +597,9 @@ test('the page can say WHICH half of the instruction left the box, and nothing e
  * the one called that today. (gemini, the plan round.)</p>
  */
 
+/** A row that carries the working directory a session was written in — what a folder is asked for. */
+const saidIn = (cwd: string): string => JSON.stringify({ type: 'user', cwd, message: { content: [] } });
+
 const renamed = (name: string): string =>
   JSON.stringify({ type: 'custom-title', sessionId: 's', customTitle: name });
 
@@ -1312,17 +1315,114 @@ test('an EMPTY folder under the new name does not shadow the old one that holds 
 
 test('Take the question reads the same folder rule as the Asked button', async () => {
   // Both go through one resolver, and this is what says so from the outside: the second flow, on a
-  // path with an underscore, which is the shape that was broken. (codex, the plan round.)
+  // path with an underscore, which is the shape that was broken.
+  //
+  // It asserts the QUESTION, not merely "did not fail". The first version wrote a title and accepted
+  // anything but a failure — so a folder holding no question would have passed it, which is a fixture
+  // the code rejects proving nothing. (codex, the code round.)
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
     const dir = join(home, '.claude', 'projects', 'D--rsd-dew-flow-benchmark');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'one.jsonl'), `${titled('A waiting one')}\n`, 'utf8');
+    const asking = JSON.stringify({
+      type: 'assistant',
+      sessionId: 'session-1',
+      timestamp: '2026-09-17T09:00:00.000Z',
+      message: {
+        content: [{
+          type: 'tool_use',
+          id: 'q1',
+          name: 'AskUserQuestion',
+          input: {
+            questions: [{
+              header: 'Scope',
+              question: 'Which folder is this?',
+              multiSelect: false,
+              options: [{ label: 'This one', description: 'the underscore path' }],
+            }],
+          },
+        }],
+      },
+    });
+    writeFileSync(join(dir, 'one.jsonl'), `${saidIn('D:\\rsd\\dew_flow_benchmark')}
+${titled('A waiting one')}
+${asking}
+`, 'utf8');
 
     const answer = await waitingQuestion(home, 'D:\\rsd\\dew_flow_benchmark', true, '');
 
-    assert.notStrictEqual(answer.kind, 'failed',
+    assert.strictEqual(answer.kind, 'one',
       'Take the question still cannot find the folder for a path with an underscore');
+    assert.strictEqual(
+      answer.kind === 'one' ? answer.session.asked.questions[0]?.question : '',
+      'Which folder is this?',
+      'the question that was found is not the one in that folder',
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a folder is this project’s because a transcript in it SAYS so, not because it has one', async () => {
+  // `D:\rsd\foo_bar` and `D:\rsd\foo-bar` are two checkouts with ONE folder name between them.
+  // Taking the first candidate that holds any transcript hands over the other project's
+  // conversations — the silent cross-project hand-over this module exists to refuse. (codex, the
+  // code round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const root = join(home, '.claude', 'projects');
+
+    // The preferred spelling for BOTH paths, holding the OTHER checkout's session.
+    const shared = join(root, 'D--rsd-foo-bar');
+    mkdirSync(shared, { recursive: true });
+    writeFileSync(join(shared, 'theirs.jsonl'),
+      `${saidIn('D:\\rsd\\foo-bar')}
+${titled('Shared name')}
+${said('not your conversation')}
+`, 'utf8');
+
+    // The older spelling, holding the one actually asked for.
+    const mine = join(root, 'D--rsd-foo_bar');
+    mkdirSync(mine, { recursive: true });
+    writeFileSync(join(mine, 'mine.jsonl'),
+      `${saidIn('D:\\rsd\\foo_bar')}
+${titled('Shared name')}
+${said('your conversation')}
+`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\rsd\\foo_bar', true, 'Shared name');
+    assert.strictEqual(found.kind, 'one', 'the session of this checkout was not found at all');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['your conversation'],
+      'another checkout’s conversation was handed over, because its folder was listed first');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an empty file, and a directory wearing the extension, are not sessions', async () => {
+  // Two more shapes the "has a .jsonl in it" test accepted: a half-written file left by a killed run,
+  // and a folder somebody called `archive.jsonl`. Neither names a cwd, so neither is evidence.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const root = join(home, '.claude', 'projects');
+    const preferred = join(root, 'D--rsd-dew-flow-bench');
+    mkdirSync(join(preferred, 'archive.jsonl'), { recursive: true });
+    writeFileSync(join(preferred, 'half-written.jsonl'), '{"type":"user","mes', 'utf8');
+
+    const older = join(root, 'D--rsd-dew_flow_bench');
+    mkdirSync(older, { recursive: true });
+    writeFileSync(join(older, 'one.jsonl'),
+      `${saidIn('D:\\rsd\\dew_flow_bench')}
+${titled('The real one')}
+${said('here')}
+`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\rsd\\dew_flow_bench', true, 'The real one');
+
+    assert.strictEqual(found.kind, 'one',
+      'an empty file or a directory named like one shadowed the folder that holds the sessions');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

@@ -1532,7 +1532,15 @@ exactly one — so *Asked*, *Take the question* and *go to conversation* had nev
 measured path has one — so `projectDirNames` offers **three** spellings and the lookup tries each:
 letters kept (Cyrillic and CJK included), A–Z0–9 only, and the one this extension produced until
 today. And because two spellings can both exist after an upgrade, the folder that actually HOLDS a
-transcript wins over an empty one that merely sorts first. Measured against Claude Code 2.1.272; the
+transcript wins over an empty one that merely sorts first. **And a folder is not this project’s because it
+holds a transcript**: `D:\rsd\foo_bar` and `D:\rsd\foo-bar` are two checkouts with one folder
+name between them, so a candidate is asked which `cwd` its transcripts record and a folder that
+names another one is passed over — the silent cross-project hand-over this module exists to
+refuse. Two facts, asked separately: whether there are transcripts at all (which tells an empty
+upgrade folder from the one with the history) and which directory they name (which tells this
+project from a namesake). A build old enough to write no `cwd` row still counts as holding
+sessions. (codex, the code round, on all three shapes: the namesake, the half-written file, and
+a directory somebody called `archive.jsonl`.) Measured against Claude Code 2.1.272; the
 rule is Anthropic's and undocumented, so when a folder stops being found the measurement is re-run —
 each transcript's own `cwd` paired with the folder it sits in — before anybody edits the regex.
 
