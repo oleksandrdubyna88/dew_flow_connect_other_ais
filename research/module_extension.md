@@ -47,11 +47,11 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. **Twenty-seven sites routed so far** — the bare failures
-in `extension.ts`, `reportStandDown`, the installer's companions, the conversation refusals in both
-the go-to command and the picker, the Bugz decision failures, both settings refusals in `sideConfig`,
-every escalation message, and the roles page including its removal modal — and the constant stands
-at **82**.
+test that matches nothing passes for ever. **Thirty-eight sites routed so far** — all of
+`extension.ts`, `escalationWatcher.ts`, `sideConfig.ts`, `rolesPanel.ts`, `conversationPickerCommand.ts`,
+`chatGotoCommand.ts`, `bugzReviewPanel.ts` and `installer.ts` — and the constant stands at **71**.
+What is left is the three biggest files: `panelProvider` (31), `chatCommand` (22), `dataCommands`
+(17), and `helpPanel`'s single call, which waits for the defect that rewires it.
 
 A wiring test moved with them and got stronger rather than looser: `chatGotoWiring` used to assert
 that the moved-conversation path contains `showWarningMessage(`, which says nothing about WHICH

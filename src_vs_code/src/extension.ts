@@ -44,7 +44,7 @@ import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
-import { notify, notifyThen } from './notify';
+import { notify, notifyAndAsk, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRunAt } from './roundsDbRead';
 import { StorageFingerprint } from './dataMove';
@@ -131,9 +131,15 @@ export function activate(context: vscode.ExtensionContext): void {
       // ASKED BEFORE the progress notification exists. Raising a progress bar and then a modal the
       // person may decline means tearing the bar down again, which inverts the order of a
       // pre-condition and the job it guards. (Code round, gemini.)
-      if (rows.length > ASK_ABOVE && await vscode.window.showWarningMessage(
-        `Export ${rows.length} rounds? Each one is read separately, so this will take a while.`,
-        { modal: true }, 'Export') !== 'Export') {
+      if (rows.length > ASK_ABOVE && await notifyAndAsk({
+        as: 'warning',
+        class: 'confirmation',
+        source: 'roundsExport',
+        code: 'export-many-rounds',
+        modal: true,
+        title: `Export ${rows.length} rounds? Each one is read separately, so this will take a while.`,
+        action: 'Export',
+      }) !== 'Export') {
         return;
       }
       // withProgress answers a Thenable, and the queue takes a Promise; awaiting it inside the
@@ -834,7 +840,13 @@ async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
   await watcher.refresh();
   const open = watcher.openQuestions;
   if (open.length === 0) {
-    void vscode.window.showInformationMessage('No ConnectOtherAIs review is waiting on an answer.');
+    void notify({
+      as: 'information',
+      class: 'refusal',
+      source: 'escalations',
+      code: 'no-question-waiting',
+      title: 'No ConnectOtherAIs review is waiting on an answer.',
+    });
     return;
   }
 
@@ -874,10 +886,16 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
       // The choice did not land, so the block below would carry a configuration nobody asked for —
       // and the install record written moments ago stops the question ever being asked again. Say
       // so instead of copying something misleading. (codex, code round.)
-      void vscode.window.showErrorMessage(
-        `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
-        + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
-        + 'where your data lives" and paste the block it gives you.');
+      void notify({
+        as: 'error',
+        class: 'failure',
+        source: 'installServer',
+        code: 'install-data-directory-not-saved',
+        title: `coai-mcp is installed at ${target.fsPath}, but where its data should live could not be `
+          + 'saved. Nothing has been copied to your clipboard: set it with "ConnectOtherAIs: Change '
+          + 'where your data lives" and paste the block it gives you.',
+        cure: 'Set the folder with "ConnectOtherAIs: Change where your data lives", then copy the block again.',
+      });
 
       return;
     }
@@ -886,13 +904,26 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
     // `serverEnv`, and the guard in `install.test.ts` that allows these two keys and no others.
     await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, serverEnv()));
     const targets = clientTargetsLine(CLIENT_TARGETS);
-    void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
+    void notify({
+      as: 'information',
+      class: 'outcome',
+      source: 'installServer',
+      code: 'server-installed',
+      title: `${installedMessage(target.fsPath)} Paste it into: ${targets}`,
+    });
   } catch (error) {
     const raw = message(error);
     const hint = installFailureHint(raw, codeOf(error));
-    void vscode.window.showErrorMessage(
-      hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
-    );
+    void notify({
+      as: 'error',
+      class: 'failure',
+      source: 'installServer',
+      code: 'server-not-installed',
+      title: hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
+      // The raw reason as well as the hint: a hint that matched nothing is exactly the case where
+      // somebody needs what the process actually said.
+      detail: raw,
+    });
   }
 }
 
@@ -900,7 +931,14 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
   const path = serverPath(context.globalStorageUri);
   if (path === undefined) {
-    void vscode.window.showErrorMessage('There is no published coai-mcp build for this platform yet.');
+    void notify({
+      as: 'error',
+      class: 'refusal',
+      source: 'installServer',
+      code: 'no-build-for-this-platform',
+      subject: `${process.platform}-${process.arch}`,
+      title: 'There is no published coai-mcp build for this platform yet.',
+    });
     return;
   }
   // Whether it is there is a question about THIS side's disk. It used to be a question about a
@@ -911,11 +949,15 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
   // The same block the install flow copies, carrying the same two variables: a person who comes back
   // to the ⋯ menu after choosing a directory must not be handed an entry that ignores the choice.
   await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, serverEnv()));
-  void vscode.window.showInformationMessage(
-    installed
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'installServer',
+    code: 'mcp-block-copied',
+    title: installed
       ? 'The MCP config block is on your clipboard — paste it into your client and restart it.'
       : 'The block is on your clipboard, but coai-mcp is not installed yet — run "Install the MCP Server…" first.',
-  );
+  });
 }
 
 async function copyClaudeSnippet(): Promise<void> {
@@ -926,7 +968,17 @@ async function copyClaudeSnippet(): Promise<void> {
   await vscode.env.clipboard.writeText(claudeSnippet());
   // What was taken, and what this repository already has. The version is in the menu item too, but
   // a menu is read BEFORE the click; this is the sentence that says whether the click mattered.
-  void vscode.window.showInformationMessage(copiedMessage(await pastedSnippetStatus()));
+  const status = await pastedSnippetStatus();
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'claudeSnippet',
+    code: 'gate-snippet-copied',
+    // The KIND, not the whole status: `current`, `older`, `ahead`, `unversioned`, `absent` is the
+    // distinction worth counting, and a version number in the key would mint one per release.
+    subject: status.kind,
+    title: copiedMessage(status),
+  });
 }
 
 /**
@@ -1043,8 +1095,12 @@ async function runExport(
       saveLabel: 'Export',
     }))?.fsPath,
     write: (path, text) => writeFileAtomically(path, text),
-    report: (message) => void vscode.window.showInformationMessage(message),
-    reportError: (message) => void vscode.window.showErrorMessage(message),
+    report: (message) => void notify({
+      as: 'information', class: 'outcome', source: 'roundsExport', code: 'rounds-exported', title: message,
+    }),
+    reportError: (message) => void notify({
+      as: 'error', class: 'failure', source: 'roundsExport', code: 'rounds-not-exported', title: message,
+    }),
     ...extra,
   }, new Date(), async (all) => {
     // ONE spawn for the whole selection — story C2, and the reason the per-round reader above is
@@ -1232,10 +1288,14 @@ async function offerUpdate(context: vscode.ExtensionContext): Promise<void> {
   if (!server.updateOffered) {
     return;
   }
-  const answer = await vscode.window.showInformationMessage(
-    'A newer coai-mcp is published.',
-    'Install it',
-  );
+  const answer = await notifyAndAsk({
+    as: 'information',
+    class: 'offer',
+    source: 'installServer',
+    code: 'newer-server-published',
+    title: 'A newer coai-mcp is published.',
+    action: 'Install it',
+  });
   if (answer === 'Install it') {
     await installServer(context);
   }
