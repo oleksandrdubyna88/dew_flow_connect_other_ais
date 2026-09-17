@@ -125,24 +125,34 @@ export async function freshening(entry: ChatEntry, thread: Thread): Promise<void
   // 2. ENDED, THEN ARCHIVED, both inside the one notification: archiving a thousand-turn transcript
   // is a serialisation and a disk write, and a progress that stopped before it would leave the
   // longest part of the wait looking like nothing happening. (codex, the code round.)
-  const done = await vscode.window.withProgress(
+  // 2a. AND THE NEW SLATE'S OWN WRITE IS INSIDE THE SAME NOTIFICATION, which it was not. The progress
+  //     closed after the archive, and `publish` then awaited `thread.writes` with nothing on screen —
+  //     so on a slow store the indicator was gone AND the new conversation had not appeared, which is
+  //     the one state a reset must never leave somebody in. `withProgress` closes when its callback
+  //     settles, throw included, so the scope cannot be left open by a write that fails.
+  await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Ending the previous conversation…' },
-    async (): Promise<Archived> => {
+    async (progress): Promise<void> => {
       const failed = await ended(thread);
+      const done: Archived = failed.length > 0
+        ? { kind: 'refused', reason: failed }
+        : await archiveConversation(thread);
+      if (done.kind === 'refused') {
+        // 3. AND IF EITHER FAILED, NOTHING HAPPENS — including a failure to ARCHIVE, which the first
+        // draft let through: it said the conversation was archived, wiped the slate, and left the old
+        // record open on disk. Five findings from two vendors, all naming the same gap. All or
+        // nothing means all of it.
+        keepTheOldOne(entry, thread, done.reason);
 
-      return failed.length > 0 ? { kind: 'refused', reason: failed } : archiveConversation(thread);
+        return;
+      }
+      // The title said ENDING, and by here the ending is over. A notification that goes on claiming
+      // the wrong thing for the longer half of the wait is worse than none: it is a wait somebody
+      // reads as stuck.
+      progress.report({ message: 'Starting the new one…' });
+      await publish(entry, thread, done.note);
     },
   );
-  if (done.kind === 'refused') {
-    // 3. AND IF EITHER FAILED, NOTHING HAPPENS — including a failure to ARCHIVE, which the first
-    // draft let through: it said the conversation was archived, wiped the slate, and left the old
-    // record open on disk. Five findings from two vendors, all naming the same gap. All or nothing
-    // means all of it.
-    keepTheOldOne(entry, thread, done.reason);
-
-    return;
-  }
-  await publish(entry, thread, done.note);
 }
 
 /**

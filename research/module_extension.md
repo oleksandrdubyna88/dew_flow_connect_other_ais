@@ -790,6 +790,26 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**A reset now keeps something on screen for the whole of itself.** The progress notification covered
+the ending and the archive and then CLOSED, after which `publish` awaited `thread.writes` with
+nothing showing — so on a slow store the indicator was gone and the new conversation had not
+appeared, which is the one state a reset must never leave somebody in. The write is inside the same
+notification now, and the title changes when the ending is over rather than going on claiming the
+wrong thing for the longer half of the wait. `withProgress` closes when its callback settles, throw
+included, so a write that fails cannot leave the scope open.
+
+**And the keyboard door opens once at a time.** `passageFor('keyboard')` probed the host —
+`windowsReach()`, about a second in a remote window — BEFORE it showed any progress, which is the
+slowest part of the gesture with nothing to look at, and precisely when a person presses again.
+Moving the probe inside the notification makes the wait legible; it does NOT make the path
+single-entry, and an earlier draft of this fix stopped there and would have shipped as decoration.
+Both presses arrive while the first is awaiting and both pass the entry point. `oneAtATime` refuses
+the second — refused rather than queued, because somebody pressing a shortcut twice wants one result
+— with the latch taken SYNCHRONOUSLY before the first await and released in a `finally`.
+
+**Three latches here are still written in place** — `chatGotoCommand`, `chatStoreCache` and
+`bugzReviewPanel`. `oneAtATime` is the first that is a value, so its rules are asserted rather than
+described; converting the other three is named in the tail plan rather than done in passing.
 **A stale answer and a stale WRITE are two questions, and only one of them was being asked.**
 `chatTurn` fenced its answers twice — a generation check before a turn begins and a slate check
 before it writes — while the write path had neither. `keepQueued` chained `keepOnDisk` onto
