@@ -290,6 +290,7 @@ of every wire field this product has shipped out of step.
 | `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
 | `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
 | `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
+| `codeHighlight.test.ts` | the real Shiki, all three grammars | a skeleton becoming MARKUP; a language rendered by guesswork; colours baked in past the theme |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
 source text, and story 4 earned that ruling: a model picker matched every regex written about it
@@ -331,6 +332,17 @@ reading the source with its comments stripped. TypeScript's own `noUnusedLocals`
 crudest break (dropping the argument leaves `keptOpen` unused); this file catches passing the WRONG
 thing, verified by making `draw()` intersect against an empty list. What it does not prove is that a
 row reopens after a decision: that needs an extension host, which this suite still does not have.
+
+**The escaping is asserted as a PROPERTY, never as an entity spelling** (2026-09-17, story 1.2). The
+two paths escape differently — Shiki writes `&#x3C;` for `<` and leaves the apostrophe alone,
+`escapeHtml` writes `&amp;` and `&#39;` — so a test looking for `&lt;` would have gone red on
+entirely correct behaviour, and one looking for "no raw `<`" would go red on Shiki's own markup. What
+is asserted instead is that the dangerous *sequences* (`</script>`, `<style`, `<img`, `<!--`) cannot
+appear in the code element **and that the text is still all there**, because an escaper that simply
+dropped the payload would pass every one of the first four. The same property is asserted twice, at
+the module and at the PAGE, because the page is where the decision was made to stop calling
+`escapeHtml` on skeletons: the call moved into the highlighter, and a later edit rendering a skeleton
+anywhere else would reintroduce what was removed. Both verified by mutation.
 
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the

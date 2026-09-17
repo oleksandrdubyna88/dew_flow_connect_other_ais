@@ -1,3 +1,4 @@
+import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml } from './webviewHtml';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
@@ -139,10 +140,10 @@ function row(pair: ReviewPair, open: boolean): string {
   <td>
     <div class="sides">
       <div class="side">
-        <div class="sideName">Before</div><pre>${escapeHtml(pair.skeletonBefore)}</pre>
+        <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language)}
       </div>
       <div class="side">
-        <div class="sideName">After</div><pre>${escapeHtml(pair.skeletonAfter)}</pre>
+        <div class="sideName">After</div>${highlight(pair.skeletonAfter, pair.language)}
       </div>
     </div>
   </td>
@@ -211,6 +212,7 @@ export function reviewPageHtml(view: ReviewView): string {
   }
 ${ZOOM_CSS}
 ${TONE_CSS}
+${HIGHLIGHT_CSS}
   h1 { font-size: 1.15em; margin: 0 0 4px; }
   .hint { opacity: .7; font-size: .92em; margin: 0 0 12px; }
   .bar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
@@ -263,10 +265,6 @@ ${TONE_CSS}
   .side { flex: 1 1 0; min-width: 0; }
   .sideName { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; opacity: .55;
               margin-bottom: 3px; }
-  pre {
-    margin: 0; font-family: var(--vscode-editor-font-family); font-size: .85em;
-    white-space: pre-wrap; word-break: break-word; opacity: .9;
-  }
   .empty { opacity: .7; padding: 24px 0; }
 </style>
 </head>

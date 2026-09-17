@@ -1023,6 +1023,7 @@
     "theme": "dark"
   },
   "dependencies": {
-    "marked": "^18.0.12"
+    "marked": "^18.0.12",
+    "shiki": "^4.4.3"
   }
 }

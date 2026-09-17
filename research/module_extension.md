@@ -7246,6 +7246,36 @@ providers named the duplication in one round. `settingWrite.ts` is the extracted
 it routes through the funnel, it also retired the **last direct notification call in the extension**:
 the census ratchet went from one permitted direct call to zero.
 
+### Syntax highlighting, with VS Code's own grammars (2026-09-17, story 1.2)
+
+`codeHighlight.ts` — Shiki 4.4.3, three grammars (`csharp`, `typescript`, `javascript`, which is
+exactly what `TreeSitterNormalizer` collects), one theme, and the **JavaScript** regex engine rather
+than the Oniguruma WASM one, so there is no `.wasm` to ship or find at run time.
+
+**The choice was made by a measurement and the deciding fact was not the size.** *Neither option can
+use VS Code's own colours* — a webview is handed the workbench theme variables and no token colours,
+and the only token-ish variable in either repository is `--vscode-debugTokenExpression-name`. So
+"as close to VS Code's own as possible" reduces to **tokenisation**, which real TextMate grammars buy
+and a regex cannot, on a corpus that is real code: `Normalise` renames identifiers and leaves
+literals, comments, generics and interpolation verbatim. Cost, measured: `.vsix` **565,590 →
+664,353 B (+17.5 %)**, against a predicted +17.0 %.
+
+**`createCssVariablesTheme`, never a stock theme.** A stock theme bakes `#1E1E1E`/`#D4D4D4` into
+every block — a dark slab inside a light editor, and a tone control that does nothing to the code it
+was bought for. The variables map to `var(--vscode-charts-*)` exactly as `creds_for_devs` maps its
+own `tok-*` classes, and `--coai-hl-foreground` is `--coai-read`, so the tone moves the uncoloured
+majority of the code with the rest of the page. Token colours are left out of the tone deliberately:
+dimming a keyword towards the background is how a highlighted block stops being readable.
+
+**Built lazily, never at import.** `bugzReviewPage.ts` is reachable from the extension's entry
+point, so a module-level `createHighlighterCoreSync` would cost every window three grammars at
+activation whether or not anybody opened the page.
+
+**An unknown language renders as escaped plain text in the same wrapper**, and so does a grammar that
+throws — a row rendering nothing is indistinguishable from a pair that was never collected. That
+fallback path is the one a new corpus language reaches first, which is why it is escaped and tested
+rather than assumed unreachable.
+
 **The webview message boundary is a union, parsed once.** `asReviewMessage` turns raw data into one
 of four shapes or into nothing, and `received` switches over it. A plain lookup table answered
 `handlers['__proto__']` with something truthy and uncallable; `null` threw on the first field read;
