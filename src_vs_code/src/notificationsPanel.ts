@@ -1,25 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
-import { Arrival, ReadPerLedger, group } from './notificationsRead';
 import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
-  PlacedRecord,
   notificationsPath,
   readNewestPlaced,
   serverNoticesPath,
 } from './notificationsFile';
-import { PageState, notificationsPageHtml, waitingPageHtml } from './notificationsPage';
-import {
-  Span,
-  acknowledge,
-  covers,
-  olderRemain,
-  onlyWithin,
-  readSeen,
-  readSoFar,
-} from './notificationsSeen';
+import { notificationsPageHtml, waitingPageHtml } from './notificationsPage';
+import { LedgerRead, UNREADABLE_LEDGER, snapshotOf } from './notificationsSnapshot';
+import { Span, acknowledge, covers, readSeen } from './notificationsSeen';
 import { withinTheClock } from './withinTheClock';
 
 /**
@@ -66,14 +57,6 @@ interface FromThePage {
   readonly type?: unknown;
   readonly generation?: unknown;
   readonly filtered?: unknown;
-}
-
-/** What one ledger's read produced, or that it could not be read. */
-interface LedgerRead {
-  readonly records: readonly PlacedRecord[];
-  readonly start: number;
-  readonly end: number;
-  readonly readable: boolean;
 }
 
 /** Whatever `work` answers, or nothing when the clock runs out first. */
@@ -192,9 +175,7 @@ export class NotificationsPanel {
   private async oneLedger(path: string, deadline: number): Promise<LedgerRead> {
     const read = await orNothing(readNewestPlaced(path, PAGE_LOADS), deadline - Date.now());
 
-    return read === undefined
-      ? { records: [], start: 0, end: 0, readable: false }
-      : { ...read, readable: true };
+    return read === undefined ? UNREADABLE_LEDGER : { ...read, readable: true };
   }
 
   /** Both ledgers, merged, grouped, and what of them has been seen. */
@@ -204,7 +185,6 @@ export class NotificationsPanel {
     }
     const dataDir = coaiDataDir();
     const deadline = Date.now() + READ_CEILING_MS;
-
     const [mine, theirs, seen] = await Promise.all([
       this.oneLedger(notificationsPath(dataDir), deadline),
       this.oneLedger(serverNoticesPath(dataDir), deadline),
@@ -218,50 +198,21 @@ export class NotificationsPanel {
       return;
     }
 
-    const soFar = readSoFar(seen ?? []);
-    const arrivals: Arrival[] = [
-      ...mine.records.map((placed) => ({ ...placed, ledger: 'extension' as const })),
-      ...theirs.records.map((placed) => ({ ...placed, ledger: 'server' as const })),
-    ];
-    // Kept APART, and only the ranges that are about the file each one indexes. A byte offset means
-    // nothing without its file, and one that outlives a rotated ledger is about a file that is gone.
-    const read: ReadPerLedger = {
-      extension: onlyWithin(soFar.get(NOTIFICATIONS_FILE) ?? [], mine.end),
-      server: onlyWithin(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs.end),
-    };
-
-    const unreadable = !mine.readable || !theirs.readable || seen === undefined;
     this.generation += 1;
-    const state: PageState = {
-      rows: group(arrivals, read),
+    const snapshot = snapshotOf({
       dataDir,
-      older: mine.start > 0 || theirs.start > 0
-        || olderRemain(read.extension)
-        || olderRemain(read.server),
-      loaded: arrivals.length,
+      mine,
+      theirs,
+      seen,
       generation: this.generation,
-      ...(this.notice === '' ? {} : { notice: this.notice }),
-      // An unreadable ledger is SAID, never rendered as empty tabs. A person who sees an empty page
-      // concludes there is nothing to see, which is the opposite of what happened.
-      ...(unreadable
-        ? { unreadable: `the ledgers did not answer within ${Math.round(READ_CEILING_MS / 1000)} seconds` }
-        : {}),
-    };
-
-    // The window this draw is offering. Nothing is written until the page says it rendered it, and
-    // an unreadable draw offers nothing at all.
-    this.loaded = unreadable
-      ? new Map()
-      : new Map([
-        [NOTIFICATIONS_FILE, { from: mine.start, to: mine.end }],
-        [SERVER_NOTICES_FILE, { from: theirs.start, to: theirs.end }],
-      ]);
-    this.covered = new Map([
-      [NOTIFICATIONS_FILE, read.extension],
-      [SERVER_NOTICES_FILE, read.server],
-    ]);
+      notice: this.notice,
+      waitedSeconds: Math.round(READ_CEILING_MS / 1000),
+    });
+    // Before the html, so a `shown` posted the instant it loads cannot find a stale window.
+    this.loaded = snapshot.loaded;
+    this.covered = snapshot.covered;
     this.notice = '';
-    alive.webview.html = notificationsPageHtml(state, randomBytes(16).toString('base64'));
+    alive.webview.html = notificationsPageHtml(snapshot.state, randomBytes(16).toString('base64'));
   }
 
   /**
