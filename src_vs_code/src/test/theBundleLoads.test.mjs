@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import Module from 'node:module';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -151,5 +151,55 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
       'the bundle exports no deactivate, so nothing runs when the host shuts the extension down');
   } finally {
     Module._load = load;
+  }
+});
+
+/**
+ * A test that runs the BUILD runs ALONE, and this is the check for it.
+ *
+ * <p><b>Measured, because it was found the expensive way.</b> The test above shells out to
+ * `npm run bundle`, whose `prebundle` hook is `scripts/prepare-gate.mjs` — and that script
+ * deliberately INVALIDATES its previous output before it verifies the pinned conventions:
+ * `removeOutput(output)`, then `rules.mjs check` under a 30-second timeout, then the write. So
+ * `src/generated/gateRule.ts` does not exist for the whole of that verification. Measured on this
+ * machine while one bundle ran: <b>absent for 2 047 ms</b>, and a CI runner is slower.</p>
+ *
+ * <p>`node --test` runs the files it is given in PARALLEL processes. Put this file in a batch
+ * beside one that walks the source tree — `notificationSites.test.mjs` reads every `.ts` under
+ * `src/` — and the walker lists a file this one is in the middle of replacing, then opens it:
+ * `ENOENT ... src/generated/gateRule.ts`. It fails at random, which is worse than failing, and it
+ * did exactly that on PR #356 while passing the identical suite one step earlier.</p>
+ *
+ * <p>The rule is therefore not “retry” and not “exclude generated files from the walk” — both leave
+ * a build mutating the tree other tests are reading. It is that a file which runs the build gets a
+ * `node --test` invocation of its own. This asserts the npm script still says so, because the
+ * failure it prevents is invisible until somebody's unrelated pull request goes red.</p>
+ */
+test('a test that runs the build gets a node --test invocation to itself', () => {
+  const script = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts.test;
+
+  // Each `node --test ...` between the `&&`s is one batch of parallel processes.
+  const batches = script
+    .split('&&')
+    .map((step) => step.trim())
+    .filter((step) => step.startsWith('node --test'))
+    .map((step) => step.slice('node --test'.length).trim().split(/\s+/u).filter(Boolean));
+
+  assert.ok(batches.length > 0, 'the test script no longer runs node --test at all');
+
+  for (const batch of batches) {
+    // A file that spawns npm against the real root drives the build, and the build is what
+    // rewrites the tree. Read the files rather than naming them, so a SECOND such test is caught
+    // the day it is written rather than the day it flakes.
+    const builders = batch.filter((file) => /execFileSync\(\s*'npm'/u.test(readFileSync(join(ROOT, file), 'utf8')));
+    if (builders.length === 0) {
+      continue;
+    }
+    assert.deepEqual(batch, builders,
+      `${builders.join(', ')} runs the build, which leaves src/generated/gateRule.ts absent for `
+      + `seconds. It shares a parallel node --test batch with ${batch.filter((one) => !builders.includes(one)).join(', ')}, `
+      + 'so any of those reading the source tree can open a file this one is replacing. Give it its own invocation.');
+    assert.equal(builders.length, 1,
+      'two tests that both run the build are in one batch, so they invalidate the tree under each other');
   }
 });

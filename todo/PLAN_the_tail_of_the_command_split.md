@@ -477,8 +477,15 @@ Two constraints from the parent carry over:
   and [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) is the backlog for
   the 224 that exist. A test here that reads a file's text instead of running it is a twelfth.
 
-The whole suite runs before each pull request — `npm test` (3 343 tests) plus the six-suite pre-run
-(38) plus the family checks, which `npm test` does **not** include.
+The whole suite runs before each pull request — `npm test` (3 343 tests) plus the pre-run (37 in one
+batch, then `theBundleLoads.test.mjs` alone, 39 in all) plus the family checks, which `npm test` does
+**not** include.
+
+**The bundle test runs alone on purpose, and a case in it asserts that it still does.** It shells out
+to `npm run bundle`, whose `prebundle` hook invalidates `src/generated/gateRule.ts` before verifying
+the pinned conventions — measured absent for 2 047 ms on one bundle here. `node --test` runs its files
+in parallel processes, so beside a test that walks `src/` that window is an `ENOENT` at random. Any
+new test that drives the build gets its own invocation.
 
 ## Definition of Done
 

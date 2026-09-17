@@ -6945,6 +6945,19 @@ line of every new module appears verbatim, IN ORDER, in the pre-split original a
 split, built on a stale base, would have silently reverted the notifications ledger for every call
 site it moved — with a green suite, a clean typecheck and a passing gate.
 
+**A test that runs the BUILD gets a `node --test` invocation to itself**, and that is now asserted
+rather than remembered. `theBundleLoads.test.mjs` shells out to `npm run bundle`, whose `prebundle`
+hook is `scripts/prepare-gate.mjs` — and that script deliberately invalidates its previous output
+before verifying the pinned conventions: remove, then `rules.mjs check` under a 30-second timeout,
+then write. Measured on one bundle here, `src/generated/gateRule.ts` was **absent for 2 047 ms**, and
+a CI runner is slower. `node --test` runs the files it is handed in PARALLEL processes, so putting
+that file in a batch beside `notificationSites.test.mjs` — which walks every `.ts` under `src/` — let
+the walker list a file the bundler was replacing and then open it: `ENOENT`, at random. It did
+exactly that on PR #356, one step after the identical suite had passed. The npm script now runs the
+bundle test in its own invocation, and a case inside that file reads the script back and fails if a
+build-running test is ever put in a shared batch again — the failure it prevents is otherwise
+invisible until somebody's unrelated pull request goes red.
+
 Nothing in this repository EXERCISES the extension — the bundle is loaded, but `activate` is never
 called — so a runtime regression in a moved callback
 would still pass all of it. The plan says so in its own words rather than claiming otherwise.
