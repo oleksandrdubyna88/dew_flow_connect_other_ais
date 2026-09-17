@@ -71,12 +71,18 @@ node .agents/conventions/tools/pin-check.mjs
   **Adding a one-shot mode means adding it here — in THIS file, `.agents/PROJECT.md`.** Two
   reviewers on 2026-09-17 sent a change to `rules/common/vendor-routing.md` instead, independently
   and in the same round, because this document names that file in its own opening paragraph and a
-  reader joins the two. That file is about which CLI a model runs on and says nothing about one-shot
-  modes; it now says so out loud. The list lives here because it is THIS product's surface rather
-  than shared guidance — the operator's rule for what belongs in `conventions` and what belongs to
-  the product it describes (2026-09-17). `ARequestFaultIsNotAnOldBinaryTests` reads the modes off
-  the switch in `Program.cs` and fails when one of them is missing from the list above, so this is
-  now a red test rather than a paragraph anybody has to remember. Inside `ServeAsync`
+  reader joins the two. That file is about which CLI a model runs on and has nothing to do with
+  one-shot modes. It is NOT annotated to say so, and that is itself a decision worth recording: a
+  six-line pointer there cost 436 bytes of the mounted-rules budget, which is nearly full, and
+  pushed `common/knowledge-base.md` out of the prompt entirely — `StageRulesTests` went red in CI
+  and said so. A whole rule is a higher price than a signpost is worth, so the correction lives
+  here, where it costs the budget nothing.
+
+  The list lives here because it is THIS product's surface rather than shared guidance — the
+  operator's rule for what belongs in `conventions` and what belongs to the product it describes
+  (2026-09-17). `ARequestFaultIsNotAnOldBinaryTests` reads the modes off the switch in
+  `Program.cs` and fails when one of them is missing from the list above, so this is now a red test
+  rather than a paragraph anybody has to remember. Inside `ServeAsync`
   the rule is unchanged and absolute.
 
   The rule names **64 and only 64**: a mode whose ARGUMENTS are wrong answers another non-zero

@@ -5,12 +5,6 @@ tasks: ["inspect","audit","plan","implement","docs","policy","test","git","pr","
 ---
 # Vendor routing — a model runs on its OWN vendor's CLI (MANDATORY)
 
-> **This rule is not about one-shot CLI modes.** `--log`, `--providers`, `--close-consult` and the
-> rest, and the exit-code contract that reserves **64** for "this binary has never heard of that
-> mode", live in [PROJECT.md](../../PROJECT.md). Two reviewers looked for them here on 2026-09-17,
-> independently, so the absence is now stated rather than left to be discovered. What follows is
-> about which CLI answers for which MODEL.
-
 > Every model this product can review with is reachable through more than one CLI, and the choice is
 > not free. This rule fixes it, because getting it wrong is invisible in the output and expensive in
 > the bill.
