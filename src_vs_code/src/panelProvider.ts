@@ -60,6 +60,7 @@ import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, writeKeep } from './roundsDbRead';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
+import { BugsKeysPanel } from './bugsKeysPanel';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
@@ -2111,6 +2112,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'reviewBugs':
         await this.reviewBugs();
         break;
+      case 'bugsKeys':
+        await this.bugsKeys();
+        break;
       case 'setBugsServer':
         await this.setBugsServer();
         break;
@@ -2531,6 +2535,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The review window, held so a second press returns to it rather than opening another. */
   private review: BugzReviewPanel | undefined;
 
+  /** The Users tab. Built once and kept, like the review window beside it. */
+  private userKeys: BugsKeysPanel | undefined;
+
   /**
    * What the corpus and the last run look like now.
    *
@@ -2802,6 +2809,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The Bugz section shows how many are waiting, and a decision changes that.
     this.bugzAt = 0;
     await this.render();
+  }
+
+  /**
+   * Opens the Users tab.
+   *
+   * <p>The server address comes from the same setting the ingest side uses, read at each call
+   * rather than captured: it is changed by the button right below this one, and a panel holding a
+   * stale copy would ask the wrong host and blame the key.</p>
+   */
+  private async bugsKeys(): Promise<void> {
+    this.userKeys ??= new BugsKeysPanel(
+      this.context.secrets,
+      () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
+    );
+
+    await this.userKeys.show();
   }
 
   private async setBugsServer(): Promise<void> {
