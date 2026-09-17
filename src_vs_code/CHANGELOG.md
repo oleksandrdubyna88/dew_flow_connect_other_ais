@@ -132,6 +132,28 @@ ever leaves.
   anything that defends a page; it is `randomBytes` now. (One more call site is still open and is
   recorded in `todo/PLAN_the_corpus_tail.md` rather than silently rewritten.)
 
+## Server 0.27.1 — 2026-09-16
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**A re-release, and nothing in the server changed.** `0.27.0` shipped from a release line that never checked out the rules it tests against, so the tag was cut again over the fix. If you are on 0.27.0 there is nothing here for you.
+
+## Server 0.27.0 — 2026-09-16
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**`coai-bugs` — the one thing that leaves the machine.** A small service that accepts a defect the collector found, keyed so a sender can be revoked, and quarantined until somebody promotes it. It stores a hash of its key rather than the key, checks an alphabet when it never saw the original, and refuses a model with exit 65 rather than 64 — because 64 means *never heard of that mode* and is how a caller detects an old binary.
+
+The review page that reads the corpus arrived with it, along with a ranking nobody trusts yet and a CSP nonce that is now actually random.
+
+## Server 0.26.0 — 2026-09-16
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The collector finds the fix, or records why it could not.** Given an accepted finding it looks for the commit that answered it, and when it cannot it writes down the reason instead of dropping the pair. The runs themselves are visible, so a button can say what is happening rather than appearing to hang.
+
+The Bugz section of the panel arrived here, and a regex in it that had never been anonymised was.
+
 ## Extension 0.47.0 — 2026-09-15
 
 **A chat row can be cleared from the spending chart, the way a reviewer's always could** (#298).
@@ -339,6 +361,30 @@ have been a quiet way to lose data:
   the installation would use the side directory inside it, so "this already holds a database" could
   be true of one and false of the other. The side is settled first now, and you are shown what was
   found and asked to confirm before anything is saved.
+
+## Server 0.25.0 — 2026-09-15
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The server's instructions fit the budget a client actually keeps.** A client retains roughly 2 KiB of a server's `instructions` and silently drops the rest — the binary is correct, the suite is green, and the tail simply never arrives. The text was cut to fit, and the rule that came with it is that when it does not fit you move the detail into the description of the tool it is about, never into a bigger number.
+
+## Server 0.24.0 — 2026-09-15
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The accepted findings read back as a corpus.** A round's findings stop being only a reply and become something later work can measure against.
+
+`--normalize` became a mode rather than a flag, carrying three grammars, and a finding's line now resolves to the method around it — so a defect survives the file being reformatted. A method the normaliser rewrites has nothing of ours left in it.
+
+## Server 0.23.0 — 2026-09-15
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The plan and document gates are judged against written rules, not against a reviewer's taste.** A gate with no diff is judged against a named tier; a reviewer is told how much of its tier this repository actually had; and coverage counts what the reviewer was SHOWN rather than what exists.
+
+**The server says the three things only a shared rule said** — that a round's reply can carry commands which outrank your defaults, that rejecting in round one is what makes the loop converge, and that `call_human` is an enforced stop. They were in a rule file that not every session reads; now the server says them too.
+
+A round also records what its diff was against, and the consultant resolves its runtime definition and refuses one it must not run.
 
 ## Extension 0.43.1 — 2026-09-14
 
@@ -623,6 +669,30 @@ have made the offer impossible for both of them, and an untitled buffer has no n
 check is gone. Choosing the offer starts a conversation the same way the ordinary chord does, for
 the tab you are in, and the chat is titled after it so you can see which one you got.
 
+## Server 0.22.0 — 2026-09-14
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**A bulk export is one spawn, not one per round.** Exporting five hundred rounds used to start five hundred processes. `--findings-many` is a mode rather than a flag on an existing one, deliberately: a binary too old for it exits 64 so the caller can fall back, while a flag would have been accepted and answered *no such round* — which an export would have written down as five hundred clean rounds.
+
+**An ordinal is not a position.** Resolving findings out of order landed every decision on the wrong finding. That is fixed, and the pair that made it possible can no longer be constructed at all.
+
+The Took column now says how long the deciding took, not only how long the reviewers ran. And a document can reach a Team server, once somebody says it may.
+
+## Server 0.21.0 — 2026-09-14
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The consultant — `consult`, the ninth tool.** When you are stuck, another vendor's model reads your checkout read-only together with the uncommitted diff the server collects itself, and answers in prose. Bounded and resumable: turns per consultation, consultations per session, an idle close, and a filesystem invariant that fails closed and never deletes anything. Four routes — codex, claude, antigravity and a local engine — each measured live. The panel grew a *Consultant* section, a live card while one runs, and a fourth tab in the log.
+
+**`review_document` — the gate reads a document and gives back a summary.** No plan round before it and no code round after it, because the document IS the work. A round is selected by bucket, so a session can be about a document rather than a branch.
+
+**A round knows which AI called it, and which model it declared.** The caller is per round rather than per session, and *never asked* is a third state rather than a blank.
+
+**The data directory can be partitioned per side**, when you ask — and a refused side never silently means the root.
+
+Custom review roles reached both clients, which ask a Team server which roles it runs, and a transient failure no longer disables them for ever.
+
 ## Extension 0.40.0 — 2026-09-13
 
 **The panel says where this window keeps its data.** Under *MCP server*: the directory, the side
@@ -880,6 +950,14 @@ panel cannot write them yet; that is the next release, with the page to manage t
 
 **The round limit's box lines up with the four above it.** Its explanation — *worked out: at most 4 waves × 10 min* — was sitting on the same line as the box, squeezing the number out of the column the other four settings make. The explanation is a line underneath now, where every other description in the panel already was.
 
+## Server 0.20.0 — 2026-09-13
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The log names every model, and the effort it ran at.** A round used to record its vendor and its role and leave the model to be guessed — which was wrong twice over, since escalation and Team servers both change it.
+
+The local reviewer now takes the first slot, because it is the slowest and the round is only as fast as its last answer.
+
 ## Extension 0.38.4 — 2026-09-12
 
 **Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.
@@ -1002,6 +1080,14 @@ loaded into memory to compare a title. The two hundred earliest turns cross to t
 eight thousand characters and saying where it was cut. Your tab finds its session file once, while
 its name still matches, and keeps it: Claude renames a conversation as it goes on, and a file does
 not move.
+
+## Server 0.19.0 — 2026-09-12
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**Your own review roles, composed onto the shipped ones.** `COAI_ROLES` adds roles this build has never heard of, with their own prompts. The built-in catalog became a seed file rather than a C# array, so a person's roles and the product's are the same kind of thing. A `COAI_ROLES` this build cannot read says so instead of falling back silently, a null inside it is a refusal rather than a crash, and a role id names an environment variable — so it carries no hyphen.
+
+**A reviewer's launch can be confined to what it was handed.** With it: a renamed file still reaches the reviewer, a filename that is itself pathspec magic no longer decides which file's diff comes back, and one deadline covers the write, the read and the wait rather than three that could each be the one that fired.
 
 ## Extension 0.35.0 — 2026-09-11
 
@@ -1305,6 +1391,20 @@ answers and the Stop — in English, Русский, Українська, Deuts
 with four translations quietly a version behind. The extension's README gained the section it never
 had: the chat was the one thing this extension does that the README did not mention.
 
+## Server 0.18.17 — 2026-09-10
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**One set of instructions for Claude Code and Codex.** The canonical rules are shared rather than copied, and the hook that loads them is addressed absolutely — so a session started outside the repository root still finds them.
+
+## Server 0.18.16 — 2026-09-10
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**A code round is a diff against the merge base, not against the tip of a base that moved.** While you were working, `main` moved; the round was reading that movement as part of your change. It now compares against the point you branched from.
+
+A role the round did not ask for is named where the AI can read it, with the reason it was omitted — rather than quietly missing from a panel that claimed a full one.
+
 ## Extension 0.31.21 — 2026-09-09
 
 **A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,
@@ -1464,6 +1564,12 @@ Windows means `codex.cmd`, which is not something a program can simply start: it
 could not be found* before a tab opens, instead of failing at the first question where it reads as
 the model refusing. And `codex` conversations are resumed by their own id rather than by "the last
 one" — which is the last one on the whole MACHINE, so two chat tabs would have answered each other.
+
+## Server 0.18.15 — 2026-09-09
+
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+
+**The log page asks for a page.** It used to read everything and count in memory; the counting is SQL's now, which is what it is for. A chat says what it is, and a job nobody polls stops holding an account open.
 
 ## Server 0.18.14 — 2026-09-09
 

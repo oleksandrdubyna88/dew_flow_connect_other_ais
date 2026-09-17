@@ -77,6 +77,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # BEFORE the draft, and it cannot run earlier than this: the step needs the checkout to read
+      # CHANGELOG.md at all. A refusal here costs nothing — no draft exists, no asset has been
+      # uploaded, nothing is published — and the repair is to write the entry and push the tag again.
+      #
+      # Why it exists, measured: 67 `mcp-v*` tags against 10 `## Server` entries, with thirteen
+      # consecutive releases carrying custom roles, `review_document`, the whole consultant and
+      # `coai-bugs`, and not one word written about any of them. The release body below is the same
+      # fixed sentence every time, so nothing else was ever going to say it.
+      - name: The changelog names this release
+        run: node .github/scripts/changelog-names-the-release.mjs "${{ github.ref_name }}"
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
