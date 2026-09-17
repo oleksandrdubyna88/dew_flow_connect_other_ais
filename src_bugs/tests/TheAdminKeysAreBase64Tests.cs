@@ -223,6 +223,24 @@ public sealed class TheAdminKeysAreBase64Tests
         why.Should().Contain("without a BOM");
     }
 
+    /// <summary>
+    /// A list written on Windows carries the marker with a carriage return, and that is still marked.
+    /// </summary>
+    /// <remarks>
+    /// The first line is taken by splitting on a newline and trimming the end, so the carriage
+    /// return a CRLF file leaves behind is trimmed with it. A reviewer asked about this case in the
+    /// code round and answered it themselves mid-paragraph; it is pinned here so that the next
+    /// reader does not have to.
+    /// </remarks>
+    [Fact]
+    public void AMarkerWrittenWithWindowsLineEndingsIsStillTheMarker()
+    {
+        var admins = Administrators(Encoded($"{AdminKeys.Marker}\r\nalices-key\r\n"));
+
+        admins.Count.Should().Be(1);
+        admins.Match("alices-key", Secret).Should().BeOfType<AdminKeys.Presented.Administrator>();
+    }
+
     /// <summary>The marker is a COMMENT, so nothing downstream had to learn about it.</summary>
     [Fact]
     public void TheMarkerIsNotItselfAnAdministrator()

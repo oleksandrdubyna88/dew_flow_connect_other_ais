@@ -2490,7 +2490,18 @@ previous release has no admin surface at all.
 with `read` rather than `sed -n 2p`, because an empty second line and a missing one must be told
 apart: empty means "no administrators", and missing means a caller this script does not understand —
 an old workflow, a truncated transfer — which would otherwise silently remove every administrator and
-report success. A third line is refused too, which is what a wrapped base64 value arrives as.
+report success. A record that arrives WITHOUT a trailing newline still counts, because `read` returns
+non-zero for that too and the value is what decides. A third record is refused, which is what a
+wrapped base64 value arrives as — and an unterminated third one is refused for the same reason it
+would otherwise have been dropped in silence.
+
+**Which line of a list is a KEY is decided in one place**, `deploy/bugs/first-key.sh`: trim the line,
+drop the blanks and the `#` comments, take the first. That is `AdminKeys.Lines`'s rule, and the ORDER
+matters — the server trims before it looks for a `#`, so an indented `  # alice` is a comment. A
+shell that filtered first made it a key, which the character check then refused, failing a deployment
+over a list the server was perfectly happy with. `TheDeliveryAgreesWithTheServerTests` runs that file
+against the server's own parser over every shape of list an operator writes, so the two cannot part
+company quietly.
 Matching walks **every** hash with `CryptographicOperations.FixedTimeEquals` and **no early return**,
 and the store is an array rather than a `FrozenSet` because a set's probe is data-dependent and so is
 its timing. The guarantee is about the credential PRESENTED, not about the number of administrators:
