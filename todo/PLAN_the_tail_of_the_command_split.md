@@ -466,6 +466,21 @@ different messages, and the permission message names the path.
 vendor process that has not exited — leaves *Ending the previous conversation…* on screen
 indefinitely, with no way out but reloading the window.
 
+> **MEASURED 2026-09-17, while implementing it, and half this story's premise was wrong.** Three
+> things were checked in the code rather than taken from the round that raised them:
+> 
+> | claimed | measured |
+> |---|---|
+> | the abandoned turn is never stopped | **`ended()` already calls `thread.session.stop()`**, as its first act |
+> | `await thread.turns` can wait for ever | **both session kinds bound a turn** — `cliChatSession` has an injectable turn budget, `remoteChatSession` a `budgets.turnMs` deadline |
+> | `await thread.writes` can wait for ever | **true.** `grep` for `setTimeout`/`AbortSignal`/`timeout` across `chatStoreFile.ts`, `atomicFile.ts`, `chatPersist.ts` and `chatStoreWrite.ts` finds ONE, a retry pause. Nothing bounds a write, and the data directory can be a NAS |
+> 
+> So parts 1 and 2 of the fix below were already there, and what remains is the WRITE path — which is
+> also where the consultation found the missing fence. Part 3 shipped on 2026-09-17; the budget on
+> `await thread.writes` is still open, and is deliberately NOT bolted on: abandoning that wait is how
+> the archive saves against a revision the disk does not hold, so it needs its own design rather than
+> a number.
+
 **A budget alone makes the UI honest and the process worse, which two reviewers found independently.**
 When the wait expires and `ended` returns, the turn it stopped waiting for is **still running**: the
 vendor process keeps its memory and its handles, and its late completion can still write — into a

@@ -195,7 +195,10 @@ test('a turn knows which conversation it was ASKED in, and cannot write into ano
   // And the WRITES at the end are guarded on the slate itself rather than on the generation, because
   // those are two different questions: between a reset beginning and the slate being wiped, the turn
   // in flight is still writing into the OLD conversation, which is where its stopped line belongs.
-  const wiped = turn.indexOf('!sameSlate(mySlate, thread.saveId)');
+  // The question and the handover became ONE unit on 2026-09-17 — `turnEnded` asks and, only on the
+  // owning branch, clears `running` — because asking and acting had drifted five lines apart and the
+  // clearing was happening on the conversation that had REPLACED this turn's own.
+  const wiped = turn.indexOf('!turnEnded(thread, mySlate)');
   assert.ok(wiped > turn.indexOf('await thread.session.send('), 'the slate is checked before the answer is even asked for');
   assert.ok(wiped < turn.indexOf('ledger(thread, {'),
     'a turn from a wiped conversation is still priced into the one that replaced it');

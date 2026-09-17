@@ -44,7 +44,10 @@ test('a conversation is written to the store, and to the memento until the migra
     + ' reached would leave the next words nowhere');
   // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
   // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
-  assert.match(source('chatPersist.ts'), /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
+  // `began` since 2026-09-17: the write path now captures WHICH conversation a queued write is for,
+  // the way `enqueue` already did for a turn, so a save resolving after a reset cannot stamp the
+  // conversation that replaced it.
+  assert.match(source('chatPersist.ts'), /keepOnDisk\(entry, thread, began\)/u, 'nothing writes a conversation to the store');
   // The gate is the binding itself: retiring the memento unbinds it, and every `memory?.` site
   // becomes a no-op without knowing.
   // The binders moved to `chatHost.ts` when the command file was split: three handles a window

@@ -145,6 +145,31 @@ export function nextAfterSave(
   }
 }
 
+/**
+ * An outcome that arrived for a conversation this tab no longer holds applies to NOTHING.
+ *
+ * <p><b>The asymmetry this closes.</b> `chatTurn` fences its answers twice — a generation check
+ * before a turn begins, and a slate check before it writes. The WRITE path had neither. `keepQueued`
+ * chains `keepOnDisk` onto `thread.writes`, which reads `thread.saveId` when it RUNS rather than
+ * when it was queued, and `settle` then assigns `thread.rev = next.rev` to whatever thread it is
+ * holding. A save issued before a reset and resolving after one therefore stamped the conversation
+ * that REPLACED it with the old save's revision — and on the other branches posted that save's note
+ * to the replacement's page, or forked it.</p>
+ *
+ * <p>A revision is not cosmetic. It is the baseline the NEXT save is checked against, so a thread
+ * carrying a number the disk never gave it fails its next write as a conflict and forks a
+ * conversation nobody split. The damage outlives the reset that caused it.</p>
+ *
+ * <p>Returning the outcome rather than a boolean is deliberate: a caller that has to ask and then
+ * remember to act on the answer is the shape `chatTurn` was in when its own check drifted five lines
+ * away from the thing it guarded.</p>
+ *
+ * @returns the outcome when it is still this conversation's, and nothing when it is not
+ */
+export function ifStillOurs(next: WriteNext, began: string, now: string): WriteNext | undefined {
+  return began === now ? next : undefined;
+}
+
 // "Is the disk the beginning of what we hold" is `isPrefixOf` in `chatStore.ts`: the migration of
 // story A4 asks the same question the other way round, so the one implementation lives where both
 // can import it rather than being copied here a second time.

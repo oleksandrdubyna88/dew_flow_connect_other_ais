@@ -167,6 +167,36 @@ export const UNSAVED = ['savedMessages', 'savedModelId', 'savedCarryFrom'] as co
  */
 export const sameSlate = <T>(began: T, now: T): boolean => began === now;
 
+/**
+ * A turn is over — hand it back to the thread, but ONLY if this turn is still the one it is running.
+ *
+ * <p><b>The question and the handover are one unit on purpose.</b> `sameSlate` above answers whether
+ * a turn still owns the thread, and `chatTurn` asked it — five lines too late. `thread.running =
+ * false` ran BEFORE the question, and the branch that had just answered *no* went on to call
+ * `show(entry, false, '')`. By then `thread` is the conversation that REPLACED the one this turn
+ * belonged to: an answer arriving after a reset cleared the replacement's running flag and painted it
+ * idle, so a chat mid-answer could be shown as finished by a turn the person had discarded.</p>
+ *
+ * <p>The comment on that branch was accurate about what it covered — <i>"Nothing is recorded
+ * anywhere, ledger included"</i>, and the ledger write is below the return — which is exactly why it
+ * read as complete. It was built to stop a stale answer being RECORDED, and it does. Nobody asked
+ * whether the two statements bracketing it also touched the new conversation.</p>
+ *
+ * <p>Splitting the question from the act again would put the defect straight back, so a caller cannot
+ * ask without acting: acting is what asking does. It takes the narrowest shape of a thread it needs,
+ * which is also what lets it be tested without an editor.</p>
+ *
+ * @returns whether this turn still owned the thread. `false` means touch nothing else on it.
+ */
+export function turnEnded(thread: { running: boolean; readonly saveId: string }, began: string): boolean {
+  if (!sameSlate(began, thread.saveId)) {
+    return false;
+  }
+  thread.running = false;
+
+  return true;
+}
+
 /** Said when the slate has been wiped: not a dialog, which the operator refused by name. */
 export const ARCHIVED = 'The previous conversation was archived — find it again in CoAI: switch conversations…';
 

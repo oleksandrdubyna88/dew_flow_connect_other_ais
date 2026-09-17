@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SaveOutcome } from '../chatStoreFile';
-import { BUSY_ELSEWHERE, CONTINUED_ELSEWHERE, INDEX_BEHIND, STILL_SAFE, nextAfterSave } from '../chatStoreWrite';
+import { BUSY_ELSEWHERE, CONTINUED_ELSEWHERE, INDEX_BEHIND, STILL_SAFE, WriteNext, ifStillOurs, nextAfterSave } from '../chatStoreWrite';
 
 /**
  * What a conversation DOES about the answer its save came back with.
@@ -206,4 +206,36 @@ test('an adopted record brings its own beginning with it', () => {
   );
 
   assert.deepEqual(next, { kind: 'adopt', rev: 5, began: 1_700_000_000_000 });
+});
+
+/**
+ * An outcome that arrives for a conversation this tab no longer holds applies to NOTHING.
+ *
+ * <p><b>The asymmetry this closes.</b> `chatTurn` fences its answers twice — a generation check
+ * before a turn begins and a slate check before it writes. The WRITE path had neither. `keepQueued`
+ * chains `keepOnDisk` onto `thread.writes`, which reads `thread.saveId` when it RUNS rather than
+ * when it was queued, and `settle` then assigns `thread.rev = next.rev` to whatever thread it is
+ * holding. So a save issued before a reset and resolving after one stamped the conversation that
+ * REPLACED it with the old save's revision — and on the other branches posted its note to that
+ * conversation's page, or forked it.</p>
+ *
+ * <p>A revision is not cosmetic: it is the baseline the next save is checked against, so a thread
+ * carrying a number the disk never gave it fails its next write as a conflict and forks a
+ * conversation nobody split.</p>
+ */
+
+test('an outcome for a conversation the tab no longer holds applies to nothing', () => {
+  const outcome: WriteNext = { kind: 'kept', rev: 7 };
+
+  assert.equal(ifStillOurs(outcome, 'the-conversation-that-asked', 'the-one-that-replaced-it'), undefined,
+    'a save issued before a reset was applied to the conversation that replaced it');
+});
+
+test('an outcome for the conversation that asked for it still applies', () => {
+  // The companion the fence needs: one that refused everything would pass the case above while no
+  // conversation ever advanced its revision again.
+  const outcome: WriteNext = { kind: 'kept', rev: 7 };
+
+  assert.deepEqual(ifStillOurs(outcome, 'one-and-the-same', 'one-and-the-same'), outcome,
+    'a save resolving into the conversation that asked for it was dropped');
 });
