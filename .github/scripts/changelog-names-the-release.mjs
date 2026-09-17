@@ -141,6 +141,21 @@ export function verdict(tag, read) {
     return { code: 2, said: `a file this guard needs could not be read: ${error.message}` };
   }
 
+  // Valid JSON is not a valid baseline, and the difference is an exit code. `{"Server": {}}` parses,
+  // and `recorded.includes` would then throw OUTSIDE the try above — so the process exits 1, which
+  // in this guard's vocabulary means "a release has no entry": a specific and wrong accusation about
+  // a file that is merely malformed. Raised by CodeRabbit on the pull request.
+  const shaped = typeof baseline === 'object' && baseline !== null && !Array.isArray(baseline)
+    && Object.values(baseline).every((versions) => Array.isArray(versions)
+      && versions.every((v) => typeof v === 'string' && /^\d+(\.\d+)*$/.test(v)));
+  if (!shaped) {
+    return {
+      code: 2,
+      said: 'the baseline is not a baseline: expected an object whose every property is an array of '
+        + `version strings, got ${JSON.stringify(baseline)?.slice(0, 120) ?? 'undefined'}.`,
+    };
+  }
+
   const recorded = baseline[line.word] ?? [];
   const problems = [];
 
@@ -182,10 +197,22 @@ if (process.argv[1] && path.resolve(process.argv[1]) === self) {
     process.exit(0);
   }
 
+  // A flag with no value used to fall back to the DEFAULT path, so `--changelog` as the last
+  // argument made the guard check a different file from the one it was asked about and pass. Raised
+  // by CodeRabbit; the sibling extractor had already been given strict parsing by the gate and this
+  // one had not.
   const valueOf = (flag, fallback) => {
     const at = argv.indexOf(flag);
+    if (at === -1) {
+      return fallback;
+    }
+    if (argv[at + 1] === undefined || argv[at + 1].startsWith('--')) {
+      console.error(`"${flag}" needs a path after it.\n`
+        + 'usage: changelog-names-the-release.mjs <tag> [--changelog <path>] [--baseline <path>]');
+      process.exit(2);
+    }
 
-    return at === -1 || argv[at + 1] === undefined ? fallback : argv[at + 1];
+    return argv[at + 1];
   };
   const tag = argv.find((argument, at) => !argument.startsWith('--')
     && argv[at - 1] !== '--changelog' && argv[at - 1] !== '--baseline');

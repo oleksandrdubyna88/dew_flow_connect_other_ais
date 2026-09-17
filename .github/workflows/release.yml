@@ -75,7 +75,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # `persist-credentials: false` because this job runs SCRIPTS from the checkout while holding a
+      # write token. By default checkout leaves that token in `.git/config`, where anything those
+      # scripts do could read it. Nothing here needs it: `gh` is handed GH_TOKEN explicitly and no
+      # step pushes. Raised by CodeRabbit's security review.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # BEFORE the draft, and it cannot run earlier than this: the step needs the checkout to read
       # CHANGELOG.md at all. A refusal here costs nothing — no draft exists, no asset has been
