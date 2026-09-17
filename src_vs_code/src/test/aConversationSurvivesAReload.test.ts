@@ -337,7 +337,8 @@ test('no process is started until the first question after a restore', () => {
 });
 
 test('the first question after a restore carries the whole transcript', () => {
-  const command = source('chatCommand.ts');
+  // The restore moved to `chatConversationRestore.ts` when the command file was split.
+  const command = source('chatConversationRestore.ts');
   const restore = command.slice(command.indexOf('export function restoreConversation'));
 
   // The WINDOW, not the file: this asserts the carry is set where a restored thread is built, and it

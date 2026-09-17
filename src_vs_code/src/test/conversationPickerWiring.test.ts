@@ -287,16 +287,14 @@ test('every detached edge in the widget ends in a catch that says something', ()
 });
 
 /**
- * The three things `chatCommand.ts` had to grow for this story, read the same way.
+ * The three things the chat command had to grow for this story, read the same way.
  *
- * <p>They live there because the `Thread` map is private to that file — the registry knows keys and
- * labels, and everything the picker describes a conversation by is on the thread. The file is far
- * over the size rule already, so what went in is three accessors and no decision.</p>
+ * <p>They are accessors and no decision: the panel registry knows keys and labels, and everything
+ * the picker describes a conversation by is on the thread. This comment used to add that they lived
+ * in `chatCommand.ts` because the thread map was private to it and that file was far over the size
+ * rule anyway — both of which stopped being true when it was split. The map is `chatThread.ts`, the
+ * accessors are `chatRegistry.ts`, and the restore is `chatConversationRestore.ts`.</p>
  */
-
-const command = (): string => read(join('src', 'chatCommand.ts'));
-
-/** And the registry half, which moved to its own module when the command file was split. */
 const registry = (): string => read(join('src', 'chatRegistry.ts'));
 
 test('the picker is told what is open by the same facts a stored row carries', () => {
@@ -344,7 +342,8 @@ test('a conversation can be restored WITHOUT a panel, and the panel is then crea
   // Its only caller was the reload serializer, which is handed one by VS Code. The picker is its first
   // caller without one — and `createChatPanel` has always taken the panel as optional, so what this
   // asserts is that the optionality reaches it rather than being defended against here.
-  const text = command();
+  // The restore moved to `chatConversationRestore.ts` when the command file was split.
+  const text = read(join('src', 'chatConversationRestore.ts'));
   const signature = text.slice(text.indexOf('export function restoreConversation'), text.indexOf('export function restoreConversation') + 400);
 
   assert.match(signature, /panel: vscode\.WebviewPanel \| undefined/u,

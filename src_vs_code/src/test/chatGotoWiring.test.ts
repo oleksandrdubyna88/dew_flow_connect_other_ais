@@ -314,7 +314,8 @@ test('a conversation the picker or a reload opened without a tab is REBOUND, not
 });
 
 test('restoring binds only when a caller names a tab, and the reload serializer never does', () => {
-  const command = source('chatCommand.ts');
+  // The restore moved to `chatConversationRestore.ts` when the command file was split.
+  const command = source('chatConversationRestore.ts');
   const restore = command.slice(command.indexOf('export function restoreConversation'));
 
   // Checked BEFORE anything is built: `panels.open` would reveal what is there without calling the

@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { Goto, GotoAsked, bindable, goto, rootOfTab } from './chatGoto';
 import {
   chatWithOtherAi,
-  restoreConversation,
 } from './chatCommand';
+import { restoreConversation } from './chatConversationRestore';
 import { askedForGoto } from './chatSessionJoin';
 import { revealBound, revealConversation, tabStillOpen, whereConversationSits } from './chatRegistry';
 import { ChatPanels } from './chatPanels';
