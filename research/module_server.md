@@ -2573,6 +2573,13 @@ source-generated `JsonTypeInfo` directly, which uses the CONTEXT's options — a
 none, so the same `Problem` arrived as `why` from a route and `Why` from a gate. The naming policy is
 declared on `BugsJson` itself, and a test reads the bytes of all three refusal paths.
 
+**The admin surface's reads are a partial of `Corpus`, in `Corpus.Listings.cs`.** They need the one
+guarded connection — the same lock and the same transaction semantics as every write — so a separate
+type would mean handing that connection out, which is what the lock exists to prevent. But nothing
+in them is on the ingest path and every one answers a question only an administrator asks, and
+together they took `Corpus.cs` past this repository's 800-line maximum. A partial is the language's
+own answer to that, and the split follows the concern rather than the line count.
+
 **The note is OUR record of why a key exists, never the holder's identity.** Two hundred characters,
 and an email-shaped note is refused. The guard catches one shape and no other — `bob@example.com` is
 refused and `Bob Smith` is not, and both directions are tested, because "notes are validated" could
