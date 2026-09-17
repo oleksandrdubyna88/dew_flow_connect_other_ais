@@ -814,6 +814,64 @@ previous release has no admin surface at all, so the retreat fixes nothing and t
 out of service. The condition names the edge check specifically, which is the one thing a rollback
 actually repairs.
 
+#### What story 4's code round changed (round 1 of 2, verdict `revise`)
+
+All twelve reviewers answered, 36 findings: **29 accepted, 7 rejected**. One of them found a hole the
+plan had claimed was closed, and it is the most valuable finding of the whole story.
+
+**THE THREE RULES DID NOT MAKE THE SHAPES DISJOINT.** The plan argued that a raw key list could not
+survive "no whitespace, strict UTF-8, no control characters". codex produced one that does: `aCE0`
+repeated sixteen times is a plausible 64-character key, has no whitespace, is valid base64, and
+decodes to `h!4` repeated sixteen times — printable ASCII, perfectly good UTF-8. It would have been
+configured as an administrator nobody holds. **And the deployment's own check would have said 200**,
+because the workflow decoded the same value and would have sent the same nonsense key: a check that
+agrees with the defect. The answer could not be a better check, so the encoded form now carries a
+MARKER — `# coai-bugs-admin-keys v1`, spelled as a comment so that every existing reader of the list
+already drops it — and a raw list cannot have one. It costs the operator one line in the command they
+paste, and it is free to introduce today for a reason that will not come again: the admin surface has
+never shipped, so there is no deployed value to migrate. A byte-order mark is refused by name for the
+same family of reasons: invisible, and it would silently become part of the first key.
+
+**The extraction moved to the host.** The workflow decoded the list and picked the first usable key
+itself, which put a second implementation of "which line is a key" in a runner, to drift from the
+server's. `admin-check` now takes the whole encoded blob and does it on the host — one rule, one
+place, and the credential still never crosses the edge.
+
+**The delivery is two RECORDS, not two lines that happen to arrive.** Four findings, from all three
+providers, about the same thing: `sed -n 2p` cannot tell an EMPTY second line from a MISSING one.
+Empty means "no administrators", which is legitimate; missing means a caller this script does not
+understand — an old workflow, a truncated transfer, a person running `secret` by hand — and it would
+have silently removed every administrator and printed success. `read` tells them apart. A THIRD line
+is refused too, because that is what a base64 value pasted without `-w0` arrives as: only its first
+chunk would survive, decoding to a prefix of the list where the first key works and later
+administrators silently do not — and the check, which tests the first key, would pass. The workflow
+refuses whitespace in the secret before sending it, which is where an operator can act on it.
+
+Smaller, and all accepted: the key's characters are checked before it is written into a curl config
+file, because curl gives meaning to quotes and backslash escapes inside a quoted value; the trap is
+armed before `mktemp` rather than after; `head -n 1` rather than the obsolescent `head -1`; an ssh
+`ConnectTimeout` and a transport exit code kept apart from the answer, so "the host could not be
+asked" and "the server said 401" are two sentences; retry progress on stderr, so forty seconds of
+waiting looks like waiting; the rollback condition reads `!= 'success'` rather than `== 'failure'`,
+because a step cancelled by a job timeout has neither; the promise scan gained the companion
+assertion the repository's own rule requires (that the pattern still MATCHES a known instance, or it
+is matching nothing anywhere) and became conditional on the column rather than asserting it; and
+`AnAbsentVariableConfiguresNobody` was pointed back at `Read(null)`, which is the path its name
+promises — a mechanical rewrite had quietly aimed it at the text parser.
+
+**Seven rejections.** Two reviewers reported that `sed -n '1p'` causes a SIGPIPE failure under
+`pipefail` and should be replaced with `head -n 1` — which is backwards: `sed -n '1p'` reads its
+input to the end, which is exactly why it was chosen, and `head -n 1` is what closes the pipe early.
+One reported that `pipefail` was not set in a step whose first line is `set -euo pipefail`. Two said
+the admin check could hang indefinitely, where `--max-time 3` bounds every attempt and ten attempts
+bound the whole thing at forty seconds. One asked for `Configured` to be renamed to `Result`, where
+mirroring `RatePerMinute.Parsed` is the point. One objected that `admin-check` calls a real endpoint
+rather than a dedicated canary — but a canary that can pass while the real surface fails is the
+failure this story is about, and this repository already settled that argument once, in
+`TheEdgeIsWatchedTests`: the request itself is the evidence. And one reported that `.agents/PROJECT.md`
+still describes the raw format, in a paragraph that reads, in the finding's own words, *"the diff
+fixes it"*.
+
 ### Story 5 — the extension can actually send *(Opus)*
 
 > **Added 2026-09-17, by operator decision, sequenced AFTER story 4.** Not part of the original

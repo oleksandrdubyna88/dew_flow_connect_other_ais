@@ -146,7 +146,7 @@ never arguments, because an argument is in process listings and shell history.
 | `COAI_BUGS_DATA` | Where `coai-bugs.db` and `logs/` live. |
 | `COAI_BUGS_KEYWORDS` | Optional. A file that **replaces** the embedded keyword list, for correcting it without waiting for a release. |
 | `COAI_BUGS_RATE_PER_MINUTE` | Optional. Requests a minute **per key**, a sliding window; `10` when unset, `0` switches the limit off, anything past `1000` or not a whole number makes the server exit **78** rather than start with a clamped value. A refused request is a `429` with `Retry-After`. Per key and never per address: this vhost clears every forwarding header, so the application sees `127.0.0.1` for everybody and an address limit would be one bucket for the whole internet — unauthenticated traffic is `limit_req`'s job above. In memory, one process, reset by a restart, by design. |
-| `COAI_BUGS_ADMIN_KEYS` | Optional. The administrators who may use `/admin/*`, as **base64 of the key list** — one line, no whitespace, which is what `base64 -w0` produces. INSIDE it, one key per line; blank lines and `#` comments are ignored, so keep a comment line saying whose each key is. The raw list is **refused with 78**, never guessed at: the two shapes overlap (a hex key is valid base64, and base64 decoding ignores line breaks), so a server that fell back would start with administrators nobody holds. Each is hashed with `COAI_BUGS_SECRET` at startup and only the hash is held. **Absent is a legitimate configuration** — the server starts, keeps collecting, and answers `401` to every admin call — so it does NOT exit 78; it logs a warning naming this variable, and that log is the only place the difference is visible (see *[An admin credential cannot be revoked in a hurry](#an-admin-credential-cannot-be-revoked-in-a-hurry)*). An admin key may also upload through `/ingest`; those pairs are attributed to `admin-<8 hex>` and counted against no key row. |
+| `COAI_BUGS_ADMIN_KEYS` | Optional. The administrators who may use `/admin/*`, as **base64 of the key list** — one line, no whitespace, which is what `base64 -w0` produces, and the list itself must begin with **`# coai-bugs-admin-keys v1`**. INSIDE it, one key per line; blank lines and `#` comments are ignored, so keep a comment line saying whose each key is — the marker is a comment too, which is why nothing else had to learn about it. Anything else is **refused with 78**, never guessed at: a raw 64-character key can be valid base64 that decodes to ordinary text (`aCE0` sixteen times decodes to `h!4` sixteen times), so without the marker a server could start with administrators nobody holds — and the deploy's own check would pass, because it would send the same nonsense key. Each is hashed with `COAI_BUGS_SECRET` at startup and only the hash is held. **Absent is a legitimate configuration** — the server starts, keeps collecting, and answers `401` to every admin call — so it does NOT exit 78; it logs a warning naming this variable, and that log is the only place the difference is visible (see *[An admin credential cannot be revoked in a hurry](#an-admin-credential-cannot-be-revoked-in-a-hurry)*). An admin key may also upload through `/ingest`; those pairs are attributed to `admin-<8 hex>` and counted against no key row. |
 | `COAI_BUGS_ADMIN_RATE_PER_MINUTE` | Optional. Requests a minute **per administrator**; `120` when unset, `0` switches it off, past `1000` or not a whole number makes the server exit **78**. Its own setting on purpose: the contributor number is flood control for a public endpoint, and using it here rate-limits the Users tab after ten pages. |
 | `COAI_LOG_LEVEL` | `Information` by default. |
 
@@ -160,7 +160,7 @@ repository's secret store, and `deploy the ingest server` delivers them.
 | Secret | What it is | How to produce it |
 |---|---|---|
 | `COAI_BUGS_SECRET` | The HMAC secret keys are hashed with. | `openssl rand -base64 32` |
-| `COAI_BUGS_ADMIN_KEYS` | The administrators, **base64**. | `printf '# alice\n<alice-key>\n' \| base64 -w0` |
+| `COAI_BUGS_ADMIN_KEYS` | The administrators, **base64**, marked. | `printf '# coai-bugs-admin-keys v1\n# alice\n<alice-key>\n' \| base64 -w0` |
 | `BUGS_DEPLOY_HOST` | The host. | `82.165.44.219` |
 | `BUGS_DEPLOY_USER` | The account the forced-command key belongs to. | `coai-bugs-deploy` |
 | `BUGS_DEPLOY_KEY` | The PRIVATE half of the deploy key. | `ssh-keygen -t ed25519 -f coai-bugs-deploy-ci -C coai-bugs-deploy-ci -N ""` |
@@ -207,17 +207,27 @@ wire and in the file, and the server decodes it. Nothing in between encodes or r
 
 ```bash
 # what you paste into Actions Secrets, and what /etc/coai-bugs/env then holds
-printf '# alice\n<alice-key>\n# bob\n<bob-key>\n' | base64 -w0
+printf '# coai-bugs-admin-keys v1\n# alice\n<alice-key>\n# bob\n<bob-key>\n' | base64 -w0
 ```
 
-**`-w0` is not decoration.** `base64` without it wraps at 76 columns, and a value with a line break
-in it is refused — as is one with a trailing carriage return, which a Windows editor adds invisibly.
-The refusal names the variable and the command.
+**The first line is not optional.** `# coai-bugs-admin-keys v1` is what tells an encoded list from a
+raw one, and without it the two are not distinguishable: a 64-character key is inside the base64
+alphabet, so `aCE0` repeated sixteen times decodes to `h!4` repeated sixteen times — printable text
+that would have been accepted as an administrator nobody holds. It is spelled as a comment, so every
+reader of the list already ignores it.
 
-**And the deploy now proves it worked.** After the edge check, the workflow takes the first usable
-key from the same secret, sends it to the host's forced command as `admin-check`, and the host makes
-one authenticated `GET /admin/keys?limit=1` on loopback and prints only the status code. Anything but
-`200` fails the run. It deliberately does NOT roll back: a wrong key is a configuration failure and
+**`-w0` is not decoration either.** `base64` without it wraps at 76 columns; a wrapped value is
+refused by the workflow before it is sent, and by the installer if it arrives anyway, because only
+its first chunk would survive — which decodes to a PREFIX of the list, where the first key works and
+later administrators silently do not. A trailing carriage return, which a Windows editor adds
+invisibly, is refused the same way. Every refusal names the variable and prints the command.
+
+**And the deploy now proves it worked.** After the edge check, the workflow sends the whole encoded
+list to the host's forced command as `admin-check`; the HOST decodes it, takes the first usable key,
+makes one authenticated `GET /admin/keys?limit=1` on loopback and prints only the status code.
+Anything but `200` fails the run. The extraction is on the host rather than in the runner so that
+one implementation decides which line is a key — a copy in the workflow would drift from the
+server's, and a check that tests a key the server does not hold reports a failure nobody can find. It deliberately does NOT roll back: a wrong key is a configuration failure and
 the previous release has no admin surface at all, so retreating would take a good build out of
 service to fix nothing. Fix the secret and deploy again.
 

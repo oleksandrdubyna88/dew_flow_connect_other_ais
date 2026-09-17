@@ -28,17 +28,42 @@ set -eu
 
 ENV_FILE=/etc/coai-bugs/env
 
-# TWO lines, from stdin: the server's secret, then the administrator list. `head -c` bounds what the
-# caller can send; `tr -d` removes the carriage return a Windows-written secret box adds, which would
-# otherwise become part of the value and hash differently from the one the client thinks it sent.
+# TWO RECORDS, from stdin: the server's secret, then the administrator list. `tr -d` removes the
+# carriage return a Windows-written secret box adds, which would otherwise become part of the value
+# and hash differently from the one the client thinks it sent.
 #
-# THE SECOND LINE MAY BE EMPTY, and that is not a failure: a server with no administrators answers
-# 401 to every /admin call, which is a legitimate way to run this one — it says so in its own startup
-# log. What would be a failure is guessing, so the line is always written, empty or not.
-INPUT=$(head -c 65536)
-SECRET=$(printf '%s\n' "$INPUT" | sed -n '1p' | tr -d '\r')
-ADMINS=$(printf '%s\n' "$INPUT" | sed -n '2p' | tr -d '\r')
+# READ, not `sed -n 2p`, because the two cases have to be told apart and only `read` can: an EMPTY
+# second line means "no administrators", which is a legitimate way to run this server, and an ABSENT
+# one means the caller sent a message this script does not understand — an old workflow, a truncated
+# transfer, somebody running `secret` by hand. The first writes an empty value on purpose. The second
+# would SILENTLY REMOVE every administrator, print success, and leave a server answering 401 to every
+# admin call, which is the exact failure this whole story exists to end. (Code round, codex, twice.)
+#
+# `|| ADMINS=''` is not decoration either: `read` returns non-zero at EOF and this script runs under
+# `set -e`. (Plan round, gemini.)
+IFS= read -r SECRET || SECRET=''
+SECRET=$(printf '%s' "$SECRET" | tr -d '\r')
 [ -n "$SECRET" ] || { printf 'no secret arrived on stdin\n' >&2; exit 1; }
+
+if IFS= read -r ADMINS; then
+  ADMINS=$(printf '%s' "$ADMINS" | tr -d '\r')
+else
+  printf 'the administrator line is missing. Send two lines: the secret, then the base64 key list (empty for none)\n' >&2
+  exit 1
+fi
+
+# NOTHING AFTER IT. A base64 value pasted without `-w0` wraps at 76 columns, and everything after the
+# first chunk would arrive here as a third line and be thrown away — leaving a value that decodes to
+# a PREFIX of the list. The first key would work, later administrators would not, and the deployment
+# check, which tests the first key, would pass. (Code round, codex.)
+if IFS= read -r EXTRA; then
+  printf 'more than two lines arrived. The key list must be base64 on ONE line: `base64 -w0`\n' >&2
+  exit 1
+fi
+
+# Bounded, as `head -c` used to bound it, but as a REFUSAL rather than a truncation: a value cut in
+# half is a value that decodes to nonsense.
+[ "${#ADMINS}" -le 65536 ] || { printf 'the administrator line is longer than 64 KiB\n' >&2; exit 1; }
 
 install -d -m 0750 -o root -g coai-bugs /etc/coai-bugs
 umask 077

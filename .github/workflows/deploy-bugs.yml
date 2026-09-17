@@ -182,7 +182,14 @@ jobs:
           [[ -n "${COAI_BUGS_SECRET:-}" ]] \
             || { echo "COAI_BUGS_SECRET is not set in this repository's secrets"; exit 1; }
           [[ -n "${COAI_BUGS_ADMIN_KEYS:-}" ]] \
-            || { echo "COAI_BUGS_ADMIN_KEYS is not set in this repository's secrets. It is the key list encoded with 'base64 -w0' — the server refuses the raw list, because the two shapes overlap and guessing would configure the wrong administrators."; exit 1; }
+            || { echo "COAI_BUGS_ADMIN_KEYS is not set in this repository's secrets. It is the key list encoded with 'base64 -w0', and the list must begin with '# coai-bugs-admin-keys v1' — the server refuses anything else, because a raw key can be valid base64 and guessing would configure administrators nobody holds."; exit 1; }
+          # WHITESPACE IS REFUSED HERE, before anything is sent. A value pasted from `base64` without
+          # -w0 wraps at 76 columns, and only its first chunk would survive the two-line protocol
+          # below — leaving a value that decodes to a PREFIX of the list, where the first key works
+          # and later administrators silently do not. The installer refuses a third line for the same
+          # reason; this says it where the operator can act on it. (Code round, codex.)
+          [[ "$COAI_BUGS_ADMIN_KEYS" != *[$' \t\n\r']* ]] \
+            || { echo "COAI_BUGS_ADMIN_KEYS contains whitespace. It must be one line with no wrapping: pipe the list through 'base64 -w0'."; exit 1; }
           # The value is base64 ON PURPOSE and travels as it is stored: the list is newline-separated
           # and a systemd EnvironmentFile assignment cannot hold a newline. Nothing here decodes or
           # re-encodes it — an encoding step in the middle is a second place for the two ends to
@@ -237,11 +244,12 @@ jobs:
       # every check above this line passes on a server whose admin API refuses everybody. This makes
       # one authenticated request and fails the run when it is not answered.
       #
-      # IT IS ASKED ON THE HOST. The forced command's `admin-check` reads one key from stdin, curls
-      # loopback and prints only the status code, so the credential never crosses the edge and never
-      # becomes an argument anywhere. The runner holds the list already — it is the thing being
-      # delivered — so the FIRST usable line is taken from it here, with the same rule
-      # `AdminKeys.Lines` uses: blank lines and `#` comments are notes to a person, not keys.
+      # IT IS ASKED ON THE HOST, and the WHOLE LIST is what is sent. The forced command's
+      # `admin-check` decodes it, takes the first usable key, curls loopback and prints only the
+      # status code — so the credential never crosses the edge and never becomes an argument
+      # anywhere, and there is ONE implementation of "which line is a key". A copy of that rule here
+      # would be a copy that drifts from the server's, and a check that tests a key the server does
+      # not hold reports a failure nobody can find. (Code round, gemini.)
       #
       # AND IT DOES NOT ROLL BACK, deliberately. A 401 here is a CONFIGURATION failure — the keys are
       # wrong, or were never re-encoded — and the previous release has no admin surface at all, so
@@ -254,20 +262,19 @@ jobs:
           COAI_BUGS_ADMIN_KEYS: ${{ secrets.COAI_BUGS_ADMIN_KEYS }}
         run: |
           set -euo pipefail
-          # `sed -n 1p` rather than `head -1`: head closes the pipe on the first line, and under
-          # `pipefail` the SIGPIPE that kills its producer fails the whole step.
-          key=$(printf '%s' "$COAI_BUGS_ADMIN_KEYS" \
-                | base64 -d \
-                | tr -d '\r' \
-                | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-                | grep -v '^#' \
-                | grep -v '^$' \
-                | sed -n '1p')
-          [[ -n "$key" ]] \
-            || { echo "::error::COAI_BUGS_ADMIN_KEYS decodes to no key at all, so this release has no administrators"; exit 1; }
-          code=$(printf '%s\n' "$key" \
+          # The ssh exit status is kept apart from the ANSWER: a refused connection and a 401 send an
+          # operator to two different places, and folding them together says only "exit 1".
+          set +e
+          code=$(printf '%s\n' "$COAI_BUGS_ADMIN_KEYS" \
                  | ssh -i ~/.ssh/id_bugs -o StrictHostKeyChecking=yes -o BatchMode=yes \
-                       "$USER_NAME@$HOST" admin-check)
+                       -o ConnectTimeout=10 "$USER_NAME@$HOST" admin-check 2>/tmp/admin-check.err)
+          transport=$?
+          set -e
+          if [[ $transport -ne 0 ]]; then
+            echo "::error::the host could not be asked whether administration works (ssh exited $transport)"
+            sed 's#/home/[^ ]*/id_bugs#<the key>#g' /tmp/admin-check.err
+            exit 1
+          fi
           # 200 is the only pass. 401 is the exact failure this story is about — the keys never
           # arrived, or arrived in a shape the server refused — and 000 is a unit that never came
           # back up, which the host's own canary should have caught first.
@@ -289,8 +296,12 @@ jobs:
       # NAMED, rather than `failure()` alone: since the administration check joined the run, a bare
       # `failure()` would retreat a perfectly good build because a KEY was wrong. The condition is
       # the edge specifically, which is the one thing a rollback actually repairs.
+      #
+      # `!= 'success'` rather than `== 'failure'`: a step CANCELLED by a job timeout has neither
+      # outcome, and an edge check that hung would otherwise leave a broken edge with no rollback.
+      # (Code round, gemini.)
       - name: Roll back, and say so
-        if: failure() && steps.deploy.outcome == 'success' && steps.edge.outcome == 'failure'
+        if: failure() && steps.deploy.outcome == 'success' && steps.edge.outcome != 'success'
         env:
           HOST: ${{ secrets.BUGS_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.BUGS_DEPLOY_USER }}
