@@ -136,31 +136,118 @@ export function projectDirsIn(
 }
 
 /**
- * The candidate folder that actually HOLDS sessions, or the preferred one when none does.
+ * The candidate folder that this project's sessions are really in.
  *
- * <p>Two spellings of one path can both exist, and the preferred name is then an empty directory
- * shadowing the transcripts — which would keep the very refusal this change is about. So the first
- * candidate with a `.jsonl` in it wins; when none has one, the preference order decides and the
- * answer is what it would have been anyway.</p>
+ * <p>Two spellings of one path can both exist — an upgrade leaves the old folder where it was and
+ * Claude Code starts writing the new one — and the preferred name is then an empty directory
+ * shadowing the transcripts.</p>
  *
- * <p>At most three listings, and only where a name matched something. The ordinary case is one
- * folder and one listing. (gemini and codex, the plan round, independently.)</p>
+ * <p><b>And a folder is not this project's because it has a transcript in it.</b> `D:\rsd\foo_bar`
+ * and `D:\rsd\foo-bar` are two checkouts with ONE folder name between them, so "the first candidate
+ * holding any `.jsonl`" hands over the other project's conversations — the silent cross-project
+ * hand-over the whole module exists to refuse. A transcript records the `cwd` it was written in, so
+ * the folder is asked rather than assumed. (codex, the code round.)</p>
+ *
+ * <p>That one check answers two more of its findings: an empty or half-written file names no `cwd`
+ * and is no longer evidence, and neither is a DIRECTORY somebody called `archive.jsonl`.</p>
+ *
+ * <p>Costed: at most three candidates, each answered by the first transcript that names a `cwd`,
+ * and only on the path where more than one spelling exists at all. The ordinary case is one folder.</p>
  */
-async function theOneWithSessions(candidates: readonly string[]): Promise<string> {
+async function theOneWithSessions(
+  candidates: readonly string[],
+  cwd: string,
+  caseBlind: boolean,
+): Promise<string> {
+  const held: string[] = [];
   for (const dir of candidates) {
-    try {
-      if ((await fs.readdir(dir)).some((name) => name.endsWith('.jsonl'))) {
-        return dir;
-      }
-    } catch {
-      // Gone or unreadable between the listing and now: the next candidate is tried, and a folder
-      // nobody can read is not one to answer with.
+    const holds = await whatIsIn(dir);
+    if (!holds.transcripts) {
       continue;
+    }
+    if (holds.cwd.length > 0 && sameCwd(holds.cwd, cwd, caseBlind)) {
+      return dir;
+    }
+    held.push(dir);
+  }
+
+  // Nothing NAMED this cwd. A folder that holds transcripts is still better than one that holds
+  // none — a build old enough to write no `cwd` row is exactly the case this fallback is for — and
+  // the preference order decides when no candidate holds anything at all.
+  return held[0] ?? candidates[0] ?? '';
+}
+
+/** Whether two working directories are the same one, by the filesystem's own rule about case. */
+function sameCwd(left: string, right: string, caseBlind: boolean): boolean {
+  return caseBlind ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/** What a candidate folder holds: whether there are transcripts at all, and which cwd they name. */
+interface FolderHolds {
+  readonly transcripts: boolean;
+  readonly cwd: string;
+}
+
+/**
+ * What a folder holds — TWO facts, because they answer different questions.
+ *
+ * <p>"There is a transcript here" is what tells an empty upgrade folder from the one with the
+ * history in it. "A transcript says it was written in this directory" is what tells THIS project's
+ * folder from another checkout that shares its spelled name. Conflating them made a session written
+ * by a build that records no `cwd` count for nothing, which is a person on an older Claude Code
+ * being sent back to where this whole change started.</p>
+ *
+ * <p>The first files that answer, and only their first rows: every row of a session carries the same
+ * `cwd`, so reading further pays for an answer already given. A file that names none — empty,
+ * half-written, or a directory wearing the extension — is not a transcript.</p>
+ */
+async function whatIsIn(dir: string): Promise<FolderHolds> {
+  let entries: string[];
+  try {
+    entries = (await fs.readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+      .map((entry) => entry.name);
+  } catch {
+    // Gone or unreadable between the listing and now: it is not the folder to answer with.
+    return { transcripts: false, cwd: '' };
+  }
+  let transcripts = false;
+  for (const name of entries.slice(0, MOST_FILES_ASKED)) {
+    let said = '';
+    const read = await eachLine(path.join(dir, name), (line) => {
+      transcripts = true;
+      if (!line.includes('"cwd"')) {
+        return true;
+      }
+      try {
+        const row = JSON.parse(line) as { cwd?: unknown };
+        said = typeof row.cwd === 'string' ? row.cwd : '';
+      } catch {
+        // A half-written line names nothing, and the next one may.
+        return true;
+      }
+
+      return said.length === 0;
+    });
+    if (said.length > 0) {
+      return { transcripts: true, cwd: said };
+    }
+    if (read === 'failed') {
+      transcripts = false;
     }
   }
 
-  return candidates[0] ?? '';
+  return { transcripts, cwd: '' };
 }
+
+/**
+ * How many files are opened before a candidate folder is taken at its word.
+ *
+ * <p>One is nearly always enough — every transcript in a folder was written in the same directory.
+ * A handful covers the folder whose newest files are empty or half-written, without turning a
+ * question about WHICH folder into a read of all of them.</p>
+ */
+const MOST_FILES_ASKED = 5;
 
 /**
  * The folders to look for a session in, given what the window has open.
@@ -711,7 +798,7 @@ async function projectDirFor(
       ? { kind: 'none', why: 'unmatched', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
       : { kind: 'none', why: 'unreadable', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
-  const dir = await theOneWithSessions(projectDirsIn(root, cwd, names, caseBlind));
+  const dir = await theOneWithSessions(projectDirsIn(root, cwd, names, caseBlind), cwd, caseBlind);
 
   return dir.length > 0 ? dir : {
     kind: 'none',
