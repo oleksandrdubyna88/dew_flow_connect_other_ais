@@ -84,7 +84,7 @@ const DEFAULT_BASELINE = path.resolve(here, '..', 'changelog-baseline.json');
  * the two can hold the same number.</p>
  */
 export function namesTheRelease(changelog, word, version) {
-  const v = version.replace(/\./g, String.raw`\.`);
+  const v = version.replaceAll('.', String.raw`\.`);
   const bareOrJoint = new RegExp(String.raw`^## (?:[^\r\n]*? · )?${word} ${v}(?=\s|$)`, 'm');
   const parenthesised = new RegExp(String.raw`^## [^\r\n]*\(${word.toLowerCase()} ${v}\)`, 'm');
 
@@ -149,10 +149,16 @@ export function verdict(tag, read) {
     && Object.values(baseline).every((versions) => Array.isArray(versions)
       && versions.every((v) => typeof v === 'string' && /^\d+(\.\d+)*$/.test(v)));
   if (!shaped) {
+    // Describe the SHAPE, never echo the content. A guard's refusal goes into a CI log that more
+    // people can read than can read the file, and "what it contained" is not what the reader needs
+    // — they need to know what it should have been. Sonar's taint analysis is right that file
+    // content reaching a log is worth a second look, even when this particular file is a committed
+    // list of version numbers.
     return {
       code: 2,
-      said: 'the baseline is not a baseline: expected an object whose every property is an array of '
-        + `version strings, got ${JSON.stringify(baseline)?.slice(0, 120) ?? 'undefined'}.`,
+      said: `the baseline at ${path.basename(DEFAULT_BASELINE)} is not a baseline: expected an `
+        + 'object whose every property is an array of version strings like "0.28.0", got '
+        + `${Array.isArray(baseline) ? 'an array' : typeof baseline}.`,
     };
   }
 
