@@ -163,7 +163,10 @@ const SECRETS: ReadonlyArray<readonly [RegExp, string]> = [
   // A URL carrying its own credentials: https://someone:password@host
   [/\b([a-z][a-z0-9+.-]{0,15}:\/\/)[^\s/@:]{1,256}:[^\s/@]{1,256}@/gi, `$1${REDACTED}@`],
   // An Authorization header, or anything that spells one out.
-  [/\b(bearer|basic|token)[ \t]+[A-Za-z0-9._~+/=-]{8,4096}/gi, `$1 ${REDACTED}`],
+  // Lower case only because the flag is `i`: spelling `A-Za-z` beside `a-z` under a
+  // case-insensitive match is a duplicated range, which is what Sonar reports and what makes a
+  // pattern harder to read than it needs to be.
+  [/\b(bearer|basic|token)[ \t]+[a-z0-9._~+/=-]{8,4096}/gi, `$1 ${REDACTED}`],
   // Vendor key shapes that are unmistakable on sight.
   [/\b(sk-|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-)[A-Za-z0-9._-]{8,512}/g, `$1${REDACTED}`],
 ];
@@ -279,7 +282,7 @@ export function notificationLine(record: NotificationRecord): string {
   // Flattened FIRST, so fields this build does not know are cleaned and redacted exactly like the
   // ones it does. A forward-compatibility bag that skipped the redactor would be a hole in a
   // security measure, dressed as tolerance.
-  const flat: Record<string, unknown> = { ...named, ...(more ?? {}) };
+  const flat: Record<string, unknown> = { ...named, ...more };
   const safe = Object.fromEntries(
     Object.entries(flat).map(([field, value]) =>
       [field, typeof value === 'string' ? safeText(value, limitFor(field)) : value]),
@@ -342,7 +345,8 @@ function optional(row: Record<string, unknown>): Partial<NotificationRecord> {
       kept[field] = value;
     }
   }
-  const unknown = strangers(row, new Set([...text, ...['class', 'source', 'code', 'utc', 'pid', 'seq', 'bound']]));
+  const known = new Set<string>([...text, 'class', 'source', 'code', 'utc', 'pid', 'seq', 'bound']);
+  const unknown = strangers(row, known);
   if (Object.keys(unknown).length > 0) {
     kept['more'] = unknown;
   }
