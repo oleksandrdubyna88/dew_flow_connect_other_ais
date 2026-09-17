@@ -271,6 +271,38 @@ export function priceOfLine(
  */
 export type PriceLookup = (modelId: string) => { inPerMillion: number; outPerMillion: number } | undefined;
 
+/**
+ * What a consultation's Cost column says: the money, a marked estimate, or a dash.
+ *
+ * <p>The reported symptom of issue #309 was 245.7k tokens beside a dash. Nothing was broken on the
+ * way there: the vendor was codex, which prints no price, and both halves behaved as designed —
+ * `UsageParser` refuses to ship a price table, and the server returns null rather than a zero that
+ * would read as "this was free". The column simply never asked the question the panel already
+ * answers for every reviewer round and every conversation in the ledger.</p>
+ *
+ * <p><b>The three states stay three.</b> Real money is never marked as an estimate; an estimate
+ * always wears its tilde; and no rate, or no tokens, is a dash rather than a zero — because a zero
+ * is a measurement and this is the absence of one.</p>
+ */
+export function consultationCost(
+  costUsd: number | null,
+  tokensIn: number,
+  tokensOut: number,
+  rate: { readonly in: number; readonly out: number } | undefined,
+): { readonly text: string; readonly estimated: boolean } {
+  if (costUsd !== null) {
+    return { text: money(costUsd), estimated: false };
+  }
+  if (rate === undefined || tokensIn + tokensOut <= 0) {
+    return { text: money(null), estimated: false };
+  }
+
+  return {
+    text: estimated(round4((tokensIn * rate.in + tokensOut * rate.out) / 1_000_000)),
+    estimated: true,
+  };
+}
+
 /** An estimate, marked as one. The tilde is the whole point: this is not what anybody billed. */
 export function estimated(usd: number): string {
   return `~${money(usd)}`;

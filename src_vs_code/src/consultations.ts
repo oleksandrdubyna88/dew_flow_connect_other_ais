@@ -28,6 +28,39 @@ export interface ConsultationTurn {
 /** The states the server writes. `closed` and `failed` are over; the other three are not. */
 export const RUNNING_STATUSES: readonly string[] = ['asking', 'open', 'interrupted'];
 
+/**
+ * How a consultation ENDED, as against why it stopped — the two questions `Reason` used to answer
+ * with one string.
+ *
+ * <p>Three of the four are somebody's verdict: a caller that verified the advice, or a person
+ * closing one by hand. The fourth is the server's own, and it is deliberately not a verdict —
+ * `lapsed` says the budget ran out or the thing sat idle, which is a fact about the clock rather
+ * than about whether the advice was any good. Flattening it into `abandoned` would put words in
+ * somebody's mouth. (issue #309, the plan round.)</p>
+ */
+export const OUTCOMES: Readonly<Record<string, string>> = {
+  solved: 'solved',
+  not_solved: 'not solved',
+  abandoned: 'abandoned',
+  lapsed: 'ran out',
+};
+
+/** What no outcome at all looks like. A dash, and never a word that could be read as a verdict. */
+export const NO_OUTCOME = '\u2014';
+
+/**
+ * What the log says about how a consultation ended.
+ *
+ * <p><b>Absent is not a verdict, and that is the whole of this function.</b> Every record written
+ * before this field existed carries nothing, and so does every one an older server still writes —
+ * and reading that as `not_solved`, or inferring `solved` from a `closed` status, would turn "the
+ * budget ran out" into "it worked". A value this build does not recognise is treated the same way:
+ * a newer server may write a fifth word, and guessing at it is the same mistake one release later.</p>
+ */
+export function outcomeSaid(outcome: string | undefined): string {
+  return OUTCOMES[outcome ?? ''] ?? NO_OUTCOME;
+}
+
 export interface Consultation {
   readonly id: string;
   readonly callerKind: string;

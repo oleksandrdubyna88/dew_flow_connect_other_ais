@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Consultation, consultationsBody, isLive, parseConsultation } from '../consultations';
+import { Consultation, consultationsBody, isLive, outcomeSaid, parseConsultation } from '../consultations';
+import { consultationCost } from '../usage';
 import { CONSULTATIONS_SHOWN, consultationsHtml } from '../roundsLog';
 import { EMPTY_LOG, parseLog } from '../roundsDb';
 
@@ -179,4 +180,57 @@ test('a server too old to have the table answers a log with no consultations, ne
 
   assert.deepEqual(log.consultations, []);
   assert.equal(log.read, true, 'an absent list is an empty one, not a failed read');
+});
+
+// ---------------------------------------------------------------------------------------------
+// How it ended, and what it cost (issue #309)
+
+test('an outcome is shown when one was recorded, and the four are the only ones', () => {
+  assert.equal(outcomeSaid('solved'), 'solved');
+  assert.equal(outcomeSaid('not_solved'), 'not solved');
+  assert.equal(outcomeSaid('abandoned'), 'abandoned');
+  assert.equal(outcomeSaid('lapsed'), 'ran out');
+});
+
+test('an ABSENT outcome is a dash, and never a verdict', () => {
+  // The rule the whole boundary table exists for. A record with no outcome is one nobody said
+  // anything about — including every record written before the field existed. Reading it as a
+  // verdict would turn a budget running out into "it worked". (codex, the plan round.)
+  assert.equal(outcomeSaid(undefined), '—');
+  assert.equal(outcomeSaid(''), '—');
+  assert.equal(outcomeSaid('something a newer server writes'), '—',
+    'a value this build does not know is not a verdict either');
+});
+
+test('the cost is the money when the vendor reported money', () => {
+  assert.deepEqual(
+    consultationCost(0.15, 40_402, 1_112, { in: 1.25, out: 10 }),
+    // Four decimals below a dollar, deliberately: `money` rounds that way so a fraction of a cent
+    // does not become '$0.00', which reads as free.
+    { text: '$0.1500', estimated: false },
+    'a real price is never marked as an estimate, even when a rate exists',
+  );
+});
+
+test('the cost is a MARKED estimate when the vendor reported none but a rate is known', () => {
+  // The reported symptom: 245.7k tokens beside a dash, because codex reports no money and the
+  // server rightly refuses to invent a price. The panel already prices the reviewers' tokens and
+  // the chat's this way; this column was the one that never asked. (issue #309.)
+  const said = consultationCost(null, 200_000, 45_700, { in: 1.25, out: 10 });
+
+  assert.equal(said.estimated, true);
+  assert.match(said.text, /^~\$/, `an estimate must wear its tilde; it said "${said.text}"`);
+});
+
+test('the cost is still a dash when nothing knows a price', () => {
+  assert.deepEqual(
+    consultationCost(null, 200_000, 45_700, undefined),
+    { text: '—', estimated: false },
+    'no reported money and no rate is not zero, and it is not free',
+  );
+  assert.deepEqual(
+    consultationCost(null, 0, 0, { in: 1.25, out: 10 }),
+    { text: '—', estimated: false },
+    'a rate over no tokens is not a price either',
+  );
 });

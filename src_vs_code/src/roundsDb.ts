@@ -124,6 +124,14 @@ export interface DbConsultation {
   readonly tokensIn: number;
   readonly tokensOut: number;
   readonly costUsd: number | null;
+  /**
+   * How it ENDED, as against why it stopped — see `outcomeSaid`.
+   *
+   * <p>Optional, and never defaulted: a record from a server that predates the field carries
+   * nothing, and nothing is not a verdict. The status beside it is the server's own and is shown as
+   * given, so an `open` consultation from an old server still reads `open`. (issue #309.)</p>
+   */
+  readonly outcome?: string | undefined;
   readonly problem: string;
   readonly advice: string;
   readonly alert: string;
