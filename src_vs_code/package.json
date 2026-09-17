@@ -158,6 +158,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.showNotifications",
+        "title": "Show notifications",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.editRoles",
         "title": "Edit review roles",
         "category": "ConnectOtherAIs"

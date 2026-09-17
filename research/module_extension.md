@@ -34,6 +34,13 @@ bounds on what one run may write. The routing of the call sites has begun and is
 | `notice.ts` | the pure half of the funnel: what a caller says, and the record it becomes |
 | `notify.ts` | the host half — the only module allowed to call `window.show*Message` |
 | `suppression.ts` | how much of one repeating fault is kept, and when the meta-alert fires. Pure |
+| `notificationsSeen.ts` | what has been READ, as byte intervals per ledger. Append-only |
+| `notificationsRead.ts` | two ledgers merged and repeats collapsed into the rows the page shows |
+| `notificationsCount.ts` | the one line the panel says, and the three states that must not collapse |
+| `notificationsGlance.ts` | the cheap look: two stats and a newline count, no record parsed |
+| `notificationsPage.ts` + `notificationsRows.ts` + `notificationsPageStyle.ts` | the page, pure |
+| `notificationsPanel.ts` | the host — a webview, a message, and the one write |
+| `pageTables.ts` | `PAGE_SIZE`, `compareRows`, `asInstant`, shared with the rounds log |
 | `credentialWords.ts` | the credential word list, extracted from `consultantWrite.ts` rather than copied |
 | `scripts/count-notifications.mjs` | the site count, DERIVED — with `notification-sites.json` checked in and a test that goes red on drift |
 
@@ -143,6 +150,36 @@ watching the test fail. A code that the redactor would touch now fails on the da
 notice left the ledger holding an answer with no record of what it was an answer to. The `.wslconfig`
 modal offers *Copy `wsl --shutdown`* and *Put it back to nat*, and the second changes a machine's
 networking.
+
+## Reading it back (S5)
+
+**A row is a GROUP**, keyed `(class, code, subject)` — one row per fault, carrying how often and how
+fast. The class is IN the key because tabs are per class and `code` alone does not guarantee a row
+belongs to exactly one: nothing stops one code being a `refusal` at one call site and a `failure` at
+another, and the row would then sit under whichever tab the newest record fell into, and move.
+`When` is the LATEST occurrence; the row carries its first, which the rate needs.
+
+**The watermark is a union of INTERVALS, per ledger, in bytes.** `notifications-seen.jsonl`, one
+line per "this window read [from, to) of ledger Y", append-only. Not a maximum — the page shows the
+newest 3000, so `max(to)` would mark everything below it read including what was never rendered.
+Not a rewritten file either: temp+rename is atomic but it is not mutual exclusion, and two windows
+each computing their own maximum can rename in reverse order, moving the watermark BACKWARDS.
+Offsets rather than timestamps, because `utc` comes from each writer's own clock and a resumed WSL
+distro writes a record stamped earlier than a watermark already set.
+
+**The panel's count parses nothing.** It counts newline bytes between the watermark and the end of
+the file, walking backwards and stopping at a cap. The watcher re-renders every window every five
+seconds, so a count meaning "parse the newest 3000" would be ~1.2 MB per window per tick from a
+directory that may be a NAS. Records below an acknowledged interval are reported as "+ older"
+without a number, which is what keeps the walk bounded by the tail in every case.
+
+**The refresh is single-flight with a GENERATION.** A NAS read can outlive the 5000 ms tick, so
+reads overlap; a completion whose generation is stale is discarded rather than rendered, or an older
+answer would overwrite a newer count silently.
+
+**A filtered page acknowledges nothing**, and says which of the two is happening. Three rows on
+screen must not claim three thousand were read. *Mark everything read* is the one thing that covers
+what was never rendered, and it is a person's explicit act — the page may only claim what it showed.
 
 **Counting is counting ROWS, at read time.** Never `seq`, never the in-memory map. A map can be
 evicted and a process can die, and a number on screen a reader cannot re-derive from the file is a

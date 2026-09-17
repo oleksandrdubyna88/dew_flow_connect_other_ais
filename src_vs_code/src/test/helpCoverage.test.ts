@@ -100,6 +100,10 @@ const ALIAS: Record<string, string> = {
   'coai.answerQuestion': 'answer it in the panel',
   'coai.answerQuestionWaiting': 'the title-bar icon turns green',
   'coai.showRounds': 'show review rounds',
+  // The panel section and the page are both called *Notifications*; nothing in the product says
+  // "show notifications" to a person, and an article written to satisfy this test rather than to
+  // be read is the thing an alias exists to avoid.
+  'coai.showNotifications': 'every message this extension has shown you',
   // It is hidden from the palette (`when: false`), because from there it would act on a list that is
   // not open. The help therefore describes what the KEYBINDING does rather than naming a command a
   // reader can never type — which is exactly what an alias is for.

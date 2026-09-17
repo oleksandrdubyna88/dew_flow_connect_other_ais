@@ -728,6 +728,21 @@ is likewise a request to systemd, read back with `stat` on the host rather than 
 | `symlinkEscape.test.ts` | a real workspace on disk, with real links | a link inside the workspace leading out of it and opening the file outside; a containment check that refuses EVERYTHING and passes the escape case by breaking the feature; a sibling directory (`ws-secret` beside `ws`) read as inside; a path that resolves nowhere accepted rather than refused; and the CANONICAL path being silently replaced by the path as written, which is how the refactor that introduced `insideReally` nearly changed an older caller's answer. Proved by removing ONLY the canonical comparison: exactly one case goes red, naming the escape, and the other four stay green — so they are not all riding on one condition. **Not covered**: that `openWorkspaceFile` actually calls it, which needs an extension host |
 | `credentialWords.test.ts` | the one shared word list | `?author=octocat` refused as a credential; `client_secret` written to a file |
 | `notificationSites.test.mjs` | the site counter, against the real tree and against fixtures | a call site added outside the funnel; a `.tsx` file the scan cannot see; a number in a comment counted as a call |
+| `notificationsSeen.test.ts` | the watermark, and two windows acknowledging at once | a watermark that moves backwards; one ledger's offsets applied to the other; a count that parses records |
+| `notificationsRead.test.ts` | the grouping | one code under two classes becoming one row that moves between tabs; a rate measured over 40 ms; a row marked read because its OLDER occurrences were |
+| `notificationsPage.test.ts` | the page RUN against a shim built from its own markup | a table that renders and does not filter; a search that cannot find the sentence on screen; a filtered view acknowledging three thousand records |
+| `pageTables.test.ts` | the comparator and the wall-clock bound, characterised | a genericisation that sorts almost the same |
+
+**The page test builds its shim FROM the rendered markup and throws on a selector it does not
+understand.** Both halves of that are earned: a hand-written fixture handed to a shim passes with no
+control on the page at all, and a shim that answers "the first element" to an unsupported selector
+has tests binding to the wrong node and passing — which is worse than no test, because it reads like
+one.
+
+**What `pageTables.test.ts` is for, precisely.** Breaking the comparator the way an optimiser would —
+`return x < y ? -1 : 1`, which throws away 0-for-equal — turns two of its tests red and leaves all 41
+of `roundsLog.test.ts` GREEN. The rounds log never asserted stability, so its own suite would have
+shipped the regression the extraction could have caused.
 
 The inventory that counter writes is read by a test in the other suite: every `code` literal the
 product can emit is in it, and `notifications.test.ts` asserts that redaction rewrites none of them.
