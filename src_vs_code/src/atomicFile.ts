@@ -117,10 +117,16 @@ async function renameWithRetry(beside: string, path: string): Promise<void> {
  * first. A `.tmp` left behind by every disk error is a directory that accumulates one per failure,
  * and a sweep that has to tell those from a write that is genuinely in flight.</p>
  */
-export async function writeFileAtomically(path: string, text: string): Promise<void> {
+export async function writeFileAtomically(path: string, text: string | Uint8Array): Promise<void> {
   const beside = besideName(path);
   await mkdir(dirname(path), { recursive: true });
   try {
+    // BYTES AS WELL AS TEXT since 2026-09-17, and the change is the TYPE alone. A pasted picture is
+    // a `Buffer` and wanted exactly this bargain — write beside the destination, rename over it —
+    // which it was not getting: it was written straight to its final name AFTER the old one had been
+    // deleted. The encoding stays unconditional because Node IGNORES it for a buffer; a first draft
+    // branched on the type to avoid a mangling that was measured not to happen, and the test written
+    // to justify that branch passed with the branch removed. The round trip is still asserted.
     await writeFile(beside, text, 'utf8');
     await renameWithRetry(beside, path);
   } catch (reason) {

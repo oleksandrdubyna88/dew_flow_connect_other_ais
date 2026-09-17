@@ -790,6 +790,20 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**Replacing an attached picture no longer destroys the one that was there.** `attachPicture` called
+`forgetPicture` FIRST — deleting the file and clearing the fields — and then wrote the replacement
+straight to its final name, so a full or unwritable disk left the conversation with no image and
+nothing to retry from: the failure destroyed the state it was meant to replace. The new picture is
+now written through `writeFileAtomically` (which learned to take bytes for this: beside the
+destination, then renamed over it), the reference moves only once it has landed, and the old file is
+removed only if it is a different one. A failed write says so AND says the existing picture is still
+attached.
+
+**And nothing has ever swept those files.** `forgetPicture` claimed they live in *“a temp directory
+the tab's own close sweeps”*. Measured 2026-09-17: `pictureDir` is `coaiDataDir()/pictures/<id>` —
+persistent data — with exactly one caller and no sweep anywhere that reaches that tree. One directory
+per conversation that ever held a picture, kept for ever. The comment is corrected; the retention is
+a policy decision of its own and is open work in the tail plan.
 **A comment promised laziness the call did not have, and that is a worse defect than a wrong type.**
 `keepOnDisk` builds `ours` as a function under a comment saying the array is built only for the one
 branch that needs it — and three lines below passed `ours()`, invoked eagerly, into a parameter typed
