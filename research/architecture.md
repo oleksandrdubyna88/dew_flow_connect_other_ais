@@ -345,6 +345,21 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### The notification ledger is the next one, and half of it is not built yet (2026-09-17)
+
+`server-notices.jsonl` has the same shape: `coai-mcp` writes it, the extension reads it, and neither
+is the other's caller. The reading half shipped with S5 — the page merges it with the extension's own
+`notifications.jsonl` and keeps a separate byte watermark for each, because an offset means nothing
+without the file it indexes. The WRITING half is S8 and does not exist yet, so today the extension
+reads a file nothing creates, which is an ordinary first run and renders as such.
+
+It is recorded here before it is finished because this section's own lesson applies to it in advance:
+a seam neither container owns is a seam neither container's tests reach. The record shape therefore
+gets shared vectors in `shared/` and a leg in `run-seam.mjs` when S8 lands — the real `coai-mcp`
+writing, the real extension parser reading back — rather than two self-consistent suites agreeing
+with themselves. Plan:
+[PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
+
 ### A field added to the round list, and what "an older half" does with it (2026-09-14)
 
 `coai-mcp --log` is the other seam between the two containers, and it gained a member:

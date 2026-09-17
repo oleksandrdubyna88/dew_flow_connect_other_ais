@@ -1,13 +1,13 @@
 # PLAN — every message coai raises is written down, counted, and readable afterwards
 
-> Status: **S1–S4 SHIPPED 2026-09-17; S5–S8 open.** The record, the two ledgers, the funnel in
-> front of all 111 call sites and the bounds on what one run may write are built, tested and through
-> two code rounds of the gate. Nothing READS the ledger yet — that is S5, and with it the panel
-> section, the page, and making the write-gap counter durable. S6 is the rounds log, S7 the three
-> extension-side defects (which is why one direct call site remains, in `helpPanel.ts`), S8 the
-> server half. Deviations from the plan as written are recorded inline, each beside the thing it
-> changed; the largest are in *E* (the run budget is charged per CODE, not per `(code, subject)`)
-> and *S4a* (three decisions the code round changed).
+> Status: **S1–S5 SHIPPED 2026-09-17; S6–S8 open.** The record, the two ledgers, the funnel in
+> front of all 111 call sites, the bounds on what one run may write, the panel section, the page and
+> the durable write-gap record are built, tested and through four code rounds of the gate. S6 is the
+> rounds log, S7 the three extension-side defects (which is why one direct call site remains, in
+> `helpPanel.ts`), S8 the server half. Deviations from the plan as written are recorded inline, each
+> beside the thing it changed; the largest are in *E* (the run budget is charged per CODE, not per
+> `(code, subject)`), *S4a* (three decisions the code round changed) and *S5b* (what the two S5 code
+> rounds changed, including one fix that was wrong and had to be replaced).
 >
 > Originally, 2026-09-16: **plan only, nothing implemented yet.** Through **two** plan rounds of this
 > repository's own gate (16 then 21 gating findings against a threshold of 6; 40 of 45 accepted),
@@ -919,6 +919,50 @@ across windows; a rate needs a span of at least a second; empty filters and inva
 so. **Two findings were refused**: one described the temp+rename design this plan discards two
 paragraphs above the sentence it quoted, and one had the read/unread direction inverted.
 
+**S5b — what the two code rounds changed (2026-09-17).** Round one returned 38 findings, 31 gating;
+28 accepted, all built. Round two returned 8, five gating, and passed at the threshold; four
+accepted. The shape change that carries most of round one is that **acknowledging is no longer
+something the host does after it sent markup** — the page posts `shown` with the generation it was
+drawn for and whether a filter narrows it, and nothing is written until it does. That one message
+answered four separate findings: a snapshot read but never rendered marked three thousand records
+read; a filtered view could claim a window it was not showing, contradicting the sentence the page
+itself was rendering; a stale page could acknowledge the snapshot that replaced it; and a failure
+notice posted to a webview that had not finished loading could be dropped.
+
+The BLOCKING one of round one was a real defect and not a design argument: `draw` flattened both
+ledgers' byte spans into one list, so a 10 KB range acknowledged in `notifications.jsonl` marked
+every `server-notices.jsonl` record below 10 KB read — and the server's file is the small one, so in
+practice it marked nearly all of them. `notificationsSeen.ts` keys its ranges by ledger for exactly
+this reason and the caller threw that away. It is fixed with a TYPE (`ReadPerLedger`, one field per
+ledger) rather than a rule, so flattening them is no longer a mistake that can be made.
+
+The rest, each beside the thing it changed: a 20-second ceiling on every read and a waiting page
+while the disk answers; draws single-flight and writes on their own chain; a refused
+acknowledgement said on the page with the range left unread; the failure page rendering no script at
+all; safe integers rather than merely finite ones; one count budget shared across both ledgers; the
+acknowledgement file read once and then only where it grew; and the live-region handlers re-bound
+only inside the branch that replaced them — `addEventListener` adds rather than replaces, so binding
+on every tick meant one click posted a dozen messages. The questions region three lines away had the
+identical defect and was fixed with it.
+
+**One accepted fix was WRONG and was replaced.** Round two found that the cheap count did not clamp
+stale watermark ranges to the file on disk, so after a rotation it walked past the end of the
+replacement, found nothing and rendered as "Nothing new". The first fix cut the range down to the
+new file's size — and that is the same bug wearing a hat: `[0, 400000)` cut to `[0, 45)` claims every
+record in the replacement has been read. It was caught by the rotation test passing for the wrong
+reason. A range that does not fit is now DROPPED, on both paths, because after a rotation there is no
+correspondence between the old offsets and the new bytes.
+
+**Two findings of round two were refused and one was answered differently.** One described a
+generation race whose behaviour is the intended one, and its own text conceded the half that
+mattered; one claimed the seen-ledger cache is keyed by file name when it is keyed by the full path.
+The third — that `shown` acknowledges the loaded window rather than only the visible page — is
+correct as a description and deliberate as a contract: acknowledging only the visible page would make
+the count unclearable, because reaching the rest is fifteen page-turns in each of seven tabs, which
+is the question the operator already settled when *Mark everything read* was added. What it was owed
+was legibility, so the sentence now says what LOADED covers, in one constant the markup and the page
+script both read.
+
 **And one test the plan did not have.** Every test listed for S5 can pass while the command is
 unregistered, the host opens the wrong page, or the wrong data directory is resolved — a person
 clicking *Show notifications* would then get nothing, and nothing would be red. S5 adds a flow that
@@ -1084,18 +1128,18 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 - [ ] The published site count comes from a **checked-in inventory** the script regenerates, and a
       test fails when the two differ — not a number retyped into three documents.
 - [ ] `npm test`, `npm run test:seam` and `CoaiMcp.Tests.exe` green.
-- [ ] `research/module_extension.md`, `research/module_server.md` and **`research/module_tests.md`**
+- [x] `research/module_extension.md`, `research/module_server.md` and **`research/module_tests.md`**
       updated — the last gains the notifications page row and says what it does not prove — and
       `research/architecture.md` gains the ledger under *The one interface neither container owns*.
-- [ ] A row is a group keyed `(class, code, subject)`; `When` is the latest occurrence; the order
+- [x] A row is a group keyed `(class, code, subject)`; `When` is the latest occurrence; the order
       is filter → group → sort → slice, and `Repeats` counts within the filter.
-- [ ] A filtered view acknowledges nothing and says so; *Mark all as read* is the only thing that
+- [x] A filtered view acknowledges nothing and says so; *Mark all as read* is the only thing that
       acknowledges what was never rendered, and it is a person's act.
-- [ ] The panel's count reads only the unacknowledged TAIL; older unacknowledged records are
+- [x] The panel's count reads only the unacknowledged TAIL; older unacknowledged records are
       reported as "+ older" rather than counted.
-- [ ] A write gap is flushed into the ledger by the next append that lands, not into a second
+- [x] A write gap is flushed into the ledger by the next append that lands, not into a second
       file in the directory that failed.
-- [ ] No module added by S5 exceeds 400 lines.
+- [x] No module added by S5 exceeds 400 lines. *(Largest is `notificationsPage.ts` at 389, then `notificationsPanel.ts` at 374. `notifications.ts` is 429 and is an S1 module, not one this step added.)*
 - [x] The reciprocal boundary line is in all six sibling plans, not only in this one. *(Done
       2026-09-17, one section per plan above its Definition of Done. The reconciliation the
       `rowMatches` row asked for was done at the same time: this plan said `roundsLog.ts:820`,

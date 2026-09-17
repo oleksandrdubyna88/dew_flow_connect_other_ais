@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises';
-import { COUNT_CAP, LedgerGlance } from './notificationsCount';
+import { COUNT_CAP, LedgerGlance, UNREADABLE_GLANCE } from './notificationsCount';
 import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
@@ -8,7 +8,7 @@ import {
   notificationsPath,
   serverNoticesPath,
 } from './notificationsFile';
-import { olderRemain, tailBegins } from './notificationsSeen';
+import { olderRemain, onlyWithin, tailBegins } from './notificationsSeen';
 import { readSoFarCheaply } from './notificationsSeenCache';
 
 /**
@@ -37,11 +37,6 @@ async function sizeOf(path: string): Promise<number | undefined> {
   }
 }
 
-/** Nothing could be looked at. Never "0 new" — the one sentence this feature exists to prevent. */
-const UNREADABLE: LedgerGlance = {
-  readable: false, anyRecords: false, unread: 0, more: false, older: false,
-};
-
 /** What the panel says, gathered without reading a record. */
 export async function glanceAtLedgers(dataDir: string): Promise<LedgerGlance> {
   const [mine, theirs, soFar] = await Promise.all([
@@ -54,12 +49,18 @@ export async function glanceAtLedgers(dataDir: string): Promise<LedgerGlance> {
   ]);
 
   if (mine === undefined || theirs === undefined || soFar === undefined) {
-    return UNREADABLE;
+    return UNREADABLE_GLANCE;
   }
 
+  // Only the ranges that are about the files on disk NOW, exactly as the page path does it. A
+  // rotated ledger leaves ranges reaching past the end of its replacement; passing one of those to
+  // `countSince` starts the walk beyond the file, finds nothing, and renders as "Nothing new" while
+  // the new ledger is full of records nobody has seen. The page had this and the cheap path did
+  // not, which is the worse half: this is the one that runs every five seconds.
+  // (codex, the second S5 code round.)
   const each = [
-    { path: notificationsPath(dataDir), spans: soFar.get(NOTIFICATIONS_FILE) ?? [] },
-    { path: serverNoticesPath(dataDir), spans: soFar.get(SERVER_NOTICES_FILE) ?? [] },
+    { path: notificationsPath(dataDir), spans: onlyWithin(soFar.get(NOTIFICATIONS_FILE) ?? [], mine) },
+    { path: serverNoticesPath(dataDir), spans: onlyWithin(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs) },
   ];
 
   let unread = 0;
@@ -77,7 +78,7 @@ export async function glanceAtLedgers(dataDir: string): Promise<LedgerGlance> {
     if (!counted.readable) {
       // `stat` succeeding says nothing about a read: on a share the failure arrives at the first
       // window, and a count that swallowed it would render as "Nothing new".
-      return UNREADABLE;
+      return UNREADABLE_GLANCE;
     }
     unread += counted.count;
     more = more || counted.more;

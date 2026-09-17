@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
-import { Notice, answered, buttonsOf, gapSentence, noticeRecord } from './notice';
+import { Notice, answered, buttonsOf, gapRecord, gapSentence, noticeRecord } from './notice';
+import { Gap, NO_GAP, settled, widened } from './writeGap';
 import { NotificationRecord } from './notifications';
 import { recordNotification } from './notificationsFile';
 import { Suppressor, suppressor } from './suppression';
@@ -55,26 +56,61 @@ const RUN = randomBytes(6).toString('hex');
  */
 const BOUNDS: Suppressor = suppressor(RUN, process.pid);
 
-/** How many records this run could not write, and when that started. Never a notification. */
-let lost = 0;
-let lostSinceIso = '';
+/** What this run could not write, and over what window. Never a notification. */
+let gap: Gap = NO_GAP;
+
+/** One gap record in flight at a time, so two writes landing together cannot write the hole twice. */
+let flushing = false;
 
 /** What the panel section and the page say about the ledger's own gap. Empty when there is none. */
 export function theGap(): string {
-  return gapSentence(lost, lostSinceIso === '' ? '' : new Date(lostSinceIso).toLocaleTimeString());
+  return gapSentence(gap.lost, gap.since === '' ? '' : new Date(gap.since).toLocaleTimeString());
 }
 
 /** For a test, and for the panel after a data directory move. */
 export function forgetTheGap(): void {
-  lost = 0;
-  lostSinceIso = '';
+  gap = NO_GAP;
 }
 
 function noteLoss(at: Date): void {
-  if (lost === 0) {
-    lostSinceIso = at.toISOString();
+  gap = widened(gap, at.toISOString());
+}
+
+/**
+ * The hole, written into the ledger by the first append that gets through.
+ *
+ * <p>Not through `write` below, and that is the whole care in it: `write` counts a failure as a lost
+ * NOTICE, so a gap record the disk also refused would inflate the number it was trying to report,
+ * and would try again with a bigger one. This one leaves the counter exactly as it found it when it
+ * fails, so the hole stays described by the instants it really covers and the next successful append
+ * carries it instead.</p>
+ *
+ * <p>The counter is cleared only on `landed`. Anything else is a hole nobody would ever read
+ * about.</p>
+ */
+async function flushTheGap(at: Date): Promise<void> {
+  if (gap.lost === 0 || flushing) {
+    return;
   }
-  lost += 1;
+  flushing = true;
+  try {
+    const held = gap;
+    let landed = true;
+    await recordNotification(
+      coaiDataDir(),
+      gapRecord(held.lost, held.since, held.until, RUN, process.pid, at),
+      () => {
+        landed = false;
+      },
+    );
+    if (landed) {
+      // Only what this record described. A notice lost WHILE it was being written is still lost,
+      // and `settled` subtracts rather than zeroing for exactly that reason.
+      gap = settled(gap, held);
+    }
+  } finally {
+    flushing = false;
+  }
 }
 
 /**
@@ -88,11 +124,18 @@ function noteLoss(at: Date): void {
  * code round.)</p>
  */
 async function write(record: NotificationRecord): Promise<boolean> {
+  const at = new Date();
   let landed = true;
   await recordNotification(coaiDataDir(), record, () => {
     landed = false;
-    noteLoss(new Date());
+    noteLoss(at);
   });
+  if (landed) {
+    // The disk is answering again, so the hole that opened while it was not gets written down now,
+    // after the record that proved the disk is back — which puts it in the ledger in the order it
+    // happened, between the records that surround it.
+    await flushTheGap(at);
+  }
 
   return landed;
 }

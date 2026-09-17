@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { finishedInTime } from './withinTheClock';
 
 /**
  * Appending to a JSONL ledger, and reading one back — the half that needs a disk.
@@ -143,7 +144,7 @@ export async function flushLedgers(withinMs: number = FLUSH_CEILING_MS): Promise
   const deadline = Date.now() + withinMs;
   for (;;) {
     const before = CHAINS.map((chain) => queues[chain]);
-    if (!await withinTheClock(Promise.all(before), deadline - Date.now())) {
+    if (!await finishedInTime(Promise.all(before), deadline - Date.now())) {
       return false;
     }
     const joined = CHAINS.some((chain, i) => queues[chain] !== before[i]);
@@ -156,34 +157,6 @@ export async function flushLedgers(withinMs: number = FLUSH_CEILING_MS): Promise
   }
 }
 
-/**
- * Whether `work` finished inside the time left.
- *
- * <p>The timer is `unref`'d, because a pending timer is itself a reason a Node process will not
- * exit, and a helper for shutting down cleanly that holds the process open would be a joke at its
- * own expense. It is cleared on the winning path too: a two-second timer left armed after a fast
- * drain keeps a handle alive for no reason.</p>
- *
- * <p>The losing path does NOT cancel the write — nothing can — it stops WAITING for it. If the
- * directory comes back before the host dies, the append still lands.</p>
- */
-async function withinTheClock(work: Promise<unknown>, msLeft: number): Promise<boolean> {
-  if (msLeft <= 0) {
-    return false;
-  }
-  let timer: NodeJS.Timeout | undefined;
-  const clock = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), msLeft);
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([work.then(() => true), clock]);
-  } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
-  }
-}
 
 /**
  * Every record in one ledger, or nothing at all.

@@ -167,3 +167,48 @@ export function gapSentence(lost: number, sinceLocal: string): string {
 
   return `${records} could not be written since ${sinceLocal}`;
 }
+
+/** The code a gap is written under. One literal, so every reader of the ledger agrees on it. */
+export const WRITE_GAP = 'notifications-write-gap';
+
+/**
+ * The same gap, as a RECORD — what makes it survive the window that noticed it.
+ *
+ * <p>The sentence above is a state, and a state dies with its host: a reloaded window reports no gap
+ * while the records it lost are still missing, which is this plan's own thesis turned on the plan.
+ * So the gap is written down too, and the only place it can be written is the LEDGER. A second file
+ * beside it is unreachable in exactly the circumstance it exists to record — the directory is what
+ * failed, so the write documenting the failed write fails as well, and the reasoning is circular.
+ * The ledger has none of that: it is durable because the ledger is, it needs no second parser and no
+ * second budget, it cannot fail while the disk is down because it simply waits for the disk, and it
+ * lands where somebody asking "what happened at 09:20" is already looking — in time order, beside
+ * the records that surround the hole. (Operator, 2026-09-17, reversing a plan-round finding that was
+ * accepted and should not have been.)</p>
+ *
+ * <p>It is carried by the next append that LANDS, never by a write of its own: a write of its own
+ * would be the regress again, one disk error lower down.</p>
+ */
+export function gapRecord(
+  lost: number,
+  sinceIso: string,
+  untilIso: string,
+  run: string,
+  pid: number,
+  at: Date,
+): NotificationRecord {
+  const many = lost === 1 ? '1 notification' : `${lost} notifications`;
+
+  return {
+    utc: at.toISOString(),
+    class: 'failure',
+    source: 'notify',
+    code: WRITE_GAP,
+    title: `${many} could not be written down`,
+    detail: `Between ${sinceIso} and ${untilIso}. What they said is lost; this is the hole they left.`,
+    cure: 'The data directory refused a write — a share that went away, a disk that is full, a '
+      + 'permission that changed. The records on either side of this one are intact; the ones '
+      + 'between those two instants are not, and cannot be recovered.',
+    run,
+    pid,
+  };
+}

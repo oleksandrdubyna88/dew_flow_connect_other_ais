@@ -10,7 +10,9 @@ import {
   Span,
   acknowledge,
   alreadyRead,
+  covers,
   merge,
+  onlyWithin,
   olderRemain,
   parseSeen,
   parseSeenLine,
@@ -199,6 +201,34 @@ test('a ledger that is not there counts zero rather than throwing', async () => 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a range already acknowledged is recognised, so it is not written down twice', () => {
+  // *Mark everything read* writes [0, end) and then redraws; the redrawn page offers the window it
+  // was given, and every reopen of an unchanged page did the same. The union would be identical
+  // either way — this is about not growing the one file the five-second path has to read.
+  const held = [span(0, 1000)];
+
+  assert.equal(covers(held, span(200, 900)), true, 'inside');
+  assert.equal(covers(held, span(0, 1000)), true, 'exactly it');
+  assert.equal(covers(held, span(0, 1001)), false, 'one byte past it is something new');
+  assert.equal(covers(held, span(1000, 1200)), false, 'the range that begins where it ends');
+  assert.equal(covers([], span(0, 10)), false);
+  // Two ranges that TOUCH cover the whole of what they span, which is why the check merges first:
+  // without it, a window covered by two acknowledgements would be written down a third time.
+  assert.equal(covers([span(0, 500), span(500, 1000)], span(100, 900)), true);
+  assert.equal(covers([span(0, 400), span(500, 1000)], span(100, 900)), false, 'and a real gap is a gap');
+});
+
+test('a range about a ledger that is no longer there is DROPPED, never cut down to fit', () => {
+  // The subtle half of the rotation rule, and the first fix got it wrong. Cutting [0, 400000) down
+  // to [0, 45) against a 45-byte replacement claims every record in the new file has been read —
+  // the exact claim the watermark exists to prevent, made quietly. After a rotation there is no
+  // correspondence between the old offsets and the new bytes, so nothing is known to have been read.
+  assert.deepEqual(onlyWithin([span(0, 400_000)], 45), [], 'nothing survives, rather than a false claim');
+  assert.deepEqual(onlyWithin([span(0, 45)], 45), [span(0, 45)], 'a range that ends exactly at the end fits');
+  assert.deepEqual(onlyWithin([span(0, 100), span(100, 9000)], 100), [span(0, 100)], 'one fits, one does not');
+  assert.deepEqual(onlyWithin([span(0, 100)], 0), [], 'and an empty file has had nothing read');
 });
 
 test('the acknowledgement file is named where the data-directory move can find it', () => {

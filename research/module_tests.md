@@ -710,6 +710,18 @@ is likewise a request to systemd, read back with `stat` on the host rather than 
 | `notificationsRead.test.ts` | the grouping | one code under two classes becoming one row that moves between tabs; a rate measured over 40 ms; a row marked read because its OLDER occurrences were |
 | `notificationsPage.test.ts` | the page RUN against a shim built from its own markup | a table that renders and does not filter; a search that cannot find the sentence on screen; a filtered view acknowledging three thousand records |
 | `pageTables.test.ts` | the comparator and the wall-clock bound, characterised | a genericisation that sorts almost the same |
+| `notificationsGlance.test.ts` | the cheap look over real files, and the seen-ledger cache | two caps of 3000 reporting 6000 new; a rotated ledger counted as "Nothing new"; a restored acknowledgement file read from a stale offset; a cache that re-reads everything while claiming not to |
+| `writeGap.test.ts` | the arithmetic of the ledger's own hole | a flush that ZEROES the counter and swallows the notices lost while it was reporting the earlier ones |
+| `theGapReachesTheLedger.test.ts` | the two wiring rules, against the source | a gap record written after a FAILED append, which counts its own failure and grows the number it reports; a gap sent through the funnel write, which recurses |
+| `liveRegionsRebind.test.ts` | the panel's live-region binding, against the source | a handler re-bound on every five-second tick, so one click posts a dozen messages and opens a dozen windows |
+
+**Three of those read SOURCE rather than running anything, and say so in their own headers.**
+`panelView.ts` renders its script as text inside 2795 lines and `notify.ts` imports `vscode`, so
+neither can be imported by a test here. What they pin is a specific pairing — this call inside that
+branch — never the presence of a word, because a structural assertion matching a fragment survives
+its own break. What they do not prove is that anything happens; `notificationsPage.test.ts` RUNS its
+page for exactly that reason, and `writeGap.test.ts` exists so the one piece of `notify.ts` worth
+asserting could be moved somewhere a test can reach it.
 
 **The page test builds its shim FROM the rendered markup and throws on a selector it does not
 understand.** Both halves of that are earned: a hand-written fixture handed to a shim passes with no

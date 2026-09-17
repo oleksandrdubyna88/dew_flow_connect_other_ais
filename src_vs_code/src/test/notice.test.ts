@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Notice, answered, gapSentence, noticeRecord } from '../notice';
+import { Notice, answered, gapRecord, gapSentence, noticeRecord } from '../notice';
 
 /**
  * What a notice MEANS, decided without a disk and without `vscode`.
@@ -70,6 +70,31 @@ test('the gap is a state and says nothing when there is no gap', () => {
   assert.equal(gapSentence(0, '12:00:00'), '');
   assert.equal(gapSentence(1, '12:00:00'), '1 record could not be written since 12:00:00');
   assert.equal(gapSentence(7, '12:00:00'), '7 records could not be written since 12:00:00');
+});
+
+test('a gap becomes a RECORD, so it survives the window that noticed it', () => {
+  // The counter above lives in memory, so a reloaded host reports no gap while the records it lost
+  // are still missing — this plan's own thesis, turned on the plan. It cannot be written to a second
+  // file in the data directory, because the directory is what failed; it goes into the LEDGER,
+  // carried by the next append that lands, where a reader asking "what happened at 09:20" is already
+  // looking. (Operator, 2026-09-17, reversing an accepted plan-round finding.)
+  const from = new Date(Date.UTC(2026, 8, 17, 9, 12, 44)).toISOString();
+  const to = new Date(Date.UTC(2026, 8, 17, 9, 30, 58)).toISOString();
+  const gap = gapRecord(14, from, to, 'run-a', 4242, NOON);
+
+  assert.equal(gap.class, 'failure', 'it belongs where a person looks for what went wrong');
+  assert.equal(gap.code, 'notifications-write-gap');
+  assert.equal(gap.run, 'run-a');
+  assert.equal(gap.pid, 4242);
+  assert.match(gap.title ?? '', /14 notifications could not be written/u);
+  // The WINDOW, in the record. "14 were lost" without saying when is a fact nobody can act on.
+  assert.match(gap.detail ?? '', /2026-09-17T09:12:44/u);
+  assert.match(gap.detail ?? '', /2026-09-17T09:30:58/u);
+  assert.match(gap.cure ?? '', /\S/u, 'and it says what to do, like every other record');
+  assert.equal(
+    gapRecord(1, from, from, 'r', 1, NOON).title,
+    '1 notification could not be written down',
+  );
 });
 
 test('a context field added to a notice reaches the record without a list being updated', () => {

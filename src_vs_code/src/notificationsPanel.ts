@@ -11,7 +11,16 @@ import {
   serverNoticesPath,
 } from './notificationsFile';
 import { PageState, notificationsPageHtml, waitingPageHtml } from './notificationsPage';
-import { Span, acknowledge, clampTo, olderRemain, readSeen, readSoFar } from './notificationsSeen';
+import {
+  Span,
+  acknowledge,
+  covers,
+  olderRemain,
+  onlyWithin,
+  readSeen,
+  readSoFar,
+} from './notificationsSeen';
+import { withinTheClock } from './withinTheClock';
 
 /**
  * The window the notifications page lives in.
@@ -68,20 +77,10 @@ interface LedgerRead {
 }
 
 /** Whatever `work` answers, or nothing when the clock runs out first. */
-export async function withinTheClock<T>(work: Promise<T>, msLeft: number): Promise<T | undefined> {
-  let timer: NodeJS.Timeout | undefined;
-  const clock = new Promise<undefined>((resolve) => {
-    timer = setTimeout(() => resolve(undefined), Math.max(0, msLeft));
-    // A pending timer is itself a reason a host will not exit, and this one can outlive the read.
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([work, clock]);
-  } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
-  }
+async function orNothing<T>(work: Promise<T>, msLeft: number): Promise<T | undefined> {
+  const raced = await withinTheClock(work, msLeft);
+
+  return raced.inTime ? raced.value : undefined;
 }
 
 export class NotificationsPanel {
@@ -89,6 +88,16 @@ export class NotificationsPanel {
 
   /** What the last draw loaded, so an acknowledgement covers that and nothing else. */
   private loaded: ReadonlyMap<string, Span> = new Map();
+
+  /**
+   * What the disk already says is read, as the last draw found it.
+   *
+   * <p>So that an acknowledgement adding nothing is not written. *Mark everything read* writes
+   * `[0, end)` and then redraws, and the redrawn page dutifully offers the window it was given;
+   * reopening an unchanged page did the same. Neither is WRONG — the union is the same union — but
+   * each is a line on the one file the five-second path has to read. (codex, the second S5 round.)</p>
+   */
+  private covered: ReadonlyMap<string, readonly Span[]> = new Map();
 
   /** Which draw is on screen. Only a `shown` naming this one may acknowledge `loaded`. */
   private generation = 0;
@@ -181,7 +190,7 @@ export class NotificationsPanel {
 
   /** One ledger, bounded by the clock, saying whether it could be read at all. */
   private async oneLedger(path: string, deadline: number): Promise<LedgerRead> {
-    const read = await withinTheClock(readNewestPlaced(path, PAGE_LOADS), deadline - Date.now());
+    const read = await orNothing(readNewestPlaced(path, PAGE_LOADS), deadline - Date.now());
 
     return read === undefined
       ? { records: [], start: 0, end: 0, readable: false }
@@ -199,7 +208,7 @@ export class NotificationsPanel {
     const [mine, theirs, seen] = await Promise.all([
       this.oneLedger(notificationsPath(dataDir), deadline),
       this.oneLedger(serverNoticesPath(dataDir), deadline),
-      withinTheClock(readSeen(dataDir), deadline - Date.now()),
+      orNothing(readSeen(dataDir), deadline - Date.now()),
     ]);
 
     // Re-read after the awaits. Every one of them is a place the event loop can run `onDidDispose`,
@@ -214,11 +223,11 @@ export class NotificationsPanel {
       ...mine.records.map((placed) => ({ ...placed, ledger: 'extension' as const })),
       ...theirs.records.map((placed) => ({ ...placed, ledger: 'server' as const })),
     ];
-    // Kept APART, and cut to the file each one indexes. A byte offset means nothing without its
-    // file, and one that outlives a rotated ledger marks records read that this file never held.
+    // Kept APART, and only the ranges that are about the file each one indexes. A byte offset means
+    // nothing without its file, and one that outlives a rotated ledger is about a file that is gone.
     const read: ReadPerLedger = {
-      extension: clampTo(soFar.get(NOTIFICATIONS_FILE) ?? [], mine.end),
-      server: clampTo(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs.end),
+      extension: onlyWithin(soFar.get(NOTIFICATIONS_FILE) ?? [], mine.end),
+      server: onlyWithin(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs.end),
     };
 
     const unreadable = !mine.readable || !theirs.readable || seen === undefined;
@@ -247,6 +256,10 @@ export class NotificationsPanel {
         [NOTIFICATIONS_FILE, { from: mine.start, to: mine.end }],
         [SERVER_NOTICES_FILE, { from: theirs.start, to: theirs.end }],
       ]);
+    this.covered = new Map([
+      [NOTIFICATIONS_FILE, read.extension],
+      [SERVER_NOTICES_FILE, read.server],
+    ]);
     this.notice = '';
     alive.webview.html = notificationsPageHtml(state, randomBytes(16).toString('base64'));
   }
@@ -270,7 +283,7 @@ export class NotificationsPanel {
     const utc = new Date().toISOString();
     const refused: string[] = [];
     for (const [ledger, span] of this.loaded) {
-      if (span.to <= span.from) {
+      if (span.to <= span.from || covers(this.covered.get(ledger) ?? [], span)) {
         continue;
       }
       await acknowledge(dataDir, { utc, ledger, from: span.from, to: span.to }, () => {
@@ -306,7 +319,7 @@ export class NotificationsPanel {
         [NOTIFICATIONS_FILE, notificationsPath(dataDir)],
         [SERVER_NOTICES_FILE, serverNoticesPath(dataDir)],
       ] as const) {
-        const whole = await withinTheClock(readNewestPlaced(path, 1), deadline - Date.now());
+        const whole = await orNothing(readNewestPlaced(path, 1), deadline - Date.now());
         if (whole === undefined) {
           landed = false;
           continue;

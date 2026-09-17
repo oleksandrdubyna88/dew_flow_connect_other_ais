@@ -92,10 +92,29 @@ function scope(state: PageState): string {
  * gemini, the S5 code round, from three roles.)</p>
  */
 function acknowledgement(): string {
-  return `<p class="ack"><span id="ack-note">Opening this page marks the loaded records read.</span>
+  return `<p class="ack"><span id="ack-note">${escapeHtml(ACKNOWLEDGING)}</span>
   <button type="button" id="mark-all">Mark everything read</button>
   <span class="quiet">— everything in both ledgers, including the older records this page does not show.</span></p>`;
 }
+
+/**
+ * The two sentences the acknowledgement line can say, in ONE place.
+ *
+ * <p>The markup renders one and the script swaps between them, so a literal in each was a literal
+ * that could drift — and the sentence is a promise about what is being written to disk.</p>
+ *
+ * <p>It says LOADED, and it says what loaded means: the page renders every row it was given and
+ * pages through them, so "the ones on later pages and in other tabs" are covered too. A reviewer
+ * read that as a defect — records marked read while only 200 of 3000 are on screen — and it is a
+ * deliberate contract rather than an oversight: acknowledging only the visible page would make the
+ * count unclearable, because reaching the rest is fifteen page-turns in each of seven tabs. The
+ * operator already ruled on the same question when *Mark everything read* was added. What a
+ * contract like that owes a person is to SAY so, in the place where it happens.
+ * (codex, the second S5 code round.)</p>
+ */
+export const ACKNOWLEDGING = 'Opening this page marks every loaded record read'
+  + ' — including the ones on later pages and in other tabs.';
+export const NOT_ACKNOWLEDGING = 'A filter is on, so nothing is being marked read.';
 
 /** A line for whatever the host needs to say after the page was drawn. Empty most of the time. */
 function noticeLine(state: PageState): string {
@@ -280,8 +299,8 @@ function pageScript(generation: number): string {
     document.getElementById('prev').disabled = page <= 1;
     document.getElementById('next').disabled = page >= pages;
     document.getElementById('ack-note').textContent = filtering()
-      ? 'A filter is on, so nothing is being marked read.'
-      : 'Opening this page marks the loaded records read.';
+      ? ${JSON.stringify(NOT_ACKNOWLEDGING)}
+      : ${JSON.stringify(ACKNOWLEDGING)};
   }
 
   // The host acknowledges nothing until this arrives. It carries the generation so a message from a
