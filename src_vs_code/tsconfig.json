@@ -10,6 +10,10 @@
     "types": ["node"],
     "rootDir": "src",
     "strict": true,
+    // `tsc` EMITS despite errors unless this is set, so a failed compile leaves a half-written
+    // `out/` that `node --test` will happily run — reporting numbers about code that did not
+    // build. This session was fooled by exactly that twice before the code round named it.
+    "noEmitOnError": true,
     "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

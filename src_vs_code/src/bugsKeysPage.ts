@@ -21,10 +21,19 @@ import { Pending } from './bugsAdminKey';
  * it is, and never as a number of pages.</p>
  */
 
-/** Which face the tab is showing. Every one of these was a finding of the plan round. */
+/**
+ * Which face the tab is showing.
+ *
+ * <p><b>Every face carries `said`</b>, and that is a code-round finding rather than symmetry for
+ * its own sake: the sentence explaining what an action came to was rendered only by the listing, so
+ * a revoke that failed and then a listing that also failed told the person nothing at all about the
+ * revoke. The most valuable sentence this tab produces — *a key MAY have been created, do not try
+ * again, look at the newest row* — is exactly the one that arrives when the server is unwell, which
+ * is precisely when the face is not the listing. (Three findings, two reviewers.)</p>
+ */
 export type View =
   /** No key has been set on this machine yet. */
-  | { readonly kind: 'no-key' }
+  | { readonly kind: 'no-key'; readonly said: string }
   /**
    * The server would not accept the key.
    *
@@ -32,11 +41,31 @@ export type View =
    * `COAI_BUGS_ADMIN_KEYS`, a wrong key and a revoked one are deliberately indistinguishable, so a
    * tab that says "your key is invalid" sends somebody to re-enter a key that was always right.</p>
    */
-  | { readonly kind: 'rejected'; readonly why: string }
+  | { readonly kind: 'rejected'; readonly why: string; readonly said: string }
   /** The server could not be reached, which is not a credential problem and must not read as one. */
-  | { readonly kind: 'unreachable'; readonly why: string }
+  | { readonly kind: 'unreachable'; readonly why: string; readonly said: string }
+  /**
+   * The server ANSWERED and refused — a 400, or a 404 for something that is not there.
+   *
+   * <p>Its own face because folding it into `unreachable` said *the server could not be reached*
+   * about a server that had just replied, and offered a Try again that would repeat the same
+   * refused request. A stale cursor is the ordinary way to arrive here, so the way out is to go
+   * back to the newest page rather than to retry. (Code round, codex.)</p>
+   */
+  | { readonly kind: 'refused'; readonly why: string; readonly said: string }
+  /**
+   * The address itself is refused, before anything was sent.
+   *
+   * <p>Not a server problem and not a key problem: the key never left this machine.</p>
+   */
+  | { readonly kind: 'unsafe'; readonly why: string; readonly said: string }
   /** Rate-limited, with what the server asked us to wait. */
-  | { readonly kind: 'limited'; readonly why: string; readonly retryAfterSeconds: number }
+  | {
+    readonly kind: 'limited';
+    readonly why: string;
+    readonly retryAfterSeconds: number;
+    readonly said: string;
+  }
   /** Keys, and whether another page may exist. */
   | {
     readonly kind: 'keys';
@@ -46,6 +75,14 @@ export type View =
     readonly hasBack: boolean;
     /** What the last action said, shown above the table. Empty when there is nothing to say. */
     readonly said: string;
+    /**
+     * Whether this page is the end of a walk rather than an empty table.
+     *
+     * <p>Following the cursor ends with one empty page, by the server's contract. Telling somebody
+     * who has just paged through fifty keys that "no keys have been issued yet" is false, and it is
+     * the sort of false that makes a person doubt the rest of the screen.</p>
+     */
+    readonly pagedPastTheEnd: boolean;
   };
 
 /** Everything the page draws. */
@@ -53,6 +90,22 @@ export interface Users {
   readonly view: View;
   /** A key the server issued that nobody has confirmed holding. Survives a closed window. */
   readonly pending?: Pending;
+  /**
+   * An issuance that was asked for and never accounted for.
+   *
+   * <p>Written before the request left, so this is what a crash between the server's commit and
+   * this machine's write leaves behind. It cannot name the key — nothing can — so it says a key may
+   * exist and points at the newest row.</p>
+   */
+  readonly orphaned?: { readonly server: string; readonly note: string };
+  /**
+   * Whether something is in flight right now.
+   *
+   * <p>A request here may take ten seconds. Without this the panel sat on stale rows with every
+   * control live, so pressing Issue twice queued two issuances — two live keys, one of them
+   * unaccounted for, from one impatient person. (Two reviewers.)</p>
+   */
+  readonly busy?: boolean;
 }
 
 /** `yyyy-MM`, or the word for a key nobody has used. */
@@ -143,8 +196,10 @@ export function usersPageHtml(users: Users, nonce: string): string {
   no key and no hash. Administrators are not listed here at all: their credentials come from the
   server's own environment, and what they upload is counted against no key.
 </p>
-${pendingBlock(users.pending)}
-${face(users.view)}
+${orphanBlock(users.orphaned)}
+${pendingBlock(users.pending, users.busy === true)}
+${saidBlock(users.view.said)}
+${face(users.view, users.busy === true)}
 <script nonce="${nonce}">
 (function () {
   var vscode = acquireVsCodeApi();
@@ -175,6 +230,7 @@ ${face(users.view)}
     if (target.id === 'back') { post('back'); return; }
     if (target.id === 'copy') { post('copy'); return; }
     if (target.id === 'discard') { post('discard'); return; }
+    if (target.id === 'dismiss') { post('dismiss'); return; }
   });
 
   post('ready');
@@ -185,7 +241,7 @@ ${face(users.view)}
 }
 
 /** The key nobody has confirmed holding, if one is waiting. */
-function pendingBlock(pending: Pending | undefined): string {
+function pendingBlock(pending: Pending | undefined, busy: boolean): string {
   if (pending === undefined) {
     return '';
   }
@@ -195,20 +251,73 @@ function pendingBlock(pending: Pending | undefined): string {
   place it still exists &mdash; it cannot be read back from the server again.</div>
   <code id="pendingkey">${safe(pending.key)}</code>
   <div class="bar">
-    <button type="button" id="copy">Copy the key</button>
-    <button type="button" class="danger" id="discard">Discard and revoke it</button>
+    <button type="button" id="copy"${off(busy)}>Copy the key</button>
+    <button type="button" class="danger" id="discard"${off(busy)}>Discard and revoke it</button>
   </div>
   <div class="state">Discarding revokes it on the server, so no key is left alive that nobody holds.</div>
 </div>`;
 }
 
+/** `disabled` while something is in flight, so a second press cannot queue a second action. */
+function off(busy: boolean): string {
+  return busy ? ' disabled' : '';
+}
+
+/** What the last action said. Rendered above EVERY face, not only the listing. */
+function saidBlock(said: string): string {
+  return said.length === 0 ? '' : `<div class="said" id="said">${safe(said)}</div>`;
+}
+
+/**
+ * An issuance that was asked for and never accounted for.
+ *
+ * <p>This is what a crash between the server's commit and this machine's write leaves behind. It
+ * cannot show the key, because the server said it once and this process never heard it — so it says
+ * what IS knowable: a key may exist, it would be the newest row, and nobody holds it.</p>
+ */
+function orphanBlock(orphaned: { server: string; note: string } | undefined): string {
+  if (orphaned === undefined) {
+    return '';
+  }
+
+  return `<div class="pending" id="orphaned">
+  <div><b>A key may have been issued and never reached this machine.</b> The request was sent to
+  ${safe(orphaned.server)}${orphaned.note.length > 0 ? ` for "${safe(orphaned.note)}"` : ''} and
+  nothing came back — the server creates the key before it answers, so it may exist.</div>
+  <div class="state">It cannot be shown: a key is returned once and this window never received it.
+  If it is there it is the NEWEST row below, and revoking it is how you make sure nobody holds a key
+  you do not.</div>
+  <div class="bar"><button type="button" class="quiet" id="dismiss">I have checked the list</button></div>
+</div>`;
+}
+
 /** Whichever face this view is. */
-function face(view: View): string {
+function face(view: View, busy: boolean): string {
   if (view.kind === 'no-key') {
     return `<div class="empty" id="nokey">
   No admin key is set on this machine. It is kept in the editor's secret storage, never in settings,
   because settings sync between machines.
-  <div class="bar"><button type="button" id="setkey">Set the bugs admin key</button></div>
+  <div class="bar"><button type="button" id="setkey"${off(busy)}>Set the bugs admin key</button></div>
+</div>`;
+  }
+
+  if (view.kind === 'unsafe') {
+    // NOT a key problem and not a server problem: nothing was sent. Saying so matters because the
+    // other two faces both invite an action that would be useless here.
+    return `<div class="empty" id="unsafe">
+  <b>The key was not sent anywhere.</b>
+  <div class="said trouble">${safe(view.why)}</div>
+  Change the ingest server in the Bugz section, then open this again.
+</div>`;
+  }
+
+  if (view.kind === 'refused') {
+    return `<div class="empty" id="refused">
+  <b>The server refused that request.</b>
+  <div class="said trouble">${safe(view.why)}</div>
+  It answered, so this is not a connection problem. If you were paging, start again from the newest
+  keys.
+  <div class="bar"><button type="button" id="refresh"${off(busy)}>Back to the newest</button></div>
 </div>`;
   }
 
@@ -223,7 +332,7 @@ function face(view: View): string {
   This server answers the same way whether the key is wrong, has been revoked, or no administrators
   are configured on it at all &mdash; so this tab cannot tell you which. Check the key held here, and
   check the server's own startup log, which is the only place the difference is visible.
-  <div class="bar"><button type="button" id="setkey">Set the bugs admin key</button></div>
+  <div class="bar"><button type="button" id="setkey"${off(busy)}>Set the bugs admin key</button></div>
 </div>`;
   }
 
@@ -231,7 +340,7 @@ function face(view: View): string {
     return `<div class="empty" id="unreachable">
   <b>The server could not be reached.</b> This is not a problem with your key.
   <div class="said trouble">${safe(view.why)}</div>
-  <div class="bar"><button type="button" id="refresh">Try again</button></div>
+  <div class="bar"><button type="button" id="refresh"${off(busy)}>Try again</button></div>
 </div>`;
   }
 
@@ -241,43 +350,51 @@ function face(view: View): string {
   <div class="said trouble">${safe(view.why)}</div>
   Try again in about ${view.retryAfterSeconds} s. Nothing is retried automatically, because a
   silent retry spends the next window as well.
-  <div class="bar"><button type="button" id="refresh">Try again</button></div>
+  <div class="bar"><button type="button" id="refresh"${off(busy)}>Try again</button></div>
 </div>`;
   }
 
-  return table(view.rows, view.total, view.hasNext, view.hasBack, view.said);
+  return table(view, busy);
 }
 
 /** The listing, with its controls. */
-function table(
-  rows: readonly KeyRow[],
-  total: number,
-  hasNext: boolean,
-  hasBack: boolean,
-  said: string,
-): string {
+function table(view: Extract<View, { kind: 'keys' }>, busy: boolean): string {
+  const { rows, total, hasNext, hasBack } = view;
   const body = rows.length === 0
-    ? '<div class="empty" id="nokeys">No keys have been issued yet.</div>'
+    ? emptyTable(view.pagedPastTheEnd)
     : `<table>
 <thead><tr><th>Note</th><th>Id</th><th>Last used</th><th>Sent</th><th>Waiting</th><th></th></tr></thead>
 <tbody>
-${rows.map(row).join('\n')}
+${rows.map((one) => row(one, busy)).join('\n')}
 </tbody>
 </table>`;
 
-  return `${said.length > 0 ? `<div class="said" id="said">${safe(said)}</div>` : ''}
-<div class="bar">
-  <button type="button" id="issue">Issue a key</button>
-  <button type="button" class="quiet" id="refresh">Refresh</button>
-  <button type="button" class="quiet" id="back"${hasBack ? '' : ' disabled'}>Back</button>
-  <button type="button" class="quiet" id="next"${hasNext ? '' : ' disabled'}>Next</button>
+  return `<div class="bar">
+  <button type="button" id="issue"${off(busy)}>Issue a key</button>
+  <button type="button" class="quiet" id="refresh"${off(busy)}>Refresh</button>
+  <button type="button" class="quiet" id="back"${hasBack && !busy ? '' : ' disabled'}>Back</button>
+  <button type="button" class="quiet" id="next"${hasNext && !busy ? '' : ' disabled'}>Next</button>
   <span class="hint" id="total">${total} ${total === 1 ? 'key' : 'keys'}</span>
+  ${busy ? '<span class="hint" id="busy">Working\u2026</span>' : ''}
 </div>
 ${body}`;
 }
 
+/**
+ * An empty table says WHICH empty it is.
+ *
+ * <p>Following the cursor ends with one empty page, by the server's own contract — so "no keys have
+ * been issued yet" is what an administrator sees after paging through fifty of them. The two are
+ * different facts and only one of them is ever true.</p>
+ */
+function emptyTable(pagedPastTheEnd: boolean): string {
+  return pagedPastTheEnd
+    ? '<div class="empty" id="pastend">That is the end of the list. Go Back for the previous page.</div>'
+    : '<div class="empty" id="nokeys">No keys have been issued yet.</div>';
+}
+
 /** One key. The revoke button carries its OWN id, so it cannot act on a neighbour. */
-function row(key: KeyRow): string {
+function row(key: KeyRow, busy = false): string {
   const ended = !live(key);
 
   return `<tr class="${ended ? 'revoked' : ''}">
@@ -287,6 +404,6 @@ function row(key: KeyRow): string {
   <td>${safe(lastSeen(key))}</td>
   <td>${key.sent}</td>
   <td>${key.waiting}</td>
-  <td>${ended ? '' : `<button type="button" class="danger" data-revoke="${safe(key.id)}">Revoke</button>`}</td>
+  <td>${ended ? '' : `<button type="button" class="danger" data-revoke="${safe(key.id)}"${off(busy)}>Revoke</button>`}</td>
 </tr>`;
 }

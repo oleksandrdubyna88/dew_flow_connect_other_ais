@@ -3,10 +3,14 @@ import { test } from 'node:test';
 
 import {
   ADMIN_KEY,
+  ISSUANCE_ATTEMPT,
   PENDING_ISSUANCE,
   Secrets,
   adminKey,
+  beginIssuance,
+  endIssuance,
   holdIssuance,
+  issuanceAttempt,
   pendingIssuance,
   releaseIssuance,
   setAdminKey,
@@ -57,6 +61,8 @@ const issued = {
   key: 'the-key-itself',
   note: 'the tuesday workshop',
   createdUtc: '2026-09-17T10:00:00.0000000Z',
+  // The server that ISSUED it. Carried so a discard can never be sent to one that did not.
+  server: 'https://bugs.example',
 };
 
 test('with nothing stored, there is no key and no pending issuance', async () => {
@@ -108,7 +114,60 @@ test('a pending issuance leaves only when it is released', async () => {
   await releaseIssuance(store);
 
   assert.equal(await pendingIssuance(store), undefined);
-  assert.deepEqual(store.writes, [`store ${PENDING_ISSUANCE}`, `delete ${PENDING_ISSUANCE}`]);
+  assert.deepEqual(
+    store.writes,
+    // Holding an issuance also clears the ATTEMPT that led to it: the attempt exists to say a key
+    // may be unaccounted for, and once the key itself is held it is accounted for.
+    [`store ${PENDING_ISSUANCE}`, `delete ${ISSUANCE_ATTEMPT}`, `delete ${PENDING_ISSUANCE}`],
+  );
+});
+
+/**
+ * The attempt is written BEFORE the request and survives everything after it.
+ *
+ * <p>This is the narrowed window: the server commits the key before this process hears anything, so
+ * a death in that instant leaves a live key with no local record. The attempt cannot name the key —
+ * nothing here can — but it is the difference between the next open saying "a key may exist, it is
+ * the newest row" and saying nothing at all.</p>
+ */
+test('an attempt is recorded before the request and survives having no answer', async () => {
+  const store = new Store();
+
+  await beginIssuance(store, { server: 'https://bugs.example', note: 'the tuesday workshop' });
+
+  assert.deepEqual(
+    await issuanceAttempt(store),
+    { server: 'https://bugs.example', note: 'the tuesday workshop' },
+  );
+  assert.equal(await pendingIssuance(store), undefined, 'an attempt is not a key');
+});
+
+test('an attempt is cleared when the key it was for is held', async () => {
+  const store = new Store();
+  await beginIssuance(store, { server: 'https://bugs.example', note: 'n' });
+
+  await holdIssuance(store, issued);
+
+  assert.equal(await issuanceAttempt(store), undefined, 'it is accounted for now');
+  assert.deepEqual(await pendingIssuance(store), issued);
+});
+
+test('an attempt is cleared when it is explicitly ended', async () => {
+  const store = new Store();
+  await beginIssuance(store, { server: 'https://bugs.example', note: 'n' });
+
+  await endIssuance(store);
+
+  assert.equal(await issuanceAttempt(store), undefined);
+});
+
+/** The issuing server travels with the key, so a discard cannot be sent to a different one. */
+test('a pending issuance remembers which server issued it', async () => {
+  const store = new Store();
+
+  await holdIssuance(store, issued);
+
+  assert.equal((await pendingIssuance(store))?.server, 'https://bugs.example');
 });
 
 /**
@@ -136,7 +195,19 @@ test('a pending issuance with no note still reads, because a note is optional', 
   const store = new Store();
   await store.store(PENDING_ISSUANCE, JSON.stringify({ id: 'aaaa1111', key: 'k' }));
 
-  assert.deepEqual(await pendingIssuance(store), { id: 'aaaa1111', key: 'k', note: '', createdUtc: '' });
+  assert.deepEqual(
+    await pendingIssuance(store),
+    // A record written by an older build has no `server`. It still reads, and the panel falls back
+    // to the current one — losing the key over a missing field would be the worse failure.
+    { id: 'aaaa1111', key: 'k', note: '', createdUtc: '', server: '' },
+  );
+});
+
+test('an attempt that is not readable is none rather than an exception', async () => {
+  const store = new Store();
+  await store.store(ISSUANCE_ATTEMPT, 'not json {');
+
+  assert.equal(await issuanceAttempt(store), undefined);
 });
 
 /** The key and the pending issuance are separate: clearing one must not clear the other. */

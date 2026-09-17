@@ -471,6 +471,12 @@ go, a pending key offers copy AND discard and says discarding revokes, the rejec
 server's words while **refusing to name a cause**, an unreachable server says it is not the key, and
 a note that is markup is escaped.
 
+`bugsAdminWire.test.ts` is the boundary: every success body read field by field, because the cast
+it replaced let a `201` without a `key` through — and that key is the one thing this product cannot
+ask for twice. It also holds `mayCarryAKey`, which decides the addresses a credential may cross:
+https anywhere, plain http only to loopback, and everything else refused BEFORE the request rather
+than after the answer.
+
 `bugsKeysFlow.test.ts` holds the decisions themselves, with no webview in sight: that Back is a
 remembered cursor rather than a computed one, that a `changed:false` revoke reports the ORIGINAL
 time, that a 404 means a stale row, and that a failed issuance says a key MAY exist and points at the

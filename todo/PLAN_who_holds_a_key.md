@@ -627,6 +627,54 @@ changed rendering; and a click must not also trigger row navigation. A list with
 is exactly where a control wired to the neighbouring row is the defect that matters, and that is the
 one a source-text assertion cannot see.
 
+#### What story 3's code round changed (round 1 of 2, verdict `revise`)
+
+All twelve reviewers answered, 41 findings: **28 accepted, 13 rejected**. Four of the rejections
+were about text that is not in the files — a backtick in a CSS comment, a `JSON.stringify`
+interpolated into the page's script, and twice that `safe()` leaks script context — and the page's
+script interpolates nothing at all, which is the shape that makes those impossible rather than
+merely absent. Three more were self-refuting, reaching the right answer mid-paragraph while the
+title kept the wrong one.
+
+The accepted ones were mostly ways to LOSE A KEY, which is the one thing this tab exists to prevent:
+
+- **Issuing twice overwrote the pending record.** One slot, so the second issuance destroyed the
+  only copy of the first — a live key nobody holds. Issuing is refused while one is pending.
+- **A discard could be sent to a server that never issued the key.** The address is a setting and
+  can change while a key is held, so B's 404 read as proof that A's key was gone. The record carries
+  its issuer and a discard goes there.
+- **The response was CAST, not read.** A `201` with no `key` passed the cast, was written to
+  `SecretStorage`, and was rejected on the way back out — the sole copy of a committed credential
+  destroyed by the code meant to preserve it. `bugsAdminWire.ts` reads every body field by field.
+- **The admin key could be sent over plain `http`.** Checked before the request now, loopback
+  excepted, because a key disclosed to a mistyped host is disclosed even when the answer is 401.
+- **The sentence explaining an action was cleared on every draw** and rendered only by the listing —
+  so *a key may exist, do not ask again* was discarded exactly when the server was unwell and a
+  different face appeared. Every face carries it, and it is cleared only once rendered.
+- **A 400 was rendered as "the server could not be reached"**, blaming the connection for a reply
+  and offering a retry of the same refused request.
+- **Nothing said an action was happening.** A ten-second request with every control live, so Issue
+  pressed twice queued two issuances.
+- **The command built a second panel**, so a key set through it left an open tab on its rejected
+  face. One shared instance.
+- **`noEmitOnError` was off**, so `tsc` emitted despite errors and `node --test out/` would run
+  stale output — which fooled this session twice before the round named it.
+
+**The residual window is narrowed and NOT closed, and that is the honest limit of this story.** The
+server commits the key before the extension hears anything, so a host death in that instant leaves a
+live key with no local record; two commits cannot be made atomic from one side. An ATTEMPT is now
+written before the request leaves — it cannot name the key, but the next open says one may exist and
+points at the newest row, which is what story 2 ordered the listing for. **Closing it needs
+`coai-bugs` to keep a server-side pending record or accept an idempotency token**, and three
+reviewers independently said the client-only version is not enough. That is a SERVER change and it
+belongs to a later story; it is written here so it is a decision rather than an oversight.
+
+**And the fix for one finding produced another**, caught by a guard rather than by a reviewer: the
+validator added for the cast findings imported its types from the client while the client imported
+the validator, and `importCycles` went red with the sentence that says why it is not a matter of
+taste — *it will bundle and fail at runtime*. The shapes now live in `bugsAdminShapes.ts`,
+underneath both.
+
 ### Story 4 — the promise, the deployment, and the scenario *(Opus)*
 
 - The promise's REMAINING wording — "four places" is no longer the count. Story 1 already rewrote it
