@@ -1,6 +1,6 @@
 import { FileHandle, open, stat } from 'node:fs/promises';
 import { NEWLINE_BYTE, missingRatherThanBroken } from './notificationsFile';
-import { Span, merge, parseSeen, readSoFar, seenPath } from './notificationsSeen';
+import { Span, merge, parseSeen, readSoFarWithin, seenPath, tailBegins } from './notificationsSeen';
 
 /**
  * The acknowledgement ledger, read ONCE and then only where it grew.
@@ -102,9 +102,28 @@ function joined(
   return all;
 }
 
+/**
+ * Whether what is held has OUTGROWN the files it describes.
+ *
+ * <p>A ledger that was replaced by a smaller one leaves the cache holding spans that reach past its
+ * end — merged, so they cannot be filtered apart any more. The only honest answer is to forget and
+ * read again, which is cheap because it happens once per rotation rather than once per tick.</p>
+ */
+function outgrown(
+  held: ReadonlyMap<string, readonly Span[]>,
+  sizes: ReadonlyMap<string, number>,
+): boolean {
+  return [...held].some(([ledger, spans]) => {
+    const size = sizes.get(ledger);
+
+    return size !== undefined && tailBegins(spans) > size;
+  });
+}
+
 /** What has been acknowledged of each ledger, or nothing at all when the file cannot be read. */
 export async function readSoFarCheaply(
   dataDir: string,
+  sizes: ReadonlyMap<string, number>,
 ): Promise<ReadonlyMap<string, readonly Span[]> | undefined> {
   const path = seenPath(dataDir);
   let size: number;
@@ -123,7 +142,10 @@ export async function readSoFarCheaply(
     return undefined;
   }
 
-  const held = remembered.get(path);
+  const outdated = remembered.get(path);
+  // Forgotten rather than filtered: what is held is already merged, so a stale range cannot be
+  // taken back out of it. This costs one full re-read per rotation and nothing at all otherwise.
+  const held = outdated !== undefined && outgrown(outdated.spans, sizes) ? undefined : outdated;
   let handle;
   try {
     handle = await open(path, 'r');
@@ -164,7 +186,7 @@ export async function readSoFarCheaply(
       return base.spans;
     }
     const complete = buffer.subarray(0, lastNewline + 1);
-    const spans = joined(base.spans, readSoFar(parseSeen(complete.toString('utf8'))));
+    const spans = joined(base.spans, readSoFarWithin(parseSeen(complete.toString('utf8')), sizes));
     const readTo = base.readTo + complete.length;
     remembered.set(path, { readTo, spans, seam: await seamAt(handle, readTo) });
 

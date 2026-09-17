@@ -42,6 +42,16 @@ function ledger(path: string, many: number): void {
   writeFileSync(path, Array.from({ length: many }, (_, n) => `record ${n}`).join(NEWLINE) + NEWLINE);
 }
 
+/**
+ * No sizes given, so nothing is dropped for being about a file that has shrunk.
+ *
+ * <p>These tests are about the CACHE — what it re-reads and what it refuses to trust — and the size
+ * filter is tested where it is decided, in `notificationsSeen.test.ts`. Handing it real sizes here
+ * would make every fixture offset have to be a real file length, which is a second thing to keep
+ * true for no gain.</p>
+ */
+const ANY_SIZE = new Map<string, number>();
+
 function acknowledged(dir: string, ledgerName: string, from: number, to: number): void {
   appendFileSync(join(dir, SEEN_FILE), seenLine({ utc: 'u', ledger: ledgerName, from, to }));
 }
@@ -164,13 +174,13 @@ test('a seen ledger REPLACED by another of the same size is not the file that wa
   try {
     const path = join(dir, SEEN_FILE);
     acknowledged(dir, NOTIFICATIONS_FILE, 100_000, 200_000);
-    const held = await readSoFarCheaply(dir);
+    const held = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(held?.get(NOTIFICATIONS_FILE) ?? []), 200_000);
 
     // The same number of digits, so the same number of bytes.
     writeFileSync(path, seenLine({ utc: 'u', ledger: NOTIFICATIONS_FILE, from: 100_001, to: 200_001 }));
-    const after = await readSoFarCheaply(dir);
+    const after = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.deepEqual(
       [...(after?.get(NOTIFICATIONS_FILE) ?? [])],
@@ -187,12 +197,12 @@ test('the acknowledgements are read once and then only where they GREW', async (
   forgetSeen();
   try {
     acknowledged(dir, NOTIFICATIONS_FILE, 0, 100);
-    const first = await readSoFarCheaply(dir);
+    const first = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(first?.get(NOTIFICATIONS_FILE) ?? []), 100);
 
     acknowledged(dir, NOTIFICATIONS_FILE, 100, 250);
-    const second = await readSoFarCheaply(dir);
+    const second = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(second?.get(NOTIFICATIONS_FILE) ?? []), 250, 'the appended line arrived');
     assert.deepEqual(
@@ -223,7 +233,7 @@ test('the bytes already consumed are never read again — observed, not assumed'
     for (const from of [0, 1000, 2000, 3000]) {
       acknowledged(dir, NOTIFICATIONS_FILE, from, from + 100);
     }
-    const held = await readSoFarCheaply(dir);
+    const held = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal((held?.get(NOTIFICATIONS_FILE) ?? []).length, 4, 'four ranges, none touching');
     const consumed = statSync(path).size;
@@ -237,7 +247,7 @@ test('the bytes already consumed are never read again — observed, not assumed'
       closeSync(fd);
     }
     acknowledged(dir, NOTIFICATIONS_FILE, 4000, 4100);
-    const after = await readSoFarCheaply(dir);
+    const after = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.deepEqual(
       [...(after?.get(NOTIFICATIONS_FILE) ?? [])].map((span) => span.from),
@@ -245,7 +255,7 @@ test('the bytes already consumed are never read again — observed, not assumed'
       'the first range survives, so its bytes were not re-read',
     );
     forgetSeen();
-    const cold = await readSoFarCheaply(dir);
+    const cold = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.deepEqual(
       [...(cold?.get(NOTIFICATIONS_FILE) ?? [])].map((span) => span.from),
@@ -265,12 +275,39 @@ test('a ledger that got SHORTER is not this ledger any more, and is read from th
   try {
     acknowledged(dir, NOTIFICATIONS_FILE, 0, 400);
     acknowledged(dir, NOTIFICATIONS_FILE, 400, 900);
-    assert.equal(tailBegins((await readSoFarCheaply(dir))?.get(NOTIFICATIONS_FILE) ?? []), 900);
+    assert.equal(tailBegins((await readSoFarCheaply(dir, ANY_SIZE))?.get(NOTIFICATIONS_FILE) ?? []), 900);
 
     writeFileSync(join(dir, SEEN_FILE), seenLine({ utc: 'u', ledger: NOTIFICATIONS_FILE, from: 0, to: 40 }));
-    const after = await readSoFarCheaply(dir);
+    const after = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.deepEqual([...(after?.get(NOTIFICATIONS_FILE) ?? [])], [{ from: 0, to: 40 }], 'only what the new file says');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a cache holding ranges the LEDGER has outgrown is forgotten, not filtered', async () => {
+  // What is held has already been merged, so a stale range cannot be taken back out of it: the only
+  // honest answer is to forget and read again. That costs one full re-read per rotation and nothing
+  // at all otherwise — and without it the cache would keep serving a span that reaches past the end
+  // of the replacement for the life of the window. (CodeRabbit, on the pull request.)
+  const dir = home();
+  forgetSeen();
+  try {
+    acknowledged(dir, NOTIFICATIONS_FILE, 0, 900);
+    const big = new Map([[NOTIFICATIONS_FILE, 900]]);
+
+    assert.equal(tailBegins((await readSoFarCheaply(dir, big))?.get(NOTIFICATIONS_FILE) ?? []), 900);
+
+    // The LEDGER was replaced; the acknowledgement file itself did not change, so nothing about it
+    // says so. The sizes are what says so.
+    const small = new Map([[NOTIFICATIONS_FILE, 45]]);
+
+    assert.deepEqual(
+      [...((await readSoFarCheaply(dir, small))?.get(NOTIFICATIONS_FILE) ?? [])],
+      [],
+      'nothing is known to be read of a file those offsets were never about',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -281,15 +318,15 @@ test('a half-written last line is left for next time rather than parsed in halve
   forgetSeen();
   try {
     acknowledged(dir, NOTIFICATIONS_FILE, 0, 100);
-    await readSoFarCheaply(dir);
+    await readSoFarCheaply(dir, ANY_SIZE);
 
     appendFileSync(join(dir, SEEN_FILE), '{"utc":"u","ledger":"notifications.jsonl","from":100,"to');
-    const torn = await readSoFarCheaply(dir);
+    const torn = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(torn?.get(NOTIFICATIONS_FILE) ?? []), 100, 'the half line is not a range');
 
     appendFileSync(join(dir, SEEN_FILE), `":900}${NEWLINE}`);
-    const whole = await readSoFarCheaply(dir);
+    const whole = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(whole?.get(NOTIFICATIONS_FILE) ?? []), 900, 'and it counts once it is complete');
   } finally {
@@ -303,7 +340,7 @@ test('the two ledgers keep their own ranges through the cache as well', async ()
   try {
     acknowledged(dir, NOTIFICATIONS_FILE, 0, 5000);
     acknowledged(dir, SERVER_NOTICES_FILE, 0, 120);
-    const spans = await readSoFarCheaply(dir);
+    const spans = await readSoFarCheaply(dir, ANY_SIZE);
 
     assert.equal(tailBegins(spans?.get(NOTIFICATIONS_FILE) ?? []), 5000);
     assert.equal(tailBegins(spans?.get(SERVER_NOTICES_FILE) ?? []), 120, 'and the small one is not swallowed');

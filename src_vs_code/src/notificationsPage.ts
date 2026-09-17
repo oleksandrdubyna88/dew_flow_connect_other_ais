@@ -296,9 +296,13 @@ function pageScript(generation: number): string {
     if (page > pages) { page = pages; }
     var from = (page - 1) * PAGE_SIZE;
     rows.forEach(function (row) { row.hidden = true; });
-    kept.slice(from, from + PAGE_SIZE).forEach(function (row, i) {
+    // MOVED, not styled. The order property is flexbox, a tbody is not a flex container, and
+    // setting it did nothing whatever: the header said the table was sorted by When while the rows
+    // sat in the order the ledger happened to hold them, from the very first paint. Appending a
+    // node that is already a child MOVES it to the end, which is how a table is reordered.
+    kept.slice(from, from + PAGE_SIZE).forEach(function (row) {
       row.hidden = false;
-      row.style.order = String(i);
+      if (row.parentNode !== null) { row.parentNode.appendChild(row); }
     });
     document.getElementById('where').textContent = kept.length === 0
       ? 'No notifications match these filters.'

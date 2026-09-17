@@ -137,6 +137,32 @@ export function merge(spans: readonly Span[]): readonly Span[] {
   return merged;
 }
 
+/**
+ * What has been acknowledged of each ledger, merged — with the ranges that are no longer about that
+ * ledger dropped FIRST.
+ *
+ * <p>The order is the whole function. Merging first and filtering after looks equivalent and is
+ * not: a stale `[0, 400000)` from a ledger that has since been replaced MERGES with the valid
+ * `[0, 45)` written against its replacement, and the merged `[0, 400000)` is then dropped whole —
+ * taking the valid one with it, on every read, for ever. The page would show everything as unread
+ * after a rotation and *Mark everything read* would never stick, because the acknowledgement it
+ * writes is swallowed by the same stale line the next time anybody looks. (CodeRabbit, on the
+ * pull request.)</p>
+ *
+ * <p>A ledger this is given no size for keeps its ranges: they are never looked up, and guessing is
+ * worse than leaving them alone.</p>
+ */
+export function readSoFarWithin(
+  ranges: readonly SeenRange[],
+  sizes: ReadonlyMap<string, number>,
+): ReadonlyMap<string, readonly Span[]> {
+  return readSoFar(ranges.filter((range) => {
+    const size = sizes.get(range.ledger);
+
+    return size === undefined || range.to <= size;
+  }));
+}
+
 /** What has been acknowledged of each ledger, merged. */
 export function readSoFar(ranges: readonly SeenRange[]): ReadonlyMap<string, readonly Span[]> {
   const byLedger = new Map<string, Span[]>();

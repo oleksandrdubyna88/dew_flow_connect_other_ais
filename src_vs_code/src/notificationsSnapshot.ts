@@ -1,7 +1,7 @@
 import { Arrival, ReadPerLedger, group } from './notificationsRead';
 import { NOTIFICATIONS_FILE, PlacedRecord, SERVER_NOTICES_FILE } from './notificationsFile';
 import { PageState } from './notificationsPage';
-import { SeenRange, Span, olderRemain, onlyWithin, readSoFar } from './notificationsSeen';
+import { SeenRange, Span, olderRemain, readSoFarWithin } from './notificationsSeen';
 
 /**
  * What one draw found, turned into what the page is handed.
@@ -62,12 +62,16 @@ export interface WhatWasRead {
 export function snapshotOf(found: WhatWasRead): Snapshot {
   const { dataDir, mine, theirs, seen } = found;
   const unreadable = !mine.readable || !theirs.readable || seen === undefined;
-  const soFar = readSoFar(seen ?? []);
-  // Kept APART, and only the ranges that are about the file each one indexes. A byte offset means
-  // nothing without its file, and one that outlives a rotated ledger is about a file that is gone.
+  // Kept APART, and each range measured against the file it is an offset INTO — before they are
+  // merged, because merging a stale range with a valid one and dropping the pair is how a rotated
+  // ledger stops accepting acknowledgements altogether.
+  const soFar = readSoFarWithin(seen ?? [], new Map([
+    [NOTIFICATIONS_FILE, mine.end],
+    [SERVER_NOTICES_FILE, theirs.end],
+  ]));
   const read: ReadPerLedger = {
-    extension: onlyWithin(soFar.get(NOTIFICATIONS_FILE) ?? [], mine.end),
-    server: onlyWithin(soFar.get(SERVER_NOTICES_FILE) ?? [], theirs.end),
+    extension: soFar.get(NOTIFICATIONS_FILE) ?? [],
+    server: soFar.get(SERVER_NOTICES_FILE) ?? [],
   };
   const arrivals: readonly Arrival[] = [
     ...mine.records.map((placed) => ({ ...placed, ledger: 'extension' as const })),
