@@ -83,13 +83,10 @@ node .agents/conventions/tools/pin-check.mjs
   `--waiting [--limit n] [--skip n]`. Without them a deployment is an empty key table and a
   quarantine nothing leaves. Configured by environment only: `COAI_BUGS_SECRET` (required; 78
   without it), `COAI_BUGS_DATA`, `COAI_BUGS_KEYWORDS`, `COAI_BUGS_RATE_PER_MINUTE` (per KEY, never
-  per address; `10` unset, `0` off, 78 past `1000`), `COAI_BUGS_ADMIN_KEYS` (**base64 of the key
-  list**, one line, no whitespace — `base64 -w0` — and the list must BEGIN with
-  `# coai-bugs-admin-keys v1`; inside it, one key per line with `#` comments ignored. Anything else
-  is REFUSED with 78, never guessed at: a raw key can be valid base64 that decodes to ordinary text,
-  and the marker is what tells the two apart. **Absent or empty is legitimate** — every `/admin/*`
-  call is then 401, and only the startup log says which) and `COAI_BUGS_ADMIN_RATE_PER_MINUTE` (per ADMINISTRATOR, its own setting;
-  `120` unset, `0` off, 78 past `1000`); the client’s key is `COAI_BUGS_KEY` or
+  per address) and `COAI_BUGS_ADMIN_RATE_PER_MINUTE` (per ADMINISTRATOR) — both `0` off, 78 past
+  `1000`, unset `10` and `120`; `COAI_BUGS_ADMIN_KEYS` (**base64 of a list starting
+  `# coai-bugs-admin-keys v1`**; `#` lines ignored, else exit 78. **Absent is legitimate**: 401 to
+  every `/admin/*`, and only the startup log says so); the client’s key is `COAI_BUGS_KEY` or
   `--key-file`, **never** `--key`. Details: `deploy/bugs/README.md`.
 - **`coai-bugs` has an admin API, and its refusals are deliberately uninformative.** `/admin/keys`,
   `/admin/audit` and `/admin/active` behind a bearer admin key; an absent variable and a wrong
