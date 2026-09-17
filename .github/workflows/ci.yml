@@ -220,3 +220,40 @@ jobs:
       - name: Package
         working-directory: src_vs_code
         run: npm run package
+
+  # The one job that runs a REAL VS Code. `research/module_tests.md` carried twelve rows ending
+  # "NOT covered … needs an extension host" and called the absence its largest single gap.
+  #
+  # NOT REQUIRED TO MERGE, and that is deliberate rather than timid: it downloads a 325 MB editor and
+  # launches it, so it is slow and can fail for reasons that have nothing to do with the change under
+  # review. Required on day one it becomes a tax on every pull request, and the pressure is then to
+  # weaken it. PROMOTE IT TO REQUIRED once it has been green on TWENTY CONSECUTIVE RUNS OF main — a
+  # number, so the promotion is a measurement rather than a mood. Until then it reports and nothing
+  # more; `continue-on-error` is what makes that true of the CHECK and not only of the intention.
+  extension-host:
+    name: extension · a real editor
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Shared instruction dependencies
+        run: npm ci --ignore-scripts --prefix .agents/conventions
+
+      - name: Install
+        working-directory: src_vs_code
+        run: npm ci
+
+      # A headless Linux runner has no display, and VS Code is a desktop application: without this
+      # the editor never starts and the failure says nothing about why. Named here because an unnamed
+      # prerequisite is how this lands as a red pipeline nobody can read.
+      - name: Run the scenarios in a real editor
+        working-directory: src_vs_code
+        run: xvfb-run -a npm run test:host
