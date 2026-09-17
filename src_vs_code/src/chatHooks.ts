@@ -22,6 +22,8 @@ import { coaiDataDir } from './dataDir';
 import { promptsFrom } from './claudeSessions';
 import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
 import { notify } from './notify';
+import { withdraw } from './chatQueue';
+import { pushChatDraft } from './chatPanel';
 
 /**
  * Everything a chat page can ask of the host, and the three writers that put words in its composer.
@@ -204,6 +206,25 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         if (found !== undefined) {
           void ask(found, text);
         }
+      },
+      // TAKE ONE BACK. The row leaves the page and the words go into the composer; what actually
+      // stops the question being asked is `oneTurn` finding it gone, because the callback that
+      // would run it cannot be un-chained. An id naming nothing is an ordinary race — a press that
+      // landed a tick after its turn began — and changes nothing rather than being an error, and
+      // redraws nothing either, since repainting would wipe the sentence explaining the last turn.
+      onWithdraw: (id, questionId) => {
+        const found = panels.entryOf(id);
+        const mine = found === undefined ? undefined : threads.get(found.id);
+        if (found === undefined || mine === undefined) {
+          return;
+        }
+        const taken = withdraw(mine.waiting, questionId);
+        if (taken.returned.length === 0) {
+          return;
+        }
+        mine.waiting = taken.waiting;
+        pushChatDraft(found, taken.returned);
+        show(found, mine.running, '');
       },
       onPick: (id, providerId, modelId, draft) => {
         const config = vscode.workspace.getConfiguration('coai');

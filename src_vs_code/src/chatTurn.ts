@@ -17,6 +17,9 @@ import { recordChatTurn } from './chatUsageFile';
 import { coaiDataDir } from './dataDir';
 import { Vendor } from './vendors';
 import { pushChatDraft } from './chatPanel';
+import { MOST_WAITING, NotJoined, began as leftTheQueue, isWanted, join } from './chatQueue';
+import { randomUUID } from 'node:crypto';
+import { remoteIsFull } from './remoteAsk';
 
 /**
  * One turn of a conversation, start to finish — and the three gestures that are turns wearing
@@ -60,12 +63,85 @@ export function ask(entry: ChatEntry, text: string): Promise<void> {
 
     return Promise.resolve();
   }
+  return enqueue(entry, thread, text);
+}
+
+/**
+ * What a question is told when it reaches a conversation that has filled up while it waited.
+ *
+ * <p>Its own constant because two things must say exactly this: the turn that refuses and the door
+ * that refuses before it. A sentence written twice is a sentence that drifts.</p>
+ */
+const CAPPED_NOW = 'This conversation has used all its turns, so that question was not asked. '
+  + 'Start a new chat, or move the thread to a local model, which keeps its own memory.';
+
+/** The queue's reason for refusing, in words. The queue itself answers in its own vocabulary. */
+function whyFull(why: NotJoined): string {
+  switch (why) {
+    case 'nothing':
+      return 'There is nothing in the box to ask.';
+    case 'tooMany':
+      return `${MOST_WAITING} questions are already waiting. Let some of them run, or take one back.`;
+    case 'tooLong':
+      return 'The questions already waiting are too long to add another. Let some of them run, or take one back.';
+    default: {
+      const unhandled: never = why;
+
+      throw new Error(`a queue refusal this build has no words for: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
+/**
+ * Put a question on the queue and on the chain — the ONE transition all four doors use.
+ *
+ * <p>The composer, the keybinding, a re-ask and a retry are four ways to ask, and they were not four
+ * ways of doing the same thing: two joined the chain and two called the turn directly, which is a
+ * question that can overtake one already waiting. One door means one behaviour, and a waiting row
+ * appears whichever way the question was asked. (issue #288.)</p>
+ *
+ * <p><b>The queue is joined synchronously</b>, before the chain is extended, so the page never shows
+ * a gap between the press and the row. And the chain's <code>.catch</code> is INSIDE what gets
+ * assigned to <code>thread.turns</code>, which is what makes a failed turn unable to strand the
+ * questions behind it: what the chain holds always resolves.</p>
+ *
+ * @param ready work belonging to THIS turn alone, run as it begins. A re-ask and a retry each
+ *   rewrite what the next model is handed, and doing that when the button was pressed set it for
+ *   whichever turn ran next — behind a queued question, somebody else's.
+ */
+export function enqueue(entry: ChatEntry, thread: Thread, text: string, ready: () => void = () => {}): Promise<void> {
+  // THE CAP REFUSES AT THE DOOR, before a row is ever drawn. It was checked only where the turn
+  // begins, so a question asked into a full conversation was shown WAITING and then refused when its
+  // moment came — a promise the conversation could not keep, drawn for as long as the queue in front
+  // of it took. The check stays in `oneTurn` as well, because a conversation can fill up while a
+  // question waits, and that is the case only the later check can see.
+  if (thread.forgetful && remoteIsFull(thread.asked)) {
+    pushChatDraft(entry, text);
+    show(entry, thread.running, CAPPED_NOW);
+
+    return Promise.resolve();
+  }
+  const joined = join(thread.waiting, text, randomUUID());
+  if (joined.kind === 'full') {
+    // The words stay where they were typed rather than being swallowed by a refusal.
+    pushChatDraft(entry, text);
+    show(entry, thread.running, whyFull(joined.why));
+
+    return Promise.resolve();
+  }
+  thread.waiting = joined.waiting;
+  show(entry, thread.running, '');
+
   // WHICH SLATE THIS QUESTION WAS TYPED ON, captured as it JOINS the chain rather than as it runs:
   // that is the whole point of it. A question queued behind an answer waits, and *New chat* pressed
   // while it waits means the person who typed it is no longer in the conversation they typed it in.
   const began = thread.generation;
   const mine = thread.turns
-    .then(() => oneTurn(entry, text, began))
+    .then(() => {
+      ready();
+
+      return oneTurn(entry, text, began, joined.id);
+    })
     .catch((reason: unknown) => {
       // Including the flag: a turn that threw is not a turn still running, and leaving it set would
       // make every later switch claim to be waiting for an answer that will never arrive.
@@ -155,12 +231,17 @@ export async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> 
   // would stay past the end and point at an unrelated message once the conversation grew again.
   // (gemini, the code round.)
   thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
-  // What the NEXT model is handed. `carry` is what `oneTurn` sends ahead of the question, and it is
-  // exactly the conversation before the answer nobody wanted.
+  // THROUGH THE QUEUE, like every other way of asking — it called the turn directly, which could
+  // overtake a question already waiting. And what the next model is handed is set as THIS turn
+  // begins, not now: `carry` is a property of the conversation, so writing it here would hand it
+  // to whichever turn ran next, which behind a queued question is not this one. Three reviewers
+  // in three roles found that second half. (issue #288, and its code round.)
+  //
   // A re-ask is a switch by another name — the same question, a different model — so the mark
   // applies to it exactly as it applies to one.
-  thread.carry = carriedFrom(again.said, thread.carryFrom);
-  await oneTurn(entry, again.question, thread.generation);
+  void enqueue(entry, thread, again.question, () => {
+    thread.carry = carriedFrom(again.said, thread.carryFrom);
+  });
 }
 
 /**
@@ -210,22 +291,44 @@ export async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Pr
     return;
   }
   thread.messages = thread.messages.slice(0, -1);
-  // Clamped for the reason the re-ask above clamps it: a stored mark past the end would point at an
-  // unrelated message as soon as the conversation grew again.
-  thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
-  await oneTurn(entry, again, thread.generation);
+  // Through the queue, and its own mark applied as its own turn begins — both for the reasons the
+  // re-ask above gives. Clamped there rather than here for the same reason it is clamped at all: a
+  // stored mark past the end would point at an unrelated message as soon as the conversation grew.
+  void enqueue(entry, thread, again, () => {
+    thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
+  });
 }
 
-export async function oneTurn(entry: ChatEntry, text: string, began: number): Promise<void> {
+export async function oneTurn(entry: ChatEntry, text: string, began: number, questionId: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
     return;
   }
+  // TAKEN BACK. The callback running right now was created when Send was pressed and a promise
+  // chain cannot be un-chained, so this is where a withdrawal actually takes effect: the question is
+  // asked for by NAME, and one that is no longer wanted begins nothing, sends nothing and appends
+  // nothing. Its words are already back in the composer — the withdrawal put them there.
+  if (!isWanted(thread.waiting, questionId)) {
+    return;
+  }
+  // AND IT LEAVES THE QUEUE AS IT BEGINS, not before and not after: a row on the page therefore
+  // means "not yet started", exactly.
+  thread.waiting = leftTheQueue(thread.waiting, questionId);
   if (!sameSlate(began, thread.generation)) {
     // ASKED IN A CONVERSATION THAT HAS BEEN RESET. Nothing is sent and nothing is appended: the
     // question below would land in a transcript its author never saw, and the reset waiting on this
     // chain would have waited out a whole answer to a question nobody is in the conversation for.
     // The words are not lost — they go back to the composer, which is where they were typed.
+    pushChatDraft(entry, text);
+
+    return;
+  }
+  // THE CAP IS A BOUNDARY HERE TOO, and this is the half only this check can see: a conversation
+  // can fill up while a question waits behind others. `remoteIsFull` used to be read at exactly one
+  // place — to DRAW the flag the page shows — so nothing refused a turn at all, and the keybinding
+  // could ask a full Team conversation a fourth time. A picker is not an enforcement.
+  if (thread.forgetful && remoteIsFull(thread.asked)) {
+    show(entry, false, CAPPED_NOW);
     pushChatDraft(entry, text);
 
     return;

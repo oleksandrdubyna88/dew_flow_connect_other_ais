@@ -72,6 +72,10 @@ function restoredPage(
       promptId: mainPrompt(presets.promptPresets)?.id ?? '',
       running: false,
       capped: false,
+      // EMPTY BY CONSTRUCTION, not by omission. The queue is runtime state and is not part of the
+      // record: a reload killed the host, so the turn a question waited behind is gone and so is the
+      // promise that would have run it. Restoring the row would draw a question that can never run.
+      waiting: [],
       // Nothing is in flight on a page that has just opened, so there is no turn to stop.
       turn: 0,
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
@@ -147,6 +151,8 @@ export function restoreConversation(
   );
   threads.set(entry.id, {
     session: closed,
+    // the host that held any queue died with the reload.
+    waiting: [],
     home: { dir: '', release: () => undefined },
     passage: saved.passage,
     models: ready.ok ? ready.models : [],
