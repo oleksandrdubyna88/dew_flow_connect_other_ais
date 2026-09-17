@@ -233,12 +233,27 @@ install -d -m 0750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs
 # setgid bit makes every release directory inherit `coai-bugs`, so group access is what the service
 # actually uses and `releases` can stay closed to everybody else.
 #
-# The setgid bit alone is NOT enough, and the first deployment proved it: `release.sh` unpacks with
-# `cp -a "$found/." "$RELEASE/"`, and that trailing `/.` applies the ARCHIVE directory's mode and
-# group to the release directory, wiping the inherited group on the line after it was granted. The
-# script puts it back explicitly — see the `chgrp --reference` in `release.sh`. Both halves are
-# needed: this bit for the `dotnet publish` path, that line for the archive path.
+# SETGID IS THE ONLY MECHANISM AVAILABLE HERE, and that is worth knowing before anybody "improves"
+# it. `coai-bugs-deploy` is deliberately NOT a member of `coai-bugs` — that is what stops the
+# account which delivers releases from reading the corpus — and on Linux a non-root user may only
+# `chgrp` a file to a group they belong to. So the deploy account cannot set this group by hand at
+# all; the kernel has to grant it, which is what this bit does.
+#
+# `bugs-v0.2.0` was rejected by its own canary for exactly this. An earlier `release.sh` tried
+# `chgrp -R --reference` after unpacking, followed by `chmod 0750`. The `chgrp` was refused and the
+# `chmod` was not, so the release landed `0750 coai-bugs-deploy:coai-bugs-deploy`: wrong group AND no
+# world bits, so the service could not read its own binary and never started. The canary caught it
+# and the host rolled back. `release.sh` therefore copies the archive ENTRY BY ENTRY rather than with
+# `cp -a "$found/."`, because the trailing `/.` applies the archive directory's mode and group to the
+# release directory and there is then no way to undo it from this account.
 install -d -m 2750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs/releases
+
+# READING THE JOURNAL, so the canary's diagnostic is not blind. `release.sh` prints
+# `journalctl -u coai-bugs -n 30` when the unit dies during the canary, and as an ordinary account it
+# got `-- No entries --` with a hint about needing `adm` or `systemd-journal` — so the one moment the
+# logs matter most produced nothing. `systemd-journal` is read-only and grants no access to
+# `/opt/coai-bugs/data`, so it does not weaken the split above.
+usermod -aG systemd-journal coai-bugs-deploy
 
 # The DATA belongs to the service, and the deploy account is deliberately not in reach of it: it
 # delivers releases, it does not get to read the corpus.
