@@ -45,6 +45,42 @@ export const OUTCOMES: Readonly<Record<string, string>> = {
   lapsed: 'ran out',
 };
 
+/**
+ * What a PERSON may record when they close one by hand, and what each word means.
+ *
+ * <p>Three, not four: `lapsed` is the server's own statement that the clock ran out, and offering it
+ * here would be asking somebody to state a fact that is not theirs — the server refuses it from this
+ * door anyway. The detail beside each is the catalogue's own sentence, for the reason the consultant
+ * picker carries one: a list of bare words leaves a person choosing between them with nothing to
+ * choose ON. (issue #309.)</p>
+ */
+export const CLOSE_CHOICES: readonly { readonly outcome: string; readonly label: string; readonly detail: string }[] = [
+  { outcome: 'solved', label: 'Solved', detail: 'the advice was verified and it worked' },
+  { outcome: 'not_solved', label: 'Not solved', detail: 'it was verified and it did not' },
+  { outcome: 'abandoned', label: 'Abandoned', detail: 'nobody is going to act on it' },
+];
+
+/**
+ * The sentence out of a one-shot mode's answer, or the raw text when it is not ours.
+ *
+ * <p>The server writes `{"error": "…"}` for a refusal and a `CloseAnswer` for a success, both on
+ * stdout. A caller that showed the raw JSON would be showing a person braces; one that showed
+ * nothing when the JSON did not parse would hide a crash. (issue #309.)</p>
+ */
+export function refusalIn(output: string): string {
+  try {
+    const parsed: unknown = JSON.parse(output);
+    const said = (parsed as { error?: unknown; said?: unknown } | null);
+    const sentence = typeof said?.error === 'string' ? said.error
+      : typeof said?.said === 'string' ? said.said
+        : '';
+
+    return sentence.length > 0 ? sentence : output.trim();
+  } catch {
+    return output.trim().length > 0 ? output.trim() : 'the server said nothing at all';
+  }
+}
+
 /** What no outcome at all looks like. A dash, and never a word that could be read as a verdict. */
 export const NO_OUTCOME = '\u2014';
 
@@ -155,6 +191,8 @@ function card(consultation: Consultation, nowMs: number): string {
   <div class="line branch">${escapeHtml(consultation.branch)}</div>
   <div class="line"><span class="badge ${badgeClass(consultation.status)}">${escapeHtml(label(consultation.status))}</span> · ${escapeHtml(budget)}</div>
   <div class="usage">${escapeHtml(age(consultation, nowMs))}${spent.tokens > 0 ? ` · ${escapeHtml(shortNumber(spent.tokens))} tokens` : ''}</div>
+  <div class="line"><button class="link" data-command="closeConsultation" data-id="${escapeHtml(consultation.id)}"
+          title="Record how this consultation ended — the AI that asked may never come back to say">End this consultation…</button></div>
 ${alertLine(consultation)}${note(consultation.status)}</div>`;
 }
 
