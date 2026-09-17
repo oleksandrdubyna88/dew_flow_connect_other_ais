@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
+import { notify, notifyAndAsk } from './notify';
 import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
@@ -2407,9 +2408,14 @@ function chooseModel(
     // and the marking behind the box would stop finding them.
     thread.role = wasRole;
     if ((preset.startingPrompt ?? '').length > 0) {
-      void vscode.window.showInformationMessage(
-        `${preset.name} opens with its own prompt, and the box holds something you wrote — so it was left alone.`,
-      );
+      void notify({
+        as: 'information',
+        class: 'outcome',
+        source: 'chat',
+        code: 'preset-prompt-left-alone',
+        subject: preset.id,
+        title: `${preset.name} opens with its own prompt, and the box holds something you wrote — so it was left alone.`,
+      });
     }
   }
   show(entry, thread.running, '');
@@ -2566,7 +2572,15 @@ async function fromTheEditor(): Promise<{ text: string; failure: string }> {
   if (ask.length === 0) {
     return { text: passage.text, failure: '' };
   }
-  const said = await vscode.window.showWarningMessage(ask, { modal: true }, 'Send all of it');
+  const said = await notifyAndAsk({
+    as: 'warning',
+    class: 'confirmation',
+    source: 'chat',
+    code: 'send-the-whole-passage',
+    modal: true,
+    title: ask,
+    action: 'Send all of it',
+  });
   if (said === 'Send all of it') {
     return { text: passage.text, failure: '' };
   }
@@ -2762,7 +2776,14 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): Promi
     // every other refusal on this path — a button that does nothing and explains nothing is the
     // defect this whole change started from. (CodeRabbit, PR #200.)
     const refusal = `${providerId} is not a reviewer this conversation can be sent to any more.`;
-    void vscode.window.showWarningMessage(refusal);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'chat-vendor-gone',
+      subject: providerId,
+      title: refusal,
+    });
     show(entry, false, refusal);
 
     return Promise.resolve(false);
@@ -2776,7 +2797,14 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): Promi
   // to the EMPTY ask alone, which is the page saying the provider moved.
   const running = modelToRun(provider.models, asked, vendorFor(providerId)?.model ?? '');
   if (!running.ok) {
-    void vscode.window.showWarningMessage(running.refusal);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'chat-model-gone',
+      subject: providerId,
+      title: running.refusal,
+    });
     // The page has already moved its own select; put the state back so it stops claiming otherwise.
     show(entry, false, running.refusal);
 
@@ -2790,9 +2818,14 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): Promi
     return Promise.resolve(true);
   }
   if (thread.running) {
-    void vscode.window.showInformationMessage(
-      `Switching to ${modelId} as soon as the current answer arrives.`,
-    );
+    void notify({
+      as: 'information',
+      class: 'outcome',
+      source: 'chat',
+      code: 'model-switch-queued',
+      subject: modelId,
+      title: `Switching to ${modelId} as soon as the current answer arrives.`,
+    });
   }
   // The ANSWER is what the queued switch did, not that it was queued. A caller that acts on the
   // switch — a model preset putting its own prompt in the composer — would otherwise act while
@@ -2804,7 +2837,15 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): Promi
       // Not swallowed: a switch that failed leaves the thread on the OLD model, and a person who
       // believes otherwise reads the next answer as the new model's. (codex, the code round.)
       const failure = `The chat could not switch to ${modelId}: ${asText(reason)}`;
-      void vscode.window.showWarningMessage(failure);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'chat',
+        code: 'model-switch-failed',
+        subject: modelId,
+        title: failure,
+        detail: asText(reason),
+      });
       show(entry, false, failure);
 
       return false;
@@ -2827,7 +2868,14 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
     ? `The reviewer ${providerId} is no longer configured.`
     : chatRuntimeRefusal(vendor);
   if (vendor === undefined || refusal.length > 0) {
-    void vscode.window.showWarningMessage(refusal);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'chat-vendor-unusable',
+      subject: providerId,
+      title: refusal,
+    });
     // The page has already moved its own select; put the state back so it stops claiming otherwise.
     show(entry, false, refusal);
 
@@ -2841,7 +2889,14 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
   const remote = isRemote(vendor) ? await remoteFor(vendor) : { session: undefined, refusal: '' };
   const cannot = cli.refusal.length > 0 ? cli.refusal : remote.refusal;
   if (cannot.length > 0) {
-    void vscode.window.showWarningMessage(cannot);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'switch-target-cannot-run',
+      subject: providerId,
+      title: cannot,
+    });
     show(entry, false, cannot);
 
     return false;
@@ -2876,9 +2931,14 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
   show(entry, false, '');
   // Said out loud: the next question costs more than the last one, because it carries everything
   // above it. A person who is not told reads the first answer as a model that mysteriously knows.
-  void vscode.window.showInformationMessage(
-    `Now asking ${modelId}. Your next question carries this conversation across to it.`,
-  );
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'chat',
+    code: 'model-switched',
+    subject: modelId,
+    title: `Now asking ${modelId}. Your next question carries this conversation across to it.`,
+  });
 
   return true;
 }
@@ -3073,7 +3133,13 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // Said out loud, like the model button beside it: a press can outlive the row it names.
         if (preset === undefined) {
           const gone = 'That saved prompt is no longer in your presets — it was removed or renamed.';
-          void vscode.window.showWarningMessage(gone);
+          void notify({
+            as: 'warning',
+            class: 'refusal',
+            source: 'chat',
+            code: 'prompt-preset-gone',
+            title: gone,
+          });
           show(found, thread.running, gone);
 
           return;
@@ -3094,9 +3160,14 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           // written with — otherwise the marking, and the pair recorded with the question when it is
           // sent, would both name a prompt nothing on screen used. (gemini, the second code round.)
           thread.promptId = wasPrompt;
-          void vscode.window.showInformationMessage(
-            `${preset.name} replaces the instruction, and the box holds something you wrote — so it was left alone.`,
-          );
+          void notify({
+            as: 'information',
+            class: 'outcome',
+            source: 'chat',
+            code: 'preset-instruction-left-alone',
+            subject: preset.id,
+            title: `${preset.name} replaces the instruction, and the box holds something you wrote — so it was left alone.`,
+          });
         }
         show(found, thread.running, '');
       },
@@ -3114,7 +3185,13 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // change started from. (CodeRabbit, PR #200.)
         if (preset === undefined) {
           const gone = 'That saved model is no longer in your presets — it was removed or renamed.';
-          void vscode.window.showWarningMessage(gone);
+          void notify({
+            as: 'warning',
+            class: 'refusal',
+            source: 'chat',
+            code: 'model-preset-gone',
+            title: gone,
+          });
           show(found, mine.running, gone);
 
           return;
@@ -3291,11 +3368,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       },
       onUseLocal: () => undefined,
       onPageError: (_id, message) => {
-        warn(`The chat page reported: ${message}`);
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'chatPage',
+          code: 'chat-page-reported-an-error',
+          title: `The chat page reported: ${message}`,
+          detail: message,
+        });
       },
       onOpenFile: (id, requested, line) => {
         void openWorkspaceFile(id, requested, line, (message) => {
-          void vscode.window.showWarningMessage(message);
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'chatPage',
+            code: 'file-from-an-answer-not-opened',
+            subject: requested,
+            title: message,
+          });
         });
       },
       onCopyAnswer: (id, index, sig) => {
@@ -3743,7 +3834,9 @@ export async function chatWithOtherAi(
   // question command — two places deciding which model answers. (gemini, the code round.)
   const ready = readyForChat();
   if (!ready.ok) {
-    void vscode.window.showWarningMessage(ready.refusal);
+    void notify({
+      as: 'warning', class: 'refusal', source: 'chat', code: 'chat-not-ready', title: ready.refusal,
+    });
 
     return;
   }
@@ -3758,9 +3851,13 @@ export async function chatWithOtherAi(
   // Ctrl+Alt+A в обычных окнах тоже вызывать. например на md файлах, cs файлах"*.
   const { claude: match, source, uri } = matchedSource(panels);
   if (source === undefined) {
-    void vscode.window.showWarningMessage(
-      'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
-    );
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'no-source-tab',
+      title: 'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
+    });
 
     return;
   }
@@ -3772,9 +3869,13 @@ export async function chatWithOtherAi(
   const passage = match === undefined ? await fromTheEditor() : await passageFor(plan.path);
   if (passage.text.trim().length === 0) {
     if (passage.failure !== CANCELLED) {
-      void vscode.window.showWarningMessage(
-        passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
-      );
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'chat',
+        code: 'nothing-to-explain',
+        title: passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
+      });
     }
 
     return;
@@ -3812,13 +3913,21 @@ async function deliverPassage(
   // not installed. Said here instead, in a sentence somebody can act on.
   const cli = await cliFor(ready.vendor);
   if (cli.refusal.length > 0) {
-    void vscode.window.showWarningMessage(cli.refusal);
+    void notify({
+      as: 'warning', class: 'refusal', source: 'chat', code: 'chat-cli-not-found', title: cli.refusal,
+    });
 
     return;
   }
   const remote = isRemote(ready.vendor) ? await remoteFor(ready.vendor) : { session: undefined, refusal: '' };
   if (remote.refusal.length > 0) {
-    void vscode.window.showWarningMessage(remote.refusal);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'team-server-not-reachable-for-chat',
+      title: remote.refusal,
+    });
 
     return;
   }
@@ -4020,15 +4129,21 @@ export async function takeTheQuestion(
 ): Promise<void> {
   const ready = readyForChat();
   if (!ready.ok) {
-    void vscode.window.showWarningMessage(ready.refusal);
+    void notify({
+      as: 'warning', class: 'refusal', source: 'chat', code: 'chat-not-ready', title: ready.refusal,
+    });
 
     return;
   }
   const { claude, source, uri } = matchedSource(panels);
   if (source === undefined) {
-    void vscode.window.showWarningMessage(
-      'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
-    );
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'no-source-tab',
+      title: 'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
+    });
 
     return;
   }
@@ -4039,7 +4154,13 @@ export async function takeTheQuestion(
   // Code writes the conversation's title into its session file, and the tab shows that same title.
   const question = await questionWaitingHere(claude?.label ?? '');
   if (question.text.length === 0) {
-    void vscode.window.showWarningMessage(question.refusal);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'chat',
+      code: 'no-question-waiting-here',
+      title: question.refusal,
+    });
 
     return;
   }
