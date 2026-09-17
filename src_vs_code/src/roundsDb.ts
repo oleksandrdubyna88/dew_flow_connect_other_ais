@@ -532,6 +532,15 @@ export interface BugCorpus {
   /** The most recent send, or the empty shape when none has ever happened. */
   readonly lastSend: SendRun;
   /**
+   * How many kept pairs are UNSENT — the number a send would actually offer.
+   *
+   * <p>Not `funnel.collected`, which counts every pair ever kept and is therefore unchanged by a
+   * successful send. A button reading that offers to send what has already gone. A server too old
+   * to say sends no key at all, and this is then 0 — which reads as "nothing to send", the safe
+   * direction: a Send that refuses is a nuisance, and one that offers an empty batch is a lie.</p>
+   */
+  readonly sendable: number;
+  /**
    * The vendors THIS server will accept for a ranking pass.
    *
    * <p>Read from the server rather than hardcoded beside the picker, because an installed
@@ -577,7 +586,7 @@ const NO_FUNNEL: BugFunnel = {
 
 /** Nothing known — which the section renders as "not asked yet", not as "no material". */
 export const EMPTY_CORPUS: BugCorpus =
-  { funnel: NO_FUNNEL, lastRun: NO_RUN, lastSend: NO_SEND, rankingVendors: [], read: false };
+  { funnel: NO_FUNNEL, lastRun: NO_RUN, lastSend: NO_SEND, sendable: 0, rankingVendors: [], read: false };
 
 /**
  * The states that mean a send is over, spelled the way the server writes them.
@@ -588,6 +597,33 @@ export const EMPTY_CORPUS: BugCorpus =
  * the server carries the same list for the same reason.</p>
  */
 const SEND_IS_OVER: readonly string[] = ['done', 'failed', 'interrupted'];
+
+/** One send, with every field checked — an older server may send none of them. */
+function readSend(raw: unknown): SendRun {
+  if (typeof raw !== 'object' || raw === null) {
+    return NO_SEND;
+  }
+
+  const held = raw as Record<string, unknown>;
+
+  return {
+    id: text(held.id),
+    startedUtc: text(held.startedUtc),
+    finishedUtc: text(held.finishedUtc),
+    state: text(held.state),
+    server: text(held.server),
+    offered: whole(held.offered),
+    sent: whole(held.sent),
+    duplicate: whole(held.duplicate),
+    refused: whole(held.refused),
+    trouble: text(held.trouble),
+  };
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const whole = (value: unknown): number =>
+  (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
 /** Whether a send is happening — what the Send button is disabled by, across a reload. */
 export function sending(send: SendRun): boolean {
@@ -633,7 +669,11 @@ export function parseBugs(text: string): BugCorpus {
       lastRun: { ...NO_RUN, ...(raw.lastRun ?? {}) },
       // And an absent `lastSend` is a server from before sends were recorded at all: no send, which
       // is what an empty id means too.
-      lastSend: { ...NO_SEND, ...(raw.lastSend ?? {}) },
+      // READ rather than spread. `lastRun` above is older and shares the weakness; this one decides
+      // whether a BUTTON is disabled, so a number where its `state` belongs would throw inside
+      // `sending()` and take the whole section's repaint with it.
+      lastSend: readSend(raw.lastSend),
+      sendable: typeof raw.sendable === 'number' ? raw.sendable : 0,
       // Absent means a server too old to say, NOT a server that allows nothing — the difference
       // decides whether the picker falls back to its own list or offers nothing at all.
       rankingVendors: Array.isArray(raw.rankingVendors) ? raw.rankingVendors : [],

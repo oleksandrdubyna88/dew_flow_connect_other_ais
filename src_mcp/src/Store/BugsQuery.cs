@@ -95,6 +95,20 @@ public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Can
     /// </remarks>
     public UploadRunRow LastSend { get; init; } = new();
 
+    /// <summary>
+    /// How many kept pairs are actually UNSENT — the number a send would offer.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>Funnel.Collected</c> counts every pair this machine has ever kept, which is the
+    /// right number for "is there a corpus" and the wrong one for "is there anything to send": after
+    /// a successful send it is unchanged, so a button reading it offers to send what has already
+    /// gone. Seven code-round findings across three providers, all of them the same sentence.</para>
+    /// <para>The predicate is <see cref="RoundsDb.Sendable"/>'s, and it has to stay that way — a
+    /// count that describes a different set from the one the run takes is a button that lies in
+    /// whichever direction the two differ.</para>
+    /// </remarks>
+    public int Sendable { get; init; }
+
     /// <summary>The vendors that may be shown a finding's own words.</summary>
     /// <remarks>
     /// <para><b>On the wire, so the picker reads the list that ENFORCES rather than a copy of it.</b>
@@ -261,6 +275,7 @@ public static class BugsQuery
             {
                 LastRun = LastRun(db),
                 LastSend = LastSend(db),
+                Sendable = Sendable(db),
             };
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteError && TooOld(e))
@@ -288,6 +303,19 @@ public static class BugsQuery
 
     /// <summary>The most recent send, through the one place that query lives.</summary>
     private static UploadRunRow LastSend(SqliteConnection db) => UploadRuns.Last(db);
+
+    /// <summary>How many pairs a send would offer right now.</summary>
+    /// <remarks>The same three conditions <see cref="RoundsDb.Sendable"/> selects on.</remarks>
+    private static int Sendable(SqliteConnection db)
+    {
+        using var read = db.CreateCommand();
+        read.CommandText = """
+            SELECT COUNT(*) FROM collect_pairs
+             WHERE keep = 1 AND sent_utc = '' AND send_refusal = ''
+            """;
+
+        return Convert.ToInt32(read.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     private static BugFunnel Funnel(SqliteConnection db)
     {

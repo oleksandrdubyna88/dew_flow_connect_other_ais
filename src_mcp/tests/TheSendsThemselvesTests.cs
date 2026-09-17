@@ -182,6 +182,26 @@ public sealed class TheSendsThemselvesTests : IDisposable
         run.Running.Should().BeFalse();
     }
 
+    /// <summary>A send that THREW is recorded as failed, with what it said, not as a clean ending.</summary>
+    /// <remarks>
+    /// The <c>finally</c> alone recorded a throw as <c>done, 0 sent</c>, because the summary variable
+    /// still held the empty value the assignment never reached — so a crashed send looked exactly
+    /// like a successful one with nothing to do. (Code round, codex, twice.)
+    /// </remarks>
+    [Fact]
+    public void ASendThatThrewIsNotRecordedAsADoneOne()
+    {
+        using var db = Db();
+        db.StartUploadRun("s1", "https://bugs.example", offered: 5);
+
+        db.EndUploadRun("s1", UploadRunState.Failed, offered: 5, sent: 0, duplicate: 0, refused: 0,
+            trouble: "the process was stopped");
+
+        var run = db.LastUploadRun();
+        run.State.Should().Be(UploadRunState.Failed);
+        run.Trouble.Should().NotBeEmpty("a crash that reads as success is worse than a crash");
+    }
+
     public void Dispose()
     {
         try

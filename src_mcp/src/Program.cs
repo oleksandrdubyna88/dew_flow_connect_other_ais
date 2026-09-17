@@ -888,6 +888,13 @@ internal static class Program
                 // from a reader because the heartbeat is what decides staleness, so a run happening
                 // in another process right now is untouched. (Code round, codex and gemini.)
                 migrated.SweepStaleCollectRuns(StaleAfter);
+
+                // A SEND needs the same, and needs it here most of all. Its row is what disables the
+                // Send button, so an abandoned one is the same deadlock the collector had: the
+                // button stays disabled, and the only thing that would clear it is the send the
+                // button will not start. It was written and called from nowhere, which eight
+                // findings across three providers pointed at. (Code round, codex and gemini.)
+                migrated.SweepAbandonedUploads();
             }
 
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(

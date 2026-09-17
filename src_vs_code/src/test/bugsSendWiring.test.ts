@@ -64,6 +64,11 @@ test('the key reaches the child through uploadRun, and never as an argument', ()
   assert.match(sending, /uploadRun\(server\.fsPath, key\)/u, 'the send uses the door that carries a key');
   assert.doesNotMatch(sending, /'--key'/u, 'an argument is in ps, in /proc and in a shell history');
   assert.doesNotMatch(sending, /--key-file/u, 'a file is a credential on disk and a cleanup a crash skips');
+  // THE COMPANION the repository's testing rule requires: a scan that asserts an ABSENCE proves
+  // nothing until something proves the pattern can still match. Both spellings exist in the CLI that
+  // would accept them, so a rename there turns this red rather than turning the ban vacuous.
+  const cli = source('../../src_mcp/src/Program.cs');
+  assert.match(cli, /--key-file/u, 'the pattern this forbids no longer matches anything anywhere');
   assert.match(sending, /'--upload-pairs', '--server', where/u,
     'the address is an argument, because an address is not a secret');
 });

@@ -126,9 +126,17 @@ export function lastSendLine(corpus: BugCorpus): string {
       : 'Nothing has been sent from this machine yet, and nothing is waiting.';
   }
 
+  const went = `${send.sent} sent, ${send.duplicate} already held, ${send.refused} refused`;
+  if (send.state === 'interrupted') {
+    // NOT an ending. Nothing is known about what it would have done, and reading its counts as a
+    // result would say "0 sent" for a send whose window was simply closed. (Code round, codex.)
+    return `The last send stopped without finishing — ${went} before it did. Press Send to offer `
+      + 'what is left.';
+  }
+
   return send.trouble.length > 0
-    ? `The last send could not finish: ${send.trouble}. Nothing was marked as sent.`
-    : `Last send: ${send.sent} sent, ${send.duplicate} already held, ${send.refused} refused.`;
+    ? `The last send could not finish: ${send.trouble}. ${went} before it stopped.`
+    : `Last send: ${went}.`;
 }
 
 /** The section's body. */

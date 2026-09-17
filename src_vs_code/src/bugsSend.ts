@@ -115,15 +115,16 @@ function queue(corpus: BugCorpus): Refusal | undefined {
 }
 
 /**
- * How many pairs are waiting to go.
+ * How many pairs a send would actually offer.
  *
- * <p>`collected` counts every pair this machine has ever kept, and the funnel has no column for
- * "kept but unsent" — so this is the honest upper bound rather than a precise queue, and the send
- * itself reports what it actually offered. A number that claims more precision than the data has is
- * the kind of number nobody checks.</p>
+ * <p>It read `funnel.collected`, which counts every pair this machine has ever KEPT — so it was
+ * unchanged by a successful send, and the button went on offering to send what had already gone
+ * while the preflight let a run start that would offer nothing. Seven code-round findings across
+ * three providers said the same sentence. The server counts the real predicate now, and this reads
+ * that.</p>
  */
 export function waiting(corpus: BugCorpus): number {
-  return corpus.funnel.collected;
+  return corpus.sendable;
 }
 
 /** What a finished send came to, in the words the section shows. */
@@ -250,13 +251,24 @@ function byCode(code: number, summary: Summary | undefined): Outcome | undefined
   return known[code];
 }
 
-/** A transport failure says TRY AGAIN, because nothing is wrong with the pairs. */
+/**
+ * A transport failure says TRY AGAIN, because nothing is wrong with the pairs.
+ *
+ * <p>It used to say "nothing was marked as sent", which is false as soon as a run has more than one
+ * batch: each is marked as the server acknowledges it, and only the batch that failed is left. What
+ * is true either way — and what the person needs — is that pressing Send again cannot duplicate
+ * anything, because the server is idempotent on a pair id derived from the payload. (Code round,
+ * codex.)</p>
+ */
 function troubleSaid(summary: Summary | undefined): string {
   const why = summary?.trouble ?? '';
   const because = why.length > 0 ? ` (${why})` : '';
+  const sent = summary === undefined || summary.accepted + summary.duplicate === 0
+    ? 'Nothing was marked as sent'
+    : `${summary.accepted + summary.duplicate} got through before it stopped and are marked`;
 
-  return `The server could not be reached${because}. Nothing was marked as sent, so pressing Send `
-    + 'again offers the same pairs — and the server ignores one it already holds.';
+  return `The server could not be reached${because}. ${sent}, so pressing Send again offers what is `
+    + 'left — and the server ignores a pair it already holds.';
 }
 
 /** And an exit of zero is judged by what the summary says, not by the zero. */
