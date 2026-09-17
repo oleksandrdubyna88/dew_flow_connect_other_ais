@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatModelChoice, ChatPageState, NO_MARKS, chatPageHtml } from '../chatPage';
+import { ChatPageState, NO_MARKS, chatPageHtml } from '../chatPage';
+import { ChatModelChoice } from '../chatContracts';
 import { chatCommandOf } from '../chatMessages';
 import { began, isWanted, join, withdraw } from '../chatQueue';
 import type { WaitingQuestion } from '../chatPage';

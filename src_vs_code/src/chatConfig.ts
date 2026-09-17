@@ -16,7 +16,7 @@ import {
   legacyPick,
   resolveChatPick,
 } from './chatModels';
-import { ChatModelChoice } from './chatPage';
+import { ChatModelChoice } from './chatContracts';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { teamServersFrom } from './teamServers';
 import { chatRuntimeRefusal } from './cliChatLaunch';

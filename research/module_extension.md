@@ -790,6 +790,24 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**One import of one four-field interface was a whole import cycle.** `chatModels.ts:1` took
+`ChatModelChoice` from `chatPage.ts`, and the page takes `ChatProvider` back — so `chatModels ↔
+chatPage` sat in the frozen list `importCycles.test.mjs` keeps. That import was the ENTIRE return
+edge: nothing else in `chatModels` reaches the page. The interface moved to `chatContracts.ts` on
+2026-09-17 and the ratchet fell from nine entries to eight — the direction it may only move. A cycle
+bundles perfectly well and fails at runtime with *Cannot access 'X' before initialization*, which is
+why that check exists.
+
+The gate over the split had accepted this as *“couples config to the page — true and pre-existing”*
+and filed it as tidiness. It was a ratchet entry. **Seven importers, not the four the plan listed** —
+`chatConfig`, `chatModels`, `chatThread`, `chatPanel` and three test files — and no re-export was
+left behind, because a convenience re-export keeps the edge and would have let the ratchet be lowered
+by a commit that changed nothing.
+
+**`ChatMessage` did NOT move with it**, and the measurement is why: it has five importers
+(`chatFresh`, `chatMessageShape`, `chatStore`, `chatTabs`, `chatThread`) rather than the one the plan
+supposed, and moving it breaks no cycle because none of those is imported back by the page. It buys
+tidiness, not a ratchet drop, so it is its own change.
 **A rename follows a few conversations at a time, and the number behind that is measured.** The
 store pass was strictly sequential. Against a real store on 2026-09-17: **5.76 ms per refile**, so
 ten thousand conversations sequentially is about **58 seconds** — not the hours the plan estimated,

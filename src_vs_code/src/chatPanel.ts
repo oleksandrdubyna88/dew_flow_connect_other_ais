@@ -2,21 +2,8 @@ import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { PageMessage, chatCommandOf, offersPair } from './chatMessages';
 import { ChatEntry, DisposableSession, RevealablePanel } from './chatPanels';
-import {
-  ChatMessage,
-  ChatModelChoice,
-  ChatPageState,
-  TurnMarks,
-  WaitingQuestion,
-  chatCappedHtml,
-  chatFailureHtml,
-  chatMessagesHtml,
-  chatPageHtml,
-  chatPickerHtml,
-  chatPresetRowsHtml,
-  chatStatusHtml,
-  chatWaitingHtml,
-} from './chatPage';
+import { ChatMessage, ChatPageState, TurnMarks, WaitingQuestion, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatPresetRowsHtml, chatStatusHtml, chatWaitingHtml } from './chatPage';
+import { ChatModelChoice } from './chatContracts';
 import { ChatProvider } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
 import { chatTabIcon } from './chatIcon';
