@@ -1,6 +1,15 @@
 # PLAN — every message coai raises is written down, counted, and readable afterwards
 
-> Status: **plan only, nothing implemented yet, 2026-09-16.** Through **two** plan rounds of this
+> Status: **S1–S4 SHIPPED 2026-09-17; S5–S8 open.** The record, the two ledgers, the funnel in
+> front of all 111 call sites and the bounds on what one run may write are built, tested and through
+> two code rounds of the gate. Nothing READS the ledger yet — that is S5, and with it the panel
+> section, the page, and making the write-gap counter durable. S6 is the rounds log, S7 the three
+> extension-side defects (which is why one direct call site remains, in `helpPanel.ts`), S8 the
+> server half. Deviations from the plan as written are recorded inline, each beside the thing it
+> changed; the largest are in *E* (the run budget is charged per CODE, not per `(code, subject)`)
+> and *S4a* (three decisions the code round changed).
+>
+> Originally, 2026-09-16: **plan only, nothing implemented yet.** Through **two** plan rounds of this
 > repository's own gate (16 then 21 gating findings against a threshold of 6; 40 of 45 accepted),
 > four internal reviews and two consultations — the second round found things the first did not, and
 > none of it contradicted the first round's fixes. What changed and why is in *What the first draft
@@ -45,9 +54,14 @@ that reads like a note about a role rather than a note about the machine.
 ### The general defect
 
 **A message a person misses is a message that never happened**, and this product has no second place
-to look. There are **109** `window.show*Message` call sites in `src_vs_code/src` outside the tests
-(68 warning, 27 information, 14 error — counted, and the count is mechanised by S1) and **no durable
-record of any of them**: `createOutputChannel` appears **0** times, there is no log file, and no
+to look. There were **109** `window.show*Message` call sites in `src_vs_code/src` outside the tests
+when this was written (68 warning, 27 information, 14 error) and **no durable record of any of
+them**. Those figures are the 2026-09-16 count and are left as the historical record of what the
+plan was written against; the live number is
+[notification-sites.json](../src_vs_code/notification-sites.json), which a script generates and a
+test compares — 111 sites today, 110 of them routed. Quoting a count in prose beside a generated one
+is the failure S1 exists to prevent, so this paragraph names the artefact rather than competing with
+it. (CodeRabbit, on this PR.): `createOutputChannel` appears **0** times, there is no log file, and no
 telemetry ([src_vs_code/README.md:316](../src_vs_code/README.md) — *"Nothing is sent to the authors of
 this extension. There is no telemetry."*). The codebase already says it out loud at
 [roundsLog.ts:1832-1834](../src_vs_code/src/roundsLog.ts) — *"the only diagnostic the extension side can

@@ -53,18 +53,19 @@ export const RUN_BUDGET = 5000;
 export const FAULT_RESERVE = 1000;
 
 /**
- * The most `(code, subject)` pairs one run can ever be counting, and it is not a guess.
+ * How big the LRU here USED to be. Nothing in this module reads it; the tests do.
  *
- * <p><b>This replaced an LRU of 512, which the code round was right to call a defect.</b> An LRU
- * evicts, an evicted key returns with its count at one, and two things that must not restart
- * restarted with it: `notifyOnce` showed a toast it had promised to show once, and a repeat
- * threshold that had climbed to ninety went back to zero — so a condition recurring slowly among
- * many others could never reach its storm at all. Two reviewers found it from two directions.</p>
+ * <p>There was an LRU of 512, and the code round was right to call it a defect: an LRU evicts, an
+ * evicted key returns with its count at one, and two things that must not restart restarted with
+ * it — `notifyOnce` showed a toast it had promised to show once, and a repeat threshold that had
+ * climbed to ninety went back to zero, so a condition recurring slowly among many others could
+ * never reach its storm at all. Two reviewers found it from two directions.</p>
  *
- * <p>Nothing is evicted now. That is affordable because the run budget already bounds it: a key
- * enters this map only when a record for it is WRITTEN, and writes are capped at one per code plus
- * the budget plus the fault reserve. The ceiling below is therefore arithmetic rather than a guess,
- * and `tracked()` exists so a test can assert it instead of trusting this paragraph.</p>
+ * <p>Nothing is evicted now, so this is not a bound the code enforces and it must not be read as
+ * one. It survives because the tests need a number that means "more subjects than the old cache
+ * could hold" to build the scenario that used to defeat it, and a scenario sized by the thing it
+ * has to outrun is clearer than one sized by a literal. (CodeRabbit was right that the docstring
+ * this replaces claimed a bound the code no longer has.)</p>
  */
 export const KEYS_REMEMBERED = 512;
 
@@ -196,6 +197,14 @@ function budgetStorm(run: string, pid: number, at: Date): NotificationRecord {
  *
  * <p>A factory rather than module state, on `textCopier`'s shape: a test gets its own, and no test
  * has to remember to reset a global before the next one reads it.</p>
+ *
+ * <p><b>What bounds `seen`, precisely.</b> A key enters it only when a record is WRITTEN, so its
+ * size is one per CODE that has spoken, plus `RUN_BUDGET`, plus `FAULT_RESERVE` — <i>plus one per
+ * distinct question</i>, because a modal or buttoned notice bypasses the budget on purpose and is
+ * still counted. That last term has no arithmetic bound and does not need one: every question waits
+ * for a hand, so the number of distinct ones a run can reach is bounded by how many a person
+ * answers. Saying "the bound is arithmetic" without that clause was wrong, and CodeRabbit said
+ * so.</p>
  *
  * <p><b>Why `heard` is a Set of CODES and the budget charges against it.</b> The plan bounded the
  * run with a budget on repeats of a `(code, subject)`, to stop "a loop churning 512 distinct
