@@ -3,6 +3,7 @@ import { ChatEntry } from './chatPanels';
 import { Thread, threads } from './chatThread';
 import { answeredBy, asText, chatLanguage, pairOf, show } from './chatShow';
 import { cliFor, remoteFor, started } from './chatLaunch';
+import { retire } from './retireSession';
 import { readyToChat, taskOf, vendorFor } from './chatConfig';
 import { TurnResult } from './chatSession';
 import { isRemote, memoryOf } from './chatModels';
@@ -184,8 +185,10 @@ export async function reopened(thread: Thread): Promise<string> {
   }
 
   const opened = started(ready.vendor, cli.resolved, ready.modelId, remote.session);
-  thread.session.dispose();
-  thread.home.release();
+  // Same shape as the switch, and the same reason for guarding it: the replacement is installed on
+  // the next lines, so a disposal that threw would leave the thread holding the old session while
+  // the new one is already running.
+  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
   thread.session = opened.session;
   thread.home = opened.home;
   thread.providers = ready.providers;

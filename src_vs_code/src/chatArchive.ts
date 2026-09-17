@@ -8,6 +8,7 @@ import { asText, show } from './chatShow';
 import { ChatSession } from './chatSession';
 import { SaveOutcome } from './chatStoreFile';
 import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened } from './chatFresh';
+import { retire } from './retireSession';
 import { reloadedNote } from './chatTabs';
 import { carriedFrom } from './chatCarry';
 import { pushChatFresh } from './chatPanel';
@@ -251,19 +252,12 @@ export async function ended(thread: Thread): Promise<string> {
   } catch (reason) {
     stopped = asText(reason);
   }
-  try {
-    // Safe to call twice, so a session already gone stays gone.
-    thread.session.dispose();
-  } catch (reason) {
-    console.warn('ConnectOtherAIs: a chat session would not be disposed on a reset', reason);
-  }
-  try {
-    // AFTER the disposal, never before it: a CLI writing on its way out into a directory that has
-    // already been removed throws where nobody is listening.
-    thread.home.release();
-  } catch (reason) {
-    console.warn('ConnectOtherAIs: a chat temp directory could not be released after a reset', reason);
-  }
+  // THE ONE IMPLEMENTATION, since 2026-09-17. These two guarded cleanups were written HERE, at this
+  // function's own code round, and the three other places that close a session had them as two bare
+  // statements — so a disposal that threw took the release down with it, silently. `retire` is this
+  // version lifted out; leaving a copy behind would have been the fourth opinion the extraction
+  // exists to stop. The order, and why it is not alphabetical, live there now.
+  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}, on a reset`, reason));
 
   return stopped;
 }

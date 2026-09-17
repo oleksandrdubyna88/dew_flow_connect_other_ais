@@ -790,6 +790,28 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**Closing a conversation lets go of BOTH its process and its directory, whatever the other did.**
+Three places did it as two bare statements — `thread.session.dispose(); thread.home.release();` — so a
+throw from the first meant the second never ran, and a vendor process AND its temporary directory
+outlived the tab, silently. At two of them it was worse than a leak: `chatLaunch` and `chatTurn`
+install a replacement session on the next lines, so a throw left the thread holding the old one
+while the new one was already running.
+
+**The correct version already existed here.** `ended()` had done it with two independent guards since
+its own code round, with the reason recorded beside it. Measured 2026-09-17: one of the four sites
+was guarded and three were not, so `retire` is that version lifted out — not a fourth opinion — and
+`ended` now calls it too, because leaving the original behind is how the fourth opinion appears next
+time. The order is load-bearing and not alphabetical: the release comes AFTER the disposal, since a
+CLI still writing on its way out into a directory that has already gone throws where nobody listens.
+
+**What it cannot do, said rather than implied.** If `dispose()` itself throws there is no stronger
+lever at this layer — `ChatSession.stop()` ends a TURN and leaves the session open, so it is weaker,
+not stronger. The process is then genuinely leaked until the host exits. What changed is that the
+leak is LOUD and the directory is still released. An earlier draft of the plan said a failed dispose
+should escalate through `stop()`; reading that method's own contract is what removed it.
+
+`chatPanels.ts` disposes a session in two more places with no paired release; a different shape, left
+alone and recorded here rather than swept in.
 **Following a rename now says something, and until 2026-09-17 it said nothing at all.** Every failure
 on that path went to the console: a conversation that could not be refiled, and an `index.refresh()`
 that threw AFTER records had been refiled. The second is the one that earns an interruption — the
