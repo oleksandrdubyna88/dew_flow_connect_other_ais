@@ -1082,11 +1082,29 @@ export function chatWaitingHtml(waiting: readonly WaitingQuestion[]): string {
     return '';
   }
 
-  const rows = waiting.map((one) => `<li class="waitingRow"><span class="waitingText">${escapeHtml(one.text)}</span>`
+  const rows = waiting.map((one) => `<li class="waitingRow"><span class="waitingText">${escapeHtml(shownOf(one.text))}</span>`
     + `<button type="button" class="waitingDrop" data-command="withdraw" data-id="${escapeHtml(one.id)}"`
     + ` title="Take this question back" aria-label="Take this question back">✕</button></li>`).join('');
 
   return `<ul class="waiting" aria-label="Waiting to be asked">${rows}</ul>`;
+}
+
+/**
+ * How much of a waiting question is DRAWN. The whole of it is still what gets asked.
+ *
+ * <p>A question may be a pasted file — the queue's own ceiling is 64 KB across eight of them — and a
+ * row is a reminder of what is coming, not a second copy of the composer. Drawing all of it would
+ * rebuild tens of kilobytes of escaped HTML on every push that touches this region, and bury the
+ * crosses under a wall of text nobody scrolls. (gemini, the code round.)</p>
+ */
+const SHOWN_OF_A_WAITING_QUESTION = 240;
+
+function shownOf(text: string): string {
+  return text.length <= SHOWN_OF_A_WAITING_QUESTION
+    ? text
+    // The ellipsis is a character rather than three dots, and it SAYS there is more — a row cut
+    // silently would read as a question somebody typed badly.
+    : `${text.slice(0, SHOWN_OF_A_WAITING_QUESTION)}…`;
 }
 
 export function chatStatusHtml(running: boolean, position: number, turn: number): string {
@@ -2162,9 +2180,21 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // carries the stop control, so a queue living inside it would be destroyed and rebuilt whenever
     // a turn's status moved - taking the keyboard off a cross somebody was reaching for.
     if (waiting && typeof data.waitingHtml === 'string' && lastWritten.waiting !== data.waitingHtml) {
+      // WHETHER THE KEYBOARD WAS IN HERE. Replacing innerHTML destroys the button somebody just
+      // pressed, and focus falls to the body - so a person withdrawing three questions with the
+      // keyboard would have to tab back in from the start each time. The same care the thinking
+      // line takes with its stop control.
+      var hadFocus = waiting.contains && waiting.contains(document.activeElement);
       waiting.innerHTML = data.waitingHtml;
       lastWritten.waiting = data.waitingHtml;
       wrote = true;
+      if (hadFocus) {
+        // The next cross if there is one, and the composer if the queue is now empty - which is
+        // where somebody who has just emptied it is going to type anyway.
+        var nextCross = waiting.querySelector && waiting.querySelector('[data-command="withdraw"]');
+        var land = nextCross || document.getElementById('say');
+        if (land && typeof land.focus === 'function') { land.focus(); }
+      }
     }
     if (thinking && typeof data.thinkingHtml === 'string' && lastWritten.thinking !== data.thinkingHtml) {
       // Whether the keyboard was on the control this is about to destroy. Replacing the line while a

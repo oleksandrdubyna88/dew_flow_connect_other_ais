@@ -138,3 +138,33 @@ test('the whole page carries the waiting rows, not only the fragment', () => {
 
   assert.match(html, /the queued one/u, 'the page does not render its own waiting list');
 });
+
+// ---------- a row is a reminder, not a second composer ----------
+
+test('a very long question is DRAWN short, and the whole of it is still what waits', () => {
+  // The ceiling is 64 KB across eight questions, so a row can be a pasted file. Drawing all of it
+  // would rebuild tens of kilobytes of escaped HTML on every push that touches this region, and
+  // bury the crosses under a wall nobody scrolls. (gemini, the code round.)
+  const long = 'x'.repeat(5_000);
+
+  const html = chatWaitingHtml([{ id: 'w1', text: long }]);
+
+  assert.ok(html.length < 2_000, `a 5 000-character question drew ${html.length} characters of row`);
+  assert.match(html, /…/u, 'the row was cut without saying so, which reads as a badly typed question');
+});
+
+test('and a short one is drawn whole, with no ellipsis invented for it', () => {
+  const html = chatWaitingHtml([{ id: 'w1', text: 'and what does the sweep do?' }]);
+
+  assert.match(html, /and what does the sweep do\?</u, 'a short question was cut');
+  assert.doesNotMatch(html, /…/u);
+});
+
+test('what is cut is still ESCAPED, because cutting is not sanitising', () => {
+  // The obvious way to get this wrong is to escape and then slice, which can cut an entity in half
+  // and put a bare '&' or a half-written '&lt' on the page.
+  const html = chatWaitingHtml([{ id: 'w1', text: `${'<img src=x onerror=alert(1)>'.repeat(40)}` }]);
+
+  assert.ok(!html.includes('<img src=x'), 'the cut question reached the page as markup');
+  assert.match(html, /&lt;img src=x/u);
+});
