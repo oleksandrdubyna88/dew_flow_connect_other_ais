@@ -264,7 +264,20 @@ mkdir -p ~coai-bugs-deploy/.ssh && chmod 700 ~coai-bugs-deploy/.ssh
 chown -R coai-bugs-deploy:coai-bugs-deploy ~coai-bugs-deploy/.ssh
 ```
 
-Then install the unit below, and run **Actions → deploy the ingest server** with the version.
+Then install the unit below — and **enable** it, which is a separate thing from installing it:
+
+```bash
+systemctl daemon-reload
+systemctl enable coai-bugs    # NOT --now: there is no binary to start until the first deploy
+```
+
+`enable` is what writes the `multi-user.target.wants` symlink the unit's `[Install]` section asks
+for, and without it the service runs until the machine reboots and then does not come back. The
+first host to run these notes was left exactly like that: installed, deployed, serving, `disabled`.
+Nothing reports it — `systemctl is-active` says `active` either way, and so does the deploy's own
+canary. `systemctl is-enabled` is the only thing that answers the question.
+
+Then run **Actions → deploy the ingest server** with the version.
 The first run writes the environment file before it installs anything, so the service has its
 secret the first time it starts.
 
