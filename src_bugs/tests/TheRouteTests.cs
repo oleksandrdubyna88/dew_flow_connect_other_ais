@@ -85,7 +85,7 @@ public sealed class TheRouteTests
         var (key, id) = server.IssueKey();
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, DateTime.UtcNow.ToString("O")).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminIdentity.Cli, server.Clock)).Should().BeTrue();
         }
 
         using var http = server.CreateClient();

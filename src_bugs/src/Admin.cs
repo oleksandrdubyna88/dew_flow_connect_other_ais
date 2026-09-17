@@ -32,7 +32,13 @@ internal static class Admin
     internal static bool Knows(string[] args) =>
         args.Length > 0 && Array.IndexOf(Modes, args[0]) >= 0;
 
-    internal static int Run(string[] args, string secret, string dataDir)
+    /// <param name="clock">
+    /// Injected, per the UTC rule: every stamp a one-shot writes — a key's creation, an audit row,
+    /// a promotion — comes from here, so a test can pin it. It does not take the serve lock: a
+    /// one-shot is not a server, and running one while the service serves is what the database's
+    /// busy timeout exists for.
+    /// </param>
+    internal static int Run(string[] args, string secret, string dataDir, TimeProvider clock)
     {
         if (secret.Length == 0)
         {
@@ -42,15 +48,18 @@ internal static class Admin
         }
 
         using var corpus = Corpus.Open(Path.Combine(dataDir, "coai-bugs.db"));
-        var now = DateTime.UtcNow.ToString("O");
+
+        // Whoever runs a one-shot has a shell on the host: the audit names them `cli`, and the
+        // exact time — this is a record about an administrator, which the promise allows.
+        var by = Audit.By(AdminIdentity.Cli, clock);
 
         // Every arm is a mode in `Modes`, and `Knows` is what let this be reached — so the default
         // is unreachable rather than a silent fallback to `--waiting`.
         return args[0] switch
         {
-            "--issue-key" => Issue(corpus, args, secret, now),
-            "--revoke" => Revoke(corpus, args, now),
-            "--promote" => Promote(corpus, args, now),
+            "--issue-key" => Issue(corpus, args, secret, by),
+            "--revoke" => Revoke(corpus, args, by),
+            "--promote" => Promote(corpus, args, by.AtUtc),
             "--waiting" => Waiting(corpus, args),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(args), args[0], $"is in {nameof(Modes)} but has no arm here"),
@@ -65,14 +74,14 @@ internal static class Admin
     /// the database in a form anybody can read back: a stolen corpus must not become a set of working
     /// keys. If the holder loses it, they get a new one — there is nothing here to recover.
     /// </remarks>
-    private static int Issue(Corpus corpus, string[] args, string secret, string now)
+    private static int Issue(Corpus corpus, string[] args, string secret, Audit by)
     {
         var note = Flag(args, "--note");
         var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
         var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
 
-        corpus.Issue(id, Corpus.HashOf(key, secret), note, now);
+        corpus.Issue(id, Corpus.HashOf(key, secret), note, by);
 
         Say($"issued {id}" + (note.Length > 0 ? $" ({note})" : string.Empty));
         Say("the key is printed once and stored only as a hash — keep it or issue another");
@@ -81,7 +90,7 @@ internal static class Admin
         return 0;
     }
 
-    private static int Revoke(Corpus corpus, string[] args, string now)
+    private static int Revoke(Corpus corpus, string[] args, Audit by)
     {
         var id = Flag(args, "--id");
         if (id.Length == 0)
@@ -96,7 +105,7 @@ internal static class Admin
             return 65; // EX_DATAERR
         }
 
-        if (!corpus.Revoke(id, now))
+        if (!corpus.Revoke(id, by))
         {
             Say($"no key {id} is in force");
 

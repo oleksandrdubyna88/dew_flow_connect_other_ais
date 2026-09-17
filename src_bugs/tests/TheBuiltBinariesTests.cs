@@ -1,6 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -137,6 +141,110 @@ public sealed class TheBuiltBinariesTests : IDisposable
             65, "it KNOWS --revoke; the argument is what is wrong, and 64 would say otherwise");
     }
 
+    /// <summary>
+    /// The shipped server migrates the file the field has, stamps the month, refuses a flood with a
+    /// number, and refuses a revoked key — over a real socket, with the real one-shots running beside it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Unit tests can all pass while the deployed `/ingest` never invokes the limiter</b>,
+    /// because the middleware is wired wrong; and an in-process host cannot show a second PROCESS
+    /// opening the database while the server holds it. So: the database is written first exactly as
+    /// `bugs-v0.1.0` left it on the host (<c>user_version = 0</c>), the real binary migrates it on
+    /// start, `--issue-key` and `--revoke` run as real concurrent openers, and every status this
+    /// story added is read off a real socket. The one-server-per-directory refusal and the
+    /// out-of-range rate refusal are exit codes, which only a process can show.</para>
+    /// <para>The month is compared with the wall clock read on either side of the ingest, so a run
+    /// that straddles a UTC month boundary is not a failure of the server.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRealServerMigratesLimitsAndStopsARevokedKey()
+    {
+        MustExist(BugsExe);
+        var database = Path.Combine(_dir, "coai-bugs.db");
+        TheMigrationTests.WriteAFileFromStepOneOnly(database);
+
+        var port = FreePort();
+        using var server = Start(BugsExe, $"--urls http://127.0.0.1:{port}", _dir, rate: "2");
+        try
+        {
+            (await Listening(port)).Should().BeTrue("the server must migrate the field's file and come up");
+            TestSql.Scalar(database, "PRAGMA user_version").Should().Be(
+                CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture),
+                "the REAL binary ran the migration on the shape the field has");
+
+            var (key, id) = IssueKeyAndId();
+            using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+
+            var before = LastSeenMonth.Now(TimeProvider.System).Value;
+            (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
+            var after = LastSeenMonth.Now(TimeProvider.System).Value;
+            var usage = UsageOf(database, id);
+            usage.LastSeenMonth.Should().MatchRegex(LastSeenMonth.Shape().ToString()).And.BeOneOf(before, after);
+            usage.Submissions.Should().Be(1);
+
+            (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
+            using var third = await Ingest(http);
+            third.StatusCode.Should().Be(
+                HttpStatusCode.TooManyRequests, "the third request inside a minute, at a limit of two");
+            third.Headers.RetryAfter.Should().NotBeNull("a 429 with no number is a client that retries at once for ever");
+            third.Headers.RetryAfter!.Delta.Should().BeGreaterThan(TimeSpan.Zero);
+            (await third.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+                .Should().Contain("2 requests a minute", "the body names the limit");
+            UsageOf(database, id).Submissions.Should().Be(2, "a 429 counts nothing");
+
+            Run(BugsExe, $"--revoke --id {id}", _dir).Code.Should().Be(
+                0, "the operator's stop button, run while the server serves — a real concurrent opener");
+            (await Ingest(http)).StatusCode.Should().Be(
+                HttpStatusCode.Unauthorized, "revoking must actually stop an ingest");
+
+            Run(BugsExe, $"--urls http://127.0.0.1:{FreePort()}", _dir).Code.Should().Be(
+                78, "one server per data directory: the limiter lives in the first one's memory");
+        }
+        finally
+        {
+            Stop(server);
+        }
+
+        Run(BugsExe, $"--urls http://127.0.0.1:{FreePort()}", _dir, rate: "1001").Code.Should().Be(
+            78, "a rate past the cap is refused at startup rather than clamped");
+    }
+
+    private static readonly object OnePair = new
+    {
+        items = new[]
+        {
+            new
+            {
+                language = "CSharp",
+                skeletonBefore = "method_1(var_1) { }",
+                skeletonAfter = "method_1(var_1) { lock (var_2) { } }",
+            },
+        },
+    };
+
+    private static Task<HttpResponseMessage> Ingest(HttpClient http) =>
+        http.PostAsJsonAsync("/ingest", OnePair, TestContext.Current.CancellationToken);
+
+    /// <summary>What the key has done, read from the FILE by a third opener while the server serves.</summary>
+    private static KeyUsage UsageOf(string database, string id)
+    {
+        using var corpus = Corpus.Open(database);
+
+        return corpus.UsageOf(id);
+    }
+
+    /// <summary>Mints a key through the real one-shot and reads its id off stderr, where the one-shot says it.</summary>
+    private (string Key, string Id) IssueKeyAndId()
+    {
+        var issued = Run(BugsExe, "--issue-key --note a-scenario", _dir);
+        issued.Code.Should().Be(0, $"--issue-key said: {issued.Err}");
+        var id = Regex.Match(issued.Err, "issued ([0-9a-f]{16})").Groups[1].Value;
+        id.Should().HaveLength(16, "the id is what --revoke needs, and stderr is where the one-shot says it");
+
+        return (issued.Out.Trim(), id);
+    }
+
     /// <summary>Seeds one kept pair into a client-side database the real CLI will read.</summary>
     private void SeedOneKeptPair() => Seed.KeptPairs(
         Client(),
@@ -205,28 +313,9 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// writing and then stops running. The server logs to its console sink on every request, so it
     /// would reach that buffer and hang there — looking exactly like a server that never came up.
     /// </remarks>
-    private static Process Start(string exe, string args, string data, string key = "")
+    private static Process Start(string exe, string args, string data, string key = "", string rate = "")
     {
-        var how = new ProcessStartInfo(exe)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(exe)!,
-        };
-        foreach (var argument in args.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            how.ArgumentList.Add(argument);
-        }
-
-        how.Environment["COAI_BUGS_SECRET"] = Secret;
-        how.Environment["COAI_BUGS_DATA"] = data;
-        how.Environment["COAI_DATA_DIR"] = data;
-        if (key.Length > 0)
-        {
-            how.Environment["COAI_BUGS_KEY"] = key;
-        }
-
+        var how = Prepared(exe, args, data, key, rate);
         var started = Process.Start(how)!;
 
         // Drained on their own threads, because the SERVER is left running: nobody calls
@@ -246,7 +335,25 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// thread — which is the documented pair that cannot block.
     /// </remarks>
     private static (int Code, string Out, string Err) Run(
-        string exe, string args, string data, string key = "")
+        string exe, string args, string data, string key = "", string rate = "")
+    {
+        var how = Prepared(exe, args, data, key, rate);
+        using var process = Process.Start(how)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit(60_000).Should().BeTrue($"{exe} {args} must finish");
+
+        return (process.ExitCode, output.GetAwaiter().GetResult(), error);
+    }
+
+    /// <summary>The environment both launches share: the secret, the data directory, and what a scenario adds.</summary>
+    /// <remarks>
+    /// One builder for <see cref="Start"/> and <see cref="Run"/>, which used to carry two copies of
+    /// it — a variable added to one and not the other is a scenario testing a differently
+    /// configured server than it thinks. <paramref name="rate"/> is the limit setting as the unit
+    /// would set it; empty leaves it unset, which is the default the server documents.
+    /// </remarks>
+    private static ProcessStartInfo Prepared(string exe, string args, string data, string key, string rate)
     {
         var how = new ProcessStartInfo(exe)
         {
@@ -263,17 +370,14 @@ public sealed class TheBuiltBinariesTests : IDisposable
         how.Environment["COAI_BUGS_SECRET"] = Secret;
         how.Environment["COAI_BUGS_DATA"] = data;
         how.Environment["COAI_DATA_DIR"] = data;
+        // Never inherited from the machine: a developer's own setting must not decide a scenario.
+        how.Environment[RatePerMinute.Variable] = rate.Length > 0 ? rate : null;
         if (key.Length > 0)
         {
             how.Environment["COAI_BUGS_KEY"] = key;
         }
 
-        using var process = Process.Start(how)!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit(60_000).Should().BeTrue($"{exe} {args} must finish");
-
-        return (process.ExitCode, output.GetAwaiter().GetResult(), error);
+        return how;
     }
 
     private static void Stop(Process server)

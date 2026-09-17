@@ -27,4 +27,13 @@
     <ProjectReference Include="..\..\src_mcp\src\CoaiMcp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The released schema, frozen. `TheSchemaIsFrozenTests` holds step 1 of `CorpusSchema` against
+         this file, which is what `bugs-v0.1.0` (f7e5170b) evaluates its `Schema` to and what the
+         first host's database already contains. Copied beside the runner rather than located by
+         walking up to the repository: a scenario over the published binary runs wherever the release
+         workflow puts it. -->
+    <None Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

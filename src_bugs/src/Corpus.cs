@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using CoaiMcp.Core.Collecting;
+using CoaiMcp.Storage;
 using Microsoft.Data.Sqlite;
 
 namespace CoaiBugs;
@@ -47,6 +48,14 @@ public sealed class Corpus : IDisposable
     /// </remarks>
     public const int MostWaiting = 20_000;
 
+    /// <summary>How many administrative actions the audit keeps: the newest this many.</summary>
+    /// <remarks>
+    /// One row per administrative action at ~150 bytes is ~7 MB here, and decades of hand-driven
+    /// administration. The sweep runs inside the transaction of every write that could cross the
+    /// mark, so the table is bounded from its first row rather than by a mode nobody will ask for.
+    /// </remarks>
+    public const int MostAudit = 50_000;
+
     /// <summary>
     /// One connection, one server, many requests — so the connection is guarded.
     /// </summary>
@@ -60,62 +69,40 @@ public sealed class Corpus : IDisposable
 
     private readonly SqliteConnection _db;
 
+    /// <summary>
+    /// Whether an <see cref="Ingesting"/> batch holds the transaction, so the writes inside it join
+    /// it rather than open one of their own.
+    /// </summary>
+    /// <remarks>
+    /// <c>SqliteConnection</c> refuses a nested transaction, and the batch is what makes the accepted
+    /// pairs, the counter and the month ONE commit. Set and cleared under <see cref="_gate"/>, which
+    /// is reentrant, so a <see cref="Keep"/> called from inside the batch sees it.
+    /// </remarks>
+    private bool _batching;
+
     private Corpus(SqliteConnection db) => _db = db;
 
     /// <summary>Opens the file and brings it up to date.</summary>
+    /// <remarks>
+    /// <para>Through the shared <see cref="SqliteMigrator"/>: <see cref="CorpusSchema.Steps"/> in
+    /// order, <c>user_version</c> recording how far the file has come. The file <c>bugs-v0.1.0</c>
+    /// created on the first host has every table of step 1 and <c>user_version = 0</c> — it was made
+    /// by a build that ran the schema as one statement and never stamped it — so on this build's first
+    /// open step 1 runs as a no-op (<c>IF NOT EXISTS</c>), the file is stamped 1, and step 2 adds
+    /// what is new. A test migrates exactly that shape, because a fresh file proves nothing.</para>
+    /// <para>The connection's timeout comes from the runner too, so the pragma it sets and the
+    /// provider's own retry are one number: a one-shot mode opening this file while the server is
+    /// mid-write WAITS rather than failing with <c>SQLITE_BUSY</c>.</para>
+    /// </remarks>
     public static Corpus Open(string path)
     {
-        var db = new SqliteConnection($"Data Source={path};Pooling=False");
+        var db = new SqliteConnection(
+            $"Data Source={path};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
         db.Open();
-        using var make = db.CreateCommand();
-        make.CommandText = Schema;
-        make.ExecuteNonQuery();
+        SqliteMigrator.Migrate(db, CorpusSchema.Steps);
 
         return new Corpus(db);
     }
-
-    /// <summary>
-    /// Everything, in one statement, because this database is young enough to have no history.
-    /// </summary>
-    /// <remarks>
-    /// <c>coai.db</c> migrates by appended steps because it has shipped and its files are in the
-    /// field. This one has not; when it does, it gains the same discipline. Saying so here is the
-    /// difference between a decision and an oversight.
-    /// </remarks>
-    private const string Schema = """
-        CREATE TABLE IF NOT EXISTS quarantine (
-            entry_id        TEXT PRIMARY KEY,
-            language        TEXT NOT NULL,
-            skeleton_before TEXT NOT NULL,
-            skeleton_after  TEXT NOT NULL,
-            received_utc    TEXT NOT NULL,
-            -- WHICH key sent it, never who holds the key. It is here so one contributor's mistake
-            -- can be undone in bulk without touching anybody else's work.
-            key_id          TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS corpus (
-            entry_id        TEXT PRIMARY KEY,
-            language        TEXT NOT NULL,
-            skeleton_before TEXT NOT NULL,
-            skeleton_after  TEXT NOT NULL,
-            promoted_utc    TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS api_keys (
-            id           TEXT PRIMARY KEY,
-            key_hash     TEXT NOT NULL UNIQUE,
-            created_utc  TEXT NOT NULL,
-            revoked_utc  TEXT NOT NULL DEFAULT '',
-            -- OUR record of why a key exists, not the holder's data. "for the tuesday workshop",
-            -- never a name or an address.
-            note         TEXT NOT NULL DEFAULT '',
-            -- A counter WITHOUT a clock, deliberately. With timestamps it would be a record of when
-            -- a person we handed a key to was working. It is not a rate limit either, and the plan
-            -- said so after a reviewer pointed out that a lifetime count has no window and no reset.
-            submissions  INTEGER NOT NULL DEFAULT 0
-        );
-        """;
 
     /// <summary>The id of a pair: a pure function of what the pair IS.</summary>
     /// <remarks>
@@ -148,35 +135,54 @@ public sealed class Corpus : IDisposable
         var entryId = IdOf(language, before, after);
         lock (_gate)
         {
-            using var transaction = _db.BeginTransaction();
-            if (Promoted(entryId))
-            {
-                transaction.Commit();
-
-                return (Kept.AlreadyHeld, entryId);
-            }
-
-            using var write = _db.CreateCommand();
-            write.CommandText = """
-                INSERT INTO quarantine
-                    (entry_id, language, skeleton_before, skeleton_after, received_utc, key_id)
-                VALUES ($id, $language, $before, $after, $now, $key)
-                ON CONFLICT(entry_id) DO NOTHING
-                """;
-            Bind(write, "$id", entryId);
-            Bind(write, "$language", language);
-            Bind(write, "$before", before);
-            Bind(write, "$after", after);
-            Bind(write, "$now", nowUtc);
-            Bind(write, "$key", keyId);
-
-            // DO NOTHING answers zero rows for a pair quarantine already holds. That is a success for
-            // the caller: it may stop sending it.
-            var stored = write.ExecuteNonQuery() == 1;
-            transaction.Commit();
-
-            return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId);
+            // Its own transaction when called alone; the batch's when called from `Ingesting`,
+            // which is how the pairs and the key's row become one commit.
+            return Transacting(() => Keeping(entryId, language, before, after, keyId, nowUtc));
         }
+    }
+
+    private (Kept Kept, string EntryId) Keeping(
+        string entryId, string language, string before, string after, string keyId, string nowUtc)
+    {
+        if (Promoted(entryId))
+        {
+            return (Kept.AlreadyHeld, entryId);
+        }
+
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO quarantine
+                (entry_id, language, skeleton_before, skeleton_after, received_utc, key_id)
+            VALUES ($id, $language, $before, $after, $now, $key)
+            ON CONFLICT(entry_id) DO NOTHING
+            """;
+        Bind(write, "$id", entryId);
+        Bind(write, "$language", language);
+        Bind(write, "$before", before);
+        Bind(write, "$after", after);
+        Bind(write, "$now", nowUtc);
+        Bind(write, "$key", keyId);
+
+        // DO NOTHING answers zero rows for a pair quarantine already holds. That is a success for
+        // the caller: it may stop sending it.
+        var stored = write.ExecuteNonQuery() == 1;
+
+        return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId);
+    }
+
+    /// <summary>Runs <paramref name="body"/> in a transaction: its own, or the open batch's.</summary>
+    private T Transacting<T>(Func<T> body)
+    {
+        if (_batching)
+        {
+            return body();
+        }
+
+        using var transaction = _db.BeginTransaction();
+        var result = body();
+        transaction.Commit();
+
+        return result;
     }
 
     /// <summary>How many pairs are waiting for a person right now.</summary>
@@ -247,52 +253,169 @@ public sealed class Corpus : IDisposable
         Convert.ToHexStringLower(
             HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(key)));
 
-    /// <summary>Writes down that a key was used, without writing down when.</summary>
+    /// <summary>
+    /// One accepted ingest: the pairs it stores, the key's count, and the key's month — one commit.
+    /// </summary>
     /// <remarks>
-    /// It was called <c>Counted</c>, which reads as a question. It increments a counter, and a
-    /// counter that is deliberately clockless is exactly the thing whose name should say what it
-    /// does. (Code round, local.)
+    /// <para><b>One transaction</b>, so a kill between the writes cannot leave an accepted batch
+    /// with a stale month or an uncounted key. <see cref="Keep"/>, called from inside
+    /// <paramref name="take"/>, joins this transaction rather than opening its own.</para>
+    /// <para><b>The counter is <c>submissions = submissions + 1</c> in SQL</b> — never read-then-write,
+    /// which loses an increment when two ingests race. <b>The month is conditional</b>
+    /// (<c>AND last_seen_month &lt;&gt; $month</c>), so a busy key rewrites its row at most once a
+    /// month; whether it did is answered, so a test can see a same-month row left alone.</para>
+    /// <para><b>Only an ACCEPTED ingest reaches here.</b> A 401, a 429 and a malformed body are
+    /// answered before it, and an administrative one-shot never calls it — each of those is a test,
+    /// because the month is a promise about what the server records and not only a column.</para>
     /// </remarks>
-    public void RecordSubmission(string keyId)
+    public Ingested<T> Ingesting<T>(string keyId, LastSeenMonth month, Func<T> take)
     {
         lock (_gate)
         {
-            using var write = _db.CreateCommand();
-            write.CommandText = "UPDATE api_keys SET submissions = submissions + 1 WHERE id = $id";
-            Bind(write, "$id", keyId);
-            write.ExecuteNonQuery();
+            using var transaction = _db.BeginTransaction();
+            _batching = true;
+            try
+            {
+                var answer = take();
+                Count(keyId);
+                var advanced = Touch(keyId, month);
+                transaction.Commit();
+
+                return new Ingested<T>(answer, advanced);
+            }
+            finally
+            {
+                _batching = false;
+            }
         }
     }
 
-    /// <summary>Records a new key and answers its id. The key itself is the caller's to print once.</summary>
-    public void Issue(string id, string keyHash, string note, string nowUtc)
+    private void Count(string keyId)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = "UPDATE api_keys SET submissions = submissions + 1 WHERE id = $id";
+        Bind(write, "$id", keyId);
+        write.ExecuteNonQuery();
+    }
+
+    private bool Touch(string keyId, LastSeenMonth month)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE api_keys SET last_seen_month = $month
+             WHERE id = $id AND last_seen_month <> $month
+            """;
+        Bind(write, "$month", month.Value);
+        Bind(write, "$id", keyId);
+
+        return write.ExecuteNonQuery() == 1;
+    }
+
+    /// <summary>
+    /// Records a new key and the administrator who minted it, in one transaction. The key itself is
+    /// the caller's to print once.
+    /// </summary>
+    /// <remarks>
+    /// The audit row and the sweep that bounds the table commit with the key, so the caller can never
+    /// report an issuance that was not audited — nor an audit of a key that was not issued.
+    /// </remarks>
+    public void Issue(string id, string keyHash, string note, Audit by)
     {
         lock (_gate)
         {
+            using var transaction = _db.BeginTransaction();
             using var write = _db.CreateCommand();
             write.CommandText = """
                 INSERT INTO api_keys (id, key_hash, created_utc, note) VALUES ($id, $hash, $now, $note)
                 """;
             Bind(write, "$id", id);
             Bind(write, "$hash", keyHash);
-            Bind(write, "$now", nowUtc);
+            Bind(write, "$now", by.AtUtc);
             Bind(write, "$note", note);
             write.ExecuteNonQuery();
+            Audited(AuditAction.Issue, id, by);
+            transaction.Commit();
         }
     }
 
-    /// <summary>Ends a key. Answers whether there was one to end.</summary>
-    public bool Revoke(string id, string nowUtc)
+    /// <summary>Ends a key, audited. Answers whether there was one to end.</summary>
+    /// <remarks>
+    /// <b>A revoked key is one whose <c>revoked_utc</c> is non-empty</b>, and <see cref="KeyFor"/>
+    /// never answers one — so the refusal happens before the rate limiter and before any write, and
+    /// a test proves that revoking actually stops an ingest. A revoke that changed nothing (no such
+    /// key, or already revoked) writes no audit row: there was no mutation to leave unaudited.
+    /// </remarks>
+    public bool Revoke(string id, Audit by)
     {
         lock (_gate)
         {
+            using var transaction = _db.BeginTransaction();
             using var write = _db.CreateCommand();
             write.CommandText = "UPDATE api_keys SET revoked_utc = $now WHERE id = $id AND revoked_utc = ''";
-            Bind(write, "$now", nowUtc);
+            Bind(write, "$now", by.AtUtc);
             Bind(write, "$id", id);
+            var changed = write.ExecuteNonQuery() == 1;
+            if (changed)
+            {
+                Audited(AuditAction.Revoke, id, by);
+            }
 
-            return write.ExecuteNonQuery() == 1;
+            transaction.Commit();
+
+            return changed;
         }
+    }
+
+    /// <summary>
+    /// The audit row for a mutation, and the sweep that keeps the table bounded — inside the
+    /// caller's transaction.
+    /// </summary>
+    /// <remarks>
+    /// <c>target</c> is the key's id and nothing else: not its note, never the key, never its hash.
+    /// That is the privacy boundary of this table and a test pins it.
+    /// </remarks>
+    private void Audited(AuditAction action, string target, Audit by)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO admin_audit (admin_id, action, target, at_utc)
+            VALUES ($admin, $action, $target, $at)
+            """;
+        Bind(write, "$admin", by.AdminId);
+        Bind(write, "$action", action.Word());
+        Bind(write, "$target", target);
+        Bind(write, "$at", by.AtUtc);
+        write.ExecuteNonQuery();
+        Sweeping(MostAudit);
+    }
+
+    /// <summary>Keeps the newest <paramref name="keep"/> audit rows and deletes the rest.</summary>
+    /// <remarks>
+    /// Internal, with the bound as a parameter, so a test can cross a small one and watch exactly the
+    /// newest rows survive; the real bound is crossed too, from a seeded table. The production path
+    /// is <see cref="Audited"/>, which always passes <see cref="MostAudit"/>.
+    /// </remarks>
+    internal void SweepAudit(int keep)
+    {
+        lock (_gate)
+        {
+            Sweeping(keep);
+        }
+    }
+
+    private void Sweeping(int keep)
+    {
+        // An INDEXED cutoff: the one id at the boundary is found through the primary key, and the
+        // delete is a range below it. `DELETE … WHERE id NOT IN (SELECT …)` is a latency spike and a
+        // lock risk inside a request. With fewer rows than `keep` the subquery is NULL, the
+        // comparison is NULL, and nothing is deleted.
+        using var sweep = _db.CreateCommand();
+        sweep.CommandText = """
+            DELETE FROM admin_audit
+             WHERE id <= (SELECT id FROM admin_audit ORDER BY id DESC LIMIT 1 OFFSET $keep)
+            """;
+        Bind(sweep, "$keep", keep);
+        sweep.ExecuteNonQuery();
     }
 
     /// <summary>What is waiting for a person to look at it.</summary>
@@ -429,8 +552,70 @@ public sealed class Corpus : IDisposable
         }
     }
 
+    /// <summary>What a key has done: its lifetime count and the month it was last used.</summary>
+    /// <remarks>Zero and empty for a key that does not exist, which is also what "never used" reads as.</remarks>
+    public KeyUsage UsageOf(string keyId)
+    {
+        lock (_gate)
+        {
+            using var read = _db.CreateCommand();
+            read.CommandText = "SELECT submissions, last_seen_month FROM api_keys WHERE id = $id";
+            Bind(read, "$id", keyId);
+            using var rows = read.ExecuteReader();
+
+            return rows.Read()
+                ? new KeyUsage(rows.GetInt32(0), rows.GetString(1))
+                : new KeyUsage(0, string.Empty);
+        }
+    }
+
+    /// <summary>The audit, oldest first, paged.</summary>
+    public IReadOnlyList<AuditRow> AuditTrail(int limit, int skip = 0)
+    {
+        lock (_gate)
+        {
+            using var read = _db.CreateCommand();
+            read.CommandText = """
+                SELECT id, admin_id, action, target, at_utc
+                  FROM admin_audit ORDER BY id LIMIT $limit OFFSET $skip
+                """;
+            Bind(read, "$limit", limit);
+            Bind(read, "$skip", skip);
+            using var rows = read.ExecuteReader();
+            var trail = new List<AuditRow>();
+            while (rows.Read())
+            {
+                trail.Add(new AuditRow(
+                    rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3), rows.GetString(4)));
+            }
+
+            return trail;
+        }
+    }
+
+    /// <summary>How many audit rows there are.</summary>
+    public int AuditCount()
+    {
+        lock (_gate)
+        {
+            using var read = _db.CreateCommand();
+            read.CommandText = "SELECT COUNT(*) FROM admin_audit";
+
+            return Convert.ToInt32(read.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+    }
+
     private static void Bind(SqliteCommand command, string name, object value) =>
         command.Parameters.AddWithValue(name, value);
 
     public void Dispose() => _db.Dispose();
 }
+
+/// <summary>What an accepted ingest came to: the answer, and whether the key's month moved.</summary>
+public sealed record Ingested<T>(T Answer, bool MonthAdvanced);
+
+/// <summary>A key's lifetime count and the month it was last used — empty for never.</summary>
+public sealed record KeyUsage(int Submissions, string LastSeenMonth);
+
+/// <summary>One administrative action, as the audit holds it.</summary>
+public sealed record AuditRow(long Id, string AdminId, string Action, string Target, string AtUtc);
