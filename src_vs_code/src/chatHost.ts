@@ -19,7 +19,16 @@ import { ChatStoreFile } from './chatStoreFile';
  * store, no memento, no heartbeat — which is every test of this file's pure neighbours, and every
  * use is guarded.</p>
  *
- * <p>No `vscode` here, so this module is NOT in `sonar.coverage.exclusions`.</p>
+ * <p><b>SonarCloud flags all three as "exporting mutable 'let' binding, use 'const' instead", and
+ * that is kept rather than silenced.</b> The rule is right in general and wrong here: the mutability
+ * IS the capability — it is what makes an importer see what `activate` bound rather than the
+ * `undefined` that was there at import time — and it is confined to this file, three names and three
+ * setters, with no other module able to assign. The alternative is three accessor functions, which
+ * would change every call site in fifteen modules to buy the same guarantee with more ceremony. Left
+ * as a reported issue so the next reader finds this paragraph rather than assuming it was missed.</p>
+ *
+ * <p>No `vscode` here, and nothing it imports reaches one either, so this module is NOT in
+ * `sonar.coverage.exclusions` — and it has tests of its own, in `src/test/chatHost.test.ts`.</p>
  */
 
 /**
