@@ -76,6 +76,22 @@ public static class ConsultationClosing
         : null;
 
     /// <summary>
+    /// The record as it ends when nobody said anything — the budget spent, or the clock run out.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own function so both automatic paths reach the same decision: the sweep in
+    /// <c>ConsultationStore</c> and the last turn in <c>ConsultationService</c> are written in two
+    /// files and would otherwise be two chances to leave the field empty — which is indistinguishable
+    /// from a record written before it existed.</para>
+    /// <para><b>It never overwrites a verdict.</b> A caller that closed its consultation and then let
+    /// the clock run out keeps what it said; the sweep runs afterwards and would otherwise erase it.</para>
+    /// </remarks>
+    public static ConsultationRecord Lapse(ConsultationRecord record) =>
+        ConsultationOutcomes.IsVerdict(record.Outcome)
+            ? record
+            : record with { Outcome = ConsultationOutcomes.Lapsed };
+
+    /// <summary>
     /// Would this close CHANGE the record? A repeat of the same outcome would not.
     /// </summary>
     /// <remarks>

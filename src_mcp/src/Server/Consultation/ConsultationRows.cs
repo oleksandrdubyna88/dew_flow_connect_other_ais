@@ -27,6 +27,7 @@ public static class ConsultationRows
         record.Turns.Count,
         record.Status,
         record.Reason,
+        record.Outcome,
         record.StartedUtc,
         record.EndedUtc,
         record.Turns.Sum(turn => turn.Seconds),

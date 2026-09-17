@@ -2599,6 +2599,17 @@ public sealed partial class PanelService
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>
         _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
+    /// <summary>
+    /// The tenth tool: how a consultation ENDED, recorded by whoever knows.
+    /// </summary>
+    /// <remarks>
+    /// Its counterpart above opens and continues one; nothing closed one until this existed, so a
+    /// consultation sat at <c>open</c> until a sweep took it and nothing anywhere said whether the
+    /// advice had worked. (issue #309.)
+    /// </remarks>
+    public Task<string> CloseConsultAsync(string repoPath, string consultationId, string outcome, string note, CancellationToken ct = default) =>
+        _consultations.CloseAsync(repoPath, consultationId, outcome, note, byPerson: false, ct);
+
 
     // ---------- plumbing ----------
 

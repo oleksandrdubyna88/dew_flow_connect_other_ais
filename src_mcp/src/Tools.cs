@@ -244,6 +244,40 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
+            async (string repoPath, string consultationId, string outcome, string? note = null) =>
+                await host.Current.CloseConsultAsync(repoPath, consultationId, outcome, note ?? string.Empty),
+            new McpServerToolCreateOptions
+            {
+                Name = "close_consult",
+                Title = "Record how a consultation ended — solved, not solved, or abandoned",
+                Description = """
+                    Ends a consultation YOU opened, with what you found. Nothing else on this
+                    surface ends one: without this call a consultation sits at `open` until it
+                    lapses, and the log can say what it cost but never whether it helped.
+
+                    Call it once you have VERIFIED the advice — which is the same moment the
+                    `consult` reply already tells you to report back. `outcome` is one of:
+
+                      solved      — you tried it and it worked
+                      not_solved  — you tried it and it did not
+                      abandoned   — nobody is going to act on it
+
+                    `note` is one sentence for the log: what you actually did, or why it was
+                    dropped. Optional, and worth writing — it is what a person reads months later
+                    when deciding whether consulting this vendor is worth the money.
+
+                    An outcome is NOT rewritten. Repeating the same one succeeds and changes
+                    nothing, which is what to do when a reply was lost; a different one is refused
+                    and names what is already on the record. A consultation the server itself
+                    closed — its budget spent, or idle too long — carries `lapsed`, which is not a
+                    verdict, so you may still record what you found.
+
+                    You may only close your own: a consultation belongs to the caller session that
+                    opened it.
+                    """,
+                ReadOnly = false, Idempotent = true, Destructive = false, OpenWorld = false,
+            });
+        yield return McpServerTool.Create(
             // Both optional arguments carry a C# default — the `resolve` lesson above: without one
             // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
             // consultationId yet, fails as "An error occurred invoking 'consult'".

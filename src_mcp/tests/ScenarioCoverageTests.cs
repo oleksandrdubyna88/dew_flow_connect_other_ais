@@ -39,6 +39,9 @@ public sealed class ScenarioCoverageTests
         ["status"] = "McpContractTests + CallerSessionsTests",
         ["consult"] = "ConsultScenarioTests — two turns over the fake CLI as codex: a thread opened, "
             + "resumed by its own id, the cap closing it, the ledger and the record written",
+        ["close_consult"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
+            + "then ENDED: the verdict on the record, a repeat that changes nothing, a conflicting "
+            + "outcome refused, a cap-closed one lapsing and still taking a verdict",
     };
 
     /// <summary>

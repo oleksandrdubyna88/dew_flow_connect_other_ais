@@ -110,6 +110,8 @@ public sealed record LoggedConsultation(
     int Turns,
     string Status,
     string Reason,
+    /// <summary>How it ended. Empty for a row written before the column existed — not a verdict.</summary>
+    string Outcome,
     string StartedUtc,
     string EndedUtc,
     double Seconds,
@@ -578,7 +580,7 @@ public static class RoundsQuery
             using var read = db.CreateCommand();
             read.CommandText = """
                 SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
-                       started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+                       outcome, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
                        problem, advice, alert
                 FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
                 """;
@@ -589,7 +591,7 @@ public static class RoundsQuery
                 consultations.Add(new LoggedConsultation(
                     Text(rows, "id"), Text(rows, "caller_kind"), Text(rows, "repo_path"), Text(rows, "branch"),
                     Text(rows, "vendor"), Text(rows, "model"), Number(rows, "turns"), Text(rows, "status"),
-                    Text(rows, "reason"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
+                    Text(rows, "reason"), Text(rows, "outcome"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
                     Real(rows, "seconds"), Big(rows, "tokens_in"), Big(rows, "tokens_out"),
                     MaybeReal(rows, "cost_usd"),
                     Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert")));

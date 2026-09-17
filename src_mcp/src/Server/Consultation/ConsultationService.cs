@@ -116,6 +116,84 @@ public sealed class ConsultationService(
                 record.Alert))];
     }
 
+    /// <summary>
+    /// Records how a consultation ENDED, and answers a sentence either way.
+    /// </summary>
+    /// <remarks>
+    /// <para>The verb the surface never had. Before it, a consultation lapsed: nine tools and none of
+    /// them ended one, so it sat at <c>open</c> until a sweep took it, and `Reason` said why it
+    /// stopped rather than whether it worked. (issue #309.)</para>
+    /// <para><b>Under the same lock as a turn</b>, for the same reason: a close that read the record
+    /// outside it could overwrite an answer being written at that moment.</para>
+    /// <para><b>A repeat writes nothing.</b> <see cref="ConsultationClosing.Writes"/> decides that
+    /// separately from the refusal, because a retry whose reply was lost must succeed — and a second
+    /// <c>EndedUtc</c> would move the moment the consultation ended to whenever the network failed.</para>
+    /// </remarks>
+    /// <param name="byPerson">
+    /// The panel's own door, which is not subject to the caller check. It reaches here through a
+    /// one-shot CLI mode on the person's own machine against their own data directory — a stronger
+    /// position than another AI's, not a weaker one — and the record keeps the difference.
+    /// </param>
+    public async Task<string> CloseAsync(string repoPath, string consultationId, string outcome, string note, bool byPerson, CancellationToken ct = default)
+    {
+        var repo = repoPath.Trim();
+        var id = consultationId.Trim();
+        if (!ConsultationStore.IsWellFormedId(id))
+        {
+            return Error($"'{id}' is not a consultation id");
+        }
+
+        using var held = await RepositoryLock.TryTakeAsync(settings.DataDir, repo, RepositoryLock.DefaultWait, ct);
+        if (held is null)
+        {
+            return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
+        }
+
+        var record = _store.Read(id);
+        if (record is null)
+        {
+            return Error($"no consultation {id} — it may have been swept after {ConsultationStore.Retention.TotalDays:0} days");
+        }
+
+        var word = outcome.Trim();
+        if (ConsultationClosing.Refusal(record, CallerOf(repo), word, byPerson) is { } refusal)
+        {
+            return Error(refusal);
+        }
+        if (!ConsultationClosing.Writes(record, word))
+        {
+            // A SUCCESS, not a refusal: the reply to the first attempt was lost, and the caller is
+            // asking again with the same word. Nothing is written — a second EndedUtc would move the
+            // moment the consultation ended to whenever the network failed.
+            return Json(
+                new CloseAnswer(id, word, Recorded: false, $"consultation {id} was already recorded as '{word}'"),
+                ServerJsonContext.Default.CloseAnswer);
+        }
+
+        var nowUtc = ConsultationStore.Stamp(DateTime.UtcNow);
+        _store.Write(record with
+        {
+            Outcome = word,
+            Status = ConsultationStatuses.Closed,
+            // The REASON is never overwritten: it says why the consultation stopped, and a close says
+            // how it ended. A record the sweep closed keeps its sentence about the budget and gains a
+            // verdict beside it. Only a record that had none gets this one.
+            Reason = record.Reason.Length > 0 ? record.Reason : Ended(word, note, byPerson),
+            EndedUtc = record.EndedUtc.Length > 0 ? record.EndedUtc : nowUtc,
+            UpdatedUtc = nowUtc,
+        });
+
+        return Json(
+            new CloseAnswer(id, word, Recorded: true, $"consultation {id} is recorded as '{word}'"),
+            ServerJsonContext.Default.CloseAnswer);
+    }
+
+    /// <summary>The sentence a close leaves behind when nothing had closed the consultation before.</summary>
+    private static string Ended(string outcome, string note, bool byPerson) =>
+        note.Trim().Length > 0
+            ? $"{(byPerson ? "closed by hand" : "closed by the caller")} as {outcome}: {note.Trim()}"
+            : $"{(byPerson ? "closed by hand" : "closed by the caller")} as {outcome}";
+
     public int Sweep(Func<int, bool> isAlive) =>
         _store.Sweep(isAlive, DateTime.UtcNow, settings.ConsultIdle, ConsultationStore.Retention);
 
@@ -542,7 +620,9 @@ public sealed class ConsultationService(
     {
         var last = record.Budget.IsLast;
 
-        return record with
+        // The LAST turn ends the consultation with nobody having said whether it worked, which is
+        // what `lapsed` records; an earlier turn leaves the outcome untouched. (issue #309.)
+        return (last ? ConsultationClosing.Lapse(record) : record) with
         {
             Turns = [.. record.Turns, turn],
             Handle = handle,

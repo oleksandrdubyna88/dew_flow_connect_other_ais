@@ -278,6 +278,100 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         Refusal(refused).Should().Contain("all 2 of its turns are used").And.Contain("COAI_CONSULT_TURNS");
     }
 
+    // ---------- how it ended (issue #309) ----------
+
+    private async Task<JsonElement> Close(PanelService service, string id, string outcome, string note = "") =>
+        JsonDocument.Parse(await service.CloseConsultAsync(_repo, id, outcome, note, TestContext.Current.CancellationToken)).RootElement;
+
+    /// <summary>
+    /// The tenth tool, over a real consultation: opened, answered, then ENDED with a verdict.
+    /// </summary>
+    /// <remarks>
+    /// The flow the surface had no verb for. Before it a consultation sat at <c>open</c> until a
+    /// sweep took it, and the log could say what it cost but never whether it helped.
+    /// </remarks>
+    [Fact]
+    public async Task AConsultationIsClosedWithAVerdict_AndTheRecordKeepsIt()
+    {
+        var service = Service();
+        var id = (await Consult(service, "the parser returns 3 where 4 is expected")).GetProperty("consultationId").GetString()!;
+
+        var closed = await Close(service, id, "solved", "the loop stopped one short; fixed and the test is green");
+
+        closed.TryGetProperty("error", out _).Should().BeFalse(closed.ToString());
+        closed.GetProperty("outcome").GetString().Should().Be("solved");
+        closed.GetProperty("recorded").GetBoolean().Should().BeTrue();
+
+        // On the RECORD, which is what the log projects and what survives a restart.
+        var record = new ConsultationStore(_data).Read(id)!;
+        record.Outcome.Should().Be("solved");
+        record.Status.Should().Be(ConsultationStatuses.Closed);
+        record.EndedUtc.Should().NotBeEmpty();
+        record.Reason.Should().Contain("the loop stopped one short");
+    }
+
+    [Fact]
+    public async Task ARepeatOfTheSameOutcomeSucceedsAndChangesNothing()
+    {
+        var service = Service();
+        var id = (await Consult(service, "the parser returns 3 where 4 is expected")).GetProperty("consultationId").GetString()!;
+        await Close(service, id, "not_solved");
+        var endedAt = new ConsultationStore(_data).Read(id)!.EndedUtc;
+
+        // The reply to the first attempt was lost and the caller is asking again. A success — and
+        // nothing is rewritten, because a second EndedUtc would move the moment it ended to
+        // whenever the network failed.
+        var again = await Close(service, id, "not_solved");
+
+        again.TryGetProperty("error", out _).Should().BeFalse(again.ToString());
+        again.GetProperty("recorded").GetBoolean().Should().BeFalse();
+        new ConsultationStore(_data).Read(id)!.EndedUtc.Should().Be(endedAt);
+    }
+
+    [Fact]
+    public async Task ADifferentOutcomeOverAVerdictIsRefused_NamingWhatIsOnTheRecord()
+    {
+        var service = Service();
+        var id = (await Consult(service, "the parser returns 3 where 4 is expected")).GetProperty("consultationId").GetString()!;
+        await Close(service, id, "solved");
+
+        Refusal(await Close(service, id, "abandoned")).Should().Contain("already recorded as 'solved'");
+    }
+
+    /// <summary>A consultation the CAP closed carries `lapsed`, and a verdict may still be recorded.</summary>
+    [Fact]
+    public async Task ACapClosedConsultationLapses_AndAVerdictMayStillBeRecorded()
+    {
+        var service = Service(turns: 1);
+        var id = (await Consult(service, "turn one and only")).GetProperty("consultationId").GetString()!;
+
+        // The cap closed it and nobody said whether it worked — which is what `lapsed` records,
+        // rather than an empty field indistinguishable from a record written before it existed.
+        new ConsultationStore(_data).Read(id)!.Outcome.Should().Be("lapsed");
+
+        var closed = await Close(service, id, "solved");
+
+        closed.TryGetProperty("error", out _).Should().BeFalse(closed.ToString());
+        new ConsultationStore(_data).Read(id)!.Outcome.Should().Be("solved");
+        // And the sentence about the budget is kept: why it stopped and how it ended are two facts.
+        new ConsultationStore(_data).Read(id)!.Reason.Should().Contain("turns are used");
+    }
+
+    [Fact]
+    public async Task AWordOutsideTheClosedSetIsRefused()
+    {
+        var service = Service();
+        var id = (await Consult(service, "the parser returns 3 where 4 is expected")).GetProperty("consultationId").GetString()!;
+
+        Refusal(await Close(service, id, "probably_fine")).Should().Contain("solved");
+        Refusal(await Close(service, id, "lapsed")).Should().Contain("the server");
+    }
+
+    [Fact]
+    public async Task ClosingAConsultationTheServerNeverWroteIsRefused()
+    {
+        Refusal(await Close(Service(), new string('d', 32), "solved")).Should().Contain("no consultation");
+    }
     [Fact]
     public async Task ARepeatedProblem_IsRefusedNamingTheTurn()
     {
