@@ -349,11 +349,27 @@ additive (the `vendor?` precedent):
 ### C. The unread watermark is an APPEND-ONLY acknowledgement
 
 `notifications-seen.jsonl` — beside the ledgers in the same data directory, and in `DATA_TO_MOVE` with
-them: one line per "this window read through offset X of ledger Y", and the effective watermark is a
-**map keyed by ledger**, `watermark[ledger] = max(offsets for that ledger)`. Not one scalar across
-both: `notifications.jsonl` is the busier file by far, and a single maximum would apply its 5000-byte
-offset to a `server-notices.jsonl` that is 300 bytes long, permanently swallowing every server notice
-below it. Not a file that is rewritten, either.
+them: one line per "this window read bytes [start, end) of ledger Y", and the effective read set is
+the **union of those intervals, per ledger**. Unread is the complement.
+
+**It is a union of intervals and NOT a maximum, and the plan said both.** Two rounds of reviewers
+found the contradiction independently (codex and gemini, the S5 plan round): this section said
+`watermark[ledger] = max(offsets for that ledger)` and then, four bullets later, that the
+acknowledgement "covers only the range actually loaded". A maximum cannot express a range. The page
+renders the newest N, so with 10 000 records and 3000 rendered, storing `max(end)` marks bytes
+0–6999 read although they were never on screen — which is the exact failure the range rule was
+written to prevent, committed by the mechanism meant to prevent it. gemini named the other end of
+it: an unread count that can never reach zero, because the region below the window is never covered
+by anything.
+
+The alternative offered — treat everything before the loaded window as acknowledged the moment the
+page opens — is refused. That is "claim they read it when they did not", which is the thing being
+avoided; a person who wants the older ones counted scrolls to them, and the intervals grow to meet.
+
+**Per ledger, not one scalar across both.** `notifications.jsonl` is the busier file by far, and a
+single set of intervals shared between them would apply its 5000-byte offsets to a
+`server-notices.jsonl` that is 300 bytes long, permanently swallowing every server notice below it.
+Not a file that is rewritten, either.
 
 The first draft had it as a whole-file write, then as a temp+rename component-wise max. Both lose
 updates, and the second one is the subtler mistake: **temp+rename is atomic but it is not mutual
@@ -381,6 +397,12 @@ rendered, and the 2000 they never saw would leave the unread count without ever 
 acknowledgement carries the **start and end offsets of the contiguous range that was rendered**, and
 the unread count is what lies outside every acknowledged range. A person who wants the older ones
 counted as read scrolls to them.
+
+**An acknowledgement that could not be WRITTEN is not an acknowledgement.** If the append fails —
+a read-only file, a directory that has gone away, a full disk — the unread state is NOT cleared in
+memory, the failure is said where the person can see it, and the next render tries again. Clearing
+the count on a write that did not land is the same defect the code round found in S1, where a record
+the disk refused was handed back as though it had been written. (codex, the S5 plan round.)
 
 **A missing file is not an error, and a corrupt one is not zero.** No file means a first run: no
 acknowledgement, everything unread, which is correct. An unparseable line is dropped and the previous
@@ -417,6 +439,13 @@ command with no case is a compile error, which is the point.
 
 The count refresh is **coalesced and never invoked synchronously from `notify`'s own stack**:
 `panelProvider` already raises a warning from the render path, and render → notify → render is a loop.
+
+**Coalesced means single-flight with a generation, and that had to be said.** The watcher ticks
+every 5000 ms and a read from a NAS can take longer than that, so reads overlap and an older
+completion can land after a newer one and overwrite the count with a staler number — silently, and
+most likely under exactly the load this feature exists to show. One read in flight, one pending
+slot that keeps only the latest request, and a generation counter: a completion whose generation is
+no longer current is discarded rather than rendered. (codex, the S5 plan round.)
 
 ### E. Suppression and storms — keyed on state, not on a clock
 
@@ -500,7 +529,11 @@ fault at once. Three windows × 1000 records is not "3000 repeats" of one incide
 one; it is three runs that each hit their ceiling, and the row says so — **"1000+ in each of 3 runs"**,
 never a bare 3000, and never a bare 1000 either. A run that hit its ceiling is shown as "1000+", never
 as a number it is not. `ratePerMin` is **derived, never
-stored**, and is **absent** (`—`) for a single occurrence or a zero-length window — `coding-style.md`:
+stored**, and is **absent** (`—`) for a single occurrence, or whenever the span between the first and
+last occurrence in the group is **under one second** — not merely zero. A burst of forty in 40 ms
+divides into tens of thousands a minute and sorts straight to the top of the one column the storm
+feature exists for, which is the same defect as rendering an unmeasured rate as `0`, in the other
+direction. (gemini, the S5 plan round.) — `coding-style.md`:
 a measurement that could not be taken must not render as `0`, and blanks sort last in the comparator
 both ways. Otherwise every singleton would sort to the top of the one column the storm feature exists
 for.
@@ -529,13 +562,32 @@ enforces needs the run-wide budget beside it, since eviction would otherwise res
 - **Filters**: search, a source facet derived from the rows, and a `datetime-local` range. The search
   haystack **includes the message text** — a log whose search cannot find the sentence on screen is
   the trap `roundsLog.ts:820` set once already.
-- **The page loads the newest N (a few thousand), not the file — and does not read the file to find
-  them.** "Load the newest N" is not a bound if getting them means parsing everything first. The
+- **The page loads the newest 3000 records, not the file — and does not read the file to find
+  them.** **N is 3000**, fixed here rather than left to whoever types it: three reviewers said the
+  same thing, that an open question is not a contract and two implementations choosing 1000 and
+  10 000 would acknowledge different ranges of the same ledger. The arithmetic: ~400 B a record is
+  ~1.2 MB parsed per page open, reached by walking back over 19 windows of 64 KB. "Load the newest N" is not a bound if getting them means parsing everything first. The
   reader seeks to the end and walks **backwards in byte windows** (64 KB at a time), keeping complete
   lines, until it has N or reaches the start; append-only is what makes that exact, and it is the
   third thing the no-rewrite rule buys. An explicit line says older records are in the file, and the
   acknowledgement covers only what was loaded (see *C*).
+- **Every field rendered is ESCAPED, and a payload test proves it at each sink.** These records are
+  built from text nobody chose — a vendor's stderr, a server's response body, an exception message —
+  which is the definition of untrusted, and this page puts all of it into a webview. Naming the
+  escaping helpers is not the same as requiring them: `title`, `detail`, `cure`, `source`, `subject`
+  and `code` each go through `escapeHtml` or `textContent`, and a test drives an event-handler
+  payload through all six and asserts it renders as text. (codex, the S5 plan round.)
+- **A filter that matches nothing says so.** "No notifications match these filters", not an empty
+  table under a pager offering page 1 of 10 — which reads as "still loading" and gets clicked again.
+- **A datetime range is validated, both values and their order.** An end before a start, or an
+  unparseable value pasted in, says which is wrong and filters NOTHING rather than everything;
+  silently showing an empty table is indistinguishable from "nothing matched".
 - **It names the data directory it is reading.**
+- **The extraction's regression guard is the rounds log's OWN suite, unchanged.** Genericising a
+  comparator is where a sort quietly stops being the sort it was, and the three behaviours most
+  likely to be lost are pinned by a characterisation test written before the move: blanks last in
+  BOTH directions, the direction flip, and stability for equal keys. Every existing rounds-log test
+  passes untouched afterwards or the extraction is wrong. (local reviewer, the S5 plan round.)
 - Reuse (`reuse-first.md` step 2): `PAGE_SIZE` and `compareRows` are **extracted** into a shared
   module. Two mechanics to get right — `compareRows` ([roundsLog.ts:679](../src_vs_code/src/roundsLog.ts))
   is typed on `LogRow`/`SortKey` and must be genericised; and `PAGE_SIZE` is interpolated into the page
@@ -602,6 +654,17 @@ that lies in exactly the situation it exists for:
   "an append is microseconds"; on a NAS it is tens of milliseconds, and a queued storm would delay a
   chat-turn record behind it and make `deactivate` wait for the backlog — after which VS Code kills the
   host and the tail is lost anyway. `flushLedgers` awaits both chains.
+- **The write-gap survives a reload, and is visible from the other window.** S1 counts what the
+  disk refused and surfaces it as a STATE rather than another notification — a notification about a
+  notification that could not be written is an infinite regress with a disk error at the bottom.
+  That counter lives in memory, so a reloaded host reports no gap while the records are still
+  missing. S5 makes it durable, and **not** as a number in `globalState`: two hosts both reading 4
+  and both writing 5 lose a failure, and each extension host holds its own in-memory copy of
+  `globalState`, so a gap recorded in one window is invisible in the other until a reload. It
+  becomes an **append-only record of gap EVENTS, summed on read** — the same storage discipline as
+  everything else here, which removes the read-modify-write and gives cross-window visibility at
+  once. When the data directory is what failed, this host's in-memory count still shows, labelled as
+  this host's. (codex and gemini, the S5 plan round, from two directions.)
 - **A killed process leaves no record at all.** SIGKILL, OOM, power loss: no `catch`, no `deactivate`.
   Both halves write a **run-start marker** and clear it on clean exit; the next start finds a stale
   marker and appends an unclean-exit record. The server already has the machinery — `running/{pid}.json`
@@ -634,7 +697,8 @@ draft missed.
 |---|---|---|---|
 | `notifications.jsonl` | ~400 B/record. The rate is **not measured** — see *Open questions*; at a hand-estimated 20–50/day that is 3–7 MB/year | **Nobody: kept for ever. This is a NEW decision for this file, taken here.** The 2026-09-10 ruling on `chat-usage.jsonl` is the precedent for the *shape* — keep rather than trim, and its docstring refuses trimming by count by name — but a ruling about spending history does not settle retention for notifications, and citing it as if it did would be the third time this plan leant on a record for something it does not cover. **If a bound is ever wanted it is a roll-up**, and the record shape already carries what one needs | Nothing to interrupt: append-only, no rewrite, no compaction |
 | `server-notices.jsonl` (S8) | `PanelService.Error` covers every refusal to the calling AI, so its rate is **not the extension's**; S8 measures it over a week before any sampling is considered for it | same | same |
-| `notifications-seen.jsonl` | one ~80 B line per page-open; a few hundred a year | kept; compactable at any time by taking the maximum, since it is append-only like everything else | nothing to interrupt — a torn last line is dropped and the previous maximum stands, which errs toward "unread" |
+| `notifications-seen.jsonl` | one ~96 B line per **page-open**, not per refresh — a page left open appends nothing while it sits there; a few hundred lines a year | kept; compactable at any time by rewriting the union of the intervals, which is safe precisely because the file is append-only | nothing to interrupt — a torn last line is dropped and the intervals already read stand, which errs toward "unread" |
+| The write-gap record | one line per FAILED ledger write, which is already bounded by the run budget above | kept with the ledgers | append-only, so a torn line costs itself |
 | Per-`(code, subject)` counters (memory) | `code` is finite — a string literal per call site — but **`subject` is not**: a path or a server name is unbounded, so the map is an **LRU capped at 512 entries**. Eviction is safe for *counts* (those are counted from rows, never from this map) but **not** for the ceiling — see the row below | process exit | nothing a reader sees is derived from it |
 | `storm` records | at most 2 per `(code, subject)` per run | — | — |
 | Records per repeating fault | **Two bounds, because one is evictable.** A per-`(code, subject)` ceiling of 1000 per run, *and* a **run-wide budget of 5000 records beyond each code's first** that no eviction can reset — otherwise a loop churning 512 distinct subjects evicts its own counter and writes for ever. (The budget was first written as one on `(code, subject)` repeats, which does **not** close that hole — see *E*.4; measured at 15 000 of 15 000 written.) At either bound one record says which was hit, and writing of that kind stops until recovery | — | resets per run, by design (see *E*) |
@@ -762,6 +826,23 @@ it needs does not exist yet.)
 **S4 — suppression and storms.** The per-`(code, subject)` ceiling, the run-wide budget, the LRU,
 `notifyResolved`, the `storm` class, and the read-time grouping that counts rows. Ahead of the UI,
 because a loop must be recorded whether or not anybody has the page open.
+
+**S5a — what the plan round changed (2026-09-17, 20 findings, 16 gating, 18 accepted).** The
+watermark was the big one and is rewritten in *C*: it stored a MAXIMUM and promised a RANGE, and a
+maximum cannot express a range. The others, each recorded beside the thing it changed: N is 3000
+rather than "a few thousand"; every rendered field is escaped and a payload test proves it; the
+acknowledgement file and the write-gap record both carry growth budgets; a failed acknowledgement
+does not clear the count; the refresh is single-flight with a generation; the write-gap becomes an
+append-only record summed on read, because `globalState` is neither concurrent-safe nor visible
+across windows; a rate needs a span of at least a second; empty filters and invalid date ranges say
+so. **Two findings were refused**: one described the temp+rename design this plan discards two
+paragraphs above the sentence it quoted, and one had the read/unread direction inverted.
+
+**And one test the plan did not have.** Every test listed for S5 can pass while the command is
+unregistered, the host opens the wrong page, or the wrong data directory is resolved — a person
+clicking *Show notifications* would then get nothing, and nothing would be red. S5 adds a flow that
+goes from the panel command through the host to a rendered record and an acknowledgement, over
+fixture ledgers in a resolved data directory, catalogued in `research/module_tests.md`. (codex.)
 
 **S5 — the panel section AND the page, together.** They cannot ship apart: the section's whole content
 is a button that opens the page, and a button that opens nothing is worse than no section. This step is
