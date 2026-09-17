@@ -2,7 +2,7 @@ import { escapeHtml } from './escapeHtml';
 import { Grouped } from './notificationsRead';
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { PAGE_STYLE } from './notificationsPageStyle';
-import { TABS, firstTab, tabStrip, tableHtml } from './notificationsRows';
+import { OPENS_SORTED_BY, TABS, firstTab, tabStrip, tableHtml } from './notificationsRows';
 
 /**
  * The notifications page: every message this product showed a person, and what to do about it.
@@ -15,6 +15,18 @@ import { TABS, firstTab, tabStrip, tableHtml } from './notificationsRows';
  * `pageTables.ts` and are pasted in BY SOURCE, bound by assignment rather than declared, because a
  * minifier renames a declaration and the page then calls a name that is not there. The same
  * mechanism the rounds log uses, and its test asserts the exact string.</p>
+ *
+ * <h2>The page tells the host it was shown; the host does not assume</h2>
+ *
+ * <p>Nothing is marked read until the page says <code>shown</code>, carrying the generation it was
+ * drawn for and whether a filter narrows it. Three reasons, and the third is the one that made it
+ * worth the message: the host cannot otherwise know the webview rendered at all; a <b>filtered</b>
+ * view must not claim three thousand records were read when three are on screen; and a message
+ * posted to a webview that has not finished loading can be dropped, so the acknowledgement failure
+ * notice needs a moment it is known to be listening. On today's page a freshly drawn document never
+ * has a filter set, so that flag is a GUARD rather than a live condition — it becomes a live one
+ * the day a draw preserves the filter, which is exactly when a guard added later would be
+ * missing.</p>
  */
 
 /** What the page is handed. */
@@ -27,6 +39,11 @@ export interface PageState {
   readonly older: boolean;
   /** How many records were loaded, so the page can say what it is NOT showing. */
   readonly loaded: number;
+  /** Which draw this is. The page hands it back, so a `shown` from a stale page acknowledges
+   *  nothing — the snapshot it belongs to is no longer the one on screen. */
+  readonly generation: number;
+  /** Something to tell the person that outlived the draw it happened in. */
+  readonly notice?: string;
   /** Set when the ledgers could not be read at all — never rendered as an empty table. */
   readonly unreadable?: string;
 }
@@ -68,20 +85,28 @@ function scope(state: PageState): string {
  * <p><b>A filtered view acknowledges nothing, and says so.</b> Three rows on screen must not mark
  * three thousand records read — that is the same "claim they read what they did not see" the
  * interval watermark exists to prevent, arriving through the filter door. Operator, 2026-09-17.</p>
+ *
+ * <p>The button beside it says what it covers. "Mark everything read" on a page that shows the
+ * newest three thousand of forty thousand reads as "mark these read" unless it is told otherwise,
+ * and it is the older ones — the ones no page-turn will ever reach — that it exists for. (codex and
+ * gemini, the S5 code round, from three roles.)</p>
  */
 function acknowledgement(): string {
   return `<p class="ack"><span id="ack-note">Opening this page marks the loaded records read.</span>
-  <button type="button" id="mark-all">Mark everything read</button></p>`;
+  <button type="button" id="mark-all">Mark everything read</button>
+  <span class="quiet">— everything in both ledgers, including the older records this page does not show.</span></p>`;
 }
 
-/** The page, or the reason there is no page. */
-export function notificationsPageHtml(state: PageState, nonce: string): string {
-  const open = firstTab(state.rows);
-  const body = state.unreadable !== undefined
-    ? `<p class="failed">The notifications could not be read: ${escapeHtml(state.unreadable)}</p>`
-    : `${scope(state)}${acknowledgement()}${filters(state.rows)}${tabStrip(state.rows, open)}`
-      + tabsBody(state.rows, open);
+/** A line for whatever the host needs to say after the page was drawn. Empty most of the time. */
+function noticeLine(state: PageState): string {
+  const said = state.notice ?? '';
 
+  return `<p class="notice" id="notice" role="status" aria-live="polite"${said === '' ? ' hidden' : ''}>`
+    + `${escapeHtml(said)}</p>`;
+}
+
+/** The shell every page here shares, so the failure page and the real one cannot drift apart. */
+function shell(nonce: string, body: string, script: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,14 +119,49 @@ export function notificationsPageHtml(state: PageState, nonce: string): string {
 <body>
 <h1>Notifications</h1>
 ${body}
-<p class="pager"><button type="button" id="prev">Previous</button>
-  <span id="where"></span>
-  <button type="button" id="next">Next</button></p>
-<script nonce="${nonce}">
-${pageScript()}
-</script>
+${script === '' ? '' : `<script nonce="${nonce}">
+${script}
+</script>`}
 </body>
 </html>`;
+}
+
+/**
+ * What is on screen WHILE the ledgers are being read.
+ *
+ * <p>The data directory may be a NAS, and a webview with nothing in it is indistinguishable from a
+ * webview that failed. It says which directory it is reading, because that is the one fact that
+ * makes a slow open diagnosable. (codex, the S5 code round.)</p>
+ */
+export function waitingPageHtml(dataDir: string, nonce: string): string {
+  return shell(
+    nonce,
+    `<p class="scope">Reading <code>${escapeHtml(dataDir)}</code>…</p>`
+    + '<p class="quiet">If this directory is on a network share, the first read can take a moment.</p>',
+    '',
+  );
+}
+
+/** The page, or the reason there is no page. */
+export function notificationsPageHtml(state: PageState, nonce: string): string {
+  if (state.unreadable !== undefined) {
+    // No script: none of the elements it binds to exist here, and a page whose script throws on
+    // load is a page whose next defect is invisible in the console it already filled.
+    return shell(
+      nonce,
+      `<p class="failed">The notifications could not be read: ${escapeHtml(state.unreadable)}</p>`
+      + `<p class="quiet">Nothing was marked read. Reading <code>${escapeHtml(state.dataDir)}</code>.</p>`,
+      '',
+    );
+  }
+  const open = firstTab(state.rows);
+  const body = `${scope(state)}${noticeLine(state)}${acknowledgement()}`
+    + `${filters(state.rows)}${tabStrip(state.rows, open)}${tabsBody(state.rows, open)}`
+    + `<p class="pager"><button type="button" id="prev">Previous</button>
+  <span id="where"></span>
+  <button type="button" id="next">Next</button></p>`;
+
+  return shell(nonce, body, pageScript(state.generation));
 }
 
 /**
@@ -126,16 +186,21 @@ function tabsBody(rows: readonly Grouped[], open: string): string {
  * preference: sorting before filtering orders rows that are about to be thrown away, and slicing
  * before either shows page four of a set the person is no longer looking at.</p>
  */
-function pageScript(): string {
+function pageScript(generation: number): string {
   return `
   var PAGE_SIZE = ${PAGE_SIZE};
+  var GENERATION = ${generation};
   var compareRows = ${compareRows.toString()};
   var asInstant = ${asInstant.toString()};
   var page = 1;
-  var sortKey = 'when';
-  var sortDir = 'desc';
+  var sortKey = '${OPENS_SORTED_BY.key}';
+  var sortDir = '${OPENS_SORTED_BY.dir}';
   var openTab = document.querySelector('[role="tab"][aria-selected="true"]');
   openTab = openTab === null ? '' : openTab.dataset.tab;
+  // Acquired ONCE: acquireVsCodeApi throws the second time it is called in a webview, so acquiring
+  // it inside a handler would work until somebody pressed the button twice.
+  var api = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+  var markAll = document.getElementById('mark-all');
 
   function sectionOf(tab) {
     return document.querySelector('[data-section="' + tab + '"]');
@@ -145,6 +210,13 @@ function pageScript(): string {
     var section = sectionOf(tab);
 
     return section === null ? [] : Array.prototype.slice.call(section.querySelectorAll('tbody tr'));
+  }
+
+  function say(text) {
+    var line = document.getElementById('notice');
+    if (line === null) { return; }
+    line.textContent = text;
+    line.hidden = text === '';
   }
 
   function bounds() {
@@ -212,7 +284,21 @@ function pageScript(): string {
       : 'Opening this page marks the loaded records read.';
   }
 
-  function onFilter() { page = 1; draw(); }
+  // The host acknowledges nothing until this arrives. It carries the generation so a message from a
+  // page that has since been replaced cannot acknowledge the snapshot that replaced it, and the
+  // filter state so that a narrowed view never claims the whole window was read.
+  function tellShown() {
+    if (api === null) { return; }
+    api.postMessage({ type: 'shown', generation: GENERATION, filtered: filtering() });
+  }
+
+  function onFilter() {
+    page = 1;
+    draw();
+    // Only when the filter has gone: re-offering an unfiltered view is what lets a page that opened
+    // filtered ever be acknowledged. The host ignores a generation it has already written down.
+    if (!filtering()) { tellShown(); }
+  }
 
   ['find', 'source', 'from', 'to'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', onFilter);
@@ -254,16 +340,31 @@ function pageScript(): string {
     });
   });
 
-  var markAll = document.getElementById('mark-all');
   if (markAll !== null) {
-    // Acquired ONCE: acquireVsCodeApi throws the second time it is called in a webview, so
-    // calling it inside the handler would work until somebody pressed the button twice.
-    var api = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
     markAll.addEventListener('click', function () {
-      if (api !== null) { api.postMessage({ type: 'markAll' }); }
+      if (api === null) { return; }
+      // Disabled and SAYING so: the work is two file reads and two appends against a directory that
+      // may be a share, and a button that looks idle while it runs is a button pressed three times.
+      markAll.disabled = true;
+      markAll.textContent = 'Marking everything read…';
+      say('Marking everything in both ledgers read…');
+      api.postMessage({ type: 'markAll' });
     });
   }
 
+  window.addEventListener('message', function (event) {
+    var message = event.data;
+    if (message === null || typeof message !== 'object' || message.type !== 'notice') { return; }
+    say(String(message.said));
+    // Terminal, either way. A success redraws the page from the host and this document goes away;
+    // a failure lands here, and the button must be pressable again.
+    if (markAll !== null) {
+      markAll.disabled = false;
+      markAll.textContent = 'Mark everything read';
+    }
+  });
+
   draw();
+  tellShown();
 `;
 }

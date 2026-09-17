@@ -567,10 +567,18 @@ ${body}
     el.addEventListener('toggle', () =>
       vscode.postMessage({ type: 'section', id: el.dataset.section, open: el.open }));
   }
-  for (const el of document.querySelectorAll('[data-command]')) {
-    el.addEventListener('click', () =>
-      vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
+  // ONE binder, for the first paint and for every region patched afterwards. It is called with the
+  // element whose contents were just REPLACED, never on a tick that changed nothing: addEventListener
+  // adds, it does not replace, so a handler re-bound on every five-second tick means one click posts
+  // a dozen messages and opens a dozen windows. (codex, the S5 code round — and the same defect was
+  // already there for the questions region, three lines away, so both are fixed here.)
+  function bindCommands(within) {
+    for (const el of within.querySelectorAll('[data-command]')) {
+      el.addEventListener('click', () =>
+        vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
+    }
   }
+  bindCommands(document);
 
   // Live updates arrive as HTML for the two regions that change on their own — the round in
   // flight, and any open escalation. Patching them leaves every other control ALONE,
@@ -620,34 +628,30 @@ ${body}
     const questions = document.getElementById('live-questions');
     const rounds = document.getElementById('live-rounds');
     const consultations = document.getElementById('live-consultations');
+    // The controls inside a region are destroyed with the markup they lived in, so each region is
+    // re-bound exactly when it was replaced — inside the same branch as the assignment.
     if (questions !== null && typeof message.questions === 'string' && message.questions !== lastQuestions) {
       lastQuestions = message.questions;
       questions.innerHTML = message.questions;
+      bindCommands(questions);
     }
     if (rounds !== null && typeof message.rounds === 'string' && message.rounds !== lastRounds) {
       lastRounds = message.rounds;
       rounds.innerHTML = message.rounds;
+      bindCommands(rounds);
     }
     // Compared before it is written, like the two above: an identical innerHTML assignment still
     // rebuilds the DOM, and this region sits in a section full of controls.
     if (consultations !== null && typeof message.consultations === 'string' && message.consultations !== lastConsultations) {
       lastConsultations = message.consultations;
       consultations.innerHTML = message.consultations;
+      bindCommands(consultations);
     }
     const notifications = document.getElementById('live-notifications');
     if (notifications !== null && typeof message.notifications === 'string' && message.notifications !== lastNotifications) {
       lastNotifications = message.notifications;
       notifications.innerHTML = message.notifications;
-    }
-    // The answer buttons live inside the patched HTML, so they are re-bound here. The notifications
-    // button is patched in too, so it is bound the same way or it stops working the first time the
-    // count changes.
-    for (const el of document.querySelectorAll('#live-notifications [data-command]')) {
-      el.addEventListener('click', () => vscode.postMessage({ type: 'command', command: el.dataset.command }));
-    }
-    for (const el of document.querySelectorAll('#live-questions [data-command]')) {
-      el.addEventListener('click', () =>
-        vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
+      bindCommands(notifications);
     }
   });
 </script>

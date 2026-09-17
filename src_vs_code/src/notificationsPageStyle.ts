@@ -22,6 +22,14 @@ export const PAGE_STYLE = `
   .scope code { opacity: 1; }
   .failed { color: var(--vscode-errorForeground); }
   .warn { color: var(--vscode-editorWarning-foreground); margin-left: 8px; }
+  /* Whatever the host has to say after the page was drawn — an acknowledgement the disk refused,
+     or a button that finished. A live region, so a screen reader hears it without being moved. */
+  .notice {
+    margin: 6px 0; padding: 4px 8px;
+    border-left: 3px solid var(--vscode-editorWarning-foreground);
+    background: var(--vscode-editorWidget-background);
+  }
+  .quiet { opacity: .7; }
 
   .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
   .filters label { display: flex; gap: 4px; align-items: center; }
