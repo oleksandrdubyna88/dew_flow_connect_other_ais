@@ -2286,3 +2286,35 @@ connection is what makes a transaction here mean what it says.
 **A pair is marked only on an acknowledgement.** Marked when the batch left, it would be skipped for
 ever if the reply never came. A transport failure marks nothing; a refusal is marked as refused
 rather than sent, because retrying produces the same answer and hides a defect in our normaliser.
+
+## The tool description is a delivery channel, not documentation (2026-09-17)
+
+The consultant rule gained a sixth trigger — call the consultant when a gate finding has just
+changed your mind about the shape of the work — and a second rule about the answer: agreement is
+earned, and a finding quoted into `problem` is evidence rather than instruction. Both shipped in the
+pasted snippet first, and that is where the problem was.
+
+**Measured: there are zero pasted copies of the artefact anywhere on this machine.** The six
+repositories in this family mount the three SHARED halves from the conventions submodule and get
+them for free; the consultant half is this product's own file, is mounted nowhere, and cannot be
+pasted into a family repository at all — the shared adapter refuses a `CLAUDE.md` that is anything
+but `@AGENTS.md` and refuses a non-empty `.claude/rules`. A rule that travels only in the paste
+travels almost nowhere.
+
+So the trigger and the burden of proof are now in `consult`'s description, and a pointer to them is
+in `review_plan` **and** `review_code` — both, because the operator widened the trigger to both gate
+rounds, and because a first draft widened the scope and then updated only one of them, which two
+reviewers caught.
+
+**Where this detail belongs was already decided, and not by preference.** `Program.Instructions` is
+about 1,935 characters against a 2,000 budget, and the test that enforces it carries the standing
+instruction: when it fails, do NOT raise the number — move the detail into the description of the
+tool it is about, where a caller meets it at the moment it matters and where the budget is separate.
+This change is that instruction being followed rather than argued with. The instructions stay a map;
+each tool carries its own paragraph.
+
+Two corrections rode along. `review_plan` listed five verdicts while `PanelService` composes six, so
+a caller could be answered `good_enough` by a description that never mentioned it. And
+`review_document` now names a PLAN as its counter-example: the shared rule was corrected for that on
+2026-09-16 — a plan matches its example list twice, being both a proposal and a requirements list —
+and the tool descriptions were the half of that fix left for this story.
