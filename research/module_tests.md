@@ -567,28 +567,43 @@ phase 0 is for and is measured by hand on purpose.
 
 `TheGateSaysWhenToConsultTests` reads `Tools.cs` as TEXT, the way `TheServerSaysWhatOnlyTheRuleSaidTests`
 does and for the same reason: the registry needs a live host to enumerate, and this is a check about
-text. Six cases — the consultant trigger, what makes an answer usable, the six verdicts, the pointer
-in BOTH gate rounds, the plan counter-example, and that no description offers a severity the parser
-rejects.
+text. Seven cases — the consultant trigger, what makes an answer usable, every verdict the machine can
+emit, the pointer in BOTH gate rounds, the plan counter-example, that no description offers a severity
+the parser rejects, and that the scan looking for it still finds one.
 
 **Every case is scoped to ONE tool's description, and that is the part worth copying.** A file-wide
 `Contain` passes when a pointer lands in `review_document` while `review_code` keeps its old text —
-which is exactly the accident this story could have shipped, since the parent plan had already
-widened its scope and updated only one of two. A reviewer raised it on the plan round and it was
-accepted, so `DescriptionOf(tool)` slices the literal belonging to the named tool and a phrase in the
-wrong one is red. It throws rather than falling back to the file, because a helper that silently
-widens its scope on a rename turns every case back into the check it replaced.
+exactly the accident this story could have shipped, since its parent plan had already widened its
+scope and updated only one of two. Raised on the plan round and accepted.
 
-The verdict case asserts the whole SET rather than "the new one is present and the old string is
-gone": a typo in one of the other five coexists happily with a correct sixth, and re-punctuating the
-list evades an exact-string check while still handing a caller an incomplete answer.
+Three things the code round changed, each of which had left a case weaker than it reads:
+
+- **The verdict list is derived, not retyped.** Six literals in a test are a second copy of a list the
+  code holds, and they stay green the day a seventh verdict is composed and this description omits it
+  — which is the defect being fixed here, one verdict earlier. The expected set now comes from the
+  nested records of `RoundVerdict`, snake-cased into the wire spelling `PanelService` composes.
+- **The shared pointer is pinned WHOLE.** A fragment was pinned first, and two descriptions carrying
+  one policy drift when a later change expands the trigger in only one of them — both still contain
+  the fragment, so both stay green. Proved: inserting two words into `review_code`'s copy is now red.
+- **The forbidden severity is scanned per DESCRIPTION, with a companion.** The plan round argued the
+  scope both ways and the code round settled it — a raw-file scan also reads comments, so a remark
+  that merely NAMES the rejected severity would fail the suite, while four descriptions would let a
+  fifth acquire the word silently. Every description, no comments. And the prohibition now has the
+  companion the house rule requires: a scan with no case proving it still detects a known instance
+  passes forever the day its pattern stops matching, exactly as loudly as when it enforced something.
 
 Phrases are matched against a whitespace-flattened copy. These literals are prose hard-wrapped at
 about a hundred columns and a raw string keeps every later line's indentation, so a phrase worth
 pinning will wrap eventually — and an assertion that fails on a reflow is complaining about layout,
 which is a test nobody trusts. The same fix was made one story earlier in the extension's half.
 
-RED observed before the descriptions moved: **5 of 6 failed**, each quoting only the description it
-was scoped to, which is itself the evidence that the slicing works. The sixth — no description says
-`critical` — passed from the start and says so in its own remarks: it is a standing guard, not a
-RED-first case, and the word appears nowhere in the file today.
+RED observed before the descriptions moved: **5 of 6 failed**, each quoting only the description it was
+scoped to, which is itself the evidence that the slicing works. Teeth then proved on all three of the
+code round's additions by breaking them one at a time against the real runner.
+
+**A note on how one of those teeth was nearly mis-read.** The first attempt to prove them drove the
+test executable from a Python harness that passed a list argv with `shell=True`; on Windows the
+executable never ran, every break reported "nothing failed", and the honest reading of that output is
+that three good assertions had no teeth at all. Run by hand, all three were red on the first try. A
+harness that cannot start the thing it measures reports silence, and silence looks exactly like a
+pass — which is the same shape as a `pin-check` answering about the wrong directory.
