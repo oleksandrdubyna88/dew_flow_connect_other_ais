@@ -62,7 +62,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
 
 interface Running {
   readonly posted: readonly Record<string, unknown>[];
-  readonly click: (on: string) => void;
+  readonly click: (on: string, matching?: Record<string, Record<string, unknown>>) => void;
   readonly box: { value: string; disabled: boolean };
 }
 
@@ -137,10 +137,15 @@ function runPage(over: Partial<ChatPageState> = {}): Running {
   return {
     posted,
     box,
-    click: (on: string) => {
+    click: (on: string, matching: Record<string, Record<string, unknown>> = {}) => {
       const fire = listeners.get(`${on}:click`);
       assert.ok(fire, `the page registered no click listener on #${on}, so this test drives nothing`);
-      fire({ target: { closest: () => null } });
+      // `closest` the way a real one behaves: it answers the nearest element matching the
+      // SELECTOR the page asks for, and null for anything else. A harness that always answered
+      // null could never reach a delegated handler — which is how the first draft of this file
+      // claimed to cover the withdrawal crossing while never once clicking a waiting row.
+      // (codex, the code round.)
+      fire({ target: { closest: (selector: string) => matching[selector] ?? null } });
     },
   };
 }
@@ -179,24 +184,35 @@ test('what the page posts for a send is a command the parser KNOWS', () => {
   assert.notEqual(chatCommandOf(posts[0]!).kind, 'ignore', `the host ignores what Send posts: ${JSON.stringify(posts[0])}`);
 });
 
-test('a withdrawal crosses the seam by ID, and the queue it lands on drops that one only', () => {
-  // The page half is asserted where the row is rendered; this is the crossing. The id the row
-  // carries is the id the parser hands the host, and the host's queue removes by that id.
-  const decoded = chatCommandOf({ type: 'command', command: 'withdraw', id: 'w2' });
-
-  assert.deepEqual(decoded, { kind: 'withdraw', id: 'w2' });
-
+test('PRESSING the cross on a waiting row crosses the seam, and drops that one only', () => {
+  // The whole crossing, driven: the page renders the rows, its delegated handler is reached by a
+  // real press, what it posts goes through the real parser, and the decoded command is applied to
+  // the real queue. The first draft asserted the middle of this by building the message by hand,
+  // which would have stayed green with the button unwired, the `data-id` wrong, or the handler
+  // posting a name the parser does not know. (codex, the code round.)
   const waiting: readonly WaitingQuestion[] = [
     { id: 'w1', text: 'first' },
     { id: 'w2', text: 'second' },
     { id: 'w3', text: 'third' },
   ];
+  const page = runPage({ running: true, turn: 1, waiting });
+
+  // The cross on the SECOND row, reached the way a real click reaches a delegated handler.
+  page.click('waiting', {
+    '[data-command="withdraw"]': { getAttribute: (name: string) => (name === 'data-id' ? 'w2' : null) },
+  });
+
+  const posts = page.posted.filter((message) => message['command'] === 'withdraw');
+  assert.equal(posts.length, 1, 'pressing the cross posted nothing at all');
+
+  const decoded = chatCommandOf(posts[0]!);
+  assert.deepEqual(decoded, { kind: 'withdraw', id: 'w2' }, 'the host cannot read what the cross posted');
+
   const after = withdraw(waiting, decoded.kind === 'withdraw' ? decoded.id : '');
 
-  assert.deepEqual(after.waiting.map((one) => one.id), ['w1', 'w3']);
+  assert.deepEqual(after.waiting.map((one) => one.id), ['w1', 'w3'], 'the wrong row was taken out');
   assert.equal(after.returned, 'second', 'the withdrawn words were not handed back');
 });
-
 test('a withdrawal that names nothing is IGNORED rather than taken as "the first one"', () => {
   // A stale retained webview posts exactly this. Treating an empty id as a position would cancel
   // somebody's oldest question because a page nobody is looking at woke up.

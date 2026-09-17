@@ -48,10 +48,20 @@ export const MOST_WAITING = 8;
  */
 export const MOST_WAITING_CHARS = 64 * 1024;
 
-/** A question joined the queue, or it did not and here is the sentence to show. */
+/**
+ * Why a question did not join — a REASON, never a sentence.
+ *
+ * <p>A pure module that returned English would make every other caller either parse user-facing text
+ * or invent its own; and `nothing` is not a capacity problem at all, so reporting it as one would
+ * make a metric counting refusals count an empty box as a full queue. The words live at the command
+ * boundary, where the rest of this feature's words live. (codex, the code round.)</p>
+ */
+export type NotJoined = 'nothing' | 'tooMany' | 'tooLong';
+
+/** A question joined the queue, or it did not and here is why. */
 export type Joined =
   | { readonly kind: 'queued'; readonly waiting: readonly WaitingQuestion[]; readonly id: string }
-  | { readonly kind: 'full'; readonly why: string };
+  | { readonly kind: 'full'; readonly why: NotJoined };
 
 /** What a withdrawal leaves behind, and the words it hands back. */
 export interface Withdrawn {
@@ -74,22 +84,16 @@ export function join(
 ): Joined {
   const said = text.trim();
   if (said.length === 0) {
-    // Not a ceiling, but the same answer: there is nothing to queue. An empty question reaching the
+    // Not a ceiling, and its own reason: there is nothing to queue. An empty question reaching the
     // queue would draw a blank row somebody cannot read and cannot act on.
-    return { kind: 'full', why: 'there is nothing in the box to ask' };
+    return { kind: 'full', why: 'nothing' };
   }
   if (waiting.length >= MOST_WAITING) {
-    return {
-      kind: 'full',
-      why: `${MOST_WAITING} questions are already waiting — let some of them run, or take one back`,
-    };
+    return { kind: 'full', why: 'tooMany' };
   }
   const held = waiting.reduce((total, one) => total + one.text.length, 0);
   if (held + said.length > MOST_WAITING_CHARS) {
-    return {
-      kind: 'full',
-      why: 'the questions already waiting are too long to add another — let some of them run, or take one back',
-    };
+    return { kind: 'full', why: 'tooLong' };
   }
 
   return { kind: 'queued', waiting: [...waiting, { id, text: said }], id };

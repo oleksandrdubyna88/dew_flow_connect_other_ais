@@ -65,7 +65,10 @@ test('the queue has a ceiling, and the refusal names which limit was hit', () =>
   const over = join(waiting, 'one too many', 'w99');
 
   assert.equal(over.kind, 'full');
-  assert.ok(over.kind === 'full' && over.why.includes(String(MOST_WAITING)), 'the refusal does not name the limit');
+  // A REASON, not a sentence. The words a person reads are written at the command boundary, where
+  // every other sentence this feature shows is written; a pure module answering in English is one
+  // every later caller has to parse or work around.
+  assert.equal(over.kind === 'full' ? over.why : '', 'tooMany');
 });
 
 test('and a ceiling on the WORDS too, because eight pasted files is not eight questions', () => {
@@ -76,11 +79,16 @@ test('and a ceiling on the WORDS too, because eight pasted files is not eight qu
   const over = first.kind === 'queued' ? join(first.waiting, 'and a little more', 'w2') : undefined;
 
   assert.ok(over && over.kind === 'full');
-  assert.match(over.why, /long|large|size|words/iu, 'the refusal does not say it is about the size');
+  assert.equal(over.why, 'tooLong', 'a size refusal is reported as a count one');
 });
 
-test('an empty question never joins the queue at all', () => {
-  assert.equal(join([], '   ', 'w1').kind, 'full');
+test('an empty question never joins the queue at all, and is not a CAPACITY refusal', () => {
+  const nothing = join([], '   ', 'w1');
+
+  assert.equal(nothing.kind, 'full');
+  // Its own reason: an empty box is not a full queue, and anything counting refusals would otherwise
+  // count one as the other. (codex, the code round.)
+  assert.equal(nothing.kind === 'full' ? nothing.why : '', 'nothing');
 });
 
 // ---------- withdrawing ----------
