@@ -79,8 +79,13 @@ public class RoundNamesTheExcludedTests
     private static ProviderSettings Remote(bool plan = true, bool code = true) =>
         new("remsoftdev-claude")
         {
-            Enabled = true, Runtime = "remote", RemoteVendor = "claude", Model = "haiku",
-            BaseUrl = "https://coai.example.com", Plan = plan, Code = code,
+            Enabled = true,
+            Runtime = "remote",
+            RemoteVendor = "claude",
+            Model = "haiku",
+            BaseUrl = "https://coai.example.com",
+            Plan = plan,
+            Code = code,
         };
 
     private static ProviderSettings Local() =>

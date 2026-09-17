@@ -76,8 +76,10 @@ public sealed class StageGateTests
         var config = new PanelConfig(new Dictionary<string, RoleGate>
         {
             ["PlanCritique"] = new(3, 2),
-            ["Conventions"] = new(1, 9), ["Architecture"] = new(1, 9),
-            ["SecurityReliability"] = new(1, 9), ["UxDxPerformance"] = new(1, 9),
+            ["Conventions"] = new(1, 9),
+            ["Architecture"] = new(1, 9),
+            ["SecurityReliability"] = new(1, 9),
+            ["UxDxPerformance"] = new(1, 9),
         });
         var state = new SessionState("s", "D:/r", "main", config);
         var three = GateRule.Evaluate(

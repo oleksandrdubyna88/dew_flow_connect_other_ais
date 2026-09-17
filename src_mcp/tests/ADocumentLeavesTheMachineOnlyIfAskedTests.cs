@@ -39,8 +39,13 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
         DocumentReviews document = DocumentReviews.Unspecified, bool plan = true) =>
         new("team-codex")
         {
-            Enabled = true, Runtime = "remote", RemoteVendor = "codex", Model = "m",
-            BaseUrl = "https://coai.example.com", Plan = plan, Documents = document,
+            Enabled = true,
+            Runtime = "remote",
+            RemoteVendor = "codex",
+            Model = "m",
+            BaseUrl = "https://coai.example.com",
+            Plan = plan,
+            Documents = document,
         };
 
     /// <summary>The migration reading, and it holds only where nothing leaves the machine.</summary>

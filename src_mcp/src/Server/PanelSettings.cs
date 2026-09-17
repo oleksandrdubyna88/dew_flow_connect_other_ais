@@ -583,59 +583,59 @@ public sealed record PanelSettings
         RoleCatalog catalog,
         string dataDir,
         ConsultantsSetting consultants) => new PanelSettings
-    {
-        Rounds = Config(env, catalog),
-        // The data directory's own notes ride here rather than in a channel of their own: this list
-        // is already "things said out loud at startup, because silence made a working configuration
-        // look broken", and a database left behind in a shared root is exactly that.
-        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. consultants.Complaints],
-        Consultants = consultants.Map,
-        ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
-        ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
-        ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
-        ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
-        ConsultantsUnreadable = consultants.Unreadable,
-        GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
-        PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
-        LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
-        ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
-        // `CountVar` rather than `IntVar`, because ZERO is the meaningful value here: it means
-        // "derive it from the round's shape". IntVar refuses anything below one and would have
-        // turned a deliberate zero into a default nobody chose — the same disagreement between the
-        // two halves that CountVar was written for.
-        RoundTimeout = TimeSpan.FromMinutes(CountVar(env, "COAI_ROUND_TIMEOUT_MINUTES", 0)),
-        RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
-        RetryLadder = LadderFrom(env),
-        // Seconds win when set: minutes are the setting a person configures, seconds are for a
-        // short budget a test or a scripted run needs. One knob would have had to lie about one
-        // of the two.
-        EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
+        {
+            Rounds = Config(env, catalog),
+            // The data directory's own notes ride here rather than in a channel of their own: this list
+            // is already "things said out loud at startup, because silence made a working configuration
+            // look broken", and a database left behind in a shared root is exactly that.
+            Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. consultants.Complaints],
+            Consultants = consultants.Map,
+            ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
+            ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
+            ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
+            ConsultEnabled = NotSwitchedOff(env, "COAI_CONSULT_ENABLED"),
+            ConsultantsUnreadable = consultants.Unreadable,
+            GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
+            PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
+            LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
+            ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
+            // `CountVar` rather than `IntVar`, because ZERO is the meaningful value here: it means
+            // "derive it from the round's shape". IntVar refuses anything below one and would have
+            // turned a deliberate zero into a default nobody chose — the same disagreement between the
+            // two halves that CountVar was written for.
+            RoundTimeout = TimeSpan.FromMinutes(CountVar(env, "COAI_ROUND_TIMEOUT_MINUTES", 0)),
+            RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
+            RetryLadder = LadderFrom(env),
+            // Seconds win when set: minutes are the setting a person configures, seconds are for a
+            // short budget a test or a scripted run needs. One knob would have had to lie about one
+            // of the two.
+            EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
-        // ABSOLUTE, always. A relative one was accepted happily and made every round unrunnable: the
-        // server writes its schema file and hands the reviewer that same relative path, and a vendor
-        // CLI is launched in a directory of its own — so every reviewer answered "cannot find the
-        // path specified" and the round came back `call_human` with nothing reviewed. Everything
-        // reported success until the answer was empty, which is the worst shape a configuration
-        // mistake can take. Found by this repository's own bench on its first real run.
-        //
-        // And PARTITIONED PER SIDE when it was overridden, so a location deliberately shared — a NAS
-        // that survives a Windows reinstall — does not end up with Windows and WSL writing one
-        // SQLite file. See ResolveDataDir; the default is untouched by it.
-        DataDir = dataDir,
-        AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
-        LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
-        Autonomous = Flag(env, "COAI_AUTONOMOUS"),
-        SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
-        SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
-        LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
+            // ABSOLUTE, always. A relative one was accepted happily and made every round unrunnable: the
+            // server writes its schema file and hands the reviewer that same relative path, and a vendor
+            // CLI is launched in a directory of its own — so every reviewer answered "cannot find the
+            // path specified" and the round came back `call_human` with nothing reviewed. Everything
+            // reported success until the answer was empty, which is the worst shape a configuration
+            // mistake can take. Found by this repository's own bench on its first real run.
+            //
+            // And PARTITIONED PER SIDE when it was overridden, so a location deliberately shared — a NAS
+            // that survives a Windows reinstall — does not end up with Windows and WSL writing one
+            // SQLite file. See ResolveDataDir; the default is untouched by it.
+            DataDir = dataDir,
+            AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
+            LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
+            Autonomous = Flag(env, "COAI_AUTONOMOUS"),
+            SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
+            SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
+            LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
-        CodeWorkspace = WorkspaceOf(env("COAI_CODE_WORKSPACE")),
-        DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
-        DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
-        PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
-    }.WithProvidersFrom(env);
+            CodeWorkspace = WorkspaceOf(env("COAI_CODE_WORKSPACE")),
+            DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
+            DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
+            PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
+        }.WithProvidersFrom(env);
 
     /// <summary>Where a code reviewer runs, or the checkout when this build does not know the name.</summary>
     /// <remarks>

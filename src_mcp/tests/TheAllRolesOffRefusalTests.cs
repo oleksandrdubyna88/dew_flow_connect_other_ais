@@ -22,15 +22,15 @@ public sealed class TheAllRolesOffRefusalTests
 {
     private static PanelService Service(RoleCatalog catalog) =>
         new(new PanelSettings
-            {
-                DataDir = Directory.CreateTempSubdirectory("coai-refusal-").FullName,
-                Rounds = new PanelConfig(
+        {
+            DataDir = Directory.CreateTempSubdirectory("coai-refusal-").FullName,
+            Rounds = new PanelConfig(
                     catalog.Roles.ToDictionary(r => r.Id, r => new RoleGate(1, 5, Enabled: false)),
                     StagePolicy.Human)
-                {
-                    Catalog = catalog,
-                },
+            {
+                Catalog = catalog,
             },
+        },
             VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 

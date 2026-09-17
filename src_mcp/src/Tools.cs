@@ -30,7 +30,10 @@ internal static class Tools
                     plus when the CredsForDevs vault was read (key rotation lands on server restart).
                     Call it before promising anyone a review.
                     """,
-                ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false,
+                ReadOnly = true,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
             });
 
         yield return McpServerTool.Create(
@@ -64,7 +67,10 @@ internal static class Tools
                     genuinely do not know it, leave it out — the round is then recorded as not
                     stating one, which is true, rather than defaulting to something that is not.
                     """,
-                ReadOnly = false, Idempotent = true, Destructive = false, OpenWorld = false,
+                ReadOnly = false,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
             });
 
         yield return McpServerTool.Create(
@@ -88,7 +94,10 @@ internal static class Tools
                     FROM, the only one that unlocks `review_code`; a document that is itself the
                     deliverable goes to `review_document` instead.
                     """,
-                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = true,
             });
 
         yield return McpServerTool.Create(
@@ -120,7 +129,10 @@ internal static class Tools
                     changes your mind about the shape of the work is what `consult` is for — call it
                     before `resolve`, once for the round, while the accept-or-reject is still open.
                     """,
-                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = true,
             });
 
         yield return McpServerTool.Create(
@@ -172,7 +184,10 @@ internal static class Tools
                     each reviewer's prose about the whole document, unmerged and gating nothing. That
                     is where a summary comes back.
                     """,
-                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = true,
             });
 
         yield return McpServerTool.Create(
@@ -203,7 +218,10 @@ internal static class Tools
                     judgement; it applies only after that verdict and is refused at any other
                     time, because until then the gate decides.
                     """,
-                ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = false,
+                ReadOnly = false,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = false,
             });
 
         yield return McpServerTool.Create(
@@ -218,7 +236,10 @@ internal static class Tools
                     round awaits `resolve`, and the recorded trail of verdicts. Survives a server
                     restart — sessions are persisted.
                     """,
-                ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false,
+                ReadOnly = true,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
             });
 
         yield return McpServerTool.Create(
@@ -240,7 +261,10 @@ internal static class Tools
                     person directly in this conversation and wait for their reply. Never decide
                     alone because nobody answered; the question stays open in VS Code either way.
                     """,
-                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = false,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = false,
             });
 
         yield return McpServerTool.Create(
@@ -275,7 +299,10 @@ internal static class Tools
                     You may only close your own: a consultation belongs to the caller session that
                     opened it.
                     """,
-                ReadOnly = false, Idempotent = true, Destructive = false, OpenWorld = false,
+                ReadOnly = false,
+                Idempotent = true,
+                Destructive = false,
+                OpenWorld = false,
             });
         yield return McpServerTool.Create(
             // Both optional arguments carry a C# default — the `resolve` lesson above: without one
@@ -319,7 +346,10 @@ internal static class Tools
                     Nothing in your tree is ever changed by this tool; if the consultant's process
                     changes anything, its advice is withheld and the paths are named.
                     """,
-                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = true,
             });
     }
 }
