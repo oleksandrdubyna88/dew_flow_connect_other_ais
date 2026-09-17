@@ -210,6 +210,141 @@ public sealed class TheBuiltBinariesTests : IDisposable
             78, "a rate past the cap is refused at startup rather than clamped");
     }
 
+    /// <summary>
+    /// The whole admin API over a real socket, from a real environment variable: issue, list, audit,
+    /// see who is sending, revoke — and a key that really stops working.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this is in THIS story and not story 4.</b> Every route can pass in-process and
+    /// over a test handler while the DEPLOYED surface answers nothing: the administrators come from
+    /// an environment variable parsed at startup, the gate is wired by hand rather than by routing,
+    /// and the six new wire shapes are bound by a source-generated serializer that compiles whether
+    /// or not it works. Deferring the real-binary check is how a broken shipped route gets accepted
+    /// as complete. (Resolved plan decision 8.)</para>
+    /// <para>It also asserts the case an operator hits on day one, on the real binary: with the
+    /// variable ABSENT the server still starts and serves `/ingest`, and every admin route answers
+    /// 401 — because a deployment whose secret was never filled in must not be a deployment that
+    /// refuses to boot.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRealServerServesTheWholeAdminApiFromAnEnvironmentVariable()
+    {
+        MustExist(BugsExe);
+        const string adminKey = "an-administrators-key-for-this-scenario";
+        var port = FreePort();
+        using var server = Start(
+            BugsExe, $"--urls http://127.0.0.1:{port}", _dir, admins: $"# alice\n{adminKey}");
+        try
+        {
+            (await Listening(port)).Should().BeTrue("the real binary must come up with administrators configured");
+
+            using var stranger = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            (await stranger.GetAsync("/admin/keys", TestContext.Current.CancellationToken))
+                .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "over a real socket, with no credential");
+
+            using var admin = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminKey);
+
+            var issued = await admin.PostAsJsonAsync(
+                "/admin/keys", new { note = "issued over a real socket" }, TestContext.Current.CancellationToken);
+            issued.StatusCode.Should().Be(HttpStatusCode.Created, await Said(issued));
+            var key = await issued.Content.ReadFromJsonAsync<Issued>(TestContext.Current.CancellationToken);
+            key!.Key.Should().NotBeNullOrWhiteSpace("the one response that carries a key must really carry it");
+
+            // The key the real server minted really authenticates the real ingest route.
+            using var contributor = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            contributor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key.Key);
+            (await Ingest(contributor)).StatusCode.Should().Be(
+                HttpStatusCode.OK, "a key issued through the API is a key the gate accepts");
+
+            var listed = await Read<KeysPage>(admin, "/admin/keys");
+            listed.Total.Should().Be(1);
+            listed.Items.Should().ContainSingle().Which.Sent.Should().Be(1, "the counter moved on the real file");
+            listed.Items[0].Waiting.Should().Be(1);
+
+            var trail = await Read<AuditPage>(admin, "/admin/audit");
+            trail.Items.Should().ContainSingle().Which.Action.Should().Be("issue");
+            trail.Items[0].AdminId.Should().StartWith(
+                "admin-", "the audit names the administrator by the id derived from the variable's line");
+
+            var active = await Read<ActiveNow>(admin, "/admin/active");
+            active.WindowSeconds.Should().Be(60);
+            active.Items.Should().Contain(row => row.Id == $"key:{key.Id}", "the contributor just sent something")
+                .And.Contain(row => row.Id.StartsWith("admin-", StringComparison.Ordinal), "so did the reader");
+
+            var revoked = await admin.PostAsync(
+                $"/admin/keys/{key.Id}/revoke", content: null, TestContext.Current.CancellationToken);
+            revoked.StatusCode.Should().Be(HttpStatusCode.OK, await Said(revoked));
+            (await Ingest(contributor)).StatusCode.Should().Be(
+                HttpStatusCode.Unauthorized, "revoking through the API must really stop an ingest");
+        }
+        finally
+        {
+            Stop(server);
+        }
+
+        // An out-of-range ADMIN limit is refused at startup, as its own setting, by the real process.
+        Run(BugsExe, $"--urls http://127.0.0.1:{FreePort()}", _dir, admins: adminKey, adminRate: "1001")
+            .Code.Should().Be(78, "the admin limit is validated and capped like the contributor one");
+    }
+
+    /// <summary>With no administrators configured, the real server still serves — and refuses every admin route.</summary>
+    [Fact]
+    public async Task TheRealServerStartsWithNoAdministratorsAndRefusesThemAll()
+    {
+        MustExist(BugsExe);
+        var port = FreePort();
+        var key = IssueKey();
+        using var server = Start(BugsExe, $"--urls http://127.0.0.1:{port}", _dir);
+        try
+        {
+            (await Listening(port)).Should().BeTrue(
+                "a deployment whose admin secret was never filled in must still boot and still collect");
+
+            using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+            (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK, "contributors are unaffected");
+
+            foreach (var route in new[] { "/admin/keys", "/admin/audit", "/admin/active" })
+            {
+                (await http.GetAsync(route, TestContext.Current.CancellationToken))
+                    .StatusCode.Should().Be(
+                        HttpStatusCode.Unauthorized,
+                        $"{route} refuses a contributor's key exactly as it refuses a stranger's");
+            }
+        }
+        finally
+        {
+            Stop(server);
+        }
+    }
+
+    private static async Task<T> Read<T>(HttpClient http, string route)
+    {
+        using var reply = await http.GetAsync(route, TestContext.Current.CancellationToken);
+        reply.StatusCode.Should().Be(HttpStatusCode.OK, await Said(reply));
+
+        return (await reply.Content.ReadFromJsonAsync<T>(TestContext.Current.CancellationToken))!;
+    }
+
+    /// <summary>What the server actually answered, so a failure names it rather than a status code.</summary>
+    private static async Task<string> Said(HttpResponseMessage reply) =>
+        $"the server said: {await reply.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}";
+
+    private sealed record Issued(string Id, string Key, string Note, string CreatedUtc);
+
+    private sealed record KeyListed(string Id, string Note, int Sent, int Waiting);
+
+    private sealed record KeysPage(IReadOnlyList<KeyListed> Items, int Total, long? NextBefore);
+
+    private sealed record AuditListed(long Id, string AdminId, string Action, string Target);
+
+    private sealed record AuditPage(IReadOnlyList<AuditListed> Items, long? NextBefore);
+
+    private sealed record ActiveCaller(string Id, int InWindow, bool Limited);
+
+    private sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int WindowSeconds);
+
     private static readonly object OnePair = new
     {
         items = new[]
@@ -313,9 +448,11 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// writing and then stops running. The server logs to its console sink on every request, so it
     /// would reach that buffer and hang there — looking exactly like a server that never came up.
     /// </remarks>
-    private static Process Start(string exe, string args, string data, string key = "", string rate = "")
+    private static Process Start(
+        string exe, string args, string data, string key = "", string rate = "",
+        string admins = "", string adminRate = "")
     {
-        var how = Prepared(exe, args, data, key, rate);
+        var how = Prepared(exe, args, data, key, rate, admins, adminRate);
         var started = Process.Start(how)!;
 
         // Drained on their own threads, because the SERVER is left running: nobody calls
@@ -335,9 +472,10 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// thread — which is the documented pair that cannot block.
     /// </remarks>
     private static (int Code, string Out, string Err) Run(
-        string exe, string args, string data, string key = "", string rate = "")
+        string exe, string args, string data, string key = "", string rate = "",
+        string admins = "", string adminRate = "")
     {
-        var how = Prepared(exe, args, data, key, rate);
+        var how = Prepared(exe, args, data, key, rate, admins, adminRate);
         using var process = Process.Start(how)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEnd();
@@ -351,9 +489,13 @@ public sealed class TheBuiltBinariesTests : IDisposable
     /// One builder for <see cref="Start"/> and <see cref="Run"/>, which used to carry two copies of
     /// it — a variable added to one and not the other is a scenario testing a differently
     /// configured server than it thinks. <paramref name="rate"/> is the limit setting as the unit
-    /// would set it; empty leaves it unset, which is the default the server documents.
+    /// would set it; empty leaves it unset, which is the default the server documents. So do
+    /// <paramref name="admins"/> and <paramref name="adminRate"/> — and an empty <c>admins</c> is a
+    /// real configuration worth running rather than an omission: it is how a deployment whose secret
+    /// was never filled in behaves, which is a scenario below.
     /// </remarks>
-    private static ProcessStartInfo Prepared(string exe, string args, string data, string key, string rate)
+    private static ProcessStartInfo Prepared(
+        string exe, string args, string data, string key, string rate, string admins = "", string adminRate = "")
     {
         var how = new ProcessStartInfo(exe)
         {
@@ -372,6 +514,8 @@ public sealed class TheBuiltBinariesTests : IDisposable
         how.Environment["COAI_DATA_DIR"] = data;
         // Never inherited from the machine: a developer's own setting must not decide a scenario.
         how.Environment[RatePerMinute.Variable] = rate.Length > 0 ? rate : null;
+        how.Environment[AdminKeys.Variable] = admins.Length > 0 ? admins : null;
+        how.Environment[RatePerMinute.Surface.Administrator.Variable] = adminRate.Length > 0 ? adminRate : null;
         if (key.Length > 0)
         {
             how.Environment["COAI_BUGS_KEY"] = key;

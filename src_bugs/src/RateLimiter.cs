@@ -104,6 +104,39 @@ public sealed class RateLimiter(RatePerMinute limit, TimeProvider clock)
         return dropped;
     }
 
+    /// <summary>Who is sending right now, read straight from memory and persisted nowhere.</summary>
+    /// <remarks>
+    /// <para>This is the one question no stored count can answer, and the reason <c>/admin/active</c>
+    /// exists: "who is flooding us" is about the current minute, and the corpus deliberately keeps no
+    /// history finer than a month. It reads the live dictionary and writes nothing.</para>
+    /// <para><b>It is also the one place this server shows contributor activity in real time</b>, and
+    /// the promise says so explicitly rather than leaving a reader to reconcile it: there is no
+    /// yesterday to ask about, and there is a right now.</para>
+    /// <para>Every subject THIS limiter holds appears, with its prefix intact — `key:…` for a
+    /// contributor and `admin-…` for an administrator — so a row says what kind of caller it is
+    /// without a second field. There are two instances, one per setting, and each holds only its own
+    /// callers: <c>/admin/active</c> therefore reads both and merges them, which is stated where it
+    /// does it. There are no address buckets to expose, which is the second thing the key-only
+    /// limiter bought. A window that has fallen idle since the last sweep is skipped rather than
+    /// reported as zero, because "sent nothing in the last minute" and "is not here" are the same
+    /// fact to a reader.</para>
+    /// </remarks>
+    public IReadOnlyList<(string Subject, int InWindow, bool Limited)> ActiveNow()
+    {
+        var now = clock.GetUtcNow().UtcTicks;
+        var active = new List<(string, int, bool)>();
+        foreach (var (subject, window) in _windows)
+        {
+            var inWindow = window.Since(now - WindowLength.Ticks);
+            if (inWindow > 0)
+            {
+                active.Add((subject.Key, inWindow, !limit.Disabled && inWindow >= limit.Value));
+            }
+        }
+
+        return [.. active.OrderByDescending(row => row.Item2).ThenBy(row => row.Item1, StringComparer.Ordinal)];
+    }
+
     /// <summary>How many stamps a subject holds, expired or not — for the tests.</summary>
     internal int StampsOf(LimiterSubject subject) =>
         _windows.TryGetValue(subject, out var window) ? window.Count : 0;

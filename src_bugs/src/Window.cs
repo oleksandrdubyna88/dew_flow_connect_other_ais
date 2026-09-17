@@ -61,16 +61,39 @@ internal sealed class Window
     /// <summary>The window without its newest stamp — for a request admitted and then refused by the corpus.</summary>
     public Window WithoutNewest() => _stamps.Length == 0 ? this : new Window(_stamps[..^1]);
 
+    /// <summary>How many stamps are still inside the window — counted, never sliced.</summary>
+    /// <remarks>
+    /// `/admin/active` asks this for every tracked subject on every call, so it walks the array and
+    /// returns a number rather than reusing <see cref="Live"/>, which allocates the surviving slice.
+    /// The same reasoning a code round applied to <see cref="IsIdle"/>: a read that only needs a
+    /// count should not pay for a copy.
+    /// </remarks>
+    public int Since(long floor) => _stamps.Length - FirstLive(floor);
+
     /// <summary>The stamps still inside the window, i.e. newer than <c>now - length</c>.</summary>
     private long[] Live(long now, long length)
     {
-        var floor = now - length;
+        var first = FirstLive(now - length);
+
+        return first == 0 ? _stamps : _stamps[first..];
+    }
+
+    /// <summary>Where the stamps still inside the window begin: the first one NEWER than the floor.</summary>
+    /// <remarks>
+    /// One scan for both readers. <see cref="Live"/> takes the slice from here and
+    /// <see cref="Since"/> takes the count, and they must agree on the boundary — a window that
+    /// admitted a request must report that request as in-window on `/admin/active`, and two copies
+    /// of `&lt;=` are two places for that to stop being true. The stamps are appended in time order,
+    /// so a walk from the oldest stops at the first survivor.
+    /// </remarks>
+    private int FirstLive(long floor)
+    {
         var first = 0;
         while (first < _stamps.Length && _stamps[first] <= floor)
         {
             first++;
         }
 
-        return first == 0 ? _stamps : _stamps[first..];
+        return first;
     }
 }

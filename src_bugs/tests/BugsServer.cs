@@ -44,7 +44,16 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
     /// The limit to serve with; unset means the server's default. Set explicitly to nothing
     /// otherwise, so a variable in the machine's environment cannot leak into a test.
     /// </param>
-    public BugsServer(int? ratePerMinute = null)
+    /// <param name="adminKeys">
+    /// The value of <c>COAI_BUGS_ADMIN_KEYS</c> — newline-separated. **Null means the variable is
+    /// ABSENT**, which is a legitimate way to run this server: every `/admin/*` call then answers
+    /// 401, indistinguishably from a wrong credential, and a test asserts exactly that.
+    /// </param>
+    /// <param name="adminRatePerMinute">
+    /// The ADMIN limit, which is its own setting. Unset means the server's default of 120; the
+    /// contributor number would make a paging test unrunnable, which is why they are separate.
+    /// </param>
+    public BugsServer(int? ratePerMinute = null, string? adminKeys = null, int? adminRatePerMinute = null)
     {
         DataDir = Path.Combine(Path.GetTempPath(), "coai-bugs-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(DataDir);
@@ -52,6 +61,20 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
         Set("COAI_BUGS_SECRET", Secret);
         Set("COAI_BUGS_DATA", DataDir);
         Set(RatePerMinute.Variable, ratePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Set(AdminKeys.Variable, adminKeys);
+        Set(
+            RatePerMinute.Surface.Administrator.Variable,
+            adminRatePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>An HTTP client presenting a bearer credential.</summary>
+    public HttpClient Bearing(string key)
+    {
+        var http = CreateClient();
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+
+        return http;
     }
 
     /// <summary>A key this server will accept, and the id it was issued under.</summary>

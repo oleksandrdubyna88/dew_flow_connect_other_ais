@@ -2407,8 +2407,8 @@ have been revoked.
 `admin_audit(id, admin_id, action, target, at_utc)` is the administrators' log. `action` is a verb
 from a closed set (`issue`, `revoke`), `target` is a key id, and a test pins that neither may carry a
 note, a key or a hash — the server holds no contributor identity, only key ids, and this is what keeps
-that true of the one table with a clock. The one-shots audit as `cli`; the admin API (story 2) audits
-as the derived `admin-<8 hex>` id. **The mutation, its audit row and the sweep commit together**, so
+that true of the one table with a clock. The one-shots audit as `cli`; the admin API audits
+as the derived `admin-<8 hex>` id of the administrator that acted. **The mutation, its audit row and the sweep commit together**, so
 no issuance is reported that was not audited: drop the audit table and `Issue` rolls the key back.
 The table is swept to the newest 50 000 rows inside that transaction, by an INDEXED cutoff on the
 primary key rather than `DELETE … WHERE id NOT IN (SELECT …)` — a latency spike and a lock risk
@@ -2434,9 +2434,97 @@ minute-sweep never evicts a window that just gained a stamp — both raced by th
 (`revoked_utc` non-empty) is refused before the limiter and before any write, and a test proves
 revoking actually stops an ingest. The limiter is one process's memory and resets on restart by
 design; `ServeLock` makes "one process" enforced rather than assumed — a second server on the same
-data directory exits 78, while the one-shots never take it. `/admin/*` gets its own limiter identity
-from story 1 (`LimiterSubject.Administrator(hash)` → `admin-<8 hex>`) so story 2 cannot land its
-routes in the contributor bucket.
+data directory exits 78, while the one-shots never take it. `/admin/*` has its own limiter identity
+(`LimiterSubject.Administrator(AdminId)` → `admin-<8 hex>`) so an admin route cannot land in the
+contributor bucket.
+
+### Who holds a key — the admin API
+
+Five routes behind `AdminGate`, all under `/admin`:
+
+```
+GET  /admin/keys?limit&before      200 { items:[ {id,note,createdUtc,revokedUtc,lastSeenMonth,sent,waiting} ], limit,total,nextBefore }
+POST /admin/keys   {note}          201 { id,key,note,createdUtc }   400 a refused note
+POST /admin/keys/{id}/revoke       200 { id,revokedUtc,changed }     404 no such key
+GET  /admin/audit?limit&before     200 { items:[ {id,adminId,action,target,atUtc} ], limit,nextBefore }
+GET  /admin/active                 200 { items:[ {id,inWindow,limited} ], windowSeconds }
+```
+
+**The administrators are one environment variable**, `COAI_BUGS_ADMIN_KEYS`, newline-separated, with
+blank lines and `#` comments dropped so a secret box can carry a line per person and a note saying
+whose it is. Each line is hashed with `COAI_BUGS_SECRET` at startup and only the hash is kept.
+Matching walks **every** hash with `CryptographicOperations.FixedTimeEquals` and **no early return**,
+and the store is an array rather than a `FrozenSet` because a set's probe is data-dependent and so is
+its timing. The guarantee is about the credential PRESENTED, not about the number of administrators:
+N comparisons cost O(N), and the count is in the operator's own secret store.
+
+**An absent variable and a wrong credential are one answer.** Both are 401 with the same body, so
+these routes are not an oracle for whether administration is enabled on a deployment. The cost is
+that an operator cannot tell a missing secret from their own typo from outside — so the server says
+it on the host: a WARNING at startup naming the variable, plus the administrator count on the "is up"
+line. Two tests read those lines, because a promise in a docblock that nothing asserts stops being
+true.
+
+**Gating is a prefix match** on `/admin`, before routing, so a route added later is protected by
+default rather than by being remembered — a path no route serves still answers 401 without a
+credential and 404 with one. Only the single successful issuance ever carries a key; no listing has a
+field for a key or a hash, which is the type system enforcing the rule instead of a reviewer checking
+it. A lost issuance response needs no idempotency token: the listing is newest-first with an exact
+`createdUtc`, so the administrator sees a key created moments ago that they do not hold and revokes
+it — the recovery depends on that ORDER, so a test pins it.
+
+**Paging is keyset everywhere**, `?limit&before`, and `nextBefore` doubles as "there is more" (a full
+page is the only evidence another exists, so following it ends with one empty page). Not `OFFSET`:
+an offset is not insert-stable, and issuing a key between two requests hides or duplicates a row —
+the distinguishing sequence is a test. The keys cursor is `rowid`, because `api_keys.id` is hex and
+sorts lexicographically rather than chronologically; it is safe because that table never deletes.
+`total` is on the keys page only — `api_keys` is tens of rows, while the audit is bounded at 50 000
+and counting it per page would scan the table while holding the corpus gate. An illegal `limit` or
+`before` is a **400 naming what was legal, never a silent clamp**, and `limit=0` is refused rather
+than meaning "everything"; a `before` past the end is an empty page, because that is a correct client
+on its last request.
+
+**The admin limit is its own setting.** `COAI_BUGS_ADMIN_RATE_PER_MINUTE`, default **120**, validated
+and capped exactly like the contributor one (78 at startup past 1 000). Sharing the contributor number
+— flood control for a public endpoint — would rate-limit the Users tab after ten pages: 250 rows at 10
+a minute is 25 minutes of paging. Two `RateLimiter` instances therefore live in the container, the
+admin one keyed, and the 429 body names the limit the caller actually reached (`per administrator`,
+not `per key` — a test read the wrong noun and it sent the operator to the wrong variable).
+
+**`/admin/active` reads BOTH limiters.** It is the one question no stored count can answer — who is
+sending right now — and the contributor limiter is the one it is about, so a route handed only the
+admin instance would answer with administrators and no contributors. Rows keep their subject prefix
+(`key:…` or `admin-…`) so a reader tells the kinds apart without a second field, busiest first. It
+persists nothing, and an idle window is absent rather than reported as zero. This is also the one
+place this server shows contributor activity in real time, and the privacy promise says so in those
+words rather than leaving a reader to reconcile it.
+
+**An administrator may upload, down a path of its own.** `/ingest` accepts either credential and the
+gate hands the endpoint an `Uploader` union; an administrator's batch goes through
+`Corpus.AcceptAdmin`, which writes the pairs with the derived `admin-…` id in `key_id` and **no
+counter and no month**, because there is no key row to carry them. The in-force re-check
+`Corpus.Accept` does inside its transaction is not bypassed — **it does not apply**: it guards a
+`--revoke` committing between the gate and the write in another process, and an administrator's set
+is built once at startup and immutable for the process's life. A test asserts the difference directly,
+`Accept` refusing the very id `AcceptAdmin` stores under. The cost is that an administrator's uploads
+are invisible to the Users tab, which story 3 must say out loud.
+
+**Revoking an administrator is NOT immediate.** Removing a line from `COAI_BUGS_ADMIN_KEYS` does
+nothing until a SUCCESSFUL redeploy, and a deploy that fails or rolls back leaves the credential
+live. That is the other side of the coin that makes the admin upload safe without a re-check; the
+operator accepted it on 2026-09-17, the emergency measure is stopping the service, and
+`deploy/bugs/README.md` says so where it cannot be missed.
+
+**Every refusal spells its one field the same way.** A handler's `TypedResults.BadRequest` goes
+through the host's JSON options, which camel-case names; a gate writes its body with a
+source-generated `JsonTypeInfo` directly, which uses the CONTEXT's options — and the context had
+none, so the same `Problem` arrived as `why` from a route and `Why` from a gate. The naming policy is
+declared on `BugsJson` itself, and a test reads the bytes of all three refusal paths.
+
+**The note is OUR record of why a key exists, never the holder's identity.** Two hundred characters,
+and an email-shaped note is refused. The guard catches one shape and no other — `bob@example.com` is
+refused and `Bob Smith` is not, and both directions are tested, because "notes are validated" could
+otherwise mean anything.
 
 **The no-client-IP promise is a DEPLOYMENT obligation, not a code one.** A reverse proxy writes
 `remote_addr` before the request reaches any route, so an in-process test asserting that no logging

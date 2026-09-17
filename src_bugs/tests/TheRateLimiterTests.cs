@@ -105,7 +105,7 @@ public sealed class TheRateLimiterTests
     public void AnAdministratorAndAContributorNeverShareABucket()
     {
         var hash = Corpus.HashOf("an-admin-key", "secret");
-        var admin = LimiterSubject.Administrator(hash);
+        var admin = LimiterSubject.Administrator(AdminId.Of(hash));
         var lookalike = LimiterSubject.Contributor(new KeyId(AdminId.Of(hash).Value));
         var (limiter, _) = At(1);
 
@@ -232,6 +232,78 @@ public sealed class TheRateLimiterTests
             limiter.StampsOf(Key).Should().Be(
                 Racers, $"round {round}: every admitted request left its stamp in the window that survived");
         }
+    }
+
+    /// <summary>A limiter nobody has used answers an empty list, not a different document.</summary>
+    /// <remarks>
+    /// This is where "nobody is sending" can be observed. It cannot be observed through
+    /// `/admin/active`, because reading that route is itself a request the admin limiter admitted a
+    /// moment earlier — so the HTTP test asserts the shape and this one asserts the empty case.
+    /// </remarks>
+    [Fact]
+    public void ALimiterNobodyHasUsedIsActivelyEmpty()
+    {
+        var (limiter, _) = At(10);
+
+        limiter.ActiveNow().Should().BeEmpty();
+    }
+
+    /// <summary>Who is sending, with their counts, busiest first and the prefix saying which kind.</summary>
+    [Fact]
+    public void ActiveNowCountsEachSubjectInsideTheWindow()
+    {
+        var (limiter, _) = At(3);
+        var other = LimiterSubject.Contributor(new KeyId("key-2"));
+        var admin = LimiterSubject.Administrator(AdminId.Of(Corpus.HashOf("an-admin-key", "secret")));
+        limiter.Admit(Key);
+        limiter.Admit(Key);
+        limiter.Admit(Key);
+        limiter.Admit(other);
+        limiter.Admit(admin);
+
+        var active = limiter.ActiveNow();
+
+        active.Should().HaveCount(3);
+        active[0].Should().Be(("key:key-1", 3, true), "busiest first, and it is at its limit");
+        active.Should().Contain(("key:key-2", 1, false));
+        active.Should().Contain((admin.Key, 1, false));
+        active.Select(row => row.Subject).Should().AllSatisfy(subject =>
+            subject.Should().Match(text => text.StartsWith("key:", StringComparison.Ordinal)
+                || text.StartsWith("admin-", StringComparison.Ordinal)));
+    }
+
+    /// <summary>A window that has fallen idle is absent, not reported as zero.</summary>
+    /// <remarks>
+    /// "Sent nothing in the last minute" and "is not here" are the same fact to a reader, and the
+    /// sweep has not necessarily run — so the reading, not the sweep, is what must skip it.
+    /// </remarks>
+    [Fact]
+    public void AnIdleWindowIsAbsentRatherThanZero()
+    {
+        var (limiter, clock) = At(3);
+        limiter.Admit(Key);
+
+        clock.Advance(TimeSpan.FromSeconds(61));
+
+        limiter.Tracked.Should().Be(1, "the window is still in the dictionary until a sweep drops it");
+        limiter.ActiveNow().Should().BeEmpty("but nobody has sent anything in the last minute");
+    }
+
+    /// <summary>A disabled limit is never "limited", however much arrives.</summary>
+    [Fact]
+    public void WithNoLimitNobodyIsEverReportedAsLimited()
+    {
+        var clock = new FrozenClock(T0);
+        var limiter = new RateLimiter(
+            ((RatePerMinute.Parsed.Rate)RatePerMinute.Parse("0")).Value, clock);
+
+        for (var at = 0; at < 50; at++)
+        {
+            limiter.Admit(Key).Admitted.Should().BeTrue();
+        }
+
+        limiter.ActiveNow().Should().BeEmpty(
+            "a disabled limiter keeps no window at all, so there is nothing to report");
     }
 
     /// <summary>Runs <paramref name="attempt"/> on that many threads released at once; answers how many said yes.</summary>

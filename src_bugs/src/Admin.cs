@@ -181,16 +181,31 @@ internal static class Admin
             return 65; // EX_DATAERR
         }
 
-        if (!corpus.Revoke(new KeyId(id), by))
+        // The three outcomes are now distinguishable, and this one-shot used to report two of them
+        // with one sentence: "no key … is in force" was said both for a key that never existed and
+        // for one already revoked, which are different things to be told at 3 a.m.
+        //
+        // ALREADY REVOKED IS NOW A SUCCESS, and that is a deliberate change. The operator's intent
+        // — this key must not work — is satisfied, and exiting 69 made `--revoke` unsafe to retry
+        // from a script that cannot know whether the first attempt landed. It matches the admin
+        // API's idempotency, which the plan requires for the same reason.
+        switch (corpus.Revoke(new KeyId(id), by))
         {
-            Say($"no key {id} is in force");
+            case Revoked.NoSuchKey:
+                Say($"no key {id} exists");
 
-            return 69; // EX_UNAVAILABLE
+                return 69; // EX_UNAVAILABLE
+
+            case Revoked.Already already:
+                Say($"key {id} was already revoked at {already.At.Stored}; nothing to do");
+
+                return 0;
+
+            default:
+                Say($"revoked {id}");
+
+                return 0;
         }
-
-        Say($"revoked {id}");
-
-        return 0;
     }
 
     /// <summary>Moves one pair out of quarantine, because a person read it.</summary>

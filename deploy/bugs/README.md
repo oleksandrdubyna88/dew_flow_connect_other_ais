@@ -146,6 +146,8 @@ never arguments, because an argument is in process listings and shell history.
 | `COAI_BUGS_DATA` | Where `coai-bugs.db` and `logs/` live. |
 | `COAI_BUGS_KEYWORDS` | Optional. A file that **replaces** the embedded keyword list, for correcting it without waiting for a release. |
 | `COAI_BUGS_RATE_PER_MINUTE` | Optional. Requests a minute **per key**, a sliding window; `10` when unset, `0` switches the limit off, anything past `1000` or not a whole number makes the server exit **78** rather than start with a clamped value. A refused request is a `429` with `Retry-After`. Per key and never per address: this vhost clears every forwarding header, so the application sees `127.0.0.1` for everybody and an address limit would be one bucket for the whole internet — unauthenticated traffic is `limit_req`'s job above. In memory, one process, reset by a restart, by design. |
+| `COAI_BUGS_ADMIN_KEYS` | Optional. The administrators who may use `/admin/*`, **one key per line**; blank lines and `#` comments are ignored, so keep a comment line saying whose each key is. Each is hashed with `COAI_BUGS_SECRET` at startup and only the hash is held. **Absent is a legitimate configuration** — the server starts, keeps collecting, and answers `401` to every admin call — so it does NOT exit 78; it logs a warning naming this variable, and that log is the only place the difference is visible (see *[An admin credential cannot be revoked in a hurry](#an-admin-credential-cannot-be-revoked-in-a-hurry)*). An admin key may also upload through `/ingest`; those pairs are attributed to `admin-<8 hex>` and counted against no key row. |
+| `COAI_BUGS_ADMIN_RATE_PER_MINUTE` | Optional. Requests a minute **per administrator**; `120` when unset, `0` switches it off, past `1000` or not a whole number makes the server exit **78**. Its own setting on purpose: the contributor number is flood control for a public endpoint, and using it here rate-limits the Users tab after ten pages. |
 | `COAI_LOG_LEVEL` | `Information` by default. |
 
 ## All secrets live in Actions Secrets
@@ -165,7 +167,37 @@ repository's secret store, and `deploy the ingest server` delivers them.
 
 **Changing `COAI_BUGS_SECRET` invalidates every issued key**, because the stored hashes were
 computed with the old one. That is a deliberate property — it is the one lever that ends every
-key at once — but it is not a rotation you do casually.
+key at once — but it is not a rotation you do casually. It invalidates every **admin** key too, for
+the same reason: those lines are hashed with it as well.
+
+### An admin credential cannot be revoked in a hurry
+
+> ⚠️ **Removing a line from `COAI_BUGS_ADMIN_KEYS` does nothing until a SUCCESSFUL redeploy — and a
+> deploy that fails or rolls back leaves the credential you just revoked still live.**
+
+A contributor key dies the moment `--revoke` commits, in the running server, because the server
+re-reads `api_keys` on every request. Administrators are deliberately not rows in that table: the set
+is read from the environment once at startup and is immutable for the process's lifetime. That is
+what makes an administrator's own upload safe without a second in-force check — there is no window
+between the gate and the write for the set to change in — and this is the other side of the same
+coin. An in-memory kill switch was considered and rejected: it is state a restart silently discards,
+which is the opposite failure and easier to forget.
+
+**So the emergency measure is stopping the service**, not editing a variable:
+
+```bash
+sudo systemctl stop coai-bugs          # the admin surface is gone; so is ingest
+# edit COAI_BUGS_ADMIN_KEYS in Actions Secrets, redeploy, and CONFIRM the deploy succeeded
+```
+
+Confirm it took: an authenticated `GET /admin/keys` with the removed key must answer `401`. A
+`200` means the old binary is still running — check `systemctl status coai-bugs` for a rollback.
+
+**Delivering this variable is not automated yet.** `COAI_BUGS_SECRET` reaches the host from Actions
+Secrets on every deploy; the admin keys do not — that is the deploy half of story 4 in
+[PLAN_who_holds_a_key.md](../../todo/PLAN_who_holds_a_key.md), and until it lands the variable is set
+on the host by hand in `/etc/coai-bugs/env`. Said plainly because the failure is quiet: a release
+starts perfectly and answers `401` to every admin call.
 
 ### Why the secret travels on stdin
 
@@ -482,6 +514,19 @@ done
 
 # 6. The file modes the unit's UMask asks for, read back rather than assumed.
 sudo stat -c '%a %n' /opt/coai-bugs/data/coai-bugs.db /opt/coai-bugs/data/coai-bugs.db-wal
+
+# 7. The admin surface. A release can start perfectly and answer 401 to every admin call — that is
+#    what an unset COAI_BUGS_ADMIN_KEYS looks like from outside, and it looks identical to a wrong
+#    key ON PURPOSE, so this pair of lines is how you tell which you have.
+curl -s -o /dev/null -w 'no credential: %{http_code}\n' https://bugs.remsoft.dev/admin/keys
+curl -s -w '\n' -H "Authorization: Bearer $COAI_BUGS_ADMIN_KEY" https://bugs.remsoft.dev/admin/keys
+#    Expect 401 for the first and a JSON page for the second. A 401 for BOTH means either the
+#    variable is unset or that key is not in it — and the SERVER's startup log is the only thing
+#    that distinguishes them:
+sudo journalctl -u coai-bugs --since '10 min ago' | grep -E 'administrators'
+
+#    Who is sending right now, which no stored count can answer. It persists nothing.
+curl -s -w '\n' -H "Authorization: Bearer $COAI_BUGS_ADMIN_KEY" https://bugs.remsoft.dev/admin/active
 ```
 
 A hit in any of them is a defect in the deployment, not in the code, and this file is where it gets
@@ -501,9 +546,10 @@ route that touches neither the list nor the database: a build accident could oth
 satisfy the release smoke, publish, and then refuse every submission as if the contributor were at
 fault.
 
-Two more refusals at startup, both **78**, since the limit became a setting: a
-`COAI_BUGS_RATE_PER_MINUTE` that is not a whole number from 0 to 1000 (refused, never clamped —
-the message names the range), and a **second server on the same data directory**. The rate limit is
+Three more refusals at startup, all **78**, since the limits became settings: a
+`COAI_BUGS_RATE_PER_MINUTE` or a `COAI_BUGS_ADMIN_RATE_PER_MINUTE` that is not a whole number from 0
+to 1000 (refused, never clamped — the message names the range and which variable it read), and a
+**second server on the same data directory**. The rate limit is
 one process's memory, so two servers would each admit the whole limit; the first holds
 `$COAI_BUGS_DATA/coai-bugs.serving` open exclusively for its lifetime and the second says so and
 stops. The one-shots (`--issue-key`, `--revoke`, `--waiting`, `--promote`) never take that lock:

@@ -26,10 +26,17 @@ public sealed partial record AdminId
     /// no table.
     /// </summary>
     /// <remarks>
-    /// Defined in story 1 because the rate limiter needs an identity for <c>/admin/*</c> that can
-    /// never share a bucket with a contributor key. Story 2 supplies the hash of the presented admin
-    /// key — <see cref="Corpus.HashOf"/>'s sixty-four hex characters; a shorter string is a
-    /// programming error, not an input, and is refused as one.
+    /// <para>Defined in story 1 because the rate limiter needs an identity for <c>/admin/*</c> that
+    /// can never share a bucket with a contributor key. The admin API supplies the hash of the
+    /// presented admin key — <see cref="Corpus.HashOf"/>'s sixty-four hex characters; a shorter
+    /// string is a programming error, not an input, and is refused as one.</para>
+    /// <para><b>It is a TRUNCATION, so a collision is silent.</b> Eight hex digits is 32 bits: two
+    /// admin keys whose hashes share them would be one id in the audit and one bucket in the
+    /// limiter, with nothing anywhere saying so. With a handful of administrators the probability is
+    /// negligible, and it is written down rather than assumed because the audit's whole job is saying
+    /// who did it. Lengthening the id is the fix if that ever stops being true; the id is derived and
+    /// stored in `admin_audit.admin_id`, so changing it would rename past administrators in the
+    /// trail, which is why it is not done pre-emptively.</para>
     /// </remarks>
     public static AdminId Of(string keyHash)
     {
