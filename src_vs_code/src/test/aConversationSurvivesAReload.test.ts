@@ -247,13 +247,17 @@ test('the memento is written until the migration has SEALED it — and sealing d
   // drain; and the way back when the clear did not happen.
   const wiring = source('extension.ts');
   const command = source('chatCommand.ts');
+  const host = source('chatHost.ts');
 
   assert.match(wiring, /seal: async \(\) => \{\s*\n\s*retireMemento\(\);\s*\n\s*await chatTabMemory\.settled\(\);/,
     'the seal does not unbind the writer and then drain its queue, in that order');
   assert.match(wiring, /unseal: \(\) => \{\s*\n\s*rememberChatsIn\(chatTabMemory\);/,
     'a clear that did not happen leaves this window writing one store while the other is in charge');
   assert.equal(wiring.split('retireMemento()').length - 1, 1, 'the memento is retired from somewhere other than the seal');
-  assert.match(command, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;/,
+  // The binders moved to `chatHost.ts` when the command file was split: three handles a window
+  // binds once, read by five of the modules coming out of it, so leaving them behind made every
+  // extraction a cycle. What they DO is unchanged, and that is what this still asserts.
+  assert.match(host, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;/,
     'retiring the memento does something other than unbind it, so a memory?. site keeps writing');
   assert.match(command, /memory\?\.remember\(/, 'the memento is no longer written at all — a store that cannot be reached leaves words nowhere');
   assert.doesNotMatch(wiring, /chatTabMemory\.prune\(\)/,

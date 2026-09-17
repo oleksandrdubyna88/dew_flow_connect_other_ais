@@ -36,6 +36,7 @@ test('the extension starts housekeeping on the store’s own directory, after th
 
 test('the chat pulses the heartbeat at every place the set of open conversations changes', () => {
   const command = source('chatCommand.ts');
+  const host = source('chatHost.ts');
   const after = (anchor: string, within: number): string => {
     const at = command.indexOf(anchor);
     assert.notEqual(at, -1, `${anchor} is gone from chatCommand.ts`);
@@ -54,7 +55,10 @@ test('the chat pulses the heartbeat at every place the set of open conversations
   assert.notEqual(pinned, -1, 'the pin after a new conversation is gone from chatCommand.ts');
   assert.match(command.slice(pinned - 400, pinned), /pulse\?\.\(\);/u, 'a newly opened conversation is not announced');
   assert.match(command, /export function heldConversationIds\(panels: ChatPanels\)/u, 'nothing reads the open conversations from the registry');
-  assert.match(command, /export function pulseChatsThrough\(/u, 'the heartbeat cannot be bound');
+  // The binders moved to `chatHost.ts` when the command file was split: three handles a window
+  // binds once, read by five of the modules coming out of it, so leaving them behind made every
+  // extraction a cycle. What they DO is unchanged, and that is what this still asserts.
+  assert.match(host, /export function pulseChatsThrough\(/u, 'the heartbeat cannot be bound');
 });
 
 test('the heartbeat is never removed by its own writer, and the sweep deletes a conversation only through the store', () => {

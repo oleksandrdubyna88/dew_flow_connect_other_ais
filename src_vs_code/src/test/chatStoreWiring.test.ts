@@ -25,13 +25,17 @@ const source = (file: string): string =>
 
 test('a conversation is written to the store, and to the memento until the migration has retired it', () => {
   const command = source('chatCommand.ts');
+  const host = source('chatHost.ts');
 
   assert.match(command, /memory\?\.remember\(/u,
     'the memento is no longer written at all: a store that cannot be reached would leave the next words nowhere');
   assert.match(command, /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
   // The gate is the binding itself: retiring the memento unbinds it, and every `memory?.` site
   // becomes a no-op without knowing.
-  assert.match(command, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;\s*\n\}/u,
+  // The binders moved to `chatHost.ts` when the command file was split: three handles a window
+  // binds once, read by five of the modules coming out of it, so leaving them behind made every
+  // extraction a cycle. What they DO is unchanged, and that is what this still asserts.
+  assert.match(host, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;\s*\n\}/u,
     'retiring the memento is something other than unbinding it, so a write site can keep going');
 });
 
