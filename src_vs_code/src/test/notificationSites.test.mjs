@@ -24,13 +24,32 @@ import {
  * build: the script and this test are both ESM and read the source tree directly.</p>
  */
 
+/**
+ * The same text, however this checkout spells the end of a line.
+ *
+ * <p>The guard is about NUMBERS. It went red twice on a file nobody had touched, both times after a
+ * rebase: the generator writes LF and git hands the file back with CRLF on Windows, and it then
+ * considers the file clean because it normalises on comparison — so `git diff` is empty while a byte
+ * comparison fails. A `.gitattributes` pin is in place and is still not enough, because a rebase
+ * materialises the file at a step where that pin is not yet in the tree and git never rewrites an
+ * already-checked-out file whose normalised content matches.</p>
+ *
+ * <p>That red is the worst kind. The test whose whole job is to say "a call site was added, moved or
+ * removed" said it about content that had not changed, and the lesson a person takes from it is to
+ * regenerate the artefact and move on — which is the reflex that makes the guard useless on the day
+ * it is right.</p>
+ */
+function sameLines(text) {
+  return text.split(String.fromCharCode(13)).join('');
+}
+
 test('the checked-in inventory is what the counter counts today', () => {
   const counted = count();
   const onDisk = readFileSync(INVENTORY, 'utf8');
 
   assert.equal(
-    asText(counted),
-    onDisk,
+    sameLines(asText(counted)),
+    sameLines(onDisk),
     'run `node scripts/count-notifications.mjs --write` — a call site was added, moved or removed',
   );
 });
