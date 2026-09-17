@@ -359,13 +359,19 @@ jobs:
         run: |
           NAME="coai-mcp-$VERSION-$RID"
           mkdir "$NAME"
-          # `ls … | head -1` reads a name containing a space as two names, and answers the same
-          # empty string whether the glob matched nothing or the directory could not be read. An
-          # ARRAY is what bash has for "the files this pattern names"; an unmatched glob leaves the
-          # pattern itself in [0], which `-e` then answers no to. Same check, one fewer process,
-          # and it cannot be fooled by a filename.
+          # `ls … | head -1` answers the same empty string whether the glob matched nothing or
+          # the directory could not be read, and TRUNCATES a name containing a newline — measured:
+          # a file called `a<newline>b_e_sqlite3.so` set NATIVE to `out/a`, and the release would
+          # have shipped without the library it had just checked for. (It does NOT split on
+          # spaces: an assignment from a command substitution is not word-split. That was the
+          # reason first given here, and it was wrong.)
+          #
+          # An ARRAY is what bash has for "the files this pattern names". The length test before
+          # the `-e` is not redundant: an unmatched glob leaves the pattern itself in [0] only
+          # while `nullglob` is unset — with it set, `${natives[0]}` under `set -u` is a crash.
+          # Nothing here sets it; the comparison costs nothing and removes the assumption.
           natives=(out/*e_sqlite3*)
-          if [ ! -e "${natives[0]}" ]; then
+          if [ ${#natives[@]} -eq 0 ] || [ ! -e "${natives[0]}" ]; then
             echo "the SQLite native library is not in the publish output — the server would ship unable to open its own database"
             ls -la out
             exit 1
@@ -375,7 +381,7 @@ jobs:
           # reaches e_sqlite3 — and with exactly the same failure when they are absent. The publish
           # has already dropped the twenty-seven languages nothing here parses; these are what is left.
           grammars=(out/*tree-sitter*)
-          if [ ! -e "${grammars[0]}" ]; then
+          if [ ${#grammars[@]} -eq 0 ] || [ ! -e "${grammars[0]}" ]; then
             echo "no tree-sitter grammars in the publish output — --normalize would throw DllNotFoundException"
             ls -la out
             exit 1
@@ -1193,7 +1199,7 @@ jobs:
           # The array, for the reason the mcp job records: `ls … | head -1` answers the same empty
           # string for a glob that matched nothing and a directory it could not read.
           natives=(out/*e_sqlite3*)
-          if [ ! -e "${natives[0]}" ]; then
+          if [ ${#natives[@]} -eq 0 ] || [ ! -e "${natives[0]}" ]; then
             echo "the SQLite native library is not in the publish output — this server would ship unable to read its own key table"
             ls -la out
             exit 1
