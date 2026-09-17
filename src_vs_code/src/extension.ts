@@ -13,13 +13,10 @@ import {
   conversationWorkspace,
   followRenames,
   heldConversationIds,
-  keepChatsIn,
   noteChatDoor,
-  pulseChatsThrough,
-  rememberChatsIn,
-  retireMemento,
   takeTheQuestion,
 } from './chatCommand';
+import { keepChatsIn, pulseChatsThrough, rememberChatsIn, retireMemento } from './chatHost';
 import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
 import { goToConversation } from './chatGotoCommand';
 import { ChatTabMemory } from './chatTabs';

@@ -236,13 +236,15 @@ test('one reset at a time, per conversation', () => {
   // ordinary. Two resets at once would dispose the same session twice, archive the same record
   // twice, and publish two different fresh ids for one tab. (Two vendors, the plan round.)
   const command = source('chatCommand.ts');
+  const thread = source('chatThread.ts');
   const start = between(command, 'async function freshStart(', 'async function freshening(');
 
   // ON THE THREAD, where the rest of this conversation's lifecycle lives — a module-level set of
   // object identities outlives the threads in it if a `finally` is ever missed. (gemini, the second
-  // code round.)
-  assert.match(command, /\n  resetting: boolean;/u, 'nothing stops a second press');
-  assert.doesNotMatch(command, /new Set<object>\(\)/u, 'the latch is still a module-level set of identities');
+  // code round.) The `Thread` type now has its own module, so the field is read there; the latch
+  // must not come back as a module-level set in EITHER file, so both files are asked.
+  assert.match(thread, /\n  resetting: boolean;/u, 'nothing stops a second press');
+  assert.doesNotMatch(command + thread, /new Set<object>\(\)/u, 'the latch is still a module-level set of identities');
   assert.match(start, /thread\.resetting\)/u, 'the latch is never read');
   assert.match(start, /try \{\s*\n\s*await freshening\(entry, thread\);\s*\n\s*\} finally \{\s*\n\s*thread\.resetting = false;/u,
     'a reset that throws leaves the latch set, and the button dead for the life of the window');
