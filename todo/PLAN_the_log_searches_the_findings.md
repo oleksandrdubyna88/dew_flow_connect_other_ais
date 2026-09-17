@@ -18,7 +18,7 @@
 `findings_fts` is an FTS5 virtual table over a finding's title, why, fix and file, kept in step with
 `findings` by triggers (`src_mcp/src/Store/Schema.cs:115`). **Nothing queries it.** The log page's
 search box filters the rows it was sent, in the webview, over the row's own visible text
-(`rowMatches`, `src_vs_code/src/roundsLog.ts:474`) — so searching for a sentence that appears in a
+(`rowMatches`, `src_vs_code/src/roundsLog.ts:801`) — so searching for a sentence that appears in a
 finding's *why* finds nothing, and searching at all only ever reaches the loaded page.
 
 The index exists because the plan that created the schema expected this. It has been dead weight in
@@ -55,6 +55,22 @@ every database written since 2026-09-05.
 | 3 | `RoundsQueryTests`: results are bounded and say whether they were cut | unbounded |
 | 4 | `roundsLogPanel.test.ts`: a stale response cannot replace a newer one | no sequencing |
 | 5 | `roundsLog.test.ts`: the header says it is showing search results, and the clear control returns to the page | no such state |
+
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan owns the `findings_fts` query; the notifications plan's S6 owns what goes INTO
+`rowMatches`' haystack.** Point 5 here keeps the row-text filter, and S6 there adds the round's
+summary sentence to the text that filter reads — two changes to one function, from opposite ends.
+
+**The notifications plan goes first**, so this one is written against a `rowMatches` that already
+searches the summary.
+
+The two plans cited the same function at two different lines (820 and 474), both taken from an
+older file. Reconciled 2026-09-17 by opening it: `roundsLog.ts:801`. Fixed in both.
 
 ## Definition of Done
 

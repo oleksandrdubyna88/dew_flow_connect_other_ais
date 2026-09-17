@@ -61,6 +61,19 @@ not notice — it exercises the routes that exist today.
 - The endpoint-registration test above, proved to have teeth by adding a gateless route to a
   fixture and watching it go red.
 
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan owns the Team server's refusal vocabulary in `src_server`.** The notifications plan does
+not touch `src_server` at all: its S8 works in `src_mcp`, writing `server-notices.jsonl` with the
+same record shape and the same redaction as the extension half.
+
+The two meet only at the wire: a refusal this plan rewords is a refusal that half records, so a
+reworded sentence changes what a reader sees in the ledger and changes no code there.
+
 ## Definition of Done
 
 - [ ] A caller refused by this server learns why, from a vocabulary the server owns.

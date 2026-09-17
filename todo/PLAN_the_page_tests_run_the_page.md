@@ -122,6 +122,18 @@ The tests ARE the deliverable, so the test plan is the verification discipline:
   loses tests has dropped a claim, and a conversion that gains none has not converted anything.
 - `bundledPage.test.ts` green throughout, unchanged, as the harness extraction's own proof.
 
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan owns the backlog of existing source-text assertions.** The notifications plan adds
+nothing to that backlog: its new page (S5) is tested by RUNNING the page against the DOM shim from
+its first commit, which is the shape this plan is converting the others to.
+
+So the count in *How much is left* does not grow when that page lands.
+
 ## Definition of Done
 
 - [ ] `src/test/pageHarness.ts` exists and every page test imports it; no page test builds its own.
