@@ -6,10 +6,11 @@ namespace CoaiBugs;
 /// rather than a reviewer noticing: a listing cannot leak a credential it has no room for. The only
 /// response in this server that ever carries a key is the single successful issuance, which builds
 /// its own shape.</para>
-/// <para><b><see cref="Cursor"/> is the paging handle, not an identity.</b> It is the row's `rowid`
-/// and it is never shown to a person — `Id` is what a person reads. It exists so the next page can
-/// be asked for by "the row before this one" instead of by an offset that shifts when a key is
-/// issued between two requests.</para>
+/// <para><b><see cref="Cursor"/> is the paging handle, not an identity.</b> It is the row's
+/// <c>(created_utc, id)</c> and it is never shown to a person — `Id` is what a person reads. It
+/// exists so the next page can be asked for by "the row before this one" instead of by an offset
+/// that shifts when a key is issued between two requests. It was the row's `rowid`, which a
+/// `VACUUM` renumbers; <see cref="KeysCursor"/> says why that mattered.</para>
 /// <para><see cref="Revoked"/> is null for a key in force, which is the one place in this file a
 /// null is the honest answer: "not revoked" is an absence, and the alternative — a sentinel time —
 /// is how a revoked-at of 0001-01-01 ends up rendered to somebody.</para>
@@ -23,7 +24,7 @@ namespace CoaiBugs;
 /// <param name="LastSeen">The month of its latest accepted ingest, or never.</param>
 /// <param name="Waiting">Its pairs still in quarantine — the second of the tab's two counts.</param>
 public sealed record KeyRow(
-    long Cursor,
+    KeysCursor Cursor,
     KeyId Id,
     string Note,
     UtcInstant Created,

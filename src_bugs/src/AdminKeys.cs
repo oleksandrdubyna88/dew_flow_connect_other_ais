@@ -74,23 +74,57 @@ public sealed class AdminKeys
     /// </remarks>
     public Presented Match(string presented, string secret)
     {
-        if (presented.Length == 0 || None)
+        if (presented.Length == 0)
         {
             return new Presented.Unknown();
         }
 
-        var wanted = Encoding.UTF8.GetBytes(Corpus.HashOf(presented, secret));
-        var found = string.Empty;
-        foreach (var hash in _hashes)
+        var hash = Corpus.HashOf(presented, secret);
+        var wanted = Encoding.UTF8.GetBytes(hash);
+        var found = false;
+        foreach (var candidate in Probed)
         {
-            if (CryptographicOperations.FixedTimeEquals(hash, wanted))
-            {
-                found = Corpus.HashOf(presented, secret);
-            }
+            // Accumulated, never returned from inside, and `|=` rather than a short-circuiting
+            // `||` so every entry is really compared.
+            found |= CryptographicOperations.FixedTimeEquals(candidate, wanted);
         }
 
-        return found.Length == 0 ? new Presented.Unknown() : new Presented.Administrator(found);
+        return found ? new Presented.Administrator(hash) : new Presented.Unknown();
     }
+
+    /// <summary>What a presented credential is compared against — never an empty list.</summary>
+    /// <remarks>
+    /// <para><b>An unconfigured server does the same work as a configured one.</b> This used to
+    /// return early when nothing was configured, which meant it never computed the presented key's
+    /// hash at all — a whole HMAC and a hex formatting skipped — while every configured deployment
+    /// paid for it on each attempt. The gate answers both cases with the same status and the same
+    /// body, so the disclosure the contract forbids was closed on the bytes and left open on the
+    /// clock; and because a refused credential is never rate-limited, an attacker can average as
+    /// many attempts as they like. (Code round, codex.)</para>
+    /// <para>So an empty configuration is compared against ONE stand-in of the same length, and the
+    /// path taken is the path of a server with one administrator and a wrong key presented. That is
+    /// the whole of what can be promised: N configured keys cost N comparisons, and the plan says
+    /// the number of administrators is not a secret — what must reveal nothing is whether
+    /// administration is enabled here at all.</para>
+    /// <para>The stand-in cannot be presented as a credential: matching it would need a key whose
+    /// hash is those sixty-four characters, which is a preimage of SHA-256. A test asserts it is
+    /// refused anyway, because a constant is a thing somebody can replace with a derivable one.</para>
+    /// </remarks>
+    internal IReadOnlyList<byte[]> Probed => _hashes.Length > 0 ? _hashes : Absent;
+
+    /// <summary>The stand-in an unconfigured server compares against. Sixty-four hex characters, as a hash is.</summary>
+    private static readonly byte[][] Absent = [Encoding.UTF8.GetBytes(new string('0', 64))];
+
+    /// <summary>The configured hashes, for the ONE caller that has to compare them with the database.</summary>
+    /// <remarks>
+    /// The hashes, never the keys — there is no copy of a key here to hand out. It exists for the
+    /// startup check that refuses a credential which is both an administrator and a contributor key:
+    /// that check needs OUR hashes and the `api_keys` table in one place, and it is a configuration
+    /// question asked once at startup rather than a credential comparison, so nothing here is
+    /// timing-sensitive. Empty when nothing is configured — unlike <see cref="Probed"/>, which
+    /// substitutes a stand-in and must never be mistaken for a list of real administrators.
+    /// </remarks>
+    internal IReadOnlyList<string> Hashes => [.. _hashes.Select(Encoding.UTF8.GetString)];
 
     /// <summary>The usable lines of the variable: blank ones and <c>#</c> comments dropped.</summary>
     private static IEnumerable<string> Lines(string? raw) =>

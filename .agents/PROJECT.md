@@ -95,7 +95,10 @@ node .agents/conventions/tools/pin-check.mjs
   offset is not insert-stable; an illegal `limit` is a 400 naming what was legal and **`limit=0` is
   refused rather than meaning everything**. Only the single successful issuance ever carries a key.
   **Removing an admin key takes a successful redeploy** — the set is immutable for the process's
-  lifetime, which is what makes an administrator's own upload safe without an in-force re-check.
+  lifetime, which is what makes an administrator's own upload safe without an in-force re-check. A
+  `nextBefore` is an **opaque token** a client passes back verbatim, never composes. And a line in
+  `COAI_BUGS_ADMIN_KEYS` that is also an issued contributor key makes the server **exit 78**: one
+  string cannot be both, or revoking the key would GRANT administration.
 - **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
   handed to VS Code as text, so a substring assertion over that text cannot see a control wired to
   the wrong branch — the string contains everything it was supposed to contain. This repository has

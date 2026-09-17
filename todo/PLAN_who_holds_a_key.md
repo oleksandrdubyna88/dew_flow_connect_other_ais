@@ -482,6 +482,59 @@ history, and an administrator can see the current minute.
   `TheRateLimiterTests` pins the genuinely empty list. The first version of that test asserted an
   empty list over HTTP and went red for exactly this reason.
 
+#### What the code round changed (round 1 of 2, verdict `proceed`, 28 findings)
+
+Ten of twelve reviewers answered; the local provider's security and UX reviewers timed out at the
+round's ten-minute limit. **15 accepted, 13 rejected with reasons.** The accepted ones, and what
+each actually was:
+
+- **A timing oracle the identical-bytes test could not see.** `AdminKeys.Match` returned early when
+  no administrator was configured, so it never hashed the presented credential — while a configured
+  deployment paid for an HMAC on every attempt, and failed credentials are not rate-limited. The
+  anti-oracle contract was kept on the bytes and open on the clock. An empty configuration now
+  compares against one stand-in of the same length.
+- **The keys cursor was `rowid`**, whose implicit numbering a `VACUUM` renumbers — and the comment
+  defending it argued a different risk (reuse after deletion). It is `(created_utc, id)` now, and
+  BOTH listings hand out an opaque token; `admin_audit.id` is a real `INTEGER PRIMARY KEY` and is
+  preserved, which is why only one of them needed a composite key. The separator is `~` because `|`
+  is not legal in a query string.
+- **Any integer was accepted as a cursor**, so `?before=-1` answered an empty page and a broken
+  pager looked like a finished one.
+- **A credential could be both an administrator and a contributor key**, and revoking the key would
+  then PROMOTE it to administrator. Refused at startup with 78; both precedence rules are wrong in
+  one direction, so there is no rule, only a refusal.
+- **`/admin/active` was unbounded** — a thousand live keys in one minute is a thousand records for
+  one request, so the response grew with the flood it diagnoses. It takes the same `limit` and
+  carries `total`.
+- **`Accept` and `AcceptAdmin` each owned their transaction lifecycle**, so an invariant added to one
+  would miss the other. The lock, the transaction, the scope's lease and the commit are one shared
+  method; what differs is the in-force check and the counter, which is the whole point.
+- **The route catalogue in the gate tests was retyped**, and named three of five routes — both POSTs,
+  the issuance among them, were outside every shared assertion. It reads the host's own
+  `EndpointDataSource` now.
+- **`ActiveNow` answered a three-field tuple**, against the doctrine's "a data container is a
+  record"; and it sorted its own rows, which the route then re-sorted with the same comparator.
+- Plus the smaller ones: the hash computed once instead of twice in the matching loop, and
+  `Refused` renamed to `Malformed` — it sat in a file beside a 401 refusal and a 429 refusal and
+  said nothing about which of the three it was.
+
+**Four of the thirteen rejections were self-refuting findings**, where the reviewer's own text
+reached the right answer and the title kept the wrong one — including one that asked for an early
+return to be ADDED to the constant-time loop, and one whose analysis ends "This is compliant. Wait,
+I". Two were factually wrong about an API (`StartsWithSegments` matches segments, not characters —
+now pinned by a test that `/administrator` is not gated) or about reachable state (`--revoke` cannot
+revoke an administrator, which has no `api_keys` row). Five asked for documentation that is already
+there, in one case three times over. One — a 16-hex id colliding and answering 500 — is real and
+was rejected with the arithmetic: 64 bits of entropy against a table of tens of rows a year is less
+likely than a disk fault this code also does not retry, and the insert is inside a transaction, so a
+collision rolls back rather than corrupting anything. It is recorded rather than fixed.
+
+**Two defects were found by the round's own fixes, not by the round.** The structural
+no-early-return test went red on the word "returned" in the loop's own comment (it strips comments
+now), and the docblock guard written after four stranded comments in this story MISSED the very
+shape it was written for until its break-it step exposed that single-line summaries close on their
+own line.
+
 ### Story 3 — the Users tab *(Opus)*
 
 - A button in the existing Bugz section (`src_vs_code/src/bugzView.ts`), opening a panel beside

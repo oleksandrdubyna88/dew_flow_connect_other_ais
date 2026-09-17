@@ -35,4 +35,15 @@ public sealed record UtcInstant
             stored, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
             ? new(at)
             : throw new InvalidOperationException($"'{stored}' is not an instant this server wrote");
+
+    /// <summary>Whether a string is an instant this type could have written. Answers; never throws.</summary>
+    /// <remarks>
+    /// For a value that arrived from OUTSIDE — half of a paging cursor a client echoed back — where
+    /// a malformed one is a 400 and not corruption. <see cref="Read"/> throws because a column this
+    /// server wrote cannot legitimately hold anything else; the two callers want opposite things
+    /// from the same parse, which is why both exist.
+    /// </remarks>
+    internal static bool Reads(string candidate) =>
+        DateTimeOffset.TryParseExact(
+            candidate, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _);
 }

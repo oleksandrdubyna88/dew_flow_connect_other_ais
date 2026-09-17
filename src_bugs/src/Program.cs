@@ -198,6 +198,11 @@ internal sealed class Program
         }
 
         using var corpus = ((Database.Ready)opened).Corpus;
+        if (BothAnAdminAndAKey(corpus, ready.Admins) is { Length: > 0 } wearingTwoHats)
+        {
+            return await RefuseAsync(wearingTwoHats);
+        }
+
         var app = Built(args, ready);
         SayUp(app, ready, corpus);
         WatchTheEdge(app);
@@ -321,6 +326,41 @@ internal sealed class Program
                 + "it is not what you meant, the variable is the place to look",
                 AdminKeys.Variable);
         }
+    }
+
+    /// <summary>
+    /// Why a configured administrator cannot also be a contributor key, or empty when none is.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The two credential stores are asked in order, so one string in both is a caller
+    /// whose identity depends on which store still holds it.</b> It uploads as a contributor —
+    /// counted against its key row, limited by the contributor setting — and the moment that row is
+    /// revoked the same bearer string becomes an administrator: uncounted, limited by the other
+    /// setting, and able to issue keys. A revocation that PROMOTES a credential is the opposite of
+    /// what the operator pressed the button for. (Code round, codex.)</para>
+    /// <para><b>Refused rather than resolved by a precedence rule</b>, because both precedences are
+    /// wrong in one direction: contributor-first is the surprise above, and admin-first means
+    /// pasting an issued contributor key into the variable silently grants administration. There is
+    /// no legitimate reason for one string to be both, so this is a configuration error — it exits
+    /// 78, like an unusable rate limit, and names the variable to edit.</para>
+    /// <para>It needs the database open AND the variable parsed, which is why it lives here rather
+    /// than in <see cref="Configure"/>: those two halves only exist together once the corpus is
+    /// open. It costs one indexed lookup per configured administrator, once, at startup.</para>
+    /// </remarks>
+    private static string BothAnAdminAndAKey(Corpus corpus, AdminKeys admins)
+    {
+        foreach (var hash in admins.Hashes)
+        {
+            if (corpus.KeyWithHash(hash) is { Length: > 0 } key)
+            {
+                return $"a line in {AdminKeys.Variable} is also the contributor key {key}. One "
+                    + "string cannot be both: it would upload as a contributor until that key was "
+                    + "revoked and become an administrator afterwards, so revoking it would GRANT "
+                    + "administration. Remove that line, or revoke and reissue the contributor key.";
+            }
+        }
+
+        return string.Empty;
     }
 
     /// <summary>The key the ADMIN limiter is registered under, so it cannot be resolved by accident.</summary>

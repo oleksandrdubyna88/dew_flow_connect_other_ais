@@ -1,4 +1,6 @@
+using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -66,6 +68,41 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
             RatePerMinute.Surface.Administrator.Variable,
             adminRatePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    /// <summary>
+    /// Every <c>/admin</c> route the running server actually serves, with its method.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read from the host's own <see cref="EndpointDataSource"/>, never retyped. A test that
+    /// repeats a list the code also holds will not notice the third entry, and that is exactly what
+    /// happened: the gate's checks named the three GET routes and silently left both POSTs — one of
+    /// them the issuance — out of every shared assertion. (Code round, codex.) Derived like this, a
+    /// sixth admin route is covered by those assertions on the day it is added.</para>
+    /// <para>A <c>{id}</c> segment is filled with a syntactically valid id, because the assertions
+    /// these feed are about the GATE: a request must be refused before routing ever looks at the
+    /// parameter, and an id that could not exist would test the same thing by accident.</para>
+    /// </remarks>
+    public IReadOnlyList<(string Method, string Path)> AdminRoutes()
+    {
+        var endpoints = Services.GetRequiredService<EndpointDataSource>().Endpoints;
+        var admin = endpoints
+            .OfType<RouteEndpoint>()
+            .Where(route => route.RoutePattern.RawText?.StartsWith("/admin", StringComparison.Ordinal) == true)
+            .SelectMany(route => Methods(route).Select(method =>
+                (method, route.RoutePattern.RawText!.Replace("{id}", "0123456789abcdef", StringComparison.Ordinal))))
+            .Distinct()
+            .OrderBy(route => route.Item2, StringComparer.Ordinal)
+            .ThenBy(route => route.method, StringComparer.Ordinal)
+            .ToList();
+
+        admin.Should().HaveCountGreaterThan(
+            4, "this server maps five admin routes; a catalogue that found fewer is reading the wrong thing");
+
+        return admin;
+    }
+
+    private static IEnumerable<string> Methods(RouteEndpoint route) =>
+        route.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["GET"];
 
     /// <summary>An HTTP client presenting a bearer credential.</summary>
     public HttpClient Bearing(string key)

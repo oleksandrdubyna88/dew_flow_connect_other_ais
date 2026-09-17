@@ -263,10 +263,13 @@ public sealed class TheRateLimiterTests
 
         var active = limiter.ActiveNow();
 
-        active.Should().HaveCount(3);
-        active[0].Should().Be(("key:key-1", 3, true), "busiest first, and it is at its limit");
-        active.Should().Contain(("key:key-2", 1, false));
-        active.Should().Contain((admin.Key, 1, false));
+        // Unordered on purpose — the busiest-first ordering belongs to `/admin/active`, which merges
+        // two limiters and has to order the result anyway, so this answers a SET.
+        active.Should().BeEquivalentTo([
+            new ActiveCaller("key:key-1", 3, true),
+            new ActiveCaller("key:key-2", 1, false),
+            new ActiveCaller(admin.Key, 1, false),
+        ]);
         active.Select(row => row.Subject).Should().AllSatisfy(subject =>
             subject.Should().Match(text => text.StartsWith("key:", StringComparison.Ordinal)
                 || text.StartsWith("admin-", StringComparison.Ordinal)));

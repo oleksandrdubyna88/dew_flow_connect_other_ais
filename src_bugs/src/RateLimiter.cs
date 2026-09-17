@@ -120,21 +120,25 @@ public sealed class RateLimiter(RatePerMinute limit, TimeProvider clock)
     /// limiter bought. A window that has fallen idle since the last sweep is skipped rather than
     /// reported as zero, because "sent nothing in the last minute" and "is not here" are the same
     /// fact to a reader.</para>
+    /// <para><b>Unordered, deliberately.</b> It answers WHO is sending; that the busiest go first is
+    /// an answer to "who is flooding us" and belongs to the route, which merges two limiters and
+    /// must order the result anyway. Sorting here as well was the same comparator written twice, one
+    /// layer apart. (Code round, gemini.)</para>
     /// </remarks>
-    public IReadOnlyList<(string Subject, int InWindow, bool Limited)> ActiveNow()
+    public IReadOnlyList<ActiveCaller> ActiveNow()
     {
         var now = clock.GetUtcNow().UtcTicks;
-        var active = new List<(string, int, bool)>();
+        var active = new List<ActiveCaller>();
         foreach (var (subject, window) in _windows)
         {
             var inWindow = window.Since(now - WindowLength.Ticks);
             if (inWindow > 0)
             {
-                active.Add((subject.Key, inWindow, !limit.Disabled && inWindow >= limit.Value));
+                active.Add(new ActiveCaller(subject.Key, inWindow, !limit.Disabled && inWindow >= limit.Value));
             }
         }
 
-        return [.. active.OrderByDescending(row => row.Item2).ThenBy(row => row.Item1, StringComparer.Ordinal)];
+        return active;
     }
 
     /// <summary>How many stamps a subject holds, expired or not — for the tests.</summary>

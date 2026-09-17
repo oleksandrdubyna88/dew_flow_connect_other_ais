@@ -173,8 +173,8 @@ public sealed class TheAdminKeysTests
     {
         var source = File.ReadAllText(Path.Combine(Source(), "AdminKeys.cs"));
 
-        const string loop = "foreach (var hash in _hashes)";
-        const string after = "return found.Length == 0";
+        const string loop = "foreach (var candidate in Probed)";
+        const string after = "return found ? new Presented.Administrator(hash)";
         source.Should().Contain(loop, "the walk is what the guarantee is made of");
         source.Should().Contain(after, "the answer is carried out of the loop, not returned from inside it");
         // The field's DECLARED type is the pin, not the absence of the word "set" in the file: the
@@ -188,8 +188,70 @@ public sealed class TheAdminKeysTests
         body.Should().Contain(
             "CryptographicOperations.FixedTimeEquals",
             "a byte-by-byte comparison that stops at the first difference leaks the prefix");
-        body.Should().NotContain("return", "an early return makes the answer's timing say WHERE the key sat");
-        body.Should().NotContain("break").And.NotContain("continue", "an early exit is the same defect");
+
+        // COMMENTS STRIPPED, because this must read the code and not the prose about it: the loop
+        // body explains that it never returns from inside, and the word "returned" in that
+        // sentence failed the assertion below. The same trap the `FrozenSet` check fell into.
+        var code = string.Join(
+            Environment.NewLine,
+            body.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+        code.Should().NotContain("return", "an early return makes the answer's timing say WHERE the key sat");
+        code.Should().NotContain("break").And.NotContain("continue", "an early exit is the same defect");
+        code.Should().NotContain("||", "a short-circuiting or would stop comparing at the first match");
+    }
+
+    /// <summary>
+    /// A server with NO administrators does the same work as one with an administrator, so the
+    /// difference cannot be timed.
+    /// </summary>
+    /// <remarks>
+    /// <para>The gate answers an absent variable and a wrong credential with the same status and the
+    /// same body, and a test compares those bytes. A code round found the half that bytes cannot
+    /// show: <c>Match</c> returned early when nothing was configured, so it never computed the
+    /// presented key's hash — a whole HMAC and hex formatting skipped — while a configured
+    /// deployment paid for it on every attempt. Failed credentials are not rate-limited, so an
+    /// attacker can average as many attempts as they like and read the difference. The identical
+    /// body is then worth nothing.</para>
+    /// <para>What is asserted is the WORK, not a duration: a wall clock on a shared machine measures
+    /// the machine. With nothing configured the comparison list holds exactly one entry, so the path
+    /// taken is the path of a deployment with one administrator and a wrong key. That is the
+    /// guarantee the contract asks for — you learn nothing about whether administration is enabled
+    /// — and it is all that can be given, because N configured keys cost N comparisons and the
+    /// plan says the count is not a secret.</para>
+    /// </remarks>
+    [Fact]
+    public void WithNoAdministratorsTheComparisonStillHappens()
+    {
+        var none = AdminKeys.Read(null, Secret);
+        var one = AdminKeys.Read("the-only-administrator", Secret);
+
+        none.Probed.Should().HaveCount(
+            one.Probed.Count,
+            "an empty configuration must walk the same number of entries as a single configured key, "
+            + "or the two are told apart by how long the answer takes");
+        none.Probed[0].Should().HaveCount(
+            one.Probed[0].Length, "and compare the same number of bytes");
+        none.Probed[0].Should().NotEqual(
+            one.Probed[0], "the stand-in is not anybody's key, and no key can hash to it");
+        none.Match("the-only-administrator", Secret).Should().BeOfType<AdminKeys.Presented.Unknown>(
+            "doing the work must not make the answer yes");
+    }
+
+    /// <summary>The stand-in cannot be presented as a credential.</summary>
+    /// <remarks>
+    /// Matching it would need a key whose hash is that exact string, which is a preimage of
+    /// SHA-256. Asserted anyway, because the stand-in is a constant somebody could one day replace
+    /// with something derivable.
+    /// </remarks>
+    [Fact]
+    public void TheStandInIsNotACredential()
+    {
+        var none = AdminKeys.Read("# nobody", Secret);
+        var standIn = Encoding.UTF8.GetString(none.Probed[0]);
+
+        none.Match(standIn, Secret).Should().BeOfType<AdminKeys.Presented.Unknown>();
+        standIn.Should().NotBe(Corpus.HashOf(standIn, Secret), "it must not be its own hash either");
     }
 
     /// <summary>The server's source directory, found from the test binary.</summary>

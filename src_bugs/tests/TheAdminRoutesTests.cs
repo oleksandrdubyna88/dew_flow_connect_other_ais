@@ -421,15 +421,15 @@ public sealed class TheAdminRoutesTests
     internal sealed record KeyListed(
         string Id, string Note, string CreatedUtc, string? RevokedUtc, string? LastSeenMonth, int Sent, int Waiting);
 
-    internal sealed record KeysPage(IReadOnlyList<KeyListed> Items, int Limit, int Total, long? NextBefore);
+    internal sealed record KeysPage(IReadOnlyList<KeyListed> Items, int Limit, int Total, string? NextBefore);
 
     internal sealed record Revocation(string Id, string RevokedUtc, bool Changed);
 
     internal sealed record AuditListed(long Id, string AdminId, string Action, string Target, string AtUtc);
 
-    internal sealed record AuditPage(IReadOnlyList<AuditListed> Items, int Limit, long? NextBefore);
+    internal sealed record AuditPage(IReadOnlyList<AuditListed> Items, int Limit, string? NextBefore);
 
     internal sealed record ActiveCaller(string Id, int InWindow, bool Limited);
 
-    internal sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int WindowSeconds);
+    internal sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int Limit, int Total, int WindowSeconds);
 }

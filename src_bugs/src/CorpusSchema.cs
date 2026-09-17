@@ -20,7 +20,29 @@ namespace CoaiBugs;
 internal static class CorpusSchema
 {
     /// <summary>The steps, in the order every file runs them. Append; never reorder, never edit.</summary>
-    internal static readonly string[] Steps = [Tables, WhoUsedItAndWhoAdministeredIt, TheMonthAPairArrived];
+    internal static readonly string[] Steps =
+        [Tables, WhoUsedItAndWhoAdministeredIt, TheMonthAPairArrived, WhatEachKeyHasWaiting];
+
+    /// <summary>
+    /// Step 4 — an index on <c>quarantine.key_id</c>, because the Users tab asks for it per key.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a new step rather than a wider one.</b> Steps are append-only: editing step 1 or
+    /// 3 would change what a NEW file gets while changing nothing on the host, which is two shapes
+    /// under one <c>user_version</c>.</para>
+    /// <para><b>What it is for.</b> `/admin/keys` answers how many pairs each listed key still has
+    /// waiting. Without an index that question is a scan of quarantine — bounded at
+    /// <see cref="MostWaiting"/> = 20 000 rows — and it runs while <see cref="_gate"/> is held, so
+    /// every ingest waits behind an operator refreshing a listing. The query is one grouped pass
+    /// now, and this is the index it groups on. The other use is the same column's other job: undoing
+    /// one contributor's batch in bulk, which reads by `key_id` too.</para>
+    /// <para>It is an INDEX and not a stored counter on purpose: a counter beside a key id would be a
+    /// second thing to keep true, and quarantine rows leave by promotion and rejection as well as
+    /// arriving.</para>
+    /// </remarks>
+    internal const string WhatEachKeyHasWaiting = """
+        CREATE INDEX IF NOT EXISTS quarantine_by_key ON quarantine (key_id);
+        """;
 
     /// <summary>
     /// Step 3 — the month a pair arrived, so that no table carrying a key id carries a clock.

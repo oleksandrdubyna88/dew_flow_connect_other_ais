@@ -232,43 +232,73 @@ public sealed class Corpus : IDisposable
     /// answered before it, and an administrative one-shot never calls it — each is a test, because
     /// the month is a promise about what the server records and not only a column.</para>
     /// </remarks>
-    public Accepted<T> Accept<T>(KeyId key, UtcMonth month, Func<IngestScope, T> take)
-    {
-        lock (_gate)
-        {
-            using var transaction = _db.BeginTransaction(deferred: false);
+    public Accepted<T> Accept<T>(KeyId key, UtcMonth month, Func<IngestScope, T> take) =>
+        Committed(() =>
 
             // CHECKED AGAIN, inside the transaction. The gate authenticated this key a moment ago
             // and a `--revoke` one-shot can commit in that moment — a separate process, on the same
             // file. Trusting the gate's answer here would store pairs, count a submission and stamp
             // a month for a key the operator had already stopped. (Code round, codex.)
-            if (!InForce(key))
-            {
-                transaction.Commit();
+            //
+            // This, and the counter below, are the WHOLE of what makes a contributor's batch
+            // different from an administrator's. Everything else — the lock, the transaction, the
+            // scope's lease — is shared, so an invariant added to one path cannot miss the other.
+            !InForce(key)
+                ? new Accepted<T>.KeyNotInForce()
+                : Counted(key, month, take));
 
-                return new Accepted<T>.KeyNotInForce();
-            }
+    /// <summary>A contributor's batch: stored, then counted and stamped on the key's own row.</summary>
+    private Accepted<T> Counted<T>(KeyId key, UtcMonth month, Func<IngestScope, T> take)
+    {
+        var answer = Batch(key, month, take);
+        Record(key, month);
 
-            // SPENT on the way out, whichever way that is. The scope holds this corpus, the key and
-            // the month, so a caller who kept it could write through it after the commit — outside
-            // the transaction, without the key being re-checked and without the counter moving.
-            // A `finally` rather than a line after the call, because a throwing callback escapes
-            // here too and leaves the same live capability behind. (Code round, codex.)
-            var scope = new IngestScope(this, key, month);
-            T answer;
-            try
-            {
-                answer = take(scope);
-            }
-            finally
-            {
-                scope.Spend();
-            }
+        return new Accepted<T>.Stored(answer);
+    }
 
-            Record(key, month);
+    /// <summary>
+    /// The batch itself: a scope that lives exactly as long as the callback, for either credential.
+    /// </summary>
+    /// <remarks>
+    /// SPENT on the way out, whichever way that is. The scope holds this corpus, the key column and
+    /// the month, so a caller who kept it could write through it after the commit — outside the
+    /// transaction, without the key being re-checked and without the counter moving. A `finally`
+    /// rather than a line after the call, because a throwing callback escapes here too and leaves
+    /// the same live capability behind. (Code round, codex.)
+    /// </remarks>
+    private T Batch<T>(KeyId keyColumn, UtcMonth month, Func<IngestScope, T> take)
+    {
+        var scope = new IngestScope(this, keyColumn, month);
+        try
+        {
+            return take(scope);
+        }
+        finally
+        {
+            scope.Spend();
+        }
+    }
+
+    /// <summary>One write, under the gate, in one IMMEDIATE transaction that always commits.</summary>
+    /// <remarks>
+    /// <para>The half every accept path shares, extracted because it was written twice: a code round
+    /// pointed out that an ingestion invariant added to the established contributor path — a
+    /// retention sweep, some common bookkeeping — would silently leave an administrator's uploads
+    /// without it, so the same stored payload would follow different rules according to whose
+    /// credential sent it. (Code round, codex.)</para>
+    /// <para>It commits even when the work decided to store nothing: a refused batch has read inside
+    /// this transaction and has nothing to roll back, and leaving it to <c>Dispose</c> would roll
+    /// back a decision that is not an error.</para>
+    /// </remarks>
+    private T Committed<T>(Func<T> work)
+    {
+        lock (_gate)
+        {
+            using var transaction = _db.BeginTransaction(deferred: false);
+            var answer = work();
             transaction.Commit();
 
-            return new Accepted<T>.Stored(answer);
+            return answer;
         }
     }
 
@@ -659,29 +689,34 @@ public sealed class Corpus : IDisposable
     /// carries `received_month` and no clock, because the rule is about the column beside a key id,
     /// not about whose key it is.</para>
     /// </remarks>
-    public T AcceptAdmin<T>(AdminId admin, UtcMonth month, Func<IngestScope, T> take)
+    public T AcceptAdmin<T>(AdminId admin, UtcMonth month, Func<IngestScope, T> take) =>
+
+        // The derived id goes in `key_id`: that column records WHICH CREDENTIAL sent the pair, and
+        // for an administrator that is this. It is not a contributor key and no row in `api_keys`
+        // will ever match it, which is exactly why nothing is counted — this path is
+        // `Accept` without the in-force check and without `Counted`, and the rest is the same code.
+        Committed(() => Batch(new KeyId(admin.Value), month, take));
+
+    /// <summary>The id of the key stored under this hash, or empty when no row holds it.</summary>
+    /// <remarks>
+    /// <para>For the startup check that refuses a credential configured as BOTH an administrator and
+    /// a contributor key. It takes a HASH and not a key, because the caller is
+    /// <see cref="AdminKeys"/>, which holds no keys.</para>
+    /// <para>An ordinary indexed lookup and deliberately NOT the fixed-time walk
+    /// <see cref="KeyFor"/> does: this compares two values the operator already holds, once, at
+    /// startup, with no request and no attacker in the loop. Using the constant-time path here would
+    /// suggest a threat that is not present and hide the one that is — a misconfiguration nobody
+    /// notices.</para>
+    /// </remarks>
+    internal string KeyWithHash(string keyHash)
     {
         lock (_gate)
         {
-            using var transaction = _db.BeginTransaction(deferred: false);
+            using var read = _db.CreateCommand();
+            read.CommandText = "SELECT id FROM api_keys WHERE key_hash = $hash";
+            Bind(read, "$hash", keyHash);
 
-            // The derived id goes in `key_id`: that column records WHICH CREDENTIAL sent the pair,
-            // and for an administrator that is this. It is not a contributor key and no row in
-            // `api_keys` will ever match it, which is exactly why nothing is counted below.
-            var scope = new IngestScope(this, new KeyId(admin.Value), month);
-            T answer;
-            try
-            {
-                answer = take(scope);
-            }
-            finally
-            {
-                scope.Spend();
-            }
-
-            transaction.Commit();
-
-            return answer;
+            return read.ExecuteScalar() as string ?? string.Empty;
         }
     }
 
@@ -702,6 +737,14 @@ public sealed class Corpus : IDisposable
         }
     }
 
+    /// <summary>The newest page of keys — the first request a reader makes.</summary>
+    /// <remarks>
+    /// An overload rather than a defaulted parameter, because the default would have to be a null
+    /// <see cref="KeysCursor"/> and the doctrine forbids one in business logic.
+    /// <see cref="KeysCursor.Newest"/> says what it means at the call site.
+    /// </remarks>
+    public IReadOnlyList<KeyRow> KeysPage(int limit) => KeysPage(limit, KeysCursor.Newest);
+
     /// <summary>One page of keys, newest first, paged by the cursor of the row to read BEFORE.</summary>
     /// <param name="limit">Rows wanted; clamped to <see cref="MostAuditPage"/>.</param>
     /// <param name="before">Exclusive cursor: the page after this one starts at its last row's <c>Cursor</c>.</param>
@@ -711,41 +754,51 @@ public sealed class Corpus : IDisposable
     /// a key between the first page and the second shifts every boundary after it, so a row is
     /// duplicated or hidden. The same defect the audit's paging was changed for, on a table small
     /// enough that the performance argument never applies.</para>
-    /// <para><b>The cursor is `rowid`</b>, because `api_keys.id` is a hex string and sorts
-    /// lexicographically rather than chronologically, so it cannot order "newest first". `rowid` is
-    /// monotonic for inserts and this table never deletes — retirement is deliberately none, revoked
-    /// rows being the trail — so it is never reused. That dependency is why it is safe, and why it is
-    /// written down.</para>
+    /// <para><b>The cursor is <c>(created_utc, id)</c>, not `rowid`.</b> See
+    /// <see cref="KeysCursor"/>: `api_keys` is keyed by a TEXT primary key, so its rowid is implicit
+    /// and a `VACUUM` renumbers it — the order survives and the numbers do not, which silently moves
+    /// a cursor a client is holding. `created_utc` sorts chronologically as ISO-8601 text and `id`
+    /// breaks a tie inside one instant.</para>
+    /// <para><b>The waiting count is a GROUPED join, not a per-row subquery.</b> It was
+    /// <c>(SELECT COUNT(*) FROM quarantine q WHERE q.key_id = k.id)</c>, evaluated once per returned
+    /// row while holding <see cref="_gate"/> — and quarantine's bound is 20 000 rows, so a page of
+    /// fifty keys could visit a million rows with every ingest blocked behind it. One grouped pass
+    /// plus the index step 4 adds answers the same question once. (Code round, gemini.)</para>
     /// </remarks>
-    public IReadOnlyList<KeyRow> KeysPage(int limit, long before = long.MaxValue)
+    public IReadOnlyList<KeyRow> KeysPage(int limit, KeysCursor before)
     {
         lock (_gate)
         {
             using var read = _db.CreateCommand();
             read.CommandText = """
-                SELECT k.rowid, k.id, k.note, k.created_utc, k.revoked_utc, k.submissions,
-                       k.last_seen_month,
-                       (SELECT COUNT(*) FROM quarantine q WHERE q.key_id = k.id)
+                SELECT k.id, k.note, k.created_utc, k.revoked_utc, k.submissions,
+                       k.last_seen_month, COALESCE(q.waiting, 0)
                   FROM api_keys k
-                 WHERE k.rowid < $before
-                 ORDER BY k.rowid DESC
+                  LEFT JOIN (SELECT key_id, COUNT(*) AS waiting FROM quarantine GROUP BY key_id) q
+                         ON q.key_id = k.id
+                 WHERE $newest = 1
+                    OR k.created_utc < $created
+                    OR (k.created_utc = $created AND k.id < $id)
+                 ORDER BY k.created_utc DESC, k.id DESC
                  LIMIT $limit
                 """;
-            Bind(read, "$before", before);
+            Bind(read, "$newest", before.FromTheNewest ? 1 : 0);
+            Bind(read, "$created", before.Created);
+            Bind(read, "$id", before.Id);
             Bind(read, "$limit", Math.Clamp(limit, 1, MostAuditPage));
             using var rows = read.ExecuteReader();
             var page = new List<KeyRow>();
             while (rows.Read())
             {
                 page.Add(new KeyRow(
-                    rows.GetInt64(0),
-                    new KeyId(rows.GetString(1)),
-                    rows.GetString(2),
-                    UtcInstant.Read(rows.GetString(3)),
-                    rows.GetString(4) is { Length: > 0 } revoked ? UtcInstant.Read(revoked) : null,
-                    new SubmissionCount(rows.GetInt32(5)),
-                    UtcMonth.Read(rows.GetString(6)),
-                    rows.GetInt32(7)));
+                    new KeysCursor(rows.GetString(2), rows.GetString(0)),
+                    new KeyId(rows.GetString(0)),
+                    rows.GetString(1),
+                    UtcInstant.Read(rows.GetString(2)),
+                    rows.GetString(3) is { Length: > 0 } revoked ? UtcInstant.Read(revoked) : null,
+                    new SubmissionCount(rows.GetInt32(4)),
+                    UtcMonth.Read(rows.GetString(5)),
+                    rows.GetInt32(6)));
             }
 
             return page;

@@ -377,6 +377,12 @@ proved by changing the cursor's `<` to `<=` and watching it report the boundary 
 400 naming what was legal or an empty page, never a clamp; `total` is asserted present on the keys
 page and **absent** on the audit, on the raw bytes.
 
+**The route catalogue is derived, not retyped.** `BugsServer.AdminRoutes()` reads the host's own
+`EndpointDataSource` and returns every `/admin` route with its real method. Written by hand, the
+gate's shared assertions named the three GET routes and silently left both POSTs out — the issuance
+among them — which is the testing rule's own warning that a list repeated in a test will not notice
+the third entry. Derived, a sixth admin route is covered by those assertions the day it is added.
+
 `TheAdminGateTests` is the disclosure rule, which is the one thing here that cannot be checked by
 looking at one server. It captures what a wrong credential is told by a server WITH administrators,
 disposes it, starts one with the variable absent, and compares status, body and `WWW-Authenticate`
@@ -389,6 +395,33 @@ satisfy an indistinguishability perfectly.
 `TheAdminUploadTests` covers the administrator's own ingest path, and its load-bearing test is
 `AccceptRefusesWhatAcceptAdminStores`: `Corpus.Accept` refuses the very id `Corpus.AcceptAdmin`
 stores under, which is the design argument made checkable rather than written down.
+
+**Two tests assert WORK rather than a duration, because the property is about time.**
+`WithNoAdministratorsTheComparisonStillHappens` compares the number and length of the entries an
+unconfigured server walks against a server with one administrator: matching used to return early
+when nothing was configured, so it never hashed the presented key at all, and identical response
+bytes were worth nothing against a clock. A wall clock on a shared machine measures the machine,
+which is why the assertion is on the comparison list and not on a stopwatch.
+`TheComparisonWalksEveryHashAndLeavesOnlyAtTheEnd` reads the source and pins the whole condition —
+and it **strips comment lines first**, because the loop's own comment says it never *returns* from
+inside and the word failed the assertion. The same trap as the `FrozenSet` check, which reads as a
+defect in a file whose remarks explain at length why it is not one.
+
+**`TheDocblocksAreAttachedTests` guards a mistake that happened four times in one story.** Inserting
+a method between a doc comment and the member it belonged to leaves two complete blocks in a row:
+the new member gets the old summary and the old member gets none. It compiles, the analysers are
+happy, and the only symptom is a reader being told something untrue. `Corpus.AuditTrail`,
+`RateLimiter.StampsOf`, `Corpus.Revoke` and `Corpus.KeysPage` each lost or gained one; three were
+found by eye. Its first version matched only a closing tag alone on its line and therefore missed
+the very case it was written for — this codebase writes most summaries on one line — which the
+break-it step caught: the defect was re-created and the test stayed green.
+
+**Two guarantees had their teeth proved by breaking the production code**, per the testing rule's
+"when the fix already landed before the test": an early `return` added to the credential loop made
+the structural test name that symptom, and changing the keys cursor's `<` to `<=` made
+`StabilityAcrossAnInsert` report the boundary row served twice. A third — the startup refusal of a
+credential that is both an administrator and a contributor key — was written RED first and observed
+failing by the server starting and serving, which is the defect itself.
 
 **And the admin routes are in the real-binary scenario in the same story, not a later one.** Every
 one of them can pass in-process while the deployed surface answers nothing — the administrators come

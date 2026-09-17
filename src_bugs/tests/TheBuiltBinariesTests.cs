@@ -238,39 +238,21 @@ public sealed class TheBuiltBinariesTests : IDisposable
         {
             (await Listening(port)).Should().BeTrue("the real binary must come up with administrators configured");
 
-            using var stranger = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            using var stranger = Talking(port, string.Empty);
             (await stranger.GetAsync("/admin/keys", TestContext.Current.CancellationToken))
                 .StatusCode.Should().Be(HttpStatusCode.Unauthorized, "over a real socket, with no credential");
 
-            using var admin = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
-            admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminKey);
-
-            var issued = await admin.PostAsJsonAsync(
-                "/admin/keys", new { note = "issued over a real socket" }, TestContext.Current.CancellationToken);
-            issued.StatusCode.Should().Be(HttpStatusCode.Created, await Said(issued));
-            var key = await issued.Content.ReadFromJsonAsync<Issued>(TestContext.Current.CancellationToken);
-            key!.Key.Should().NotBeNullOrWhiteSpace("the one response that carries a key must really carry it");
+            using var admin = Talking(port, adminKey);
+            var key = await IssuedOverTheSocket(admin);
 
             // The key the real server minted really authenticates the real ingest route.
-            using var contributor = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
-            contributor.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key.Key);
+            using var contributor = Talking(port, key.Key);
             (await Ingest(contributor)).StatusCode.Should().Be(
                 HttpStatusCode.OK, "a key issued through the API is a key the gate accepts");
 
-            var listed = await Read<KeysPage>(admin, "/admin/keys");
-            listed.Total.Should().Be(1);
-            listed.Items.Should().ContainSingle().Which.Sent.Should().Be(1, "the counter moved on the real file");
-            listed.Items[0].Waiting.Should().Be(1);
-
-            var trail = await Read<AuditPage>(admin, "/admin/audit");
-            trail.Items.Should().ContainSingle().Which.Action.Should().Be("issue");
-            trail.Items[0].AdminId.Should().StartWith(
-                "admin-", "the audit names the administrator by the id derived from the variable's line");
-
-            var active = await Read<ActiveNow>(admin, "/admin/active");
-            active.WindowSeconds.Should().Be(60);
-            active.Items.Should().Contain(row => row.Id == $"key:{key.Id}", "the contributor just sent something")
-                .And.Contain(row => row.Id.StartsWith("admin-", StringComparison.Ordinal), "so did the reader");
+            await TheKeyIsListedWithWhatItSent(admin, key);
+            await TheActionIsInTheTrail(admin);
+            await TheContributorIsSendingRightNow(admin, key);
 
             var revoked = await admin.PostAsync(
                 $"/admin/keys/{key.Id}/revoke", content: null, TestContext.Current.CancellationToken);
@@ -319,6 +301,103 @@ public sealed class TheBuiltBinariesTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A credential that is BOTH a contributor key and an administrator line stops the server.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two stores are asked in order, so one string in both of them is a caller whose
+    /// identity depends on which store still holds it: it uploads as a contributor, counted against
+    /// its key row and limited by the contributor setting — and the moment that row is revoked the
+    /// same bearer string becomes an administrator, uncounted and limited by the other setting. A
+    /// revocation that PROMOTES a credential is the opposite of what an operator pressed the button
+    /// for. (Code round, codex.)</para>
+    /// <para>Refused at startup rather than resolved by a precedence rule, because every precedence
+    /// is wrong in one direction: contributor-first is the surprise above, and admin-first would let
+    /// pasting a contributor key into the variable silently grant administration. There is no
+    /// legitimate reason for one string to be both, so it is a configuration error and the server
+    /// says so and exits 78 — the same answer it gives an unusable rate limit.</para>
+    /// <para>Over the real binary because only a process can show an exit code, and because the
+    /// check needs the database open and the variable parsed — the two halves that only exist
+    /// together at startup.</para>
+    /// </remarks>
+    [Fact]
+    public void ACredentialThatIsBothAKeyAndAnAdministratorIsRefusedAtStartup()
+    {
+        MustExist(BugsExe);
+        var key = IssueKey();
+        key.Should().NotBeEmpty("the contributor key is this test's setup");
+
+        var refused = Run(BugsExe, $"--urls http://127.0.0.1:{FreePort()}", _dir, admins: key);
+
+        refused.Code.Should().Be(
+            78,
+            "a string that is both a contributor key and an administrator is a configuration error, "
+            + $"not a caller with two roles; the server said: {refused.Err}");
+        refused.Err.Should().Contain(
+            AdminKeys.Variable, "and it must name the variable to edit");
+
+        // The same server starts perfectly once the overlap is gone, so the refusal is about the
+        // overlap and not about administrators being configured at all.
+        var fine = Run(
+            BugsExe, "--waiting", _dir, admins: "an-administrator-that-is-nobodys-contributor-key");
+        fine.Code.Should().Be(0, $"the one-shots are unaffected; it said: {fine.Err}");
+    }
+
+    /// <summary>A client for the real socket, with a bearer credential when there is one.</summary>
+    private static HttpClient Talking(int port, string key)
+    {
+        var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+        if (key.Length > 0)
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+        }
+
+        return http;
+    }
+
+    /// <summary>Issues through the real API and insists the one key-carrying response carried one.</summary>
+    private static async Task<Issued> IssuedOverTheSocket(HttpClient admin)
+    {
+        var issued = await admin.PostAsJsonAsync(
+            "/admin/keys", new { note = "issued over a real socket" }, TestContext.Current.CancellationToken);
+        issued.StatusCode.Should().Be(HttpStatusCode.Created, await Said(issued));
+        var key = await issued.Content.ReadFromJsonAsync<Issued>(TestContext.Current.CancellationToken);
+        key!.Key.Should().NotBeNullOrWhiteSpace("the one response that carries a key must really carry it");
+
+        return key;
+    }
+
+    /// <summary>The listing shows the key with the counter and the queue the real file holds.</summary>
+    private static async Task TheKeyIsListedWithWhatItSent(HttpClient admin, Issued key)
+    {
+        var listed = await Read<KeysPage>(admin, "/admin/keys");
+
+        listed.Total.Should().Be(1);
+        listed.Items.Should().ContainSingle().Which.Id.Should().Be(key.Id);
+        listed.Items[0].Sent.Should().Be(1, "the counter moved on the real file");
+        listed.Items[0].Waiting.Should().Be(1);
+    }
+
+    /// <summary>The trail names the administrator by the id derived from the variable's own line.</summary>
+    private static async Task TheActionIsInTheTrail(HttpClient admin)
+    {
+        var trail = await Read<AuditPage>(admin, "/admin/audit");
+
+        trail.Items.Should().ContainSingle().Which.Action.Should().Be("issue");
+        trail.Items[0].AdminId.Should().StartWith("admin-");
+    }
+
+    /// <summary>The live view shows both kinds of caller, each under its own prefix.</summary>
+    private static async Task TheContributorIsSendingRightNow(HttpClient admin, Issued key)
+    {
+        var active = await Read<ActiveNow>(admin, "/admin/active");
+
+        active.WindowSeconds.Should().Be(60);
+        active.Items.Should().Contain(row => row.Id == $"key:{key.Id}", "the contributor just sent something")
+            .And.Contain(row => row.Id.StartsWith("admin-", StringComparison.Ordinal), "so did the reader");
+        active.Total.Should().BeGreaterThanOrEqualTo(2, "and the total counts what the page truncated to");
+    }
+
     private static async Task<T> Read<T>(HttpClient http, string route)
     {
         using var reply = await http.GetAsync(route, TestContext.Current.CancellationToken);
@@ -343,7 +422,7 @@ public sealed class TheBuiltBinariesTests : IDisposable
 
     private sealed record ActiveCaller(string Id, int InWindow, bool Limited);
 
-    private sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int WindowSeconds);
+    private sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int Limit, int Total, int WindowSeconds);
 
     private static readonly object OnePair = new
     {

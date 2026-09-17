@@ -25,33 +25,29 @@ public sealed class TheAdminGateTests
 {
     private const string AdminKey = "an-administrators-key";
 
-    private static readonly string[] EveryAdminRoute =
-    [
-        "/admin/keys",
-        "/admin/audit",
-        "/admin/active",
-    ];
-
-    /// <summary>With no credential, every admin route refuses and says nothing about why.</summary>
+    /// <summary>With no credential, every admin route the server serves refuses.</summary>
+    /// <remarks>
+    /// The routes come from the host's own endpoint table rather than a list retyped here, with
+    /// their real methods — see <see cref="BugsServer.AdminRoutes"/>. Written by hand it named the
+    /// three GET routes and quietly left both POSTs out, the issuance among them.
+    /// </remarks>
     [Fact]
     public async Task WithoutACredentialEveryAdminRouteRefuses()
     {
         using var server = new BugsServer(adminKeys: AdminKey);
         using var http = server.CreateClient();
 
-        foreach (var route in EveryAdminRoute)
+        foreach (var (method, path) in server.AdminRoutes())
         {
-            var reply = await http.GetAsync(route, TestContext.Current.CancellationToken);
+            using var asking = new HttpRequestMessage(new HttpMethod(method), path);
+            var reply = await http.SendAsync(asking, TestContext.Current.CancellationToken);
 
-            reply.StatusCode.Should().Be(HttpStatusCode.Unauthorized, $"{route} is not public");
+            reply.StatusCode.Should().Be(
+                HttpStatusCode.Unauthorized, $"{method} {path} is not public, least of all the issuance");
         }
 
-        var issuing = await http.PostAsJsonAsync(
-            "/admin/keys", new { note = "mine now" }, TestContext.Current.CancellationToken);
-        issuing.StatusCode.Should().Be(HttpStatusCode.Unauthorized, "least of all this one");
-
         using var corpus = server.Reading();
-        corpus.KeysTotal().Should().Be(0);
+        corpus.KeysTotal().Should().Be(0, "and a refused issuance issues nothing");
         corpus.AuditCount().Should().Be(0, "a refused request does nothing and records nothing");
     }
 
@@ -75,10 +71,12 @@ public sealed class TheAdminGateTests
         var configured = await Refusals(adminKeys: AdminKey);
         var none = await Refusals(adminKeys: null);
 
-        foreach (var route in EveryAdminRoute)
+        none.Should().HaveSameCount(
+            configured, "both servers must have been asked the same questions");
+        foreach (var (route, answer) in configured)
         {
             none[route].Should().Be(
-                configured[route],
+                answer,
                 $"{route} must answer the same thing whether administration is configured here or "
                 + "not; a difference makes this endpoint an oracle anybody can ask");
         }
@@ -96,11 +94,12 @@ public sealed class TheAdminGateTests
         using var server = new BugsServer(adminKeys: adminKeys);
         using var http = server.Bearing("not-an-administrators-key");
         var answers = new Dictionary<string, string>();
-        foreach (var route in EveryAdminRoute)
+        foreach (var (method, path) in server.AdminRoutes())
         {
-            var reply = await http.GetAsync(route, TestContext.Current.CancellationToken);
+            using var asking = new HttpRequestMessage(new HttpMethod(method), path);
+            var reply = await http.SendAsync(asking, TestContext.Current.CancellationToken);
             var body = await reply.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-            answers[route] = $"{(int)reply.StatusCode} {reply.Headers.WwwAuthenticate} {body}";
+            answers[$"{method} {path}"] = $"{(int)reply.StatusCode} {reply.Headers.WwwAuthenticate} {body}";
         }
 
         return answers;
@@ -224,6 +223,32 @@ public sealed class TheAdminGateTests
         server.Said.Should().NotContain(
             line => line.Contains(AdminKey, StringComparison.Ordinal),
             "and a log line is not a place to print a credential");
+    }
+
+    /// <summary>
+    /// The gate matches SEGMENTS, so a path that merely starts with those letters is not gated.
+    /// </summary>
+    /// <remarks>
+    /// A reviewer read <c>StartsWithSegments("/admin")</c> as <c>String.StartsWith</c> and reported
+    /// that `/administrator` would be caught by it. It would not — matching on segment boundaries is
+    /// the whole difference between the two APIs and the reason this code uses that one — but the
+    /// claim deserves a pin rather than an argument, because the two spellings are one character
+    /// apart and the wrong one compiles. Gated by accident is not harmless: it would answer 401 to a
+    /// public route somebody adds later under a name that happens to share the prefix.
+    /// </remarks>
+    [Fact]
+    public async Task APathThatMerelyStartsWithThoseLettersIsNotGated()
+    {
+        using var server = new BugsServer(adminKeys: AdminKey);
+        using var stranger = server.CreateClient();
+
+        var reply = await stranger.GetAsync("/administrator", TestContext.Current.CancellationToken);
+
+        reply.StatusCode.Should().Be(
+            HttpStatusCode.NotFound,
+            "`/administrator` is one segment, not `/admin` plus something — a 401 here would mean "
+            + "the gate is matching characters and would swallow a public route added under a name "
+            + "that shares the prefix");
     }
 
     /// <summary>`/health` is public, and the admin gate does not touch it.</summary>
