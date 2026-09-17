@@ -1,3 +1,9 @@
 # Shell scripts run on Linux — a CRLF shebang is "bad interpreter", and the one in
 # .github/scripts is executed by a GitHub runner on every release.
 *.sh text eol=lf
+
+# Compared byte for byte by notificationSites.test.mjs against what
+# scripts/count-notifications.mjs prints, and the script writes LF. Without this, git checks it
+# out with CRLF on Windows and the drift test goes red on a file nobody has touched - which it
+# did, on a rebase, hiding what that test is actually for.
+src_vs_code/notification-sites.json text eol=lf
