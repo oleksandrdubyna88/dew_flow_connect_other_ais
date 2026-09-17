@@ -873,13 +873,17 @@ public sealed class RoundsDb : IDisposable
 
     /// <summary>How long a send may go without a beat before it is presumed gone.</summary>
     /// <remarks>
-    /// Shorter than the collector's, because a send is bounded by a network request rather than by a
-    /// model: a run with nothing to say for ten minutes is a run whose process is not there. A laptop
-    /// that slept through the middle of one is swept and simply offered the same pairs again — the
-    /// server is idempotent on the derived pair id, so nothing is lost by being wrong in this
-    /// direction, and a button stuck on "Sending…" for ever is what being wrong in the other costs.
+    /// <para>The collector's number, deliberately. It was ten minutes, on the reasoning that a send
+    /// is bounded by a network request rather than by a model — and four code-round findings said the
+    /// same thing back: a cutoff shorter than the work can legitimately take is a fence around a live
+    /// process. Thirty minutes is longer than the panel's own cap on a send, so a run this sweeps has
+    /// outlived the only thing that starts one.</para>
+    /// <para>Being wrong in this direction costs nothing: a swept run's pairs are simply offered
+    /// again, and the server is idempotent on the derived pair id. Being wrong in the other direction
+    /// leaves a button that says "Sending…" for ever, with the only thing that would clear it being
+    /// the send the button will not start.</para>
     /// </remarks>
-    public static readonly TimeSpan SendPresumedGoneAfter = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan SendPresumedGoneAfter = TimeSpan.FromMinutes(30);
 
     /// <summary>Opens the send, before the first request leaves.</summary>
     /// <remarks>

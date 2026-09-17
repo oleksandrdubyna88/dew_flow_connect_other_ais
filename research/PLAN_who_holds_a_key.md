@@ -997,6 +997,41 @@ asked for exists too: nothing is written unless the whole answer lines up, and a
 is left waiting. A retry costs a redundant request, never a duplicate row. What was true is that the
 person could not SEE any of that, and the sentences now say it.
 
+#### What story 5's code round changed (round 1 of 2, verdict `revise`)
+
+All twelve reviewers answered, 49 findings: **32 accepted, 17 rejected**. The accepted ones fall into
+four groups, and three of them are the same lesson: a mechanism is not a mechanism until something
+calls it.
+
+- **The sweep was written and called from nowhere.** Eight findings across three providers. An
+  abandoned send would have fenced every later one for ever — the Send button disabled, and the only
+  thing that would clear it being the send the button refuses to start. It runs now where the panel's
+  own reader runs, which is the one that executes when somebody looks. Its cutoff also moved from ten
+  minutes to the collector's thirty, because a cutoff shorter than the work can legitimately take is
+  a fence around a live process.
+- **A run that THREW was recorded as `done, 0 sent`**, because the summary variable still held the
+  empty value the assignment never reached. A crashed send looked exactly like a successful one with
+  nothing to do.
+- **Nothing was atomic about "is a send already running".** The panel reads the row, then starts a
+  process; two presses inside that window both see an idle row. The CLI refuses now, where the check
+  and the write are one connection apart.
+- **The button's number counted pairs already sent.** Seven findings, three providers: it read
+  `funnel.collected`, which is every pair ever kept and is unchanged by a successful send, so the
+  button offered to send what had already gone. `--bugs-json` carries a real `sendable` count now,
+  using the send's own predicate.
+
+Two sentences were also simply untrue and are fixed: a transport failure said "nothing was marked as
+sent", which is false the moment a multi-batch run has landed one batch; and an interrupted send was
+rendered as an ordinary ending, so a closed window read as a server that had refused everything.
+
+**Seventeen rejections, and the largest were verified by counting.** Two reviewers reported
+`JSON.stringify` interpolated into a script element in `bugsSend.ts` — a file that contains that
+string zero times, has no template literal and no script. One asked for `noEmitOnError`, which story 3
+turned on and which every build here has run under. One asked for a companion to a structural scan,
+which was fair and is accepted; the rest of that provider's ten were "might" findings about a test
+configuration this diff does not touch. And one asked for a guard that would let a sweep's GUESS
+outrank the process that knows what it actually did.
+
 ## Test plan
 
 > **Corrected 2026-09-17.** Four lines here specified behaviour that story 1 and the plan round had

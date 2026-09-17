@@ -156,7 +156,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // address that must not carry a key, no key, nothing waiting, or a send already running), and what
 // the run came to. The last one is the story: uploading used to be a CLI invocation whose result
 // nobody in the editor ever saw.
-const PLACES_THIS_SPEAKS = 121;
+// 121 → 122 on 2026-09-17, story 5's code round: a send that could not be STARTED says so. A spawn
+// that fails outright — a binary deleted between the check and the run, a permission — would
+// otherwise leave the section exactly as it was, with a button somebody just pressed and nothing
+// anywhere saying why nothing happened.
+const PLACES_THIS_SPEAKS = 122;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

@@ -15,6 +15,9 @@ import { EMPTY_CORPUS, type BugCorpus, type SendRun } from '../roundsDb';
 const corpus = (over: Partial<BugCorpus> = {}): BugCorpus => ({
   ...EMPTY_CORPUS,
   funnel: { ...EMPTY_CORPUS.funnel, collected: 4 },
+  // What a send would OFFER, which is not what has been kept: after a successful send the kept
+  // count is unchanged and this is zero, which is the whole of what seven findings were about.
+  sendable: 4,
   read: true,
   ...over,
 });
@@ -56,7 +59,7 @@ test('no key is its own sentence, and says where a key is kept', () => {
 });
 
 test('nothing waiting is refused rather than sent as an empty batch', () => {
-  const nothing = corpus({ funnel: { ...EMPTY_CORPUS.funnel, collected: 0 } });
+  const nothing = corpus({ sendable: 0 });
 
   assert.equal(mayStart({ server: 'https://bugs.example', key: 'k', corpus: nothing })?.kind,
     'nothing-to-send');
@@ -159,6 +162,22 @@ test('a server that could not be reached says try again, and why that is safe', 
   assert.match(outcome.said, /already holds/u, 'the reason pressing Send again cannot duplicate');
 });
 
+/**
+ * And a run that got some through before it broke must not claim nothing was marked.
+ *
+ * <p>Each batch is marked as the server acknowledges it, so a send that failed on its third batch
+ * has two batches’ worth already sent. Telling the person otherwise sends them looking for
+ * pairs that are not missing. (Code round, codex.)</p>
+ */
+test('a transport failure after some batches says what got through', () => {
+  const outcome = outcomeOf(EXITS.couldNotReach,
+    '{"offered":400,"accepted":180,"duplicate":20,"refused":0,"trouble":"connection reset"}');
+
+  assert.equal(outcome.kind, 'trouble');
+  assert.match(outcome.said, /200 got through before it stopped/u);
+  assert.doesNotMatch(outcome.said, /Nothing was marked/u, 'two hundred pairs were');
+});
+
 /** An installed server older than the send path, which is about this machine, not the pairs. */
 test('an old binary says to update it, and that nothing was lost', () => {
   const outcome = outcomeOf(EXITS.tooOld, '');
@@ -192,10 +211,18 @@ test('the button says what is happening, with the denominator when there is one'
   assert.equal(sendLabel(running({ sent: 1, offered: 4 }), corpus()), 'Sending… 1 of 4');
   assert.equal(sendLabel(running({ offered: 0 }), corpus()), 'Sending…');
   assert.equal(sendLabel(send(), corpus()), 'Send 4 pair(s)');
-  assert.equal(sendLabel(send(), corpus({ funnel: { ...EMPTY_CORPUS.funnel, collected: 0 } })), 'Send');
+  assert.equal(sendLabel(send(), corpus({ sendable: 0 })), 'Send');
 });
 
-test('what is waiting is what the funnel collected', () => {
+/** THE ONE SEVEN FINDINGS WERE ABOUT: what is waiting is what a send would OFFER. */
+test('what is waiting is the unsent count, not everything ever kept', () => {
   assert.equal(waiting(corpus()), 4);
   assert.equal(waiting(EMPTY_CORPUS), 0);
+
+  // Everything kept, nothing left to send: the button must not offer to send it again.
+  const allSent = corpus({ funnel: { ...EMPTY_CORPUS.funnel, collected: 9 }, sendable: 0 });
+  assert.equal(waiting(allSent), 0);
+  assert.equal(sendLabel(send(), allSent), 'Send');
+  assert.equal(mayStart({ server: 'https://bugs.example', key: 'k', corpus: allSent })?.kind,
+    'nothing-to-send');
 });

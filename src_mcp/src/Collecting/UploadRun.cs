@@ -43,6 +43,21 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         // idle button, and a second Send starts a second process against the same pairs. It is
         // written HERE rather than by the caller so that every way of starting a send — the one-shot
         // by hand, the extension's button, a future scheduler — records it. (Plan round, all three.)
+        // SWEPT FIRST, then asked. A run abandoned by a killed process would otherwise fence every
+        // later send for ever, and the sweep is what tells an abandoned run from a live one.
+        db.SweepAbandonedUploads();
+        var already = db.LastUploadRun();
+        if (already.Running)
+        {
+            // The panel checks this too, and cannot make it atomic: it reads the row, then starts a
+            // process, and two presses inside that window both see an idle row. Here the check and
+            // the write are one connection apart, which is as close to atomic as this gets.
+            // (Code round, codex, twice.)
+            Say($"a send started {already.StartedUtc} is still running; nothing was sent");
+
+            return new UploadSummary(Trouble: "another send is already running");
+        }
+
         var runId = Guid.NewGuid().ToString("N");
         db.StartUploadRun(runId, server.ToString(), offered: 0);
 
@@ -50,6 +65,15 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         try
         {
             total = await BatchesAsync(db, server, key, limit, runId, ct);
+        }
+        catch (Exception e)
+        {
+            // WHAT HAPPENED, rather than nothing. The `finally` alone recorded a throw as `done, 0
+            // sent`, because `total` still held the empty summary the assignment never reached — so
+            // a crashed send looked like a successful one that had nothing to do. A cancellation is
+            // not a failure of the pairs either, and both are named. (Code round, codex, twice.)
+            total = total with { Trouble = e is OperationCanceledException ? "the send was stopped" : e.Message };
+            throw;
         }
         finally
         {

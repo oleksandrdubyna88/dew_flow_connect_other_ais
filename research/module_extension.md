@@ -6954,6 +6954,14 @@ address nobody set, an address a credential must not cross, no key, nothing wait
 already running. The CLI refuses the same things — belt and braces, deliberately — but only the
 preflight runs before the key moves.
 
+**The number on the button is the number a send would OFFER.** It was `funnel.collected`, which
+counts every pair this machine has ever kept and is therefore unchanged by a successful send — so the
+button went on offering to send what had already gone, and the preflight let a run start that would
+offer nothing. Seven code-round findings across three providers said the same sentence. `--bugs-json`
+carries a `sendable` count using the send's own predicate now, and the two must stay the same set: a
+count describing a different set from the one the run takes is a button that lies in whichever
+direction they differ.
+
 **The in-flight state is the server's, not the panel's.** A pair is marked sent only on the server's
 acknowledgement, which is what makes a killed upload safe to retry — and it is also why the funnel
 cannot answer "is a send happening": for the whole of a multi-minute run the counts say what they
@@ -6962,6 +6970,11 @@ per batch, and ends it in a `finally`; `--bugs-json` carries the row as `lastSen
 its label and its disabled state are read from THAT. A reload shows the send that is still going, and
 a second Send is refused rather than started beside the first. Three plan reviewers arrived at this
 independently.
+
+**And the section moves while it runs.** The row is beaten per batch, and the panel polls it exactly
+as it polls a collection — the writer is another PROCESS and the only channel between them is the
+database, so a watcher that awaited the whole run and repainted once would have made "Sending… 1 of
+4" true and invisible.
 
 **Every ending has a sentence**, including the two that are about this machine rather than about the
 pairs: exit 64 is an installed `coai-mcp` older than sending — *update it, nothing was lost* — and a

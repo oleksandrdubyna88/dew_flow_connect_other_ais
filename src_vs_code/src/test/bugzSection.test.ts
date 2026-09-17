@@ -38,7 +38,12 @@ const RUN: CollectRun = {
   reasons: '',
 };
 
-const corpus = (lastRun: CollectRun, collected = 0, lastSend = EMPTY_CORPUS.lastSend): BugCorpus => ({
+const corpus = (
+  lastRun: CollectRun,
+  collected = 0,
+  lastSend = EMPTY_CORPUS.lastSend,
+  sendable = collected,
+): BugCorpus => ({
   funnel: {
     all: 100, onCode: 80, accepted: 60, gating: 50, runtime: 40, located: 40, unprocessed: 20,
     collected,
@@ -46,6 +51,7 @@ const corpus = (lastRun: CollectRun, collected = 0, lastSend = EMPTY_CORPUS.last
   rankingVendors: ['local'],
   lastRun,
   lastSend,
+  sendable,
   read: true,
 });
 
@@ -397,7 +403,6 @@ const SENDING: SendRun = {
   id: 's1',
   startedUtc: '2026-09-17T09:00:00Z',
   finishedUtc: '',
-  heartbeatUtc: '2026-09-17T09:00:30Z',
   state: 'running',
   server: 'https://bugs.example',
   offered: 4,
@@ -405,7 +410,7 @@ const SENDING: SendRun = {
   duplicate: 0,
   refused: 0,
   trouble: '',
-} as unknown as SendRun;
+};
 
 test('the Send button is on the page, and says how much is waiting', () => {
   const { html } = run({}, { bugz: corpus(RUN, 4) });
@@ -434,24 +439,22 @@ test('while a send is running the button says so and cannot start a second', () 
 });
 
 test('a send that ended says what it came to', () => {
-  const ended = corpus(RUN, 4, {
-    ...SENDING, state: 'done', finishedUtc: 'u', sent: 3, duplicate: 1, refused: 0,
-  } as unknown as SendRun);
+  const ended = corpus(RUN, 4, { ...SENDING, state: 'done', finishedUtc: 'u', sent: 3, duplicate: 1 });
 
   assert.match(
     bugzBody({ corpus: ended, models: [], model: '', server: 'https://bugs.example' }),
     /Last send: 3 sent, 1 already held, 0 refused/u);
 });
 
-test('a send that could not finish says so, and that nothing was marked', () => {
-  const broke = corpus(RUN, 4, {
-    ...SENDING, state: 'failed', finishedUtc: 'u', trouble: 'connection refused',
-  } as unknown as SendRun);
+test('a send that could not finish says so, and what got through before it did', () => {
+  const broke = corpus(RUN, 4, { ...SENDING, state: 'failed', finishedUtc: 'u', trouble: 'connection refused' });
 
   const body = bugzBody({ corpus: broke, models: [], model: '', server: 'https://bugs.example' });
 
   assert.match(body, /could not finish: connection refused/u);
-  assert.match(body, /Nothing was marked as sent/u);
+  // NOT "nothing was marked": each batch is marked as the server acknowledges it, so a run that
+  // failed on its third batch has two batches' worth already sent. (Code round, codex.)
+  assert.match(body, /before it stopped/u);
 });
 
 test('a machine that has never sent says that, rather than saying nothing', () => {

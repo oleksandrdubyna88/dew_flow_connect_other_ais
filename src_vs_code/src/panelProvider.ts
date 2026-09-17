@@ -2537,6 +2537,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private static readonly SEND_CAP_MS = 30 * 60_000;
 
   /**
+   * How often the section re-reads the send's row while one is running.
+   *
+   * <p>Seconds rather than milliseconds, because every tick is one spawn of `--bugs-json` — the
+   * panel owns no SQLite. The run beats once per batch, so the numbers move whether or not a tick
+   * lands on one.</p>
+   */
+  private static readonly SEND_BEAT_MS = 2_000;
+
+  /**
    * How often the section is repainted while a collection runs.
    *
    * <p>Three seconds. Each tick is a process spawn reading a database, so this is not free — but a
@@ -2882,8 +2891,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    await this.watchSend(uploadRun(server.fsPath, key)(
-      ['--upload-pairs', '--server', where], PanelProvider.SEND_CAP_MS));
+    try {
+      await this.watchSend(uploadRun(server.fsPath, key)(
+        ['--upload-pairs', '--server', where], PanelProvider.SEND_CAP_MS));
+    } catch (reason: unknown) {
+      // Never silently: a spawn that could not start at all — a binary deleted between the check
+      // and the run, a permission — would otherwise leave the section exactly as it was, with a
+      // button somebody just pressed and nothing anywhere saying why nothing happened.
+      await notify({
+        as: 'error',
+        class: 'failure',
+        source: 'bugz',
+        code: 'send-could-not-run',
+        title: `The send could not be started: ${String(reason)}`,
+        detail: String(reason),
+      });
+    }
   }
 
   /**
@@ -2895,8 +2918,25 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the two that are about this machine rather than about the pairs.</p>
    */
   private async watchSend(sending: Promise<{ code: number; output: string }>): Promise<void> {
-    const answer = await sending;
+    // POLLED, exactly as `watchCollect` is, and for the reason story 5 built the run row at all: the
+    // writer is another PROCESS and the only channel between them is the database. Awaiting the
+    // whole run and repainting once meant the row moved every batch and the section never showed
+    // it — "Sending… 1 of 4" would have been true and invisible. (Code round, gemini and codex.)
+    let over = false;
+    const finished = sending.then((answer) => {
+      over = true;
+
+      return answer;
+    });
+
+    while (!over) {
+      await Promise.race([finished, new Promise((wake) => setTimeout(wake, PanelProvider.SEND_BEAT_MS))]);
+      await this.render();
+    }
+
+    const answer = await finished;
     await this.render();
+
 
     // A send that WORKED is an outcome and a send that did not is a failure, which is the
     // difference the funnel of notification classes is for: one is a thing that happened and the

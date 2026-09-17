@@ -2675,6 +2675,15 @@ persists it, so `Keep` computes it and answers the id it used.
 **It sends as many batches as it takes.** It sent one, so two thousand kept pairs answered "200
 accepted" and exit code 0 with eighteen hundred still queued and nothing saying so.
 
+**A send refuses to start beside one already running.** The panel checks too and cannot make it
+atomic: it reads the row, then starts a process, and two presses inside that window both see an idle
+row. In the CLI the check and the write are one connection apart — it sweeps first, so an abandoned
+run cannot fence every later send, then reads the last row and refuses if it is live.
+
+**A run that THREW is recorded as failed, with what it said.** The `finally` alone wrote `done, 0
+sent`, because the summary variable still held the empty value the assignment never reached — a
+crashed send that looked exactly like a successful one with nothing to do.
+
 **And it writes down that it is sending.** `upload_runs` is opened before the first request, beaten
 after each batch and ended in a `finally`, because the pairs themselves cannot carry that state: one
 is marked only on the server's acknowledgement — the rule that makes a killed send safe to retry — so
