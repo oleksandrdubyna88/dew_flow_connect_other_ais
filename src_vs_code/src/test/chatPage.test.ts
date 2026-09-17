@@ -48,6 +48,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     running: false,
     capped: false,
     turn: 0,
+    waiting: [],
     failure: '',
     draft: '',
     marks: NO_MARKS,
@@ -100,12 +101,15 @@ function thinkingRegion(html: string): string {
   return html.slice(at, html.indexOf('</div>', at));
 }
 
-test('a running turn says so, and locks the composer', () => {
+test('a running turn says so, and leaves the composer open for the next question', () => {
   const html = chatPageHtml(state({ running: true }), 'n0nce');
 
   // Eight of the 9.4 measured seconds are silent; without this the page reads as hung.
   assert.ok(thinkingRegion(html).includes('Thinking…'), 'a running turn is invisible');
-  assert.ok(/<textarea[^>]*disabled/.test(html), 'a second turn could be typed into the same pipe');
+  // AND THE BOX STAYS OPEN. It was disabled here, to keep a second turn out of a pipe that carries
+  // one — a job the host's own chain and the session both do properly, and which cost the person
+  // the nine seconds they wanted to spend typing the next question. (issue #288.)
+  assert.ok(!/<textarea[^>]*disabled/.test(html), 'the composer is dead while an answer is on its way');
 });
 
 test('an idle page has no thinking line and an open composer', () => {
@@ -735,7 +739,10 @@ test('the passage has no inner scroll and is still visibly the text being discus
 });
 
 test('the Send button is locked exactly when the textarea is', () => {
-  for (const [over, locked] of [[{ running: true }, true], [{ capped: true }, true], [{}, false]] as const) {
+  // A running turn is no longer one of the locking states — see the case above it. What matters
+  // here is unchanged and is the reason this test exists: the two controls never disagree, because
+  // the one that disagrees is the one that sends.
+  for (const [over, locked] of [[{ running: true }, false], [{ capped: true }, true], [{}, false]] as const) {
     const html = chatPageHtml(state(over), 'n0nce');
     const button = html.slice(html.indexOf('id="send"'), html.indexOf('>', html.indexOf('id="send"')));
     const box = html.slice(html.indexOf('id="say"'), html.indexOf('>', html.indexOf('id="say"')));
@@ -746,8 +753,10 @@ test('the Send button is locked exactly when the textarea is', () => {
 
   // And it keeps agreeing when the host pushes a state, which is where the two could drift apart.
   const page = runChatPage();
+  page.deliver({ type: 'state', running: true, capped: true });
+  assert.strictEqual(page.seen['send']?.disabled, true, 'a capped conversation left the Send button open');
   page.deliver({ type: 'state', running: true, capped: false });
-  assert.strictEqual(page.seen['send']?.disabled, true, 'a running turn left the Send button open');
+  assert.strictEqual(page.seen['send']?.disabled, false, 'a running turn locked the Send button');
   page.deliver({ type: 'state', running: false, capped: false });
   assert.strictEqual(page.seen['send']?.disabled, false, 'the finished turn left the Send button locked');
 });
@@ -778,40 +787,44 @@ test('the Send button and Enter share one send, wired inside the nonced script',
   assert.deepStrictEqual(sends.map((message) => message['text']), ['what does this do', 'and this']);
 });
 
-test('a send locks the composer at once, before the host has said anything', () => {
-  // The gap the gate found, raised by two vendors independently: between posting and the host's
-  // `running: true` the composer stayed open, so a second Enter — or a click, now that there is a
-  // button — put a second turn down a pipe that carries one. Nothing on the host end had gone wrong
-  // yet; the page simply had not been told, and it did not need telling.
+test('a send leaves the composer open, and a second one is SENT rather than swallowed', () => {
+  // This used to assert the opposite, and the reason it did is worth keeping: the page locked
+  // itself the instant it posted, to close a window "the width of a second Enter" in which a
+  // second turn went down a pipe that carries one.
+  //
+  // That window is now the feature. A second Enter posts a second `send`, the host puts it on
+  // `thread.turns` behind the first, and the session refuses to interleave them in any case — so
+  // the page no longer has to defend a rule that two layers below it enforce properly. What it
+  // must not do is swallow the question, which is what locking did. (issue #288.)
   const page = runChatPage();
   page.seen['say'].value = 'the first question';
   page.fire('send', 'click');
 
-  assert.strictEqual(page.seen['say'].disabled, true, 'the box stayed open between the send and the answer');
-  assert.strictEqual(page.seen['send'].disabled, true, 'the Send button stayed open between the send and the answer');
+  assert.strictEqual(page.seen['say'].disabled, false, 'the box locked itself the moment it was used');
+  assert.strictEqual(page.seen['send'].disabled, false, 'the Send button locked itself the moment it was used');
+  assert.strictEqual(page.seen['say'].value, '', 'the question was not taken out of the box');
 
   page.seen['say'].value = 'and immediately a second';
   page.fire('send', 'click');
-  page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
-  assert.strictEqual(
-    page.posted.filter((message) => message['command'] === 'send').length,
-    1,
-    'a second turn went down the pipe while the first was still in flight',
+  assert.deepEqual(
+    page.posted.filter((message) => message['command'] === 'send').map((message) => message['text']),
+    ['the first question', 'and immediately a second'],
+    'the second question never reached the host, which is the whole of issue #288',
   );
 });
 
-test('the composer comes back with the focus when the turn ends', () => {
-  // send() deliberately does NOT focus: it locks, and focusing a control you have just disabled is
-  // how a caret ends up in a box nobody can type in. The page already returned focus when a lock
-  // lifts, and that is now the single path — one place decides, whichever way the turn went.
+test('the composer keeps the keyboard across a send, because the next question is typed in it', () => {
+  // It used to LOSE the keyboard and get it back when the turn ended, which was right while a send
+  // locked the box: focusing a control you have just disabled puts a caret where nobody can type.
+  // Nothing is disabled now, so the keyboard simply stays where the person is working. (issue #288.)
   const page = runChatPage();
   page.seen['say'].value = 'ask';
   page.fire('send', 'click');
-  const stolen = page.seen['say'].focused;
+
+  assert.strictEqual(page.seen['say'].disabled, false, 'the send disabled the box it just emptied');
 
   page.deliver({ type: 'state', running: false, capped: false });
 
-  assert.ok(page.seen['say'].focused > stolen, 'the box did not get the focus back when the turn ended');
   assert.strictEqual(page.seen['say'].disabled, false, 'the finished turn left the box locked');
 });
 
@@ -882,8 +895,10 @@ test('the header button posts the SAME command as the capped notice’s, and pos
 });
 
 test('a locked composer posts nothing, however it is asked', () => {
-  const page = runChatPage({ running: true });
-  page.seen['say'].value = 'while a turn runs';
+  // A CAPPED conversation, which is the one state that still locks: it can never take another turn,
+  // so a question typed into it would be a promise nothing can keep.
+  const page = runChatPage({ capped: true });
+  page.seen['say'].value = 'into a conversation that is full';
 
   page.fire('send', 'click');
   page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
@@ -1215,10 +1230,11 @@ test('a reader who scrolls back down on their own retires the jump control', () 
 });
 
 test('a locked composer does not get the focus from a jump', () => {
-  // While a turn runs the box is disabled; focusing it would put the caret where nobody can type.
-  const page = runChatPage({ running: true });
+  // A CAPPED conversation is the one that locks now; focusing it would put the caret where nobody
+  // can type. A running turn no longer locks anything, so the jump may focus that box freely.
+  const page = runChatPage({ capped: true });
   const scroll = page.scrolledUp();
-  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>', running: true, capped: false });
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>', running: true, capped: true });
   page.frames();
   const focusedBefore = page.seen['say'].focused;
 
@@ -2085,15 +2101,18 @@ test('a box with something in it sends it, re-ask or no re-ask', () => {
   assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'reask'), []);
 });
 
-test('a re-ask locks the composer like any other turn', () => {
+test('a re-ask leaves the composer open, like any other turn', () => {
+  // It locked, and asserted that a second press could not re-ask twice. The lock is gone, so the
+  // second press DOES post a second re-ask — and that is correct rather than a regression: two
+  // presses of Re-ask are two questions, and they queue behind each other exactly as two Sends do.
+  // (issue #288.)
   const page = runChatPage({ reask: 'Claude Opus' });
   page.seen['say'].value = '';
   page.fire('send', 'click');
-  page.fire('send', 'click');
 
-  assert.strictEqual(page.seen['say'].disabled, true, 'the composer stayed open during a re-ask');
+  assert.strictEqual(page.seen['say'].disabled, false, 'the composer locked itself during a re-ask');
   assert.strictEqual(page.posted.filter((message) => message['command'] === 'reask').length, 1,
-    'a second press re-asked a second time');
+    'the press did not re-ask at all');
 });
 
 test('a model label in the button is escaped like everything else', () => {
@@ -2736,14 +2755,18 @@ test('Send has room before it, and the button beside it empties the box', () => 
   assert.match(ruleFor(css, '.pickerRow #send'), /margin-left: 18px/, 'there is no room between them');
 });
 
-test('a turn in flight locks the box, the send AND the clear', () => {
-  // A box nobody can type in is a box nobody should be able to empty either: the turn was built from
-  // what is in it, and emptying it mid-turn makes the composer disagree with the question being
-  // answered.
-  const locked = chatPageHtml(state({ running: true }), 'n0nce');
+test('a FULL conversation locks the box, the send AND the clear', () => {
+  // A box nobody can type in is a box nobody should be able to empty either. That was written about
+  // a turn in flight and is now true of the one state that still locks: a capped conversation, which
+  // can never take another turn however long anybody waits. (issue #288.)
+  const locked = chatPageHtml(state({ capped: true }), 'n0nce');
 
-  assert.match(locked, /id="clear"[^>]*disabled/, 'the clear stayed live while a turn was running');
+  assert.match(locked, /id="clear"[^>]*disabled/, 'the clear stayed live on a conversation that is full');
   assert.match(locked, /id="send"[^>]*disabled/);
+  // And a turn in flight locks NONE of the three, which is the change.
+  const running = chatPageHtml(state({ running: true }), 'n0nce');
+  assert.doesNotMatch(running, /id="clear"[^>]*disabled/, 'a running turn locked the clear');
+  assert.doesNotMatch(running, /id="send"[^>]*disabled/, 'a running turn locked the send');
   assert.doesNotMatch(chatPageHtml(state({ running: false }), 'n0nce'), /id="clear"[^>]*disabled/);
 });
 

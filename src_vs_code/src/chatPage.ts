@@ -45,6 +45,20 @@ export interface AnsweredBy {
   readonly label: string;
 }
 
+/**
+ * One question that has been typed and not yet asked.
+ *
+ * <p>The ID is not decoration and it is not the text. A question is withdrawn by NAME, because the
+ * callback that will run it was created the moment Send was pressed — un-drawing a row cannot
+ * un-create that — so the thing that begins the turn has to be able to ask "is this one still
+ * wanted?" about a specific one. Two identical questions typed twice are two rows, and withdrawing
+ * the second must not cancel the first. (codex, the plan round.)</p>
+ */
+export interface WaitingQuestion {
+  readonly id: string;
+  readonly text: string;
+}
+
 export interface ChatMessage {
   readonly role: 'you' | 'model';
   readonly text: string;
@@ -160,8 +174,10 @@ export interface ChatPageState {
    * time a late message lands can be the turn AFTER the one somebody pressed for.</p>
    */
   readonly turn: number;
-  /** A turn is in flight: the composer is locked and the thinking line is shown. */
+  /** A turn is in flight: the thinking line is shown, and a new question WAITS rather than sending. */
   readonly running: boolean;
+  /** Questions typed while a turn was running, oldest first. Nobody has asked them yet. */
+  readonly waiting: readonly WaitingQuestion[];
   /**
    * The conversation has reached its limit and cannot take another turn.
    *
@@ -929,6 +945,11 @@ function chatStyle(
   hr.end { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 14px 0 0; opacity: .55; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }
+  .waiting { list-style: none; margin: 0 0 12px; padding: 0; }
+  .waitingRow { display: flex; align-items: baseline; gap: 6px; opacity: .7; margin: 0 0 4px; }
+  .waitingText { flex: 1 1 auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .waitingDrop { flex: 0 0 auto; background: none; border: 0; color: inherit; cursor: pointer; padding: 0 4px; }
+  .waitingDrop:hover { color: var(--vscode-errorForeground); }
   #stop { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0 0 0 4px; cursor: pointer; text-decoration: underline; }
   #stop[disabled] { opacity: .5; cursor: default; text-decoration: none; }
   .queued { opacity: .8; font-size: .9em; }
@@ -1033,6 +1054,29 @@ ${TONE_CSS}`;
  * <p>`position` is 0 when the server did not say, or when the turn has left the queue and is being
  * answered. Both are "no number to show", and neither is position zero.</p>
  */
+/**
+ * The questions waiting their turn, oldest first. Empty draws nothing.
+ *
+ * <p>Under the thinking line, because that is where the eye already is while an answer runs, and
+ * dimmed, because none of this has been said yet — it is not transcript and must not read as any.
+ * Each row carries its own ✕: withdrawing is per question, so taking back the third does not touch
+ * the first two.</p>
+ *
+ * <p>Escaped like everything else the page renders, and the reason is sharper here than most: a
+ * waiting row is text somebody PASTED, and the webview holds a privileged message bridge.</p>
+ */
+export function chatWaitingHtml(waiting: readonly WaitingQuestion[]): string {
+  if (waiting.length === 0) {
+    return '';
+  }
+
+  const rows = waiting.map((one) => `<li class="waitingRow"><span class="waitingText">${escapeHtml(one.text)}</span>`
+    + `<button type="button" class="waitingDrop" data-command="withdraw" data-id="${escapeHtml(one.id)}"`
+    + ` title="Take this question back" aria-label="Take this question back">✕</button></li>`).join('');
+
+  return `<ul class="waiting" aria-label="Waiting to be asked">${rows}</ul>`;
+}
+
 export function chatStatusHtml(running: boolean, position: number, turn: number): string {
   if (!running) {
     return '';
@@ -1057,12 +1101,13 @@ export function chatStatusHtml(running: boolean, position: number, turn: number)
  * change from a repeat. Two copies of these expressions would drift on the day one of them gains a
  * condition, and the symptom would be a page that scrolls on a push that changed nothing.</p>
  */
-type Regions = Record<'messages' | 'thinking' | 'capped' | 'failure', string>;
+type Regions = Record<'messages' | 'thinking' | 'waiting' | 'capped' | 'failure', string>;
 
 function regionsOf(state: ChatPageState): Regions {
   return {
     messages: chatMessagesHtml(state.messages, state.marks, state.carryFrom, state.running),
     thinking: chatStatusHtml(state.running, 0, state.turn),
+    waiting: chatWaitingHtml(state.waiting),
     capped: chatCappedHtml(state.capped),
     failure: chatFailureHtml(state.failure, state.canRetry, state.messages.length),
   };
@@ -1080,7 +1125,11 @@ function regionsOf(state: ChatPageState): Regions {
  * of the markup, so there is no program to run for it.</p>
  */
 function chatBody(state: ChatPageState, regions: Regions): string {
-  const locked = state.running || state.capped;
+  // THE CAP, AND ONLY THE CAP. It was `running || capped`, and those are two different facts: an
+  // answer on its way is exactly when a person wants to type the next question, while a FULL
+  // conversation can never take another turn however long anybody waits — so queueing into one
+  // would promise something that will not happen. (issue #288.)
+  const locked = state.capped;
 
   return `<header>
 <h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}
@@ -1099,6 +1148,7 @@ ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" ar
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="messages">${regions.messages}</div>
 <div id="thinking">${regions.thinking}</div>
+<div id="waiting">${regions.waiting}</div>
 <div id="failure">${regions.failure}</div>
 <div id="capped">${regions.capped}</div>
 </main>
@@ -1377,7 +1427,6 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // re-ask, so nothing that used to work has changed meaning.
       if (canReask) {
         vscode.postMessage({ type: 'command', command: 'reask' });
-        lock(true);
       }
 
       return;
@@ -1386,14 +1435,12 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     vscode.postMessage({ type: 'command', command: 'send', text: text });
     fitComposer();
     paintBackdrop();
-    // Locked HERE, not when the host gets round to saying so. Between the post and the state that
-    // comes back there was a window - small, and the width of a second Enter - in which a second
-    // turn went down a pipe that carries one. Two vendors found it independently; the page did not
-    // need telling that it had just sent something.
-    lock(true);
-    // And no focus call: focusing a control you have just disabled is how a caret ends up in a box
-    // nobody can type in. The unlock below already hands focus back when the turn ends, whichever
-    // way it went, and one place deciding that is the point.
+    // AND IT DOES NOT LOCK. It used to, immediately, to close a window "the width of a second
+    // Enter" in which a second turn went down a pipe that carries one. That window is what this
+    // feature is FOR now: a second Enter joins the queue instead of racing, the host serialises the
+    // turns, and the session refuses to interleave them in any case. Locking here would make the
+    // composer dead again the instant somebody used it, which is the bug. (issue #288.)
+    // The box keeps the keyboard, because the next question is typed in it.
   }
   // The one place either control's lock is written. Two controls deciding the same thing from the
   // same inputs is two chances to disagree, and the one that disagrees is the one that sends.
@@ -2193,7 +2240,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     }
     if (box && typeof data.running === 'boolean' && typeof data.capped === 'boolean') {
       const wasLocked = box.disabled;
-      lock(data.running || data.capped);
+      // The CAP alone, matching the markup. A running turn no longer locks anything: what a person
+      // types while one is in flight goes into the queue.
+      lock(data.capped);
       // Back to the box when the turn ends. Without this every single follow-up costs a mouse click,
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }
