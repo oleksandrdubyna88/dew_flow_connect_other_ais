@@ -1,7 +1,8 @@
 # PLAN — who holds a key, and what they have sent
 
 > Status: **in progress — story 1 (the schema, the audit, a limit that is a setting) shipped
-> 2026-09-17 on `feat/a-limit-that-is-a-setting`; stories 2–4 not started.** Scope: `src_bugs`
+> 2026-09-17 as `bugs-v0.2.0`; stories 2–5 not started.** Story 5 was added on 2026-09-17 and is
+> not in the original four. Scope: `src_bugs`
 > (schema, rate limit, admin API), `src_vs_code` (the Bugz section's Users tab), and the privacy
 > promise in `research/module_server.md` and `deploy/bugs/README.md`, which this change
 > **deliberately rewrites**. Story 1's deviations from the text below are recorded at the end of its
@@ -36,14 +37,26 @@ that argument and was right — an operator seeing `2026-09-16` learns which day
 worked. **Offered the narrower option, the operator took it**, so what is stored is the MONTH and the
 promise below survives in a form worth printing.
 
-**The promise becomes this, in all four places, with no softening — and it is now SCOPED, because a
-reviewer caught the second evasion:** the first version said "no clock time", while `admin_audit`,
-`createdUtc` and `revokedUtc` all store exact times.
+**This is the CANONICAL wording — every other file quotes it, so it is edited here first.** It has
+been narrowed three times, each time because a reviewer refused an evasion, and each refusal is worth
+keeping:
+
+1. The first version said "no clock time" while `admin_audit`, `createdUtc` and `revokedUtc` all
+   store exact times. So it is **scoped**: contributors and administrators are different promises.
+2. It then claimed a DATE was materially different from a TIMESTAMP. It is not — `2026-09-16` tells
+   you which day somebody worked. So it is a **month**.
+3. It said "no history" while `quarantine.received_utc` sat beside `key_id`, which made it plainly
+   false for any pair awaiting review. The **data** changed rather than the wording (story 1, step 3).
 
 > **About a contributor**, the server records only the **month a key was last used** and how much it
 > has sent. It records no date, no clock time, no address, no name, and no history: there is no way
 > to ask which day a contributor worked, or at what hour, or what a key did in any month but its
-> last.
+> last. **Nothing that carries a key id carries a clock**, and a test over the schema refuses any
+> table that does.
+>
+> **An administrator can see the current minute**, because the rate limiter holds it in memory —
+> `/admin/active` answers who is sending right now. It records nothing and there is no yesterday to
+> ask about; this is the one thing a live view can tell you that no stored history does.
 >
 > **About administrators**, the server records exact times: when a key was issued, when it was
 > revoked, and who did it. That is a log about the people holding administrative power, not about the
@@ -91,11 +104,11 @@ That also removes a denial-of-service a reviewer found in the first draft: with 
 callers in the table, the tracked set is bounded by **keys that exist**, so no flood of invented
 credentials can fill it and start refusing real ones.
 
-## The four stories
+## The stories
 
 > **Model policy**, per the gate's standing order: the split itself and stories **1** and **2** —
 > schema migration, authentication, rate limiting — are done on **Fable (max)**, because being wrong
-> there is expensive. Stories **3** and **4** are ordinary work on **Opus**. Each story is reviewed
+> there is expensive. Stories **3**, **4** and **5** are ordinary work on **Opus**. Each story is reviewed
 > through `review_code`, resolved, documented, tested and committed **before the next begins**.
 
 ### Story 1 — the schema, and a limit that is a setting *(Fable)*
@@ -229,7 +242,10 @@ leave an accepted pair with a stale month. The update is conditional
   hash-and-probe with data-dependent timing. Every configured hash is compared with
   `CryptographicOperations.FixedTimeEquals` and the results accumulated **without an early return**,
   exactly as `Corpus.KeyFor` already does for contributor keys.
-- An admin id is derived: `admin-` + the first 8 hex of its hash. Deterministic, no table.
+- An admin id is derived: `admin-` + the first 8 hex of its hash. Deterministic, no table. **It is a
+  truncation, so a collision is silent**: two admin keys whose hashes share those 32 bits would be
+  indistinguishable in the audit. With a handful of administrators the probability is negligible, and
+  it is recorded rather than assumed because the audit's whole job is saying who did it.
 - An admin key **may also upload**; the derived id serves at the ingest boundary.
 - **Admin credentials are not rows in `api_keys`** and therefore appear nowhere in the Users tab, have
   no counters and no `lastSeenMonth`. Accepted, and the tab **says so**: an admin credential is
@@ -237,9 +253,18 @@ leave an accepted pair with a stale month. The update is conditional
 - Startup logs once at Information when the variable is absent, because an admin API with no admins
   answers 401 to everybody and looks broken.
 
-Every response is a JSON object, never a bare array. `skip`/`limit` are non-negative integers —
+> ⚠️ **THE PAGING IN THIS SUBSECTION AND THE TABLE BELOW IT IS SUPERSEDED.** Read
+> *"Story 2's contract as the plan round RESOLVED it"* further down before implementing any of it.
+> `skip` and `total` are gone: paging is keyset (`?limit&before`) on both routes, because offset
+> paging is not insert-stable and story 1 already removed `OFFSET` from `AuditTrail`. The rest of
+> this subsection — the JSON-object rule, the 400-not-a-clamp rule, the key-return rule — still
+> stands. It is left in place rather than rewritten so the change is visible and the reasoning has
+> something to argue against.
+
+Every response is a JSON object, never a bare array. Paging parameters are non-negative integers —
 anything else is **400**, not a silent clamp — `limit` defaults to 50 and is capped at 200. **Every
-list is ordered by `created_utc, id`** so a row inserted between pages cannot duplicate or hide one.
+list is ordered so a row inserted between pages cannot duplicate or hide one** (the resolved section
+says how; `created_utc, id` with an offset does not achieve it).
 
 ```
 GET  /admin/keys?skip&limit
@@ -269,8 +294,12 @@ GET  /admin/active                200 { items:[ {id,inWindow,limited} ], windowS
   two-click recovery deserves.)
 - **Every mutation and its audit row commit in ONE transaction**, so the API cannot report success for
   an unaudited action nor failure for a completed one.
-- `note` is validated: it is the one field where somebody types a name out of habit, and an
-  email-shaped note is refused as a cheap guard on the promise.
+- `note` is validated: over 200 characters, or shaped like an email address, is a 400. **It catches
+  one shape and no other** — `bob@example.com` is refused and `Bob Smith` is not, which is the very
+  mistake the guard exists for. It is worth having because it is free, and it is written down here
+  because a guard that stops one spelling of a problem invites the belief that the problem is
+  handled. What actually protects the promise is that the note is OUR record of why a key exists and
+  nothing reads it as identity.
 
 #### Story 2's contract as the plan round RESOLVED it (2026-09-17)
 
@@ -358,6 +387,48 @@ defect story 1 closed); a distinct status for the absent variable (see point 5);
 policy for `api_keys` (the plan's own growth budget already sets it — none, because a revoked row IS
 the record that the key existed and was stopped).
 
+#### Four more the OPERATOR settled (2026-09-17), after the round missed them
+
+**9. `/admin/*` gets its own limit: `COAI_BUGS_ADMIN_RATE_PER_MINUTE`, default 120.** Validated and
+capped the same way as the contributor setting, `0` disables. The arithmetic nobody had done: the
+audit retains 50 000 rows and pages at most 200, so reading it is **250 requests**, and at the
+contributor default of 10 a minute the Users tab hits its own `429` after ten pages and needs 25
+minutes for the whole table. One number cannot serve both surfaces — the contributor limit is flood
+control on a public endpoint, and admins are a closed set of authenticated people. Raising the
+shared default was the wrong trade: it would loosen flood control to suit a UI.
+
+**10. `total` for keys, none for the audit.** Removing `total` everywhere left no way to count
+anything, because `limit=0` is a 400 — so a UI could not say "N keys" without paging all of them.
+`/admin/keys` returns `total`: it is tens of rows and the `COUNT(*)` is free. `/admin/audit` returns
+only `nextBefore`, because there a count is 50 000 rows scanned on every page while holding the
+corpus gate. The asymmetry is deliberate and each side is honest about what it can afford; story 3
+shows an exact key count and the audit as a paged list with no total.
+
+```
+GET /admin/keys?limit&before    200 { items:[…], limit, total, nextBefore? }
+GET /admin/audit?limit&before   200 { items:[…], limit, nextBefore? }
+```
+
+**11. Revoking an admin credential is NOT immediate, and that is accepted.** A consequence of point
+3 that point 3 did not state: if the in-memory set is immutable for the process's lifetime, then
+removing a key from `COAI_BUGS_ADMIN_KEYS` does nothing until a **successful** redeploy — and a
+deploy that fails or rolls back leaves the credential you just revoked still live. Contributor keys
+have `--revoke` and die instantly; admin keys have no equivalent.
+
+The operator accepted this rather than closing it, and the alternatives are recorded because they
+are the obvious suggestions: an in-memory kill switch is state a restart silently discards, which is
+the opposite failure and easier to forget; and persisting admin revocations means admin credentials
+become rows in `api_keys`, which the operator had already settled against and which reopens what the
+tab shows. **So it must be said loudly** — in `deploy/bugs/README.md` and in the tab — that an admin
+credential dies on a successful redeploy and that the emergency measure is stopping the service.
+
+**12. `/admin/active` is a real-time view of contributor activity, and the promise must say so.** It
+records nothing, so it keeps the letter of the promise — but "there is no way to ask which day a
+contributor worked" does not obviously cover "there IS a way to ask whether they are sending right
+now". That capability is the point of the endpoint and it is defensible; leaving a reader to
+reconcile it against the promise is not. The promise's wording gains a sentence: the server keeps no
+history, and an administrator can see the current minute.
+
 ### Story 3 — the Users tab *(Opus)*
 
 - A button in the existing Bugz section (`src_vs_code/src/bugzView.ts`), opening a panel beside
@@ -379,7 +450,12 @@ the record that the key existed and was stopped).
 
 ### Story 4 — the promise, the deployment, and the scenario *(Opus)*
 
-- The promise rewritten in four places, in the scoped wording above, **with a test** that the phrase
+- The promise's REMAINING wording — "four places" is no longer the count. Story 1 already rewrote it
+  in `research/module_server.md`, `deploy/bugs/README.md` and the `Program` remark. What is left is
+  the stale "a counter without a clock" remarks in `deploy/nginx/coai-bugs`, `src_bugs/src/Ingest.cs`
+  and `src_bugs/tests/TheRouteTests.cs` — **and NOT** the one in step 1's SQL, which is frozen against
+  the released commit and must stay exactly as it shipped. Also the sentence from decision 12: the
+  server keeps no history, and an administrator can see the current minute. **With a test** that the phrase
   "a counter without a clock" cannot survive beside a column that has one.
 - `COAI_BUGS_ADMIN_KEYS` and `COAI_BUGS_RATE_PER_MINUTE` registered in `.agents/PROJECT.md`. **No new
   one-shot modes**; `--issue-key` and `--revoke` keep working unchanged.
@@ -392,35 +468,110 @@ the record that the key existed and was stopped).
   suites can all pass while the deployed binary, the SecretStorage wiring and the webview fail
   together.
 
+### Story 5 — the extension can actually send *(Opus)*
+
+> **Added 2026-09-17, by operator decision, sequenced AFTER story 4.** Not part of the original
+> plan: found while answering "where do I put the key even if I had one?" — a question with a worse
+> answer than expected.
+
+**The symptom.** There is **no send path in the extension at all.** Every `bugz*.ts` file was
+searched: the only matches for "send" or "upload" are the English words inside prose comments. The
+panel Collects and Reviews — the review panel writes its decisions straight to the local database —
+and then stops. Uploading is a `coai-mcp --upload-pairs --server … ` invocation with `COAI_BUGS_KEY`
+in the environment, which is a CLI operation a person does by hand.
+
+**And the setting that looks like it works does not.** `state.server`, set through "Set the ingest
+server…", is read in exactly **one** place — `bugzView.ts:137`, to render its own button's label.
+Nothing else consumes it. It is a control that stores a value nothing uses, which is the same failure
+class as a test asserting a fragment: it looks right, so nobody checks.
+
+**Why this is sequenced after story 4 and not before story 3.** The operator's call. It is worth
+recording the argument that lost: a Users tab managing keys for a server the extension cannot send
+to is a tab for a workflow that does not exist end to end. The argument that won is that the plan was
+approved as four stories and reordering it mid-flight costs more than the wait.
+
+**Scope, when it comes:** a Send action in the Bugz section that invokes the real one-shot; the
+contributor key in `SecretStorage` (never `settings.json`, which syncs) with the same three states
+story 3 defines for the admin key; the stored server address actually read; and the acknowledgement
+handled — `--upload-pairs` marks nothing as sent until the server answers, so the panel must not
+either. The page RUN by its test, per `.agents/PROJECT.md`.
+
 ## Test plan
 
-Migration from a **step-1 file**. `last_seen_month` matches `^\d{4}-\d{2}$` asserted on the
-stored value, with a frozen clock either side of a UTC month boundary. The month advances **only on an
-accepted ingest** — not on a 401, a 429, a malformed body or an admin call — each a test. The
-conditional write does not rewrite a same-month row. The limit at the boundary, over it, after the
-window, at `0`, and at the validated maximum. A **revoked key is refused**, before and after. Admin
-comparison constant-time and independent of how many admins are configured. The admin API over real
-HTTP: every route, every error code, ordering stable across an insert, and **no response but the
-issuance one containing a key or a hash**. `/admin/active` reflects the limiter and survives no
-restart. Mutation and audit roll back together. The audit sweep keeps the newest rows. The Users tab
-RUN, revoke driven through the rendered markup, and the key-entry flow in all three states.
+> **Corrected 2026-09-17.** Four lines here specified behaviour that story 1 and the plan round had
+> already replaced, and one of them was dangerous: it told a reader the month update is conditional.
+> That condition was REMOVED because the counter rewrites the same row on every ingest, so it saved
+> nothing — and adding it back to the now-combined `UPDATE` would gate the counter too and stop
+> same-month ingests being counted at all. A stale test plan is how a removed defect gets
+> reintroduced by somebody following instructions.
+
+**Story 1, shipped.** Migration from a **step-1 file** whose SQL is frozen against the released
+commit. `last_seen_month` matches `^\d{4}-(0[1-9]|1[0-2])$` — bounded to real months, not two digits
+— asserted on the value READ BACK, with a frozen clock either side of a UTC month boundary. The
+month advances **only on an accepted ingest**: not on a 401, a 429, a malformed body or an admin
+call, each a test. The counter and the month are **one unconditional `UPDATE`**, and a test asserts
+three ingests count three. The limit at the boundary, over it, after the window, at `0`, and at the
+validated maximum. A **revoked key is refused**, before and after, and again inside the transaction
+when the revoke lands between the gate and the write. N threads released by a barrier against a
+limit of L admit exactly L. No table carrying a `key_id` carries a clock. A spent `IngestScope`
+refuses.
+
+**Story 2.** Admin comparison constant-time **with respect to the presented credential** — no early
+return, so timing cannot reveal which configured key matched; the number of configured admins is not
+a secret and is not claimed to be hidden. The admin API over real HTTP: every route, every error
+code, `limit=0` refused, a `before` past the end answering an empty page rather than an error,
+keyset paging stable across an insert between two page requests, `total` present for keys and absent
+for the audit. **No response but the single issuance one contains a key or a hash**, asserted in both
+directions. A lost issuance is recoverable from the newest-first listing alone. An absent variable
+and a wrong credential are indistinguishable from outside. `/admin/active` reflects the limiter,
+persists nothing, and answers the same shape when empty. The two limits are independent settings.
+Mutation and audit roll back together; the audit sweep keeps the newest rows across the real 50 000
+bound. The admin routes exercised by the scenario harness over the REAL built binary.
+
+**Stories 3–5.** The Users tab RUN rather than read as text, revoke driven through the rendered
+markup, the key-entry flow in all three states, and the tab saying what it cannot show. The promise's
+remaining wording pinned by a test. The deploy delivering both admin settings and asserting an
+authenticated `/admin/keys` afterwards. The send path's own tests, per story 5.
 
 ## Definition of done
 
-- [ ] `user_version` migrations incl. `admin_audit` + its sweep, tested from a step-1 file.
-- [ ] Rate limit **per key only**, configurable, validated maximum, `0` disables, 429 carries
+**Story 1 — done, `bugs-v0.2.0` tagged 2026-09-17.**
+
+- [x] `user_version` migrations incl. `admin_audit` + its sweep, tested from a step-1 file whose SQL
+      is frozen against the released commit.
+- [x] Rate limit **per key only**, configurable, validated maximum, `0` disables, 429 carries
       `Retry-After`; unauthenticated traffic is left to nginx and the plan says why.
-- [ ] Ingest + counter + `last_seen_month` in one transaction; conditional update.
-- [ ] Revoked keys refused, with a test that proves revoking stops an ingest.
-- [ ] Admin keys: array + `FixedTimeEquals`, derived ids, absent-variable log, excluded from the tab.
-- [ ] Admin API: shapes above, stable ordering, validated paging, notes validated, one transaction
-      per mutation+audit, only the issuance response carrying a key.
-- [ ] `/admin/active`, from the limiter, persisting nothing, keys only.
+- [x] Ingest + counter + `last_seen_month` in one transaction, the counter atomic in SQL, the two
+      columns in ONE unconditional `UPDATE`.
+- [x] Revoked keys refused, with a test that proves revoking stops an ingest — and refused again
+      inside the transaction when the revoke lands after the gate.
+- [x] No table carrying a `key_id` carries a clock time, asserted over the schema.
+- [x] One server per data directory, enforced rather than assumed.
+
+**Story 2 — not started.**
+
+- [ ] Admin keys: array + `FixedTimeEquals`, no early return, derived ids, absent-variable log.
+- [ ] Admin API: the shapes in *"Story 2's contract as the plan round RESOLVED it"* — **not the route
+      table above it, which is superseded** — keyset paging, `total` for keys only, notes validated,
+      one transaction per mutation+audit, only the issuance response carrying a key.
+- [ ] `/admin/active`, from the limiter, persisting nothing, keys only, shape invariant when empty.
+- [ ] `COAI_BUGS_ADMIN_RATE_PER_MINUTE` as its own setting, default 120, validated and capped.
+- [ ] An admin uploads through `AcceptAdmin`, with no counter and no month, and the reason the
+      in-force re-check does not apply is stated in the code.
+- [ ] Admin routes in the scenario harness, over the real binary, catalogued in `module_tests.md`.
+
+**Stories 3–5 — not started.**
+
 - [ ] Users tab: key-entry command and states, copy-before-dismiss, confirmed revoke, failures shown,
-      page tested by RUNNING it.
-- [ ] Promise rewritten in four places, scoped to contributors, with a test pinning it.
-- [ ] Both variables in `.agents/PROJECT.md`; deploy delivers them and verifies an admin call.
-- [ ] Scenario over the real artefacts, catalogued in `module_tests.md`.
+      page tested by RUNNING it, and it says what it cannot show — keys, and admin credentials.
+- [ ] The three remaining "a counter without a clock" remarks rewritten, with a test pinning the
+      phrase against a column that has one.
+- [ ] That an admin credential dies only on a successful redeploy is written in the deploy notes and
+      shown in the tab.
+- [ ] Both admin settings in `.agents/PROJECT.md`; the deploy delivers them and verifies an
+      authenticated admin call.
+- [ ] Story 5: the extension can SEND, and the stored ingest-server address is read by something
+      other than a button label.
 
 ## What this deliberately does NOT do
 
