@@ -204,10 +204,10 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
     /// A consultation belonging to ANOTHER checkout is refused rather than closed under this one's lock.
     /// </summary>
     /// <remarks>
-    /// The lock is taken on the path the caller supplied, and the record is read by id. Those are two
-    /// different things: a supplied path naming another checkout would take that one's lock and then
-    /// write this record anyway, so a turn running in the real repository could overwrite the close.
-    /// The path is checked rather than trusted. (codex, the code round.)
+    /// The lock is taken by repository and the record is read by id. Those are two different things:
+    /// a supplied path naming another checkout would take that one's lock and then write this record
+    /// anyway, so a turn running in the REAL repository could overwrite the close. The path is
+    /// checked rather than trusted. (codex, the first code round.)
     /// </remarks>
     [Fact]
     public void AConsultationFromAnotherCheckoutIsRefused_RatherThanClosedUnderTheWrongLock()
@@ -221,6 +221,96 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
             code.Should().Be(65);
             said.Should().Contain("close it from there");
             OutcomeOf(id).Should().BeEmpty("nothing was written under a lock that guards another tree");
+        }
+        finally
+        {
+            Directory.Delete(elsewhere, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// And it does not TOUCH that other checkout's lock on the way to refusing.
+    /// </summary>
+    /// <remarks>
+    /// <para>The residue of the finding above, raised again on the second code round and right the
+    /// second time. Checking the path AFTER taking the supplied one's lock closes the data-loss half
+    /// — nothing is written — and leaves two costs standing. The visible one is here: a close aimed
+    /// at the wrong repository waits out the whole 30-second lock budget on a repository it has
+    /// nothing to do with, and BLOCKS a consultation that is legitimately running there, before
+    /// answering a refusal it could have given instantly from the record.</para>
+    /// <para>The invisible one is worse and is why the fix is to take the RECORD's lock rather than
+    /// to reorder two checks. Correctness rested on two normalisers agreeing about what one path is:
+    /// <c>SamePath</c> resolves links (<c>DocumentReader.CanonicalRoot</c>), and
+    /// <c>RepositoryLock.Normalise</c> does not — it is <c>GetFullPath</c> and a lowercase. Where
+    /// those differ, and <c>SamePath</c>'s own remarks record that they DO on macOS, where
+    /// <c>/var</c> is a link, two spellings of one checkout pass the path check and take two
+    /// DIFFERENT locks: the close then writes while a turn in the same tree is running, which is the
+    /// one thing the lock exists to prevent. Deriving the lock from the record's own
+    /// <c>RepoPath</c> — the spelling git resolved — leaves nothing for two normalisers to disagree
+    /// about. (codex Architecture, the second code round.)</para>
+    /// </remarks>
+    [Fact]
+    public void AndItDoesNotWaitOnTheOtherCheckoutsLockToSayNo()
+    {
+        var id = Recorded();
+        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        // HELD, the way a consultation running there holds it — a FileShare.None handle in the data
+        // directory, which is exactly what RepositoryLock opens.
+        var theirs = RepositoryLock.PathFor(_data, elsewhere);
+        Directory.CreateDirectory(Path.GetDirectoryName(theirs)!);
+        using (var _ = new FileStream(theirs, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            var started = Stopwatch.StartNew();
+
+            var (code, said) = Run("--close-consult", "--repo", elsewhere, "--id", id, "--outcome", "solved");
+
+            started.Stop();
+            code.Should().Be(65, said);
+            said.Should().Contain(
+                "close it from there",
+                "the refusal is decided from the RECORD, so a lock held in an unrelated checkout cannot change it");
+            started.Elapsed.Should().BeLessThan(
+                RepositoryLock.DefaultWait,
+                "the close waited out another repository's lock budget before refusing — and for as long as it "
+                + "waited it was also blocking whatever legitimately holds that lock");
+        }
+
+        Directory.Delete(elsewhere, recursive: true);
+    }
+
+    /// <summary>
+    /// WHICH lock was taken, read off the filesystem rather than off a clock.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both halves in one case, and neither of them waits: taking a lock CREATES its file, so
+    /// the question "whose lock did this close take" has a direct answer. A successful close leaves
+    /// the consultation's own lock file behind — so the fix above was not bought by taking no lock at
+    /// all — and a close aimed at another checkout leaves that checkout's nowhere, which is the
+    /// statement the timing assertion above can only make indirectly.</para>
+    /// <para>The alternative was to hold the consultation's own lock and assert the refusal, which
+    /// proves the same thing and pays the full 30-second budget on every run of this suite for ever.
+    /// A guard that makes the suite slower than the product is a guard people learn to skip.</para>
+    /// </remarks>
+    [Fact]
+    public void TheLockFileItLeavesBehindIsTheConsultationsOwn()
+    {
+        var id = Recorded();
+        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        try
+        {
+            var ours = RepositoryLock.PathFor(_data, _repo);
+            var theirs = RepositoryLock.PathFor(_data, elsewhere);
+            theirs.Should().NotBe(ours, "the two checkouts must hash to different locks for this to say anything");
+
+            Run("--close-consult", "--repo", elsewhere, "--id", id, "--outcome", "solved").Code.Should().Be(65);
+
+            File.Exists(theirs).Should().BeFalse(
+                "a close refused from the record took an unrelated repository's lock on the way to refusing");
+
+            Run("--close-consult", "--repo", _repo, "--id", id, "--outcome", "solved").Code.Should().Be(0);
+
+            File.Exists(ours).Should().BeTrue(
+                "the close that succeeded took no lock at all, which is not what the fix was for");
         }
         finally
         {

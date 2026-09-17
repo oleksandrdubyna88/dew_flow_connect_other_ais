@@ -143,25 +143,49 @@ public sealed class ConsultationService(
             return Error($"'{id}' is not a consultation id");
         }
 
-        using var held = await RepositoryLock.TryTakeAsync(settings.DataDir, repo, RepositoryLock.DefaultWait, ct);
-        if (held is null)
-        {
-            return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
-        }
-
-        var record = _store.Read(id);
-        if (record is null)
+        // WHICH consultation, before which lock. This read is outside the lock and nothing is
+        // decided from it: it answers one question — which checkout does this consultation belong to
+        // — and everything below runs against the re-read under that checkout's own lock.
+        var found = _store.Read(id);
+        if (found is null)
         {
             return Error($"no consultation {id} — it may have been swept after {ConsultationStore.Retention.TotalDays:0} days");
         }
 
-        // THE LOCK MUST BE THE RECORD'S. A supplied path naming another checkout would take that
-        // one's lock and then read and write this record anyway — so a turn running in the real
-        // repository could overwrite the close, and the verdict would vanish with the status
-        // flapping behind it. The path is checked rather than trusted. (codex, the code round.)
-        if (!SamePath(record.RepoPath, repo))
+        // THE SUPPLIED PATH IS CHECKED, NEVER TRUSTED — and it is checked BEFORE any lock is taken.
+        // The log lists consultations from every checkout a person has reviewed, so a close can
+        // legitimately arrive naming the wrong one; refusing it from the record costs nothing, while
+        // refusing it from behind a lock made somebody else's repository wait out this one's whole
+        // budget for a question it was never asked. (codex, the second code round.)
+        if (!SamePath(found.RepoPath, repo))
         {
-            return Error($"consultation {id} belongs to {record.RepoPath} — close it from there");
+            return Error($"consultation {id} belongs to {found.RepoPath} — close it from there");
+        }
+
+        // THE LOCK IS THE RECORD'S OWN, not the caller's spelling of it. Taking the supplied path's
+        // lock and then comparing the two would rest the whole guarantee on two normalisers agreeing
+        // about what one path is, and they do not: SamePath resolves links through
+        // DocumentReader.CanonicalRoot, and RepositoryLock.Normalise is GetFullPath and a lowercase.
+        // Where those differ — and SamePath's own remarks record that they DO, on macOS, where /var
+        // is a link — two spellings of one checkout would pass the comparison above and take two
+        // DIFFERENT locks, so this close would write while a turn in the same tree was running,
+        // which is the one thing the lock exists to prevent. RepoPath is what git resolved: one
+        // spelling, with nothing left for two normalisers to disagree about. (codex, the second
+        // code round.)
+        using var held = await RepositoryLock.TryTakeAsync(settings.DataDir, found.RepoPath, RepositoryLock.DefaultWait, ct);
+        if (held is null)
+        {
+            return Error($"another consultation is running in {found.RepoPath} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
+        }
+
+        // RE-READ under the lock. The read above happened outside it, so a turn may have answered,
+        // failed or been swept in between — and every decision below is about the record as it is
+        // NOW. Only the checkout was taken from the earlier read, and a record's repository does
+        // not change.
+        var record = _store.Read(id);
+        if (record is null)
+        {
+            return Error($"no consultation {id} — it may have been swept after {ConsultationStore.Retention.TotalDays:0} days");
         }
 
         var word = outcome.Trim();

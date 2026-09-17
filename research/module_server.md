@@ -70,10 +70,23 @@ absence of a verdict* — empty, or `lapsed` — rather than *is this one of min
 write a fifth word, and a build that recognised only its own three would read that as nobody having
 decided and replace it: durable state from a build that knows more, lost in silence.
 
-**The close takes the RECORD's lock, not the caller's path.** The lock is keyed by repository and is
-taken before the record is read; a supplied path naming another checkout would take that one's lock
-and then write this record anyway, so a turn running in the real repository could overwrite the
-close. The path is compared with the record's and a mismatch is refused naming where it belongs.
+**The close takes the RECORD's lock, not the caller's path — and takes it AFTER deciding which
+record this is.** The order is the whole point and it took two code rounds to get right. The first
+draft locked the supplied path and then compared it with the record's, which stops the write but
+leaves two costs standing: a close aimed at the wrong repository waits out the full 30-second budget
+on a repository it has nothing to do with, BLOCKING a consultation that is legitimately running
+there — and, worse, correctness then rests on two normalisers agreeing about what one path is.
+They do not. <code>SamePath</code> resolves links through <code>DocumentReader.CanonicalRoot</code>;
+<code>RepositoryLock.Normalise</code> is <code>GetFullPath</code> and a lowercase. Where those
+differ — and <code>SamePath</code>'s own remarks record that they DO on macOS, where <code>/var</code>
+is a link — two spellings of one checkout pass the comparison and take two DIFFERENT locks, so the
+close writes while a turn in that tree is running.
+
+So: read the record (outside any lock, deciding nothing but which checkout it belongs to), refuse a
+supplied path that is not that checkout, take the lock from <code>record.RepoPath</code> — the
+spelling git resolved, with nothing left for two normalisers to disagree about — and RE-READ under
+it, because a turn may have answered, failed or been swept in between. Every decision below runs
+against that second read.
 
 **A close while a turn is RUNNING is refused.** `asking` means a vendor is being asked at that
 moment, and a close landing then would be overwritten by that turn's own write — the status visibly
