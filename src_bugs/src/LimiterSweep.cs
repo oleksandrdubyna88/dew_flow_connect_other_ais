@@ -25,12 +25,11 @@ internal sealed class LimiterSweep(RateLimiter limiter, ILogger<LimiterSweep> lo
                 Tick();
             }
         }
-        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        catch (Exception e) when (!stopping.IsCancellationRequested)
         {
-            // A planned stop, which is the only way this loop is meant to end.
-        }
-        catch (Exception e)
-        {
+            // Filtered on the TOKEN, not the exception type, per the reliability rule: a planned stop
+            // is the one way this loop is meant to end, and the host treats a cancelled ExecuteAsync
+            // during shutdown as exactly that. Anything else is a sweep that died, and is said.
             log.LogError(
                 e, "the rate limiter's sweep stopped; idle windows are kept until the next start");
         }
