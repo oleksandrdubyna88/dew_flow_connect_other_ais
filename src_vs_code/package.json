@@ -966,6 +966,7 @@
     "test:live": "npm run compile && node scripts/live-chat.mjs",
     "test:fresh": "npm run compile && node scripts/live-fresh.mjs",
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
+    "test:close-compat": "node scripts/live-close-consult-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",
