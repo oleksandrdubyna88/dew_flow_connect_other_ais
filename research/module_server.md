@@ -2675,10 +2675,16 @@ persists it, so `Keep` computes it and answers the id it used.
 **It sends as many batches as it takes.** It sent one, so two thousand kept pairs answered "200
 accepted" and exit code 0 with eighteen hundred still queued and nothing saying so.
 
-**A send refuses to start beside one already running.** The panel checks too and cannot make it
-atomic: it reads the row, then starts a process, and two presses inside that window both see an idle
-row. In the CLI the check and the write are one connection apart — it sweeps first, so an abandoned
-run cannot fence every later send, then reads the last row and refuses if it is live.
+**A send refuses to start beside one already running, and the refusal is the INSERT itself.** It
+read the last row and then inserted, which is two statements with a gap: two processes both read
+idle, both inserted, and both offered the same waiting pairs. `StartUploadRun` is now one statement
+with `WHERE NOT EXISTS (… state = 'running' AND finished_utc = '')` and answers whether it TOOK
+the lease; a sweep runs first, so an abandoned run cannot fence every later send.
+
+**Which pairs a send would offer is written once**, in `SendablePairs`: `keep = 1`, no `sent_utc`,
+no `send_refusal`. The SELECT that takes them and the COUNT the button shows both use it, because
+they were two copies for one commit — and a rule added to one and not the other makes the button
+show a number the run does not use.
 
 **A run that THREW is recorded as failed, with what it said.** The `finally` alone wrote `done, 0
 sent`, because the summary variable still held the empty value the assignment never reached — a

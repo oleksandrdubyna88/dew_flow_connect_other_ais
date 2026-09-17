@@ -412,11 +412,18 @@ public sealed class RoundsDb : IDisposable
     public IReadOnlyList<StoredPair> Sendable(int limit)
     {
         using var read = _db.CreateCommand();
+        // The predicate comes from SendablePairs, which is the one place it is written: it was here
+        // and in the button's count, the same three conditions twice, which is how a button comes to
+        // show a number the run does not use. (Code round 2, gemini and codex.)
         read.CommandText = """
             SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
                    p.keep, f.severity, f.category, f.title
               FROM collect_pairs p JOIN findings f ON f.id = p.finding_id
-             WHERE p.keep = 1 AND p.sent_utc = '' AND p.send_refusal = ''
+             WHERE
+            """
+            + " " + SendablePairs.Conditions
+            + """
+
              ORDER BY p.written_utc, p.finding_id
              LIMIT $limit
             """;
@@ -892,20 +899,36 @@ public sealed class RoundsDb : IDisposable
     /// happens. The pairs cannot carry it — they are marked only on an acknowledgement — which is
     /// exactly why this table exists. (Plan round, all three reviewers.)
     /// </remarks>
-    public void StartUploadRun(string runId, string server, int offered)
+    /// <returns>
+    /// Whether this call TOOK the lease. False means another send is already running and this one
+    /// must not start.
+    /// </returns>
+    public bool StartUploadRun(string runId, string server, int offered)
     {
         var now = Now();
         using var write = _db.CreateCommand();
+
+        // ONE STATEMENT, because two were a race. It read the last run, found it idle, and then
+        // inserted — and two processes inside that gap both read idle and both inserted, each with
+        // its own id, and both then offered the same waiting pairs. One connection is not a lock;
+        // `WHERE NOT EXISTS` inside the insert is. (Code round 2, gemini and codex, independently.)
+        //
+        // `ON CONFLICT(id) DO NOTHING` stays for the case it was always for: the SAME run started
+        // twice must not erase what the first one achieved.
         write.CommandText = """
             INSERT INTO upload_runs (id, started_utc, heartbeat_utc, state, server, offered)
-            VALUES ($id, $now, $now, 'running', $server, $offered)
+            SELECT $id, $now, $now, 'running', $server, $offered
+             WHERE NOT EXISTS (
+                   SELECT 1 FROM upload_runs WHERE state = 'running' AND finished_utc = ''
+             )
             ON CONFLICT(id) DO NOTHING
             """;
         Bind(write, "$id", runId);
         Bind(write, "$now", now);
         Bind(write, "$server", server);
         Bind(write, "$offered", offered);
-        write.ExecuteNonQuery();
+
+        return write.ExecuteNonQuery() > 0;
     }
 
     /// <summary>The send is alive, and this is how far it has got.</summary>
@@ -975,10 +998,14 @@ public sealed class RoundsDb : IDisposable
     public int SweepAbandonedUploads(TimeSpan staleAfter)
     {
         using var write = _db.CreateCommand();
+        // BOTH halves of "unfinished". `EndUploadRun` writes the state and `finished_utc` in one
+        // statement, so `state = 'running'` is enough today — and only while that stays true, and
+        // while nobody adds a state this sweep has never heard of. Naming the column costs nothing
+        // and depends on neither. (Code round 2, local.)
         write.CommandText = """
             UPDATE upload_runs
                SET state = 'interrupted', finished_utc = $now
-             WHERE state = 'running' AND heartbeat_utc < $cutoff
+             WHERE state = 'running' AND finished_utc = '' AND heartbeat_utc < $cutoff
             """;
         Bind(write, "$now", Now());
         Bind(write, "$cutoff", _time.GetUtcNow().UtcDateTime.Subtract(staleAfter).ToString("O"));

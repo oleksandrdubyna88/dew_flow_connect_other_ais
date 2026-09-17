@@ -1032,6 +1032,35 @@ which was fair and is accepted; the rest of that provider's ten were "might" fin
 configuration this diff does not touch. And one asked for a guard that would let a sweep's GUESS
 outrank the process that knows what it actually did.
 
+#### And what round 2 changed (round 2 of 2, verdict `good_enough`)
+
+All three reviewers answered, 7 findings, all gating: **5 accepted, 2 rejected**. Every accepted one
+was a narrowing I had described honestly and left as a narrowing.
+
+- **The single-flight was not atomic.** Two reviewers, independently. The CLI read the last run and
+  then inserted — two statements with a gap, and two processes inside it both read idle and both
+  offered the same pairs. The insert refuses itself now, which is one statement.
+- **The sendable predicate was written twice**, once in the SELECT that takes the pairs and once in
+  the COUNT the button shows. `SendablePairs` holds it, and the two callers share it.
+- **The sweep named only `state`**, not `finished_utc`; naming both costs nothing and depends on
+  neither `EndUploadRun` writing them together nor on nobody adding a state.
+- **An absent `sendable` read as zero**, so a server older than this story disabled the Send button
+  for ever: the send was never attempted, exit 64 never arrived, and nobody was told to update the
+  server. Absent is now its own value and falls back to what was kept — optimistically, on purpose,
+  because that is the path that can explain itself.
+
+**And the live contract test earned its place a second time.** The shared predicate compiled, every
+unit test passed, and the real binary answered `SQLite Error 1: near "WHEREp": syntax error` — a C#
+raw string literal keeps no trailing newline, so `WHERE` and the condition had been concatenated
+into one word. Nothing but running the real thing would have found it.
+
+**Two rejections.** One asked for a guard stopping a woken process from overwriting a swept
+`interrupted`: the process knows what it did and the sweep only guessed from silence, so that
+overwrite is the correct direction. The other said a transport failure crashes the CLI instead of
+printing its summary — `OnceAsync` catches `HttpRequestException` and `TaskCanceledException` and
+turns both into `Trouble`, so the `throw` reached by the outer catch is for genuinely unexpected
+faults, where "try again" would be advice to retry a thing that cannot work.
+
 ## Test plan
 
 > **Corrected 2026-09-17.** Four lines here specified behaviour that story 1 and the plan round had
