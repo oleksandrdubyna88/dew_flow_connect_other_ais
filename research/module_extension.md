@@ -1452,7 +1452,7 @@ above it and stops at the widget's edge, which they proved with a picture. So a 
 synthetic one, takes everything except the thing wanted.
 
 It is on disk, though. Claude Code appends each session to `~/.claude/projects/<the cwd with every
-separator replaced by a dash>/<uuid>.jsonl`, and a question is a `tool_use` block named
+character that is not a letter or a digit replaced by a dash>/<uuid>.jsonl`, and a question is a `tool_use` block named
 `AskUserQuestion` whose input carries every question, every option and every description; a later
 row's `tool_result` names its `tool_use_id` once it has been answered. `claudeQuestion.ts` reads
 that — pure, lines in, decisions out — and `claudeSessions.ts` finds the file.
@@ -1517,6 +1517,20 @@ those two alone skipped the write.
 conversation, and that string is exactly what VS Code puts on the tab. Measured against a live
 session before it was built. So two sessions waiting in one folder are no longer a flat refusal: the
 one whose title matches the active tab wins, and a title matching neither or both still refuses.
+
+**And the FOLDER was spelled wrong for five of the six repositories here (2026-09-17).**
+`projectDirName` replaced `\`, `/` and `:` — verified, honestly, against a real `~/.claude/projects`
+on a machine whose paths contained nothing else. A person on a Mac found the rest: a repository called
+`dew_flow_payroll` keeps its sessions under `…-dew-flow-payroll`, this looked for
+`…-dew_flow_payroll`, and the answer was that no session existed. Re-measured over **84 pairs** of
+(the `cwd` a transcript records, the folder that transcript sits in): the three-character rule was
+right for **51**, and replacing everything that is not a letter or a digit is right for **84 of 84**.
+The characters seen changing were `\` `:` `.` and `_`. Checked against the folders on disk
+afterwards: the new rule names an existing folder for all six repositories here, the old one for
+exactly one — so *Asked*, *Take the question* and *go to conversation* had never once worked in a
+`dew_flow_*` checkout. What is still unknown is what becomes of a letter outside A–Z, because no
+measured path has one; `projectDirIn` therefore looks for the older spelling as well, so a folder
+written under either rule is found rather than reported as no sessions at all.
 
 **A session wears MORE THAN ONE name, and until 2026-09-16 this read one of them.** There is a second
 row — `{"type":"custom-title","customTitle":"…","sessionId":"…"}` — which is what the tab wears when a
