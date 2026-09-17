@@ -6817,10 +6817,13 @@ anywhere in the series.
 | `chatConversationRestore.ts` | how a reloaded tab comes back | yes |
 | `chatCommand.ts` | the entry points: the command, the two doors, `newConversation` | yes |
 
-**Five of them need no editor at all**, which is the half of this a line count does not show. They
-are outside `sonar.coverage.exclusions` — that list is exactly the modules importing `vscode`,
-asserted in both directions by `sonarExclusions.test.ts` — so they can gain real tests, where every
-line that stayed behind is still covered only by reading its own source.
+**Two of them need no editor at all** — `chatThread` and `chatHost` — and both have real tests now,
+which is the half of this a line count does not show. The claim was FIVE until SonarCloud refused
+the pull request: `chatPersist`, `chatRegistry` and `chatFollow` import no `vscode` and still cannot
+be loaded without one, because they import modules that do. `sonar.coverage.exclusions` is therefore
+the set of modules that cannot LOAD outside an extension host rather than the set that names the
+editor — the transitive question, which is the one `sonarExclusions.test.ts`'s own comment always
+posed — asserted in both directions, 35 of 187.
 
 **The order was forced by cycles, not chosen.** `Thread` and the three bind-once handles come out
 first because every later module reads them; the write queue precedes the session join because

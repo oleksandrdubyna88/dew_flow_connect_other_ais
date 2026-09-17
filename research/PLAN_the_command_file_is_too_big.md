@@ -53,9 +53,17 @@ Fifteen modules, in six tiers, each tier one commit:
 | 6 | `chatConversationRestore.ts` | 249 | how a reloaded tab comes back | yes |
 | — | `chatCommand.ts` | **543** | the entry points: the command, the two doors, `newConversation` | yes |
 
-**Five of the fifteen need no editor at all.** They sit outside `sonar.coverage.exclusions` and can
-gain real tests; every line that stayed behind is still covered only by reading its own source. That
-was the second reason for doing this and the one a line count does not show.
+**Two of the fifteen need no editor at all** — `chatThread` and `chatHost` — and both have real tests
+now, which is the second reason for doing this and the one a line count does not show.
+
+**That number was five until SonarCloud refused the pull request, and the correction is worth more
+than the claim was.** `chatPersist`, `chatRegistry` and `chatFollow` import no `vscode` and cannot be
+loaded without one anyway: `chatPersist` reaches it through `chatPanel`, and the other two through
+`chatPersist`, `chatCapture` and `chatRoots`. `require('vscode')` throws at the first hop, wherever
+that hop is. They were therefore outside the coverage exclusions, contributed 0 % of the new code,
+and failed the gate — which is exactly the number-about-the-analysis that entry exists to stop.
+`sonarExclusions.test.ts` now asks the TRANSITIVE question, which is the one its own comment always
+posed: *a module that cannot be loaded outside an extension host*. 35 of 187 rather than 32.
 
 Two are over the 400 the rule calls typical, and each says why in its own header as the rule asks:
 `chatHooks.ts` (670 — `conversationHooks` is one object literal built in one place) and `chatTurn.ts`
