@@ -39,7 +39,7 @@ import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
-import { blindSpotsHtml, consultationsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
+import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
@@ -106,6 +106,12 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     onForget: async (provider) => {
       await panelRef.forgetUsage(provider);
+      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
+    // The log is where every consultation is, including the ones that have lapsed out of the
+    // sidebar — so this is the only surface from which the state the issue describes can be ended.
+    onCloseConsultation: async (id) => {
+      await panelRef.closeConsultation(id);
       await refreshRoundsLog(roundsLog, watcher, panelRef, true);
     },
     onForgetChat: async (provider, model) => {
@@ -1033,7 +1039,7 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
     force,
     blindSpotsHtml(fresh),
     fresh.totals,
-    consultationsHtml(fresh));
+    await panel.consultationsTab(fresh));
 }
 
 /**

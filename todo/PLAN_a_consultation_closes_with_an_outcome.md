@@ -65,6 +65,14 @@ reviewers' tokens and the chat's tokens this way already; the Consultations tab 
 does not. Nothing needs to be added to the server, and in particular no price table — the server's
 refusal stands and this plan does not touch it.
 
+**And the rates have to REACH it, which is where this nearly failed.** `consultationsHtml` is called
+from `extension.ts:930` as `consultationsHtml(fresh)` — a `DbLog` and nothing else. A version of
+this change that added the arithmetic and left that call alone passes every unit test and ships the
+dash unchanged; it was built that way once and the re-read caught it. The pair it needs is already
+assembled a few lines away, in `PanelProvider.usageTab()`: `vendorsHere()` and
+`modelPrices(vendors)`. **The DoD below therefore asks for the assertion at the RENDERED TABLE, not
+at the function** — this repository's own rule that a picker is not an enforcement, one surface over.
+
 ## What ships
 
 | | |
@@ -73,13 +81,34 @@ refusal stands and this plan does not touch it.
 | `ConsultationRecord.Outcome` | `solved` / `not_solved` / `abandoned` / `lapsed` — the closed set below — beside the existing `Reason`, which keeps answering *why it stopped* |
 | the **How it ended** column | says the outcome when there is one, and stays honest when there is not |
 | the **Cost** column | `~$…` from `priceOfLine`, marked as an estimate, when the vendor reported no money |
-| a human close | the *Consultant* section's running-consultation card gets a close control, because an AI that has crashed or moved on will never call the verb |
+| a human close | the **log page's Consultations tab** gets the control — see below for why not the sidebar card |
 
 **The outcome is recorded by whoever knows it.** The AI that asked is the one that verified the
 advice — `consult`'s own instructions already say *"verify it, then report back on the same
 consultationId"* — so the verb is the primary path. The human control exists for the case the verb
 cannot cover: a session that ended without calling it, which is exactly the state the issue's own
 screenshot is in.
+
+**The human control goes in the LOG, not on the sidebar card** (operator decision, 2026-09-17). The
+first draft put it on the running-consultation card, and that was wrong twice over. The sidebar is
+PRESENT TENSE — the 2026-09-05 ruling that took finished rounds out of it — so a control about how
+something ENDED does not belong there. And it was unreachable for the case it exists for: the card
+shows only live consultations, so the moment one lapses it leaves the sidebar, and the state the
+issue's screenshot will be in within a day would have had no control at all. The log's Consultations
+tab already lists every consultation including the lapsed ones, and already carries a
+`[data-command]` delegate (`roundsLog.ts:1742`) that posts to `roundsLogPanel` exactly as
+`answer` and `usageWindow` do.
+
+**Which means the repository comes from the RECORD, not from the window.** The log lists
+consultations from every checkout a person has reviewed, so a close made from it must take the lock
+on the repository the consultation belongs to. Reading the first workspace folder would take a lock
+on whatever happens to be open and then refuse, or worse, lock something unrelated.
+
+**A close while a turn is RUNNING is refused** (operator decision, 2026-09-17). `asking` means a
+vendor is being asked right now; a close that landed then would be overwritten by that turn's own
+write a moment later, and the status would visibly flap from closed back to open. It is refused with
+a sentence naming the cure — *wait for the answer* — which is the same shape `ConsultationRules`
+already uses to refuse a follow-up on an `asking` record.
 
 ## The outcome — the closed set, who may write it, and what every path leaves
 
@@ -109,10 +138,14 @@ directory. That is a stronger trust position than another AI's, not a weaker one
 is not subject to the caller check — and the record says which door was used, so *the AI said it
 worked* is never confused with *a person marked it closed*.
 
-**An outcome is immutable once written.** A retry carrying the SAME outcome succeeds and rewrites
-nothing (the answer to a lost response); a different one is refused as a conflict and says so. The
-one permitted transition is filling an ABSENT outcome on a record the server closed — that is the
-human close of a lapsed consultation, which is exactly the state the issue's screenshot is in.
+**A VERDICT is immutable once written; the absence of one is not.** A retry carrying the same
+outcome succeeds and rewrites nothing (the answer to a lost response); a different verdict over a
+verdict is refused as a conflict and says which is on the record. What may still be answered is
+either form of "nobody decided": an EMPTY outcome, which is every record written before this field,
+and `lapsed`, which is the server saying the clock ran out rather than anybody's verdict. That is
+the whole point of the human close — the consultation in the issue's screenshot will be `lapsed`
+within a day, and a rule that treated the server's own word as a verdict would make it unclosable
+for ever.
 
 ## The panel cannot call an MCP tool — the bridge, named
 
@@ -164,14 +197,18 @@ Two rules the table exists to fix in advance, and the first is the one the first
 6. The human close in the *Consultant* section.
 7. **Teeth**: delete the absent-is-not-not_solved guard and watch the boundary test go red; remove
    the estimate's tilde and watch the cost test go red.
-8. The `--close-consult` one-shot mode, and the panel's outcome picker: the control opens a choice
-   of the three human outcomes with a confirm and a cancel, and reports the server's refusal — a
-   conflict, a stale record, a binary too old — rather than closing optimistically.
+8. The `--close-consult` one-shot mode, and the LOG's outcome picker: the control opens a choice of
+   the three human outcomes with a confirm and a cancel, passes the consultation's OWN repository
+   path, and reports the server's refusal — a conflict, a running turn, a stale record, a binary too
+   old — rather than closing optimistically.
 9. **The live counterpart check**, because no unit test can prove the two-sided claim: a script that
-   runs the PREVIOUS released server binary and the new extension's reader against one data
-   directory, asserting an old record parses with no outcome and its status intact, and that
-   `--close-consult` against the old binary fails the way the table says. `npm run test:claude-models`
-   is the precedent — hand-run, catalogued, not in CI.
+   runs the PREVIOUS released server binary and this build against one data directory, asserting that
+   the old binary refuses `--close-consult` with a sentence, that this build reads a record written
+   without the field, and — the one that matters most — that **the old binary can still read a
+   database this build has MIGRATED**, since a migration is one-way and a schema the un-updated half
+   cannot read strands a person until they update. It must resolve the release BEFORE the newest, or
+   once this ships it compares the build against itself and reports a boundary it never tested.
+   `npm run test:claude-models` is the precedent — hand-run, catalogued, not in CI.
 10. `cd src_vs_code && npm run clean && npm run compile && npm test` — the repository's own
    platform-safe scripts, rather than a shell `rm -rf`; then the server suite; then
    `node .agents/conventions/tools/plan-lifecycle.mjs`.
@@ -208,7 +245,13 @@ Two rules the table exists to fix in advance, and the first is the one the first
 - [ ] A RED test observed failing before each half, naming the real symptom.
 - [ ] A `closed` record with no outcome never reads as `not_solved` — asserted, and proved by breaking it.
 - [ ] A consultation whose vendor reported no money shows a marked estimate when a rate exists, the
-      real money unmarked when the vendor reported one, and the dash when there is neither.
+      real money unmarked when the vendor reported one, and the dash when there is neither — asserted
+      on the TABLE AS THE PRODUCT BUILDS IT, not only on the function, because a decision nobody calls
+      passes every test and ships the symptom.
+- [ ] The close control is in the log's Consultations tab, reaches a LAPSED consultation, and is
+      absent from the sidebar card, which stays present tense.
+- [ ] A close while a turn is running is refused with a sentence naming the cure.
+- [ ] The close uses the consultation's OWN repository path, not the window's first folder.
 - [ ] An absent outcome renders as a dash and leaves the STATUS untouched — asserted for an `open`
       record and a `closed` one, and proved by breaking it.
 - [ ] A repeat of the same outcome succeeds; a different one is refused as a conflict; a person may

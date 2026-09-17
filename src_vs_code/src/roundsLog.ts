@@ -1007,11 +1007,19 @@ export function consultationsHtml(
   /**
    * The reviewer rows and the published price lists, so a consultation whose vendor printed no money
    * can still be priced — the two inputs `priceOfLine` already takes for every round and every
-   * conversation in the ledger. Optional because a fixture has neither and the column then says what
-   * it always said: a dash. (issue #309.)
+   * conversation in the ledger.
    */
-  vendors: readonly Vendor[] = [],
-  listed: PriceLookup = () => undefined,
+  vendors: readonly Vendor[],
+  /**
+   * REQUIRED, both of them, and that is the fix rather than a style.
+   *
+   * <p>They were optional with empty defaults, and the result was a table that computed nothing:
+   * `extension.ts` called `consultationsHtml(fresh)`, every unit test passed by calling the
+   * arithmetic directly, and the product went on showing the dash this change exists to remove. A
+   * decision nobody calls is the defect this repository already has a rule about. With no default
+   * there is no way to build this table without saying what it costs. (issue #309, the review pass.)</p>
+   */
+  listed: PriceLookup,
 ): string {
   if (log.consultations.length === 0) {
     return '<div class="empty">No consultations yet. One happens when a stuck AI calls <code>consult</code> —'
@@ -1024,7 +1032,7 @@ export function consultationsHtml(
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
     <td><span class="badge ${badgeOf(one.status)}">${escapeHtml(one.status)}</span>${one.reason.length > 0 ? ` <span class="decided" title="${escapeHtml(one.reason)}">why…</span>` : ''}</td>
-    <td>${escapeHtml(outcomeSaid(one.outcome))}</td>
+    <td>${escapeHtml(outcomeSaid(one.outcome))}${closeControl(one)}</td>
     ${costCell(one, vendors, listed)}
     <td class="what">${escapeHtml(one.problem)}</td>
     <td class="what">${escapeHtml(one.advice)}</td>
@@ -1043,6 +1051,30 @@ export function consultationsHtml(
     <th>How it ended</th><th>Outcome</th><th class="num">Tokens</th><th class="num">Cost</th>
     <th>What was stuck</th><th>What was advised</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * The control that records how a consultation ended, for the rows that have no verdict yet.
+ *
+ * <p>HERE rather than on the sidebar card, which is where it was first built. The sidebar is present
+ * tense, and a control about how something ENDED does not belong in it — but the deciding reason is
+ * that the card shows only LIVE consultations, so the moment one lapses it leaves the sidebar and
+ * takes the control with it. The state the issue's own screenshot will be in within a day would have
+ * had no control at all. (Operator decision, 2026-09-17.)</p>
+ *
+ * <p>Offered for an empty outcome and for `lapsed`, which are the two ways of saying nobody decided,
+ * and withheld once somebody has: a verdict is not rewritten, so a control promising to is a control
+ * that will be refused. A FAILED consultation produced no advice, so there is nothing to have a
+ * verdict about.</p>
+ */
+function closeControl(one: DbConsultation): string {
+  const decided = one.outcome !== undefined && one.outcome.length > 0 && one.outcome !== 'lapsed';
+  if (decided || one.status === 'failed') {
+    return '';
+  }
+
+  return ` <button type="button" class="decided" data-command="closeConsultation" data-id="${escapeHtml(one.id)}"
+    title="Record how this consultation ended">record…</button>`;
 }
 
 /**

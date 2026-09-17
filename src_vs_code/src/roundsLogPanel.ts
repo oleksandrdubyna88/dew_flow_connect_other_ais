@@ -14,6 +14,8 @@ export interface RoundsLogHooks {
   readonly onUsageWindow: (window: string) => Promise<void>;
   /** ✕ beside a vendor on the spending tab. */
   readonly onForget: (provider: string) => Promise<void>;
+  /** Record how a consultation ended — the log is where every one of them is, lapsed included. */
+  readonly onCloseConsultation: (id: string) => Promise<void>;
   /** The ✕ beside a CHAT row on the spending tab — a vendor and a model, not a vendor. */
   readonly onForgetChat: (provider: string, model: string) => Promise<void>;
   /**
@@ -205,6 +207,9 @@ export class RoundsLogPanel {
     }
     if (command.kind === 'usageWindow') {
       void this.hooks.onUsageWindow(command.window);
+    }
+    if (command.kind === 'closeConsultation') {
+      void this.hooks.onCloseConsultation(command.id);
     }
     if (command.kind === 'forget') {
       void this.hooks.onForget(command.provider);

@@ -50,6 +50,8 @@ export type LogCommand =
   | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
   | { readonly kind: 'forget'; readonly provider: string }
+  /** Record how a consultation ended. The id is the consultation, not a round. */
+  | { readonly kind: 'closeConsultation'; readonly id: string }
   /** One CHAT row, which is a vendor AND a model — one id cannot name the pair. */
   | { readonly kind: 'forgetChat'; readonly provider: string; readonly model: string }
   | {
@@ -144,6 +146,8 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return { kind: 'answer', id };
     case 'usageWindow':
       return { kind: 'usageWindow', window: id };
+    case 'closeConsultation':
+      return { kind: 'closeConsultation', id };
     case 'forgetUsage':
       return { kind: 'forget', provider: id };
     case 'forgetChat':

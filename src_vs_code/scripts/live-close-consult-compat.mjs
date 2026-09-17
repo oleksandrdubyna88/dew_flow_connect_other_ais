@@ -88,7 +88,10 @@ function oldServer(into) {
     return '';
   }
   const tags = JSON.parse(listed.stdout).map((one) => one.tagName).filter((one) => one.startsWith('mcp-v'));
-  const tag = tags[0];
+  // The release BEFORE the newest. Taking the newest would, the moment this change ships,
+  // compare the build against ITSELF and report a boundary that was never tested — the docblock
+  // said "before" from the start and the code did not. (The review pass, 2026-09-17.)
+  const tag = tags.length > 1 ? tags[1] : tags[0];
   if (tag === undefined) {
     return '';
   }

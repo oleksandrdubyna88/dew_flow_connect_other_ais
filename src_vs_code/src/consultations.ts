@@ -191,8 +191,6 @@ function card(consultation: Consultation, nowMs: number): string {
   <div class="line branch">${escapeHtml(consultation.branch)}</div>
   <div class="line"><span class="badge ${badgeClass(consultation.status)}">${escapeHtml(label(consultation.status))}</span> · ${escapeHtml(budget)}</div>
   <div class="usage">${escapeHtml(age(consultation, nowMs))}${spent.tokens > 0 ? ` · ${escapeHtml(shortNumber(spent.tokens))} tokens` : ''}</div>
-  <div class="line"><button class="link" data-command="closeConsultation" data-id="${escapeHtml(consultation.id)}"
-          title="Record how this consultation ended — the AI that asked may never come back to say">End this consultation…</button></div>
 ${alertLine(consultation)}${note(consultation.status)}</div>`;
 }
 
