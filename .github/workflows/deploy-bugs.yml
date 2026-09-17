@@ -15,8 +15,14 @@ name: deploy the ingest server
 #
 # As with the Team server, this workflow does NOT swap symlinks, keep a trail or decide that a
 # deployment is healthy — `deploy/bugs/release.sh` on the host owns all of that. This file checks
-# the request, puts the PUBLISHED artefact on the host, runs that script, and proves afterwards
-# that the version answering the internet is the one that was asked for.
+# the request, puts the PUBLISHED artefact on the host, runs that script, and then asks the edge
+# whether it answers.
+#
+# It does NOT establish which VERSION is answering, and this comment used to say it did. `/health`
+# carries no version on purpose: it is unauthenticated and faces the public internet, so a build
+# banner there would tell anybody which release is running. Which release is serving is settled on
+# the host, by the canary in `release.sh`, after the symlink swap and the restart — where that
+# information already is.
 #
 # Dispatch rather than `on: release`: cutting a release and choosing to interrupt a live service
 # are the same person's decisions, but they are not the same decision.
@@ -120,12 +126,14 @@ jobs:
         run: |
           set -uo pipefail
 
-          # The FIRST and LAST lines only. Those are `-----BEGIN OPENSSH PRIVATE KEY-----` and its
-          # END, which are not secret and are exactly what a truncated paste loses. The body is
-          # never printed and the line count is a number, not a key.
-          echo "first line: $(head -1 ~/.ssh/id_bugs)"
-          echo "last line:  $(tail -1 ~/.ssh/id_bugs)"
-          echo "lines:      $(wc -l < ~/.ssh/id_bugs)"
+          # The LINE COUNT, and deliberately nothing else about the file.
+          #
+          # This step first printed the BEGIN and END lines too, on the reasoning that they are not
+          # secret and are exactly what a truncated paste loses. Both came back as `***`: the
+          # runner masks any substring of a secret's value, and those lines are part of it. So the
+          # idea cannot work, and the count is what survives — an unencrypted ed25519 key is 7
+          # lines, an encrypted one is longer, and a truncated paste is shorter than either.
+          echo "the key has $(wc -l < ~/.ssh/id_bugs) lines"
 
           # `-P ''` supplies an EMPTY passphrase rather than leaving ssh-keygen to ask for one,
           # which is what separates the two causes: an encrypted key answers "incorrect passphrase"
@@ -145,8 +153,9 @@ jobs:
             echo "::error::public half in the host's authorized_keys."
           else
             echo "::error::BUGS_DEPLOY_KEY could not be read as an OpenSSH private key: truncated,"
-            echo "::error::re-wrapped, or the wrong kind of value. Compare the two lines printed above"
-            echo "::error::with the file on disk and re-paste the WHOLE of it, BEGIN and END included."
+            echo "::error::re-wrapped, or the wrong kind of value. An unencrypted ed25519 key is 7"
+            echo "::error::lines; compare that with the count above and re-paste the WHOLE file,"
+            echo "::error::BEGIN and END lines and the trailing newline included."
           fi
           # What ssh-keygen itself said, which names neither the key nor any part of it.
           sed 's#/home/[^ ]*/id_bugs#<the key>#g' /tmp/keyerr

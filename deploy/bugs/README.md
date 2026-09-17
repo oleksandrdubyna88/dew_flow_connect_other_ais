@@ -230,12 +230,28 @@ install -m 0755 -o root -g root /opt/coai-bugs/src/deploy/bugs/install-env.sh \
 
 # The deploy account may restart this one unit, and run that one helper with NO arguments. The
 # trailing "" is what says "no arguments": a sudoers command with no argument spec permits any.
+#
+# `/usr/bin/systemctl`, NOT `/bin/systemctl`. sudo matches the command by the path it resolves
+# through `secure_path`, and that is `/usr/bin/systemctl`; `/bin` is a symlink to `/usr/bin` on a
+# usrmerge system but sudo compares the path it was given, so a rule naming `/bin/systemctl`
+# matches nothing and every `systemctl` call in `release.sh` is refused. The first host to run
+# these notes had the `/usr/bin` spelling because it was corrected by hand, and the notes still
+# carried the one that does not work.
+#
+# `is-active --quiet` IS A SEPARATE ENTRY, and must be. sudoers matches arguments exactly, and
+# `release.sh`'s canary asks `$SYSTEMCTL is-active --quiet "$SERVICE"` — an entry for
+# `systemctl is-active coai-bugs` does not authorise it. Without this line the canary's
+# "did the unit stop during the canary" check is refused by sudo on every deploy.
 cat > /etc/sudoers.d/coai-bugs-deploy <<'SUDO'
-coai-bugs-deploy ALL=(root) NOPASSWD: /bin/systemctl restart coai-bugs, /bin/systemctl stop coai-bugs, /bin/systemctl is-active coai-bugs
+coai-bugs-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart coai-bugs, /usr/bin/systemctl stop coai-bugs, /usr/bin/systemctl is-active coai-bugs, /usr/bin/systemctl is-active --quiet coai-bugs
 coai-bugs-deploy ALL=(root) NOPASSWD: /usr/local/sbin/coai-bugs-install-env ""
 SUDO
 chmod 0440 /etc/sudoers.d/coai-bugs-deploy
 visudo -cf /etc/sudoers.d/coai-bugs-deploy   # a bad drop-in locks sudo for everybody
+
+# Read back what the account may ACTUALLY do, rather than what the file says it may do. This is
+# the check that would have caught both corrections above on the day they were written.
+sudo -u coai-bugs-deploy sudo -n -l
 
 mkdir -p ~coai-bugs-deploy/.ssh && chmod 700 ~coai-bugs-deploy/.ssh
 # paste the authorized_keys line above, with the PUBLIC half of BUGS_DEPLOY_KEY
