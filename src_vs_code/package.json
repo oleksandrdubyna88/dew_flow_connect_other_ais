@@ -148,6 +148,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.setBugsContributorKey",
+        "title": "Set the bugs contributor key",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.editChatPresets",
         "title": "Edit chat presets",
         "category": "ConnectOtherAIs"

@@ -3,10 +3,12 @@ import { test } from 'node:test';
 
 import {
   ADMIN_KEY,
+  CONTRIBUTOR_KEY,
   ISSUANCE_ATTEMPT,
   PENDING_ISSUANCE,
   Secrets,
   adminKey,
+  contributorKey,
   beginIssuance,
   endIssuance,
   holdIssuance,
@@ -14,6 +16,7 @@ import {
   pendingIssuance,
   releaseIssuance,
   setAdminKey,
+  setContributorKey,
 } from '../bugsAdminKey';
 
 /**
@@ -224,4 +227,55 @@ test('clearing the admin key leaves a pending issuance alone', async () => {
     issued,
     'the key that nobody copied is the one thing that must not be lost by tidying up',
   );
+});
+
+/**
+ * The CONTRIBUTOR key, which is a different credential from the admin one.
+ *
+ * <p>Kept apart deliberately: one issues and revokes keys, the other uploads this machine's own
+ * pairs, and a person who holds both must be able to remove either without touching the other. They
+ * share a module because they share a rule — `settings.json` syncs, and a credential that follows
+ * somebody to another machine is one nobody can account for.</p>
+ */
+test('the contributor key is stored, read back, and lives apart from the admin key', async () => {
+  const store = new Store();
+
+  await setContributorKey(store, 'contributor-key');
+  await setAdminKey(store, 'admin-key');
+
+  assert.equal(await contributorKey(store), 'contributor-key');
+  assert.equal(await adminKey(store), 'admin-key');
+  assert.equal(store.raw(CONTRIBUTOR_KEY), 'contributor-key');
+  assert.notEqual(CONTRIBUTOR_KEY, ADMIN_KEY, 'one box for both would be one key for both');
+});
+
+test('clearing the contributor key removes it rather than storing an empty one', async () => {
+  const store = new Store();
+  await setContributorKey(store, 'contributor-key');
+
+  await setContributorKey(store, '   ');
+
+  assert.equal(await contributorKey(store), '');
+  assert.equal(store.raw(CONTRIBUTOR_KEY), undefined,
+    'an empty value that READS as set is a key that refuses every request and says nothing');
+  assert.ok(store.writes.includes(`delete ${CONTRIBUTOR_KEY}`));
+});
+
+test('removing one credential leaves the other alone', async () => {
+  const store = new Store();
+  await setContributorKey(store, 'contributor-key');
+  await setAdminKey(store, 'admin-key');
+
+  await setAdminKey(store, '');
+
+  assert.equal(await adminKey(store), '');
+  assert.equal(await contributorKey(store), 'contributor-key', 'they are two credentials');
+});
+
+test('a key with spaces around it is stored trimmed, because a pasted key usually has one', async () => {
+  const store = new Store();
+
+  await setContributorKey(store, '  contributor-key\n');
+
+  assert.equal(await contributorKey(store), 'contributor-key');
 });

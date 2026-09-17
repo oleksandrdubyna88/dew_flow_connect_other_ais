@@ -871,6 +871,121 @@ public sealed class RoundsDb : IDisposable
     /// <remarks>Through <see cref="CollectRuns"/>, which is the one place this query lives.</remarks>
     public CollectRunRow LastCollectRun() => CollectRuns.Last(_db);
 
+    /// <summary>How long a send may go without a beat before it is presumed gone.</summary>
+    /// <remarks>
+    /// Shorter than the collector's, because a send is bounded by a network request rather than by a
+    /// model: a run with nothing to say for ten minutes is a run whose process is not there. A laptop
+    /// that slept through the middle of one is swept and simply offered the same pairs again — the
+    /// server is idempotent on the derived pair id, so nothing is lost by being wrong in this
+    /// direction, and a button stuck on "Sending…" for ever is what being wrong in the other costs.
+    /// </remarks>
+    public static readonly TimeSpan SendPresumedGoneAfter = TimeSpan.FromMinutes(10);
+
+    /// <summary>Opens the send, before the first request leaves.</summary>
+    /// <remarks>
+    /// Before, not after: one write at the finish is the shape that cannot represent <i>sending</i>,
+    /// and a panel whose whole job is to say what is happening needs that state to exist while it
+    /// happens. The pairs cannot carry it — they are marked only on an acknowledgement — which is
+    /// exactly why this table exists. (Plan round, all three reviewers.)
+    /// </remarks>
+    public void StartUploadRun(string runId, string server, int offered)
+    {
+        var now = Now();
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            INSERT INTO upload_runs (id, started_utc, heartbeat_utc, state, server, offered)
+            VALUES ($id, $now, $now, 'running', $server, $offered)
+            ON CONFLICT(id) DO NOTHING
+            """;
+        Bind(write, "$id", runId);
+        Bind(write, "$now", now);
+        Bind(write, "$server", server);
+        Bind(write, "$offered", offered);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>The send is alive, and this is how far it has got.</summary>
+    /// <remarks>
+    /// A beat is PROOF OF LIFE, so it takes a swept run back — a machine that slept longer than the
+    /// cutoff is a send that was never gone. Only a FINISHED send is out of reach, which the
+    /// <c>finished_utc = ''</c> guard is for; the collector's beat carries the same line for the
+    /// same reason.
+    /// </remarks>
+    public void BeatUploadRun(string runId, int offered, int sent, int duplicate, int refused)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE upload_runs
+               SET heartbeat_utc = $now, state = 'running', offered = $offered,
+                   sent = $sent, duplicate = $duplicate, refused = $refused
+             WHERE id = $id AND finished_utc = ''
+            """;
+        Bind(write, "$now", Now());
+        Bind(write, "$id", runId);
+        Bind(write, "$offered", offered);
+        Bind(write, "$sent", sent);
+        Bind(write, "$duplicate", duplicate);
+        Bind(write, "$refused", refused);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>The send is over, and this is what it came to.</summary>
+    /// <remarks>
+    /// <paramref name="trouble"/> is the CLI's own sentence rather than a flag, because the panel has
+    /// to render it: "the server answered 502" sends a person somewhere and "failed" sends them
+    /// nowhere.
+    /// </remarks>
+    public void EndUploadRun(
+        string runId, string state, int offered, int sent, int duplicate, int refused, string trouble)
+    {
+        var now = Now();
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE upload_runs
+               SET heartbeat_utc = $now, finished_utc = $now, state = $state, offered = $offered,
+                   sent = $sent, duplicate = $duplicate, refused = $refused, trouble = $trouble
+             WHERE id = $id
+            """;
+        Bind(write, "$now", now);
+        Bind(write, "$id", runId);
+        Bind(write, "$offered", offered);
+        Bind(write, "$state", state);
+        Bind(write, "$sent", sent);
+        Bind(write, "$duplicate", duplicate);
+        Bind(write, "$refused", refused);
+        Bind(write, "$trouble", trouble);
+        write.ExecuteNonQuery();
+    }
+
+    /// <summary>Ends the sends whose owner stopped saying it was alive.</summary>
+    /// <remarks>
+    /// Marked, never deleted, and only a STALE one — the same two rules
+    /// <see cref="SweepStaleCollectRuns"/> carries, and for the same reasons: the panel reaches this
+    /// database through one-shot invocations, so a sweep that took every unfinished row would end
+    /// the send that is happening right now, from the process asked to display it.
+    /// </remarks>
+    /// <returns>How many sends were ended.</returns>
+    public int SweepAbandonedUploads() => SweepAbandonedUploads(SendPresumedGoneAfter);
+
+    /// <summary>The same sweep, with the cutoff named — which is what a test can drive.</summary>
+    public int SweepAbandonedUploads(TimeSpan staleAfter)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE upload_runs
+               SET state = 'interrupted', finished_utc = $now
+             WHERE state = 'running' AND heartbeat_utc < $cutoff
+            """;
+        Bind(write, "$now", Now());
+        Bind(write, "$cutoff", _time.GetUtcNow().UtcDateTime.Subtract(staleAfter).ToString("O"));
+
+        return write.ExecuteNonQuery();
+    }
+
+    /// <summary>The most recent send, or an empty row when none has ever started.</summary>
+    /// <remarks>Through <see cref="UploadRuns"/>, which is the one place this query lives.</remarks>
+    public UploadRunRow LastUploadRun() => UploadRuns.Last(_db);
+
     private string Now() => _time.GetUtcNow().UtcDateTime.ToString("O");
 
     private static void Bind(SqliteCommand command, string name, object value) =>

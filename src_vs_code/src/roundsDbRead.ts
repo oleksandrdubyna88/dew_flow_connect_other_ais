@@ -315,6 +315,28 @@ export function serverRun(executable: string, stop?: () => boolean): Run {
 }
 
 /**
+ * The spawn a SEND goes through, and the only one that carries a credential.
+ *
+ * <p><b>Named rather than a parameter on {@link serverRun}.</b> A generic "extra environment" would
+ * be a door any caller could put anything through, and the thing being carried here is a contributor
+ * key: the plan round's objection was that the specific context is lost in a generic signature, and
+ * it was right. This function exists so that the answer to "what can put a credential into a child
+ * process" is one grep with one result.</p>
+ *
+ * <p><b>The key is never an argument.</b> An argument is in process listings, in `/proc`, and in a
+ * shell history; `coai-mcp` refuses `--key` outright for that reason and reads `COAI_BUGS_KEY`
+ * instead. It is never written to a file either — `--key-file` exists, and it would mean writing a
+ * credential to disk to avoid memory it is already in, with a cleanup a crash skips.</p>
+ *
+ * <p>{@link serverEnv} still decides the data directory, so a send reads the same database the
+ * section shows.</p>
+ */
+export function uploadRun(executable: string, key: string): Run {
+  return (args, capMs) =>
+    capture(executable, [...args], false, capMs, undefined, { ...serverEnv(), COAI_BUGS_KEY: key });
+}
+
+/**
  * The same spawn, asked about a directory this window is NOT pointed at.
  *
  * <p>The one legitimate reason to want that, and it has one caller: verifying a move. The copy has

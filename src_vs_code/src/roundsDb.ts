@@ -485,6 +485,33 @@ export interface CollectRun {
   readonly reasons: string;
 }
 
+/**
+ * One SEND, as `--bugs-json` reports it.
+ *
+ * <p>It exists because the funnel cannot answer "is a send happening". A pair is marked sent only on
+ * the server's acknowledgement — the rule that makes a killed upload safe to retry — so for the whole
+ * of a multi-minute run the counts say exactly what they said before it started. A panel reading them
+ * shows an idle button, a reload shows an idle button, and a second Send starts a second process
+ * against the same waiting pairs. (Plan round, all three reviewers.)</p>
+ *
+ * <p>An empty {@link id} means NO SEND HAS EVER HAPPENED here, and an older server emits no
+ * `lastSend` key at all — {@link parseBugs} maps that absence onto this same empty shape.</p>
+ */
+export interface SendRun {
+  readonly id: string;
+  readonly startedUtc: string;
+  readonly finishedUtc: string;
+  readonly state: string;
+  readonly server: string;
+  readonly offered: number;
+  readonly sent: number;
+  /** How many the server ALREADY HELD. A success, and not the same one as {@link sent}. */
+  readonly duplicate: number;
+  readonly refused: number;
+  /** The CLI's own sentence when a run could not finish. Empty when nothing went wrong. */
+  readonly trouble: string;
+}
+
 /** How far the filter narrows, step by step — the only readable form of a skip rate. */
 export interface BugFunnel {
   readonly all: number;
@@ -502,6 +529,8 @@ export interface BugFunnel {
 export interface BugCorpus {
   readonly funnel: BugFunnel;
   readonly lastRun: CollectRun;
+  /** The most recent send, or the empty shape when none has ever happened. */
+  readonly lastSend: SendRun;
   /**
    * The vendors THIS server will accept for a ranking pass.
    *
@@ -529,13 +558,41 @@ const NO_RUN: CollectRun = {
   reasons: '',
 };
 
+const NO_SEND: SendRun = {
+  id: '',
+  startedUtc: '',
+  finishedUtc: '',
+  state: '',
+  server: '',
+  offered: 0,
+  sent: 0,
+  duplicate: 0,
+  refused: 0,
+  trouble: '',
+};
+
 const NO_FUNNEL: BugFunnel = {
   all: 0, onCode: 0, accepted: 0, gating: 0, runtime: 0, located: 0, unprocessed: 0, collected: 0,
 };
 
 /** Nothing known — which the section renders as "not asked yet", not as "no material". */
 export const EMPTY_CORPUS: BugCorpus =
-  { funnel: NO_FUNNEL, lastRun: NO_RUN, rankingVendors: [], read: false };
+  { funnel: NO_FUNNEL, lastRun: NO_RUN, lastSend: NO_SEND, rankingVendors: [], read: false };
+
+/**
+ * The states that mean a send is over, spelled the way the server writes them.
+ *
+ * <p>ENDINGS rather than beginnings, and everything is read against it: a state this build has never
+ * heard of is treated as STILL GOING, because the cost of a stale line is a stale line and the cost
+ * of declaring a live send finished is a second process sending the same pairs. `UploadRunState` in
+ * the server carries the same list for the same reason.</p>
+ */
+const SEND_IS_OVER: readonly string[] = ['done', 'failed', 'interrupted'];
+
+/** Whether a send is happening — what the Send button is disabled by, across a reload. */
+export function sending(send: SendRun): boolean {
+  return send.id.length > 0 && !SEND_IS_OVER.includes(send.state);
+}
 
 /** Whether a run is happening — what the Collect button is disabled by. */
 /**
@@ -574,6 +631,9 @@ export function parseBugs(text: string): BugCorpus {
       funnel: { ...NO_FUNNEL, ...raw.funnel },
       // An absent `lastRun` is an older server, and it means the same thing an empty id means.
       lastRun: { ...NO_RUN, ...(raw.lastRun ?? {}) },
+      // And an absent `lastSend` is a server from before sends were recorded at all: no send, which
+      // is what an empty id means too.
+      lastSend: { ...NO_SEND, ...(raw.lastSend ?? {}) },
       // Absent means a server too old to say, NOT a server that allows nothing — the difference
       // decides whether the picker falls back to its own list or offers nothing at all.
       rankingVendors: Array.isArray(raw.rankingVendors) ? raw.rankingVendors : [],

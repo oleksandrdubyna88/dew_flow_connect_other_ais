@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
+import { setContributorKey } from './bugsAdminKey';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -387,6 +388,22 @@ export function activate(context: vscode.ExtensionContext): void {
         context.secrets,
         () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
       ).askForKey();
+    }),
+    // The CONTRIBUTOR key — what this machine sends its own pairs with, and a different credential
+    // from the admin one: one issues and revokes, the other uploads, and a person who holds both
+    // must be able to remove either. A command as well as a button for the reason the admin key has
+    // one: a door that exists only behind the thing it unlocks is not a door.
+    vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
+      const typed = await vscode.window.showInputBox({
+        title: 'The contributor key for the ingest server',
+        prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (typed !== undefined) {
+        await setContributorKey(context.secrets, typed);
+        await panel.render();
+      }
     }),
     vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side

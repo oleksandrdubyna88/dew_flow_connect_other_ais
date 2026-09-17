@@ -31,6 +31,16 @@
 
 /** The three things this extension keeps for the bugs admin surface. */
 export const ADMIN_KEY = 'coai.bugs.adminKey';
+
+/**
+ * The CONTRIBUTOR key — what this machine sends its own pairs with.
+ *
+ * <p>A different credential from the admin key and kept apart from it on purpose: one issues and
+ * revokes, the other uploads, and a person who holds both should be able to remove either. Same
+ * storage for the same reason — `settings.json` syncs, and a key that follows somebody to another
+ * machine is a key nobody can account for.</p>
+ */
+export const CONTRIBUTOR_KEY = 'coai.bugs.contributorKey';
 export const PENDING_ISSUANCE = 'coai.bugs.pendingIssuance';
 export const ISSUANCE_ATTEMPT = 'coai.bugs.issuanceAttempt';
 
@@ -77,14 +87,35 @@ export async function adminKey(secrets: Secrets): Promise<string> {
 
 /** Sets it. An empty value CLEARS it rather than storing nothing under a key that then reads as set. */
 export async function setAdminKey(secrets: Secrets, key: string): Promise<void> {
+  await put(secrets, ADMIN_KEY, key);
+}
+
+/** The contributor key, or empty when none has been set. */
+export async function contributorKey(secrets: Secrets): Promise<string> {
+  return (await secrets.get(CONTRIBUTOR_KEY)) ?? '';
+}
+
+/** Sets it, with the same clear-on-empty rule the admin key has. */
+export async function setContributorKey(secrets: Secrets, key: string): Promise<void> {
+  await put(secrets, CONTRIBUTOR_KEY, key);
+}
+
+/**
+ * Stores a credential, or removes it when what arrived is nothing.
+ *
+ * <p>The clear-on-empty rule in ONE place: storing `''` leaves a key that reads as SET and refuses
+ * every request, which is the worst of both — and it is the kind of rule that gets remembered at the
+ * first call site and forgotten at the second.</p>
+ */
+async function put(secrets: Secrets, name: string, key: string): Promise<void> {
   const trimmed = key.trim();
   if (trimmed.length === 0) {
-    await secrets.delete(ADMIN_KEY);
+    await secrets.delete(name);
 
     return;
   }
 
-  await secrets.store(ADMIN_KEY, trimmed);
+  await secrets.store(name, trimmed);
 }
 
 /**

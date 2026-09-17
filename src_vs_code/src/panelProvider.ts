@@ -58,7 +58,9 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, writeKeep } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { contributorKey, setContributorKey } from './bugsAdminKey';
+import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { usersPanel } from './bugsKeysPanel';
 import { BugzReviewPanel } from './bugzReviewPanel';
@@ -2118,6 +2120,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'setBugsServer':
         await this.setBugsServer();
         break;
+      case 'sendBugs':
+        await this.sendBugs();
+        break;
+      case 'setBugsKey':
+        await this.setBugsKey();
+        break;
       default: {
         // A PanelCommand with no case above lands here and fails to compile. That is the whole
         // guard: the Update button was posting a command nobody handled, and nothing said so.
@@ -2518,6 +2526,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private static readonly COLLECT_CAP_MS = 30 * 60_000;
 
   /**
+   * How long a send may take.
+   *
+   * <p>Shorter than a collection because it is bounded by a network request rather than by a model,
+   * and longer than one request because it is as many batches as it takes: two thousand pairs is ten
+   * of them, each with the CLI's own two-minute timeout. A cap is not a promise that anything is
+   * wrong at the end of it — the pairs are marked on acknowledgement, so a killed send is simply
+   * offered again.</p>
+   */
+  private static readonly SEND_CAP_MS = 30 * 60_000;
+
+  /**
    * How often the section is repainted while a collection runs.
    *
    * <p>Three seconds. Each tick is a process spawn reading a database, so this is not free — but a
@@ -2820,6 +2839,99 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       this.context.secrets,
       () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
     ).show();
+  }
+
+  /**
+   * Sends what this machine has kept, through the real one-shot.
+   *
+   * <p><b>Everything is decided before the child exists.</b> `mayStart` reads the address, the key
+   * and the database's own send row, so an address a credential must not cross never has one put
+   * into a process environment — the CLI refuses it too, and that belt-and-braces is deliberate, but
+   * only this check runs before the key moves. (Plan round, codex.)</p>
+   *
+   * <p><b>And the key reaches the child through `uploadRun`</b>, the one door that carries a
+   * credential: never an argument, which is in `ps` and in a shell history, and never a file, which
+   * is a cleanup a crash skips.</p>
+   */
+  private async sendBugs(): Promise<void> {
+    const server = serverPath(this.context.globalStorageUri);
+    if (server === undefined) {
+      await notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'bugz',
+        code: 'server-not-installed-for-sending',
+        title: 'The MCP server is not installed yet, so there is nothing to send with.',
+      });
+
+      return;
+    }
+
+    const where = this.settings().bugzServer.trim();
+    const key = await contributorKey(this.context.secrets);
+    const refusal = mayStart({ server: where, key, corpus: this.bugzCache });
+    if (refusal !== undefined) {
+      await notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'bugz',
+        code: `send-refused-${refusal.kind}`,
+        title: refusal.why,
+      });
+
+      return;
+    }
+
+    await this.watchSend(uploadRun(server.fsPath, key)(
+      ['--upload-pairs', '--server', where], PanelProvider.SEND_CAP_MS));
+  }
+
+  /**
+   * Repaints while a send runs, and says what it came to when it stops.
+   *
+   * <p>The same poll `watchCollect` uses, and for the same reason: the writer is another PROCESS and
+   * the only channel between them is the database. What differs is the ending — a send has an
+   * outcome a person has to read, and every exit the CLI can answer has its own sentence, including
+   * the two that are about this machine rather than about the pairs.</p>
+   */
+  private async watchSend(sending: Promise<{ code: number; output: string }>): Promise<void> {
+    const answer = await sending;
+    await this.render();
+
+    // A send that WORKED is an outcome and a send that did not is a failure, which is the
+    // difference the funnel of notification classes is for: one is a thing that happened and the
+    // other is a thing to act on.
+    const outcome = outcomeOf(answer.code, answer.output);
+    const went = outcome.kind === 'sent' || outcome.kind === 'partly';
+    await notify({
+      as: went ? 'information' : 'warning',
+      class: went ? 'outcome' : 'failure',
+      source: 'bugz',
+      code: `send-${outcome.kind}`,
+      title: outcome.said,
+    });
+  }
+
+  /**
+   * Asks for the contributor key and stores it in the editor's secret storage.
+   *
+   * <p>Never `settings.json`: settings sync, and a credential that follows somebody to another
+   * machine is one nobody can account for. The same rule and the same storage as the admin key,
+   * which is why they share a module.</p>
+   */
+  private async setBugsKey(): Promise<void> {
+    const typed = await vscode.window.showInputBox({
+      title: 'The contributor key for the ingest server',
+      prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
+      password: true,
+      ignoreFocusOut: true,
+    });
+    if (typed === undefined) {
+      return;
+    }
+
+    await setContributorKey(this.context.secrets, typed);
+    await this.render();
   }
 
   private async setBugsServer(): Promise<void> {

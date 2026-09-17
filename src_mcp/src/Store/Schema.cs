@@ -32,6 +32,7 @@ internal static class Schema
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
+        TheSendsThemselves,
     ];
 
     internal const string Tables = """
@@ -334,6 +335,39 @@ internal static class Schema
     internal const string WhatWasSent = """
         ALTER TABLE collect_pairs ADD COLUMN sent_utc     TEXT NOT NULL DEFAULT '';
         ALTER TABLE collect_pairs ADD COLUMN send_refusal TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// A SEND, while it is happening — the state the pairs themselves cannot represent.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a run row and not the funnel.</b> A pair is marked sent only on the server's
+    /// acknowledgement, which is the right rule and the reason the funnel cannot answer "is a send
+    /// happening": for the whole of a multi-minute upload the counts say exactly what they said
+    /// before it started. A panel reading them shows an idle button, a reload shows an idle button,
+    /// and a second Send starts a second process against the same waiting pairs. Three plan
+    /// reviewers arrived at that independently.</para>
+    /// <para><b>The same shape as <c>collect_runs</c></b>, deliberately: opened before the first
+    /// request, a heartbeat that is proof of life rather than a process id — the data directory can
+    /// be a NAS, where a pid belongs to another machine — and a terminal state that a sweep can
+    /// reach when a run is abandoned.</para>
+    /// </remarks>
+    internal const string TheSendsThemselves = """
+        CREATE TABLE IF NOT EXISTS upload_runs (
+            id            TEXT PRIMARY KEY,
+            started_utc   TEXT NOT NULL,
+            finished_utc  TEXT NOT NULL DEFAULT '',
+            heartbeat_utc TEXT NOT NULL,
+            state         TEXT NOT NULL DEFAULT 'running',
+            server        TEXT NOT NULL DEFAULT '',
+            offered       INTEGER NOT NULL DEFAULT 0,
+            sent          INTEGER NOT NULL DEFAULT 0,
+            duplicate     INTEGER NOT NULL DEFAULT 0,
+            refused       INTEGER NOT NULL DEFAULT 0,
+            trouble       TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_upload_runs_started ON upload_runs(started_utc DESC);
         """;
 
     /// <summary>How a consultation ended, as against why it stopped.</summary>
