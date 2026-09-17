@@ -134,26 +134,30 @@ ever leaves.
 
 ## Server 0.27.1 — 2026-09-16
 
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the
+> time; this is what its commits say shipped, not what somebody wrote while shipping it. **The
+> versions 0.26.0 and 0.27.0 exist in the manifest and were never tagged**, so everything they were
+> given is here: this is one release carrying 29 commits, not a patch on two others.
 
-**A re-release, and nothing in the server changed.** `0.27.0` shipped from a release line that never checked out the rules it tests against, so the tag was cut again over the fix. If you are on 0.27.0 there is nothing here for you.
+**`coai-bugs` — the one thing that leaves the machine.** A small service that accepts a defect the
+collector found, keyed so a sender can be revoked, and quarantined until somebody promotes it. It
+stores a hash of its key rather than the key, checks an alphabet when it never saw the original, and
+refuses a model with exit 65 rather than 64 — because 64 means *never heard of that mode* and is how
+a caller detects an old binary. The review page that reads the corpus arrived with it, along with a
+ranking nobody trusts yet and a CSP nonce that is now actually random.
 
-## Server 0.27.0 — 2026-09-16
+**The collector finds the fix, or records why it could not.** Given an accepted finding it looks for
+the commit that answered it, and when it cannot it writes down the reason instead of dropping the
+pair. The runs themselves are visible, so a button can say what is happening rather than appearing
+to hang — and a beat is what proves one is alive, not a process id. The Bugz section of the panel
+arrived here, and a regex in it that had never been anonymised was.
 
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
+**The rules a round is judged against got one owner.** One tier, owned by production, a tail counted
+at any depth, and every stale copy of the claim corrected — including the record admitting that the
+rotated tail reaches nothing here yet.
 
-**`coai-bugs` — the one thing that leaves the machine.** A small service that accepts a defect the collector found, keyed so a sender can be revoked, and quarantined until somebody promotes it. It stores a hash of its key rather than the key, checks an alphabet when it never saw the original, and refuses a model with exit 65 rather than 64 — because 64 means *never heard of that mode* and is how a caller detects an old binary.
-
-The review page that reads the corpus arrived with it, along with a ranking nobody trusts yet and a CSP nonce that is now actually random.
-
-## Server 0.26.0 — 2026-09-16
-
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
-
-**The collector finds the fix, or records why it could not.** Given an accepted finding it looks for the commit that answered it, and when it cannot it writes down the reason instead of dropping the pair. The runs themselves are visible, so a button can say what is happening rather than appearing to hang.
-
-The Bugz section of the panel arrived here, and a regex in it that had never been anonymised was.
-
+**And the release line itself.** `0.27.0` was cut from a line that never checked out the rules it
+tests against; the fix is why this tag exists at all.
 ## Extension 0.47.0 — 2026-09-15
 
 **A chat row can be cleared from the spending chart, the way a reviewer's always could** (#298).
@@ -1391,20 +1395,6 @@ answers and the Stop — in English, Русский, Українська, Deuts
 with four translations quietly a version behind. The extension's README gained the section it never
 had: the chat was the one thing this extension does that the README did not mention.
 
-## Server 0.18.17 — 2026-09-10
-
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
-
-**One set of instructions for Claude Code and Codex.** The canonical rules are shared rather than copied, and the hook that loads them is addressed absolutely — so a session started outside the repository root still finds them.
-
-## Server 0.18.16 — 2026-09-10
-
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
-
-**A code round is a diff against the merge base, not against the tip of a base that moved.** While you were working, `main` moved; the round was reading that movement as part of your change. It now compares against the point you branched from.
-
-A role the round did not ask for is named where the AI can read it, with the reason it was omitted — rather than quietly missing from a panel that claimed a full one.
-
 ## Extension 0.31.21 — 2026-09-09
 
 **A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,
@@ -1564,12 +1554,6 @@ Windows means `codex.cmd`, which is not something a program can simply start: it
 could not be found* before a tab opens, instead of failing at the first question where it reads as
 the model refusing. And `codex` conversations are resumed by their own id rather than by "the last
 one" — which is the last one on the whole MACHINE, so two chat tabs would have answered each other.
-
-## Server 0.18.15 — 2026-09-09
-
-> Reconstructed on 2026-09-17 from the commit record. No notes were written for this release at the time; this is what its commits say shipped, not what somebody wrote while shipping it.
-
-**The log page asks for a page.** It used to read everything and count in memory; the counting is SQL's now, which is what it is for. A chat says what it is, and a job nobody polls stops holding an account open.
 
 ## Server 0.18.14 — 2026-09-09
 

@@ -81,12 +81,20 @@ jobs:
       # CHANGELOG.md at all. A refusal here costs nothing — no draft exists, no asset has been
       # uploaded, nothing is published — and the repair is to write the entry and push the tag again.
       #
-      # Why it exists, measured: 67 `mcp-v*` tags against 10 `## Server` entries, with thirteen
-      # consecutive releases carrying custom roles, `review_document`, the whole consultant and
-      # `coai-bugs`, and not one word written about any of them. The release body below is the same
-      # fixed sentence every time, so nothing else was ever going to say it.
+      # Why it exists, measured across all three heading shapes the file uses: 65 `mcp-v*` tags, 24
+      # of them documented and 41 with nothing — and eight consecutive releases carrying custom
+      # roles, `review_document`, the whole consultant and `coai-bugs` with not one word written
+      # about any of them. The release body below is the same fixed sentence every time, so nothing
+      # else was ever going to say it.
+      #
+      # The tag arrives as an ENVIRONMENT VARIABLE, not as `${{ ... }}` inside the command. A `${{ }}`
+      # expression is pasted into the shell source before bash parses it, and a git ref may contain
+      # `"`, `$`, `;` and a backtick — none of them on git's forbidden list — so an interpolated tag
+      # is executable text on a runner holding the release credentials.
       - name: The changelog names this release
-        run: node .github/scripts/changelog-names-the-release.mjs "${{ github.ref_name }}"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node .github/scripts/changelog-names-the-release.mjs "$RELEASE_TAG"
 
       - name: Create it, once
         env:
