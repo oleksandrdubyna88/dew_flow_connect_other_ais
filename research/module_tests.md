@@ -309,11 +309,20 @@ reply for it to order.
 | `TheRouteTests` | the REAL server in-process | the AOT JSON binding, the bearer header, the 401, the caps |
 | `OnlyThreeFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing |
 | `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
-| `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code |
+| `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code; the field's file not migrated; a 429 without its number; a revoke that stops nothing; two servers on one directory |
 | `TheEdgeIsWatchedTests` | the running server, reading what it LOGGED | a misconfigured edge going unnoticed; the address reaching a log |
 | `WhatTheArgumentsMeanTests` | the argument rules, in-process | 64 answered for a mode this binary has, or withheld for one it does not |
 | `TheKeywordListIsCheckedTests` | the startup guard | a binary that starts, passes the smoke, and refuses every pair |
 | `TheArchiveCheckTests` | the RELEASE's own shell, executed | an archive shipped without the executable, or without the library it dlopens |
+| `TheSchemaIsFrozenTests` | step 1 of `CorpusSchema` against a fixture copied from the RELEASED tree | step 1 edited after it shipped — two shapes under one version number |
+| `TheMigrationTests` | a file written by step 1 ONLY, at `user_version = 0` — the shape the host has | a column `IF NOT EXISTS` never adds; a second open re-running an `ALTER`; a concurrent opener failing instead of waiting |
+| `SqliteMigratorTests` (in `src_mcp/tests`) | the shared runner over a fresh and a part-way file | a step run twice; WAL or the busy timeout not set |
+| `TheLimitIsASettingTests` | `RatePerMinute.Parse` over every shape of the value | a clamp where a refusal is owed; a default or the off switch lost |
+| `TheRateLimiterTests` | the limiter on a frozen clock, and THREADS released by a barrier | a fixed bucket; an over-admit under a race; a stamp evicted from under an admit |
+| `TheLastSeenMonthTests` | the real server on a frozen clock, either side of a UTC month boundary | a day or an hour stored; the month moved by a 401, a 429, a 400 or an admin call; an increment lost to a race |
+| `TheRevokedKeyTests` | the real `--revoke` one-shot against the running server | the operator's stop button stopping nothing; a revoked key reaching the limiter |
+| `TheAuditTests` | `admin_audit` through `Issue`/`Revoke`, and the sweep over a small and the REAL bound | a note, a key or a hash in the audit; a sweep keeping the wrong rows; a mutation committed without its audit row |
+| `TheServeLockTests` | the exclusive open, and a one-shot beside it | two servers on one data directory; a one-shot locked out |
 
 **Why an HTTP suite when the decisions are already unit-tested.** `Ingest.Take` is pure and covered;
 the route is not part of it. The one that matters most is the AOT JSON binding — this repository has
@@ -376,9 +385,82 @@ moves into a workflow: a condition nothing executes is a condition nobody has re
 
 **It found two defects the first time it ran.** `coai-bugs --rotate-the-moon` started Kestrel and listened for ever instead of exiting 64 — the binary had no unknown-mode branch at all, which is the half of the exit-code rule that lets a caller detect an old binary. The test noticed after four minutes and fifty-seven seconds, which is how long it takes to see that a process nobody asked to start is still running.
 
+**The story-1 suites (2026-09-17): a schema that ships, a limit that is a setting, and a promise
+that changed shape.**
+
+`TheSchemaIsFrozenTests` exists because a freeze that compares a constant to itself is not a freeze.
+Step 1 of `CorpusSchema` is what `bugs-v0.1.0` (`f7e5170b`) shipped and what the first host's
+database contains at `user_version = 0`; the fixture under `fixtures/` is that SQL copied once, and
+the test holds the constant to it with line endings normalised and nothing else. A third test runs
+the fixture and asserts it produces the released tables and not step 2's, so the migration tests
+cannot be migrating an empty file.
+
+`TheMigrationTests` migrates the file the FIELD has, because a fresh file proves nothing: the
+fixture's tables, one key the old build issued, no version stamp. It lands on the current version
+with `last_seen_month` and `admin_audit`, the old key reads as never used and can be revoked, and a
+second open runs no second `ALTER`. Its last test holds a write lock on the file for two and a half
+seconds from a second connection and asserts the corpus's own write WAITS behind it rather than
+failing with `SQLITE_BUSY` — the wall-clock price of observing a wait at all, and the one test here
+that takes longer than a blink. `SqliteMigratorTests`, in the mcp suite, covers the shared runner
+itself: it was `RoundsDb.Migrate` with one test of its own (the step that fails part-way, still
+there), and it gained its contract when it became shared.
+
+`TheRateLimiterTests` races THREADS released by a barrier, not tasks: a race a scheduler may
+serialise proves nothing, and the finding it answers was eleven simultaneous requests all reading one
+window and all passing a limit of ten. Sixty-four against ten, twenty-five rounds, exactly ten
+admitted each round; and thirty-two admits against a sweep that wants to evict their idle window,
+every stamp kept. The rest is the sliding window on a frozen clock — a fixed bucket admits twice the
+limit across its boundary, and one test says so in as many words.
+
+`TheLastSeenMonthTests` asserts the STORED value against `LastSeenMonth.Shape()` and against the
+month the frozen clock said, one second before midnight on the 30th and at midnight on the 1st. The
+month is a promise about what the server records, so each way of not being an accepted ingest has a
+test: a 401, a 429 (thirty seconds into October, still inside September's minute), a malformed body,
+and the one-shots. Sixteen concurrent ingests count sixteen, because the counter is
+`submissions = submissions + 1` in SQL and the whole batch is one commit.
+
+`TheRevokedKeyTests` presses the real stop button — `Admin.Run(["--revoke", …])`, in-process,
+against the database the server holds — and asserts the ingest that worked before does not work
+after, wrote nothing and counted nothing; and that five requests on a revoked key are five 401s and
+never a 429, with the limiter tracking nobody, because the refusal happens before it.
+
+`TheAuditTests` pins the privacy boundary of the one table with a clock: `action` is a verb derived
+from the enum (never retyped), `target` is a key id, and no row carries the note, the key or its
+hash. The bound is crossed twice — over a small `keep` through the seam, where the surviving ids and
+targets are named, and over the REAL 50 000 from a seeded table, where two real issuances push the
+two oldest rows out. Dropping the audit table underneath `Issue` rolls the key back, which is the
+one-transaction claim made observable.
+
+`TheBuiltBinariesTests` gained the scenario this story needed most: unit tests can all pass while the
+deployed `/ingest` never invokes the limiter, because the middleware is wired wrong, and no in-process
+host can show a second PROCESS opening the database while the server holds it. So the database is
+written first exactly as the host has it, the real binary migrates it on start (asserted by reading
+`user_version` off the file), `--issue-key` and `--revoke` run as real concurrent openers, the month
+is read back through a third, the third request inside a minute at a limit of two is a 429 carrying
+`Retry-After` and the limit in its body, the revoked key is a 401, a second server on the same
+directory exits 78, and a rate of 1 001 exits 78.
+
+**Teeth, observed on 2026-09-17**, with the production side broken and then restored, six guards at
+once: step 1 with a column appended — *differ on line 31 and column 44*; the limiter's
+compare-and-swap replaced by a plain write — *Expected admitted to be 10 … but found 64*; the
+sweep's cutoff off by one — *found 6* over the small bound and *found 50001* over the real one; the
+revoked-key filter removed from `KeyFor` — *Expected … Unauthorized {value: 401} … but found
+HttpStatusCode.OK {value: 200}*; the busy budget cut to one millisecond — *SQLite Error 5:
+'database is locked'*. All six green again after the restore, and every failure named the defect
+rather than a setup error.
+
+**And one guard in the mcp suite caught this story's own documentation.**
+`StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` collects the REAL repository's
+instruction files and tier rules under the gate's 80 000-byte budget, which they fill to within
+1 145 bytes on a CRLF checkout. A kilobyte added to `.agents/PROJECT.md` for the new variable pushed
+a TIER rule out of every round's bundle, and the canary went red in the whole-suite run that
+started after that edit. The paragraph became one clause (+247 bytes) and the canary is green;
+the headroom itself is worth knowing about.
+
 **What these still do not prove.** The no-client-IP promise is a deployment fact — a reverse proxy
 writes `remote_addr` before the request reaches any route — and no test in this process can reach
-it. It is verified by reading the deployed stack's logs after a real ingest.
+it. It is verified by reading the deployed stack's logs after a real ingest. The unit's `UMask=0027`
+is likewise a request to systemd, read back with `stat` on the host rather than asserted here.
 
 ## The notification ledger's suites (2026-09-17)
 

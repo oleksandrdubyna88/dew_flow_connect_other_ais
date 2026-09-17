@@ -4,9 +4,11 @@ The one public thing in this repository. Anybody with a key may send anonymous b
 skeletons to it; it knows nothing about who they are, and keeping it that way is **half application
 and half this document**.
 
-> **Not deployed yet.** These are the notes the release was written against, not a record of a
-> machine. When the first host runs it, this file becomes the record and says so — the way
-> `deploy/README.md` does for the Team server.
+> **Deployed.** `bugs-v0.1.0` was released on 2026-09-16 and installed on the host on 2026-09-17,
+> so this file is the record of a machine now, the way `deploy/README.md` is for the Team server.
+> The database that binary created — `/opt/coai-bugs/data/coai-bugs.db`, its tables present and
+> `user_version = 0` — is the shape every later release migrates forward; step 1 of the schema is
+> frozen against it, and the first start of the next release stamps it and adds what is new.
 
 Same shape as the Team server, deliberately: **Native AOT under systemd, no container**, host nginx
 as the edge, host certbot for TLS. `deploy/README.md` explains why that host runs binaries rather
@@ -28,10 +30,24 @@ than images, and every reason applies here.
 
 ## What this server promises, and which half of it is code
 
+The promise is **scoped**, and it was rewritten on 2026-09-17 when the operator, offered the
+narrowest thing that answers "is this key alive", took the month:
+
+> **About a contributor**, the server records only the **month a key was last used** and how much it
+> has sent. It records no date, no clock time, no address, no name, and no history: there is no way
+> to ask which day a contributor worked, or at what hour, or what a key did in any month but its
+> last.
+>
+> **About administrators**, the server records exact times: when a key was issued, when it was
+> revoked, and who did it. That is a log about the people holding administrative power, not about
+> the people contributing.
+
 | Promise | Kept by |
 |---|---|
-| A key carries no identity — no name, no address, no `last_seen_utc` | **Code.** The schema has no column for any of them. |
-| `submissions` counts without a clock | **Code.** With timestamps it is a record of when a person was working. |
+| A key carries no identity — no name, no address | **Code.** The schema has no column for either. |
+| Of WHEN a key was used, only the calendar month (`last_seen_month`, `yyyy-MM`, UTC) — never a day or an hour | **Code.** The column is typed as a month; nothing can write a finer value into it, and it moves only on an accepted ingest. |
+| `submissions` is a lifetime count | **Code.** It is not a rate limit; the limit is per key, in memory, and below. |
+| `admin_audit` names administrators, actions and key ids — never a note, a key or a hash | **Code.** A test pins what its two text columns may hold. |
 | The route reads no client address | **Code.** `HttpRequest` is taken for its headers and nothing else. |
 | No request-logging middleware is registered | **Code.** `UseSerilogRequestLogging` is deliberately not wired. |
 | **No client address is recorded anywhere** | **THIS DOCUMENT.** See *The edge*. |
@@ -124,6 +140,7 @@ never arguments, because an argument is in process listings and shell history.
 | `COAI_BUGS_SECRET` | **Required.** The HMAC secret keys are hashed with. Without it the server exits **78** rather than hashing with no secret. |
 | `COAI_BUGS_DATA` | Where `coai-bugs.db` and `logs/` live. |
 | `COAI_BUGS_KEYWORDS` | Optional. A file that **replaces** the embedded keyword list, for correcting it without waiting for a release. |
+| `COAI_BUGS_RATE_PER_MINUTE` | Optional. Requests a minute **per key**, a sliding window; `10` when unset, `0` switches the limit off, anything past `1000` or not a whole number makes the server exit **78** rather than start with a clamped value. A refused request is a `429` with `Retry-After`. Per key and never per address: this vhost clears every forwarding header, so the application sees `127.0.0.1` for everybody and an address limit would be one bucket for the whole internet — unauthenticated traffic is `limit_req`'s job above. In memory, one process, reset by a restart, by design. |
 | `COAI_LOG_LEVEL` | `Information` by default. |
 
 ## All secrets live in Actions Secrets
@@ -308,6 +325,11 @@ RestartSec=5
 RestartPreventExitStatus=78
 User=coai-bugs
 Group=coai-bugs
+# Defence in depth for the corpus, not the boundary. Everything this process CREATES — the database
+# on a fresh host, and the `-wal` and `-shm` files WAL mode keeps beside it — is born without the
+# world-readable bit. The directory's 0750 (`install -d` above) is the PRIMARY boundary and stays so;
+# this is what still holds if that one is ever loosened by hand.
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target
@@ -316,6 +338,16 @@ WantedBy=multi-user.target
 **Loopback only.** `--urls http://127.0.0.1:8110` — nginx is the only thing that may reach it, and a
 server bound to `0.0.0.0` behind a firewall is one rule away from being reachable without the vhost
 that keeps the promise above.
+
+**`UMask=0027` is defence in depth, and the directory is the boundary.** The first deployment
+created `coai-bugs.db` as `0644` — readable by anyone who can reach the directory — and the
+directory's `0750` was the only thing keeping the corpus private. The mask is what we ASK for; what
+it achieves is read back, never assumed: after the first start under this unit,
+`stat -c %a /opt/coai-bugs/data/coai-bugs.db /opt/coai-bugs/data/coai-bugs.db-wal` should read
+`640`. Two things it does not do on its own: a file the earlier unit already created keeps its old
+mode until `chmod 0640 /opt/coai-bugs/data/coai-bugs.db` is run once, as `coai-bugs`; and the
+`-wal`/`-shm` companions take the mode of the database they belong to, so that one `chmod` is what
+makes them `640` too. Record the `stat` output here when it has been read.
 
 ### Installing it
 
@@ -405,6 +437,18 @@ sudo journalctl -u nginx     --since '10 min ago' | grep -E "$ADDR"
 # 4. And ask the SERVER whether its edge is behaving. This line appearing means the vhost is
 #    wrong, and it names the header rather than the address:
 sudo journalctl -u coai-bugs --since '10 min ago' | grep 'the edge sent'
+
+# 5. The per-KEY limit, with a real key: past COAI_BUGS_RATE_PER_MINUTE inside a minute the answer
+#    is 429 with a Retry-After header and a body naming the limit. An unknown key never reaches it
+#    (step 2 is 401s, throttled by nginx), which is the whole point of limiting by key.
+for i in $(seq 1 12); do
+  curl -s -o /dev/null -w '%{http_code} retry-after=%header{retry-after}\n' \
+    -H "Authorization: Bearer $COAI_BUGS_KEY" -H 'Content-Type: application/json' \
+    -d '{"items":[]}' https://bugs.remsoft.dev/ingest
+done
+
+# 6. The file modes the unit's UMask asks for, read back rather than assumed.
+sudo stat -c '%a %n' /opt/coai-bugs/data/coai-bugs.db /opt/coai-bugs/data/coai-bugs.db-wal
 ```
 
 A hit in any of them is a defect in the deployment, not in the code, and this file is where it gets
@@ -423,6 +467,15 @@ It also refuses to start on an empty keyword list, exiting **78**, because `/hea
 route that touches neither the list nor the database: a build accident could otherwise start,
 satisfy the release smoke, publish, and then refuse every submission as if the contributor were at
 fault.
+
+Two more refusals at startup, both **78**, since the limit became a setting: a
+`COAI_BUGS_RATE_PER_MINUTE` that is not a whole number from 0 to 1000 (refused, never clamped —
+the message names the range), and a **second server on the same data directory**. The rate limit is
+one process's memory, so two servers would each admit the whole limit; the first holds
+`$COAI_BUGS_DATA/coai-bugs.serving` open exclusively for its lifetime and the second says so and
+stops. The one-shots (`--issue-key`, `--revoke`, `--waiting`, `--promote`) never take that lock:
+running one beside the service is the ordinary case, and the database's busy timeout is what makes
+it wait for the server's write rather than fail.
 
 ## Backing up
 

@@ -2187,10 +2187,60 @@ HMAC-SHA256 with a server secret, compared in constant time against **every** ro
 timing does not depend on where a key sits. A revoked key and an unknown one are indistinguishable.
 `--issue-key` prints the key once and stores only the hash; `--revoke` ends one.
 
-**`last_seen_utc` does not exist**, on purpose: with submission timestamps it is a record of when a
-person we handed a key to was working. `submissions` is a counter without a clock — **and it is not
-a rate limit**, which the plan claimed until a reviewer pointed out that a lifetime count has no
-window and no reset. What bounds abuse is the 1 MB body cap and the 200-pair batch cap.
+**The promise, scoped — and it changed on 2026-09-17, deliberately.** Until then the key table held
+a counter and no clock of any kind. The operator asked to see which keys are alive and, offered the
+narrowest option that answers it, took the MONTH:
+
+> **About a contributor**, the server records only the **month a key was last used** and how much it
+> has sent. It records no date, no clock time, no address, no name, and no history: there is no way
+> to ask which day a contributor worked, or at what hour, or what a key did in any month but its
+> last.
+>
+> **About administrators**, the server records exact times: when a key was issued, when it was
+> revoked, and who did it. That is a log about the people holding administrative power, not about
+> the people contributing.
+
+`api_keys.last_seen_month` is `yyyy-MM`, UTC, from a `TimeProvider` the host injects — named
+`_month`, not `_utc` or `_date`, because `_utc` reads as a timestamp and invites one. It moves
+**only on an accepted ingest**: a 401, a 429, a malformed body and an administrative one-shot each
+leave it alone, and each is a test. The accepted pairs, the counter (`submissions = submissions + 1`
+in SQL, never read-then-write) and the conditional month update (`AND last_seen_month <> $month`, so
+a busy key rewrites its row at most once a month) are **one transaction** — `Corpus.Ingesting`, which
+`Keep` joins instead of opening its own. `submissions` is still not a rate limit; the limit is below.
+
+`admin_audit(id, admin_id, action, target, at_utc)` is the administrators' log. `action` is a verb
+from a closed set (`issue`, `revoke`), `target` is a key id, and a test pins that neither may carry a
+note, a key or a hash — the server holds no contributor identity, only key ids, and this is what keeps
+that true of the one table with a clock. The one-shots audit as `cli`; the admin API (story 2) audits
+as the derived `admin-<8 hex>` id. **The mutation, its audit row and the sweep commit together**, so
+no issuance is reported that was not audited: drop the audit table and `Issue` rolls the key back.
+The table is swept to the newest 50 000 rows inside that transaction, by an INDEXED cutoff on the
+primary key rather than `DELETE … WHERE id NOT IN (SELECT …)` — a latency spike and a lock risk
+inside a request — and the bound is crossed by a test, twice.
+
+**The schema migrates now.** `Corpus.Schema` was one statement with a note saying it would gain the
+step discipline "when it ships". It shipped as `bugs-v0.1.0` and its file is on a host at
+`user_version = 0`, so `CorpusSchema.Steps` runs through the same `SqliteMigrator` as `coai.db` —
+moved from `RoundsDb` into `CoaiMcp.Storage`, a project both binaries reference, because the gate
+ruled against a second copy. **Step 1 is frozen** against a fixture copied from the released tree
+(`TheSchemaIsFrozenTests`): a test built from the current constant would pass whatever was done to
+it. A test migrates a file written by step 1 only, because a fresh file proves nothing.
+
+**The rate limit is a setting.** `COAI_BUGS_RATE_PER_MINUTE`, default 10, `0` disables (tested),
+refused past 1 000 at startup with exit 78 rather than clamped. **Per key only** — the vhost clears
+every forwarding header, so Kestrel sees `127.0.0.1` for everybody and an address bucket would be one
+bucket for the whole internet; unauthenticated traffic is nginx's, which already limits it. A
+sliding minute, an immutable `Window` of at most `limit` stamps replaced by compare-and-swap
+(`TryUpdate`/`TryRemove` of the exact instance), so N simultaneous requests admit exactly L and the
+minute-sweep never evicts a window that just gained a stamp — both raced by threads in
+`TheRateLimiterTests`. 429 carries `Retry-After` and a body naming the limit. The order on
+`/ingest` is the contract: **401, then 429, then 400, then the work** — a revoked key
+(`revoked_utc` non-empty) is refused before the limiter and before any write, and a test proves
+revoking actually stops an ingest. The limiter is one process's memory and resets on restart by
+design; `ServeLock` makes "one process" enforced rather than assumed — a second server on the same
+data directory exits 78, while the one-shots never take it. `/admin/*` gets its own limiter identity
+from story 1 (`LimiterSubject.Administrator(hash)` → `admin-<8 hex>`) so story 2 cannot land its
+routes in the contributor bucket.
 
 **The no-client-IP promise is a DEPLOYMENT obligation, not a code one.** A reverse proxy writes
 `remote_addr` before the request reaches any route, so an in-process test asserting that no logging
