@@ -1,6 +1,6 @@
 # PLAN — the page tests RUN the page
 
-> Status: **plan only, nothing implemented yet.** Scope: the webview page test files under
+> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: the webview page test files under
 > `src_vs_code/src/test/` — `roundsLogPage.test.ts` first, then `rolesPage.test.ts`,
 > `chatPresetsPage.test.ts` and every other file that asserts over a generated page's SOURCE TEXT.
 >
@@ -9,6 +9,22 @@
 > (the rule this exists to satisfy),
 > [research/PLAN_a_round_leaves_as_a_file.md](../research/PLAN_a_round_leaves_as_a_file.md)
 > (where it was raised, and which converted the two controls it added).
+>
+> **The boundary with [PLAN_the_tail_of_the_command_split.md](PLAN_the_tail_of_the_command_split.md),
+> written here because a boundary legible from one direction only is how the same work gets built
+> twice** (`planning-docs.md`). That plan fixes what the HOST does and owns the **extension-host**
+> harness (its story 13). This one owns the **webview page** and the 224 source-text assertions over
+> it. They are disjoint, and the harnesses are different: `bundledPage.test.ts` executes a bundled,
+> minified page script against a stub DOM, which cannot reach a native `createQuickPick`.
+>
+> **Two rounds of that plan's gate sent its story 6 here, and both were wrong** — story 6's refusal is
+> drawn by `vscode.window.createQuickPick` at `conversationPickerCommand.ts:197`, a native control,
+> not a page script. Nothing in this plan blocks it and nothing in it blocks this. Recorded so the
+> next reader does not repeat the routing.
+>
+> The status line also gained its date on 2026-09-17: `planning-docs.md:28` requires
+> `plan only, nothing implemented yet, <YYYY-MM-DD>`, and `plan-lifecycle.mjs` checks that a status
+> line EXISTS rather than that it carries a date — so this was green while being wrong.
 
 ## The symptom
 

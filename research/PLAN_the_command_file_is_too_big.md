@@ -244,6 +244,11 @@ diff nobody can review. They are below with what each rests on. The security one
 > `main` and on the branch alike, and this series' diff to it is 53/19 — a hazard note for whoever
 > edits it next, not a defect), and the typed Sonar-exclusion count (tooling measures it now).
 >
+> **The boundary, in one row, because the extracted plan now carries the full table.** This plan owns
+> the fifteen modules and the proof that they changed nothing; the extracted one owns every defect
+> this series was forbidden to fix, plus the **extension-host harness** it needed to prove one of
+> them. `PLAN_the_page_tests_run_the_page.md` owns the webview page and is disjoint from both.
+>
 > One item turned out **larger** than it is written here. `ChatModelChoice` is not merely untidy:
 > `chatModels.ts:1` is its only import from `chatPage.ts`, and it is therefore the **sole return edge
 > of the `chatModels ↔ chatPage` cycle** that `importCycles.test.mjs` freezes. Moving the interface
