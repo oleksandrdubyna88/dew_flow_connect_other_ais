@@ -438,13 +438,11 @@ export class BugsKeysPanel {
    * should, so an action that painted nothing — a cancelled dialog, a message this build does not
    * know — leaves the tab exactly as it was.</p>
    */
-  private async showControls(busy: boolean): Promise<void> {
+  private showControls(busy: boolean): void {
     const changed = withControls(this.lastPaint, busy);
     if (changed !== undefined) {
       this.paint(changed);
     }
-
-    await Promise.resolve();
   }
 
   /** The one place a page is written, and the one place that records what is on screen. */

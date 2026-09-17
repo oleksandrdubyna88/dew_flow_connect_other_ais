@@ -19,6 +19,14 @@
  * arrangement in this repository for anything a `vscode` host would otherwise make unreachable.</p>
  */
 
+/**
+ * One half of a turn, or one of its repaints.
+ *
+ * <p>A repaint is synchronous — it assigns a string to a webview — and a fake `await` written only
+ * to satisfy a signature is noise a reader has to decide about. So the coordinator takes either.</p>
+ */
+export type Work = () => void | Promise<void>;
+
 /** What a coordinator does at the three moments a caller cannot see. */
 export interface TurnHooks {
   /**
@@ -29,16 +37,16 @@ export interface TurnHooks {
    * arriving, so during the ten seconds that matter every control was still live and Issue pressed
    * twice queued two issuances — the very thing the flag was added for.</p>
    */
-  readonly started: () => Promise<void>;
+  readonly started: Work;
   /**
    * An action has ended — painted, refused, or thrown — and nothing is in flight.
    *
    * <p>Called with {@link Turns.busy} already false, so a repaint reads the state it is about to
    * show rather than the state it is leaving.</p>
    */
-  readonly settled: () => Promise<void>;
+  readonly settled: Work;
   /** An action threw. The person is told; the coordinator carries on. */
-  readonly failed: (reason: unknown) => Promise<void>;
+  readonly failed: (reason: unknown) => void | Promise<void>;
 }
 
 /** Actions, in order, with the controls given back after every one of them. */
@@ -55,13 +63,13 @@ export class Turns {
   }
 
   /** Queues one action. What comes back is over when THAT action, and its repaint, are over. */
-  run(work: () => Promise<void>): Promise<void> {
+  run(work: Work): Promise<void> {
     this.chain = this.chain.then(() => this.turn(work));
 
     return this.chain;
   }
 
-  private async turn(work: () => Promise<void>): Promise<void> {
+  private async turn(work: Work): Promise<void> {
     this.running = true;
     // BEFORE the work, so the page says what is happening for as long as it happens.
     await this.guarded(this.hooks.started);
@@ -79,7 +87,7 @@ export class Turns {
    * it. Painting is a webview write and a webview can be disposed mid-flight, so this is an
    * ordinary event rather than a theoretical one.</p>
    */
-  private async guarded(work: () => Promise<void>): Promise<void> {
+  private async guarded(work: Work): Promise<void> {
     try {
       await work();
     } catch (reason: unknown) {
