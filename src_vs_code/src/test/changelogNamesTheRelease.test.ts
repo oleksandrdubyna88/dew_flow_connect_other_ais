@@ -270,16 +270,45 @@ test('the baseline names no release that was never tagged', () => {
     { cwd: repoRoot, encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL' });
 
   if (tags.status !== 0) {
-    // A shallow or tagless checkout cannot answer this; say so rather than passing quietly.
     assert.fail(`git could not list the tags, so this case proved nothing: ${tags.stderr}`);
   }
 
   const released = new Set(tags.stdout.split('\n')
     .map((t) => t.trim()).filter(Boolean).map((t) => t.slice('mcp-v'.length)));
+
+  // A checkout with NO tags cannot answer this question, and it does not fail loudly on its own:
+  // `git tag --list` exits 0 with empty output, so every recorded version reads as a phantom and the
+  // case fails naming the wrong cause. That is not hypothetical — `actions/checkout` fetches no tags
+  // by default, which is what this repository's checkouts did when the case was written, so it was
+  // green here and would have been red in CI against a perfectly correct tree.
+  assert.notEqual(released.size, 0,
+    'this checkout carries no tags, so this case cannot tell a phantom version from a real one. '
+    + 'In CI that means the job\'s `actions/checkout` needs `fetch-tags: true`; locally it means '
+    + 'the clone was made with --no-tags.');
+
   const phantom = baseline.Server.filter((v) => !released.has(v));
 
   assert.deepEqual(phantom, [],
     `these versions have a changelog entry and no tag: ${phantom.join(', ')}`);
+});
+
+test('the job that runs this suite fetches the tags it needs', () => {
+  // The case above is only as good as the checkout it runs in, and a test that can only pass on a
+  // developer's machine is worse than no test: it reports green where it was written and red where
+  // it is enforced. `actions/checkout` brings no tags unless asked.
+  const ci = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8')
+    .replace(/\r\n/g, '\n');
+
+  const start = ci.indexOf('extension · typecheck · test · package');
+  assert.notEqual(start, -1, 'the extension job is still the one that runs npm test');
+  const job = ci.slice(start, ci.indexOf('\n  ', ci.indexOf('- name: Package', start)) + 1
+    || undefined);
+
+  const checkout = job.indexOf('actions/checkout@');
+  assert.notEqual(checkout, -1, 'the job checks the repository out');
+  assert.match(job.slice(checkout, checkout + 200), /fetch-tags:\s*true/,
+    'without fetch-tags the tag list is empty, `git tag --list` still exits 0, and the '
+    + 'phantom-version case fails naming every release a phantom');
 });
 
 /**

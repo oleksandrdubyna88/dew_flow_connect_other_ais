@@ -156,7 +156,14 @@ jobs:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest
     steps:
+      # `fetch-tags` because one case in `changelogNamesTheRelease.test.ts` asks `git tag --list`:
+      # it refuses a changelog baseline naming a version that was never released, which is a defect
+      # this repository has actually had. Without this input the tag list is EMPTY and `git tag`
+      # still exits 0 — so the case would not error, it would report every recorded release as a
+      # phantom and fail naming the wrong cause. Tags only; the shallow fetch is untouched.
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
 
       # The snippet the ⋯ menu hands out and the shared rule six repositories load must be the same
       # text, and the only test that can compare them reads the rule out of this submodule. Without
