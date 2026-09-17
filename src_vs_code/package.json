@@ -967,6 +967,7 @@
     "compile": "npm run clean && tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
     "test": "npm run compile && node --test src/test/prepareGate.test.mjs src/test/claudeAdapter.test.mjs src/test/notificationSites.test.mjs src/test/proveMove.test.mjs src/test/importCycles.test.mjs && node --test src/test/theBundleLoads.test.mjs && node scripts/run-tests.mjs",
+    "test:host": "npm run compile && node scripts/run-host.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
@@ -985,6 +986,7 @@
   "devDependencies": {
     "@types/node": "^26.4.1",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.0.0",
     "c8": "^12.0.0",
     "esbuild": "^0.28.2",

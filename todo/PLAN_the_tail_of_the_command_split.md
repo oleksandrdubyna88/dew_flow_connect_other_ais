@@ -734,6 +734,29 @@ is unproven.
    required only after it has been **green on twenty consecutive runs of `main`** — a number, so the
    promotion is a measurement rather than a mood.
 
+> **SHIPPED 2026-09-17, and its first scenario is NOT story 6's — which is a deviation, so here is
+> why.** This story says the first conversion is story 6's, watched red before story 6's guard
+> exists. Writing it that way means committing a RED test: the guard is in group 4 and this is group
+> 3, so the scenario would sit failing in `main` until it landed. This repository does not ship red
+> tests, and a scenario that is expected to fail teaches everyone to ignore the job.
+>
+> So the first scenario is the gap row's own subject instead — **the extension activates and every
+> command its manifest declares is really registered** — and the harness earns its keep the way this
+> repository proves everything else: by being broken. A phantom command added to the manifest fails
+> the run with *“declared in the manifest and never registered, so the menu item does nothing”* and a
+> non-zero exit. **Story 6's scenario lands WITH story 6**, where it can go red and green in one
+> change.
+>
+> **What the launch cost, because the plan asked for the entrypoint and this is what it actually
+> takes.** A run started from a terminal INSIDE VS Code inherits `ELECTRON_RUN_AS_NODE=1`; the child
+> `Code.exe` then behaves as plain Node, runs the first argument as a script, and rejects the rest
+> with Node's own `bad option:` wording — a message that names VS Code's binary and says nothing
+> about the variable. Two wrong diagnoses were made before the wording gave it away. The launcher
+> strips it and nine `VSCODE_*` siblings, and says so in its header.
+>
+> Also learned: the editor is **1 GB on disk** per version, so `.vscode-test/` is gitignored — it was
+> sitting untracked and would have been committed.
+
 ### The entrypoint, because “use test-electron” is not a specification
 
 *(codex, round 3: with no launcher named, “on a headless CI runner the editor can fail to launch or
