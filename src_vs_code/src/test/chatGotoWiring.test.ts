@@ -22,6 +22,21 @@ const between = (text: string, from: string, to: string): string =>
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
+/**
+ * One function's text, from its opening line to the next top-level declaration.
+ *
+ * <p>The helper `chatSourceWiring.test.ts` carries, for the same reason: a fixed character width
+ * goes red for the length of a paragraph somebody added rather than for anything about the code.</p>
+ */
+const bodyOf = (text: string, opening: string): string => {
+  const at = text.indexOf(opening);
+  assert.ok(at >= 0, `there is no ${opening} to read`);
+  const after = text.indexOf('\n}', at);
+
+  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
+};
+
+
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
   contributes: {
     commands: { command: string; title: string }[];
@@ -91,7 +106,9 @@ test('the two ambiguities the walk can meet arrive as two separate facts', () =>
   // nothing of this name, so the decision could only ever call the second the first — and the
   // commonest case of all was reported as a failure that had not happened. The fact each sentence
   // rests on is gathered separately at the walker boundary.
-  const command = source('chatCommand.ts');
+  // Joining a tab to its session moved to `chatSessionJoin.ts` when the command file was split.
+  // What it must do is unchanged; only the file it is read out of is.
+  const command = source('chatSessionJoin.ts');
 
   assert.match(command, /walkFailed: walked\.unsure \|\| walked\.found\.some\(/u,
     'a walk that ANSWERED and one that could not be done still arrive as the same fact');
@@ -102,7 +119,7 @@ test('the two ambiguities the walk can meet arrive as two separate facts', () =>
     'only a thrown walk counts as a failure, so an unlistable folder reads as "nothing is called that"');
   // And that reading is EXHAUSTIVE over the reason, so a third one cannot be counted as a finished
   // search by default.
-  const reading = command.slice(command.indexOf('function didNotAnswer('), command.indexOf('function didNotAnswer(') + 700);
+  const reading = bodyOf(command, 'export function didNotAnswer(');
   assert.match(reading, /const unhandled: never = one\.why;/u,
     'a walk outcome nobody has thought of yet would be read as a folder that answered');
   assert.match(command, /severalSessions: severalMatch\(walked\.found\),/u,
@@ -259,8 +276,10 @@ test('a record that moved says so AND opens the list, rather than stopping', () 
 test('a walk of the session directory that FAILED is not read as “no sessions”', () => {
   // "No session is called that" leads to offering a new conversation — so an unreadable directory
   // would have produced a duplicate of a conversation that already existed. (Two vendors.)
-  const command = source('chatCommand.ts');
-  const walk = command.slice(command.indexOf('async function sessionsNamed('), command.indexOf('async function sessionsNamed(') + 1_400);
+  // Joining a tab to its session moved to `chatSessionJoin.ts` when the command file was split.
+  // What it must do is unchanged; only the file it is read out of is.
+  const command = source('chatSessionJoin.ts');
+  const walk = bodyOf(command, 'export async function sessionsNamed(');
 
   assert.match(walk, /unsure: true/u, 'a failed walk is indistinguishable from an empty one');
   assert.match(walk, /console\.warn\(/u, 'a failed walk is swallowed without a word');
@@ -269,7 +288,9 @@ test('a walk of the session directory that FAILED is not read as “no sessions�
 });
 
 test('the session walk shows progress, because it reads a directory and can take seconds', () => {
-  const command = source('chatCommand.ts');
+  // Joining a tab to its session moved to `chatSessionJoin.ts` when the command file was split.
+  // What it must do is unchanged; only the file it is read out of is.
+  const command = source('chatSessionJoin.ts');
 
   assert.match(command, /withProgress\(\s*\n?\s*\{ location: vscode\.ProgressLocation\.Window, title: 'Finding this conversation…' \}/u,
     'a person who presses the chord sees nothing at all while the sessions are read');
@@ -286,7 +307,9 @@ test('a conversation the picker or a reload opened without a tab is REBOUND, not
   // Through the shared helper, because the picker's own accept reaches a live conversation too and
   // the two were one rule kept in two places — with only one of them keeping it.
   assert.match(bind, /revealBound\(panels, where, tab\?\.key\)/u, 'an unbound conversation is revealed but never bound to its tab');
-  assert.match(source('chatCommand.ts'), /export function revealBound[\s\S]{0,400}panels\.rekey\(where, onto\)/u,
+  // The registry readers moved to `chatRegistry.ts` when the command file was split; what they must
+  // do is unchanged.
+  assert.match(source('chatRegistry.ts'), /export function revealBound[\s\S]{0,400}panels\.rekey\(where, onto\)/u,
     'the helper both callers go through does not actually move the registration');
 });
 

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { asText } from './asText';
-import { openConversations, restoreConversation, revealBound, whereConversationSits } from './chatCommand';
+import { restoreConversation } from './chatCommand';
+import { openConversations, revealBound, whereConversationSits } from './chatRegistry';
 import { notify } from './notify';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';

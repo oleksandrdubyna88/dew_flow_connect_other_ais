@@ -1,14 +1,11 @@
 import * as vscode from 'vscode';
 import { Goto, GotoAsked, bindable, goto, rootOfTab } from './chatGoto';
 import {
-  askedForGoto,
   chatWithOtherAi,
   restoreConversation,
-  revealBound,
-  revealConversation,
-  tabStillOpen,
-  whereConversationSits,
 } from './chatCommand';
+import { askedForGoto } from './chatSessionJoin';
+import { revealBound, revealConversation, tabStillOpen, whereConversationSits } from './chatRegistry';
 import { ChatPanels } from './chatPanels';
 import { ConversationIndex } from './chatStoreCache';
 import { ChatStoreFile } from './chatStoreFile';

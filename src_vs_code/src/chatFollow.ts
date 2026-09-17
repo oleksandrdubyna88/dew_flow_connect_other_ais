@@ -1,0 +1,169 @@
+import { ChatStoreFile } from './chatStoreFile';
+import { ConversationIndex } from './chatStoreCache';
+import { ConversationSource, sourceOfFile } from './chatStore';
+import { ChatPanels } from './chatPanels';
+import { threads } from './chatThread';
+import { store } from './chatHost';
+import { keepQueued } from './chatPersist';
+import { NAMES_ARE_CASE_BLIND, asUri, filedFor, fsPathOf, reorigin } from './chatRoots';
+import { heldConversationIds } from './chatRegistry';
+import { Moved, followable, movedTo, prepareMoves } from './chatSource';
+
+/**
+ * A conversation follows the file it was opened from.
+ *
+ * <p>Extracted from `chatCommand.ts` unchanged. A rename arrives from the editor with an explicit
+ * old-to-new mapping, and every conversation filed under the old uri is rewritten to the new one —
+ * a LIVE one through its thread and its write queue, a closed one through the store, never both.</p>
+ *
+ * <p>A module of its own rather than part of the registry beside it because they share nothing:
+ * this one writes, and the registry only reads.</p>
+ */
+
+/**
+ * A file has MOVED: follow every conversation that was opened from it.
+ *
+ * <p>Two halves, and they must not both write the same record. A conversation this window holds
+ * OPEN is followed on its thread and written through the conversation's own queue — the thread is
+ * the authority for a live record, and its chain is what keeps two writes from both carrying the
+ * revision this window last accepted. Everything else is followed on DISK, through the store's
+ * `refile`, which reads and replaces inside one claim; the ids this window holds are skipped there,
+ * or the two halves would race for one conversation.</p>
+ *
+ * <p><b>Both facts move together</b> — the uri and the root it now belongs to. A file dragged from
+ * one workspace root into another changes both, and rewriting the uri alone would leave the
+ * conversation filed under the root it left, invisible in exactly the folder the person is looking
+ * at. (Two vendors, the plan round.)</p>
+ *
+ * <p>An UNTITLED buffer that is saved is not followed at all, and `chatSource.ts` says why: the
+ * editor reports no previous uri for it, so there is nothing to match a conversation against and a
+ * listener would attach one to the wrong file as readily as to the right one.</p>
+ *
+ * <p>Detached, and therefore ending in a catch that says something: a rename must not wait on a
+ * disk, and nothing above this is listening.</p>
+ */
+export function followRenames(panels: ChatPanels, index: ConversationIndex, renames: readonly Moved[]): void {
+  if (renames.length === 0) {
+    return;
+  }
+  // Normalised ONCE, before anything is asked about them: a folder refactor reports many moves, and
+  // the old paths were being put into comparable form again for every conversation in the store.
+  const moves = prepareMoves(renames, NAMES_ARE_CASE_BLIND);
+  for (const { key } of panels.known()) {
+    const entry = panels.get(key);
+    const thread = entry === undefined ? undefined : threads.get(entry.id);
+    if (entry === undefined || thread === undefined || !followable(thread.source)) {
+      continue;
+    }
+    const moved = movedTo(thread.source.uri, moves, asUri, fsPathOf);
+    if (moved.length === 0) {
+      continue;
+    }
+    reorigin(thread, sourceOfFile(moved));
+    keepQueued(entry, thread);
+  }
+  const onDisk = store;
+  if (onDisk === undefined) {
+    return;
+  }
+  void (async () => {
+    let touched = 0;
+    for (const meta of index.entries({ kind: 'everywhere' })) {
+      try {
+        // ASKED NOW, not from a set taken before any awaiting began. A conversation that closed while
+        // this loop was running is no longer followed by its thread, and a snapshot would have gone on
+        // saying it was — so its rename would have been followed by neither half. (local, the code
+        // round; it was my own open question.)
+        if (heldConversationIds(panels).includes(meta.id) || !followable(meta.source)) {
+          continue;
+        }
+        const moved = movedTo(meta.source.uri, moves, asUri, fsPathOf);
+        if (moved.length === 0) {
+          continue;
+        }
+        if (await follow(onDisk, meta.id, meta.source, sourceOfFile(moved))) {
+          touched += 1;
+        }
+      } catch (reason) {
+        // PER UNIT, as `reliability.md` requires of a loop over independent things: one conversation
+        // that cannot be followed must not stop every other conversation following the same rename.
+        console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${meta.id}`, reason);
+      }
+    }
+    if (touched > 0) {
+      // The picker reads the INDEX, not the disk. Without this the rows go on naming the file they
+      // left and sitting in the folder they left — and a second rename would compare against that
+      // stale source and follow nothing. (gemini, the code round, three times.)
+      await index.refresh();
+    }
+  })().catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: following a renamed file threw', reason);
+  });
+}
+
+/** How many times a conversation held by somebody else is asked again before the rename is given up on. */
+const FOLLOW_TRIES = 5;
+
+/** How long between those asks. Short: a save is milliseconds, and nothing is waiting on this. */
+const FOLLOW_WAIT_MS = 200;
+
+/**
+ * Move one closed conversation to where its file went, waiting out an ordinary concurrent save.
+ *
+ * <p>A `busy` claim is the commonest outcome there is — another window writing a turn — and treating
+ * it as final loses the rename FOR EVER, because a rename happens once and is not replayed. Four
+ * reviewers said so independently. So it is asked again a few times, and only a lock that never
+ * clears is reported.</p>
+ */
+export async function follow(onDisk: ChatStoreFile, id: string, was: ConversationSource, next: ConversationSource): Promise<boolean> {
+  // The answer is "does the index need re-reading", NOT "did I write it". They come apart when
+  // another window followed the same rename first: nothing was written here and the rows in memory
+  // are stale all the same.
+  for (let tries = 0; tries < FOLLOW_TRIES; tries += 1) {
+    const done = await onDisk.refile(id, was, next, filedFor(next));
+    if (done.kind === 'followed') {
+      return true;
+    }
+    if (done.kind === 'unindexed') {
+      // The conversation moved; the row that lists it did not. Reading the record repairs that entry
+      // under the conversation's own lock — which is what `read` already does whenever it finds the
+      // index stale — so the index has something true to refresh from afterwards.
+      await onDisk.read(id);
+      console.warn(`ConnectOtherAIs: a conversation followed a renamed file but its index entry did not: ${id} — ${done.reason}`);
+
+      return true;
+    }
+    if (done.kind === 'kept') {
+      if (done.why !== 'busy') {
+        // Somebody else followed it first, or it is gone. Neither is a failure and neither is ours to
+        // report — but the DISK has moved under our index either way, so it still counts as touched:
+        // if every match came back like this the index would never be refreshed, and the picker would
+        // go on naming the file the conversation left while a later rename compared against that
+        // stale source. (CodeRabbit, on the pull request.)
+        return true;
+      }
+    } else if (done.kind === 'failed') {
+      console.warn(`ConnectOtherAIs: a conversation could not follow a renamed file: ${id} — ${done.reason}`);
+
+      return false;
+    } else {
+      // EXHAUSTIVE BY NAME: a future outcome must decide here rather than falling through into the
+      // busy retry, which is what a chain of ifs would have let it do. (codex, the code round.)
+      const unhandled: never = done;
+
+      throw new Error(
+        `a refile answer this build has no arm for: ${JSON.stringify(unhandled)}`
+        + ' — the answers it may give are followed, unindexed, kept and failed',
+      );
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, FOLLOW_WAIT_MS);
+    });
+  }
+  // SAID. The conversation keeps the path it had, so *go to* will not find it by the file's new
+  // name — and the person is not interrupted, because there is nothing they can do about another
+  // window and the conversation is still in the picker.
+  console.warn(`ConnectOtherAIs: a conversation was busy in another window and could not follow a renamed file: ${id}`);
+
+  return false;
+}

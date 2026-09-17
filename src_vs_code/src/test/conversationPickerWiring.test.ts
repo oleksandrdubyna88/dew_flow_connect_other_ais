@@ -296,12 +296,15 @@ test('every detached edge in the widget ends in a catch that says something', ()
 
 const command = (): string => read(join('src', 'chatCommand.ts'));
 
+/** And the registry half, which moved to its own module when the command file was split. */
+const registry = (): string => read(join('src', 'chatRegistry.ts'));
+
 test('the picker is told what is open by the same facts a stored row carries', () => {
   // Ids alone is what `heldConversationIds` gives, and a list of ids is not a list a person can
   // choose from. Two open conversations sharing a title are exactly the case the registry exists for,
   // and the model, the turn count and the last line are what tell them apart.
-  const text = command();
-  const body = text.slice(text.indexOf('export function openConversations'), text.indexOf('export function revealConversation'));
+  const text = registry();
+  const body = text.slice(text.indexOf('export function openConversations'), text.indexOf('export function whereConversationSits'));
 
   assert.ok(body.length > 0, 'nothing tells the picker what this window holds open');
   for (const fact of ['title', 'modelId', 'turns', 'lastLine', 'updatedAt']) {
@@ -328,7 +331,8 @@ test('a conversation last used is stamped when something CHANGED, never on a rep
 });
 
 test('an open conversation is revealed by its store id, which is the only name the picker has for it', () => {
-  const text = command();
+  // The reveal moved to `chatRegistry.ts` when the command file was split; what it must do is unchanged.
+  const text = registry();
   const body = text.slice(text.indexOf('export function revealConversation'), text.indexOf('export function revealConversation') + 900);
 
   assert.ok(body.length > 0, 'nothing can reveal a conversation the picker names');
