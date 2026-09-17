@@ -2223,10 +2223,30 @@ such table added later is covered without anybody remembering to.
 `api_keys.last_seen_month` is `yyyy-MM`, UTC, from a `TimeProvider` the host injects — named
 `_month`, not `_utc` or `_date`, because `_utc` reads as a timestamp and invites one. It moves
 **only on an accepted ingest**: a 401, a 429, a malformed body and an administrative one-shot each
-leave it alone, and each is a test. The accepted pairs, the counter (`submissions = submissions + 1`
-in SQL, never read-then-write) and the conditional month update (`AND last_seen_month <> $month`, so
-a busy key rewrites its row at most once a month) are **one transaction** — `Corpus.Ingesting`, which
-`Keep` joins instead of opening its own. `submissions` is still not a rate limit; the limit is below.
+leave it alone, and each is a test.
+
+The accepted pairs, the counter and the month are **one transaction** — `Corpus.Accept`, which hands
+the callback an `IngestScope` instead of letting `Keep` open a transaction of its own. The counter
+and the month are **one unconditional `UPDATE`**:
+
+```sql
+UPDATE api_keys SET submissions = submissions + 1, last_seen_month = $month WHERE id = $id
+```
+
+**Do not make the month conditional again.** An earlier version wrote it separately with
+`AND last_seen_month <> $month`, justified as sparing a row rewrite for a busy key. A code round
+refuted the saving: the counter rewrites that same row on *every* ingest, so the condition spared no
+page write at all and cost a second statement and a second B-tree lookup on the server's hottest
+path. Adding the condition back to the combined statement would be worse than the original — it
+would gate the counter too, so a same-month ingest would stop counting.
+
+`submissions` is still not a rate limit; the limit is below. The count is atomic in SQL rather than
+read-then-write, so two concurrent accepted ingests cannot lose an increment between them.
+
+**The scope is a lease.** `IngestScope` is spent when `Accept` returns, in a `finally`, so a caller
+who kept a reference cannot write through it after the commit — that write would have no transaction
+around it, no re-check of the key, and no counter, which is quarantine rows for a key that may since
+have been revoked.
 
 `admin_audit(id, admin_id, action, target, at_utc)` is the administrators' log. `action` is a verb
 from a closed set (`issue`, `revoke`), `target` is a key id, and a test pins that neither may carry a

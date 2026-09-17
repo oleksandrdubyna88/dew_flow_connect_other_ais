@@ -344,7 +344,7 @@ internal sealed class Program
             return TypedResults.Ok(stored.Answer);
         }
 
-        limiter.Forgive(LimiterSubject.Contributor(key.Value));
+        limiter.Forgive(LimiterSubject.Contributor(key));
 
         return TypedResults.Unauthorized();
     }
