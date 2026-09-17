@@ -49,6 +49,26 @@ export const COLUMNS: readonly Column[] = [
  */
 export const TABS: readonly string[] = [...CLASS_ORDER, UNKNOWN_TAB];
 
+/**
+ * What the page is sorted by before anybody clicks anything.
+ *
+ * <p>One place, read by the header (which marks that column for a screen reader) and by the page
+ * script (whose `sortKey`/`sortDir` start here). They were two literals, and `aria-sort="none"` on
+ * every column told a screen-reader user the table was unsorted while it was sorted by When,
+ * descending — so the first click on When appeared to do nothing and in fact reversed a direction
+ * the reader had never been told about. (codex, the S5 code round.)</p>
+ */
+export const OPENS_SORTED_BY = { key: 'when', dir: 'desc' } as const;
+
+/** How one column's initial sort state is named in ARIA. */
+function sortedSaid(column: Column): string {
+  if (column.key !== OPENS_SORTED_BY.key) {
+    return 'none';
+  }
+
+  return OPENS_SORTED_BY.dir === 'desc' ? 'descending' : 'ascending';
+}
+
 /** A rate as a figure, or an em dash where no window worth measuring was observed. */
 export function rateSaid(row: Grouped): string {
   return row.ratePerMin === undefined ? '—' : `${row.ratePerMin.toFixed(1)}/min`;
@@ -97,7 +117,7 @@ export function rowHtml(row: Grouped): string {
 /** The header, every column sortable, the current one marked for a reader and for a screen reader. */
 export function headHtml(): string {
   const cells = COLUMNS.map((column) =>
-    `<th scope="col" data-key="${escapeHtml(column.key)}" aria-sort="none"`
+    `<th scope="col" data-key="${escapeHtml(column.key)}" aria-sort="${sortedSaid(column)}"`
     + `${column.figure === true ? ' class="figure"' : ''}>`
     + `<button type="button" class="sort">${escapeHtml(column.label)}</button></th>`);
 

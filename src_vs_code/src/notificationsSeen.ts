@@ -55,9 +55,17 @@ export function seenLine(range: SeenRange): string {
   return `${JSON.stringify(range)}\n`;
 }
 
-/** A number that is a real, non-negative offset, or nothing. */
+/**
+ * A number that is a real, non-negative byte offset, or nothing.
+ *
+ * <p>SAFE integer, not merely finite. `1e21` and `3.5` are both finite and neither is a byte offset:
+ * a fractional bound makes `alreadyRead` answer differently for two records on the same byte, and a
+ * value past 2^53 compares greater than every offset the file will ever have, so one corrupt line
+ * would mark a ledger read for ever. Errs toward UNREAD, which is the safe direction.
+ * (codex, the S5 code round.)</p>
+ */
 function offsetOf(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 /**
@@ -153,6 +161,22 @@ export function readSoFar(ranges: readonly SeenRange[]): ReadonlyMap<string, rea
  */
 export function tailBegins(spans: readonly Span[]): number {
   return spans.reduce((highest, span) => Math.max(highest, span.to), 0);
+}
+
+/**
+ * Ranges cut down to the ledger that is actually on disk now.
+ *
+ * <p>A ledger can get SHORTER. It is rotated, restored from a backup, or replaced by hand, and the
+ * acknowledgements written against the old one then cover bytes the new file does not have. Left
+ * alone, `[0, 400000)` against a 900-byte file marks every record in it read and hides the very
+ * first fault after the rotation — and the person has no way to know why the page is empty. Cutting
+ * the ranges to the file's current end errs toward UNREAD: a record may be shown twice, which is
+ * the harmless direction. (codex, the S5 code round.)</p>
+ */
+export function clampTo(spans: readonly Span[], size: number): readonly Span[] {
+  return spans
+    .map((span) => ({ from: Math.min(span.from, size), to: Math.min(span.to, size) }))
+    .filter((span) => span.to > span.from);
 }
 
 /** Whether one record's line start has already been acknowledged. What the PAGE marks rows with. */

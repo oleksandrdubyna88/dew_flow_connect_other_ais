@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { NotificationRecord } from '../notifications';
+import { NotificationRecord, parseNotifications } from '../notifications';
 import {
   Arrival,
   Grouped,
+  Ledger,
   RUN_CEILING,
   group,
   keyOf,
@@ -24,12 +25,22 @@ import {
 
 const AT = Date.UTC(2026, 8, 17, 9, 0, 0);
 
-function arrival(over: Partial<NotificationRecord> & { at?: number; ms?: number } = {}): Arrival {
-  const { at, ms, ...rest } = over;
+/** One arrival, with every knob a test here needs — and no cast at any call site. */
+interface Fixture extends Partial<NotificationRecord> {
+  /** Where its line starts, which is what the watermark is compared against. */
+  readonly at?: number;
+  /** How far after `AT` it happened, in milliseconds. */
+  readonly ms?: number;
+  /** Which of the two ledgers it came out of. */
+  readonly ledger?: Ledger;
+}
+
+function arrival(over: Fixture = {}): Arrival {
+  const { at, ms, ledger, ...rest } = over;
 
   return {
     at: at ?? 0,
-    ledger: 'extension',
+    ledger: ledger ?? 'extension',
     record: {
       utc: new Date(AT + (ms ?? 0)).toISOString(),
       class: 'failure',
@@ -39,6 +50,28 @@ function arrival(over: Partial<NotificationRecord> & { at?: number; ms?: number 
       ...rest,
     },
   };
+}
+
+/**
+ * A record as a NEWER build wrote it, read back through the real parser.
+ *
+ * <p>`NotificationRecord.class` is a union of what THIS build can write, and the parser is the one
+ * place allowed to widen it — so a "class from the future" fixture goes through the parser rather
+ * than through `as never`. A cast in a test asserts nothing about the code: it says the test author
+ * believes this value can occur. Parsing the line a newer build would actually have written proves
+ * it. (codex, the S5 code round.)</p>
+ */
+function fromANewerBuild(kind: string): NotificationRecord {
+  const parsed = parseNotifications(JSON.stringify({
+    utc: new Date(AT).toISOString(),
+    class: kind,
+    source: 'serverSettingsSync',
+    code: 'a-code-from-the-future',
+    run: 'run-a',
+  }));
+  assert.equal(parsed.length, 1, 'the parser dropped it, so this fixture would be testing nothing');
+
+  return parsed[0] as NotificationRecord;
 }
 
 /**
@@ -199,7 +232,10 @@ test('a row is read only when EVERY occurrence in it is', () => {
 test('a class this build has never heard of is shown, not dropped', () => {
   // The forward-compatibility bargain the parser already takes: a newer build writing a class this
   // one does not know must not make its records vanish from an older reader.
-  const row = only(group([arrival({ class: 'something-new' as never, at: 0 })], NOTHING_READ));
+  const row = only(group(
+    [{ at: 0, ledger: 'extension', record: fromANewerBuild('something-new') }],
+    NOTHING_READ,
+  ));
 
   assert.equal(tabOf(row), 'other');
   assert.equal(row.repeats, 1);
@@ -208,7 +244,7 @@ test('a class this build has never heard of is shown, not dropped', () => {
 test('the two ledgers merge into one set of rows, and a row remembers which it came from', () => {
   const rows = group([
     arrival({ at: 0, code: 'from-the-extension' }),
-    { ...arrival({ at: 0, code: 'from-the-server' }), ledger: 'server' } as Arrival,
+    arrival({ at: 0, code: 'from-the-server', ledger: 'server' }),
   ], NOTHING_READ);
 
   assert.equal(rows.length, 2);

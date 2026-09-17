@@ -207,7 +207,7 @@ export async function countSince(
 }
 
 /** The one byte this counts. Spelled rather than escaped: an escape here once reached disk RAW. */
-const NEWLINE_BYTE = 10;
+export const NEWLINE_BYTE = 10;
 
 /**
  * Whether a failure to reach a ledger means "not there yet" or "could not be read".

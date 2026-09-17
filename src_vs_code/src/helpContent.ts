@@ -15,6 +15,17 @@ import { UK } from './helpUk';
  *
  * <p><b>Languages.</b> English is required on every article; the others are optional and fall
  * back VISIBLY — a missing translation must never hide an article.</p>
+ *
+ * <p><b>What is translated, and what is not.</b> This catalog — article BODIES — is the only text
+ * in the extension that exists in five languages. Everything else a person sees is English: panel
+ * sections, buttons, badges, the notifications page, and every sentence a notice raises. That is a
+ * decision rather than an oversight, and it is written down here because this file is the one place
+ * that makes it look otherwise — somebody adding a Russian body and then a Russian button would be
+ * following what they found rather than a rule. A second, partial translation surface is worse than
+ * one language: a page half in each is harder to read than either, and a stale half is invisible,
+ * which `bodyFor` already has to say out loud for the bodies it can see. If the product is ever
+ * translated it is translated whole, through one mechanism, not by this catalog spreading outwards.
+ * (codex, the S5 code round.)</p>
  */
 
 export const HELP_LANGUAGES = ['en', 'ru', 'uk', 'de', 'es'] as const;
