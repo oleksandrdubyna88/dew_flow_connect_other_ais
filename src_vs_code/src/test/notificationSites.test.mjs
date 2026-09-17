@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
-import { INVENTORY, asText, count } from '../../scripts/count-notifications.mjs';
+import {
+  INVENTORY,
+  SOURCE_EXTENSIONS,
+  asText,
+  count,
+  everySourceFile,
+} from '../../scripts/count-notifications.mjs';
 
 /**
  * The published count of places this extension speaks to a person cannot drift.
@@ -106,4 +114,60 @@ test('the per-file breakdown accounts for every site', () => {
     Object.keys(counted.perFile).every((path) => !path.includes('/test/')),
     'the tests are not product call sites, and two of them assert on these very names',
   );
+});
+
+test('the scan sees every extension the compiler ships, not only .ts', () => {
+  // A hole the code round found, and it was not hypothetical: a `.tsx` file calling
+  // `window.showWarningMessage` would have left BOTH numbers unchanged — the population and the
+  // ratchet — so the completeness promise would have gone on being made while being false. A scan
+  // that decides what counts by extension has to know every extension `tsconfig.json` accepts.
+  assert.deepEqual([...SOURCE_EXTENSIONS], ['.ts', '.tsx', '.mts', '.cts']);
+});
+
+test('a file in one of those extensions is actually picked up, not merely listed in a constant', () => {
+  // The companion the previous test needs: a list of extensions nothing reads would pass it.
+  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  try {
+    writeFileSync(join(here, 'panel.tsx'), 'void vscode.window.showWarningMessage("hi");\n');
+    writeFileSync(join(here, 'types.d.ts'), 'declare const x: number;\n');
+    writeFileSync(join(here, 'notes.md'), 'vscode.window.showWarningMessage\n');
+
+    const found = everySourceFile(here).map((path) => path.slice(here.length + 1));
+
+    assert.deepEqual(found, ['panel.tsx'], 'the .tsx is source; a declaration file and a doc are not');
+  } finally {
+    rmSync(here, { recursive: true, force: true });
+  }
+});
+
+test('the scan counts code and not prose, in both directions', () => {
+  // Found by making a comment that says `vscode.window.showErrorMessage` while fixing something
+  // else: the population went up by one. The scan had always counted the words in docstrings, and
+  // this file's subject matter is those very words. It is worse than a nuisance — a comment
+  // mentioning `notify(` inflates `routed` and therefore the POPULATION, which is the number the
+  // completeness promise is made over.
+  const here = mkdtempSync(join(tmpdir(), 'coai-sites-'));
+  try {
+    writeFileSync(
+      join(here, 'talker.ts'),
+      [
+        '// A comment naming vscode.window.showErrorMessage and notify( on purpose.',
+        '/* And a block one: .showWarningMessage, modal: true */',
+        'const url = "https://example.com/a//b"; // a URL, whose // must not eat this line',
+        'void vscode.window.showWarningMessage("the one real call");',
+        '',
+      ].join('\n'),
+    );
+
+    const [file] = everySourceFile(here);
+    assert.ok(file !== undefined);
+    const text = readFileSync(file, 'utf8');
+
+    assert.equal((text.match(/\.showErrorMessage\b/gu) ?? []).length, 1, 'the raw text does hold the prose');
+    assert.equal(count(here).byApi.showErrorMessage, 0, 'and the scan does not count it');
+    assert.equal(count(here).byApi.showWarningMessage, 1, 'the real call, once');
+    assert.equal(count(here).modal, 0, 'a modal named in a comment is not a question anybody was asked');
+  } finally {
+    rmSync(here, { recursive: true, force: true });
+  }
 });

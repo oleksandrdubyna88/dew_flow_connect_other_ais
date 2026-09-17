@@ -546,13 +546,25 @@ export function activate(context: vscode.ExtensionContext): void {
   void offerUpdate(context);
 }
 
-export function deactivate(): Promise<void> {
+export async function deactivate(): Promise<void> {
   // The watcher is a subscription; VS Code disposes it. No server, no port — but the chat ledger's
   // writes are deliberately NOT awaited by the turn that made them (a person's answer must not wait
   // on a disk), so a host closed the instant a turn ends could take the record with it. VS Code
   // awaits what this returns, which is the one moment the queue can be drained for free.
   // (codex and the local reviewer, the code round.)
-  return flushChatUsage();
+  //
+  // The drain has a CEILING and can therefore give up, which is the right trade — a window that
+  // will not close is answered by VS Code killing the host, and that loses more than the ceiling
+  // gives up. What it must not do is give up in silence: the console is the only surface left at
+  // this point in the lifecycle, since the panel and every webview are already gone, and a record
+  // saying "records were lost" cannot be written to the ledger that is what failed.
+  if (!await flushChatUsage()) {
+    console.error(
+      'ConnectOtherAIs: the ledgers could not be drained before this window closed. Records written '
+      + 'in the last moments may be missing — the usual cause is a data directory on a drive that '
+      + 'stopped answering.',
+    );
+  }
 }
 
 /**

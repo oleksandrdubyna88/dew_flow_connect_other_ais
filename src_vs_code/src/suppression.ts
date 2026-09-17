@@ -1,4 +1,4 @@
-import { Notice } from './notice';
+import { Notice, buttonsOf } from './notice';
 import { NotificationRecord } from './notifications';
 
 /**
@@ -53,12 +53,18 @@ export const RUN_BUDGET = 5000;
 export const FAULT_RESERVE = 1000;
 
 /**
- * How many `(code, subject)` pairs are counted at once.
+ * The most `(code, subject)` pairs one run can ever be counting, and it is not a guess.
  *
- * <p>`code` is finite — a string literal per call site — but `subject` is a path or a server name and
- * is not, so the map is an LRU. Losing an entry costs one extra "first occurrence" line and can
- * never corrupt a count, because nothing a reader sees is derived from this map: the page counts
- * ROWS.</p>
+ * <p><b>This replaced an LRU of 512, which the code round was right to call a defect.</b> An LRU
+ * evicts, an evicted key returns with its count at one, and two things that must not restart
+ * restarted with it: `notifyOnce` showed a toast it had promised to show once, and a repeat
+ * threshold that had climbed to ninety went back to zero — so a condition recurring slowly among
+ * many others could never reach its storm at all. Two reviewers found it from two directions.</p>
+ *
+ * <p>Nothing is evicted now. That is affordable because the run budget already bounds it: a key
+ * enters this map only when a record for it is WRITTEN, and writes are capped at one per code plus
+ * the budget plus the fault reserve. The ceiling below is therefore arithmetic rather than a guess,
+ * and `tracked()` exists so a test can assert it instead of trusting this paragraph.</p>
  */
 export const KEYS_REMEMBERED = 512;
 
@@ -71,6 +77,14 @@ export interface Verdict {
   readonly write: boolean;
   /** This occurrence's ordinal for its `(code, subject)` in this run. Diagnostic only. */
   readonly seq: number;
+  /**
+   * Whether this run has never seen this `(code, subject)` before.
+   *
+   * <p>What `notifyOnce` shows on, and it is NOT `seq === 1` — that was the bug. A key evicted from
+   * a bounded cache comes back with `seq` at one while this stays false, because the question "have
+   * I told them about this already" is about the run and not about a cache.</p>
+   */
+  readonly firstEver: boolean;
   /** A meta-alert this occurrence crossed a bound into. At most two per key, one per run. */
   readonly storm?: NotificationRecord;
 }
@@ -78,6 +92,8 @@ export interface Verdict {
 /** The bounded state of one run. */
 export interface Suppressor {
   readonly admit: (notice: Notice, at: Date) => Verdict;
+  /** How many keys this run is counting. A seam for the test that pins the bound. */
+  readonly tracked: () => number;
   /**
    * The condition this names has ended, so the next occurrence is a first occurrence again.
    *
@@ -190,6 +206,14 @@ function budgetStorm(run: string, pid: number, at: Date): NotificationRecord {
  * cannot be reset by the churn it exists to stop. The cost is stated rather than hidden: once the
  * budget is spent, a genuinely new `(code, subject)` of an ordinary class is not written either —
  * which is what the `failure`/`stand-down` reserve above is for, and why it is not optional.</p>
+ *
+ * <p><b>A QUESTION is never suppressed, by any bound.</b> A notice carrying buttons or a modal is
+ * asking a person something, and a destructive confirmation that is asked, answered and obeyed with
+ * neither side on disk is precisely the audit this ledger exists to be. It is safe because a
+ * question cannot storm: every one of them waits for a hand, so a loop of them is serialised by the
+ * person answering it. Found by codex on the code round, and it was the most valuable finding in
+ * the round — the budget had a path that silently disabled the auditing of destructive actions in
+ * exactly the conditions where somebody would later need it.</p>
  */
 export function suppressor(run: string, pid: number): Suppressor {
   const seen = new Map<string, Seen>();
@@ -197,55 +221,60 @@ export function suppressor(run: string, pid: number): Suppressor {
   let spent = 0;
   let budgetSaid = false;
 
-  const remember = (key: string, now: Seen): void => {
-    seen.delete(key);
-    seen.set(key, now);
-    while (seen.size > KEYS_REMEMBERED) {
-      const oldest = seen.keys().next();
-      if (oldest.done === true) {
-        return;
-      }
-      seen.delete(oldest.value);
+  const affordable = (notice: Notice): boolean => {
+    if (notice.modal === true || buttonsOf(notice).length > 0) {
+      return true;
     }
+    const kind = notice.class;
+
+    return spent < (kind === 'failure' || kind === 'stand-down' ? RUN_BUDGET + FAULT_RESERVE : RUN_BUDGET);
   };
 
-  const affordable = (kind: Notice['class']): boolean =>
-    spent < (kind === 'failure' || kind === 'stand-down' ? RUN_BUDGET + FAULT_RESERVE : RUN_BUDGET);
-
   return {
+    tracked: () => seen.size,
     admit: (notice, at) => {
       const key = keyOf(notice.code, notice.subject);
       const before = seen.get(key);
+      const firstEver = before === undefined;
       const now: Seen = {
         firstMs: before?.firstMs ?? at.getTime(),
         count: (before?.count ?? 0) + 1,
       };
-      remember(key, now);
 
       const firstOfThisCode = !heard.has(notice.code);
       heard.add(notice.code);
       if (firstOfThisCode) {
-        return { write: true, seq: now.count };
+        seen.set(key, now);
+
+        return { write: true, seq: now.count, firstEver };
       }
       if (now.count > CEILING) {
-        return { write: false, seq: now.count };
+        seen.set(key, now);
+
+        return { write: false, seq: now.count, firstEver };
       }
-      if (!affordable(notice.class)) {
+      if (!affordable(notice)) {
+        // NOT remembered. The map grows only with what is written, which is what makes its size
+        // arithmetic rather than a guess: one key per code, plus the budget, plus the reserve. A
+        // refused key left in it would let a churn loop grow memory without bound after the ledger
+        // had already stopped growing, which is the wrong way round.
         if (budgetSaid) {
-          return { write: false, seq: now.count };
+          return { write: false, seq: now.count, firstEver };
         }
         budgetSaid = true;
 
-        return { write: false, seq: now.count, storm: budgetStorm(run, pid, at) };
+        return { write: false, seq: now.count, firstEver, storm: budgetStorm(run, pid, at) };
       }
       spent += 1;
+      seen.set(key, now);
       if (now.count !== STORM_AT && now.count !== CEILING) {
-        return { write: true, seq: now.count };
+        return { write: true, seq: now.count, firstEver };
       }
 
       return {
         write: true,
         seq: now.count,
+        firstEver,
         storm: keyStorm(notice, now, now.count === CEILING ? CEILING : STORM_AT, run, pid, at),
       };
     },

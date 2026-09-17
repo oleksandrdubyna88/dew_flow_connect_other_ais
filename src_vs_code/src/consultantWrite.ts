@@ -12,6 +12,7 @@
  */
 
 import { Vendor, VENDOR_PRESETS, normaliseId } from './vendors';
+import { namesACredential } from './credentialWords';
 import {
   CALLER_KINDS,
   ConsultantChoice,
@@ -216,25 +217,6 @@ export function badEndpoint(typed: string): string | undefined {
 }
 
 /**
- * Words that make a parameter a credential, matched inside the name and without case.
- *
- * <p>The first version of this list was the half-dozen spellings I thought of, compared exactly, and
- * the gate was right that a gateway names the parameter what it likes: `x-api-key`, `apiKey` and
- * `subscription-key` are all in the wild and all missed by an exact match against `api_key`. So the
- * test is CONTAINMENT, case-blind — which is the right shape for the job, because the cost of a
- * false positive here is a sentence asking someone to move a key into the vault, and the cost of a
- * miss is a live credential in a file people commit.</p>
- *
- * <p>It stays a list of words rather than becoming "refuse any query string": an endpoint that names
- * an API version or a deployment is ordinary — `?api-version=2024-02-01` is how Azure spells one —
- * and refusing those would send people back to pasting keys somewhere worse. (codex, the code round
- * on this split.)</p>
- */
-const CREDENTIAL_WORDS: readonly string[] = [
-  'key', 'token', 'secret', 'password', 'passwd', 'authorization', 'auth', 'credential', 'sig', 'signature',
-];
-
-/**
  * Whether a URL carries a credential in its query or its fragment.
  *
  * <p>The fragment is read for the same reason the query is. A `#` never reaches the server, so it is
@@ -247,7 +229,12 @@ function carriesAKey(parsed: URL): boolean {
     ...new URLSearchParams(parsed.hash.replace(/^#/, '')).keys(),
   ];
 
-  return named.some((name) => CREDENTIAL_WORDS.some((word) => name.toLowerCase().includes(word)));
+  // `credentialWords.ts`, not a list here. This one WAS the list, private to this module, until the
+  // notifications ledger needed the same judgement — and the first attempt at sharing it added a
+  // second copy beside this one instead of moving it, which the code round caught. A marker added to
+  // one list and not the other would make settings validation and ledger redaction disagree about
+  // the same string: refused in one path, written to a file in the other.
+  return named.some(namesACredential);
 }
 
 /**

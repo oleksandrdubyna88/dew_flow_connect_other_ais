@@ -658,25 +658,34 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * gap, not the one that prompted the work.</p>
    */
   private sayWhatTheServerSaid(answer: ProvidersAnswer): void {
-    for (const sentence of answer.notes.unrecognised) {
-      // `notifyOnce`, not a `Set` here. The probe is cached for ten seconds and re-run on every
-      // render, so an unreadable `COAI_ROLES` arrives every ten seconds for as long as it stays
-      // unreadable; the person is told once. What changed in S4 is that every arrival is now
-      // RECORDED — the Set this replaces showed the sentence once and wrote nothing, so a complaint
-      // arriving four thousand times looked exactly like one arriving twice, and the storm that
-      // ought to fire at a hundred could never fire at all.
-      void notifyOnce({
-        as: 'warning',
-        class: 'failure',
-        source: 'coai-mcp',
-        code: 'server-did-not-understand-a-setting',
-        // The SENTENCE, because a run can carry several and they are separate complaints about
-        // separate settings. One counter across all of them would hide every one but the first.
-        subject: sentence,
-        title: sentence,
-        cure: 'The server is running without that setting. Fix it in the panel and reload the window.',
-      });
+    const said = answer.notes.unrecognised;
+    if (said.length === 0) {
+      return;
     }
+    // ONE notice for the whole answer, not one per sentence. The first version looped, and the code
+    // round was right about where that ends: `unrecognised` is free text the SERVER composes, with
+    // no bound on how many entries a malformed settings file produces, so each sentence being its
+    // own subject meant each was its own key — ten thousand toasts and ten thousand serialised
+    // appends, on a chain a later record then waits behind. An unbounded input reaching an unbounded
+    // number of notifications is the shape this whole feature exists to bound. (codex.)
+    //
+    // The subject is the whole set joined, so a DIFFERENT complaint is still news — which was the
+    // reason the loop keyed on the sentence — while the same set arriving on every ten-second probe
+    // stays one key. `notifyOnce` shows it once per run and records every arrival.
+    void notifyOnce({
+      as: 'warning',
+      class: 'failure',
+      source: 'coai-mcp',
+      code: 'server-did-not-understand-a-setting',
+      subject: said.join(' · '),
+      title: said.length === 1
+        ? (said[0] ?? '')
+        : `The server could not understand ${said.length} of its settings, starting with: ${said[0] ?? ''}`,
+      // Every sentence, on the record, bounded by DETAIL_LIMIT at the serialiser rather than by a
+      // number chosen here — so the ledger keeps what the toast has no room for.
+      detail: said.join('\n'),
+      cure: 'The server is running without those settings. Fix them in the panel and reload the window.',
+    });
   }
 
   /** Keyed on the executable too: a reinstall inside the window must not serve the old one's answer. */

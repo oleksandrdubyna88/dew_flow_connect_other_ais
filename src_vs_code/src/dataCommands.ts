@@ -236,16 +236,13 @@ async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory:
     return;
   }
 
-  // The window itself has to catch up too, and it cannot do so in place. The two watchers, the
-  // panel and the chat store were all constructed at activation from the directory of the moment;
-  // `storageReadsThisSide` moves what the RESOLVER answers, not what those instances already hold,
-  // so they go on watching and writing the old folder. Rebuilding them one by one would be four
-  // lifetimes to get right for a thing that happens once; a reload is honest and complete.
-  // (CodeRabbit, Major.)
-  void offerAReload(directory);
-
   await vscode.env.clipboard.writeText(mcpServerBlock(server.fsPath, serverEnv()));
-  void notifyAndAsk({
+  // The modal FIRST, and awaited. It used to be raised beside a reload offer already on screen, and
+  // a modal disables the whole workbench — so the *Reload Window* button on that toast could not be
+  // pressed until the modal was dismissed, which is a dialog holding a notification hostage. They
+  // are two steps of one instruction and they now happen in that order: paste the block, then
+  // decide about the reload. (gemini, the code round; the overlap predates the funnel.)
+  await notifyAndAsk({
     as: 'warning',
     class: 'confirmation',
     source: 'dataDirectory',
@@ -260,6 +257,14 @@ async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory:
       + 'they are reloaded.',
     action: 'I have pasted it',
   });
+
+  // Offered rather than performed, and offered LAST. The window itself has to catch up too and it
+  // cannot do so in place: the two watchers, the panel and the chat store were all constructed at
+  // activation from the directory of the moment, and `storageReadsThisSide` moves what the
+  // RESOLVER answers, not what those instances already hold, so they go on watching and writing
+  // the old folder. Rebuilding them one by one would be four lifetimes to get right for a thing
+  // that happens once; a reload is honest and complete. (CodeRabbit, Major.)
+  void offerAReload(directory);
 }
 
 /**

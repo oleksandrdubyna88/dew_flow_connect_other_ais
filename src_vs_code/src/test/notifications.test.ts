@@ -189,3 +189,52 @@ test('seq zero is kept, because absent and zero are different facts', () => {
     undefined,
   );
 });
+
+test('a credential NAMED and given in ordinary text is taken out, not only one in a URL', () => {
+  // The redaction covered URL parameters, URL userinfo, Authorization-style prefixes and vendor key
+  // shapes — and nothing at all for the shape these records actually carry most often, because they
+  // are built from text nobody chose and a server that refuses a request quotes what it was given
+  // back at you. (codex, the code round.)
+  const line = notificationLine({
+    utc: '2026-09-16T17:05:39.812Z',
+    class: 'failure',
+    source: 'coai-mcp',
+    code: 'server-refused',
+    title: 'the gateway said password=letmein was wrong',
+    detail: 'api_key: abc123def456 and {"client_secret": "s3cr3t-value"} and PASSWORD = hunter2',
+  });
+
+  assert.ok(!line.includes('letmein'), line);
+  assert.ok(!line.includes('abc123def456'), line);
+  assert.ok(!line.includes('s3cr3t-value'), line);
+  assert.ok(!line.includes('hunter2'), line);
+  assert.ok(line.includes('[redacted]'));
+});
+
+test('an ordinary labelled value is left alone, because a redaction that fires on everything is noise', () => {
+  const line = notificationLine({
+    utc: '2026-09-16T17:05:39.812Z',
+    class: 'failure',
+    source: 'coai-mcp',
+    code: 'server-refused',
+    title: 'author=octocat and api-version=2024-02-01 and count: 17',
+  });
+
+  assert.ok(line.includes('octocat'), line);
+  assert.ok(line.includes('2024-02-01'), line);
+  assert.ok(line.includes('17'), line);
+});
+
+test('a URL survives being written down, because a sentence that loses its endpoint is useless', () => {
+  // The cheap version of the labelled rule — anything before a colon — eats `https://host`. This is
+  // the assertion that says it does not: the scheme is not a credential word, so nothing matches.
+  const line = notificationLine({
+    utc: '2026-09-16T17:05:39.812Z',
+    class: 'failure',
+    source: 'coai-mcp',
+    code: 'server-refused',
+    title: 'could not reach https://coai.example.com:8443/api/v1/rounds',
+  });
+
+  assert.ok(line.includes('https://coai.example.com:8443/api/v1/rounds'), line);
+});

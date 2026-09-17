@@ -71,3 +71,48 @@ test('the gap is a state and says nothing when there is no gap', () => {
   assert.equal(gapSentence(1, '12:00:00'), '1 record could not be written since 12:00:00');
   assert.equal(gapSentence(7, '12:00:00'), '7 records could not be written since 12:00:00');
 });
+
+test('a context field added to a notice reaches the record without a list being updated', () => {
+  // `given()` used to keep a hand-written allowlist of field names, four functions away from
+  // `notificationLine`, which redacts by iterating the record's OWN entries for the stated reason
+  // that a list would have to be remembered. The same argument applied here and the code did the
+  // opposite: a field added to Notice and to NotificationRecord, and supplied at a call site, was
+  // dropped in silence. This asserts the inversion — everything that is not presentation travels.
+  const record = noticeRecord(
+    notice({
+      subject: 'V:/connectOtherAis',
+      detail: 'the mirror could not be written',
+      cure: 'reload the window',
+      action: 'Reload Window',
+      repo: 'connect_other_ais',
+      branch: 'main',
+      session: '0ed4ad0e',
+      provider: 'codex',
+      role: 'Conventions',
+    }),
+    'r',
+    1,
+    NOON,
+  );
+
+  for (const field of ['subject', 'detail', 'cure', 'action', 'repo', 'branch', 'session', 'provider', 'role']) {
+    assert.ok(field in record, `${field} never reached the record`);
+  }
+});
+
+test('how a notice is PRESENTED does not reach the record', () => {
+  // `as` is which toast API to call; `actions` and `modal` are how it is shown. None of them is a
+  // fact about what happened, and a record is a fact about what happened. They are also the reason
+  // the mapping can be structural at all: the exclusion list is about presentation, so it does not
+  // grow when a new fact about an event is added.
+  const record = noticeRecord(
+    notice({ as: 'error', modal: true, actions: ['Copy', 'Cancel'] }),
+    'r',
+    1,
+    NOON,
+  );
+
+  assert.equal('as' in record, false);
+  assert.equal('modal' in record, false);
+  assert.equal('actions' in record, false);
+});
