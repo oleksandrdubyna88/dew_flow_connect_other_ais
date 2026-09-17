@@ -81,12 +81,28 @@ export function compareRows<Row extends object>(
  * <p><b>One home, because two pages must agree.</b> `utc-timestamps.md` asks for a single place per
  * comparison, and two pages each deciding for themselves whether an instant is in range is how they
  * come to disagree about the same row.</p>
+ *
+ * <p>It uses `Number.isNaN` rather than the global, which coerces — `isNaN('')` is false and
+ * `isNaN('x')` is true, so the bare one answers about a STRING it was never given. Identical here,
+ * because `getTime` returns a number, and the form that cannot be wrong costs nothing. This
+ * docstring is OUTSIDE the function, which is why it may contain backticks at all: `toString()`
+ * takes only the body. (SonarCloud S3504/S7773/S3358, on lines this file inherited when the
+ * function was lifted out of `roundsLog.ts` — which is why they counted as new code.)</p>
  */
 export function asInstant(localValue: string, endOfMinute: boolean): string {
   if (!localValue) {
     return '';
   }
-  var at = new Date(localValue).getTime();
+  // NO BACKTICKS ANYWHERE BELOW THIS LINE, comments included: this body is pasted into a page
+  // script by toString(), the script lives inside a template literal, and one backtick in a comment
+  // ends it and dumps the rest of the page as markup. A test asserts it, and caught this very edit.
+  const at = new Date(localValue).getTime();
+  if (Number.isNaN(at)) {
+    return '';
+  }
+  // The minute a picker names INCLUDES that minute: without this, "to 23:59" ends at 23:59:00.000
+  // and the last minute of today falls outside the range the page opens on.
+  const throughTheMinute = endOfMinute ? 59_999 : 0;
 
-  return isNaN(at) ? '' : new Date(at + (endOfMinute ? 59999 : 0)).toISOString();
+  return new Date(at + throughTheMinute).toISOString();
 }
