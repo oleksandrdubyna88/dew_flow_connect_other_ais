@@ -118,9 +118,34 @@ that provably does nothing.
    its generated notes to `RELEASES.md` (`changelog-path`), because a changelog assembled from PR
    titles is the record this family deliberately does not keep.
 7. The branch protection on all seven repositories requires every job above.
-8. `dew_flow_conventions` carries the rule (`common/pull-requests.md`, already in PR #1) and a tool,
+8. **BLOCKED on one operator decision — do not build this before it is answered.**
+   `dew_flow_conventions` carries the rule (`common/pull-requests.md`, already in PR #1) and a tool,
    `tools/repo-settings-check.mjs`, that reads a repository's protection and settings through `gh api`
    and fails when a flag above is off — so the settings cannot drift back silently.
+
+   The RULE is settled and belongs there. **The TOOL's home is not.** The operator ruled on
+   2026-09-17 that conventions says how to develop and "must not be responsible for following the
+   rules" — and a settings checker is exactly enforcement. Against that: the submodule already hosts
+   `pin-check`, `plan-lifecycle`, `adapter-check` and `ownership-check`, so the practice exists and
+   the ruling was given about a POLICY, not about those tools. The two readings differ and only the
+   operator can settle it. The choices and what each costs:
+
+   | | where the tool lives | cost |
+   |---|---|---|
+   | A | `dew_flow_conventions/tools/` | consistent with four existing tools; one conventions commit buys a six-consumer pin cascade every time it changes |
+   | B | one repository, run against all seven | consistent with today's ruling; a seventh place to look, and nothing mounts it |
+
+   Until one is recorded here, Epic 1 item 3 is blocked.
+9. **The release path holds a write token and runs code a tag chooses.** Every checkout that does
+   not push sets `persist-credentials: false`; every `uses:` line is pinned to a full 40-character
+   commit SHA with the version in a trailing comment; and release tags are protected so a `mcp-v*`
+   tag cannot be pushed against an arbitrary commit. See Epic 5 — raised by a security review on
+   2026-09-17, with the cheap half already shipped.
+
+   **Measured in `connect_other_ais` only.** The other six repositories have release workflows of
+   their own and none of them has been inventoried, so this requirement is stated for the family and
+   EVIDENCED for one member. Epic 5 step 0 is that inventory, and it comes before any of the rest —
+   a builder who skips it will protect the wrong tag pattern somewhere.
 
 ## Epics
 
@@ -130,8 +155,10 @@ that provably does nothing.
    `pull_request` triggers of `ci-server.yml` and `ci-extension.yml`; protection requires all jobs.
 2. Protection + merge settings on `rag_qln`, `mcp`, `benchmark`, `sidecar_rust`, requiring their
    existing jobs (contract jobs included — they run on every PR with their own services).
-3. `tools/repo-settings-check.mjs` in conventions, with its selftest; run by hand for now (it needs a
-   token), documented in the README.
+3. **BLOCKED — see requirement 8.** `tools/repo-settings-check.mjs`, with its selftest; run by hand
+   for now (it needs a token), documented in the README. Its HOME is the open decision: conventions
+   (as written) or one repository. Do not build it until requirement 8 records the answer — the
+   choice changes where the file goes, who mounts it, and whether changing it costs a pin cascade.
 
 ### Epic 2 — formatting gates
 
@@ -147,16 +174,131 @@ Three files per repository from one template each; the semantic-title workflow m
 ### Epic 4 — release-please
 
 `release-please-config.json` + `.release-please-manifest.json` per repository that releases, the
-`release-please.yml` workflow (`googleapis/release-please-action@v4`), `changelog-path: RELEASES.md`,
-`include-component-in-tag: true`, `tag-separator: "-"` so the tags are `mcp-v0.17.4`. Measured on one
-release before the others adopt it: the tag it cuts must trigger the existing release workflow and
-produce the same artefacts.
+`release-please.yml` workflow, `changelog-path: RELEASES.md`, `include-component-in-tag: true`,
+`tag-separator: "-"` so the tags are `mcp-v0.17.4`. Measured on one release before the others adopt
+it: the tag it cuts must trigger the existing release workflow and produce the same artefacts.
+
+**The action it adds is pinned like every other**, by requirement 9: `googleapis/release-please-action`
+at a full commit SHA with `# v4` after it, not `@v4`. This epic used to say `@v4`, which requirement 9
+now forbids — a plan that introduces a tag-pinned action while requiring SHA pins teaches the next
+builder that the requirement is optional.
+
+**The sidecar's tag shape is an open conflict, not an oversight.** Requirement 6 records that
+`dew_flow_sidecar_rust` already releases on `v*`, and `include-component-in-tag: true` produces a
+component-prefixed tag instead — so applying this epic unchanged cuts a tag its own release workflow
+does not trigger, and the release silently produces nothing. Decide one of two before configuring it:
+keep `v*` for the sidecar as a per-repository override, or change that workflow's trigger to the
+prefixed shape and say so in its own PR. Whichever is chosen, the acceptance test below must run
+against the sidecar as well as `dew_flow_mcp`.
+
+### Epic 5 — the release path stops handing a write token to tag-controlled code
+
+**Raised 2026-09-17** by CodeRabbit's security review on PR #347, as CWE-522, *Insufficiently
+Protected Credentials*. The shape of it: the release jobs run scripts **from the checkout** while
+holding `contents: write` and a `GH_TOKEN`, and a tag can point at any commit. A tag pushed against
+an unreviewed commit therefore runs that commit's scripts with the credentials that publish
+releases.
+
+**Measured in `connect_other_ais`, 2026-09-17** — and the finding is not "unpinned", it is
+**half-pinned**, which is worse because it reads as deliberate:
+
+| how it is pinned | actions |
+|---|---|
+| by SHA | `setup-node` ×7, `docker/login-action` ×3, `setup-buildx-action` ×2, `docker/build-push-action` ×2, `action-semantic-pull-request` ×1, **`actions/checkout` ×2** |
+| by tag | **`actions/checkout@v7` ×13**, `actions/setup-dotnet@v6` ×5, `actions/setup-java@v6` ×1 |
+
+`actions/checkout` is pinned both ways in one repository. zizmor reports the tag form as
+`unpinned-uses` under a blanket policy, and `artipacked` for the checkouts that persist credentials.
+
+**Already done, and it is only the cheap half** (shipped in #347): `persist-credentials: false` on
+the drafting checkout, so the job that runs scripts while holding a write token no longer leaves
+that token in `.git/config` for them to read. Nothing in those jobs needs it — `gh` is handed
+`GH_TOKEN` explicitly and no step pushes.
+
+**What is left. Step 0 first — the rest is stated for the family and measured in one repository.**
+
+0. **Inventory the other six.** For each: which workflows trigger on a tag, which of their jobs hold
+   `contents: write` or a `GH_TOKEN`, which checkouts persist credentials, which scripts those jobs
+   run from the checkout, and the exact tag patterns each releases on. One table in this document.
+   Without it a builder protects `v*` somewhere that releases on `server-v*`, or misses a release
+   path entirely — and the steps below all key off that table.
+1. `persist-credentials: false` on **every** checkout that does not push, across the family. A
+   checkout that DOES push keeps it, and the inventory says which those are.
+2. **Every `uses:` pinned to a full 40-character commit SHA, with the version in a trailing comment**
+   — `actions/checkout@8f4b7f8… # v5`. Not "one policy per repository": the family picks SHA, because
+   a tag is mutable and zizmor reports it as `unpinned-uses` under a blanket policy. The mixed state
+   measured above is the defect precisely because it leaves the reader unable to tell which lines
+   were a decision. **This is only maintainable with the `github-actions` Dependabot group** in
+   requirement 3; a frozen SHA with no bot behind it rots into an unpatched action, which is a worse
+   place than a tag. Do not do step 2 in a repository before that group exists there.
+3. **Protected release tags** — the one that actually closes CWE-522; the others narrow the blast
+   radius, this removes the entry. The mechanism, because "protected" alone is not actionable:
+   a GitHub **tag ruleset** over each release pattern from the step 0 table (`mcp-v*`,
+   `extension-v*`, `server-v*`, `bugs-v*`, and whatever the sidecar settles on in Epic 4), with
+   **Restrict creations** on and an explicit bypass list. Classic branch protection cannot do this —
+   it does not govern tags.
+   - The bypass list is the whole design: it must contain the release actor and nothing else. Today
+     that is the operator; after Epic 4 it is release-please, which cuts the tag from a merged and
+     therefore reviewed release PR. **Order matters: land Epic 4 in a repository before restricting
+     its tags, or the restriction blocks the automation that was going to satisfy it.**
+   - **Restrict updates** and **Restrict deletions** on as well, or a protected tag can simply be
+     moved to another commit, which is the same exposure with extra steps.
+   - Note the honest limit: a ruleset restricts WHO may create a tag, not which commit it points at.
+     The commit becomes trustworthy because the only permitted creator cuts it from a merged PR. If
+     the operator keeps a personal bypass, the exposure is reduced to "an actor we trust", not
+     removed — say which of the two was chosen when this ships.
+4. Release logic from a reviewed, pinned ref rather than from the tagged checkout. **In scope for
+   this plan, sequenced last on purpose**: steps 0-3 make it an improvement rather than a rescue,
+   and if the operator stops after step 3 the CWE is already closed. It is the only step that may be
+   dropped without reopening the finding — record it here if it is.
+
+**This lives here and NOT in `dew_flow_conventions`, by the operator's ruling of 2026-09-17:**
+*"there lie the general rules on how to develop; it must not be responsible for following the
+rules."* Conventions says how to work; the branch protections, action pins, Dependabot groups and CI
+gates that make people follow it belong to the repositories being protected. Checked while
+answering: `.agents/conventions/common/` mentions `uses:`, pinning and actions **nowhere**, so there
+was no shared policy to extend — and the submodule has six workflows of its own that such a rule
+would have bound.
+
+> **This ruling sits against requirement 8 of this plan**, which proposes
+> `tools/repo-settings-check.mjs` **in** `dew_flow_conventions`. The submodule already hosts
+> enforcement tools (`pin-check`, `plan-lifecycle`, `adapter-check`, `ownership-check`), so the
+> practice exists and the ruling was given about a POLICY rather than about those tools. Only the
+> operator can settle which reading wins.
+>
+> **The tension is not resolved here, but it is no longer only mentioned here.** A document round
+> pointed out that a note buried in Epic 5 does not stop a builder who reads Epic 1 and starts
+> typing — so requirement 8 and Epic 1 item 3 are both marked BLOCKED, requirement 8 carries the two
+> options and what each costs, and the Definition of Done does not close until one is recorded. What
+> is deliberately NOT done is choosing on the operator's behalf.
 
 ## Test plan
 
 Each epic lands as a PR per repository; the PR is the test — CI, CodeRabbit, and the protection
 itself refusing what it should. `repo-settings-check.mjs` has fixtures for a compliant and a drifted
-repository. Release-please is verified on `dew_flow_mcp` first (smallest release surface).
+repository.
+
+**Release-please (Epic 4)** is verified on `dew_flow_mcp` first (smallest release surface), and the
+verification is not "release-please cut a tag": it is that **the tag it cut triggered the existing
+release workflow and that workflow produced the same artefacts as before**. A tag nothing builds
+from is the failure this is watching for, and it is silent. Run the same check against
+`dew_flow_sidecar_rust`, whose tag shape is an open conflict recorded in Epic 4.
+
+**Epic 5 needs tests a pull request cannot give**, because tag protection is a repository setting
+and CI never exercises it. Each is one command and an expected outcome, run once per repository
+after the ruleset is applied:
+
+| what | how | expected |
+|---|---|---|
+| an unauthorized actor cannot create a release tag | push a throwaway tag matching the pattern, as a non-bypass actor | **refused** by the ruleset |
+| the permitted actor still can | let release-please cut one, or push as the recorded bypass actor | created, and the release workflow runs |
+| a protected tag cannot be moved | force-push the tag to a different commit | **refused** |
+| a protected tag cannot be deleted | delete it | **refused** |
+| no job persists a credential it does not need | grep every workflow for `actions/checkout` and read the `with:` beside it | every non-pushing checkout sets `persist-credentials: false` |
+| every action is pinned | `grep -rhoE "uses: [^ ]+" .github/workflows/` per repository | every line is a 40-character SHA |
+
+**Delete the throwaway tag afterwards, and check that the deletion itself was refused or permitted
+as the ruleset intends** — a test tag left behind on a release pattern is a release nobody meant.
 
 ## Definition of Done
 
@@ -166,4 +308,14 @@ repository. Release-please is verified on `dew_flow_mcp` first (smallest release
 - [ ] release-please cuts the tags the release workflows already build from, with the narrative
       changelog untouched.
 - [ ] `repo-settings-check.mjs` passes against all seven repositories.
+- [ ] Epic 5 step 0: the other six repositories are inventoried, in a table in this document.
+- [ ] No checkout persists a credential it does not need, and every `uses:` line in every repository
+      is a 40-character SHA with its version in a comment, with the `github-actions` Dependabot group
+      keeping them current.
+- [ ] Release tags are protected by a ruleset whose bypass list contains only the release actor, and
+      the six tests in the test plan were run and their outcomes recorded — including the two that
+      must be REFUSED.
+- [ ] Whether Epic 5 step 4 shipped or was dropped is recorded, with the reason.
+- [ ] **Requirement 8's home is settled by the operator**, and Epic 1 item 3 is unblocked or dropped
+      accordingly. Nothing in Epic 1 item 3 is built before that.
 - [ ] This plan promoted with what shipped differently.
