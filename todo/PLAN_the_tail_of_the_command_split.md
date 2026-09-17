@@ -54,14 +54,15 @@ Nothing here is a regression of the split. Each item names the file and line it 
 the first thing any story does is re-read that line — the parent series moved these lines once, and
 a line reference in a plan is worth what it is verified against.
 
-**This plan has been through two gate rounds and one consultation, all on 2026-09-17**, and what they
-changed is marked in place — a plan that hides its own revision is a plan whose reasoning cannot be
-checked.
+**This plan has been through three gate rounds and one consultation, all on 2026-09-17**, and what
+they changed is marked in place — a plan that hides its own revision is a plan whose reasoning cannot
+be checked.
 
 | | reviewers | findings | accepted | rejected |
 |---|---|---|---|---|
 | round 1 | 3 | 23 | 18 | 5 |
 | round 2 | 3 | 17 | 11 | 6 |
+| round 3 | 3 | 17 | 14 | 3 |
 
 **Round 1's largest change was the build order**: it was wrong, and in a way the first draft had
 already written down without noticing.
@@ -83,6 +84,16 @@ a native `createQuickPick` that nothing in this repository can drive — is one 
 `research/module_tests.md` ending “not covered … needs an extension host”. Twelve honest admissions
 is a pattern, not an omission, and the operator's call was to build the harness **in this plan**
 rather than in a document of its own, because story 6 cannot finish without it.
+
+**Round 3 then read the whole thing again and refused six assertions this plan was making about its
+own work.** The pattern in them is one thing: *a sentence describing an outcome was standing where a
+change belongs.* “The sweep's reach is widened” named no mechanism; “a visible refusal” named no
+surface; “the session was asked to stop” was a test that passes while the process it should have
+killed is still running; story 5 named the thirty-second lock expiry as a problem and then did not
+solve it; story 13 required a harness that must fail loudly and did not say through what; and the
+Sonar table promised six findings while locating five. Each is now a mechanism rather than an
+outcome, and the security sweep round 3 asked for **found two things this plan did not know** — one
+already-hardened site worth copying, and a second containment implementation nobody had noticed.
 
 ---
 
@@ -148,6 +159,33 @@ the reason. Then three more, because a containment check that refuses everything
 - a symlink that stays **inside** the workspace opens;
 - a sibling directory (`/ws-secret` beside `/ws`) is refused — trap 2, asserted rather than assumed.
 
+### Every model-reachable path-opening site, swept before one line changes
+
+*(codex, round 3: “the symlink test can pass for `openWorkspaceFile` while another model-controlled
+path still uses lexical `isInside`”. The sweep was run while writing this, and it changed the
+answer — one of the three sites it found is already hardened, and copying ITS pattern is cheaper
+than inventing one.)*
+
+| site | reachable from a model? | state |
+|---|---|---|
+| `chatHooks.ts:610`, `openWorkspaceFile` | **yes** — a link in an answer | **the defect.** Lexical `isInside`, then `stat` and `showTextDocument`, both following links |
+| `chatPanel.ts:368`, `openLink` → `vscode.env.openExternal` | **yes** — a link in an answer | **already clean, and it is the pattern to copy.** `chatMessages.ts:380` refuses at the MESSAGE BOUNDARY: `/^https?:\/\/[^\s]+$/i.test(url) ? { kind: 'openLink', url } : IGNORE`, with a header saying it *“validates rather than trusts”*. Nothing but `http`/`https` ever becomes an `openLink` |
+| `dataCommands.ts:628`, a private `isInside` | no — a person choosing a data directory | **not a hole, but a SECOND implementation** of the containment rule, with its own case-folding and separator logic. Injected at `dataCommands.ts:450` as a parameter, which is why a grep for `isInside(` misses the call |
+| `escalationWatcher.ts:314`, `installer.ts:101` and `:162` | no — targets the extension computes itself | out of scope, recorded so nobody sweeps them twice |
+
+**Two things this changed.** First, `openLink` shows where the check BELONGS: at the boundary where
+an untrusted message becomes a command, refusing by allowlist rather than inspecting later. Story 1
+cannot move entirely there — a workspace path is legitimate and only its TARGET is in question — but
+the refusal should be as early and as total. Second, `dataCommands.ts:628` means this repository has
+**two** containment implementations that can drift. Unifying them is NOT this story (it is
+person-driven and a different threat model), and it is written down here so the next reader finds it
+rather than discovering it during the next incident.
+
+**What the story leaves behind:** a structural check that every `showTextDocument`/`fs.stat` reached
+from a page command goes through the one canonicalising road — with the legitimate match it already
+has, so the check cannot pass by matching nothing. The sweep above is a measurement taken once; the
+check is what keeps it true.
+
 **Ship it on its own.** One file, one function, its own pull request, ahead of everything else here.
 
 ---
@@ -180,9 +218,19 @@ the process tree through the shared launcher”, which was the same wrong layer 
 for; it is fixed here rather than left as two stories disagreeing. Both errors are reported, not one
 swallowed by the other (`coding-style.md`: never silently swallow errors).
 
-**The test.** A thread whose `session.dispose` throws. Red: `home.release` was not called and the
-child is still alive. Green: the release ran, the tree was killed, and both facts are asserted — the
-second is the one a reordering fix would fail.
+**The test, and the gate rewrote it twice.** A thread whose `session.dispose` throws. Red:
+`home.release` was not called and the child is still alive.
+
+**“The session was asked to stop” is NOT the green condition, and an earlier draft said it was.** A
+test that observes the CALL passes while the child outlives the tab — the leak this story exists to
+close. Worse, the `finally` can then release the temporary directory while a forked grandchild is
+still using it. *(codex, round 3.)* Green is therefore observed on the PROCESS: a real parent-child
+tree, and after the cleanup neither is alive.
+
+**Residual, stated because story 8 states it and these two must not disagree:** `ChatSession.stop()`
+does not report confirmed termination, and for a REMOTE session there is nothing local to observe.
+The local path awaits termination before releasing; the remote path records that cancellation was
+requested and not confirmed, and says so rather than implying a kill.
 
 ---
 
@@ -233,10 +281,18 @@ three exist:
 **So the fix is to EXTEND one helper, not to design a protocol.** `writeFileAtomically(path, text:
 string)` takes a string and a picture is bytes, so it takes `string | Uint8Array`; the write goes
 through it; the old attachment is retained until the new one has landed; and the sweep's reach is
-widened to `pictures/<id>`, which the store sweep's survey does not currently cover. A fixed
+widened to `pictures/<id>`. A fixed
 temporary name would be a **regression** — `besideName` carries the pid and a sequence precisely so
 two windows writing at once do not collide, and the gate's “deterministic name” is already satisfied
 in a stronger form.
+
+**“The sweep's reach is widened” was an assertion, and the gate was right to refuse it.** *(local,
+round 3.)* The store sweep surveys the conversation-store root and its designated subdirectories,
+and `pictures/<id>` is not one of them — so the debris a failed replacement leaves is collected by
+nothing, and the sentence above was describing an outcome rather than a change. The story says HOW:
+the picture directory joins the surveyed set, matched by the same `.tmp` rule and the same
+`DEBRIS_AGE_MS`, and **the test asserts the survey REACHES it** rather than asserting the constant
+exists. A widening that is only a sentence is a widening that never ran.
 
 **One accepted finding shrank when it was checked, and that is recorded rather than quietly
 dropped.** A reviewer required that *“the stored reference moves before the old file goes”*, and it
@@ -298,6 +354,27 @@ same record twice. The sweep's daily marker must not be borrowed as that ownersh
 read-then-write claim can race. **This is the one new persistence surface in the whole plan**, and it
 is new because nothing here already does it — not because it sounded thorough.
 
+**And naming the thirty seconds is not the same as solving them — two reviewers said so
+independently, and they were right.** *(gemini and codex, round 3.)* The paragraph above states the
+expiry as a reason the existing locks cannot be used, then specifies ownership without saying how it
+is HELD across a batch that runs for hours. Unsolved, an active job either loses its claim at thirty
+seconds or a recovery worker takes records out from under it. So the job carries, explicitly:
+
+| | what it is |
+|---|---|
+| **schema** | the intent (from, to), the record list, a per-item state, and a monotonic **fencing token** |
+| **states** | `pending → claimed → done`, each transition durable before the filesystem move it authorises |
+| **ownership** | a lease with a **heartbeat shorter than its expiry**, renewed while work continues |
+| **a lost lease** | the worker STOPS at the next item rather than finishing the batch — a worker that ignores a lost lease is the duplicate-write path the lease exists to close |
+| **fencing** | a move carrying a token older than the record's own is refused, so a paused worker that wakes up after its lease expired cannot write |
+| **recovery** | a stranded job is reclaimed by the next startup or the next `follow`, named as the owner, with the age at which a job is abandoned rather than resumed |
+| **size and retention** | how large the job state can get for 10 000 records, when a `done` job is deleted, and who deletes it |
+
+**The test that decides this is not the happy batch.** It is two workers: a recovery pass started
+while a live `follow` holds the lease, asserting the second one refuses rather than races; and a
+worker whose lease is expired out from under it mid-batch, asserting its next move is refused by the
+fencing token rather than applied.
+
 **The test.** A store of N records with a counting clock: the pure scheduling half is extracted and
 tested as a value (`coding-style.md`: extract a named unit), so the width, the bound and the progress
 cadence are asserted without an editor. Then the interrupted case — a job killed at 40 % and
@@ -315,6 +392,13 @@ logs, so the person sees a working picker full of paths that no longer exist.
 
 **The fix.** Its own guard, and on failure a visible refusal rather than a silent log — the records
 moved, so the state on screen is known-wrong and must say so.
+
+**Through WHAT, named rather than assumed.** *(local, round 3, and the objection was fair: “a visible
+refusal” can hide a whole UI component.)* It is not a new surface. `main` already routes every
+message through a notifications funnel — the ledger whose call sites `notificationSites.test.mjs`
+counts and ratchets downward — and this refusal joins it like the rest. No new component, no picker
+redesign, and **a new direct `vscode.window.show*` call would fail that ratchet**, which is the check
+that keeps this story from growing a surface of its own.
 
 **The test, and this is where two rounds of review and one consultation all landed somewhere
 different.** A unit test over the callback passes while nobody is actually told, which leaves exactly
@@ -414,6 +498,12 @@ the job. Story 8 calls `stop()`.
    old save resolving after a replacement stamps the REPLACEMENT with the old save's revision. Fence
    the queued execution and the post-await effect, and leave `forkOnDisk`'s own legitimate `saveId`
    change (`chatPersist.ts:145`) alone. *(the consultation, verified by reading both paths.)*
+
+**And the person is told when the stop could not be confirmed.** *(gemini, round 3.)* Part 3 drops
+late completions silently, and part 2 cannot confirm termination — together those would leave a
+conversation in a terminal state while a vendor process may still be running and being billed for.
+The terminal state therefore distinguishes *ended* from *ended, and the previous turn was asked to
+stop but did not confirm*, through the same notifications funnel story 6 uses.
 
 **The test.** A thread whose `turns` never settles. Red: `ended` never returns. Green: it returns
 within the budget with a reason naming the turn, and `stop()` was called on the session. Then the one
@@ -621,6 +711,26 @@ is unproven.
    required only after it has been **green on twenty consecutive runs of `main`** — a number, so the
    promotion is a measurement rather than a mood.
 
+### The entrypoint, because “use test-electron” is not a specification
+
+*(codex, round 3: with no launcher named, “on a headless CI runner the editor can fail to launch or
+the scenario can be skipped while the optional job remains green” — which is the exact outcome this
+story says twice that it must avoid, and did not say how.)*
+
+| | what the story must pin down |
+|---|---|
+| the script | one npm script, its own `node --test` invocation, never inside the existing batch |
+| the launcher | a `runTests` entry point handing `test-electron` the extension path, the workspace fixture and the runner |
+| the runner inside the host | `node:test` programmatically, so there is ONE runner in this repository and no mocha |
+| discovery | an explicit list of scenario files, not a glob — a glob that matches nothing is a pass |
+| the workspace | a temporary folder created per run and deleted after, never the developer's own |
+| timeouts | one for the editor launching and a separate one for the scenario, so “VS Code never started” and “the test hung” are different failures with different messages |
+| cleanup | the host is killed on every exit path, including a throw, so a failed run leaves no editor behind |
+| **the exit code** | **non-zero when the host does not start, when no scenario is discovered, and when a scenario is skipped.** Zero means the scenario RAN |
+
+That last row is the whole story. A harness that exits zero because it found nothing to run is the
+green tick over nothing this plan keeps naming.
+
 ### The scope discipline, which matters more than the harness
 
 **This story builds the harness and converts ONE row: story 6's.** It does not convert the other
@@ -679,7 +789,22 @@ Eleven issues were reported and the interesting thing is which:
 | [chatTurn.ts:219](../src_vs_code/src/chatTurn.ts#L219), `oneTurn` | cognitive complexity 17 against the 15 allowed. Unchanged from `main`. The seam that reduces it is the one the module header already names as the honest next move — take it, rather than splitting the function to satisfy a number. |
 | [chatHooks.ts](../src_vs_code/src/chatHooks.ts) | two places that read better as an optional chain. |
 | [chatHooks.ts:657](../src_vs_code/src/chatHooks.ts#L657) | `pictureDir(entry.id.toString())` — stringifies as `[object Object]` if anything ever puts it in a template. It does not today; the defect is that nothing stops it. |
-| [chatSessionJoin.ts:88-90](../src_vs_code/src/chatSessionJoin.ts#L88-L90), `resolveAndPin` | a nested ternary (`own ?? (pinnable(…) ? … : undefined)`), one of the two Sonar reports there. |
+| [chatSessionJoin.ts:88-90](../src_vs_code/src/chatSessionJoin.ts#L88-L90), `resolveAndPin` | the FIRST nested ternary: `own ?? (pinnable(…) ? … : undefined)`. |
+| [chatSessionJoin.ts:268-269](../src_vs_code/src/chatSessionJoin.ts#L268-L269) | **the second one, which every earlier draft left unlocated** — `? sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : '')) : kind === 'claude' ? { kind: 'none' } : sourceOfFile(…)`. |
+
+**That last row is a finding the gate earned.** *(codex, round 3.)* The Definition of Done required
+six findings closed while this table located five and said “one of the two” about the sixth — a
+completion condition nobody could check. It was found by reading `chatSessionJoin.ts` rather than by
+re-reading the report.
+
+**The two optional-chain sites in `chatHooks.ts` are deliberately NOT given lines here.** They are
+read off the SonarCloud report for the pull request at the time the work is done: four stories
+rewrite that file before this group runs, so a line typed today names a different expression by then,
+and guessing one is how the wrong thing gets changed.
+
+**What proves the six are gone is not this table** — it is the SonarCloud quality gate on that pull
+request reporting nothing on the touched lines. The table says which six to expect; the gate says
+whether they went.
 
 None is a behaviour change and none was introduced by the split. **They are worth one afternoon
 together**, as one commit, last — not earlier, because `oneTurn` and `attachPicture` are rewritten by
@@ -760,6 +885,40 @@ the pinned conventions — measured absent for 2 047 ms on one bundle here. `nod
 in parallel processes, so beside a test that walks `src/` that window is an `ENOENT` at random. Any
 new test that drives the build gets its own invocation.
 
+**A green suite is not evidence until the artefacts are fresh.** *(codex, round 3, and this
+repository has already been bitten by it: after a rename, a stale `out/` ran BOTH names and the count
+silently inflated.)* TypeScript can emit despite errors and a blocked build can leave yesterday's
+JavaScript in place, so `npm test` reports green against the old implementation while the changed
+source is broken. Every recorded suite result in this plan is taken from a run that began with a
+cleaned `out/`, and the compiler's exit status is authoritative over the runner's.
+
+### What each story proves, and what it does NOT
+
+*(codex, round 3: unit tests can pass while the command wiring, the host state or the UI is wrong for
+the sequence a person actually performs. The answer is not to convert everything — see story 13's
+scope discipline — it is to say per story what is left unproven, so nobody reads a green suite as a
+guarantee it never made.)*
+
+| story | proved as a value | proved end to end | NOT proved, and the risk retained |
+|---|---|---|---|
+| 1 | containment, all four cases | — | that the refusal REACHES the person; the open is host-side |
+| 2 | the release ran, the tree died | — | a real vendor CLI's own fork behaviour under a thrown dispose |
+| 3 | the supplier is not called on success | n/a | nothing — this one is a pure function |
+| 4 | write, rename and sweep | — | a genuinely full disk, which no test here creates |
+| 5 | width, bound, cadence, two workers | — | ten thousand real records; the tests use a counting clock |
+| 6 | the refusal is raised | **yes, story 13's scenario** | — |
+| 7 | two failures classified apart | — | that the message is legible to somebody who did not write it |
+| 8 | budget, `stop()`, the write fence | — | that a remote vendor really stopped; `stop()` cannot confirm |
+| 9 | the scope spans the write, and rejects | — | the indicator as VS Code actually draws it |
+| 10 | one capture from two presses | — | a real keypress reaching the command |
+| 11 | the cycle is gone | n/a | nothing — the ratchet is the proof |
+| 12 | the replacement is untouched | — | a real turn resolving after a real reset |
+
+**Ten of the twelve rows have a gap in the third column, and that is the honest state of this
+repository** rather than a failure of this plan: `research/module_tests.md` carries twelve rows
+saying the same thing. Story 13 closes one. Each later story adds its own row there, with its reason,
+rather than leaving the map to say nothing about work that has shipped.
+
 ## Definition of Done
 
 - [ ] Story 1 shipped **first and alone**, with the escape reproduced red and refused green, and the
@@ -791,8 +950,35 @@ new test that drives the build gets its own invocation.
 - [ ] No module crossed 800 lines; any that approached it was extracted rather than widened.
 - [ ] No new source-text assertion was added.
 - [ ] The coai gate ran on each pull request — `review_plan` to `proceed`, then `review_code`.
-- [ ] `research/module_extension.md` and `research/module_tests.md` updated with every change.
+- [ ] **Every touched module's documentation updated, not just two files.** *(codex, round 3: the
+      DoD named `module_extension.md` and `module_tests.md` while stories 1–12 change hooks,
+      persistence, storage, session, capture, archive and model modules — so after story 1 the module
+      doc could still describe lexical-only containment.)* The mapping, per pull request:
+      stories 1, 2, 4, 12 → `module_extension.md`; stories 3, 5 → the store's own module doc;
+      story 13 → `module_tests.md`, whose gap row it rewrites; every story → its row in
+      `module_tests.md`'s flow table, including the “NOT proved” column above.
+- [ ] `research/architecture.md` and its Mermaid diagrams regenerated when cross-module interaction
+      changed — story 5 adds a persisted job and story 13 adds a test surface, and both are that.
+- [ ] **The boundary table exists in BOTH directions** (below), and the other two plans gained their
+      half in the same change rather than being left to describe work they no longer own.
 - [ ] This plan promoted to `research/` when the last group lands, with its deviations recorded.
+
+## The boundary with the two plans beside this one
+
+*(codex, round 3: a reader starting from either of the other plans sees no statement of which stories
+this one owns, so they can rebuild the same work or modify the same surface under contradictory
+assumptions. `planning-docs.md` asks for a boundary to be written into the OLDER document too — this
+plan had a pointer in the parent and nothing in the page-tests plan.)*
+
+| item | owned by | the other part | order | disjoint? |
+|---|---|---|---|---|
+| the fifteen modules, and that they changed nothing | `PLAN_the_command_file_is_too_big.md` (IMPLEMENTED) | this plan fixes the defects that series was forbidden to touch | parent first, done | yes |
+| how the WEBVIEW PAGE is tested; the 224 source-text assertions | `PLAN_the_page_tests_run_the_page.md` | this plan adds no page tests and converts none | independent | **yes — and an earlier draft wrongly said story 6 depended on it** |
+| the EXTENSION-HOST harness | **this plan, story 13** | neither other plan owns it; `module_tests.md:175` records the gap | before story 6 | yes |
+| the twelve “needs an extension host” rows | `module_tests.md` records them; this plan converts ONE | the other eleven stay, each with its reason | after story 13 exists | yes |
+
+**Both other documents gain their half of this table in the same change**, or the boundary is legible
+from one direction only — which is how the same work gets built twice.
 
 ## What the gate rejected, and on what measurement
 
