@@ -24,10 +24,18 @@ public sealed class TheAdminKeysTests
     private const string Secret = "a-server-secret";
 
     /// <summary>No variable is no administrators, and that is a legitimate way to run the server.</summary>
+    /// <remarks>
+    /// Through <see cref="AdminKeys.Read"/>, because that is the path an absent variable actually
+    /// takes. A mechanical rewrite pointed this at the text parser when the wire format landed, and
+    /// the test kept its name while testing something else. (Code round, codex.)
+    /// </remarks>
     [Fact]
     public void AnAbsentVariableConfiguresNobody()
     {
-        var admins = AdminKeys.Of(string.Empty, Secret);
+        var read = AdminKeys.Read(null, Secret);
+        read.Should().BeOfType<AdminKeys.Configured.Admins>("an absent variable is not a startup failure");
+
+        var admins = ((AdminKeys.Configured.Admins)read).Keys;
 
         admins.None.Should().BeTrue();
         admins.Count.Should().Be(0);

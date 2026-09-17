@@ -35,6 +35,27 @@ public sealed class AdminKeys
     /// <summary>The environment variable the administrators are read from.</summary>
     public const string Variable = "COAI_BUGS_ADMIN_KEYS";
 
+    /// <summary>
+    /// The line every encoded list must begin with, and the reason the shapes are disjoint at all.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Without it they are not.</b> The first version of this rule refused whitespace,
+    /// non-UTF-8 bytes and control characters, and argued that a raw key list could not survive all
+    /// three. A code-round reviewer produced one that does: <c>aCE0</c> repeated sixteen times is a
+    /// raw 64-character key, has no whitespace, is valid base64, and decodes to <c>h!4</c> repeated
+    /// — printable, no control characters, perfectly good UTF-8. It would have been accepted as an
+    /// administrator nobody holds, and the deployment's own check would have PASSED, because the
+    /// workflow decodes the same value and would have sent the same nonsense key.</para>
+    /// <para>So the encoded form carries a marker and the raw form cannot. It is spelled as a
+    /// COMMENT so that every reader of the list already drops it: <see cref="Lines"/> ignores `#`
+    /// lines, and so does the deployment when it picks a key to test with. Nothing had to learn a
+    /// new rule except this method.</para>
+    /// <para>It costs the operator one line in the command they paste, and it is safe to introduce
+    /// today for a reason that will not come again: the admin surface has never shipped, so there is
+    /// no deployed value to migrate.</para>
+    /// </remarks>
+    public const string Marker = "# coai-bugs-admin-keys v1";
+
     /// <summary>One entry per configured administrator: the hash of their key.</summary>
     /// <remarks>
     /// The HASHES, never the keys. The keys arrive as text and are hashed once here, so the only
@@ -110,9 +131,29 @@ public sealed class AdminKeys
 
     /// <summary>The decoded bytes as the operator's list, or the reason they are not one.</summary>
     private static Configured Decoded(ReadOnlySpan<byte> bytes, string secret) =>
-        Text(bytes, out var text)
+        Text(bytes, out var text) ? Marked(text, secret) : Unusable("does not decode to text");
+
+    /// <summary>
+    /// The decoded text, if it is an encoded list at all rather than something that decoded.
+    /// </summary>
+    /// <remarks>
+    /// The byte-order mark gets its own sentence because it is invisible: a Windows editor writes
+    /// one, the file looks exactly right, and every rule below would pass while the first key
+    /// silently became BOM-plus-key and matched nothing.
+    /// </remarks>
+    private static Configured Marked(string text, string secret)
+    {
+        if (text.StartsWith('\uFEFF'))
+        {
+            return Unusable("begins with a byte-order mark, which no key has. Save the list as UTF-8 without a BOM");
+        }
+
+        var first = text.Split('\n', 2)[0].TrimEnd();
+
+        return first == Marker
             ? new Configured.Admins(Of(text, secret))
-            : Unusable("does not decode to text");
+            : Unusable($"does not begin with '{Marker}'");
+    }
 
     /// <summary>
     /// Whether the bytes are text a person could have typed.
@@ -154,9 +195,12 @@ public sealed class AdminKeys
     private static Configured Unusable(string what) =>
         new Configured.Refused(
             $"{Variable} {what}. It must be the key list encoded as base64 on ONE line — no spaces, "
-            + "no line breaks, no carriage returns — which is what `base64 -w0` produces. It is "
-            + "never the raw key list: the two shapes overlap, so a server that guessed would start "
-            + "with the wrong administrators and nothing would say so.");
+            + "no line breaks, no carriage returns — and the list itself must begin with "
+            + $"'{Marker}'. What to paste into the secret box:\n\n"
+            + $"    printf '{Marker}\\n# alice\\n<alice-key>\\n' | base64 -w0\n\n"
+            + "It is never the raw key list, and the marker is what makes those two things tell "
+            + "apart: a raw key can be valid base64 that decodes to ordinary text, so without it a "
+            + "server could start with administrators nobody holds and say nothing.");
 
     /// <summary>The administrator a presented key belongs to, or nothing.</summary>
     /// <remarks>

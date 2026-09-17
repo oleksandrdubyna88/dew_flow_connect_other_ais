@@ -17,7 +17,16 @@ namespace CoaiBugs.Tests;
 /// </remarks>
 internal static class Delivery
 {
-    /// <summary>Exactly what <c>base64 -w0</c> makes of the list, or nothing when there is none.</summary>
+    /// <summary>
+    /// Exactly what <c>base64 -w0</c> makes of the marked list, or nothing when there is none.
+    /// </summary>
+    /// <remarks>
+    /// The MARKER goes on for the caller, because every real delivery carries it and a fixture that
+    /// left it off would be testing a value the server refuses. The one place that must not use this
+    /// helper is the suite that tests the encoding itself.
+    /// </remarks>
     internal static string? AdminKeys(string? list) =>
-        list is null ? null : Convert.ToBase64String(Encoding.UTF8.GetBytes(list));
+        list is null
+            ? null
+            : Convert.ToBase64String(Encoding.UTF8.GetBytes(CoaiBugs.AdminKeys.Marker + "\n" + list));
 }

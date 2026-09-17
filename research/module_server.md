@@ -2450,9 +2450,11 @@ GET  /admin/audit?limit&before     200 { items:[ {id,adminId,action,target,atUtc
 GET  /admin/active                 200 { items:[ {id,inWindow,limited} ], windowSeconds }
 ```
 
-**The administrators are one environment variable**, `COAI_BUGS_ADMIN_KEYS`, newline-separated, with
-blank lines and `#` comments dropped so a secret box can carry a line per person and a note saying
-whose it is. Each line is hashed with `COAI_BUGS_SECRET` at startup and only the hash is kept.
+**The administrators are one environment variable**, `COAI_BUGS_ADMIN_KEYS`. Its VALUE is a single
+line of base64; what that decodes to is the operator's list — newline-separated, with blank lines and
+`#` comments dropped so a secret box can carry a line per person and a note saying whose it is, and
+beginning with the marker line `# coai-bugs-admin-keys v1`. Each key line is hashed with
+`COAI_BUGS_SECRET` at startup and only the hash is kept.
 
 **And it arrives BASE64, always.** The list is newline-separated and a systemd `EnvironmentFile`
 assignment cannot hold a newline, so the value is one line — `base64 -w0` — from the secret box
@@ -2462,22 +2464,33 @@ to disagree about what a key is, which is the same reason a custom separator was
 
 **There is no fallback to the raw list, and "it decodes" is not the test.** A server that tried
 base64 and fell back would turn a typo into a server running with the WRONG administrators, with
-nothing in the startup log saying so. The two shapes genuinely overlap — a 64-character hex key is
-inside the base64 alphabet and its length is a multiple of four, and `Convert.TryFromBase64String`
-ignores whitespace, so a raw two-line list can decode silently to nonsense. Three rules make them
-disjoint and each is a test: **no whitespace** in the encoded value, **strict UTF-8** on the bytes,
-and **no control characters** in the decoded text beyond CR, LF and TAB. Anything else is a startup
-refusal naming the variable and the command, and it exits 78 like an unusable rate limit. An absent
-or empty variable stays what it was: no administrators, a warning, and a server that starts.
+nothing in the startup log saying so. The two shapes genuinely overlap: a 64-character key is inside
+the base64 alphabet and its length is a multiple of four, and `Convert.TryFromBase64String` ignores
+whitespace. **`aCE0` repeated sixteen times decodes to `h!4` repeated sixteen times** — printable,
+valid UTF-8, no control characters — so the first three rules (no whitespace, strict UTF-8, no
+control characters) are necessary and NOT sufficient. The marker is what makes the shapes disjoint,
+and it is a `#` comment so that every existing reader of the list already drops it. A byte-order mark
+is refused by name, because a Windows editor writes one invisibly and the first key would otherwise
+become BOM-plus-key. Anything else is a startup refusal naming the variable and printing the command,
+and it exits 78 like an unusable rate limit. An absent or empty variable stays what it was: no
+administrators, a warning, and a server that starts.
 
 **The deploy proves it worked.** `/health` is public and answers `ok` whether or not one
 administrator is configured, so every check the deploy made before this one passed on a server whose
 admin API refused everybody — which is exactly what happened. After the edge check the workflow sends
-the first usable key to the host's forced command as `admin-check`, and the host makes one
-authenticated `GET /admin/keys?limit=1` on loopback and prints only the status code. The credential
-never crosses the edge and never becomes an argument: it reaches `curl` through a 0600 config file a
-trap removes. Anything but `200` fails the run, and it does not roll back — a wrong key is a
-configuration failure, and the previous release has no admin surface at all.
+the whole encoded list to the host's forced command as `admin-check`; the HOST decodes it, takes the
+first usable key with the same comment-and-blank-line rule the server uses, makes one authenticated
+`GET /admin/keys?limit=1` on loopback and prints only the status code. The credential never crosses
+the edge and never becomes an argument: it reaches `curl` through a 0600 config file a trap removes,
+and its characters are checked first, because curl's config format gives meaning to quotes. Anything
+but `200` fails the run, and it does not roll back — a wrong key is a configuration failure, and the
+previous release has no admin surface at all.
+
+**The delivery is two RECORDS, not two lines that happen to arrive.** `install-env.sh` reads them
+with `read` rather than `sed -n 2p`, because an empty second line and a missing one must be told
+apart: empty means "no administrators", and missing means a caller this script does not understand —
+an old workflow, a truncated transfer — which would otherwise silently remove every administrator and
+report success. A third line is refused too, which is what a wrapped base64 value arrives as.
 Matching walks **every** hash with `CryptographicOperations.FixedTimeEquals` and **no early return**,
 and the store is an array rather than a `FrozenSet` because a set's probe is data-dependent and so is
 its timing. The guarantee is about the credential PRESENTED, not about the number of administrators:

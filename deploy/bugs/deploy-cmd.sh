@@ -35,7 +35,7 @@
 #   deploy <version>      install that RELEASE's linux-x64 artefact and switch to it
 #   deploy --rollback     pop one deployment off the trail
 #   secret                read two lines from stdin into /etc/coai-bugs/env, print nothing
-#   admin-check           read one admin key from stdin, ask the local server, print the status code
+#   admin-check           read the base64 key list from stdin, ask the local server, print the code
 #   health                what the unit answers — a REPORT, never a verdict
 # ---------------------------------------------------------------------------
 set -eu
@@ -83,12 +83,46 @@ case "$VERB" in
     # /proc/<pid>/cmdline and in the auth log. It reaches curl through a config file, because
     # `-H "Authorization: ..."` is an argument too — `umask` makes it 0600 and a trap removes it on
     # every exit path, including a signal.
-    KEY=$(head -c 4096 | head -1 | tr -d '\r\n')
-    [ -n "$KEY" ] || refuse "no key arrived on stdin"
+    # THE WHOLE LIST arrives, base64, exactly as it was delivered — and the FIRST USABLE KEY is
+    # picked out HERE rather than in the workflow. One place knows how to read the list: a copy of
+    # that rule in a runner is a copy that drifts from the one the server uses, and a check that
+    # tests a key the server does not hold reports a failure nobody can find. (Code round, gemini.)
+    #
+    # The marker line and the operator's notes are `#` comments, so the same filter drops both.
+    BLOB=$(head -c 65536 | tr -d '\r\n')
+    [ -n "$BLOB" ] || refuse "no key list arrived on stdin"
 
-    umask 077
-    CONF=$(mktemp)
+    # Decoded FIRST and checked on its own, so "this is not base64" and "this holds no key" are two
+    # different sentences. Folded together they produced the wrong one for a value nobody encoded:
+    # `base64 -d` emits partial output for partial input, and the refusal blamed the key's characters.
+    # The alphabet, before the decode, because `base64 -d` emits partial output for partial input and
+    # the refusal then blamed the wrong thing entirely — it complained about the KEY's characters for
+    # a value nobody had encoded at all.
+    case "$BLOB" in
+      ''|*[!A-Za-z0-9+/=]*) refuse "the key list is not base64" ;;
+    esac
+
+    LIST=$(printf '%s' "$BLOB" | base64 -d 2>/dev/null || true)
+    [ -n "$LIST" ] || refuse "the key list is not base64"
+
+    KEY=$(printf '%s\n' "$LIST" | tr -d '\r' | grep -v '^#' | grep -v '^[[:space:]]*$' | head -n 1 || true)
+    [ -n "$KEY" ] || refuse "the key list holds no key: every line is blank or a comment"
+
+    # WHAT A KEY MAY CONTAIN, checked before it is written anywhere. curl's config format gives
+    # meaning to quotes and backslash escapes inside a quoted value, so a key holding one could
+    # change what the rest of the line means. Issued keys are hex; this admits the wider set an
+    # operator might reasonably choose and refuses everything that could be punctuation in a config
+    # file. (Code round, gemini.)
+    case "$KEY" in
+      *[!A-Za-z0-9_.:+/=-]*) refuse "the first key holds a character a credential should not" ;;
+    esac
+
+    # The trap is armed BEFORE the file exists, so a signal between `mktemp` and the next line still
+    # removes it; `umask` is what makes it 0600 rather than the mode a default umask would give.
+    CONF=''
     trap 'rm -f "$CONF"' EXIT INT TERM HUP
+    umask 077
+    CONF=$(mktemp) || refuse "could not make a temporary file"
     printf 'header = "Authorization: Bearer %s"\n' "$KEY" > "$CONF"
 
     # The unit was restarted moments ago by `deploy`, so the first attempt can arrive before it is
@@ -97,10 +131,13 @@ case "$VERB" in
     ATTEMPT=0
     CODE=000
     while [ "$ATTEMPT" -lt 10 ]; do
-      CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 --config "$CONF" \
+      CODE=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 --config "$CONF" \
              'http://127.0.0.1:8110/admin/keys?limit=1' 2>/dev/null || printf '000')
       [ "$CODE" = "000" ] || break
       ATTEMPT=$((ATTEMPT + 1))
+      # On STDERR, so the caller reading stdout still gets one line with one number on it — and so
+      # forty seconds of waiting looks like waiting rather than like a hang. (Code round, codex.)
+      printf 'the unit has not answered yet; attempt %s of 10\n' "$ATTEMPT" >&2
       sleep 1
     done
 
