@@ -546,10 +546,19 @@ route that touches neither the list nor the database: a build accident could oth
 satisfy the release smoke, publish, and then refuse every submission as if the contributor were at
 fault.
 
-Three more refusals at startup, all **78**, since the limits became settings: a
+Four more refusals at startup, all **78**, since the limits became settings: a
 `COAI_BUGS_RATE_PER_MINUTE` or a `COAI_BUGS_ADMIN_RATE_PER_MINUTE` that is not a whole number from 0
-to 1000 (refused, never clamped — the message names the range and which variable it read), and a
-**second server on the same data directory**. The rate limit is
+to 1000 (refused, never clamped — the message names the range and which variable it read), a
+**second server on the same data directory**, and a line in `COAI_BUGS_ADMIN_KEYS` that is **also an
+issued contributor key**.
+
+That last one is worth knowing before you hit it. The two credential stores are checked in order, so
+one string in both would upload as a contributor — counted against its key row, on the contributor
+limit — and then become an administrator the moment that key was revoked. **Revoking it would grant
+administration**, which is the opposite of what you pressed the button for. The server refuses to
+start, names the contributor key id, and the fix is either to remove that line from the variable or
+to revoke and reissue the contributor key. Do not "fix" it by reusing the key elsewhere: there is no
+configuration in which one string should be both. The rate limit is
 one process's memory, so two servers would each admit the whole limit; the first holds
 `$COAI_BUGS_DATA/coai-bugs.serving` open exclusively for its lifetime and the second says so and
 stops. The one-shots (`--issue-key`, `--revoke`, `--waiting`, `--promote`) never take that lock:

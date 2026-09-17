@@ -2458,6 +2458,18 @@ and the store is an array rather than a `FrozenSet` because a set's probe is dat
 its timing. The guarantee is about the credential PRESENTED, not about the number of administrators:
 N comparisons cost O(N), and the count is in the operator's own secret store.
 
+**An unconfigured server does the same work as a configured one**, which is the half of the
+anti-oracle contract that identical bytes cannot give. Matching returned early when nothing was
+configured, so it never computed the presented key's hash at all — a whole HMAC and a hex formatting
+skipped — while every configured deployment paid for it on each attempt; and a refused credential is
+never rate-limited, so an attacker can average as many attempts as they like. An empty configuration
+is now compared against ONE stand-in of the same length, so the path taken is the path of a server
+with one administrator and a wrong key. That is the whole of what can be promised, since N keys cost
+N comparisons: what reveals nothing is **whether administration is enabled here at all**. The
+stand-in cannot be presented as a credential — that would need a preimage of SHA-256 — and a test
+asserts it is refused anyway, because a constant is a thing somebody can replace with a derivable
+one.
+
 **An absent variable and a wrong credential are one answer.** Both are 401 with the same body, so
 these routes are not an oracle for whether administration is enabled on a deployment. The cost is
 that an operator cannot tell a missing secret from their own typo from outside — so the server says
@@ -2476,13 +2488,31 @@ it — the recovery depends on that ORDER, so a test pins it.
 **Paging is keyset everywhere**, `?limit&before`, and `nextBefore` doubles as "there is more" (a full
 page is the only evidence another exists, so following it ends with one empty page). Not `OFFSET`:
 an offset is not insert-stable, and issuing a key between two requests hides or duplicates a row —
-the distinguishing sequence is a test. The keys cursor is `rowid`, because `api_keys.id` is hex and
-sorts lexicographically rather than chronologically; it is safe because that table never deletes.
-`total` is on the keys page only — `api_keys` is tens of rows, while the audit is bounded at 50 000
-and counting it per page would scan the table while holding the corpus gate. An illegal `limit` or
-`before` is a **400 naming what was legal, never a silent clamp**, and `limit=0` is refused rather
-than meaning "everything"; a `before` past the end is an empty page, because that is a correct client
-on its last request.
+the distinguishing sequence is a test. `total` is on the keys page only — `api_keys` is tens of rows,
+while the audit is bounded at 50 000 and counting it per page would scan the table while holding the
+corpus gate. An illegal `limit` or `before` is a **400 naming what was legal, never a silent clamp**,
+and `limit=0` is refused rather than meaning "everything"; a `before` past the end is an empty page,
+because that is a correct client on its last request.
+
+**The cursor is an OPAQUE TOKEN, and a client never composes one.** The keys listing pages by
+`(created_utc, id)` and the audit by its own row id, but both arrive as a string the caller passes
+back verbatim — one rule for a reader to hold, and the reason a token that was not handed out is a
+400 rather than an empty page. Two defects are behind that shape, both from the code round:
+
+- **The keys cursor was `rowid`, and the comment defending it answered the wrong risk.** It argued
+  that `api_keys` never deletes, so a number is never reused — true, and not the question. The table
+  is keyed by `id TEXT PRIMARY KEY`, so its rowid is *implicit*, and SQLite renumbers implicit rowids
+  on `VACUUM` or any later step that rebuilds the table: the order survives, the numbers do not, and
+  a client holding a `nextBefore` across a maintenance window silently skips or repeats keys. Step 3
+  of the schema already said in writing that a VACUUM renumbers, three hundred lines above the code
+  that assumed otherwise. `admin_audit.id` is declared `INTEGER PRIMARY KEY`, so it *is* the rowid
+  and is preserved — which is the whole reason only one of the two listings needed a composite key.
+- **Any integer was accepted as a cursor**, so `?before=-1` and `?before=0` answered 200 with an
+  empty page: a client computing a cursor instead of echoing one saw a finished listing and stopped.
+
+The separator is `~`, which is unreserved in RFC 3986, so the token is legal in a query string
+exactly as it was given. It was `|` — not a legal query character — and the tests that followed a
+cursor were the first thing to notice.
 
 **The admin limit is its own setting.** `COAI_BUGS_ADMIN_RATE_PER_MINUTE`, default **120**, validated
 and capped exactly like the contributor one (78 at startup past 1 000). Sharing the contributor number
@@ -2499,10 +2529,32 @@ persists nothing, and an idle window is absent rather than reported as zero. Thi
 place this server shows contributor activity in real time, and the privacy promise says so in those
 words rather than leaving a reader to reconcile it.
 
+It is **bounded** like the listings, with the same `limit`, and carries `total`: it answered every
+active subject, and the growth budget allows a thousand live keys inside one minute — a thousand
+records built, sorted and serialised for one request, so the response grew with the flood it was
+being read to diagnose. Busiest-first means the bound keeps the part anybody reads. `total` is free
+here and not on the audit page for a reason worth keeping straight: this one is the length of a list
+already in memory, the audit's would be a COUNT over a table while holding the corpus gate.
+
+**A credential cannot be both an administrator and a contributor key.** The two stores are asked in
+order, so one string in both is a caller whose identity depends on which store still holds it: it
+uploads as a contributor, counted and limited by the contributor setting, and the moment that key row
+is revoked the same bearer string becomes an administrator — uncounted, on the other limit, able to
+issue keys. **A revocation that PROMOTES a credential** is the opposite of what the operator pressed
+the button for. It is refused at startup with exit 78 rather than resolved by a precedence rule,
+because both precedences are wrong in one direction: contributor-first is that surprise, and
+admin-first means pasting an issued key into the variable silently grants administration. One indexed
+lookup per configured administrator, once, when the corpus is already open — which is why the check
+lives beside the serve path rather than in the environment parsing.
+
 **An administrator may upload, down a path of its own.** `/ingest` accepts either credential and the
 gate hands the endpoint an `Uploader` union; an administrator's batch goes through
 `Corpus.AcceptAdmin`, which writes the pairs with the derived `admin-…` id in `key_id` and **no
-counter and no month**, because there is no key row to carry them. The in-force re-check
+counter and no month**, because there is no key row to carry them. The lock, the transaction, the
+scope's lease and the commit are ONE shared method — a code round pointed out that an ingestion
+invariant added to the established contributor path would otherwise leave administrator uploads
+without it, so the same payload would follow different rules according to whose credential sent it.
+What remains unshared is exactly the difference: the in-force re-check, and the counter. The in-force re-check
 `Corpus.Accept` does inside its transaction is not bypassed — **it does not apply**: it guards a
 `--revoke` committing between the gate and the write in another process, and an administrator's set
 is built once at startup and immutable for the process's life. A test asserts the difference directly,

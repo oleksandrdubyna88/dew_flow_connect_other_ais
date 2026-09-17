@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
@@ -39,7 +40,7 @@ internal static partial class AdminApi
             Issue(http, corpus, secret, clock, body));
         app.MapPost("/admin/keys/{id}/revoke", (string id, HttpContext http) => Revoke(http, corpus, clock, id));
         app.MapGet("/admin/audit", (HttpContext http) => Trail(http, corpus));
-        app.MapGet("/admin/active", () => Active(contributors, admins));
+        app.MapGet("/admin/active", (HttpContext http) => Active(http, contributors, admins));
     }
 
     private static IResult Keys(HttpContext http, Corpus corpus)
@@ -47,16 +48,22 @@ internal static partial class AdminApi
         var read = AdminPaging.From(http.Request.Query);
         if (read is not AdminPaging.Read.Page(var paging))
         {
-            return Refused(read);
+            return Malformed(read.Refusal);
         }
 
-        var page = corpus.KeysPage(paging.Limit, paging.Before);
+        var token = KeysCursor.From(paging.Before);
+        if (token is not KeysCursor.Read.Page(var cursor))
+        {
+            return Malformed(token.Refusal);
+        }
+
+        var page = corpus.KeysPage(paging.Limit, cursor);
 
         return TypedResults.Ok(new AdminWire.KeysPage(
             [.. page.Select(Listed)],
             paging.Limit,
             corpus.KeysTotal(),
-            More(page.Count, paging.Limit, page.Count > 0 ? page[^1].Cursor : null)));
+            More(page.Count, paging.Limit, page.Count > 0 ? page[^1].Cursor.Token : string.Empty)));
     }
 
     private static IResult Trail(HttpContext http, Corpus corpus)
@@ -64,16 +71,25 @@ internal static partial class AdminApi
         var read = AdminPaging.From(http.Request.Query);
         if (read is not AdminPaging.Read.Page(var paging))
         {
-            return Refused(read);
+            return Malformed(read.Refusal);
         }
 
-        var page = corpus.AuditTrail(paging.Limit, paging.Before);
+        var token = KeysCursor.Audit(paging.Before);
+        if (token is not KeysCursor.Read<long>.Page(var before))
+        {
+            return Malformed(token.Refusal);
+        }
+
+        var page = corpus.AuditTrail(paging.Limit, before);
 
         return TypedResults.Ok(new AdminWire.AuditPage(
             [.. page.Select(row => new AdminWire.AuditListed(
                 row.Id, row.Who.Value, row.Action.Word(), row.Target.Value, row.At.Stored))],
             paging.Limit,
-            More(page.Count, paging.Limit, page.Count > 0 ? page[^1].Id : null)));
+            More(
+                page.Count,
+                paging.Limit,
+                page.Count > 0 ? page[^1].Id.ToString(CultureInfo.InvariantCulture) : string.Empty)));
     }
 
     private static IResult Issue(
@@ -106,7 +122,7 @@ internal static partial class AdminApi
             _ => throw new InvalidOperationException("Revoked has no fourth case"),
         };
 
-    /// <summary>Who is sending right now, across BOTH limiters.</summary>
+    /// <summary>Who is sending right now, across BOTH limiters, busiest first and BOUNDED.</summary>
     /// <remarks>
     /// <para><b>Both, because the contributor limiter is the one the question is about.</b> The two
     /// settings are separate, so there are two <see cref="RateLimiter"/> instances and each holds
@@ -114,28 +130,51 @@ internal static partial class AdminApi
     /// administrators and no contributors, which is the inverse of what the endpoint is for. Every
     /// row carries its subject's prefix, so `key:…` and `admin-…` are told apart without a second
     /// field, and the merged list is ordered once, here.</para>
+    /// <para><b>Bounded, and it says when it truncated.</b> It answered every active subject, and a
+    /// code round did the arithmetic the growth budget allows: a thousand live keys all sending
+    /// inside one minute is a thousand records built, sorted and serialised for one request — the
+    /// response grows with the flood it is being read to diagnose. So it takes the same `limit` as
+    /// the listings and carries `total`, and because the rows are ordered busiest-first the bound
+    /// keeps the only part anybody reads. `total` is free here: it is the length of a list already
+    /// in memory, not a table scan, which is why this route has one where the audit does not.</para>
     /// <para>It reads live dictionaries and persists nothing; an idle window is absent rather than
     /// reported as zero.</para>
     /// </remarks>
-    private static IResult Active(RateLimiter contributors, RateLimiter admins) =>
-        TypedResults.Ok(new AdminWire.ActiveNow(
-            [.. Sending(contributors)
-                .Concat(Sending(admins))
+    private static IResult Active(HttpContext http, RateLimiter contributors, RateLimiter admins)
+    {
+        var read = AdminPaging.From(http.Request.Query);
+        if (read is not AdminPaging.Read.Page(var paging))
+        {
+            return Malformed(read.Refusal);
+        }
+
+        var sending = Sending(contributors).Concat(Sending(admins)).ToList();
+
+        return TypedResults.Ok(new AdminWire.ActiveNow(
+            [.. sending
                 .OrderByDescending(row => row.InWindow)
-                .ThenBy(row => row.Id, StringComparer.Ordinal)],
+                .ThenBy(row => row.Id, StringComparer.Ordinal)
+                .Take(paging.Limit)],
+            paging.Limit,
+            sending.Count,
             (int)RateLimiter.WindowLength.TotalSeconds));
+    }
 
     private static IEnumerable<AdminWire.ActiveCaller> Sending(RateLimiter limiter) =>
         limiter.ActiveNow().Select(row => new AdminWire.ActiveCaller(row.Subject, row.InWindow, row.Limited));
 
     /// <summary>The cursor for the NEXT page, or null when this one was the last.</summary>
     /// <remarks>
-    /// A full page is the only reason to believe another exists; a short one is the end. This is why
-    /// there is no `hasMore` field — the cursor's presence IS the answer, and two fields that must
-    /// agree are two fields that can disagree.
+    /// <para>A full page is the only reason to believe another exists; a short one is the end. This
+    /// is why there is no `hasMore` field — the cursor's presence IS the answer, and two fields that
+    /// must agree are two fields that can disagree.</para>
+    /// <para>A token, not a number, on BOTH listings even though the audit's is a decimal id
+    /// underneath: a client's rule is "pass back what you were given", and one rule is easier to
+    /// keep than two. It is also what stops a client computing a cursor, which is how
+    /// `?before=-1` came to answer an empty page that read like the end of the list.</para>
     /// </remarks>
-    private static long? More(int returned, int limit, long? last) =>
-        returned == limit ? last : null;
+    private static string? More(int returned, int limit, string last) =>
+        returned == limit && last.Length > 0 ? last : null;
 
     private static AdminWire.KeyListed Listed(KeyRow row) =>
         new(
@@ -147,10 +186,14 @@ internal static partial class AdminApi
             row.Sent.Value,
             row.Waiting);
 
-    private static IResult Refused(AdminPaging.Read read) =>
-        read is AdminPaging.Read.Refused refused
-            ? TypedResults.BadRequest(new Problem(refused.Why))
-            : throw new InvalidOperationException("only a refusal reaches here");
+    /// <summary>A 400 saying what was legal. One helper for every malformed parameter.</summary>
+    /// <remarks>
+    /// It was called `Refused`, which in this file sits beside a 401 refusal and a 429 refusal and
+    /// therefore said nothing about which of the three it was. (Code round, local.) `Malformed` is
+    /// only ever the request's own shape: the gate answers the other two and this is never reached
+    /// for either.
+    /// </remarks>
+    private static IResult Malformed(string why) => TypedResults.BadRequest(new Problem(why));
 
     /// <summary>Why a note cannot be stored, or empty when it can.</summary>
     /// <remarks>

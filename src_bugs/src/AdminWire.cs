@@ -41,7 +41,7 @@ internal static class AdminWire
         IReadOnlyList<KeyListed> Items,
         int Limit,
         int Total,
-        long? NextBefore);
+        string? NextBefore);
 
     /// <summary>The ONE response in this server that carries a key, and it carries it once.</summary>
     /// <remarks>
@@ -68,7 +68,7 @@ internal static class AdminWire
         string AtUtc);
 
     /// <summary>A page of the audit, newest first. No `total`; see the remarks.</summary>
-    internal sealed record AuditPage(IReadOnlyList<AuditListed> Items, int Limit, long? NextBefore);
+    internal sealed record AuditPage(IReadOnlyList<AuditListed> Items, int Limit, string? NextBefore);
 
     /// <summary>One caller sending inside the current window.</summary>
     /// <param name="Id">The limiter subject, prefix intact: `key:…` or `admin-…`.</param>
@@ -77,7 +77,18 @@ internal static class AdminWire
     internal sealed record ActiveCaller(string Id, int InWindow, bool Limited);
 
     /// <summary>Who is sending right now. Persists nothing; the shape never varies when empty.</summary>
-    internal sealed record ActiveNow(IReadOnlyList<ActiveCaller> Items, int WindowSeconds);
+    /// <remarks>
+    /// <b>It carries <c>Total</c> and the audit page does not</b>, which is not an inconsistency:
+    /// this total is the length of a list already in memory, while the audit's would be a COUNT over
+    /// a table bounded at 50 000 rows, run on every page while holding the corpus gate. The number
+    /// is here because the items are truncated to <c>Limit</c> busiest-first, and a truncated list
+    /// that cannot say how much it left out is a list an operator reads as the whole answer.
+    /// </remarks>
+    internal sealed record ActiveNow(
+        IReadOnlyList<ActiveCaller> Items,
+        int Limit,
+        int Total,
+        int WindowSeconds);
 
     /// <summary>What a new key is asked for with.</summary>
     internal sealed record IssueRequest(string? Note);
