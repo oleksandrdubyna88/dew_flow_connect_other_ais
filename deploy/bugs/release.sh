@@ -180,7 +180,12 @@ if [[ -n "$FROM" ]]; then
     found="$scratch"
     [[ -f "$scratch/$SERVICE" ]] || found=$(dirname "$(find "$scratch" -mindepth 2 -maxdepth 2 -name "$SERVICE" -type f | head -1)")
     [[ -f "$found/$SERVICE" ]] || die "$FROM carries no $SERVICE at its top level or one below it"
-    cp -a "$found/." "$RELEASE/"
+
+    # ENTRY BY ENTRY, never `cp -a "$found/."` — see the note below `fi` for what that cost.
+    # `--preserve=mode,timestamps` and not `-a`, because `-a` implies preserving OWNERSHIP, which a
+    # non-root copier cannot do and which makes `cp` exit non-zero under `set -e`.
+    find "$found" -mindepth 1 -maxdepth 1 \
+        -exec cp -r --preserve=mode,timestamps {} "$RELEASE"/ \;
     rm -rf "$scratch"
 else
     say "building $VERSION from $ROOT/src (this takes several minutes)"
@@ -189,7 +194,7 @@ else
         || die "the publish failed"
 fi
 
-# THE GROUP, PUT BACK, because the copy above took it away.
+# THE GROUP IS NEVER LOST, which is the whole design of the two lines below.
 #
 # `releases` is setgid (2750) so that a release directory created under it inherits the group
 # `coai-bugs` and the service reaches its binary by GROUP. That is what the ownership model is for:
@@ -201,16 +206,30 @@ fi
 # It worked, for a reason nobody chose, and it would have stopped working the day an archive was
 # packed with a directory mode of 0750.
 #
-# Measured on the host, in a scratch directory, because a claim about setgid is worth checking:
-# a plain `mkdir` under the 2750 parent came out `coai-bugs 2755`; after
-# `cp -a source/. copied/` the same directory read `root 755`.
+# AND THE FIRST ATTEMPT AT THIS MADE IT WORSE, which is why the fix looks like this.
 #
-# `--reference` takes the group from the parent rather than naming it, so this stays correct if the
-# service account is ever renamed. `-R` because the FILES have to be group-readable too — the
-# binary to execute and `e_sqlite3` to dlopen.
-chgrp -R --reference="$RELEASES" "$RELEASE" \
-    || say "could not set the group on $RELEASE; the service may not be able to read it"
-chmod 0750 "$RELEASE"
+# That attempt was `chgrp -R --reference="$RELEASES" "$RELEASE"` followed by `chmod 0750`. On Linux a
+# non-root user may only chgrp a file they own to a group they BELONG TO, and `coai-bugs-deploy` is
+# deliberately not a member of `coai-bugs` — that is the whole point of the split, so that the
+# account which delivers releases cannot read the corpus. So `chgrp` was refused, `chmod` was not,
+# and `0.2.0` landed as `0750 coai-bugs-deploy:coai-bugs-deploy`: the world bits the service had been
+# reading through were gone and the group was wrong. The service could not start, the canary caught
+# it, and the host rolled back to `0.1.0`. The fix had produced exactly the failure it was added to
+# prevent, and a worse one — before it the service read the binary by luck, after it not at all.
+#
+# The check that would have caught it: the earlier experiment ran AS ROOT, and root can chgrp to any
+# group. A permission fix verified as root is not verified.
+#
+# So nothing here needs a privilege this account lacks. The parent is setgid, a directory created
+# under it inherits `coai-bugs` from the kernel, and files created INSIDE it inherit the same — no
+# chgrp anywhere. What has to be avoided is the one operation that destroys that: `cp -a "$src/."`
+# applies the SOURCE directory's mode and group to `$RELEASE` itself. Copying the entries one at a
+# time writes only INTO `$RELEASE` and leaves its own attributes alone.
+#
+# Setgid kept, so a later write inside still inherits the group; world bits off, so the group is
+# what the service uses rather than a wider permission standing beside it. `chmod` by the owner
+# needs no group membership, which is why this line is safe where `chgrp` was not.
+chmod 2750 "$RELEASE"
 
 # INSPECTED before it is trusted, because a release that ships without this is the one defect this
 # server cannot report about itself.
