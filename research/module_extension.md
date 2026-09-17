@@ -6794,7 +6794,7 @@ reach the page as `undefined` in a cell and as an invalid id in the decision pos
 ## The chat command file is split (2026-09-17)
 
 `chatCommand.ts` was 4 183 lines against the 800 the coding-style rule allows, with 53 imports, 20
-exports and one 326-line function. It is **543** now, in fifteen modules and seven commits under
+exports and one 326-line function. It is **543** now, in fifteen modules under
 [PLAN_the_command_file_is_too_big.md](PLAN_the_command_file_is_too_big.md), with no behaviour change
 anywhere in the series.
 
@@ -6830,11 +6830,15 @@ because `show` reads `pairOf`, `pairOf` calls `vendorFor`, and `switchModel` cal
 
 **What proves a move changed nothing.** Not the test count — it survives a test renamed out of one
 file and into another — but the collected test NAMES diffed against a baseline measured by stashing
-each tier on the same commit (3 261, identical throughout); `npm run bundle`, the only check here
-that a cycle fails; and `scripts/prove-move.mjs`, which asserts every body line of every new module
-appears verbatim in the pre-split original (3 388 lines, zero residue). That last one exists because
-a first attempt at this split, built on a stale base, would have silently reverted the notifications
-ledger for every call site it moved — with a green suite, a clean typecheck and a passing gate.
+each tier on the same commit (3 261, identical throughout); `npm run bundle`, which proves the graph
+RESOLVES; `src/test/importCycles.test.mjs`, which is what proves it is ACYCLIC, because a cycle
+bundles perfectly well and fails at runtime instead; `src/test/theBundleLoads.test.mjs`, which loads
+the built bundle against a stubbed editor; and `scripts/prove-move.mjs`, which asserts every body
+line of every new module appears verbatim, IN ORDER, in the pre-split original at a pinned SHA
+(3 388 lines, 33 contiguous runs, zero residue). That last one exists because a first attempt at this
+split, built on a stale base, would have silently reverted the notifications ledger for every call
+site it moved — with a green suite, a clean typecheck and a passing gate.
 
-Nothing in this repository can start an extension host, so a runtime regression in a moved callback
+Nothing in this repository EXERCISES the extension — the bundle is loaded, but `activate` is never
+called — so a runtime regression in a moved callback
 would still pass all of it. The plan says so in its own words rather than claiming otherwise.

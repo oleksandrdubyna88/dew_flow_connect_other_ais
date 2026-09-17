@@ -20,31 +20,71 @@ import { join } from 'node:path';
 /** Only the extension's own modules: a cycle through `node:` or `vscode` is not a thing. */
 const LOCAL = /^\.\.?\//u;
 
-/** The import specifiers one source file names, relative paths only. */
+/**
+ * The import specifiers one source file names, relative paths only.
+ *
+ * <p>BOTH quote styles, and the dynamic form. The first version matched single quotes alone, which
+ * is this repository's house style and therefore exactly the wrong thing to rely on: a guard that
+ * only sees the spelling everybody happens to use today is a guard that stops working the first time
+ * somebody pastes in a line with double quotes. (codex, the code round.)</p>
+ */
 export function importsOf(text) {
   const found = [];
-  // `import … from 'x'`, `export … from 'x'`, and the dynamic `import('x')`.
-  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/gu)) {
-    const [, specifier] = match;
+  // `import … from 'x'`, `export … from "x"`, and the dynamic `import('x')`.
+  for (const match of text.matchAll(/(?:from|import)\s*\(?\s*(['"])([^'"]+)\1/gu)) {
+    const [, , specifier] = match;
     if (LOCAL.test(specifier)) {
-      found.push(specifier.replace(/^\.\//u, '').replace(/\.js$/u, ''));
+      found.push(specifier.replace(/\.js$/u, ''));
     }
   }
 
   return [...new Set(found)];
 }
 
-/** Every `*.ts` in a directory, by module name, with what it imports. */
-export function graphOf(dir) {
+/**
+ * Every `*.ts` under a directory, by module path, with what it imports.
+ *
+ * <p>RECURSIVE. `src/` is flat today, and a check that assumed it would stay flat would report no
+ * cycle for two modules put in a subfolder tomorrow — silence that reads exactly like safety.
+ * (codex, the code round.)</p>
+ */
+export function graphOf(dir, prefix = '') {
   const graph = new Map();
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith('.ts') || name.endsWith('.d.ts')) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      for (const [name, imports] of graphOf(join(dir, entry.name), `${prefix}${entry.name}/`)) {
+        graph.set(name, imports);
+      }
       continue;
     }
-    graph.set(name.replace(/\.ts$/u, ''), importsOf(readFileSync(join(dir, name), 'utf8')));
+    if (!entry.name.endsWith('.ts') || entry.name.endsWith('.d.ts')) {
+      continue;
+    }
+    const name = `${prefix}${entry.name.replace(/\.ts$/u, '')}`;
+    const from = importsOf(readFileSync(join(dir, entry.name), 'utf8'));
+    // A specifier is relative to the file that names it, so it is resolved against this folder.
+    graph.set(name, from.map((one) => resolveFrom(prefix, one)));
   }
 
   return graph;
+}
+
+/** `./x` and `../y/z`, as the module names this graph uses. */
+function resolveFrom(prefix, specifier) {
+  const parts = [...prefix.split('/').filter((one) => one.length > 0), ...specifier.split('/')];
+  const out = [];
+  for (const part of parts) {
+    if (part === '.' || part.length === 0) {
+      continue;
+    }
+    if (part === '..') {
+      out.pop();
+      continue;
+    }
+    out.push(part);
+  }
+
+  return out.join('/');
 }
 
 /**

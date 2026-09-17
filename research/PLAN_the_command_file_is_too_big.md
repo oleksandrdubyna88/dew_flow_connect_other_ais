@@ -1,7 +1,7 @@
 # PLAN — the chat command file is five times the ceiling
 
 > Status: **IMPLEMENTED, 2026-09-17.** `src_vs_code/src/chatCommand.ts` went from **4 183 lines to
-> 543**, under the 800 the coding-style rule allows, in fifteen modules and nine commits. No
+> 543**, under the 800 the coding-style rule allows, in fifteen modules. No
 > behaviour change anywhere in the series, and that is measured rather than asserted.
 >
 > Scope: `chatCommand.ts` and the eleven test files that read its SOURCE TEXT.
@@ -196,7 +196,71 @@ bundle-load smoke test, the ordered comparison in `prove-move.mjs`, and its pinn
 accepted findings widened the exact counts from a named list of modules to the WHOLE source tree,
 because a count over a list passes if the next call goes somewhere the list was never told about.
 
+### The code round
+
+`good_enough`, 10 of 12 reviewers answering (two local ones lost the engine to a busy card and a
+timeout). **25 findings: 17 accepted and 8 rejected with measurements.** Both gemini reviewers on
+architecture and on security-reliability found no defects and said the split is faithful.
+
+Six accepted findings changed code, and all six are in the series: `bodyOf` deduplicated, the test
+script compiling before any suite result, the region budget made REQUIRED rather than optional, the
+cycle scan made recursive and quote-agnostic, and two documentation corrections.
+
+The eight rejections, each on something checkable:
+
+- *Three imports are missing* — they are not; `chatGotoCommand.ts:7`, `extension.ts:15` and
+  `conversationPickerCommand.ts:4` all have them, the typecheck is clean, and the reviewer's own note
+  says the finding assumed the diff was the file.
+- *`publish` publishes the id before the disk write* — the opposite: `await thread.writes` is twelve
+  lines above `pushChatFresh`, and two tests pin the order.
+- *`follow`'s retry can hang the extension host* — five tries at 200 ms is one second, in a detached
+  call nothing awaits, and the bound is pinned by a test.
+- *`index` or `onDisk` could be undefined* — both are non-optional parameters under `strict`; a
+  runtime check for a state the compiler forbids is code no test can cover.
+- *`ChatModelChoice` couples config to the page* — true and pre-existing, below.
+
+**ELEVEN pre-existing defects in moved code were accepted and deliberately NOT fixed here**, because
+this series may not change behaviour and a diff that moves 3 388 lines and fixes eleven things is a
+diff nobody can review. They are below with what each rests on. The security one should not wait.
+
 ## Tail — noticed while moving, left for their own work
+
+### Accepted at the code round, each needing its own change
+
+- **A symlink can escape the workspace when a model-supplied link is opened.** `openWorkspaceFile`
+  checks containment with `isInside(folder.uri.path, target.path)` — lexical only — and then calls
+  `stat` and `showTextDocument`, both of which follow links. A workspace holding `docs/secrets`
+  pointing outside it opens the outside file. The fix is the one `claudeSessions` already uses for
+  the same shape: canonicalise both sides with realpath and compare those. **This is the one on this
+  list that should be done next rather than eventually.**
+- **Closing a chat can skip its cleanup.** `onClosed` runs `thread?.session.dispose();` and then
+  `thread?.home.release();`. If dispose throws, release never runs and a vendor process and its
+  temporary directory outlive the tab. Each needs its own try, with the release in a `finally`.
+- **`keepOnDisk` allocates the whole transcript on every save while its comment says it does not.**
+  The comment reads *"MAPPED ONLY WHEN IT IS ASKED FOR"*; three lines below,
+  `nextAfterSave(outcome, baseline, ours: readonly string[])` takes an ARRAY and the call passes
+  `ours()`. The function shape gives the appearance of laziness without the effect. Take the
+  supplier and call it in the one branch that needs it.
+- **Replacing an attached image destroys the old one before the new one is written.**
+  `attachPicture` calls `forgetPicture` first, so a full or unwritable disk leaves the conversation
+  with no image and nothing to retry from. Write to a temporary file, swap, then delete.
+- **A folder rename refiles closed conversations strictly one at a time.** Ten thousand records,
+  each with up to five 200 ms retries, is hours — with no progress shown and a stale picker until
+  the final refresh. Bounded concurrency, and something on screen.
+- **`index.refresh()` is not guarded.** If it throws after records were refiled, the picker keeps
+  showing names that have moved; the outer catch only logs.
+- **`follow` cannot tell a busy store from a fatal error.** A permission failure is retried five
+  times and then reported the same way a lock is, with nothing said to the person.
+- **A reset can wait forever.** `ended` awaits `thread.turns` and `thread.writes` with no timeout, so
+  one stuck turn leaves *Ending the previous conversation…* on screen indefinitely.
+- **New chat drops its progress indicator before the new record is written.** The scope closes after
+  archiving, while `publish` still awaits `thread.writes` — a slow store leaves no terminal state.
+- **The keyboard capture path probes the host before showing progress.** `windowsReach()` takes about
+  a second in a remote window and nothing is on screen for it, which invites a second press.
+- **`ChatModelChoice` lives in `chatPage.ts`**, so the configuration layer compiles through the page
+  renderer. A neutral contracts module would be tidier.
+
+### Noticed while moving
 
 - **`keepOnDisk` maps the whole transcript on every save while its own comment says it does not.**
   The comment reads *"MAPPED ONLY WHEN IT IS ASKED FOR"*, and three lines below,
