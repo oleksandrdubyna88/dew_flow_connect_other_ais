@@ -70,17 +70,30 @@ public sealed record ConsultationRecord(
     string StartedUtc)
 {
     /// <summary>The vendor's own conversation id — guarded before it is ever reused.</summary>
-    public string Handle { get; init; } = string.Empty;
+    public string Handle { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>
+    /// EVERY member below normalises null in its accessor, and the reason is the same for all of
+    /// them: the source-generated deserializer skips property INITIALISERS for members the JSON does
+    /// not carry, so <c>= string.Empty</c> protects a record built in code and nothing read back
+    /// from a file. A record written before a field existed therefore came back with that field
+    /// null, and the first <c>.Length</c> anywhere downstream threw.
+    /// </summary>
+    /// <remarks>
+    /// It was only the collections, on the <c>PersistedSession</c> precedent, and the strings had
+    /// the identical hole for as long. Found by the <c>--close-consult</c> scenario on issue #309:
+    /// a real process crashed with a <c>NullReferenceException</c> reading a record whose
+    /// <c>reason</c> the file simply did not have — which is every record older than that change.
+    /// </remarks>
     public IReadOnlyList<ConsultationTurn> Turns { get => field ?? []; init; } = [];
 
-    public string Status { get; init; } = ConsultationStatuses.Asking;
+    public string Status { get => field ?? string.Empty; init; } = ConsultationStatuses.Asking;
 
-    public string UpdatedUtc { get; init; } = string.Empty;
+    public string UpdatedUtc { get => field ?? string.Empty; init; } = string.Empty;
 
-    public string EndedUtc { get; init; } = string.Empty;
+    public string EndedUtc { get => field ?? string.Empty; init; } = string.Empty;
 
-    public string Reason { get; init; } = string.Empty;
+    public string Reason { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
     /// How it ENDED, as against why it stopped — <c>solved</c>, <c>not_solved</c>, <c>abandoned</c>,
@@ -94,12 +107,12 @@ public sealed record ConsultationRecord(
     /// either as one — a reader that inferred <c>solved</c> from a closed status would turn a spent
     /// budget into a success.</para>
     /// </remarks>
-    public string Outcome { get; init; } = string.Empty;
+    public string Outcome { get => field ?? string.Empty; init; } = string.Empty;
 
     public int RunnerPid { get; init; }
 
     /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>
-    public string Alert { get; init; } = string.Empty;
+    public string Alert { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
     /// The carry budget the adapter declared when this consultation opened. Zero for a vendor that
