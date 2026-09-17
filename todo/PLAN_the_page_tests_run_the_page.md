@@ -88,6 +88,24 @@ competing with the conversion for review attention. A `node:vm` sandbox with a c
 an allowlist of globals, a hard timeout and an output bound is a good follow-up once the conversion
 is done.
 
+## The boundary with the stylesheet reader (MANDATORY, both sides)
+
+A reviewer on 2026-09-17 read
+[PLAN_one_reader_for_a_page_stylesheet.md](PLAN_one_reader_for_a_page_stylesheet.md) as working
+against this plan. It does not, and the division is written on both sides so the objection does not
+have to be re-made.
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| BEHAVIOURAL assertions over page source text — a control on the wrong branch, a missing `return` | **this plan**, by running the page against the shim | none | either |
+| Reading a page's STYLESHEET — parsing rules, ranking by specificity, saying which one paints | [PLAN_one_reader_for_a_page_stylesheet.md](PLAN_one_reader_for_a_page_stylesheet.md), on `cssRules.ts` | none — a DOM shim does not implement the cascade | either |
+
+**Disjoint**: [`PROJECT.md:110`](../.agents/PROJECT.md#L110) carves out exactly this case —
+*"Source assertions stay legitimate where there is no program to run"* — and `cssRules.ts` was created
+by issue #322's code round **after** the 2026-09-14 ruling this plan enforces. A stylesheet question is
+never answered by running the page; a behavioural question is never answered by reading its text.
+Neither plan blocks the other.
+
 ## Build order
 
 1. **`src/test/pageHarness.ts`** — `runningPage(module, exported, state)`, the stub element with

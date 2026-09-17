@@ -130,6 +130,23 @@ never subtract from what the person could already choose.**
   model probe is seconds rather than milliseconds.
 - **It does not call `/v1/models`.** Nothing here has a key to call it with, measured above. When a
   vendor key is configured the API becomes the better candidate source, and that is the open tail.
+  Extracted 2026-09-17 into
+  [PLAN_the_candidate_list_can_be_asked_of_the_api.md](../todo/PLAN_the_candidate_list_can_be_asked_of_the_api.md),
+  whose first step is establishing whether a key is reachable at all. The boundary with it, and with
+  the probing-state plan this section also defers to, is tabled below.
+
+## The boundaries with the two plans this defers to
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| Asking the CLI which models it reaches, the week-long cache, the version invalidation | **this plan** | left in place by both | shipped first |
+| Where the CANDIDATE NAMES come from when a vendor key exists | [PLAN_the_candidate_list_can_be_asked_of_the_api.md](../todo/PLAN_the_candidate_list_can_be_asked_of_the_api.md) | named here as the open tail | after this one |
+| How a probe SAYS it is working — the panel's progress state, across local-engine and model probes | [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) | neither this plan nor the candidate plan adds or removes a probe surface | either |
+| `ASKING_CLAUDE` and `claudeNote` | **this plan** | consumed unchanged by both | done |
+
+**Disjoint**: this plan decides what the probe ASKS and how long the answer keeps; the candidate plan
+decides what it asks ABOUT; the probing-state plan decides what the person SEES while it runs. None of
+the three needs another to land first, and the no-key path is frozen by all of them.
 - **It does not touch codex, antigravity, local or remote discovery.** Those already ask.
 
 ## What shipped, and where it differs from this plan

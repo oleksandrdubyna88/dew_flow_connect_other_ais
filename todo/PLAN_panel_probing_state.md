@@ -84,6 +84,23 @@ starting a process each, and a probe's outcome — failure included — is cache
    immediately and letting the probe dispatch its own update when it finishes is a different shape
    from step 2 below, and it is the shape this needs.
 
+## The boundary with the model-candidate plans (MANDATORY, both sides)
+
+[PLAN_the_models_are_asked_rather_than_listed.md](../research/PLAN_the_models_are_asked_rather_than_listed.md)
+deferred the model probe's progress reporting to this plan when it shipped, and
+[PLAN_the_candidate_list_can_be_asked_of_the_api.md](PLAN_the_candidate_list_can_be_asked_of_the_api.md)
+was extracted from it on 2026-09-17. The division was legible from one side only until now.
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| How a probe SAYS it is working — the panel's progress state, across local-engine and model probes | **this plan** | neither of the other two adds or removes a probe surface | either |
+| Asking the CLI which models it reaches, the cache, the version invalidation | [PLAN_the_models_are_asked_rather_than_listed.md](../research/PLAN_the_models_are_asked_rather_than_listed.md) | consumed unchanged here | shipped |
+| Where the candidate NAMES come from when a vendor key exists | [PLAN_the_candidate_list_can_be_asked_of_the_api.md](PLAN_the_candidate_list_can_be_asked_of_the_api.md) | none | either |
+
+**Disjoint**: this plan decides what a person SEES while a probe runs; the other two decide what it
+asks and what it asks about. A longer candidate list makes this plan's case stronger — a model probe
+is seconds rather than milliseconds — but neither needs the other to land first.
+
 ## Build order
 
 1. The state itself in `PanelState`, with `staticKey`/`liveRegions` deciding repaint-or-patch, plus a

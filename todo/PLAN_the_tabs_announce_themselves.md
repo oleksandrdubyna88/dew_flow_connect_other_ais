@@ -124,6 +124,18 @@ back as fresh HTML), so `aria-pressed` needs no script — the render is the upd
   because deleting dead CSS in the panel is a different change with a different diff. Recorded here so
   the next person does not have to find it again.
 
+## The boundary with the facet plan (MANDATORY, both sides)
+
+Both plans touch `src_vs_code/src/roundsLog.ts`, so the division is named here as well as there.
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| The tab strip's selected-state, ARIA and arrow keys | **this plan** | none | either |
+| What the facet selects CONTAIN, and clearing a selection the view switch hides | [PLAN_a_facet_offers_only_what_its_view_holds.md](PLAN_a_facet_offers_only_what_its_view_holds.md) | none | either |
+
+**Disjoint**: one plan is about the control that switches views, the other about the controls beside
+it. They share a file and no function; whichever lands second rebases without conflict.
+
 ## Build order
 
 1. `tabKeys.ts` + its tests. Nothing consumes it yet.
