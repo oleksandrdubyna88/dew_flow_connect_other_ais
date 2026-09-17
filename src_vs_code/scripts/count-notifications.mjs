@@ -33,11 +33,27 @@ export const INVENTORY = join(EXTENSION, 'notification-sites.json');
 const APIS = /** @type {const} */ (['showInformationMessage', 'showWarningMessage', 'showErrorMessage']);
 
 /**
+ * Every extension a shipped module can have here.
+ *
+ * <p>`.ts` alone was a hole in the guard, and the code round found it: a `.tsx` file calling
+ * `window.showWarningMessage` would have left BOTH numbers unchanged — the population and the
+ * ratchet — so the completeness promise would have gone on being made while being false. A scan
+ * that decides what counts by file extension has to know every extension the compiler accepts, and
+ * `tsconfig.json` accepts these four. (codex, Architecture.)</p>
+ */
+export const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+
+/** Whether this file is one the compiler would ship, and not a declaration file. */
+function isShippedSource(entry) {
+  return !entry.endsWith('.d.ts') && SOURCE_EXTENSIONS.some((end) => entry.endsWith(end));
+}
+
+/**
  * Whole-file text, not lines: at least one call here is split across a line break
  * (`extension.ts`, the stand-down warning), and a line-by-line scan misses it — which is one of the
  * four the first hand count was out by.
  */
-function everySourceFile(dir) {
+export function everySourceFile(dir) {
   const found = [];
   for (const entry of readdirSync(dir)) {
     const path = join(dir, entry);
@@ -47,7 +63,7 @@ function everySourceFile(dir) {
       if (entry !== 'test') {
         found.push(...everySourceFile(path));
       }
-    } else if (entry.endsWith('.ts')) {
+    } else if (isShippedSource(entry)) {
       found.push(path);
     }
   }
@@ -58,47 +74,139 @@ function everySourceFile(dir) {
 /** The funnel itself, which is allowed — indeed required — to call the API directly. */
 const FUNNEL = 'notify.ts';
 
-/** What the source says, today. */
-export function count() {
+/**
+ * The file with its comments taken out, so the scan counts CODE.
+ *
+ * <p>This is not tidiness, it is correctness, and it was found the way these things are found: the
+ * fix for another finding added the sentence *"carried over from an `await
+ * vscode.window.showErrorMessage`"* to a comment, and the population jumped by one. The scan had
+ * always counted prose — every API name and every `notify(` written in a docstring — and this file
+ * is unusually full of prose ABOUT those names, because that is what the whole feature is about.</p>
+ *
+ * <p>It runs both ways, which is why it matters more than a miscount: a comment can inflate
+ * `direct` and turn the guard red over nothing, and it can inflate `routed` and the population,
+ * which is the number the completeness promise is made over.</p>
+ *
+ * <p>A state machine rather than a regex, because the cheap version — strip from `//` to the end of
+ * the line — eats the rest of any line holding a `https://` URL, and a real call sitting after one
+ * would vanish from the count. The four states are all that TypeScript needs here: ordinary code, a
+ * quoted string (single, double or template), a line comment, a block comment.</p>
+ */
+function withoutComments(text) {
+  let out = '';
+  let state = 'code';
+  let quote = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const here = text[i];
+    const next = text[i + 1];
+    if (state === 'code') {
+      if (here === '/' && next === '/') {
+        state = 'line';
+        i += 1;
+      } else if (here === '/' && next === '*') {
+        state = 'block';
+        i += 1;
+      } else if (here === "'" || here === '"' || here === '`') {
+        state = 'string';
+        quote = here;
+        out += here;
+      } else {
+        out += here;
+      }
+    } else if (state === 'string') {
+      out += here;
+      if (here === '\\') {
+        out += next ?? '';
+        i += 1;
+      } else if (here === quote) {
+        state = 'code';
+      }
+    } else if (state === 'line') {
+      if (here === '\n') {
+        state = 'code';
+        out += here;
+      }
+    } else if (here === '*' && next === '/') {
+      state = 'code';
+      i += 1;
+    } else if (here === '\n') {
+      // Kept, so nothing downstream sees two statements joined into one line.
+      out += here;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * What ONE file contributes.
+ *
+ * <p>Split out of `count` because that function had grown past the size the shared coding-style
+ * rule allows, and because the per-file judgements — is this the funnel, is this the pure half —
+ * are the part somebody will come back to read. (codex, Conventions.)</p>
+ */
+function readOneFile(file) {
+  const text = withoutComments(readFileSync(file, 'utf8'));
+  const isFunnel = file.endsWith(FUNNEL);
+  const byApi = Object.fromEntries(APIS.map((api) => [api, 0]));
+  let inTheFunnel = 0;
+  for (const api of APIS) {
+    const hits = text.match(new RegExp(`\\.${api}\\b`, 'gu'))?.length ?? 0;
+    if (isFunnel) {
+      inTheFunnel += hits;
+    } else {
+      byApi[api] += hits;
+    }
+  }
+
+  return {
+    byApi,
+    inTheFunnel,
+    // The funnel's own `modal: true` is how it PASSES the flag on, not a question it asks. Counting
+    // it moved the event total from 93 to 92 the moment the funnel landed, which is the shape of
+    // error this whole script exists to stop.
+    modal: isFunnel ? 0 : (text.match(/modal:\s*true/gu)?.length ?? 0),
+    // Call sites that have been routed. The definitions themselves are not calls, so the funnel and
+    // the pure half are left out of this count as well.
+    //
+    // EVERY DOOR HAS TO BE NAMED HERE. `notifyOnce` arrived in S4 and this pattern did not know it,
+    // so routing a call site through it took the POPULATION from 111 down to 110 - the one number
+    // that must never fall, falling because the work was going well. The test held, and the lesson
+    // is that a door missing from this list reads as a message that stopped existing.
+    // `notifyResolved` is deliberately NOT matched: it clears a counter and says nothing to anybody.
+    routed: isFunnel || file.endsWith('notice.ts')
+      ? 0
+      : (text.match(/\bnotify(?:AndAsk|Then|Once)?\(/gu)?.length ?? 0),
+  };
+}
+
+/**
+ * What the source says, today.
+ *
+ * <p>The directory is a parameter so a test can point it at a fixture and assert what the scan
+ * SEES, rather than only that a constant lists the right extensions. `testing.md` asks for that
+ * companion beside every structural prohibition, and a list nothing reads would pass without
+ * it.</p>
+ */
+export function count(dir = SOURCE) {
   const byApi = Object.fromEntries(APIS.map((api) => [api, 0]));
   const perFile = {};
   let modal = 0;
   let inTheFunnel = 0;
   let routed = 0;
 
-  for (const file of everySourceFile(SOURCE)) {
-    const text = readFileSync(file, 'utf8');
-    const isFunnel = file.endsWith(FUNNEL);
-    let here = 0;
+  for (const file of everySourceFile(dir)) {
+    const here = readOneFile(file);
+    let direct = 0;
     for (const api of APIS) {
-      const hits = text.match(new RegExp(`\\.${api}\\b`, 'gu'))?.length ?? 0;
-      if (isFunnel) {
-        inTheFunnel += hits;
-      } else {
-        byApi[api] += hits;
-        here += hits;
-      }
+      byApi[api] += here.byApi[api];
+      direct += here.byApi[api];
     }
-    // The funnel's own `modal: true` is how it PASSES the flag on, not a question it asks. Counting
-    // it moved the event total from 93 to 92 the moment the funnel landed, which is the shape of
-    // error this whole script exists to stop.
-    if (!isFunnel) {
-      modal += text.match(/modal:\s*true/gu)?.length ?? 0;
-    }
-    // Call sites that have been routed. The definitions themselves are not calls, so the funnel
-    // and the pure half are left out of this count as well.
-    //
-    // EVERY DOOR HAS TO BE NAMED HERE. `notifyOnce` arrived in S4 and this pattern did not know
-    // it, so routing a call site through it took the POPULATION from 111 down to 110 - the one
-    // number that must never fall, falling because the work was going well. The test held, and
-    // the lesson is that a door missing from this list reads as a message that stopped existing.
-    // `notifyResolved` is deliberately NOT matched: it clears a counter and says nothing to
-    // anybody.
-    if (!isFunnel && !file.endsWith('notice.ts')) {
-      routed += text.match(/\bnotify(?:AndAsk|Then|Once)?\(/gu)?.length ?? 0;
-    }
-    if (here > 0) {
-      perFile[relative(EXTENSION, file).replaceAll('\\', '/')] = here;
+    modal += here.modal;
+    inTheFunnel += here.inTheFunnel;
+    routed += here.routed;
+    if (direct > 0) {
+      perFile[relative(EXTENSION, file).replaceAll('\\', '/')] = direct;
     }
   }
 

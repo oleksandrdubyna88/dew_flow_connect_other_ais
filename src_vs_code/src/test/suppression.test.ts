@@ -246,3 +246,82 @@ test('a storm record survives the round trip, so read-time grouping can reach it
   assert.equal(back?.subject, 'V:/x');
   assert.equal(back?.class, 'storm');
 });
+
+test('a question is never suppressed, however spent the budget is', () => {
+  // The most valuable finding of the code round. Once the run budget was spent, record() returned
+  // nothing and notifyAndAsk still showed the modal and acted on the answer — so a destructive
+  // confirmation could be asked, answered and obeyed with neither side on disk, which is precisely
+  // the audit this ledger exists to be. It is safe to exempt them because a question cannot storm:
+  // every one waits for a hand, so a loop of them is serialised by the person answering it.
+  const bounds = suppressor('r', 1);
+  for (let n = 0; n < RUN_BUDGET + FAULT_RESERVE + 100; n += 1) {
+    bounds.admit(complaint({ class: 'refusal', subject: `path-${n}` }), new Date(START));
+  }
+
+  const modal = complaint({ class: 'confirmation', code: 'remove-role', subject: 'Role2', modal: true });
+  const buttoned = complaint({ class: 'offer', code: 'reload-window', action: 'Reload Window' });
+  const plain = complaint({ class: 'outcome', code: 'a-copy-landed' });
+
+  assert.equal(occurrences(ledgerOf(bounds, modal, 3)).length, 3, 'a modal question, three times');
+  assert.equal(occurrences(ledgerOf(bounds, buttoned, 3)).length, 3, 'a notice with a button');
+  assert.equal(occurrences(ledgerOf(bounds, plain, 3)).length, 1, 'and an ordinary one is still bounded');
+});
+
+test('what was already told is not told again, whatever the counter has been through', () => {
+  // `notifyOnce` shows on firstEver, not on seq === 1. Under the LRU this file used to have, 512
+  // other subjects evicted a key and the next occurrence came back as seq 1 — so the toast returned
+  // and, worse, the repeat threshold restarted, meaning a condition recurring slowly among many
+  // others could never reach its storm at all. Two reviewers found it from two directions.
+  const bounds = suppressor('r', 1);
+  const mine = complaint({ subject: 'V:/connectOtherAis' });
+
+  assert.equal(bounds.admit(mine, new Date(START)).firstEver, true, 'the first time');
+  for (let n = 0; n < KEYS_REMEMBERED * 3; n += 1) {
+    bounds.admit(complaint({ subject: `other-${n}` }), new Date(START));
+  }
+  const back = bounds.admit(mine, new Date(START + 60_000));
+
+  assert.equal(back.firstEver, false, 'still known after three times the old cache would have held');
+  assert.equal(back.seq, 2, 'and its count carried on rather than restarting');
+});
+
+test('a slow repeat among many others still reaches its storm', () => {
+  // The consequence that made the eviction worth fixing rather than documenting. One subject
+  // recurring between hundreds of others must still climb to the threshold; under an LRU its count
+  // was reset before it ever got there.
+  const bounds = suppressor('r', 1);
+  const slow = complaint({ subject: 'the-one-that-matters' });
+  const alerts = [];
+  // Enough noise between occurrences to push the slow one out of any cache of KEYS_REMEMBERED. The
+  // first version of this test put ONE other subject between them, which never filled the old
+  // 512-entry cache at all - so it passed against the very code it was written to reject. Found by
+  // breaking the fix and watching this test stay green.
+  const noisePerStep = Math.ceil((KEYS_REMEMBERED * 2) / STORM_AT);
+  for (let n = 0; n < STORM_AT; n += 1) {
+    const verdict = bounds.admit(slow, new Date(START + n * 60_000));
+    if (verdict.storm !== undefined) {
+      alerts.push(verdict.storm);
+    }
+    for (let noise = 0; noise < noisePerStep; noise += 1) {
+      bounds.admit(complaint({ subject: `noise-${n}-${noise}` }), new Date(START + n * 60_000));
+    }
+  }
+
+  assert.equal(alerts.length, 1, 'it reached the threshold');
+  assert.equal(alerts[0]?.bound, STORM_AT);
+});
+
+test('the map of counted keys is bounded by the write budget, not by a guessed cache size', () => {
+  // What replaced the LRU. Nothing is evicted now, which is only affordable because a key enters the
+  // map when a record for it is WRITTEN and writes are already capped. This asserts the arithmetic
+  // rather than trusting the paragraph that states it.
+  const bounds = suppressor('r', 1);
+  for (let n = 0; n < RUN_BUDGET * 3; n += 1) {
+    bounds.admit(complaint({ class: 'refusal', subject: `path-${n}` }), new Date(START));
+  }
+
+  assert.ok(
+    bounds.tracked() <= RUN_BUDGET + FAULT_RESERVE + 1,
+    `${bounds.tracked()} keys held after ${RUN_BUDGET * 3} occurrences across distinct subjects`,
+  );
+});

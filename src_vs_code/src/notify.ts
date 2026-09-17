@@ -78,14 +78,23 @@ function noteLoss(at: Date): void {
 }
 
 /**
- * Put one record down. Never throws, and tells the gap counter when the disk refuses.
+ * Put one record down, and say whether it LANDED.
  *
- * <p>`appendLine` catches internally and would hand back a resolved promise, so without the
- * callback the counter above would read zero straight through a disk failure — a log that lies by
- * omission about its own omissions.</p>
+ * <p>`appendLine` catches internally and hands back a resolved promise, so without the callback the
+ * counter above would read zero straight through a disk failure — a log that lies by omission about
+ * its own omissions. The boolean is the same fact, returned rather than only counted, because a
+ * caller that is about to write a second record REFERRING to this one has to know: an answer
+ * appended to an asking that is not on disk is a row about a question nobody can find. (codex, the
+ * code round.)</p>
  */
-async function write(record: NotificationRecord): Promise<void> {
-  await recordNotification(coaiDataDir(), record, () => noteLoss(new Date()));
+async function write(record: NotificationRecord): Promise<boolean> {
+  let landed = true;
+  await recordNotification(coaiDataDir(), record, () => {
+    landed = false;
+    noteLoss(new Date());
+  });
+
+  return landed;
 }
 
 /** The toast itself, exactly as the call site would have shown it. */
@@ -117,21 +126,21 @@ function show(notice: Notice): Thenable<string | undefined> {
  * the thousandth repeat, then the row saying the thousandth was the last one kept.</p>
  */
 async function record(notice: Notice, at: Date): Promise<{
-  readonly seq: number;
+  readonly firstEver: boolean;
   readonly kept: NotificationRecord | undefined;
 }> {
   const verdict = BOUNDS.admit(notice, at);
-  const kept = verdict.write
+  const asked = verdict.write
     ? { ...noticeRecord(notice, RUN, process.pid, at), seq: verdict.seq }
     : undefined;
-  if (kept !== undefined) {
-    await write(kept);
-  }
+  // `landed`, not "we called write". A record the disk refused is not a record, and returning it
+  // would have `notifyAndAsk` append an ANSWER to an asking that does not exist on disk.
+  const landed = asked === undefined ? false : await write(asked);
   if (verdict.storm !== undefined) {
     await write(verdict.storm);
   }
 
-  return { seq: verdict.seq, kept };
+  return { firstEver: verdict.firstEver, kept: landed ? asked : undefined };
 }
 
 /**
@@ -172,8 +181,12 @@ export async function notify(notice: Notice): Promise<void> {
  * shown.</p>
  */
 export async function notifyOnce(notice: Notice): Promise<void> {
-  const { seq } = await record(notice, new Date());
-  if (seq === 1) {
+  // `firstEver`, not `seq === 1`. They are the same number until something is evicted or the run
+  // budget refuses a key, and then they are not: the question "have I already told them" is about
+  // the run, not about whatever the counter happens to still be holding. (codex and gemini, the
+  // code round, from two directions.)
+  const { firstEver } = await record(notice, new Date());
+  if (firstEver) {
     void show(notice);
   }
 }

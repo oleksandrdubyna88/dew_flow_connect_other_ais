@@ -148,6 +148,22 @@ const SECRETS: ReadonlyArray<readonly [RegExp, string]> = [
 const PARAMETER = /([?&#])([^\s=&#]{1,64})=([^\s&#]{1,4096})/g;
 
 /**
+ * A credential NAMED and then given, anywhere in ordinary text.
+ *
+ * <p>`password=letmein`, `api_key: abc123`, `"client_secret": "..."` — none of which is a URL
+ * parameter, an Authorization header or a vendor key shape, so none of which the three patterns
+ * above touch. They reach this ledger constantly: these records are built from text nobody chose,
+ * and a server that refuses a request tends to quote what it was given back at you. (codex, the
+ * code round.)</p>
+ *
+ * <p>The optional quotes are matched without a backreference on purpose — every pattern that runs
+ * over arbitrary text here has bounded repetition and no backtracking trap, and a backreference is
+ * how that promise gets quietly broken. A JSON body redacts as `"password": "[redacted]"`, with the
+ * quotes kept, because the line still has to read like what it was.</p>
+ */
+const LABELLED = /([A-Za-z][A-Za-z0-9_.-]{0,63})("?[ \t]{0,4}[:=][ \t]{0,4}"?)([^\s"',;)}]{1,4096})/g;
+
+/**
  * Whether a character may be written down at all.
  *
  * <p><b>Code points, not a literal and not a character class</b> — and that is not a style
@@ -189,7 +205,16 @@ export function safeText(value: string, limit: number): string {
     withoutParameters,
   );
 
-  return redacted.length <= limit ? redacted : redacted.slice(0, limit) + TRUNCATED;
+  // LAST, so the shapes that can be recognised on sight have already been taken out: an
+  // `Authorization: Bearer ...` is redacted by its own pattern above before this one sees the word
+  // `Authorization` at all, which keeps the sentence readable instead of redacting it twice.
+  const named = redacted.replace(
+    LABELLED,
+    (whole: string, name: string, joiner: string) =>
+      (namesACredential(name) ? `${name}${joiner}${REDACTED}` : whole),
+  );
+
+  return named.length <= limit ? named : named.slice(0, limit) + TRUNCATED;
 }
 
 /** Which limit a field gets. Everything that is not the long one is held to the short one. */

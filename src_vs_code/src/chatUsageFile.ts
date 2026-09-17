@@ -92,7 +92,7 @@ export function recordChatTurn(dataDir: string, record: ChatTurnRecord): Promise
  * VS Code awaits what `deactivate` returns, so this is the one moment the queue can be drained
  * without making anybody wait for it. (codex and the local reviewer, the code round.)</p>
  */
-export function flushChatUsage(): Promise<void> {
+export function flushChatUsage(): Promise<boolean> {
   return flushLedgers();
 }
 

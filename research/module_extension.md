@@ -10,12 +10,18 @@
 
 ### Everything this side says to a person is written down (2026-09-16, in progress)
 
-There are **109** `window.show*Message` call sites here and, until now, no durable record of any of
-them: `createOutputChannel` appears zero times, there is no log file and no telemetry. A message a
-person misses is a message that never happened, and on 2026-09-16 that cost ninety minutes — a
+Every place this side speaks to a person had, until now, no durable record of any kind:
+`createOutputChannel` appears zero times, there is no log file and no telemetry. A message a person
+misses is a message that never happened, and on 2026-09-16 that cost ninety minutes — a
 settings-mirror stand-down warned once, nobody saw it, and eleven code rounds ran against a role
 deleted thirty-eight minutes earlier. Plan, two gate rounds deep:
 [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
+
+**How many places that is, this document does not say.** The number lives in
+[notification-sites.json](../src_vs_code/notification-sites.json), which a script generates and a
+test compares. This paragraph used to carry `109` and the artefact said `111`, which is the failure
+the script exists to prevent, committed by the document describing the script. (codex, the code
+round.) The counts quoted further down are historical — they are dated, and each says what moved it.
 
 **What exists after steps S1 to S4** — the record, the ledgers, the funnel in front of them, and the
 bounds on what one run may write. The routing of the call sites has begun and is not finished: see
@@ -52,7 +58,7 @@ locked region would hold it for as long as the toast sat on screen, every later 
 answer `'busy'`, and the single dropped retry would fire — the 2026-09-16 incident, reproduced by
 the mechanism built against it. That is why there are three doors rather than one.
 
-**The ratchet, because 109 sites do not move in one commit.** A whitelist with a hundred entries in
+**The ratchet, because a hundred-odd sites do not move in one commit.** A whitelist with a hundred entries in
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
@@ -61,12 +67,19 @@ stands at **1**. The one that is left is `helpPanel.ts`'s settings refusal, held
 defect 3 rewires it through `reportRefusal`, and touching that line twice is worse than touching it
 once.
 
-**The population went from 109 to 110, and that took a deliberate act.** S3 surfaces what
-`--providers` has always answered and the panel has always dropped: `unrecognised`, the server's own
-list of settings it could not understand — a malformed `COAI_ROLES`, a role row it refused — each
-already written as a sentence meant to be acted on. `oneProvider` read `{provider, auth, note}` off
-each row and discarded everything beside it, so those complaints were visible only in a log file
-nobody opens. The panel now records each one once per session, keyed by the sentence.
+**The population rose once on purpose here (2026-09-16, S3), and that took a deliberate act.** S3
+surfaces what `--providers` has always answered and the panel has always dropped: `unrecognised`, the
+server's own list of settings it could not understand — a malformed `COAI_ROLES`, a role row it
+refused — each already written as a sentence meant to be acted on. `oneProvider` read
+`{provider, auth, note}` off each row and discarded everything beside it, so those complaints were
+visible only in a log file nobody opens.
+
+The panel raises ONE notice for the whole answer rather than one per sentence. The first version
+looped, and the code round was right about where that ends: `unrecognised` is free text the SERVER
+composes with no bound on how many entries a malformed settings file produces, so a sentence per key
+meant ten thousand toasts and ten thousand serialised appends. The subject is the joined set, so a
+DIFFERENT complaint is still news while the same set arriving on every ten-second probe stays one
+key; every sentence is on the record in `detail`. (codex, the code round.)
 
 It would **not** have caught the 2026-09-16 incident — that role was accepted rather than dropped,
 and its complaint came at round time — and saying so is the point: it closes a real gap, not the one

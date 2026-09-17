@@ -179,3 +179,46 @@ test('the flush drains writes queued WHILE it is draining', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const NEWLINE = String.fromCharCode(10);
+
+test('a write that never settles does not hold the window open, and says so', async () => {
+  // The blocking finding of the code round. The ceiling was checked only AFTER the drain resolved,
+  // which bounds a drain that is making progress and does nothing at all about the one case a
+  // ceiling exists for: an append pending on a data directory that has stopped answering — the
+  // operator's is a NAS. The await never returned, the deadline was never read, and the window
+  // would not close until VS Code killed the host, losing the whole tail rather than the part that
+  // could not be written. The docstring promised a ceiling the code did not have. (codex, Blocking;
+  // the local reviewer found the same thing from the performance side.)
+  const dir = home();
+  try {
+    const slow = join(dir, 'slow.jsonl');
+    // A chain that cannot possibly finish inside the deadline. It is a long queue rather than a
+    // hung handle because a hung handle is not something a test can produce on demand - but the
+    // mechanism under test is the same one, and it is the only one: whether the ceiling is read
+    // while the chain is still busy, or only after it has finished.
+    for (let n = 0; n < 4_000; n += 1) {
+      void appendLine(slow, `${n}
+`, 'a notification', { chain: 'notifications' });
+    }
+
+    const began = Date.now();
+    const drained = await flushLedgers(1);
+    const took = Date.now() - began;
+
+    assert.equal(drained, false, 'it gave up, and said so instead of reporting a clean drain');
+    assert.ok(took < 2_000, `the drain returned in ${took}ms rather than waiting for the whole queue`);
+
+    // And nothing is corrupted by giving up: the writes were not cancelled, only un-awaited.
+    assert.equal(await flushLedgers(30_000), true, 'the rest lands, and a complete drain says true');
+    const lines = readFileSync(slow, 'utf8').split(NEWLINE).filter((line) => line.length > 0);
+    assert.equal(lines.length, 4_000);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a drain with no time left gives up at once rather than starting a wait it cannot finish', async () => {
+  assert.equal(await flushLedgers(0), false, 'no time is not a little time');
+  assert.equal(await flushLedgers(-5), false);
+});

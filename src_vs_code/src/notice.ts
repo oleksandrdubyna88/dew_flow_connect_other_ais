@@ -67,15 +67,34 @@ export interface Notice {
   readonly role?: string;
 }
 
-/** Only the optional fields that were given, so a record carries no empty strings. */
+/**
+ * What a notice says that is ABOUT the notice rather than about the thing it reports.
+ *
+ * <p>Three fields, and everything else a notice carries belongs on the record. `as` is which toast
+ * API to call; `actions` and `modal` are how it is presented. None of them is a fact about what
+ * happened, and a record is a fact about what happened.</p>
+ */
+const PRESENTATION: ReadonlySet<string> = new Set<keyof Notice>(['as', 'actions', 'modal']);
+
+/**
+ * Only the fields that were given, so a record carries no empty strings.
+ *
+ * <p><b>Derived from the notice's own entries, not from a list of names.</b> It used to be a list,
+ * and `notificationLine` sat four functions away redacting by iterating entries for the stated
+ * reason that *"a field added to `NotificationRecord` next year is redacted by this function without
+ * anybody remembering to add it to a list"*. The same argument applied here and this function did
+ * the opposite: a context field added to `Notice` and to `NotificationRecord`, and supplied at a
+ * call site, was dropped on the floor in silence — the record simply did not have it, and nothing
+ * anywhere said so. (codex, the code round.)</p>
+ *
+ * <p>The inversion is what makes it safe: instead of naming what to KEEP, it names what to leave
+ * out, and that set is about presentation rather than about content, so it does not grow when a new
+ * fact about an event is added.</p>
+ */
 function given(notice: Notice): Partial<NotificationRecord> {
-  const fields: Array<keyof Notice & keyof NotificationRecord> = [
-    'subject', 'title', 'detail', 'cure', 'action', 'repo', 'branch', 'session', 'provider', 'role',
-  ];
   const kept: Record<string, string> = {};
-  for (const field of fields) {
-    const value = notice[field];
-    if (typeof value === 'string' && value.length > 0) {
+  for (const [field, value] of Object.entries(notice)) {
+    if (!PRESENTATION.has(field) && typeof value === 'string' && value.length > 0) {
       kept[field] = value;
     }
   }

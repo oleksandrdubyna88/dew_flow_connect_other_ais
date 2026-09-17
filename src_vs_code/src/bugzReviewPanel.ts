@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 
 import { asText } from './asText';
-import { notifyAndAsk } from './notify';
+import { notify } from './notify';
 import { KeepWrite, PairsRead } from './roundsDbRead';
 
 import { reviewPageHtml } from './bugzReviewPage';
@@ -95,9 +95,14 @@ export class BugzReviewPanel {
       if (!written.ok) {
         // A FAILURE, not "none of them existed". The two send a person to different places, and
         // saying the wrong one sends them to collect again for nothing. (Code round, codex.)
-        // Awaited, as it was: the redraw below must not race the message. `notifyAndAsk` is the
-        // door that waits; with no button on it, no answer record is written.
-        await notifyAndAsk({
+        // `notify`, which waits for the DISK and not for the person. It was `notifyAndAsk` here,
+        // carried over from an `await vscode.window.showErrorMessage` in the code this replaced, and
+        // both have the same defect: a VS Code error toast does not dismiss itself, so `this.draw()`
+        // below did not run until somebody noticed the toast in the corner and closed it — leaving
+        // this panel frozen with its controls disabled and no terminal state. The record is still on
+        // disk before the toast appears; what stops is waiting for a human who has no decision to
+        // make. (gemini, the code round.)
+        await notify({
           as: 'error',
           class: 'failure',
           source: 'bugzReview',
@@ -106,7 +111,7 @@ export class BugzReviewPanel {
           detail: written.why,
         });
       } else if (written.decided !== ids.length) {
-        await notifyAndAsk({
+        await notify({
           as: 'warning',
           class: 'failure',
           source: 'bugzReview',
@@ -122,8 +127,9 @@ export class BugzReviewPanel {
     }).catch(async (error_: unknown) => {
       // The same CODE as the refusal above, deliberately: one condition, reached two ways. The key
       // is what a repeat is counted on, and "the decision could not be saved" is one thing however
-      // it arrived.
-      await notifyAndAsk({
+      // it arrived - and the same door, for the same reason: the redraw below must not wait for
+      // somebody to close a toast that asks them nothing.
+      await notify({
         as: 'error',
         class: 'failure',
         source: 'bugzReview',

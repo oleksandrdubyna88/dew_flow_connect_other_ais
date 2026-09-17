@@ -127,16 +127,60 @@ export function appendLine(
  * QUIESCENCE: await, then ask whether anything joined while we waited, and stop only when nothing
  * did.</p>
  *
- * <p>Bounded, because a drain that cannot end is a window that will not close.</p>
+ * <p><b>Bounded against the CLOCK, not against the writes.</b> The first version checked the
+ * deadline only after `await Promise.all(before)` had resolved — which bounds a drain that is making
+ * progress and does nothing at all about the one case the bound exists for. An append pending on a
+ * data directory that has become unreachable (the operator's is a NAS) never resolves, so the await
+ * never returns, the deadline is never read, and the window will not close until VS Code kills the
+ * host — losing the whole tail instead of the part that could not be written. The docstring above
+ * promised a ceiling the code did not have. Found on the code round by codex, as Blocking, and by
+ * the local reviewer from the performance side.</p>
+ *
+ * <p>It answers whether everything reached the disk, so a caller can record the gap rather than
+ * assume there is none.</p>
  */
-export async function flushLedgers(withinMs: number = FLUSH_CEILING_MS): Promise<void> {
+export async function flushLedgers(withinMs: number = FLUSH_CEILING_MS): Promise<boolean> {
   const deadline = Date.now() + withinMs;
   for (;;) {
     const before = CHAINS.map((chain) => queues[chain]);
-    await Promise.all(before);
+    if (!await withinTheClock(Promise.all(before), deadline - Date.now())) {
+      return false;
+    }
     const joined = CHAINS.some((chain, i) => queues[chain] !== before[i]);
-    if (!joined || Date.now() >= deadline) {
-      return;
+    if (!joined) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
+  }
+}
+
+/**
+ * Whether `work` finished inside the time left.
+ *
+ * <p>The timer is `unref`'d, because a pending timer is itself a reason a Node process will not
+ * exit, and a helper for shutting down cleanly that holds the process open would be a joke at its
+ * own expense. It is cleared on the winning path too: a two-second timer left armed after a fast
+ * drain keeps a handle alive for no reason.</p>
+ *
+ * <p>The losing path does NOT cancel the write — nothing can — it stops WAITING for it. If the
+ * directory comes back before the host dies, the append still lands.</p>
+ */
+async function withinTheClock(work: Promise<unknown>, msLeft: number): Promise<boolean> {
+  if (msLeft <= 0) {
+    return false;
+  }
+  let timer: NodeJS.Timeout | undefined;
+  const clock = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), msLeft);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([work.then(() => true), clock]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
     }
   }
 }

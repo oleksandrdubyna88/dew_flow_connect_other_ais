@@ -380,6 +380,31 @@ moves into a workflow: a condition nothing executes is a condition nobody has re
 writes `remote_addr` before the request reaches any route — and no test in this process can reach
 it. It is verified by reading the deployed stack's logs after a real ingest.
 
+## The notification ledger's suites (2026-09-17)
+
+| Suite | Drives | Catches |
+|---|---|---|
+| `notifications.test.ts` | the real serialiser and parser | a secret written verbatim; a torn line taking a year of history with it; a class a newer build knows and this one drops |
+| `notice.test.ts` | the pure half of the funnel | a context field that never reaches the record; an answer written over the asking instead of beside it |
+| `suppression.test.ts` | the bounds, as the LEDGER they produce | a sampled design where 10 occurrences and 99 look identical; a question asked and obeyed with neither side recorded; a repeat that never reaches its storm |
+| `notificationsFile.test.ts` | two real files and the real append chains | a multi-byte record split across a read window; a drain that waits on a disk until the host is killed |
+| `credentialWords.test.ts` | the one shared word list | `?author=octocat` refused as a credential; `client_secret` written to a file |
+| `notificationSites.test.mjs` | the site counter, against the real tree and against fixtures | a call site added outside the funnel; a `.tsx` file the scan cannot see; a number in a comment counted as a call |
+
+**Why the counter has tests of its own.** It is the enforcement of the whole completeness promise,
+so a defect in it is a promise that goes on being made while being false. Two were found this way:
+the scan read only `.ts`, and it counted API names written in PROSE — this subsystem's files being
+unusually full of prose about exactly those names.
+
+**What these still do not prove.** **No test here runs the real VS Code host**, and none can: every
+module that imports `vscode` is unimportable by this suite, which is why the funnel is split into a
+pure half that is tested and a thin host half that is not. So nothing proves a toast actually
+appears, that its buttons are the ones passed, or that a modal blocks what a modal blocks. What the
+funnel DOES to a record before showing it is tested exhaustively; that it shows it at all is
+asserted structurally, by a scan that counts the call sites and a ratchet that only falls. The three
+UX defects found on the code round — a redraw waiting behind an error toast, a modal covering a
+reload offer — were all found by READING, and none of them could have been caught here.
+
 ## What this does NOT prove
 
 The most valuable section, and the first one people drop.

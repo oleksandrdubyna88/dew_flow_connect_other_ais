@@ -754,7 +754,14 @@ is a button that opens the page, and a button that opens nothing is worse than n
 the fourth live region, the watermark, the coalesced refresh, the `package.json` command, the two page
 modules, registration, the shared `PAGE_SIZE` / `compareRows` / range-conversion extraction, tabs,
 sorting, paging and filters — **and the surface for S2's "N records could not be written" counter**,
-which S2 records with nowhere to show it until here. The page panel must carry `enableFindWidget: true`
+which S2 records with nowhere to show it until here — **and that counter must become DURABLE in this
+step**, not only visible. It lives in memory today, so a reloaded host reports no gap while the
+records it lost are still missing. It cannot be persisted to the ledger whose writes are what
+failed, which is the regress `notice.ts` names; `globalState` is a different store on a different
+disk from the data directory, which may be a NAS, and is the right home for it. Raised on the code
+round and deferred to here on the ground that durable state with no reader is not a fix. (codex.)
+
+The page panel must carry `enableFindWidget: true`
 as a **top-level literal** and subscribe to `onDidDispose`; **three** structural scans discover panels
 and will find it — `panelsAreSearchable.test.ts`, `theLogRefusesToOpen.test.ts` and
 `theTabWearsAnIcon.test.ts`.
