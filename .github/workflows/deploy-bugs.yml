@@ -118,15 +118,39 @@ jobs:
       # refusal by the server.
       - name: Which key this run holds
         run: |
-          set -euo pipefail
-          ssh-keygen -y -f ~/.ssh/id_bugs > ~/.ssh/id_bugs.pub 2>/dev/null || {
-            echo "::error::BUGS_DEPLOY_KEY could not be read as an OpenSSH private key. It is either"
-            echo "::error::truncated, re-wrapped, or the wrong kind of value. Re-paste the WHOLE file,"
-            echo "::error::including the BEGIN and END lines and the trailing newline."
-            exit 1
-          }
-          echo "this run offers: $(ssh-keygen -lf ~/.ssh/id_bugs.pub)"
-          echo "the host must list the same fingerprint in ~coai-bugs-deploy/.ssh/authorized_keys"
+          set -uo pipefail
+
+          # The FIRST and LAST lines only. Those are `-----BEGIN OPENSSH PRIVATE KEY-----` and its
+          # END, which are not secret and are exactly what a truncated paste loses. The body is
+          # never printed and the line count is a number, not a key.
+          echo "first line: $(head -1 ~/.ssh/id_bugs)"
+          echo "last line:  $(tail -1 ~/.ssh/id_bugs)"
+          echo "lines:      $(wc -l < ~/.ssh/id_bugs)"
+
+          # `-P ''` supplies an EMPTY passphrase rather than leaving ssh-keygen to ask for one,
+          # which is what separates the two causes: an encrypted key answers "incorrect passphrase"
+          # and a damaged one answers "invalid format". Without this they are one failure with one
+          # message, and the fix for each is different.
+          if ssh-keygen -y -P '' -f ~/.ssh/id_bugs > ~/.ssh/id_bugs.pub 2>/tmp/keyerr; then
+            echo "this run offers: $(ssh-keygen -lf ~/.ssh/id_bugs.pub)"
+            echo "the host must list the same fingerprint in ~coai-bugs-deploy/.ssh/authorized_keys"
+            exit 0
+          fi
+
+          if grep -qi passphrase /tmp/keyerr; then
+            echo "::error::BUGS_DEPLOY_KEY is protected by a PASSPHRASE. A deploy runs unattended and"
+            echo "::error::has nobody to type one, so this key cannot be used as it is. Strip it with"
+            echo "::error::'ssh-keygen -p -N \"\" -f <keyfile>' and re-paste, or generate the pair again"
+            echo "::error::with 'ssh-keygen -t ed25519 -N \"\" -C coai-bugs-deploy-ci' and put the new"
+            echo "::error::public half in the host's authorized_keys."
+          else
+            echo "::error::BUGS_DEPLOY_KEY could not be read as an OpenSSH private key: truncated,"
+            echo "::error::re-wrapped, or the wrong kind of value. Compare the two lines printed above"
+            echo "::error::with the file on disk and re-paste the WHOLE of it, BEGIN and END included."
+          fi
+          # What ssh-keygen itself said, which names neither the key nor any part of it.
+          sed 's#/home/[^ ]*/id_bugs#<the key>#g' /tmp/keyerr
+          exit 1
 
       # The server's own secret, delivered from the secret store rather than typed on the box. It
       # reaches the host over ssh on STDIN — never as an argument, which `ps` and the auth log see.
