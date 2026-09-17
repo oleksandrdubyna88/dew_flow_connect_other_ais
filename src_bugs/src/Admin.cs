@@ -98,20 +98,27 @@ internal static class Admin
         return code;
     }
 
-    /// <summary>Says so when the run waited on the database — a silent wait reads as a hang.</summary>
+    /// <summary>Says so when the run took a while — a silent wait reads as a hang.</summary>
     /// <remarks>
-    /// A one-shot beside the running server waits for the server's write on the busy timeout, and a
-    /// terminal that stops for seconds with nothing said is a person reaching for Ctrl+C. Said after
-    /// the fact, because nothing can know in advance; one second is where a person starts to wonder.
+    /// <para>A one-shot beside the running server waits for the server's write on the busy timeout,
+    /// and a terminal that stops for seconds with nothing said is a person reaching for Ctrl+C. Said
+    /// after the fact, because nothing can know in advance; one second is where a person starts to
+    /// wonder.</para>
+    /// <para><b>It says the database MAY have been busy, not that it was.</b> This measures the
+    /// whole command, and `--waiting` can spend a second printing a long list without ever meeting a
+    /// lock. Asserting contention from total elapsed time would tell an operator the server was
+    /// mid-write when it was not — and sending somebody to look at the wrong thing is worse than
+    /// saying less. Naming the busy timeout is what makes the likely cause checkable without
+    /// claiming it. (CodeRabbit, #348.)</para>
     /// </remarks>
     private static void Waited(TimeSpan elapsed)
     {
         if (elapsed >= WorthMentioning)
         {
             Say(
-                $"that took {elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)} s: the "
-                + "database was busy — the server was mid-write — and a one-shot waits up to "
-                + $"{SqliteMigrator.BusyTimeoutMilliseconds / 1000} s for it");
+                $"that took {elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)} s; if "
+                + "the server was mid-write, a one-shot waits up to "
+                + $"{SqliteMigrator.BusyTimeoutMilliseconds / 1000} s for the database");
         }
     }
 
