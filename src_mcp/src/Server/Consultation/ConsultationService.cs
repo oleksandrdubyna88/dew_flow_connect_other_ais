@@ -155,6 +155,15 @@ public sealed class ConsultationService(
             return Error($"no consultation {id} — it may have been swept after {ConsultationStore.Retention.TotalDays:0} days");
         }
 
+        // THE LOCK MUST BE THE RECORD'S. A supplied path naming another checkout would take that
+        // one's lock and then read and write this record anyway — so a turn running in the real
+        // repository could overwrite the close, and the verdict would vanish with the status
+        // flapping behind it. The path is checked rather than trusted. (codex, the code round.)
+        if (!SamePath(record.RepoPath, repo))
+        {
+            return Error($"consultation {id} belongs to {record.RepoPath} — close it from there");
+        }
+
         var word = outcome.Trim();
         if (ConsultationClosing.Refusal(record, CallerOf(repo), word, byPerson) is { } refusal)
         {
@@ -174,6 +183,7 @@ public sealed class ConsultationService(
         _store.Write(record with
         {
             Outcome = word,
+            OutcomeBy = byPerson ? ConsultationSources.Person : ConsultationSources.Caller,
             Status = ConsultationStatuses.Closed,
             // The REASON is never overwritten: it says why the consultation stopped, and a close says
             // how it ended. A record the sweep closed keeps its sentence about the budget and gains a

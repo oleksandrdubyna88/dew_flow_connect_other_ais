@@ -148,7 +148,7 @@ import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import { consultationsHtml } from './roundsLog';
-import { CLOSE_CHOICES, refusalIn } from './consultations';
+import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
 import {
@@ -2563,6 +2563,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * not speak it. A refusal comes back on stdout with exit 65 and is SHOWN: a close that failed
    * silently would leave the card exactly as it was, which reads as a button that does nothing.
    * (issue #309.)</p>
+   *
+   * <p><b>And exit 64 is a sentence of its own.</b> The two halves of this product update
+   * separately, so a person whose extension is newer than their server presses a button the binary
+   * has never heard of. 64 is exactly what that binary answers — <c>.agents/PROJECT.md</c> reserves
+   * the code for it — and showing its argument-parser's complaint instead would send somebody to
+   * debug a request that was never read. (codex, the code round.)</p>
+   *
+   * <p><b>Under a progress notification</b>, because it is not instant: the run waits on the
+   * consultation's own repository lock, which a turn in that checkout can hold for the length of a
+   * vendor call. Without one the picker closes, nothing moves, and the only feedback for up to
+   * twenty seconds is a table that has not changed. (codex UX, the code round.)</p>
    */
   async closeConsultation(id: string): Promise<void> {
     if (id.length === 0) {
@@ -2570,8 +2581,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
     const server = serverPath(this.context.globalStorageUri);
     if (server === undefined) {
-      await vscode.window.showWarningMessage(
-        'The MCP server is not installed yet, so there is nothing to record this with.');
+      await notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'consultations',
+        code: 'server-not-installed-for-closing',
+        title: 'The MCP server is not installed yet, so there is nothing to record this with.',
+        cure: 'Install it from the ConnectOtherAIs panel.',
+      });
 
       return;
     }
@@ -2599,20 +2616,58 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // would guard nothing and could block something unrelated. (The review pass, 2026-09-17.)
     const repo = (await this.roundsLog()).consultations.find((one) => one.id === id)?.repoPath ?? '';
     if (repo.length === 0) {
-      await vscode.window.showWarningMessage(
-        `Consultation ${id} is not in the log any more — it may have been swept.`);
+      await notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'consultations',
+        code: 'consultation-gone-from-the-log',
+        // The consultation, because this code is about one of them and a shared counter would let
+        // recovering one reset the other.
+        subject: id,
+        title: 'That consultation is not in the log any more.',
+        detail: `${id} — a record is swept some days after it ends.`,
+      });
 
       return;
     }
-    const { code, output } = await serverRun(server.fsPath)(
-      ['--close-consult', '--repo', repo, '--id', id, '--outcome', chosen.outcome,
-        ...(note.trim().length > 0 ? ['--note', note.trim()] : [])],
-      PanelProvider.CLOSE_CONSULT_CAP_MS);
+    const { code, output } = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Recording '${chosen.label}'…`,
+        cancellable: false,
+      },
+      // The WHOLE wait: the run takes the consultation's repository lock, and a turn running in
+      // that checkout holds it for as long as a vendor takes to answer.
+      async () => serverRun(server.fsPath)(
+        ['--close-consult', '--repo', repo, '--id', id, '--outcome', chosen.outcome,
+          ...(note.trim().length > 0 ? ['--note', note.trim()] : [])],
+        PanelProvider.CLOSE_CONSULT_CAP_MS));
 
-    if (code !== 0) {
+    if (code === SERVER_TOO_OLD) {
+      // Reserved, and for this only: a binary that knows the mode answers 65 however wrong the
+      // request was. So this is not "something went wrong" — it is the one failure whose cure is a
+      // version rather than a different click, and saying it is the whole value of the code.
+      await notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'consultations',
+        code: 'server-too-old-to-close-a-consultation',
+        title: 'This MCP server is too old to record how a consultation ended.',
+        detail: 'Nothing was changed.',
+        cure: 'Update the server from the ConnectOtherAIs panel, then try again.',
+      });
+    } else if (code !== 0) {
       // The SENTENCE the server wrote, not a code: it names what is already on the record, or the
       // word it would have taken. `refusalIn` reads the JSON and falls back to the raw text.
-      await vscode.window.showErrorMessage(`The consultation was not closed: ${refusalIn(output)}`);
+      await notify({
+        as: 'error',
+        class: 'failure',
+        source: 'consultations',
+        code: 'consultation-not-closed',
+        subject: id,
+        title: 'The consultation was not closed.',
+        detail: refusalIn(output),
+      });
     }
 
     await this.render();

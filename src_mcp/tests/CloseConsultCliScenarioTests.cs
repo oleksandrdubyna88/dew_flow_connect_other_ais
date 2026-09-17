@@ -17,9 +17,15 @@ namespace CoaiMcp.Tests;
 /// exercised here is the argument parsing, the JSON on stdout and the EXIT CODES, against a real
 /// record on disk. (issue #309; the missing bridge was named on the plan round.)</para>
 /// <para>The exit codes are the part nothing else can check, because they are what the panel reads:
-/// <b>0</b> recorded, <b>64</b> the arguments were wrong, <b>65</b> the server refused with a
-/// sentence. A refusal is an ANSWER — the sentence is on stdout for the panel to show — which is why
-/// it is not the same code as a disk that would not answer.</para>
+/// <b>0</b> recorded, <b>65</b> the request was refused or malformed. A refusal is an ANSWER — the
+/// sentence is on stdout for the panel to show — which is why it is not the code a disk that would
+/// not answer gets.</para>
+/// <para><b>And never 64</b>, which this mode used to return for missing arguments. 64 is reserved,
+/// by <c>.agents/PROJECT.md</c>, for "this binary has never heard of that mode" — it is how the
+/// panel detects a server too old for a feature. A mode the binary HAS, answering it, sends the
+/// panel to tell a person their server needs updating when the request was simply malformed.
+/// <see cref="ARequestFaultIsNotAnOldBinaryTests"/> holds the rule; this holds it for this mode.
+/// (codex SecurityReliability, the code round.)</para>
 /// </remarks>
 public sealed class CloseConsultCliScenarioTests : IDisposable
 {
@@ -113,6 +119,8 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
 
     private string OutcomeOf(string id) => new ConsultationStore(_data).Read(id)!.Outcome;
 
+    private string OutcomeByOf(string id) => new ConsultationStore(_data).Read(id)!.OutcomeBy;
+
     [Fact]
     public void ThePanelsDoorRecordsAnOutcome()
     {
@@ -124,6 +132,9 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
         code.Should().Be(0, said);
         JsonDocument.Parse(said).RootElement.GetProperty("recorded").GetBoolean().Should().BeTrue();
         OutcomeOf(id).Should().Be("solved");
+        // The door is part of the fact. "A person marked it closed" and "the AI said it worked" are
+        // two different claims, and this is the one door that can say the first.
+        OutcomeByOf(id).Should().Be("person");
     }
 
     /// <summary>
@@ -154,12 +165,27 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
         OutcomeOf(id).Should().Be("abandoned");
     }
 
+    /// <summary>A malformed request is a DATA error, and never the code that means "too old".</summary>
+    /// <remarks>
+    /// Each of the three is a real way to get it wrong from the panel — no arguments at all, a repo
+    /// without an id, an id without an outcome — and none of them says anything about the age of the
+    /// binary that received it.
+    /// </remarks>
     [Fact]
-    public void MissingArgumentsAreAUsageError_NotARefusal()
+    public void MissingArgumentsAreADataError_NeverTheCodeThatMeansTooOld()
     {
-        Run("--close-consult").Code.Should().Be(64);
-        Run("--close-consult", "--repo", _repo).Code.Should().Be(64);
-        Run("--close-consult", "--repo", _repo, "--id", Recorded()).Code.Should().Be(64);
+        foreach (var malformed in new[]
+        {
+            new[] { "--close-consult" },
+            ["--close-consult", "--repo", _repo],
+            ["--close-consult", "--repo", _repo, "--id", Recorded()],
+        })
+        {
+            Run(malformed).Code.Should().Be(
+                65,
+                "64 means 'this binary has never heard of --close-consult' and sends the panel to "
+                + "tell a person to update a server that is fine");
+        }
     }
 
     [Fact]
@@ -172,6 +198,34 @@ public sealed class CloseConsultCliScenarioTests : IDisposable
         code.Should().Be(65);
         said.Should().Contain("solved", "the refusal names the words that would work");
         OutcomeOf(id).Should().BeEmpty("a refused close writes nothing");
+    }
+
+    /// <summary>
+    /// A consultation belonging to ANOTHER checkout is refused rather than closed under this one's lock.
+    /// </summary>
+    /// <remarks>
+    /// The lock is taken on the path the caller supplied, and the record is read by id. Those are two
+    /// different things: a supplied path naming another checkout would take that one's lock and then
+    /// write this record anyway, so a turn running in the real repository could overwrite the close.
+    /// The path is checked rather than trusted. (codex, the code round.)
+    /// </remarks>
+    [Fact]
+    public void AConsultationFromAnotherCheckoutIsRefused_RatherThanClosedUnderTheWrongLock()
+    {
+        var id = Recorded();
+        var elsewhere = Directory.CreateTempSubdirectory("coai-close-other-").FullName;
+        try
+        {
+            var (code, said) = Run("--close-consult", "--repo", elsewhere, "--id", id, "--outcome", "solved");
+
+            code.Should().Be(65);
+            said.Should().Contain("close it from there");
+            OutcomeOf(id).Should().BeEmpty("nothing was written under a lock that guards another tree");
+        }
+        finally
+        {
+            Directory.Delete(elsewhere, recursive: true);
+        }
     }
 
     [Fact]

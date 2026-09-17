@@ -109,6 +109,20 @@ public sealed record ConsultationRecord(
     /// </remarks>
     public string Outcome { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>
+    /// Who supplied the outcome: <c>caller</c>, <c>person</c>, or the server's own <c>server</c>.
+    /// Empty wherever <see cref="Outcome"/> is.
+    /// </summary>
+    /// <remarks>
+    /// A FIELD rather than a sentence inside <see cref="Reason"/>, because <c>Reason</c> is kept as
+    /// the server left it — a consultation the sweep closed keeps its line about the budget — so a
+    /// verdict recorded afterwards left no trace of which door it came through. "The AI said it
+    /// worked" and "a person marked it closed" are different claims and an export that had to parse
+    /// prose to tell them apart would be reading English for a fact. (codex Architecture, the code
+    /// round; the plan promised this distinction and the first build did not keep it.)
+    /// </remarks>
+    public string OutcomeBy { get => field ?? string.Empty; init; } = string.Empty;
+
     public int RunnerPid { get; init; }
 
     /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>

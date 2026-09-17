@@ -5,7 +5,7 @@ import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
 import { PriceLookup, consultationCost, priceOfLine, shortNumber, UsageEntry, Window, WINDOWS } from './usage';
-import { outcomeSaid } from './consultations';
+import { outcomeBySaid, outcomeSaid } from './consultations';
 import { Vendor } from './vendors';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -1032,7 +1032,7 @@ export function consultationsHtml(
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
     <td><span class="badge ${badgeOf(one.status)}">${escapeHtml(one.status)}</span>${one.reason.length > 0 ? ` <span class="decided" title="${escapeHtml(one.reason)}">why…</span>` : ''}</td>
-    <td>${escapeHtml(outcomeSaid(one.outcome))}${closeControl(one)}</td>
+    <td>${escapeHtml(outcomeSaid(one.outcome))}${byCell(one)}${closeControl(one)}</td>
     ${costCell(one, vendors, listed)}
     <td class="what">${escapeHtml(one.problem)}</td>
     <td class="what">${escapeHtml(one.advice)}</td>
@@ -1051,6 +1051,20 @@ export function consultationsHtml(
     <th>How it ended</th><th>Outcome</th><th class="num">Tokens</th><th class="num">Cost</th>
     <th>What was stuck</th><th>What was advised</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * Who recorded it, beside the word — muted, because the word is the answer and this is its author.
+ *
+ * <p>Only where there is a word AND a recognised author: a row with no outcome has nobody to name,
+ * and `ran out · by the server` says the same thing twice. The distinction is kept as a field by
+ * the server so that nothing has to read a person's free-text note to learn it, and dropping it
+ * here would throw that away one layer before the eye. (codex Architecture, the code round.)</p>
+ */
+function byCell(one: DbConsultation): string {
+  const by = outcomeBySaid(one.outcomeBy);
+
+  return by.length === 0 ? '' : ` <span class="decided">${escapeHtml(by)}</span>`;
 }
 
 /**

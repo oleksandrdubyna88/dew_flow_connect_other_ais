@@ -323,7 +323,8 @@ internal static class Program
     /// AI's rather than a weaker one. The record keeps which door was used.</para>
     /// <para>The answer is JSON on stdout — safe here and only here, because this mode does not speak
     /// the protocol — and the exit code is what the panel reads: 0 recorded, 65 refused with a
-    /// sentence, 64 the arguments were wrong.</para>
+    /// sentence — and a malformed request is 65 too, never 64: that code means "this binary has
+    /// never heard of that mode" and is how the panel detects a server too old for a feature.</para>
     /// </remarks>
     private static async Task<int> CloseConsultAsync(string[] args)
     {
@@ -336,7 +337,11 @@ internal static class Program
         {
             Note("--close-consult needs --repo <path> --id <consultation> --outcome <solved|not_solved|abandoned> [--note <text>]");
 
-            return 64; // EX_USAGE
+            // 65, NOT 64. The rule names 64 and only 64 for "never heard of that mode", because that
+            // is how a caller detects an old binary — a known mode answering it would send the panel
+            // to tell a person their server is too old when the request was simply malformed.
+            // `--upload-pairs` answers 65 for a missing `--server` and this is the same fault.
+            return 65; // EX_DATAERR
         }
 
         try
@@ -346,18 +351,31 @@ internal static class Program
                 Environment.GetEnvironmentVariable);
             var settings = Server.PanelSettings.FromEnvironment(configuration);
             var launcher = new Runners.Processes.ProcessLauncher();
-            var keys = await new Server.KeyVault(launcher)
-                .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
+            // NO VAULT READ. Recording how a consultation ended talks to nobody — it reads a record
+            // file, writes it back and projects a row — and a key belongs to a vendor launch. The
+            // read is not free: it spawns `creds config <key>`, which on a machine with the vault
+            // configured is a process, a socket and a prompt-shaped wait in the middle of a button
+            // the person expects to be instant, and on a machine without one is a failure to
+            // rediscover on every click. `--providers` reads the vault because it REPORTS on keys.
+            // (codex Architecture, the code round.)
             var service = new Server.PanelService(
-                settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None);
+                settings, Server.VaultKeys.None("a close needs no vendor key"), DateTime.UtcNow, launcher,
+                Serilog.Core.Logger.None);
 
             var answer = await service.CloseConsultByHandAsync(repo, id, outcome, note ?? string.Empty);
             await Console.Out.WriteLineAsync(answer);
 
-            // A REFUSAL is an answer, not a crash: the sentence is on stdout for the panel to show,
-            // and the code says it did not happen. 65 is EX_DATAERR — the input named something the
-            // server would not do, as against 74 for a disk that would not answer.
-            return answer.Contains("\"error\"", StringComparison.Ordinal) ? 65 : 0;
+            // PARSED, not searched. It was `answer.Contains("\"error\"")`, which read an answer
+            // that is not JSON AT ALL as a success — the substring is nowhere in a stack trace, so
+            // the mode exited 0 and the panel told the person their outcome had been recorded when
+            // nothing could be read at all. Of the two wrong answers, "it did not happen" is the one
+            // that makes somebody look. (The other half of that check was sound and the first draft
+            // of this comment said otherwise: JSON escapes a quote inside a value as \", so `"error"`
+            // never appears within one. Asking the shape is simply the question being asked.)
+            // A refusal is an answer rather than a crash — the sentence is on stdout to show — so it
+            // has its own code: 65 for a request the server would not do, against 74 for a disk that
+            // would not answer. (codex, the code round.)
+            return Refused(answer) ? 65 : 0;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException
                                        or System.Text.Json.JsonException or InvalidOperationException)
@@ -365,6 +383,28 @@ internal static class Program
             Note($"the consultation could not be closed: {e.Message}");
 
             return 74; // EX_IOERR
+        }
+    }
+
+    /// <summary>Is this answer the error shape, read as JSON rather than as text?</summary>
+    /// <remarks>
+    /// Only the top-level member decides, and a reply that will not PARSE is a refusal: the caller
+    /// has nothing it can act on either way, and reporting success for output nobody can read sends
+    /// the person away satisfied. A field's value is not consulted, which is what makes this
+    /// independent of whatever sentence a future answer carries.
+    /// </remarks>
+    internal static bool Refused(string answer)
+    {
+        try
+        {
+            using var parsed = System.Text.Json.JsonDocument.Parse(answer);
+
+            return parsed.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
+                || parsed.RootElement.TryGetProperty("error", out _);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return true;
         }
     }
 

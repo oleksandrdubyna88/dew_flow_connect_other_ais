@@ -1,0 +1,61 @@
+{
+  "why": [
+    "How a consultation ended, as a word. Both halves of this product have their own copy of this",
+    "catalogue — the server validates against it before writing anything, and the panel turns it into",
+    "the sentence a person reads and the choices a person is offered — and the two ship separately, so",
+    "a word added to one and not the other is a refusal nobody can explain from the other side.",
+    "",
+    "Neither half owns this file. Each asserts its OWN catalogue against it, which is the shape",
+    "`NothingReadsAnotherProgramsSourceTests` requires: a suite that read the other program's source",
+    "to derive its expectation goes quiet on a reformat instead of going red.",
+    "",
+    "`verdict` is the distinction the whole feature turns on. Three of these are somebody's statement",
+    "about whether the advice was any good. `lapsed` is the server's own statement that the clock ran",
+    "out, which is a fact about time — so it is not a verdict, it may be replaced by one, and no",
+    "caller and no person may write it."
+  ],
+  "outcomes": [
+    {
+      "word": "solved",
+      "verdict": true,
+      "label": "Solved",
+      "detail": "the advice was verified and it worked",
+      "said": "solved"
+    },
+    {
+      "word": "not_solved",
+      "verdict": true,
+      "label": "Not solved",
+      "detail": "it was verified and it did not",
+      "said": "not solved"
+    },
+    {
+      "word": "abandoned",
+      "verdict": true,
+      "label": "Abandoned",
+      "detail": "nobody is going to act on it",
+      "said": "abandoned"
+    },
+    {
+      "word": "lapsed",
+      "verdict": false,
+      "label": "",
+      "detail": "the budget ran out or it sat idle — written by the server and by nobody else",
+      "said": "ran out"
+    }
+  ],
+  "sources": [
+    {
+      "word": "caller",
+      "detail": "the AI that opened the consultation, through the `close_consult` tool"
+    },
+    {
+      "word": "person",
+      "detail": "a human, through the panel's own one-shot `--close-consult` door"
+    },
+    {
+      "word": "server",
+      "detail": "nobody said anything and the clock ran out; only ever beside `lapsed`"
+    }
+  ]
+}

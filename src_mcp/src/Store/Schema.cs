@@ -31,7 +31,7 @@ internal static class Schema
     internal static readonly string[] Steps =
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
-        TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded,
+        TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
     ];
 
     internal const string Tables = """
@@ -347,5 +347,23 @@ internal static class Schema
     /// </remarks>
     internal const string HowItEnded = """
         ALTER TABLE consultations ADD COLUMN outcome TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>And who said so.</summary>
+    /// <remarks>
+    /// <para>Three different claims wear the same word otherwise: the caller's own verdict, a
+    /// person's, and the server's <c>lapsed</c> when a budget ran out. <c>reason</c> cannot carry it
+    /// — it is deliberately never overwritten, so a consultation the sweep already closed keeps its
+    /// sentence about the budget and a verdict recorded afterwards lands beside it with no author at
+    /// all. An export that had to read English to tell a person from an AI would one day read it
+    /// wrong. (codex Architecture, the code round of issue #309.)</para>
+    /// <para><b>Its own step rather than a second line inside <see cref="HowItEnded"/></b>, although
+    /// the two shipped in one story: a database that has already run nine steps records nine, and
+    /// widening the ninth would leave it without this column while believing it had run every step.
+    /// That is the exact failure the append-only rule exists to prevent, and "it has not been
+    /// released yet" is not a property of the file on somebody's disk.</para>
+    /// </remarks>
+    internal const string WhoSaidSo = """
+        ALTER TABLE consultations ADD COLUMN outcome_by TEXT NOT NULL DEFAULT '';
         """;
 }

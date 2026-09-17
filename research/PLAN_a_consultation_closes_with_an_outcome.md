@@ -1,13 +1,40 @@
 # PLAN — a consultation closes with an outcome, and its tokens have a price
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `src_mcp/src/Tools.cs`,
-> `src_mcp/src/Server/Consultation/*`, `src_vs_code/src/roundsLog.ts`, `src_vs_code/src/consultations.ts`
-> — the consultation's ending and its cost column.
+> Status: **IMPLEMENTED, 2026-09-17.** Scope: `src_mcp/src/Tools.cs`,
+> `src_mcp/src/Server/Consultation/*`, `src_mcp/src/Store/*`, `src_vs_code/src/roundsLog.ts`,
+> `src_vs_code/src/consultations.ts`, `src_vs_code/src/panelProvider.ts` — the consultation's ending
+> and its cost column.
+>
+> **What shipped differently from this document**, which is the part of a record worth keeping:
+>
+> 1. **The close control is in the LOG only, and not on the sidebar card.** The plan put it on both.
+>    The operator chose the log on 2026-09-17, and the deciding reason is one the plan had not seen:
+>    the card shows only LIVE consultations, so the moment one lapses it leaves the sidebar and takes
+>    the control with it — the state the issue's own screenshot is in would have had no control at all.
+> 2. **A close while a turn is RUNNING is refused**, rather than queued or allowed. Also the
+>    operator's decision, 2026-09-17: a close landing during an `asking` turn would be overwritten by
+>    that turn's own write a moment later, with the status visibly flapping from closed back to open.
+> 3. **The outcome has an AUTHOR**, `OutcomeBy` — `caller`, `person` or the server's own `server` —
+>    with its own column and its own migration step. The plan claimed the record kept this
+>    distinction and the first build did not: `Reason` is deliberately never overwritten, so a verdict
+>    recorded over a lapsed consultation landed beside a sentence about the budget with nobody named.
+>    Found on the code round.
+> 4. **The catalogue moved into `shared/consultation-outcomes.json`**, a file neither half owns, with
+>    each half asserting its own copy against it. The plan had the four words written down twice.
+> 5. **A usage error is exit 65, not 64.** The plan's build order said 64 and the first build returned
+>    it; `.agents/PROJECT.md` reserves 64 for "this binary has never heard of that mode", which is how
+>    the panel detects a server too old for a feature, so a malformed request wearing it would have
+>    sent somebody to update a server that was fine. The panel gained the 64 branch it implies.
+> 6. **The read-only log reader asks what shape the database is.** Not foreseen at all: the reader
+>    opens `Mode=ReadOnly` so the schema steps never run for it, and naming a new column threw the
+>    WHOLE page away — rounds, blind spots and totals — for a data directory written by the previous
+>    release. Found by writing the test for it.
+> 7. **The live boundary check ran against coai-mcp 0.27.1** and is recorded below.
 >
 > Issue: [#309](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/309).
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [PLAN_consultant.md](../research/PLAN_consultant.md).
+> Related docs: [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md),
+> [PLAN_consultant.md](PLAN_consultant.md).
 
 ## The two symptoms, and what is measured about each
 
@@ -242,25 +269,52 @@ Two rules the table exists to fix in advance, and the first is the one the first
 
 ## Definition of Done
 
-- [ ] A RED test observed failing before each half, naming the real symptom.
-- [ ] A `closed` record with no outcome never reads as `not_solved` — asserted, and proved by breaking it.
-- [ ] A consultation whose vendor reported no money shows a marked estimate when a rate exists, the
+- [x] A RED test observed failing before each half, naming the real symptom.
+- [x] A `closed` record with no outcome never reads as `not_solved` — asserted, and proved by breaking it.
+- [x] A consultation whose vendor reported no money shows a marked estimate when a rate exists, the
       real money unmarked when the vendor reported one, and the dash when there is neither — asserted
       on the TABLE AS THE PRODUCT BUILDS IT, not only on the function, because a decision nobody calls
       passes every test and ships the symptom.
-- [ ] The close control is in the log's Consultations tab, reaches a LAPSED consultation, and is
+- [x] The close control is in the log's Consultations tab, reaches a LAPSED consultation, and is
       absent from the sidebar card, which stays present tense.
-- [ ] A close while a turn is running is refused with a sentence naming the cure.
-- [ ] The close uses the consultation's OWN repository path, not the window's first folder.
-- [ ] An absent outcome renders as a dash and leaves the STATUS untouched — asserted for an `open`
+- [x] A close while a turn is running is refused with a sentence naming the cure.
+- [x] The close uses the consultation's OWN repository path, not the window's first folder.
+- [x] An absent outcome renders as a dash and leaves the STATUS untouched — asserted for an `open`
       record and a `closed` one, and proved by breaking it.
-- [ ] A repeat of the same outcome succeeds; a different one is refused as a conflict; a person may
+- [x] A repeat of the same outcome succeeds; a different one is refused as a conflict; a person may
       fill an absent outcome on a lapsed record.
-- [ ] The human close reaches the server through `--close-consult` and surfaces its refusal.
-- [ ] The live counterpart check exists, was RUN against the previous released binary, and its result
+- [x] The human close reaches the server through `--close-consult` and surfaces its refusal.
+- [x] The live counterpart check exists, was RUN against the previous released binary, and its result
       is recorded here.
-- [ ] `close_consult` refuses another caller's id and an unknown outcome, and is idempotent.
-- [ ] The two-sided table above is true of the code, both rows.
-- [ ] Whole extension suite green from a cleaned `out/`; the server suite green; `plan-lifecycle.mjs` clean.
-- [ ] `research/module_server.md` and `research/module_extension.md` updated.
-- [ ] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
+- [x] `close_consult` refuses another caller's id and an unknown outcome, and is idempotent.
+- [x] The two-sided table above is true of the code, both rows.
+- [x] Whole extension suite green from a cleaned `out/`; the server suite green; `plan-lifecycle.mjs` clean.
+- [x] `research/module_server.md` and `research/module_extension.md` updated.
+- [x] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
+
+### What the live counterpart check answered
+
+Run by hand on **2026-09-17**, and again after the code round, against **coai-mcp 0.27.1** — the
+release BEFORE the newest, because the newest may already be this change and a build compared with
+itself reports a boundary nobody tested.
+
+```
+ok    the previous release REFUSES --close-consult rather than appearing to succeed — exit 64
+ok    and says so in a sentence the panel can show — unknown argument '--close-consult'
+ok    this build reads a record written without the field, and closes it — exit 0
+ok    the previous release still reads a database this build has migrated — exit 0
+ok    and still answers the consultation, column it has never heard of and all
+ok    with the status this build wrote — status: closed
+ok    this build reads the outcome back — outcome: solved
+ok    and who recorded it — outcomeBy: person
+```
+
+The first line is worth more than its position suggests: **exit 64 is what an un-updated server
+really answers**, which is why the panel's "your server is too old" branch is a fact rather than an
+assumption — and why this mode had to stop returning 64 for a malformed request of its own.
+
+### The suites, as run
+
+- `CoaiMcp.Tests.exe` — **2193 total, 0 failed**, 2191 succeeded, 2 skipped.
+- `cd src_vs_code && npm run compile && npm test` — from a cleaned `out/`, per the stale-output rule.
+- `node .agents/conventions/tools/plan-lifecycle.mjs` — clean.

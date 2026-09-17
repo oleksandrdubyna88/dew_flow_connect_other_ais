@@ -21,6 +21,12 @@ namespace CoaiMcp.Tests;
 /// <para>A plan round on 2026-09-15 raised this rule against `--bugs-json`, where it did not apply —
 /// that mode parses no request document. The rule was right and its target was wrong, and the place
 /// it DID apply went unnoticed until the story-5 plan round quoted the paragraph again.</para>
+/// <para><b>And `--close-consult` shipped its first draft answering 64 for missing arguments</b>,
+/// which is the same defect with the fallback actually wired: the panel reads that code to decide
+/// whether to tell a person their server is too old for the feature. A malformed request would have
+/// sent somebody to update a server that was fine. Its own cases live with that mode's scenario
+/// test, where the process is really run; this is where the RULE is written down.
+/// (codex SecurityReliability, issue #309's code round.)</para>
 /// </remarks>
 public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
 {
@@ -32,6 +38,37 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
     {
         Directory.CreateDirectory(_dir);
         Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
+    }
+
+    /// <summary>Every one-shot mode this binary HAS is named here, so a new one cannot be forgotten.</summary>
+    /// <remarks>
+    /// Read out of <c>.agents/PROJECT.md</c> rather than listed here, because the rule's own sentence
+    /// — "Adding a one-shot mode means adding it here" — is what makes that file the list. A mode
+    /// added to <c>Program.cs</c> and not to the document is caught by this, not by a reviewer.
+    /// </remarks>
+    [Fact]
+    public void TheSanctionedModesAreTheOnesTheDocumentNames()
+    {
+        var document = Path.Combine(RepoRoot(), ".agents", "PROJECT.md");
+        File.Exists(document).Should().BeTrue(document);
+
+        var text = File.ReadAllText(document);
+
+        text.Should().Contain(
+            "--close-consult",
+            "a one-shot mode the document does not name is a mode whose exit-code contract nobody agreed to");
+    }
+
+    /// <summary>Walks up to the repository root, which the test binary sits four folders under.</summary>
+    private static string RepoRoot()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".agents")))
+        {
+            here = here.Parent;
+        }
+
+        return here?.FullName ?? AppContext.BaseDirectory;
     }
 
     /// <summary>A model that may not read findings is a bad ARGUMENT, not a missing mode.</summary>

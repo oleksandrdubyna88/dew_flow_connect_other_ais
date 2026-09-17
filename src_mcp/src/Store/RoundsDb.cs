@@ -150,13 +150,13 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = """
             INSERT INTO consultations (
                 id, caller, caller_kind, repo_path, branch, head_sha, vendor, model, turns, status,
-                reason, outcome, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert)
+                reason, outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert)
             VALUES (
                 $id, $caller, $kind, $repo, $branch, $sha, $vendor, $model, $turns, $status,
-                $reason, $outcome, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert)
+                $reason, $outcome, $outcomeBy, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert)
             ON CONFLICT(id) DO UPDATE SET
                 turns = excluded.turns, status = excluded.status, reason = excluded.reason,
-                outcome = excluded.outcome,
+                outcome = excluded.outcome, outcome_by = excluded.outcome_by,
                 ended_utc = excluded.ended_utc, seconds = excluded.seconds,
                 tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out,
                 cost_usd = excluded.cost_usd, problem = excluded.problem,
@@ -174,6 +174,7 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$status", row.Status);
         Bind(write, "$reason", row.Reason);
         Bind(write, "$outcome", row.Outcome);
+        Bind(write, "$outcomeBy", row.OutcomeBy);
         Bind(write, "$started", row.StartedUtc);
         Bind(write, "$ended", row.EndedUtc);
         Bind(write, "$seconds", row.Seconds);

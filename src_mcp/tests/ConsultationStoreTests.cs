@@ -294,3 +294,204 @@ public sealed class ConsultationStoreTests : IDisposable
         lengths.Should().NotThrow();
     }
 }
+
+/// <summary>The per-caller call cap — and what it does when it cannot write its own counter.</summary>
+public sealed class ConsultCallCounterTests : IDisposable
+{
+    private readonly string _data = Directory.CreateTempSubdirectory("coai-consult-count-").FullName;
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_data, recursive: true);
+        }
+        catch (IOException) { }
+    }
+
+    [Fact]
+    public void CallsAreCountedUntilTheCap_ThenRefused()
+    {
+        var counter = new ConsultCallCounter(_data);
+        var now = DateTime.UtcNow;
+
+        for (var i = 1; i <= 3; i++)
+        {
+            counter.TryTake("caller-a", 3, now).Should().Be(new CounterOutcome(true, i, string.Empty));
+        }
+
+        counter.TryTake("caller-a", 3, now).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ASecondCallerHasItsOwnCount()
+    {
+        var counter = new ConsultCallCounter(_data);
+        var now = DateTime.UtcNow;
+        counter.TryTake("caller-a", 1, now);
+
+        counter.TryTake("caller-b", 1, now).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheWindowExpires_AndTheCountStartsAgain()
+    {
+        var counter = new ConsultCallCounter(_data);
+        var now = DateTime.UtcNow;
+        counter.TryTake("caller-a", 1, now);
+
+        counter.TryTake("caller-a", 1, now + ConsultCallCounter.Window + TimeSpan.FromMinutes(1)).Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnUnwritableCounter_StillENFORCESTheCap_AndSaysSo()
+    {
+        // NEVER fail open: the split-order claim can, because a repeated instruction is cheap; a
+        // call cap that fails open is a runaway agent on a paid vendor. Two reviewers, plan round.
+        var unwritable = Path.Combine(_data, "not-a-directory");
+        File.WriteAllText(unwritable, "this is a file, so no directory can be made inside it");
+        var counter = new ConsultCallCounter(unwritable);
+        var now = DateTime.UtcNow;
+        var caller = "caller-" + Guid.NewGuid().ToString("N");
+
+        var first = counter.TryTake(caller, 2, now);
+        first.Allowed.Should().BeTrue();
+        first.Note.Should().Contain("in memory");
+
+        counter.TryTake(caller, 2, now).Allowed.Should().BeTrue();
+        counter.TryTake(caller, 2, now).Allowed.Should().BeFalse("the cap holds even with no file to write it in");
+    }
+}
+
+/// <summary>
+/// Whether two spellings name one checkout — the comparison <c>status</c> stands on.
+/// </summary>
+/// <remarks>
+/// The two sides reach this from different places: the RECORD holds what git answered, which is the
+/// real path, and the query holds whatever the session was opened with. Nothing keeps those two
+/// spellings equal, and on macOS they are routinely not.
+/// </remarks>
+public sealed class SameCheckoutTests
+{
+    /// <summary>The ordinary case: one spelling, no links, still the same checkout.</summary>
+    [Fact]
+    public void TheSamePathSpelledTheSameWay_IsTheSameCheckout()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "coai-one-checkout");
+
+        ConsultationService.SamePath(path, path + Path.DirectorySeparatorChar, p => p)
+            .Should().BeTrue("a trailing separator is not a different directory");
+    }
+
+    /// <summary>
+    /// A checkout git reports THROUGH its links is the one the caller asked about.
+    /// </summary>
+    /// <remarks>
+    /// <para>This is what failed on macOS, and it failed silently in the most expensive direction.
+    /// <c>status</c> exists so a compacted conversation can find the consultation it already opened;
+    /// the record held <c>/private/var/folders/…</c> because that is what git answers, the query
+    /// held <c>/var/folders/…</c> because that is what the session was opened with, and
+    /// <c>GetFullPath</c> — which normalises separators and <c>..</c> and nothing else — called them
+    /// different. So <c>status</c> reported nothing open about an open consultation, and the caller
+    /// did the reasonable thing with that answer: opened a second one, collected the tree again, and
+    /// asked a model that had already answered, from scratch, on the same budget.</para>
+    /// <para>The link is a seam rather than a real one, so this holds on every platform instead of
+    /// only on the one that has a <c>/private</c>.</para>
+    /// </remarks>
+    [Fact]
+    public void ACheckoutReachedThroughALink_IsTheSameCheckout()
+    {
+        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
+        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+
+        string Link(string p) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(p),
+                Path.TrimEndingDirectorySeparator(said),
+                StringComparison.OrdinalIgnoreCase)
+                ? real
+                : p;
+
+        ConsultationService.SamePath(real, said, Link)
+            .Should().BeTrue("git answers with the resolved path and the session was opened with the other one");
+    }
+
+    /// <summary>
+    /// One checkout is ONE owner, whichever spelling of it the caller happens to hold.
+    /// </summary>
+    /// <remarks>
+    /// <para>When nothing in the environment names a session — a plain CLI, a runner — a consultation
+    /// is owned by its checkout. That identity was built twice from two different strings: the write
+    /// had already resolved the repository through git, the read used what the session was opened
+    /// with. Same directory, two owners, and <c>status</c> filtered out the consultation it was
+    /// asked about. It survived the first fix to <c>SamePath</c> untouched, because the path
+    /// comparison was never the only thing comparing paths.</para>
+    /// </remarks>
+    [Fact]
+    public void OneCheckoutIsOneOwner_WhicheverSpellingNamesIt()
+    {
+        var said = Path.Combine(Path.GetTempPath(), "coai-checkout-as-said");
+        var real = Path.Combine(Path.GetTempPath(), "coai-checkout-as-resolved");
+
+        string Link(string p) =>
+            string.Equals(
+                Path.TrimEndingDirectorySeparator(p),
+                Path.TrimEndingDirectorySeparator(said),
+                StringComparison.OrdinalIgnoreCase)
+                ? real
+                : p;
+
+        ConsultationService.RepoIdentity(said, Link).Should().Be(
+            ConsultationService.RepoIdentity(real, Link),
+            "the session was opened with one spelling and git answered with the other");
+    }
+
+    /// <summary>Two different checkouts stay different — the guard against fixing this too hard.</summary>
+    [Fact]
+    public void TwoDifferentCheckouts_AreNotTheSameOne()
+    {
+        var one = Path.Combine(Path.GetTempPath(), "coai-checkout-one");
+        var other = Path.Combine(Path.GetTempPath(), "coai-checkout-two");
+
+        ConsultationService.SamePath(one, other, p => p).Should().BeFalse();
+        ConsultationService.RepoIdentity(one, p => p).Should().NotBe(ConsultationService.RepoIdentity(other, p => p));
+    }
+
+    /// <summary>
+    /// A path this machine cannot make sense of is not the one being asked about — it is not a crash.
+    /// </summary>
+    /// <remarks>
+    /// A record can come from a server that ran on another machine. That was already true of
+    /// <c>GetFullPath</c> and has to stay true now that a resolver runs over both sides.
+    /// </remarks>
+    [Fact]
+    public void APathThisMachineCannotResolve_IsNotAMatch_AndDoesNotThrow()
+    {
+        var here = Path.Combine(Path.GetTempPath(), "coai-checkout-here");
+
+        ConsultationService.SamePath(here, "\0not-a-path", p => p).Should().BeFalse();
+        ConsultationService.SamePath(here, string.Empty, p => p).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A checkout this machine cannot resolve still names itself — and names itself the SAME way
+    /// from both sides, which is the only thing the identity has to guarantee.
+    /// </summary>
+    /// <remarks>
+    /// The point of the fallback is not that the name is good; it is that there is one. A record can
+    /// come from a server that ran on another machine, and a resolver that throws must not leave the
+    /// write and the read disagreeing — that disagreement is the whole defect this rule exists for.
+    /// </remarks>
+    [Fact]
+    public void ACheckoutThatCannotBeResolved_StillNamesItselfTheSameWayTwice()
+    {
+        const string unresolvable = "\0not-a-path";
+
+        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Be(
+            ConsultationService.RepoIdentity(unresolvable, p => p),
+            "the write and the read must agree even where neither can resolve");
+
+        ConsultationService.RepoIdentity(unresolvable, p => p).Should().Contain(
+            "repo:", "an owner that cannot be resolved is still an owner");
+    }
+}

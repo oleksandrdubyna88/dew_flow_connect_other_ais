@@ -56,6 +56,25 @@ let the clock run out keeps what it said.
 **`Reason` is never overwritten either.** Why it stopped and how it ended are two facts, so a
 consultation the cap closed keeps its sentence about the budget and gains a verdict beside it.
 
+**And therefore WHO said so is its own field.** `Reason` is the only sentence on the record and it is
+kept as the server left it, so a verdict recorded afterwards landed beside a line about the budget
+with no author at all. `ConsultationRecord.OutcomeBy` carries `caller`, `person` or the server's own
+`server`, projected into its own column: "the AI said it worked", "a person marked it closed" and
+"the clock ran out" are three different claims, and an export that had to read English to tell them
+apart would one day read it wrong. The log shows it beside the word — *by the AI*, *by hand* — and
+shows nothing beside `lapsed`, which already says the clock did it. (The code round; the plan
+promised the distinction and the first build did not keep it.)
+
+**An outcome this build has never heard of is not overwritten.** `IsVerdict` asks *is this the
+absence of a verdict* — empty, or `lapsed` — rather than *is this one of mine*. A newer server may
+write a fifth word, and a build that recognised only its own three would read that as nobody having
+decided and replace it: durable state from a build that knows more, lost in silence.
+
+**The close takes the RECORD's lock, not the caller's path.** The lock is keyed by repository and is
+taken before the record is read; a supplied path naming another checkout would take that one's lock
+and then write this record anyway, so a turn running in the real repository could overwrite the
+close. The path is compared with the record's and a mismatch is refused naming where it belongs.
+
 **A close while a turn is RUNNING is refused.** `asking` means a vendor is being asked at that
 moment, and a close landing then would be overwritten by that turn's own write — the status visibly
 flapping from closed back to open. It is refused in the same shape `ConsultationRules` already uses
@@ -72,8 +91,42 @@ plan promised the control and did not name the door until the plan round asked.
 That door is the PERSON's and is not subject to the caller check, deliberately: it runs on their own
 machine against their own data directory, which is a stronger trust position than another AI's rather
 than a weaker one — and a consultation whose session has gone is exactly the one nobody else can
-close. The exit code is what the panel reads: **0** recorded, **64** the arguments were wrong,
-**65** refused with a sentence on stdout to show.
+close. The exit code is what the panel reads: **0** recorded, **65** refused or malformed — with
+the sentence on stdout to show — and **64** for one thing only.
+
+**64 means "this binary has never heard of that mode", and nothing else.** `.agents/PROJECT.md`
+reserves it so that a caller can tell a server too old for a feature from one that understood the
+request and declined it, and this mode's first draft returned it for missing arguments: the panel
+would have told a person to update a server that was fine. The panel now has a branch for it that
+names the cure, and the live boundary check observes the previous release answering exactly 64.
+
+**The refusal is read as JSON rather than searched for text.** It was
+`answer.Contains("\"error\"")`, which reported an answer that will not PARSE as a success — a stack
+trace contains that substring nowhere, so the mode exited 0 and the panel said the outcome had been
+recorded when nothing could be read at all.
+
+**And the vault is not read on this path.** A close talks to nobody: it reads a record file, writes it
+back and projects a row. Reading the key vault spawns `creds config <key>`, which is a process and a
+wait in the middle of a button a person expects to be instant. `--providers` reads it because it
+REPORTS on keys.
+
+### The catalogue lives in a file neither half owns
+
+Both halves have their own copy of these four words — this one validates against it before writing
+anything, the panel turns it into the sentence a person reads and the choices a person is offered —
+and they ship on separate clocks. So both assert against `shared/consultation-outcomes.json`, which
+is the shape `NothingReadsAnotherProgramsSourceTests` requires: a suite that derived its expectation
+from the other program's SOURCE would go quiet on a reformat rather than red.
+
+### A read-only reader cannot migrate, so it asks what shape it has
+
+`RoundsQuery` opens the database `Mode=ReadOnly`, and the schema steps run on OPEN — so they never
+run for it. A data directory whose last writer was an older release genuinely has the
+`consultations` table without this story's two columns, and naming one answered *no such column*,
+which the reader's guard deliberately does not catch (a half-written file reading as an empty one is
+the worse failure). Because `Read` composes the WHOLE page, that took the rounds, the blind spots and
+the totals with it. It now asks `pragma_table_info` and picks one of three literal query texts, the
+way the rounds half has done since story 6's counter column.
 
 ### Two defects older than this change, found by its scenario
 
@@ -93,12 +146,20 @@ Neither could surface in a unit test, which is what the scenario requirement is 
 ### The boundary, checked against the release rather than argued
 
 `src_vs_code/scripts/live-close-consult-compat.mjs`, run by hand, downloads the previous release and
-runs both binaries on one data directory. Against **coai-mcp 0.28.0, 2026-09-17**: the old binary
-refuses `--close-consult` as an unknown argument with a sentence rather than appearing to succeed;
-this build reads a record written without the field and closes it; and **the old binary still reads a
-database this build has MIGRATED**, answering the consultation with the extra column and all. That
-last one is the one worth having — a migration is one-way, so a schema change the un-updated binary
-cannot read strands a person until they update.
+runs both binaries on one data directory. Against **coai-mcp 0.27.1, re-run 2026-09-17 after the
+code round**: the old binary refuses `--close-consult` as an unknown argument **with exit 64** and a
+sentence, rather than appearing to succeed; this build reads a record written without the field and
+closes it; **the old binary still reads a database this build has MIGRATED**, answering the
+consultation with the two extra columns and all; and this build reads back both the outcome and its
+author. The migration row is the one worth having — a migration is one-way, so a schema change the
+un-updated binary cannot read strands a person until they update.
+
+The unpacker is named by its absolute path on Windows, and that is not fussiness: `tar` is two
+different programs there. Windows ships **bsdtar** as `%SystemRoot%\System32\tar.exe`, which reads a
+zip and takes a drive-lettered path; Git Bash puts **GNU tar** earlier on PATH, and that one calls a
+zip "not a tar archive" and reads the leading `C:` as a remote host. The bare word is a coin toss
+decided by whichever shell a person is in. Every child also has a deadline now: a check whose failure
+mode is a terminal that never returns is a check nobody trusts the green of.
 
 ## The consultant — the ninth tool (2026-09-12)
 

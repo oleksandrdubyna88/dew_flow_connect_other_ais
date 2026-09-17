@@ -97,6 +97,34 @@ export function outcomeSaid(outcome: string | undefined): string {
   return OUTCOMES[outcome ?? ''] ?? NO_OUTCOME;
 }
 
+/**
+ * Who supplied the outcome, as a person reads it.
+ *
+ * <p>Three doors and they are three different claims: an AI that verified its own advice, a person
+ * who decided, and the clock. The server keeps them apart as a field precisely so that nobody has
+ * to read a free-text note to tell them apart — so showing the word and not its author would throw
+ * the distinction away one layer before the eye.</p>
+ *
+ * <p>Empty for an author this build does not recognise, on the same rule `outcomeSaid` follows: a
+ * newer server may write a fourth source, and a guess at it is the same mistake one release later.
+ * Empty for `server` too — `ran out` already says the clock did it, and "ran out · by the server"
+ * is the same sentence twice. (issue #309.)</p>
+ */
+export function outcomeBySaid(outcomeBy: string | undefined): string {
+  return outcomeBy === 'caller' ? 'by the AI' : outcomeBy === 'person' ? 'by hand' : '';
+}
+
+/**
+ * The exit code that means "this binary has never heard of that mode", and NOTHING else.
+ *
+ * <p>`.agents/PROJECT.md` reserves 64 for exactly this, so that a caller can tell a server too old
+ * for a feature from a server that understood the request and declined it — which answers 65. The
+ * two halves of this product update separately, so an extension newer than its server is an
+ * ordinary Tuesday rather than a corner case, and it is the one failure whose cure is a version
+ * rather than a different click.</p>
+ */
+export const SERVER_TOO_OLD = 64;
+
 export interface Consultation {
   readonly id: string;
   readonly callerKind: string;

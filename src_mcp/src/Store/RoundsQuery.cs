@@ -112,6 +112,8 @@ public sealed record LoggedConsultation(
     string Reason,
     /// <summary>How it ended. Empty for a row written before the column existed — not a verdict.</summary>
     string Outcome,
+    /// <summary>Who said so — <c>caller</c>, <c>person</c>, the server's own <c>server</c>, or nobody.</summary>
+    string OutcomeBy,
     string StartedUtc,
     string EndedUtc,
     double Seconds,
@@ -578,12 +580,16 @@ public static class RoundsQuery
         try
         {
             using var read = db.CreateCommand();
-            read.CommandText = """
-                SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
-                       outcome, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-                       problem, advice, alert
-                FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
-                """;
+            // THE SHAPE IS ASKED FOR, never assumed. This connection is READ-ONLY, so the schema
+            // steps do not run for it: a data directory whose last writer was an older release has
+            // the table and not these columns, and naming one answered "no such column" — which the
+            // guard below deliberately does NOT catch, and which takes the rounds, the blind spots
+            // and the totals down with it, because this composes the whole page. The rounds half has
+            // carried two texts for exactly this since story 6's counter; this half had one.
+            // (codex, the code round.)
+            read.CommandText = HasColumn(db, "consultations", "outcome_by")
+                ? SqlConsultationsAuthored
+                : HasColumn(db, "consultations", "outcome") ? SqlConsultationsEnded : SqlConsultationsPlain;
             read.Parameters.AddWithValue("$limit", limit);
             using var rows = read.ExecuteReader();
             while (rows.Read())
@@ -591,7 +597,7 @@ public static class RoundsQuery
                 consultations.Add(new LoggedConsultation(
                     Text(rows, "id"), Text(rows, "caller_kind"), Text(rows, "repo_path"), Text(rows, "branch"),
                     Text(rows, "vendor"), Text(rows, "model"), Number(rows, "turns"), Text(rows, "status"),
-                    Text(rows, "reason"), Text(rows, "outcome"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
+                    Text(rows, "reason"), Text(rows, "outcome"), Text(rows, "outcome_by"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
                     Real(rows, "seconds"), Big(rows, "tokens_in"), Big(rows, "tokens_out"),
                     MaybeReal(rows, "cost_usd"),
                     Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert")));
@@ -613,6 +619,42 @@ public static class RoundsQuery
 
         return consultations;
     }
+
+    /// <summary>
+    /// The consultations page, in the three shapes a database can be in — written out, not composed.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three literals for the same reason the rounds page has two, and the reason is in the
+    /// comment above those: one text with the columns spliced in reads as SQL built at runtime to
+    /// every scanner and to a person skimming, and a query that needs a paragraph to prove it is
+    /// safe costs more than the duplicated lines that need none.</para>
+    /// <para>Three rather than four, because the steps are ORDERED: a file with <c>outcome_by</c>
+    /// has <c>outcome</c>, since the step that adds the second ran after the step that adds the
+    /// first. The missing columns are substituted as empty strings, which is what they mean —
+    /// nobody recorded a verdict, and nobody is not <c>solved</c>.</para>
+    /// </remarks>
+    private const string SqlConsultationsAuthored = """
+        SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+               outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+               problem, advice, alert
+        FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+        """;
+
+    /// <summary>The same page against a file written before the author column was appended.</summary>
+    private const string SqlConsultationsEnded = """
+        SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+               outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+               problem, advice, alert
+        FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+        """;
+
+    /// <summary>And against one written before a consultation could be said to have ended at all.</summary>
+    private const string SqlConsultationsPlain = """
+        SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+               '' AS outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+               problem, advice, alert
+        FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+        """;
 
     /// <summary>SQLite's generic error code, which is what a missing table arrives as.</summary>
     private const int SqliteNoSuchTable = 1;

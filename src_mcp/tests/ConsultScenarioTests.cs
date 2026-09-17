@@ -305,6 +305,10 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         // On the RECORD, which is what the log projects and what survives a restart.
         var record = new ConsultationStore(_data).Read(id)!;
         record.Outcome.Should().Be("solved");
+        // WHO said it, as a field. The note is a person's or an AI's own words and may contain
+        // anything at all, so the one thing an export must never do is read English to decide
+        // whether a verdict came from the caller, from a person, or from the clock.
+        record.OutcomeBy.Should().Be("caller", "the tool is the caller's own door, not the panel's");
         record.Status.Should().Be(ConsultationStatuses.Closed);
         record.EndedUtc.Should().NotBeEmpty();
         record.Reason.Should().Contain("the loop stopped one short");

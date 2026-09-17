@@ -184,6 +184,45 @@ refuses somebody who is stuck — and because a terminal record is never written
 `ConsultationService.Reproject` lets the view catch up at startup with the one write that could have
 been lost.
 
+### And it ENDS across the seam too, through a door that is not MCP (2026-09-17)
+
+Issue #309 added the tenth tool, `close_consult`, and with it the first thing on this surface a
+PERSON can do to a consultation — which is where the seam gets interesting, because the extension
+does not speak MCP to `coai-mcp` and never has. It drives one-shot modes selected from `args[0]`
+before any transport opens, so the log's `record…` control reaches the server through
+**`--close-consult`** and through nothing else. The container diagram gains no arrow: this is the
+same process door `--log` has always used.
+
+What is new is that the door now carries a WRITE, and that makes its exit codes part of the
+architecture rather than a detail of one mode:
+
+| code | means | what the panel does |
+|---|---|---|
+| 0 | recorded | repaint |
+| 64 | **this binary has never heard of that mode** | tell the person their server is too old, and name the cure |
+| 65 | refused or malformed — the sentence is on stdout | show the server's own sentence |
+
+64 is reserved by [.agents/PROJECT.md](../.agents/PROJECT.md) for exactly one meaning, and this is
+the first place anything acts on it. A mode the binary HAS must therefore answer 65 however wrong the
+request was: the two halves of this product update on separate clocks, so an extension newer than its
+server is an ordinary Tuesday, and a malformed request wearing 64 would send somebody to update
+something that works. The live boundary check observes the previous release answering 64 for real.
+
+**Three things now exist in both halves, so one of them is a file neither half owns.** The four
+outcome words, which of them is somebody's verdict, and who may have supplied one: the server
+validates against them before writing, and the panel turns them into the sentence a person reads and
+the choices a person is offered. `shared/consultation-outcomes.json` holds them and each half
+asserts its OWN catalogue against it — the shape
+[module_tests.md](module_tests.md) records as the alternative to a suite reading the other program's
+source, which goes quiet on a reformat instead of going red.
+
+**And a schema change is a two-sided event.** The reader opens the database read-only, so the steps
+that add a column never run for it: a data directory last written by an older release has the table
+and not the columns, and the page asks `pragma_table_info` which shape it is looking at rather than
+assuming the newest. The other direction — the older BINARY reading a database this build has
+migrated — is checked against the real released artefact rather than argued, because a migration is
+one-way and getting it wrong strands a person until they update.
+
 ## The extension gained two arrows of its own (2026-09-09)
 
 Until the chat, every vendor was reached through `coai-mcp`: the extension configured reviewers and
