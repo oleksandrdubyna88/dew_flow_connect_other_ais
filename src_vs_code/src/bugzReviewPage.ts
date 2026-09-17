@@ -83,7 +83,19 @@ export const undecided = (pairs: readonly ReviewPair[]): number =>
   pairs.filter((p) => p.keep === UNDECIDED).length;
 
 /** An ARIA boolean is a lowercase STRING, which `${true}` also spells but by accident. */
-const aria = (yes: boolean): string => (yes ? 'true' : 'false');
+const ariaBoolean = (yes: boolean): string => (yes ? 'true' : 'false');
+
+/**
+ * A `findingId` on its way into an attribute or a selector.
+ *
+ * <p>It is typed `number` and `roundsDbRead.pairOf` refuses a pair whose id is not one — but this
+ * module is pure and its caller's promise is not a property of the page. The id is written into
+ * `data-row`, `data-toggle`, `data-detail` and an element id, and the page's own script then builds
+ * `[data-detail="' + id + '"]` from what it reads back, so a value carrying a quote would break out
+ * of both the attribute and the selector. Escaping costs one call and makes the page safe by
+ * construction rather than by what the reader upstream happens to check today.</p>
+ */
+const key = (findingId: number): string => escapeHtml(String(findingId));
 
 /**
  * One pair: the line you always see, and the code you asked for.
@@ -99,18 +111,27 @@ const aria = (yes: boolean): string => (yes ? 'true' : 'false');
  * in the plan exist to catch.</p>
  */
 function row(pair: ReviewPair, open: boolean): string {
-  const id = pair.findingId;
+  const id = key(pair.findingId);
   const said = `${escapeHtml(pair.severity)} · ${escapeHtml(pair.category)} — ${escapeHtml(pair.title)}`;
 
+  // The three lines are INSIDE the button, so the whole summary is the target. The first version
+  // wrapped only the chevron and the symbol, and left the severity, the title and the state word
+  // outside it — pressing any of them did nothing at all, while the stylesheet beside it claimed
+  // the whole line was the button. A code reviewer (codex, UX) found it. They are spans rather
+  // than divs because a `button` takes phrasing content: a `div` in there is invalid markup that
+  // browsers merely tolerate.
   return `<tr class="pair" data-row="${id}">
   <td class="pick"><input type="checkbox" data-pick="${id}"></td>
   <td class="what">
     <button type="button" class="twist" data-toggle="${id}"
-            aria-expanded="${aria(open)}" aria-controls="detail-${id}">
-      <span class="chev" aria-hidden="true">▸</span><span class="sym">${escapeHtml(pair.symbolName)}</span>
+            aria-expanded="${ariaBoolean(open)}" aria-controls="detail-${id}">
+      <span class="chev" aria-hidden="true">▸</span>
+      <span class="lines">
+        <span class="sym">${escapeHtml(pair.symbolName)}</span>
+        <span class="said">${said}</span>
+        <span class="state ${decision(pair.keep)}">${decision(pair.keep)}</span>
+      </span>
     </button>
-    <div class="said">${said}</div>
-    <div class="state ${decision(pair.keep)}">${decision(pair.keep)}</div>
   </td>
 </tr>
 <tr class="detail" id="detail-${id}" data-detail="${id}"${open ? '' : ' hidden'}>
@@ -218,14 +239,17 @@ ${TONE_CSS}
   /* The tick column is as narrow as a box and must not take the click target of the row with it. */
   th.pick, td.pick { width: 1%; padding-right: 0; }
   th.pick input, td.pick input { cursor: pointer; margin: 0; }
-  /* The whole summary line is the button, so the target is the line and not a glyph. It keeps the
-     page's own text colour: a button coloured as a button would make every method look pressable
-     in the accent colour and drown the state words underneath. */
+  /* The whole summary line is the button — every one of the three lines is inside it — so the
+     target is the line and not a glyph. It keeps the page's own text colour: a button coloured as
+     a button would make every method look pressable in the accent colour and drown the state
+     words underneath. */
   button.twist {
     background: none; color: inherit; padding: 0; text-align: left; width: 100%;
-    display: flex; align-items: baseline; gap: 6px; font: inherit;
+    display: flex; align-items: flex-start; gap: 6px; font: inherit;
   }
-  .chev { display: inline-block; opacity: .6; transition: transform .1s; font-size: .9em; }
+  .lines { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+  .chev { display: inline-block; opacity: .6; transition: transform .1s; font-size: .9em;
+          line-height: 1.4; }
   button.twist[aria-expanded="true"] .chev { transform: rotate(90deg); }
   .sym { font-weight: 600; }
   .said { opacity: .7; font-size: .85em; margin-top: 2px; }
@@ -298,7 +322,7 @@ ${body(pairs, rows, trouble)}
   // Opening a row is painted HERE and the panel is merely told. A redraw runs the server — one
   // process per click is what a round trip would cost — so the page owns the gesture and the panel
   // owns what survives the next redraw. Nothing about the corpus changes either way.
-  function show(id, open) {
+  function showRow(id, open) {
     // By the data attribute rather than by the element id, so opening one row and opening all of
     // them look the same thing up the same way. The element id exists for aria-controls, which
     // needs a real target; a second lookup path would be a second place for the two to disagree.
@@ -343,7 +367,7 @@ ${body(pairs, rows, trouble)}
     if (twisting) {
       var rowId = twisting.getAttribute('data-toggle');
       var opening = twisting.getAttribute('aria-expanded') !== 'true';
-      show(rowId, opening);
+      showRow(rowId, opening);
       vscode.postMessage({ type: 'expand', id: Number(rowId), open: opening });
       return;
     }
