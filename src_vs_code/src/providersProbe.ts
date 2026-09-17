@@ -1,4 +1,4 @@
-import { parseProviders, ProvidersAnswer } from './providers';
+import { NO_NOTES, parseProviderNotes, parseProviders, ProvidersAnswer } from './providers';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
 
@@ -36,7 +36,7 @@ const CAP_MS = 8_000;
  */
 export async function readProviders(executable: string): Promise<ProvidersAnswer> {
   if (executable.length === 0) {
-    return { reported: {}, asked: false, answered: false };
+    return { reported: {}, asked: false, answered: false, notes: NO_NOTES };
   }
 
   // With the data directory this window chose. `--providers` answers out of the settings file, and
@@ -45,12 +45,16 @@ export async function readProviders(executable: string): Promise<ProvidersAnswer
   // theirs.
   const { code, output } = await capture(executable, ['--providers'], false, CAP_MS, undefined, serverEnv());
   if (code !== 0) {
-    return { reported: {}, asked: true, answered: false };
+    return { reported: {}, asked: true, answered: false, notes: NO_NOTES };
   }
 
   const reported = parseProviders(output);
+  // Read even when the ROWS could not be: a body that is not a providers answer may still be JSON
+  // carrying the reason, and these two are the server's own account of what it could not
+  // understand.
+  const notes = parseProviderNotes(output);
 
   return reported === undefined
-    ? { reported: {}, asked: true, answered: false }
-    : { reported, asked: true, answered: true };
+    ? { reported: {}, asked: true, answered: false, notes }
+    : { reported, asked: true, answered: true, notes };
 }

@@ -56,7 +56,7 @@ import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
-import { ProvidersAnswer } from './providers';
+import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, writeKeep } from './roundsDbRead';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -640,9 +640,55 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /** The last answer from `--providers`, when it was taken, and which binary gave it. */
-  private providersCache: ProvidersAnswer = { reported: {}, asked: false, answered: false };
+  private providersCache: ProvidersAnswer = { reported: {}, asked: false, answered: false, notes: NO_NOTES };
+
+  /**
+   * Which of the server's own complaints have already been written down this session.
+   *
+   * <p>The probe is cached for ten seconds and re-run on every render, so without this the same
+   * unreadable `COAI_ROLES` would be recorded every ten seconds for as long as it stayed
+   * unreadable. Keyed by the sentence, so a DIFFERENT complaint is news — and the same complaint
+   * after a restart is news too, which is right: a new host is a new observer.</p>
+   *
+   * <p>This is the local form of the suppression S4 generalises. It mirrors `discoveryWarned` and
+   * `promptWriteFailed`, which this class already keeps for the same reason.</p>
+   */
+  private notesSaid = new Set<string>();
 
   private providersAt = 0;
+
+  /**
+   * Write down what the server said about ITSELF, which nothing has ever read.
+   *
+   * <p>`--providers` has always answered `unrecognised` — the settings it could not understand,
+   * each already a sentence meant to be acted on — and a `vaultNote`. The panel's parser took
+   * `{provider, auth, note}` off each row and dropped the rest, so a malformed `COAI_ROLES` or a
+   * role row the server refused was visible only in a log file nobody opens. Three lines of parser
+   * and this; the notifications plan calls it the cheapest honest improvement in the inventory.</p>
+   *
+   * <p>It would NOT have caught the 2026-09-16 incident — that role was accepted rather than
+   * dropped, and its complaint came at round time — and saying so is the point: this closes a real
+   * gap, not the one that prompted the work.</p>
+   */
+  private sayWhatTheServerSaid(answer: ProvidersAnswer): void {
+    for (const sentence of answer.notes.unrecognised) {
+      if (this.notesSaid.has(sentence)) {
+        continue;
+      }
+      this.notesSaid.add(sentence);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'coai-mcp',
+        code: 'server-did-not-understand-a-setting',
+        // The SENTENCE, because a run can carry several and they are separate complaints about
+        // separate settings. One counter across all of them would hide every one but the first.
+        subject: sentence,
+        title: sentence,
+        cure: 'The server is running without that setting. Fix it in the panel and reload the window.',
+      });
+    }
+  }
 
   /** Keyed on the executable too: a reinstall inside the window must not serve the old one's answer. */
   private providersFrom = '';
@@ -928,9 +974,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
     this.providersInFlight = true;
     try {
-      const answer = executable.length === 0
-        ? { reported: {}, asked: false, answered: false }
+      const answer: ProvidersAnswer = executable.length === 0
+        ? { reported: {}, asked: false, answered: false, notes: NO_NOTES }
         : await readProviders(executable);
+      this.sayWhatTheServerSaid(answer);
       const changed = JSON.stringify(answer) !== JSON.stringify(this.providersCache);
       this.providersCache = answer;
       this.providersAt = Date.now();

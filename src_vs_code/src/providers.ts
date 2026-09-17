@@ -51,6 +51,47 @@ export interface ProvidersAnswer {
   /** A binary existed and was run. False means nothing was asked — which the Server section says. */
   readonly asked: boolean;
   readonly answered: boolean;
+  /** What the server said ABOUT ITSELF, which used to be dropped on the floor. */
+  readonly notes: ProviderNotes;
+}
+
+/**
+ * The two things `--providers` has always said and nobody has ever read.
+ *
+ * <p>`ProvidersAnswer` carried three fields and the server sends five. `Unrecognised` is the
+ * server's own list of settings it could not understand — a malformed `COAI_ROLES`, a role row it
+ * dropped, a consultant entry it refused — each already written as a sentence meant to be acted on.
+ * `VaultNote` says whether a credential vault was configured. Both crossed the wire on every probe,
+ * and `oneProvider` read `{provider, auth, note}` off each row and discarded everything beside
+ * them. The notifications plan calls this the cheapest honest improvement in the whole
+ * inventory.</p>
+ *
+ * <p>Nothing here is an error: a body that is not a providers answer yields two empties, because
+ * these are advisory and a probe that failed is already reported by `answered`.</p>
+ */
+export interface ProviderNotes {
+  readonly unrecognised: readonly string[];
+  readonly vaultNote: string;
+}
+
+/** Two empties — what an unparseable body, or a build too old to send them, amounts to. */
+export const NO_NOTES: ProviderNotes = { unrecognised: [], vaultNote: '' };
+
+export function parseProviderNotes(output: string): ProviderNotes {
+  try {
+    const parsed = JSON.parse(output) as { unrecognised?: unknown; vaultNote?: unknown } | null;
+    if (parsed === null || typeof parsed !== 'object') {
+      return NO_NOTES;
+    }
+    const rows = Array.isArray(parsed.unrecognised) ? parsed.unrecognised : [];
+
+    return {
+      unrecognised: rows.filter((row): row is string => typeof row === 'string' && row.length > 0),
+      vaultNote: typeof parsed.vaultNote === 'string' ? parsed.vaultNote : '',
+    };
+  } catch {
+    return NO_NOTES;
+  }
 }
 
 /**
