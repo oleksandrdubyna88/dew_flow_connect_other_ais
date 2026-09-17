@@ -8,7 +8,6 @@ import { notify } from './notify';
 import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
-import { spendLabel, spendSoFar } from './chatSpend';
 import {
   ModelPreset,
   PromptPreset,
@@ -20,13 +19,14 @@ import {
 } from './chatPresets';
 import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened, sameSlate } from './chatFresh';
 import { reloadedNote } from './chatTabs';
-import { CONVERSATION_VERSION, ConversationRecord, ConversationSource, metaOf, sourceOfFile, sourceOfSession } from './chatStore';
+import { ConversationRecord, ConversationSource, metaOf, sourceOfFile, sourceOfSession } from './chatStore';
 import { ChatStoreFile, SaveOutcome } from './chatStoreFile';
 import { ConversationIndex } from './chatStoreCache';
-import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { Thread, threads } from './chatThread';
-import { memory, pulse, store } from './chatHost';
+import { pulse, store } from './chatHost';
+import { answeredBy, asText, chatLanguage, pairOf, show } from './chatShow';
+import { keepQueued, recordOf } from './chatPersist';
 import {
   NAMES_ARE_CASE_BLIND,
   asUri,
@@ -41,7 +41,7 @@ import {
 import { Ready, chatCatalogFrom, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf, vendorFor } from './chatConfig';
 import { CANCELLED, fromTheEditor, matchedSource, passageFor, snapshots } from './chatCapture';
 import { ChatSession, TurnResult } from './chatSession';
-import { AnsweredBy, ChatPageState } from './chatPage';
+import { ChatPageState } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import {
@@ -52,7 +52,6 @@ import {
   modelToRun,
   openingModel,
 } from './chatModels';
-import { remoteIsFull } from './remoteAsk';
 import { remoteChatFor } from './chatRemote';
 import { TeamServer, rowBelongsTo, teamServersFrom } from './teamServers';
 import { readToken } from './teamServerAuth';
@@ -63,7 +62,7 @@ import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
-import { chatTextTone, chatUiScale, createChatPanel, pushChatCopied, pushChatDraft, pushChatFresh, pushChatNote, pushChatState, setChatDraft } from './chatPanel';
+import { chatTextTone, chatUiScale, createChatPanel, pushChatCopied, pushChatDraft, pushChatFresh, setChatDraft } from './chatPanel';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
 import { chatProcessFor } from './chatProcess';
 import { resolvedExecutable } from './versionProbe';
@@ -78,7 +77,6 @@ import {
   serviceLines,
   stillOurs,
 } from './chatPrompt';
-import { LanguageCode } from './settingsShape';
 import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession } from './sessionKey';
 import { GotoAsked, sessionSourceOf, tabKindOf } from './chatGoto';
 import { Moved, filedUnder, followable, movedTo, prepareMoves, sameRoot, sessionIdOf } from './chatSource';
@@ -717,291 +715,6 @@ function emptyTempDir(): ChatHome {
 }
 
 /**
- * Push the page's whole visible state, with the thread's own model list rather than an empty one.
- *
- * <p>A thread that is GONE pushes nothing. That is the guard for a tab closed while a turn was still
- * in flight: the answer can arrive up to a poll later, and posting into a webview VS Code has torn
- * down throws out of a callback nobody is catching. Forgetting the thread on close is what makes
- * every reader of it — this one included — a no-op afterwards.</p>
- *
- * @param queued how many turns are ahead of this one on a Team server; 0 for none, and for a local
- *   model, which has no queue
- */
-function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): void {
-  const thread = threads.get(entry.id);
-  if (thread === undefined) {
-    return;
-  }
-  const config = vscode.workspace.getConfiguration('coai');
-  pushChatState(entry, {
-    messages: thread.messages,
-    carryFrom: thread.carryFrom,
-    running,
-    // Built in epic 2 and set for the first time here: a remote conversation stops at three turns
-    // and the page offers the local model that has a memory instead.
-    capped: thread.forgetful && remoteIsFull(thread.asked),
-    failure,
-    models: thread.models,
-    providers: thread.providers,
-    providerId: thread.providerId,
-    modelId: thread.modelId,
-    // The two lists and the prompt in force, so the rows of buttons can be redrawn with the right
-    // one pressed — read HERE rather than held on the thread, because the person edits them in
-    // another tab and a copy taken when the conversation opened would be the list as it was then.
-    promptId: thread.promptId,
-    // The button the PERSON pressed, which is ahead of the session while a switch is still running.
-    chosenModelId: thread.chosenId,
-    promptPresets: savedPrompts(config),
-    modelPresets: savedModels(config),
-    // Which words are which, so the box and the transcript above it draw the same turn the same
-    // way. The ROLE comes from the thread rather than from the model in force: a queued switch holds
-    // the two apart for as long as an answer lasts, and what is marked has to be what is THERE.
-    marks: {
-      role: thread.role,
-      task: taskOf(config, thread.promptId, chatSettingsFrom((key) => config.get(key)).prompt),
-      service: serviceLines(chatLanguage()),
-    },
-    queued,
-    // The turn a stop would name. Zero while nothing runs, which is also what the page renders no
-    // control for — a stop that names no turn is refused by the seam rather than obeyed loosely.
-    turn: running ? (thread?.turn ?? 0) : 0,
-    // Who would answer a re-ask. Empty while a turn runs: the button is locked anyway, and offering
-    // to re-ask something that is still being answered is offering a question nobody asked yet.
-    reask: running || thread === undefined ? '' : reaskLabel(thread),
-    // Whether the failure on screen still has its question behind it. False while a turn runs, for
-    // the reason the re-ask above is empty then: the composer is locked, and sending again something
-    // that is still being answered is a second turn down a pipe that carries one.
-    //
-    // AND only when something actually failed. The builder already draws nothing without a failure,
-    // so this changes no pixel — but it keeps the invariant in one place instead of leaving it to
-    // emerge from two, which is what a later reader of the flag would trip over. (gemini, the plan
-    // round.)
-    // AND under the pair it failed under. Switch model after a failure and the retry is withdrawn
-    // rather than silently redirected: a retry is the same question to the same model, and a re-ask
-    // is the same question to a different one — which is already the Send button's other face.
-    canRetry: running || failure.length === 0
-      ? false
-      : thread.failedWith === pairOf(thread) && retryFrom(thread.messages) !== undefined,
-    attached: thread?.attached ?? '',
-    spend: spendLabel(spendSoFar(thread?.spend ?? [])),
-  });
-  // The one place the transcript reaches a page is the one place it is written down — but only when
-  // there is something new to write. `show` runs on every state push: a turn starting, a queue
-  // position moving, a failure clearing. Each of those used to rewrite up to twenty whole
-  // transcripts into one key, which is a lot of JSON on the extension host for a page that said the
-  // same words. The comparison is by REFERENCE, because `thread.messages` is replaced rather than
-  // mutated, so it is exact and costs nothing. (gemini, the code round.)
-  // The MARK is compared too. Pressing Carry nothing above changes neither the transcript nor the
-  // model, so a comparison of those two alone skipped the write — and the rule the person had just
-  // drawn would not have survived a reload, silently.
-  if (thread.savedMessages === thread.messages
-    && thread.savedModelId === thread.modelId
-    && thread.savedCarryFrom === thread.carryFrom) {
-    return;
-  }
-  thread.savedMessages = thread.messages;
-  thread.savedModelId = thread.modelId;
-  thread.savedCarryFrom = thread.carryFrom;
-  // AND WHEN. Below the guard, so it records that something CHANGED rather than that a page redrew —
-  // the picker orders its Open section by this, and a conversation nobody has spoken in must not
-  // climb to the top of it because its tab repainted. See `Thread.usedAt`.
-  thread.usedAt = Date.now();
-  // The MEMENTO, until this window's migration has confirmed every record is on disk and
-  // `retireMemento` has unbound it — a no-op from then on. It is kept this long because a store that
-  // cannot be reached must not leave the person's next words written nowhere (A4's plan round).
-  memory?.remember({
-    id: thread.saveId,
-    title: thread.title,
-    passage: thread.passage,
-    modelId: thread.modelId,
-    messages: thread.messages,
-    fromSession: thread.fromSession,
-    carryFrom: thread.carryFrom,
-  });
-  // AND to the store on disk, which is the source of truth: the reload serializer reads it, and the
-  // memento above is a fallback for as long as it holds anything. Detached on purpose — nobody waits
-  // for a disk to see their own words — and therefore ending in a catch of its own, which
-  // `reliability.md` requires of every edge nothing is above.
-  // CHAINED, not fired. Two writes issued before the first answers would both carry the revision
-  // this window last had accepted, so the second would be refused — and a refusal reads as another
-  // window, so a tab would fork itself and say it had become a copy of a conversation nobody else
-  // was in. The chain also recovers from a rejection instead of staying poisoned, which is the
-  // bargain `chatTabs.ts` already makes for the memento's queue.
-  keepQueued(entry, thread);
-}
-
-/**
- * Queue a write of this conversation to the store, behind whatever it is already writing.
- *
- * <p>Extracted from `show` because story C1 gave the store a SECOND writer: a Claude session's id
- * arrives from a background walk, long after the page last changed, and `show`'s dedupe guard
- * compares messages, model and mark — so a source landing on its own would never have reached disk
- * through that path. Both writers go through this one queue, which is what keeps two writes from
- * both carrying the revision this window last accepted and the second being read as another
- * window.</p>
- */
-function keepQueued(entry: ChatEntry, thread: Thread): void {
-  const step = (): Promise<void> => keepOnDisk(entry, thread).catch((reason: unknown) => {
-    // The outer edge of a detached call, and therefore a catch that SAYS something: the store
-    // answers in outcomes and never rejects, so anything arriving here is a defect rather than a
-    // disk, and the page is told as well as the console.
-    console.error('ConnectOtherAIs: a conversation could not be written to the store', reason);
-    pushChatNote(entry, thread.saveId, 'This conversation could not be written to disk just now.');
-  });
-  thread.writes = thread.writes.then(step, step);
-}
-
-/**
- * The conversation as the store keeps it — built here, because only this side knows a thread.
- *
- * <p>`rev` is what the store stamps, so the value put in is the one it will replace; `source` is
- * `none` until story C1 teaches a conversation what it was opened from, and `none` matches no tab,
- * which is the honest answer while nothing knows better.</p>
- */
-function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
-  return {
-    version: CONVERSATION_VERSION,
-    rev: thread.rev,
-    id: thread.saveId,
-    title: thread.title,
-    passage: thread.passage,
-    modelId: thread.modelId,
-    messages: thread.messages,
-    fromSession: thread.fromSession,
-    carryFrom: thread.carryFrom,
-    source: thread.source,
-    workspace: thread.workspace,
-    // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
-    // plan round; a conversation answered three months after it started was recorded as having
-    // started that day, and the picker draws its "started" from this field.
-    createdAt: thread.createdAt,
-    updatedAt: at,
-  };
-}
-
-/**
- * Write this conversation to the store, and do what its answer says.
- *
- * <p>The store's swap can refuse, and what a refusal MEANS is `chatStoreWrite.ts` — pure, and tested
- * as values. What is left here is the disk and the page. The rule worth carrying in your head while
- * reading it: nothing below can lose a conversation, because the transcript is on the thread and the
- * disk is only where it is kept for tomorrow.</p>
- */
-async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
-  if (store === undefined) {
-    return;
-  }
-  // MAPPED ONLY WHEN IT IS ASKED FOR. The words are needed by one branch of one outcome — the
-  // containment check on a refusal — and `show` runs on every push that changes anything. Building
-  // an array of every message's text before knowing whether a conflict even happened is an
-  // allocation per turn for a comparison that almost never runs. (gemini and local, the code round.)
-  const ours = (): readonly string[] => thread.messages.map((message) => message.text);
-  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours());
-  if (next.kind === 'adopt') {
-    // Our own record, from a session before this window ever wrote. Take the number the disk reports
-    // and save once more against it; a SECOND refusal has no innocent reading left and forks.
-    thread.rev = next.rev;
-    // AND WHEN IT BEGAN. The adopted record is this conversation's own earlier session, so its
-    // creation instant is the true one; without taking it, a conversation started in January and
-    // answered in March would be rewritten as having started in March, and the picker draws its
-    // "started" from that field. (codex, the code round.)
-    if (next.began !== undefined) {
-      thread.createdAt = next.began;
-    }
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours()));
-
-    return;
-  }
-  await settle(entry, thread, next);
-}
-
-/** This conversation's words, for the one comparison that asks for them. */
-const ours0 = (thread: Thread): readonly string[] => thread.messages.map((message) => message.text);
-
-/** What one answer does to the thread and to the page. Never called with `adopt`, which is a retry. */
-async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promise<void> {
-  if (next.kind === 'kept') {
-    thread.rev = next.rev;
-    if (next.note !== undefined) {
-      // A half-commit, said once and only where it matters: the transcript is safe on disk and the
-      // row that finds it again is behind, which the next read of it repairs.
-      pushChatNote(entry, thread.saveId, next.note);
-    }
-
-    return;
-  }
-  if (next.kind === 'said') {
-    pushChatNote(entry, thread.saveId, next.note);
-
-    return;
-  }
-  await forkOnDisk(entry, thread);
-}
-
-/**
- * This conversation belongs to another window now; keep ours under a new id.
- *
- * <p>Every message stays — they are on the thread, and the record written below carries all of them
- * — so what a person loses is nothing, and what they gain is a tab that says which of the two
- * windows they are looking at.</p>
- *
- * <p><b>It does not go back through `settle`, and that is deliberate.</b> It used to, which made the
- * two functions mutually recursive: a fork whose own save was refused would fork again, and again,
- * with nothing bounding it. It also pushed the settled note and then immediately overwrote it with
- * its own. A forked id is freshly minted and nobody else holds it, so the only answers its save can
- * give are that it landed or that the disk would not take it — both handled here, in one place, with
- * ONE sentence reaching the page. (gemini, A3's second code round.)</p>
- */
-async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
-  thread.saveId = randomUUID();
-  thread.rev = 0;
-  // The dedupe marks go first: this is the same transcript under a different name, and the guard in
-  // `show` would otherwise decide nothing had changed and skip writing it anywhere.
-  delete thread.savedMessages;
-  delete thread.savedModelId;
-  delete thread.savedCarryFrom;
-  // THE MEMENTO FIRST, and WAITED FOR — while it is still bound. Written the other way round, a crash
-  // in between leaves the fork on disk under an id the memento has never heard of: while the memento
-  // is a fallback the tab could reload as the original it no longer owns, and the copy holding the
-  // person's words would be orphaned from both the reload and the migration meant to carry it
-  // across. Three reviewers from two vendors asked for the order, and codex for the wait —
-  // `remember` queues rather than writes, so without it the two are only in invocation order and the
-  // crash window stays open. Once `retireMemento` has run this is a no-op and the fork rests on the
-  // store's own swap, which is what the page's `setState` of the new id reloads against.
-  memory?.remember({
-    id: thread.saveId,
-    title: thread.title,
-    passage: thread.passage,
-    modelId: thread.modelId,
-    messages: thread.messages,
-    fromSession: thread.fromSession,
-    carryFrom: thread.carryFrom,
-  });
-  await memory?.settled();
-
-  // THE SENTENCE, and the new id with it: the page hands that id back to the serializer after a
-  // reload, so a tab that forked and was then reloaded comes back as the copy rather than as the
-  // original. A save that then failed adds its own sentence to this one rather than replacing it —
-  // the fork is the fact that matters, and the disk is a detail underneath it.
-  let note = CONTINUED_ELSEWHERE;
-  if (store !== undefined) {
-    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0, ours0(thread));
-    if (next.kind === 'kept') {
-      thread.rev = next.rev;
-      note = next.note === undefined ? note : `${note} ${next.note}`;
-    } else if (next.kind === 'said') {
-      // Not swallowed, which is the house rule: a fork whose own save failed used to say nothing.
-      note = `${note} ${next.note}`;
-    }
-    // `fork` and `adopt` cannot arrive: the id was minted a moment ago, so nothing is there to
-    // conflict with and nothing is there to adopt.
-  }
-  pushChatNote(entry, thread.saveId, note);
-  // The heartbeat names ids, and this conversation has a new one.
-  pulse?.();
-}
-
-/**
  * A conversation with no process behind it, which answers rather than throws.
  *
  * <p>Written once because it is wanted twice: a tab restored after a reload, and a tab somebody has
@@ -1327,16 +1040,6 @@ function ask(entry: ChatEntry, text: string): Promise<void> {
   return mine;
 }
 
-/** The answer language, read fresh: a follow-up turn is asked long after the command ran. */
-function chatLanguage(): LanguageCode {
-  return chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).language;
-}
-
-/** A thrown thing, as a sentence. */
-function asText(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
-}
-
 /**
  * Give a restored conversation the process it has not got, or say why it cannot have one.
  *
@@ -1446,19 +1149,6 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
  * that decides what a failed turn carries, and two places deciding one thing is one place
  * disagreeing.</p>
  */
-/**
- * The pair a turn would go to NOW, as `provider/model` — the key a retry is matched against.
- *
- * <p>One function because two callers must agree exactly: the failing branch writes it down and the
- * button is drawn from it. An empty `modelId` means "whatever the row is set to", which is what the
- * row itself says — the same fallback the ledger uses, and for the same reason.</p>
- */
-function pairOf(thread: Thread): string {
-  const answering = vendorFor(thread.providerId);
-
-  return `${thread.providerId}/${thread.modelId.length > 0 ? thread.modelId : (answering?.model ?? '')}`;
-}
-
 async function oneRetry(entry: ChatEntry, thread: Thread, at: number): Promise<void> {
   const stillTheSame = thread.messages.length === at && thread.failedWith === pairOf(thread);
   const again = stillTheSame ? retryFrom(thread.messages) : undefined;
@@ -2757,32 +2447,6 @@ async function attachPicture(entry: ChatEntry, thread: Thread, dataUrl: string):
     return;
   }
   show(entry, thread.running, '');
-}
-
-/**
- * The name of the model that a re-ask would go to, or empty when there is nothing to re-ask.
- *
- * <p>The LABEL rather than the id, because it goes on a button a person reads. `reaskFrom` decides
- * whether there is anything to re-ask at all; this only names who would take it.</p>
- */
-function reaskLabel(thread: Thread): string {
-  return reaskFrom(thread.messages, thread.providerId) === undefined ? '' : answeredBy(thread).label;
-}
-
-/**
- * Which model a turn was answered by, as the page will caption it.
- *
- * <p>The label is the one the picker offered, so the caption reads as the name a person chose from
- * rather than an id. A model that is not in the list any more — a Team server that withdrew it — is
- * still named by its id: what answered is a fact about the past, and the page's job is to say it.</p>
- */
-function answeredBy(thread: Thread): AnsweredBy {
-  const chosen = thread.models.find((model) => model.id === thread.modelId);
-  // An empty label is not a label. `??` keeps one, and the caption would then fall through to
-  // "The other AI" for a model whose id was known all along. (gemini, the code round.)
-  const named = chosen?.label.trim() ?? '';
-
-  return { id: thread.modelId, label: named.length > 0 ? named : thread.modelId };
 }
 
 /**

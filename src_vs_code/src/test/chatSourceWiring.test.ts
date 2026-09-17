@@ -23,8 +23,9 @@ const source = (file: string): string =>
 test('a record is written with the conversation’s OWN source and root, not with a placeholder', () => {
   // The one line that decides whether any of this reaches disk. It said `{ kind: 'none' }` and
   // `conversationWorkspace()` for three epics.
-  const command = source('chatCommand.ts');
-  const built = command.slice(command.indexOf('function recordOf('), command.indexOf('function recordOf(') + 1_200);
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  const built = bodyOf(source('chatPersist.ts'), 'export function recordOf(');
 
   assert.match(built, /source: thread\.source,/u, 'a record is still written with a placeholder source');
   assert.match(built, /workspace: thread\.workspace,/u, 'a record is still filed under this window’s first root rather than its own');
@@ -119,14 +120,26 @@ test('the write queue is ONE queue, so the pin cannot race the page', () => {
   // Two writers now: the page, on every push, and the pin, minutes later. Both carry the revision
   // this window last accepted, so two issued before the first answers would have the second refused
   // — and a refusal reads as another window, which would fork the conversation.
-  const command = source('chatCommand.ts');
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  const persist = source('chatPersist.ts');
 
-  assert.match(command, /function keepQueued\(entry: ChatEntry, thread: Thread\): void \{/u, 'there is no one place a write is queued');
+  assert.match(persist, /export function keepQueued\(entry: ChatEntry, thread: Thread\): void \{/u, 'there is no one place a write is queued');
   // Three writers and the definition: the page on every push, the pin when a session is found, and a
   // rename following a file that moved. A fourth appearing without this test being read is a writer
   // nobody checked against the chain.
-  assert.equal(command.split('keepQueued(').length - 1, 4, 'a writer was added to or removed from the one queue');
-  const queue = command.slice(command.indexOf('function keepQueued('), command.indexOf('function keepQueued(') + 900);
+  //
+  // COUNTED OVER EVERY MODULE THE COMMAND FILE WAS SPLIT INTO, because the count IS the assertion:
+  // once the writers live in different files, counting one of them is exactly the hole this was
+  // written to close. Named rather than globbed — a glob would sweep in modules that mention the
+  // queue without using it, and be wrong in the quiet direction.
+  const everywhere = [
+    'chatCommand.ts',
+    'chatPersist.ts',
+    'chatShow.ts',
+  ].map(source).join('\n');
+  assert.equal(everywhere.split('keepQueued(').length - 1, 4, 'a writer was added to or removed from the one queue');
+  const queue = bodyOf(persist, 'export function keepQueued(');
   assert.match(queue, /thread\.writes = thread\.writes\.then\(step, step\);/u, 'writes are fired rather than chained');
 });
 

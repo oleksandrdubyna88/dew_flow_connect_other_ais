@@ -23,13 +23,35 @@ import * as path from 'node:path';
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
+/**
+ * One function's text, from its opening line to the next top-level declaration.
+ *
+ * <p>The same helper `chatSourceWiring.test.ts` carries, for the same reason: a fixed character
+ * width goes red for the length of a paragraph somebody added rather than for anything about the
+ * code. The end is found rather than guessed.</p>
+ */
+const bodyOf = (text: string, opening: string): string => {
+  const at = text.indexOf(opening);
+  assert.ok(at >= 0, `there is no ${opening} to read`);
+  const after = text.indexOf('\n}', at);
+
+  return after < 0 ? text.slice(at) : text.slice(at, after + 2);
+};
+
 test('a conversation is written to the store, and to the memento until the migration has retired it', () => {
-  const command = source('chatCommand.ts');
   const host = source('chatHost.ts');
 
-  assert.match(command, /memory\?\.remember\(/u,
-    'the memento is no longer written at all: a store that cannot be reached would leave the next words nowhere');
-  assert.match(command, /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
+  // TWO writers, counted rather than matched. The page push and the fork both write the memento,
+  // and they are in two modules now — a match over both files together would pass on either one
+  // alone, which is a weaker assertion than the one that was here before the split.
+  assert.equal(
+    (source('chatShow.ts') + source('chatPersist.ts')).split('memory?.remember(').length - 1,
+    2,
+    'the memento is no longer written by both the page push and the fork: a store that cannot be'
+    + ' reached would leave the next words nowhere');
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  assert.match(source('chatPersist.ts'), /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
   // The gate is the binding itself: retiring the memento unbinds it, and every `memory?.` site
   // becomes a no-op without knowing.
   // The binders moved to `chatHost.ts` when the command file was split: three handles a window
@@ -44,8 +66,9 @@ test('the store writes of ONE conversation are chained, and the chain survives a
   // had accepted, so two writes issued before the first answers both carry the old one — the second
   // is refused, a refusal reads as another window, and the tab forks ITSELF and says it has become a
   // copy of a conversation nobody else was in. `show` runs on every push, and pushes are not rare.
-  const command = source('chatCommand.ts');
-  const chained = command.slice(command.indexOf('const step = ('));
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  const chained = source('chatPersist.ts').slice(source('chatPersist.ts').indexOf('const step = ('));
 
   assert.match(chained.slice(0, 900), /thread\.writes = thread\.writes\.then\(step, step\)/u,
     'the store writes of one conversation race each other, so a tab can fork itself');
@@ -82,8 +105,9 @@ test('the extension gives the chat a store to write to, under the coai data dire
 test('a conversation another window took over is kept under a NEW id, never overwritten', () => {
   // The whole point of the swap. The transcript is on the thread, so a fork loses nothing: what it
   // costs is one id, and what it buys is that neither window's turns are destroyed by the other's.
-  const command = source('chatCommand.ts');
-  const fork = command.slice(command.indexOf('async function forkOnDisk'), command.indexOf('async function forkOnDisk') + 2_600);
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  const fork = bodyOf(source('chatPersist.ts'), 'async function forkOnDisk');
 
   assert.match(fork, /thread\.saveId = randomUUID\(\)/u, 'a fork keeps the id it was refused under');
   assert.match(fork, /thread\.rev = 0/u, 'a forked conversation would swap against a revision that is not its own');

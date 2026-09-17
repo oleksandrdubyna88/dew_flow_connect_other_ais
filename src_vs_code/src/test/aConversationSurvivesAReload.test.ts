@@ -246,7 +246,6 @@ test('the memento is written until the migration has SEALED it — and sealing d
   // the clear lands after it and fills the key again. The seal is the one retirement point: unbind, then
   // drain; and the way back when the clear did not happen.
   const wiring = source('extension.ts');
-  const command = source('chatCommand.ts');
   const host = source('chatHost.ts');
 
   assert.match(wiring, /seal: async \(\) => \{\s*\n\s*retireMemento\(\);\s*\n\s*await chatTabMemory\.settled\(\);/,
@@ -259,7 +258,14 @@ test('the memento is written until the migration has SEALED it — and sealing d
   // extraction a cycle. What they DO is unchanged, and that is what this still asserts.
   assert.match(host, /export function retireMemento\(\): void \{\s*\n\s*memory = undefined;/,
     'retiring the memento does something other than unbind it, so a memory?. site keeps writing');
-  assert.match(command, /memory\?\.remember\(/, 'the memento is no longer written at all — a store that cannot be reached leaves words nowhere');
+  // TWO writers, counted rather than matched. The page push and the fork both write the memento,
+  // and they are in two modules now — a match over both files together would pass on either one
+  // alone, which is a weaker assertion than the one that was here before the split.
+  assert.equal(
+    (source('chatShow.ts') + source('chatPersist.ts')).split('memory?.remember(').length - 1,
+    2,
+    'the memento is no longer written by both the page push and the fork — a store that cannot be'
+    + ' reached leaves words nowhere');
   assert.doesNotMatch(wiring, /chatTabMemory\.prune\(\)/,
     'the activation-time prune is back, and shrinks the memento before the migration has read it');
   assert.doesNotMatch(source('chatTabs.ts'), /KEEP_TABS|KEEP_FOR_MS|\.slice\(0, /,
@@ -347,7 +353,9 @@ test('a push that changed nothing writes nothing', () => {
   // `show` runs on every state push — a turn starting, a queue position moving, a failure clearing —
   // and each of those used to rewrite up to twenty whole transcripts into one key. The comparison is
   // by reference, which is exact because `thread.messages` is replaced rather than mutated.
-  const command = source('chatCommand.ts');
+  // The page push moved to `chatShow.ts` when the command file was split — it had to come out
+  // before the archive, the turn, the launch and the hooks, all of which call it.
+  const command = source('chatShow.ts');
 
   assert.match(
     command,
