@@ -1,3 +1,4 @@
+import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { asText } from './asText';
 import { Escalation } from './escalations';
 import { ChatLedgers, roundKey, usageRegion } from './panelView';
@@ -667,53 +668,16 @@ function secondsOf(round: RoundRecord, status: LogRow['status'], nowMs: number):
 }
 
 // ---------------------------------------------------------------------------------------------
-// The two functions below run in the PAGE. They must reference nothing outside their parameters
-// — no import, no module constant, no helper — and use no template literal, because their source
-// is embedded into a script that itself lives inside one. `roundsLog.test.ts` asserts both.
+// `compareRows` and `asInstant` MOVED to `pageTables.ts` when the notifications page needed them,
+// and they are re-exported here so every caller and every test that named them still does. The
+// constraint they carry went with them and is written out there: they run in the PAGE, embedded by
+// their own source text, so they may reference nothing outside their parameters. The functions
+// below are under the same rule.
 // ---------------------------------------------------------------------------------------------
 
-/**
- * Orders two rows by one column. A blank sorts after every real value in BOTH directions: a
- * missing number is not a small one, and "oldest first" must not begin with rounds that have no
- * date at all.
- */
-export function compareRows(a: LogRow, b: LogRow, key: SortKey, dir: 'asc' | 'desc'): number {
-  const x = (a as unknown as Record<string, unknown>)[key];
-  const y = (b as unknown as Record<string, unknown>)[key];
-  const xBlank = x === null || x === undefined || x === '';
-  const yBlank = y === null || y === undefined || y === '';
-  if (xBlank && yBlank) {
-    return 0;
-  }
-  if (xBlank) {
-    return 1;
-  }
-  if (yBlank) {
-    return -1;
-  }
-  const sign = dir === 'asc' ? 1 : -1;
-  if (typeof x === 'number' && typeof y === 'number') {
-    return (x - y) * sign;
-  }
-  return String(x).localeCompare(String(y)) * sign;
-}
-
-/**
- * A wall-clock value from a `datetime-local` input, as the instant the filter compares against.
- *
- * <p>What the input holds is WALL CLOCK and what a round records is UTC, so comparing the two as
- * strings is wrong by the reader's offset. `endOfMinute` includes the minute the bound names, which
- * is what a minute-granularity picker means by it — without it "to 23:59" ends at 23:59:00.000 and
- * the last minute of today falls outside the range the page opens on.</p>
- */
-export function asInstant(localValue: string, endOfMinute: boolean): string {
-  if (!localValue) {
-    return '';
-  }
-  var at = new Date(localValue).getTime();
-
-  return isNaN(at) ? '' : new Date(at + (endOfMinute ? 59999 : 0)).toISOString();
-}
+// Imported for this file's own use AND re-exported, because a bare `export ... from` does not
+// bring the name into scope here - the page builder below interpolates all three.
+export { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 
 /**
  * What a figure in a money column says, or an em dash where there is no figure.
@@ -1209,15 +1173,6 @@ function waitingFor(): string {
   return '<div class="empty">Reading the log…</div>';
 }
 
-/**
- * How many rows one page holds.
- *
- * <p>Two hundred, from the operator on 2026-09-09: «у нас есть пагинаций. 200 на стр достаточно.»
- * The same number the server pages its own list at, and it is a constant rather than a setting on
- * purpose — a configurable page size is the first step towards a page-number strip, which is the
- * growth this deliberately does not have.</p>
- */
-export const PAGE_SIZE = 200;
 
 /** What `--log` answers at most: `RoundsQuery` bounds the consultations by the rounds' own limit. */
 export const CONSULTATIONS_SHOWN = PAGE_SIZE;
