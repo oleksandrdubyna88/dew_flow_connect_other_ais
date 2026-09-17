@@ -1,8 +1,11 @@
 # PLAN — CI hardening across the dew_flow family: formatting gates, supply chain, PR culture, releases
 
-> Status: **plan only, nothing implemented yet — except the repository settings, applied 2026-09-05 and
-> listed below as done.** Scope: every `dew_flow_*` repository's `.github/` (workflows, dependabot,
-> PR template), `.editorconfig` where missing, and `dew_flow_conventions` for the rule that binds them.
+> Status: **partially implemented, 2026-09-17.** Repository settings applied 2026-09-05. Epic 3 (pins,
+> the persisted credential, dependabot, PR template, semantic titles) and Epic 5 steps 0–2 are shipped;
+> Epic 2 is shipped except one blocked line recorded in its own section. Epics 1 and 4 are NOT started,
+> and Epic 5 step 3 — the step that actually closes the write-token hole — waits on Epic 4.
+> Scope: every `dew_flow_*` repository's `.github/` (workflows, dependabot, PR template),
+> `.editorconfig` where missing, and `dew_flow_conventions` for the rule that binds them.
 >
 > Related docs: [research/PLAN_local_db.md](../research/PLAN_local_db.md) (unrelated, same week);
 > `dew_flow_conventions/common/pull-requests.md` (the rule this plan enforces mechanically);
@@ -167,6 +170,35 @@ namespaces, `var`, expression bodies, records) — then ONE reformat commit (`do
 `--verify-no-changes` step. Per TS package: eslint where missing (flat config, typescript-eslint,
 recommended + no-floating-promises), then the `lint` step. `actionlint` everywhere.
 
+**State, 2026-09-17.** `actionlint` is in all seven (one job, no new third-party action: the binary is
+pinned by version and verified by checksum, because every `uses:` line had just been pinned to a SHA and
+an unpinnable action would undo that). The formatting gate is merged in three of five .NET repositories
+and open in `connect_other_ais` and `rag_qln`.
+
+**What actionlint actually found, and the measurement that was wrong first.** The number reported when
+this job was written — zero across all seven — came from a local binary with **no shellcheck on PATH**,
+which makes actionlint silently drop the shellcheck-backed analysis of `run:` blocks: no warning, exit
+zero. Its own rules survive (the injection and undefined-input checks both still fire); the shell
+analysis is where everything was. True count with shellcheck present: **eighteen**, thirteen in
+`connect_other_ais` and five in `creds_for_devs`, **every one in a release or deploy workflow** — the
+files no CI run exercises because they only execute on a tag. All eighteen were fixed by changing the
+shell, none by an ignore list, and the step now asserts `command -v shellcheck` so the same silent loss
+cannot recur.
+
+**One item is BLOCKED and is not being substituted with something weaker.** `connect_other_ais/src_vs_code`
+is on `typescript ^7.0.2`; `typescript-eslint` 8.70.0 declares peer `typescript: ">=4.8.4 <6.1.0"`
+(checked against the registry, 2026-09-17). So the largest TS package in the family cannot take the
+type-aware linter this epic specifies, and `no-floating-promises` — named above as the acceptance
+criterion — is a type-aware rule. Plain eslint would pass a gate while dropping the one rule that
+motivated it, so it is not a fallback. Downgrading the compiler to please a linter inverts the
+dependency. **Decision: leave it blocked, and revisit when typescript-eslint supports TS 7.** Epic 2
+does not close until this line says which way it went.
+
+> **Consequence for Dependabot.** `rag_qln` has an open PR bumping ITS extension to TS 7, which would
+> break the eslint config being added there in the same week. A compiler bump past the parser's
+> supported range must not merge on its own: require a clean install plus a lint run on the proposed
+> lockfile, with a floating-promise fixture proving the rule still fires.
+
 ### Epic 3 — dependabot, PR template, semantic titles
 
 Three files per repository from one template each; the semantic-title workflow made a required check.
@@ -304,6 +336,8 @@ as the ruleset intends** — a test tag left behind on a release pattern is a re
 
 - [ ] Every job of every repository is a required check, and no PR can skip one.
 - [ ] `dotnet format --verify-no-changes` / eslint / cargo fmt / actionlint fail a badly formatted PR.
+- [ ] **Epic 2's blocked line is resolved**: `src_vs_code` either has the type-aware linter or the
+      plan records why it still cannot, with the peer range that says so.
 - [ ] `dependabot.yml`, the PR template and the semantic-title check exist in every repository.
 - [ ] release-please cuts the tags the release workflows already build from, with the narrative
       changelog untouched.
