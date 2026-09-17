@@ -21,16 +21,22 @@ import { test } from 'node:test';
  * fallback and then failed would leave the fallback on the release for ever, however many times it
  * was retried.</p>
  *
- * <p>It needs a POSIX shell. CI runs on `ubuntu-latest` where that is always true, so a missing `sh`
- * fails there and skips on a Windows checkout without one — the shape of
- * `StageRulesTests.RequireTheMount`, and for its reason.</p>
+ * <p>It needs <b>bash</b>, not merely a POSIX shell, and getting that wrong is what CI caught here:
+ * `draft-release.sh` opens with `set -euo pipefail`, and `pipefail` is a bash extension that POSIX
+ * `sh` does not have. Running it with `sh` passed on a Windows checkout — where Git Bash's `sh` IS
+ * bash — and on `ubuntu-latest`, where `sh` is dash, every one of these cases got exit **2** from
+ * `Illegal option -o pipefail` before the script did anything. Green where written, red where
+ * enforced, again.</p>
+ *
+ * <p>A checkout without bash skips rather than fails — the shape of
+ * `StageRulesTests.RequireTheMount`, and for its reason. CI always has it.</p>
  */
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const script = path.join(repoRoot, '.github', 'scripts', 'draft-release.sh');
 
-const hasShell = spawnSync('sh', ['-c', 'exit 0'], { encoding: 'utf8' }).status === 0;
-const needsShell = hasShell ? false : 'no POSIX shell on this checkout';
+const hasBash = spawnSync('bash', ['-c', 'exit 0'], { encoding: 'utf8' }).status === 0;
+const needsShell = hasBash ? false : 'no bash on this checkout';
 
 /** What the stub `gh` was asked to do, one call per line. */
 interface Run { code: number; calls: string[]; said: string }
@@ -63,7 +69,7 @@ function draft(state: 'draft' | 'published' | 'absent', notes: string): Run {
       '',
     ].join('\n'), { encoding: 'utf8', mode: 0o755 });
 
-    const ran = spawnSync('sh', [script, 'mcp-v0.28.0', 'coai-mcp 0.28.0', notesFile], {
+    const ran = spawnSync('bash', [script, 'mcp-v0.28.0', 'coai-mcp 0.28.0', notesFile], {
       encoding: 'utf8',
       timeout: 60_000,
       killSignal: 'SIGKILL',
@@ -239,7 +245,7 @@ test('the extractor and the drafter work as one chain, the way the job runs them
         '',
       ].join('\n'), { encoding: 'utf8', mode: 0o755 });
 
-      const drafted = spawnSync('sh', [script, 'mcp-v0.28.0', 'coai-mcp 0.28.0', notes], {
+      const drafted = spawnSync('bash', [script, 'mcp-v0.28.0', 'coai-mcp 0.28.0', notes], {
         encoding: 'utf8',
         timeout: 60_000,
         killSignal: 'SIGKILL',
@@ -262,7 +268,7 @@ test('a notes path that is a directory is refused, not read', { skip: needsShell
   // `[ -r ]` is true for a directory and for some broken symlinks. What the script needs is a FILE.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'draftrelease-'));
   try {
-    const ran = spawnSync('sh', [script, 'mcp-v0.28.0', 'title', dir],
+    const ran = spawnSync('bash', [script, 'mcp-v0.28.0', 'title', dir],
       { encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL' });
 
     assert.notEqual(ran.status, 0, 'a directory is not a notes file');
@@ -319,4 +325,17 @@ test('no run block carries a literal backslash-n where a line break belongs', ()
         `${name}:${at + 1} has a literal "\n" where a line continuation belongs: ${line.trim()}`);
     }
   }
+});
+
+test('the script says which shell it wants, and these cases use that one', () => {
+  // The cases above run the script with `bash`. That is only right while the script ASKS for bash —
+  // and it does, in its shebang, because `set -euo pipefail` needs it. If somebody changes the
+  // shebang to `/bin/sh` while keeping `pipefail`, the tests would keep passing under bash while
+  // every release failed under dash, which is the exact split this file already paid for once.
+  const first = fs.readFileSync(script, 'utf8').split('\n')[0];
+
+  assert.match(first, /^#!.*\bbash\b/,
+    `the tests invoke bash; the script's shebang says ${first}`);
+  assert.match(fs.readFileSync(script, 'utf8'), /set -euo pipefail/,
+    'and pipefail is the reason it has to be bash rather than any POSIX shell');
 });
