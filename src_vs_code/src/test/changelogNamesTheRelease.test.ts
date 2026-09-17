@@ -357,3 +357,66 @@ test('the tag reaches the guard as an environment variable, never as shell text'
   assert.match(guardStep, /changelog-names-the-release\.mjs\s+"\$[A-Z_]+"/,
     'and the command expands that variable, quoted');
 });
+
+test('a baseline whose line is not a list of versions is refused, not crashed on', () => {
+  // `JSON.parse` accepts far more than a baseline. `{"Server": {}}` is valid JSON, and
+  // `recorded.includes` then throws OUTSIDE the try that turns a read failure into exit 2 — so the
+  // process exits 1, which in this guard's vocabulary means "a release has no entry". A specific and
+  // wrong accusation, from a file that is simply malformed. Found by CodeRabbit on the pull request.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changelogguard-'));
+  try {
+    const changelog = path.join(dir, 'CHANGELOG.md');
+    fs.writeFileSync(changelog, entry('## Server 0.28.0 — 2026-09-17'), 'utf8');
+
+    for (const malformed of ['{"Server": {}}', '{"Server": "0.28.0"}', '{"Server": [1]}',
+      '[]', 'null', '"text"']) {
+      const baseline = path.join(dir, 'baseline.json');
+      fs.writeFileSync(baseline, malformed, 'utf8');
+      const ran = spawnSync(process.execPath,
+        [script, 'mcp-v0.28.0', '--changelog', changelog, '--baseline', baseline],
+        { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
+
+      assert.equal(ran.status, REFUSED,
+        `${malformed} is a malformed baseline, which is not the same as a missing release entry`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a flag given as the last argument is refused rather than silently defaulted', () => {
+  // `--changelog` with nothing after it fell back to the DEFAULT path, so the guard cheerfully
+  // checked a different file from the one it was asked about and passed. Found by CodeRabbit; the
+  // sibling extractor had already been given strict parsing by the gate, and this one had not.
+  for (const argv of [['mcp-v0.28.0', '--changelog'], ['mcp-v0.28.0', '--baseline'],
+    ['mcp-v0.28.0', '--changelog', '--baseline']]) {
+    const ran = spawnSync(process.execPath, [script, ...argv],
+      { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
+
+    assert.equal(ran.status, REFUSED,
+      `${argv.join(' ')}: a flag with no value must refuse, not read the default file`);
+  }
+});
+
+test('the drafting job does not leave a write token in the checkout', () => {
+  // `actions/checkout` writes the job's token into `.git/config` by default, and this job then runs
+  // scripts FROM that checkout while holding `contents: write`. Anything those scripts do could read
+  // it. They do not need it — `gh` is given `GH_TOKEN` explicitly and nothing here pushes — so the
+  // credential simply should not be lying around. Raised by CodeRabbit's security review.
+  //
+  // This is the cheap half. The rest of that finding — protecting release tags, running release
+  // logic from a pinned trusted ref, pinning every action by SHA — is a decision about this
+  // repository's whole release design and is recorded as a question rather than answered here.
+  const workflow = fs
+    .readFileSync(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8')
+    .replace(/\r\n/g, '\n');
+
+  const start = workflow.indexOf('\n  mcp-draft:');
+  const next = workflow.indexOf('\n  server-draft:', start);
+  const job = workflow.slice(start, next === -1 ? undefined : next);
+  const checkout = job.indexOf('actions/checkout@');
+
+  assert.notEqual(checkout, -1);
+  assert.match(job.slice(checkout, checkout + 220), /persist-credentials:\s*false/,
+    'the job runs scripts from the checkout and needs no git credential to do it');
+});
