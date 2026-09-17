@@ -41,8 +41,10 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
   // file alone, so what it learned died at the next reload while the walk's version lasted for ever.
   // Both go through `adoptFound` now, and this asserts BOTH halves: what the helper writes, and that
   // each caller reaches it. A second copy of these four lines anywhere else fails the count below.
-  const command = source('chatCommand.ts');
-  const pin = command.slice(command.indexOf('function adoptFound('), command.indexOf('function adoptFound(') + 2_400);
+  // Joining a tab to its session moved to `chatSessionJoin.ts` when the command file was split.
+  // What it must do is unchanged; only the file it is read out of is.
+  const join = source('chatSessionJoin.ts');
+  const pin = bodyOf(join, 'export function adoptFound(');
 
   assert.match(pin, /sessionIdOf\(/u, 'the pin stores something other than the session’s id');
   assert.match(pin, /mine\.source = sourceOfSession\(/u, 'the pin does not give the conversation its identity');
@@ -61,14 +63,14 @@ test('the pin writes the session id AND the folder it was found in, and saves fo
 
   // Guarded on `fromSession`, or the record would state its origin two ways and `agreeOnOrigin`
   // would refuse to read it back — the conversation would save and then be unopenable.
-  const walk = command.slice(command.indexOf('function pinSession('), command.indexOf('function pinSession(') + 1_400);
+  const walk = bodyOf(join, 'export function pinSession(');
   assert.match(walk, /if \(!fromSession \|\| title\.length === 0\) \{/u, 'a session source can be written onto a tab that has no session');
   assert.match(walk, /adoptFound\(entry, mine,/u, 'the walk keeps its own copy of what a pin writes');
   // Exactly two callers and the definition. A third way to adopt a session is a writer nobody
   // checked against the store's origin pair.
-  assert.equal(command.split('adoptFound(').length - 1, 3, 'a caller was added to or removed from the one road in');
+  assert.equal(join.split('adoptFound(').length - 1, 3, 'a caller was added to or removed from the one road in');
   assert.match(
-    bodyOf(command, 'async function resolveAndPin('),
+    bodyOf(join, 'export async function resolveAndPin('),
     /adoptFound\(entry, mine,/u,
     'a press that resolves an unpinned tab keeps the file alone, so what it found dies at the next reload',
   );
@@ -94,8 +96,10 @@ test('the Asked button asks the session ID before it asks the name', () => {
   // path and the next press walked the folder by a title Claude Code rewrites underneath it. The id
   // IS the file's name, so the answer is one directory entry rather than every transcript read —
   // 5.2 s warm on the operator's own folder, measured.
-  const command = source('chatCommand.ts');
-  const resolve = bodyOf(command, 'async function resolveAndPin(');
+  // Joining a tab to its session moved to `chatSessionJoin.ts` when the command file was split.
+  // What it must do is unchanged; only the file it is read out of is.
+  const join = source('chatSessionJoin.ts');
+  const resolve = bodyOf(join, 'export async function resolveAndPin(');
 
   assert.ok(
     resolve.indexOf('findSessionById(') > 0 && resolve.indexOf('findSessionById(') < resolve.indexOf('findSessionIn('),
@@ -108,7 +112,7 @@ test('the Asked button asks the session ID before it asks the name', () => {
   assert.match(resolve, /pinnable\(byId\.map/u,
     'two roots answering to one id would be picked between rather than refused');
 
-  const byId = bodyOf(command, 'async function findSessionById(');
+  const byId = bodyOf(join, 'export async function findSessionById(');
   // And the id is looked for in EVERY root, as the name is: a session's id names no folder.
   assert.match(byId, /everyFolder\(/u, 'the id is looked for in one root only');
   // A source that is not a Claude session has no id to look for, and says so by finding nothing.
@@ -137,6 +141,8 @@ test('the write queue is ONE queue, so the pin cannot race the page', () => {
     'chatCommand.ts',
     'chatPersist.ts',
     'chatShow.ts',
+    'chatSessionJoin.ts',
+    'chatFollow.ts',
   ].map(source).join('\n');
   assert.equal(everywhere.split('keepQueued(').length - 1, 4, 'a writer was added to or removed from the one queue');
   const queue = bodyOf(persist, 'export function keepQueued(');
@@ -178,8 +184,10 @@ test('a renamed file is followed; a SAVED untitled buffer deliberately is not', 
 test('the follow writes a live conversation through its thread and a closed one through the store — never both', () => {
   // One record, one writer. A live conversation's thread is the authority and its chain serialises
   // the write; a closed one is only on disk. Following both halves for one id would have them race.
-  const command = source('chatCommand.ts');
-  const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('export function followRenames(') + 2_600);
+  // The rename follower moved to `chatFollow.ts` when the command file was split; what it must do is
+  // unchanged.
+  const command = source('chatFollow.ts');
+  const follow = bodyOf(command, 'export function followRenames(');
 
   // Asked AT THE MOMENT the store pass reaches each record, never from a set taken before any
   // awaiting began: a conversation that closes while the loop runs is no longer followed by its
@@ -191,7 +199,7 @@ test('the follow writes a live conversation through its thread and a closed one 
   assert.match(follow, /follow\(onDisk, meta\.id, meta\.source, sourceOfFile\(moved\)\)/u, 'a closed conversation is not followed at all');
   // A busy claim is an ordinary concurrent save, not a verdict: a rename happens once and is never
   // replayed, so giving up on the first one loses it for ever. (Four reviewers, the code round.)
-  const one = command.slice(command.indexOf('async function follow(onDisk'));
+  const one = command.slice(command.indexOf('export async function follow(onDisk'));
   assert.match(one.slice(0, 1_800), /done\.why !== 'busy'/u, 'a conversation busy in another window loses its rename permanently');
   assert.match(one.slice(0, 1_800), /FOLLOW_TRIES/u, 'the retry is unbounded, or there is none');
   // Both facts in one call, or the conversation ends up filed under the root it left.
@@ -219,7 +227,9 @@ test('a restored conversation that lost its session source pins again — the se
 test('the store pass survives one conversation that cannot be followed', () => {
   // reliability.md: a loop over independent units wraps each unit, records the failure on that unit,
   // and carries on. The loop's job is the campaign; one record is never allowed to end it.
-  const command = source('chatCommand.ts');
+  // The rename follower moved to `chatFollow.ts` when the command file was split; what it must do is
+  // unchanged.
+  const command = source('chatFollow.ts');
   const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('const FOLLOW_TRIES'));
 
   assert.match(follow, /try \{/u, 'the store pass has no per-conversation guard');
@@ -229,7 +239,9 @@ test('the store pass survives one conversation that cannot be followed', () => {
 });
 
 test('the renames are put into comparable form once, not once per conversation', () => {
-  const command = source('chatCommand.ts');
+  // The rename follower moved to `chatFollow.ts` when the command file was split; what it must do is
+  // unchanged.
+  const command = source('chatFollow.ts');
   const follow = command.slice(command.indexOf('export function followRenames('), command.indexOf('const FOLLOW_TRIES'));
 
   assert.match(follow, /const moves = prepareMoves\(renames, NAMES_ARE_CASE_BLIND\);/u, 'the renames are normalised inside the loop over the store');

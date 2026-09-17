@@ -9,11 +9,11 @@ import { openRoles } from './rolesPanel';
 import { ChatPanels } from './chatPanels';
 import {
   chatWithOtherAi,
-  followRenames,
-  heldConversationIds,
   noteChatDoor,
   takeTheQuestion,
 } from './chatCommand';
+import { followRenames } from './chatFollow';
+import { heldConversationIds } from './chatRegistry';
 import { keepChatsIn, pulseChatsThrough, rememberChatsIn, retireMemento } from './chatHost';
 import { chatReadsThisSide } from './chatConfig';
 import { conversationWorkspace } from './chatRoots';
