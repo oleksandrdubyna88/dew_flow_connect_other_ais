@@ -68,6 +68,51 @@ languages, and whether the webview's CSP admits it. Ship the regex port if the c
 and say so in the plan; the shape (one highlighter module the page calls) is the same either way, so
 the choice can be revisited without touching the page.
 
+### The measurement, run 2026-09-17 — and the choice is **Shiki**
+
+Shiki 4.4.3, three grammars (`csharp`, `typescript`, `javascript`), one theme, the **JavaScript**
+regex engine rather than the Oniguruma WASM one:
+
+| | today | with Shiki |
+|---|---|---|
+| extension bundle, raw | 1,772,645 B | **+613,959 B** (+35 %) |
+| the same, deflated — what a `.vsix` actually stores | 442,653 B | **+96,010 B** |
+| `.vsix` on disk | 565,590 B | ≈ 661,600 B (**+17 %**) |
+
+**The CSP admits it unchanged.** Shiki emits inline `style` attributes; the page sets no
+`style-src-attr`, so they fall back to `style-src 'unsafe-inline'`, which is already there.
+
+**It fits a pure, synchronous page module.** `createHighlighterCoreSync` + `createJavaScriptRegexEngine`
+imports nothing from `node:`, needs no WASM file, and returns HTML without an `await` — so
+`reviewPageHtml` stays the pure synchronous function the bundle test requires. This was the risk
+that could have ruled Shiki out and it did not: the grammars raised **no engine warnings**, and on a
+realistic skeleton `public`/`async`/`await` came back `token-keyword`, `// …` `token-comment`,
+`"a default"` `token-string-expression`, and `Task<List<string>>` tokenised without the `<` breaking
+anything.
+
+**Why the size is worth paying, and it is not the reason you would guess.** *Neither option can use
+VS Code's own colours.* A webview is handed the workbench theme variables and **no token colours** —
+the only token-ish variable in either repository is `--vscode-debugTokenExpression-name`, and
+`creds_for_devs` colours its own `tok-*` classes with `var(--vscode-charts-*)` and hard-coded
+fallbacks. So "as close to VS Code's own as possible" reduces to **tokenisation**, which is exactly
+what real TextMate grammars buy and a regex cannot.
+
+Three things then decide it:
+
+1. **The corpus is real code.** `Normalise` renames identifiers and leaves literals, comments,
+   generics and interpolation verbatim — so the page renders `Task<List<string>>`, `$"{var_1} …"` and
+   `// …`, which is precisely where a regex highlighter goes wrong.
+2. **`scriptRender.ts` has no C# row at all**, and C# is the corpus's main language. The reuse saving
+   is smaller than it looks: the port would mean hand-writing a grammar for the language that matters
+   most, which is the thing being reused to avoid.
+3. **`createCssVariablesTheme` keeps theme- and tone-following.** It emits `var(--coai-hl-token-…)`
+   rather than baked colours, so the page maps them to `var(--vscode-charts-*)` exactly as the
+   sibling does — and story 1.1's tone control still reaches the code. A default Shiki theme would
+   have hard-coded `#1E1E1E`/`#D4D4D4` and broken both.
+
+**What this costs if it is ever regretted:** one module, `highlight(code, language): string`. The page
+calls that and nothing else, so the engine behind it can be swapped without touching `bugzReviewPage.ts`.
+
 **`BugzReviewPanel.draw()` replaces the entire HTML**, so collapse state, zoom and tone must live
 somewhere a repaint does not destroy — the panel's state, not the DOM.
 
