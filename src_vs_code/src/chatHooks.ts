@@ -21,6 +21,7 @@ import { coaiDataDir } from './dataDir';
 import { insideReally, promptsFrom } from './claudeSessions';
 import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
 import { notify } from './notify';
+import { retire } from './retireSession';
 import { withdraw } from './chatQueue';
 import { pushChatDraft } from './chatPanel';
 
@@ -447,8 +448,14 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         // removing it turns all of them into no-ops at once. (codex and gemini, the code round.)
         threads.delete(id);
         pulse?.();
-        thread?.session.dispose();
-        thread?.home.release();
+        if (thread !== undefined) {
+          // BOTH CLEANUPS, whatever the other did. Two bare statements meant a disposal that threw
+          // took the directory release down with it, so a vendor process and its temp directory both
+          // outlived the tab — silently. `ended()` had been doing this correctly since its own code
+          // round; `retire` is that version lifted out rather than a second opinion.
+          retire(thread,
+            (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
+        }
       },
       onAttach: (id, dataUrl) => {
         const thread = threads.get(id);
