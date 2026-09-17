@@ -23,6 +23,12 @@ import * as path from 'node:path';
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
+/** Every module, so a count cannot be evaded by putting the new call somewhere unlisted. */
+const everySource = (): string => fs.readdirSync(path.join(__dirname, '..', '..', 'src'))
+  .filter((one) => one.endsWith('.ts'))
+  .map((one) => source(one))
+  .join('\n');
+
 /**
  * One function's text, from its opening line to the next top-level declaration.
  *
@@ -45,7 +51,7 @@ test('a conversation is written to the store, and to the memento until the migra
   // and they are in two modules now — a match over both files together would pass on either one
   // alone, which is a weaker assertion than the one that was here before the split.
   assert.equal(
-    (source('chatShow.ts') + source('chatPersist.ts')).split('memory?.remember(').length - 1,
+    everySource().split('memory?.remember(').length - 1,
     2,
     'the memento is no longer written by both the page push and the fork: a store that cannot be'
     + ' reached would leave the next words nowhere');

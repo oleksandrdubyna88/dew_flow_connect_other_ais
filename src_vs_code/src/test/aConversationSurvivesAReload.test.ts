@@ -206,6 +206,12 @@ test('a remembered tab is read back by id, and nothing on the memory prunes or f
 const source = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
+/** Every module, so a count cannot be evaded by putting the new call somewhere unlisted. */
+const everySource = (): string => fs.readdirSync(path.join(__dirname, '..', '..', 'src'))
+  .filter((one) => one.endsWith('.ts'))
+  .map((one) => source(one))
+  .join('\n');
+
 test('the extension tells VS Code how to bring a chat tab back, and it reads the STORE to do it', () => {
   // The symptom, as a test: there was no serializer anywhere, so a reload had nothing to restore
   // through and every tab came back empty or not at all.
@@ -262,7 +268,7 @@ test('the memento is written until the migration has SEALED it — and sealing d
   // and they are in two modules now — a match over both files together would pass on either one
   // alone, which is a weaker assertion than the one that was here before the split.
   assert.equal(
-    (source('chatShow.ts') + source('chatPersist.ts')).split('memory?.remember(').length - 1,
+    everySource().split('memory?.remember(').length - 1,
     2,
     'the memento is no longer written by both the page push and the fork — a store that cannot be'
     + ' reached leaves words nowhere');

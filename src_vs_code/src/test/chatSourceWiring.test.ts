@@ -133,17 +133,16 @@ test('the write queue is ONE queue, so the pin cannot race the page', () => {
   // rename following a file that moved. A fourth appearing without this test being read is a writer
   // nobody checked against the chain.
   //
-  // COUNTED OVER EVERY MODULE THE COMMAND FILE WAS SPLIT INTO, because the count IS the assertion:
-  // once the writers live in different files, counting one of them is exactly the hole this was
-  // written to close. Named rather than globbed — a glob would sweep in modules that mention the
-  // queue without using it, and be wrong in the quiet direction.
-  const everywhere = [
-    'chatCommand.ts',
-    'chatPersist.ts',
-    'chatShow.ts',
-    'chatSessionJoin.ts',
-    'chatFollow.ts',
-  ].map(source).join('\n');
+  // COUNTED OVER EVERY MODULE IN `src`, because the count IS the assertion: once the writers live in
+  // different files, counting one of them is exactly the hole this was written to close — and a
+  // count over a NAMED list still passes if the next call goes somewhere the list was never told
+  // about, which is the one way a fourth writer could arrive unseen. The whole tree cannot be
+  // evaded, and `keepQueued(` is precise enough that nothing else matches it. (The gate's plan
+  // round, where the named list was the finding.)
+  const everywhere = fs.readdirSync(path.join(__dirname, '..', '..', 'src'))
+    .filter((one) => one.endsWith('.ts'))
+    .map((one) => source(one))
+    .join('\n');
   assert.equal(everywhere.split('keepQueued(').length - 1, 4, 'a writer was added to or removed from the one queue');
   const queue = bodyOf(persist, 'export function keepQueued(');
   assert.match(queue, /thread\.writes = thread\.writes\.then\(step, step\);/u, 'writes are fired rather than chained');
