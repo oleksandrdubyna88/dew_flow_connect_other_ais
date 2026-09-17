@@ -37,18 +37,21 @@ test('the extension starts housekeeping on the store’s own directory, after th
 test('the chat pulses the heartbeat at every place the set of open conversations changes', () => {
   const command = source('chatCommand.ts');
   const host = source('chatHost.ts');
-  const after = (anchor: string, within: number): string => {
-    const at = command.indexOf(anchor);
-    assert.notEqual(at, -1, `${anchor} is gone from chatCommand.ts`);
+  // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
+  // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
+  const persist = source('chatPersist.ts');
+  const after = (anchor: string, within: number, text = command): string => {
+    const at = text.indexOf(anchor);
+    assert.notEqual(at, -1, `${anchor} is gone from the chat command modules`);
 
-    return command.slice(at, at + within);
+    return text.slice(at, at + within);
   };
 
   // The registration takes the tab *go to* bound it to since story C3, or its own key for every
   // other caller.
   assert.match(after('  panels.open(bindTo?.key ?? {}, bindTo?.label ?? saved.title, () => entry);', 200), /pulse\?\.\(\);/u, 'a restored conversation is not announced');
   assert.match(after('        threads.delete(id);', 80), /pulse\?\.\(\);/u, 'a closed conversation is still announced as open');
-  assert.match(after('thread.saveId = randomUUID();', 4_000), /pulse\?\.\(\);/u, 'a conversation re-minted under a new id is announced under the old');
+  assert.match(after('thread.saveId = randomUUID();', 4_000, persist), /pulse\?\.\(\);/u, 'a conversation re-minted under a new id is announced under the old');
   // The pin takes the ENTRY rather than its id since story C1: it writes the conversation's source
   // when the session is found, and writing needs the entry the note would go to.
   const pinned = command.indexOf('pinSession(entry, state.title, state.fromSession)');

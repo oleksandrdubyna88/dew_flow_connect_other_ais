@@ -317,7 +317,9 @@ test('a conversation last used is stamped when something CHANGED, never on a rep
   // `show` runs on every push — a turn starting, a queue position moving, a failure clearing. Stamping
   // above the guard would put a conversation nobody spoke in at the top of the list, which is the same
   // defect A4 fixed for the store's own `updatedAt` when it ruled that a reload is not a use.
-  const text = command();
+  // The page push moved to `chatShow.ts` when the command file was split — it had to come out
+  // before the archive, the turn, the launch and the hooks, all of which call it.
+  const text = read(join('src', 'chatShow.ts'));
   const guard = text.indexOf('thread.savedMessages = thread.messages;');
   const stamp = text.indexOf('thread.usedAt =');
 

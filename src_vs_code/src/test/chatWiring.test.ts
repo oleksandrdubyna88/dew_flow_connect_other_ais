@@ -203,7 +203,11 @@ test('a retry goes to the model that failed, or it is not offered at all', () =>
   // whatever is selected when the button is pressed would be a re-ask wearing the other one's label.
   // Nothing else records which model failed — a failed turn appends no answer, and an answer is the
   // only message carrying the model that produced it. (codex, the second code round.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // The page push moved to `chatShow.ts` when the command file was split — it had to come out
+  // before the archive, the turn, the launch and the hooks, all of which call it.
+  // The `canRetry` arm went with the page push; the failing branch that writes the pair down is
+  // still in the command file until the turn comes out.
+  const text = read(join('src', 'chatCommand.ts')) + read(join('src', 'chatShow.ts'));
 
   assert.match(
     text,
