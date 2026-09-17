@@ -47,11 +47,18 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. **Thirty-eight sites routed so far** — all of
-`extension.ts`, `escalationWatcher.ts`, `sideConfig.ts`, `rolesPanel.ts`, `conversationPickerCommand.ts`,
-`chatGotoCommand.ts`, `bugzReviewPanel.ts` and `installer.ts` — and the constant stands at **71**.
-What is left is the three biggest files: `panelProvider` (31), `chatCommand` (22), `dataCommands`
-(17), and `helpPanel`'s single call, which waits for the defect that rewires it.
+test that matches nothing passes for ever. **Fifty-five of the 109 sites are routed** — all of
+`extension.ts`, `dataCommands.ts`, `escalationWatcher.ts`, `sideConfig.ts`, `rolesPanel.ts`,
+`conversationPickerCommand.ts`, `chatGotoCommand.ts`, `bugzReviewPanel.ts` and `installer.ts` — and
+the constant stands at **54**. What is left is `panelProvider` (31), `chatCommand` (22), and
+`helpPanel`'s single call, which waits for the defect that rewires it.
+
+**The counter reports a population and a remainder, and the distinction is load-bearing.** `sites`
+is every place this extension speaks to a person, routed or not, and it does not fall — it is what
+the completeness promise is made over. `direct` is what is left, and it is the only number the
+ratchet watches. An earlier version conflated the two, and the first routed modal moved the event
+total from 93 to 89: the population appearing to shrink because the work was going well. A test now
+pins the population at 109.
 
 A wiring test moved with them and got stronger rather than looser: `chatGotoWiring` used to assert
 that the moved-conversation path contains `showWarningMessage(`, which says nothing about WHICH

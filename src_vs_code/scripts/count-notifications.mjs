@@ -95,7 +95,13 @@ export function count() {
     }
   }
 
-  const sites = APIS.reduce((total, api) => total + byApi[api], 0);
+  // `direct` is what is left to route; `sites` is the POPULATION, which is what the plan and the
+  // Definition of Done promise completeness over and which must not shrink as work proceeds.
+  // Counting only the direct calls as `sites` made `events` mix two populations the moment the
+  // first modal was routed: a routed confirmation keeps its `modal: true`, so it left the numerator
+  // and stayed in the subtrahend. Caught by reading the output, not by a test — which is why the
+  // consistency assertions below exist now.
+  const direct = APIS.reduce((total, api) => total + byApi[api], 0);
 
   return {
     $comment: [
@@ -103,9 +109,12 @@ export function count() {
       'The plan, the todo/README row and the Definition of Done quote THIS file, so that a call',
       'site added tomorrow turns a test red instead of making three documents quietly wrong.',
     ],
-    sites,
+    /** Every place this extension speaks to a person, routed or not. This number does not fall. */
+    sites: direct + routed,
+    /** Still calling the API directly. THIS is the ratchet, and it only ever falls. */
+    direct,
     modal,
-    events: sites - modal,
+    events: direct + routed - modal,
     /**
      * Calls to the API from INSIDE the funnel. Must never be zero: a scan that matches nothing
      * passes for ever, and this is its positive companion — the thing `testing.md` asks a
@@ -131,9 +140,9 @@ function main() {
     console.log(`count-notifications: wrote ${relative(EXTENSION, INVENTORY)}`);
   }
   console.log(
-    `${counted.sites} call sites — ${counted.byApi.showWarningMessage} warning, `
-    + `${counted.byApi.showInformationMessage} information, ${counted.byApi.showErrorMessage} error; `
-    + `${counted.modal} modal, so ${counted.events} events.`,
+    `${counted.sites} call sites, ${counted.routed} routed and ${counted.direct} still direct `
+    + `(${counted.byApi.showWarningMessage} warning, ${counted.byApi.showInformationMessage} information, `
+    + `${counted.byApi.showErrorMessage} error); ${counted.modal} modal, so ${counted.events} events.`,
   );
 }
 

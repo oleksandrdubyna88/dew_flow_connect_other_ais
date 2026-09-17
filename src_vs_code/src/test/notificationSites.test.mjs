@@ -31,9 +31,22 @@ test('the count is internally consistent, which the hand-written one was not', (
   const counted = count();
   const byApi = Object.values(counted.byApi).reduce((total, n) => total + n, 0);
 
-  assert.equal(byApi, counted.sites, 'the per-API split must sum to the total');
+  assert.equal(byApi, counted.direct, 'the per-API split must sum to the calls still made directly');
+  assert.equal(
+    counted.direct + counted.routed,
+    counted.sites,
+    'the population is what is routed plus what is not, and it must not shrink as work proceeds',
+  );
   assert.equal(counted.events, counted.sites - counted.modal, 'events are the sites that are not modal questions');
   assert.ok(counted.sites > 0, 'a counter that finds nothing would pass every other assertion here');
+});
+
+test('the POPULATION does not fall while the work proceeds', () => {
+  // The completeness promise is made over this number, so it must mean the same thing on the day
+  // the funnel lands as on the day the last site is routed. An earlier version of this script made
+  // `sites` mean "still direct", and the first routed modal quietly moved `events` from 93 to 89 —
+  // the population appearing to shrink because the work was going well.
+  assert.equal(count().sites, 109, 'the number of places this extension speaks to a person');
 });
 
 /**
@@ -42,14 +55,14 @@ test('the count is internally consistent, which the hand-written one was not', (
  * and never to rise: a new direct call makes the drift test above red, and lowering this constant
  * is the only sanctioned way to change it.
  */
-const MOST_DIRECT_CALLS_ALLOWED = 71;
+const MOST_DIRECT_CALLS_ALLOWED = 54;
 
 test('no call site is added outside the funnel — the count only ever falls', () => {
   const counted = count();
 
   assert.ok(
-    counted.sites <= MOST_DIRECT_CALLS_ALLOWED,
-    `${counted.sites} direct calls, and the ratchet stands at ${MOST_DIRECT_CALLS_ALLOWED}. `
+    counted.direct <= MOST_DIRECT_CALLS_ALLOWED,
+    `${counted.direct} direct calls, and the ratchet stands at ${MOST_DIRECT_CALLS_ALLOWED}. `
     + 'A new message goes through notify() — see notify.ts.',
   );
 });
@@ -65,7 +78,7 @@ test('the per-file breakdown accounts for every site', () => {
   const counted = count();
   const perFile = Object.values(counted.perFile).reduce((total, n) => total + n, 0);
 
-  assert.equal(perFile, counted.sites);
+  assert.equal(perFile, counted.direct, 'the breakdown lists where the REMAINING direct calls are');
   assert.ok(
     Object.keys(counted.perFile).every((path) => !path.includes('/test/')),
     'the tests are not product call sites, and two of them assert on these very names',
