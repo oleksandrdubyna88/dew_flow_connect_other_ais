@@ -27,7 +27,8 @@ const KEPT = 0;
 const LOST = 1;
 const REFUSED = 2;
 
-function compare(current: unknown, base: unknown): { code: number; said: string } {
+function compare(current: unknown, base: unknown, extra: string[] = []):
+{ code: number; said: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
   try {
     const now = path.join(dir, 'now.json');
@@ -35,7 +36,7 @@ function compare(current: unknown, base: unknown): { code: number; said: string 
     fs.writeFileSync(now, JSON.stringify(current), 'utf8');
     fs.writeFileSync(before, JSON.stringify(base), 'utf8');
 
-    const ran = spawnSync(process.execPath, [script, now, before],
+    const ran = spawnSync(process.execPath, [script, now, before, ...extra],
       { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
 
     assert.equal(ran.error, undefined, `could not run: ${ran.error?.message}`);
@@ -83,11 +84,13 @@ test('dropping a whole release line is refused too', () => {
 
 test('a base with no baseline at all is a pass, not a crash', () => {
   // The commit that INTRODUCES the baseline has nothing to compare against, and so does any branch
-  // taken from before it existed. Refusing there would make the check impossible to merge.
-  const { code, said } = compare({ Server: ['0.28.0'] }, {});
+  // taken from before it existed. Refusing there would make the check impossible to merge. The
+  // absence has to be VOUCHED FOR though — see the case below about a file that exists and is empty.
+  const { code, said } = compare({ Server: ['0.28.0'] }, {}, ['--base-absent']);
 
   assert.equal(code, KEPT, 'nothing was recorded before, so nothing can have been lost');
-  assert.match(said, /nothing|no baseline|first/i, 'and it says why it had nothing to compare');
+  assert.match(said, /nothing|no baseline|absent|first/i,
+    'and it says why it had nothing to compare');
 });
 
 test('a file it cannot read is refused rather than waved through', () => {
@@ -149,10 +152,13 @@ test('a null baseline is refused rather than crashing', () => {
 });
 
 test('an empty base says whether it was absent or merely empty', () => {
-  const { said } = compare({ Server: ['0.28.0'] }, {});
+  const vouched = compare({ Server: ['0.28.0'] }, {}, ['--base-absent']);
+  const present = compare({ Server: ['0.28.0'] }, {});
 
-  assert.match(said, /empty|absent|no baseline|first/i,
+  assert.notEqual(vouched.said, present.said,
     'a base emptied by accident and a base that never existed deserve different words');
+  assert.match(vouched.said, /absent|nothing|first/i);
+  assert.match(present.said, /empty|truncated/i);
 });
 
 test('CI proves the base file is ABSENT before treating it as empty', () => {
@@ -168,4 +174,43 @@ test('CI proves the base file is ABSENT before treating it as empty', () => {
     'absence is established by asking whether the object exists, not by any command failing');
   assert.doesNotMatch(step, /git show[^\n]*\|\|\s*echo/,
     'a blanket `|| echo {}` turns every git error into a pass');
+});
+
+test('a base file that EXISTS and is empty is refused, not treated as the first commit', () => {
+  // The sharp version of the empty-base pass, raised on the second code round: if a truncated `{}`
+  // ever lands on main, every later pull request sees an empty base, takes the "nothing could have
+  // been lost" path, and the ratchet is silently dead for ever. Absence is a fact CI establishes
+  // with `git cat-file -e`; the script must be TOLD, not left to infer it from emptiness.
+  const { code, said } = compare({ Server: ['0.28.0'] }, {});
+
+  assert.equal(code, REFUSED, 'an empty baseline that is present is a truncated file');
+  assert.match(said, /--base-absent|truncated|empty/i, 'and it says how to declare a real absence');
+});
+
+test('an absence the caller vouches for is still a pass', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'baselinegrows-'));
+  try {
+    const now = path.join(dir, 'now.json');
+    const before = path.join(dir, 'before.json');
+    fs.writeFileSync(now, JSON.stringify({ Server: ['0.28.0'] }), 'utf8');
+    fs.writeFileSync(before, '{}', 'utf8');
+
+    const ran = spawnSync(process.execPath, [script, now, before, '--base-absent'],
+      { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' });
+
+    assert.equal(ran.status, KEPT,
+      'the commit that introduces the baseline has nothing to compare against and must merge');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CI declares the absence rather than letting the script guess it', () => {
+  const ci = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8')
+    .replace(/\r\n/g, '\n');
+  const at = ci.indexOf('baseline-only-grows.mjs');
+  const step = ci.slice(ci.lastIndexOf('- name:', at), at + 500);
+
+  assert.match(step, /--base-absent/,
+    'the branch that wrote {} because the object does not exist is the branch that says so');
 });
