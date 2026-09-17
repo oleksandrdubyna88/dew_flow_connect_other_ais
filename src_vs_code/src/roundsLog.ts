@@ -1380,7 +1380,7 @@ export function roundsLogHtml(
 <div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
 <section id="tab-rounds" data-section="rounds" class="view-rounds">
 <div class="toolbar">
-      <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
+      <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers, models…" autocomplete="off">
       <label>From <input id="from" type="datetime-local" step="60"></label>
       <label>To <input id="to" type="datetime-local" step="60"></label>
       <button type="button" id="today">Today</button>
@@ -1721,8 +1721,8 @@ export function roundsLogHtml(
       // DERIVED from the markup, never a list of ids. Three named one at a time meant a section
       // added tomorrow would render and never be un-hidden, with nothing red — which is the defect
       // the notifications page was deliberately built without, and the reason this step exists.
-      var sections = document.querySelectorAll('[data-section]');
-      for (var s = 0; s < sections.length; s++) {
+      const sections = document.querySelectorAll('section[data-section]');
+      for (let s = 0; s < sections.length; s++) {
         sections[s].hidden = sections[s].getAttribute('data-section') !== which;
       }
       // BEFORE the table's own line, which follows and wins. One section answers to TWO tabs, so
