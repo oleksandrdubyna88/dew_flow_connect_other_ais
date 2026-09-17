@@ -349,6 +349,56 @@ did, and the catalogue said otherwise.
 
 **And one level below that: two real processes.** `BothHalvesTests` hosts the server's ASSEMBLIES, which cannot see a publish-layout, trimming or embedded-resource defect — and this story's whole reason for existing is a keyword file read from a directory no release has. `TheBuiltBinariesTests` starts the built `coai-bugs` on a real port, mints a key through the real `--issue-key`, uploads through the real `coai-mcp --upload-pairs`, and reads the result back through the real `--waiting`. It is on `COAI_CONTRACT_EXE`, the seam the release workflow already sets, so the same scenario is a fast check here and the release smoke there.
 
+**The admin API's four suites, and why each is at the layer it is at.**
+
+`TheAdminKeysTests` is the credential store: what `COAI_BUGS_ADMIN_KEYS` parses to (comments, blank
+lines, `\r\n`, surrounding spaces), that the LAST configured key matches — which an early return
+would break while every first-key test passed — and that the same key under a different secret is
+nobody, which is what proves the lines are hashed rather than compared as text. One test reads the
+private field through reflection and asserts every entry is 64 hex characters and none is the key,
+because "we hash it" is the kind of claim a refactor keeps in the comment and drops from the field.
+The no-early-return guarantee is **structural**: the property is about TIME, and a test that measured
+it would be measuring the machine, so it reads the source and pins the whole condition — the loop
+exists, it compares with `FixedTimeEquals`, and its body holds no `return`, `break` or `continue`.
+Its teeth were proved by adding an early return and watching it name that symptom.
+
+`TheAdminRoutesTests` is the five routes over real HTTP, including the six new `BugsJson` shapes
+actually binding. It reads every answer through record shapes declared in the test file rather than
+through the server's own wire types — a test that deserialised with `AdminWire` would agree with the
+server about a field it had renamed. The issued key is used to ingest, so "the response carries a
+key" cannot pass for a stub; the newest-first order that makes a lost issuance recoverable is
+asserted as the contract it is; and one test walks the bytes of every route asserting that none but
+the issuance carries a key or a hash.
+
+`TheAdminPagingTests` is the arithmetic. `StabilityAcrossAnInsert` is the sequence an `OFFSET`
+implementation cannot pass — page one, then an insert at the top, then page two — and its teeth were
+proved by changing the cursor's `<` to `<=` and watching it report the boundary row served twice.
+`limit=0`, a limit past the cap, a non-numeric value and a cursor past the end are each asserted as a
+400 naming what was legal or an empty page, never a clamp; `total` is asserted present on the keys
+page and **absent** on the audit, on the raw bytes.
+
+`TheAdminGateTests` is the disclosure rule, which is the one thing here that cannot be checked by
+looking at one server. It captures what a wrong credential is told by a server WITH administrators,
+disposes it, starts one with the variable absent, and compares status, body and `WWW-Authenticate`
+byte for byte. The two servers run **sequentially**, not side by side: the harness configures the
+server through process environment variables, so two live instances share a data directory and a
+serve lock and the second never builds a host — a failure that says nothing about admin keys. Its
+other half asserts the right credential IS accepted, because a gate that refused everything would
+satisfy an indistinguishability perfectly.
+
+`TheAdminUploadTests` covers the administrator's own ingest path, and its load-bearing test is
+`AccceptRefusesWhatAcceptAdminStores`: `Corpus.Accept` refuses the very id `Corpus.AcceptAdmin`
+stores under, which is the design argument made checkable rather than written down.
+
+**And the admin routes are in the real-binary scenario in the same story, not a later one.** Every
+one of them can pass in-process while the deployed surface answers nothing — the administrators come
+from an environment variable parsed at startup, the gate is wired by hand rather than by routing, and
+the wire shapes are bound by a serializer that compiles whether or not it works.
+`TheBuiltBinariesTests` therefore issues, lists, audits, reads `/admin/active` and revokes over a real
+socket against the built binary, confirms the revoked key really stops ingesting, and checks the two
+configurations an operator actually hits: an out-of-range admin limit exiting 78, and the variable
+ABSENT — where the server must still boot, still collect, and refuse every admin route.
+
 **Three suites that exist because the code round moved the code out from under them.**
 
 `TheEdgeIsWatchedTests` drives the real server and asserts on **what it logged**, because the edge

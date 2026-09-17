@@ -375,29 +375,51 @@ public sealed class Corpus : IDisposable
         }
     }
 
-    /// <summary>Ends a key, audited. Answers whether there was one to end.</summary>
+    /// <summary>
+    /// Stops a key, and says which of the three things happened rather than whether one did.
+    /// </summary>
     /// <remarks>
-    /// A revoke that changed nothing — no such key, or already revoked — writes no audit row: there
-    /// was no mutation to leave unaudited.
+    /// <para><b>A <c>bool</c> could not carry this.</b> The admin route owes a 404 for a key that
+    /// never existed and a 200 with <c>changed: false</c> for one already revoked, and `false` meant
+    /// both. Asking a second question to tell them apart would be a second query with a race between
+    /// it and this one — a key revoked in the gap would answer 404 for a key that exists. So the read
+    /// and the write happen in ONE transaction and the answer names the case. (Plan round, gemini.)
+    /// </para>
+    /// <para>An already-revoked key reports the time of its ORIGINAL revocation, not the time of this
+    /// attempt: that is the fact an administrator is asking for, and the attempt is in the audit
+    /// only if it changed something.</para>
     /// </remarks>
-    public bool Revoke(KeyId id, Audit by)
+    public Revoked Revoke(KeyId id, Audit by)
     {
         lock (_gate)
         {
             using var transaction = _db.BeginTransaction(deferred: false);
+            using var read = _db.CreateCommand();
+            read.CommandText = "SELECT revoked_utc FROM api_keys WHERE id = $id";
+            Bind(read, "$id", id.Value);
+            if (read.ExecuteScalar() is not string already)
+            {
+                transaction.Commit();
+
+                return new Revoked.NoSuchKey();
+            }
+
+            if (already.Length > 0)
+            {
+                transaction.Commit();
+
+                return new Revoked.Already(UtcInstant.Read(already));
+            }
+
             using var write = _db.CreateCommand();
             write.CommandText = "UPDATE api_keys SET revoked_utc = $now WHERE id = $id AND revoked_utc = ''";
             Bind(write, "$now", by.At.Stored);
             Bind(write, "$id", id.Value);
-            var changed = write.ExecuteNonQuery() == 1;
-            if (changed)
-            {
-                Audited(AuditAction.Revoke, id, by);
-            }
-
+            write.ExecuteNonQuery();
+            Audited(AuditAction.Revoke, id, by);
             transaction.Commit();
 
-            return changed;
+            return new Revoked.Now(by.At);
         }
     }
 
@@ -612,6 +634,121 @@ public sealed class Corpus : IDisposable
             return rows.Read()
                 ? new Usage.Known(new SubmissionCount(rows.GetInt32(0)), UtcMonth.Read(rows.GetString(1)))
                 : new Usage.NoSuchKey();
+        }
+    }
+
+    /// <summary>
+    /// A batch from an ADMINISTRATOR: stored and attributed, but counted against no key.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this is a separate path and not <see cref="Accept{T}"/> with a different id.</b>
+    /// `Accept` re-checks `InForce` inside its transaction against `api_keys`, and an administrator
+    /// is deliberately not a row there — so the plan's "an admin key may also upload" was, as
+    /// written, either a rejection, a silent weakening of that guard, or an uncounted write. All
+    /// three reviewers refused to let it stand. This is the resolution the operator took.</para>
+    /// <para><b>The in-force re-check is not bypassed; it does not apply.</b> That check exists for
+    /// a race a contributor key really has: a `--revoke` one-shot can commit between the gate and
+    /// the write, in another process, against the same file. An administrator's credentials live in
+    /// <see cref="AdminKeys"/>, built once at startup and immutable for the process — rotation means
+    /// editing the secret and redeploying, which RESTARTS this server. There is no window between
+    /// the gate and the write for the set to change in, so there is nothing here to guard.</para>
+    /// <para><b>No counter and no month on any key row</b>, because there is no row: an
+    /// administrator's uploads are invisible to the Users tab, which the plan accepts and story 3
+    /// must say out loud. The quarantine row still carries the derived `admin-…` id in `key_id`, so
+    /// one administrator's mistake can be undone in bulk exactly like anybody else's — and it still
+    /// carries `received_month` and no clock, because the rule is about the column beside a key id,
+    /// not about whose key it is.</para>
+    /// </remarks>
+    public T AcceptAdmin<T>(AdminId admin, UtcMonth month, Func<IngestScope, T> take)
+    {
+        lock (_gate)
+        {
+            using var transaction = _db.BeginTransaction(deferred: false);
+
+            // The derived id goes in `key_id`: that column records WHICH CREDENTIAL sent the pair,
+            // and for an administrator that is this. It is not a contributor key and no row in
+            // `api_keys` will ever match it, which is exactly why nothing is counted below.
+            var scope = new IngestScope(this, new KeyId(admin.Value), month);
+            T answer;
+            try
+            {
+                answer = take(scope);
+            }
+            finally
+            {
+                scope.Spend();
+            }
+
+            transaction.Commit();
+
+            return answer;
+        }
+    }
+
+    /// <summary>How many keys exist, revoked ones included.</summary>
+    /// <remarks>
+    /// Cheap enough to answer on every page, unlike the audit's: the growth budget puts `api_keys`
+    /// at tens of rows a year, hand-issued, and revoked rows are the audit trail so none are deleted.
+    /// This is why `/admin/keys` carries `total` and `/admin/audit` does not.
+    /// </remarks>
+    public int KeysTotal()
+    {
+        lock (_gate)
+        {
+            using var read = _db.CreateCommand();
+            read.CommandText = "SELECT COUNT(*) FROM api_keys";
+
+            return Convert.ToInt32(read.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+    }
+
+    /// <summary>One page of keys, newest first, paged by the cursor of the row to read BEFORE.</summary>
+    /// <param name="limit">Rows wanted; clamped to <see cref="MostAuditPage"/>.</param>
+    /// <param name="before">Exclusive cursor: the page after this one starts at its last row's <c>Cursor</c>.</param>
+    /// <remarks>
+    /// <para><b>Keyset, not `OFFSET`, and the reason is not performance here.</b> With tens of rows an
+    /// offset scan would cost nothing — but it is not INSERT-STABLE, which a reviewer caught: issuing
+    /// a key between the first page and the second shifts every boundary after it, so a row is
+    /// duplicated or hidden. The same defect the audit's paging was changed for, on a table small
+    /// enough that the performance argument never applies.</para>
+    /// <para><b>The cursor is `rowid`</b>, because `api_keys.id` is a hex string and sorts
+    /// lexicographically rather than chronologically, so it cannot order "newest first". `rowid` is
+    /// monotonic for inserts and this table never deletes — retirement is deliberately none, revoked
+    /// rows being the trail — so it is never reused. That dependency is why it is safe, and why it is
+    /// written down.</para>
+    /// </remarks>
+    public IReadOnlyList<KeyRow> KeysPage(int limit, long before = long.MaxValue)
+    {
+        lock (_gate)
+        {
+            using var read = _db.CreateCommand();
+            read.CommandText = """
+                SELECT k.rowid, k.id, k.note, k.created_utc, k.revoked_utc, k.submissions,
+                       k.last_seen_month,
+                       (SELECT COUNT(*) FROM quarantine q WHERE q.key_id = k.id)
+                  FROM api_keys k
+                 WHERE k.rowid < $before
+                 ORDER BY k.rowid DESC
+                 LIMIT $limit
+                """;
+            Bind(read, "$before", before);
+            Bind(read, "$limit", Math.Clamp(limit, 1, MostAuditPage));
+            using var rows = read.ExecuteReader();
+            var page = new List<KeyRow>();
+            while (rows.Read())
+            {
+                page.Add(new KeyRow(
+                    rows.GetInt64(0),
+                    new KeyId(rows.GetString(1)),
+                    rows.GetString(2),
+                    UtcInstant.Read(rows.GetString(3)),
+                    rows.GetString(4) is { Length: > 0 } revoked ? UtcInstant.Read(revoked) : null,
+                    new SubmissionCount(rows.GetInt32(5)),
+                    UtcMonth.Read(rows.GetString(6)),
+                    rows.GetInt32(7)));
+            }
+
+            return page;
         }
     }
 

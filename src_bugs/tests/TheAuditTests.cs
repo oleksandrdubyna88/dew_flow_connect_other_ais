@@ -45,7 +45,7 @@ public sealed class TheAuditTests : IDisposable
 
         corpus.Issue(id, Corpus.HashOf("the-key", "secret"), "for the tuesday workshop", Cli());
         _clock.Advance(TimeSpan.FromMinutes(7));
-        corpus.Revoke(id, Cli()).Should().BeTrue();
+        corpus.Revoke(id, Cli()).Should().BeOfType<Revoked.Now>();
 
         // NEWEST FIRST: the revoke happened seven minutes after the issue, so it is the first row.
         corpus.AuditTrail(10).Should().SatisfyRespectively(
@@ -77,7 +77,7 @@ public sealed class TheAuditTests : IDisposable
         var id = AnId();
         corpus.Issue(id, "hash", string.Empty, Cli());
         _clock.Advance(TimeSpan.FromMinutes(1));
-        corpus.Revoke(id, Cli()).Should().BeTrue();
+        corpus.Revoke(id, Cli()).Should().BeOfType<Revoked.Now>();
 
         corpus.AuditTrail(10).Select(row => row.Action).Should().Equal(
             [AuditAction.Revoke, AuditAction.Issue], "the newest action comes first");
@@ -89,10 +89,12 @@ public sealed class TheAuditTests : IDisposable
         using var corpus = Open();
         var id = AnId();
         corpus.Issue(id, "hash", string.Empty, Cli());
-        corpus.Revoke(id, Cli()).Should().BeTrue();
+        corpus.Revoke(id, Cli()).Should().BeOfType<Revoked.Now>();
 
-        corpus.Revoke(id, Cli()).Should().BeFalse("already revoked");
-        corpus.Revoke(new KeyId("no-such-key"), Cli()).Should().BeFalse();
+        corpus.Revoke(id, Cli()).Should().BeOfType<Revoked.Already>(
+            "already revoked — and this used to be indistinguishable from a key that never existed");
+        corpus.Revoke(new KeyId("no-such-key"), Cli()).Should().BeOfType<Revoked.NoSuchKey>(
+            "no such key, which the route owes a 404 rather than an idempotent 200");
 
         corpus.AuditCount().Should().Be(2, "there was no mutation to leave unaudited");
     }

@@ -83,8 +83,19 @@ node .agents/conventions/tools/pin-check.mjs
   `--waiting [--limit n] [--skip n]`. Without them a deployment is an empty key table and a
   quarantine nothing leaves. Configured by environment only: `COAI_BUGS_SECRET` (required; 78
   without it), `COAI_BUGS_DATA`, `COAI_BUGS_KEYWORDS`, `COAI_BUGS_RATE_PER_MINUTE` (per KEY, never
-  per address; `10` unset, `0` off, 78 past `1000`); the client’s key is `COAI_BUGS_KEY` or
+  per address; `10` unset, `0` off, 78 past `1000`), `COAI_BUGS_ADMIN_KEYS` (one key per line,
+  `#` comments ignored; **absent is legitimate** — every `/admin/*` call is then 401, and only the
+  startup log says which) and `COAI_BUGS_ADMIN_RATE_PER_MINUTE` (per ADMINISTRATOR, its own setting;
+  `120` unset, `0` off, 78 past `1000`); the client’s key is `COAI_BUGS_KEY` or
   `--key-file`, **never** `--key`. Details: `deploy/bugs/README.md`.
+- **`coai-bugs` has an admin API, and its refusals are deliberately uninformative.** `/admin/keys`,
+  `/admin/audit` and `/admin/active` behind a bearer admin key; an absent variable and a wrong
+  credential answer identically so the surface is not an oracle for whether administration is
+  enabled. Paging is **keyset** (`?limit&before`, `nextBefore` doubles as "there is more") because an
+  offset is not insert-stable; an illegal `limit` is a 400 naming what was legal and **`limit=0` is
+  refused rather than meaning everything**. Only the single successful issuance ever carries a key.
+  **Removing an admin key takes a successful redeploy** — the set is immutable for the process's
+  lifetime, which is what makes an administrator's own upload safe without an in-force re-check.
 - **A webview page is tested by RUNNING it.** A page is assembled as a template literal and
   handed to VS Code as text, so a substring assertion over that text cannot see a control wired to
   the wrong branch — the string contains everything it was supposed to contain. This repository has

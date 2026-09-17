@@ -117,7 +117,7 @@ public sealed class TheLastSeenMonthTests
         server.Clock.Set(EndOfSeptember);
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeOfType<Revoked.Now>();
         }
 
         using var revoked = Client(server, key);

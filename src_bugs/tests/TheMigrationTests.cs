@@ -78,7 +78,7 @@ public sealed class TheMigrationTests : IDisposable
 
         corpus.UsageOf(TheOldBuildsKey).Should().Be(
             new Usage.Known(new SubmissionCount(0), new LastSeen.Never()), "a row the old build wrote reads as never used, not as a blank");
-        corpus.Revoke(TheOldBuildsKey, Audit.By(AdminId.Cli, clock)).Should().BeTrue();
+        corpus.Revoke(TheOldBuildsKey, Audit.By(AdminId.Cli, clock)).Should().BeOfType<Revoked.Now>();
         corpus.AuditTrail(10).Should().ContainSingle().Which.Target.Should().Be(TheOldBuildsKey);
     }
 

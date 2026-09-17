@@ -39,12 +39,15 @@ public readonly record struct LimiterSubject
     /// </remarks>
     public static LimiterSubject Contributor(KeyId key) => new(SubjectKind.Contributor, key.Value);
 
-    /// <summary>
-    /// An administrator, by the id derived from the presented admin key's hash, on <c>/admin/*</c>.
-    /// </summary>
-    /// <remarks>Story 2 calls this with <see cref="Corpus.HashOf"/> of the key it authenticated.</remarks>
-    public static LimiterSubject Administrator(string keyHash) =>
-        new(SubjectKind.Administrator, AdminId.Of(keyHash).Value);
+    /// <summary>An administrator, by the id derived from the admin key that was authenticated.</summary>
+    /// <remarks>
+    /// It takes an <see cref="AdminId"/> for the same reason <see cref="Contributor"/> takes a
+    /// <see cref="KeyId"/>: the typed id is the boundary, and a factory taking <c>string</c> is a
+    /// hole through it. It used to take the raw hash and derive the id here, which put the
+    /// derivation in two places — this one and the audit's — for one identity.
+    /// </remarks>
+    public static LimiterSubject Administrator(AdminId id) =>
+        new(SubjectKind.Administrator, id.Value);
 
     /// <summary>For display — <c>/admin/active</c>, a log line — never the dictionary key.</summary>
     public string Key => Kind == SubjectKind.Contributor ? "key:" + Id : Id;

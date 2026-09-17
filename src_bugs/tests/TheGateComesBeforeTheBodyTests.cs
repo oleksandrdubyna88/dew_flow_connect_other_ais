@@ -44,7 +44,7 @@ public sealed class TheGateComesBeforeTheBodyTests
         var (key, id) = server.IssueKey();
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeOfType<Revoked.Now>();
         }
 
         using var http = server.CreateClient();

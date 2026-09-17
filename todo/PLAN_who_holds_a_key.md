@@ -1,12 +1,13 @@
 # PLAN — who holds a key, and what they have sent
 
 > Status: **in progress — story 1 (the schema, the audit, a limit that is a setting) shipped
-> 2026-09-17 as `bugs-v0.2.0`; stories 2–5 not started.** Story 5 was added on 2026-09-17 and is
+> 2026-09-17 as `bugs-v0.2.0`; story 2 (admin keys and the admin API) is code complete on
+> 2026-09-17 and not yet tagged; stories 3–5 not started.** Story 5 was added on 2026-09-17 and is
 > not in the original four. Scope: `src_bugs`
 > (schema, rate limit, admin API), `src_vs_code` (the Bugz section's Users tab), and the privacy
 > promise in `research/module_server.md` and `deploy/bugs/README.md`, which this change
-> **deliberately rewrites**. Story 1's deviations from the text below are recorded at the end of its
-> section.
+> **deliberately rewrites**. Each story's deviations from the text below are recorded at the end of
+> its own section.
 >
 > Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_a_corpus_of_real_defects.md](../research/PLAN_a_corpus_of_real_defects.md),
@@ -429,6 +430,58 @@ now". That capability is the point of the endpoint and it is defensible; leaving
 reconcile it against the promise is not. The promise's wording gains a sentence: the server keeps no
 history, and an administrator can see the current minute.
 
+#### What story 2 actually shipped, where it differs from the text above
+
+- **Built by Opus, not Fable.** Fable's spend limit had not reset; the model policy is a preference
+  and a blocked model is not a reason to stop. Said plainly rather than quietly.
+- **`/admin/active` reads BOTH limiters.** The two limits are separate settings and therefore two
+  `RateLimiter` instances, each holding only its own callers — so the route as first wired was handed
+  the ADMIN limiter and would have answered with administrators and no contributors, the exact
+  inverse of decision 12. Found by reading decision 12 against the wiring, not by a test. The merge
+  and its ordering happen in the route, and `RateLimiter`'s remark no longer claims one instance sees
+  both kinds.
+- **The absent-variable startup line is a WARNING, not Information.** The subsection above says
+  Information. The disclosure rule makes this line the operator's ONLY channel for the difference
+  between a missing secret and their own typo, and at Information it sits among a dozen startup
+  lines. Two tests read it — the warning when absent, and the count beside the admin limit when
+  present. Recorded as a deviation rather than taken silently.
+- **The 429 names the limit the caller reached.** `IngestGate` had one wording, "per key", so an
+  administrator at the admin limit was told the contributor noun — which sends them to the wrong
+  environment variable, the very thing that method's own remark claims it avoids. `Uploader.Noun`
+  carries the word. Caught by a test written for the admin upload path.
+- **Every refusal now spells its one field the same way.** A route's `TypedResults.BadRequest` goes
+  through the host's JSON options, which camel-case names; a gate writes its body with a
+  source-generated `JsonTypeInfo` directly, which uses the CONTEXT's options — and `BugsJson` had
+  none, so one server answered `why` from a route and `Why` from a gate. The policy is declared on
+  the context; a test reads the bytes of all three refusal paths. **This was a pre-existing defect**
+  in story 1's gate, surfaced by story 2 adding admin error bodies a UI must parse.
+- **`/ingest` takes either credential through an `Uploader` union.** `AcceptAdmin` existed with NO
+  CALLER — the DoD item was unsatisfiable as built, and an admin key at `/ingest` got a 401. The gate
+  resolves the credential, the endpoint switches on the union, and each kind is limited by its own
+  setting. `LimiterSubject.Administrator` now takes an `AdminId` rather than a raw hash, which
+  removes the second place the id was derived.
+- **`AdminId.Of` records the truncation collision**, as the subsection above requires and the code
+  did not: eight hex digits is 32 bits, two colliding admin keys would be one id in the audit and one
+  bucket in the limiter, and lengthening it later would rename past administrators in the trail.
+- **Three stranded docblocks were fixed**, from inserting methods between a comment and its member:
+  `Corpus.AuditTrail` had lost its summary to `AcceptAdmin`, `RateLimiter.StampsOf` to `ActiveNow`,
+  and `Corpus.Revoke` carried its superseded pair above the new one. A sweep now looks for the shape.
+- **`deploy/bugs/README.md` and `.agents/PROJECT.md` gained the two variables now**, though the
+  subsection above assigns the registration to story 4: shipping a credential variable undocumented
+  is worse than doing a later story's documentation item early, and `AdminKeys`' own remark claims
+  the README warns about admin rotation — a claim that was false until this story made it true. The
+  README also says plainly that **delivering the variable is not automated yet** and points at story
+  4, because the failure is quiet: a release starts perfectly and answers 401 to every admin call.
+- **Still story 4's, untouched here:** the deploy workflow delivering `COAI_BUGS_ADMIN_KEYS` from
+  Actions Secrets (the forced command's `secret` verb takes one line on stdin today, and a
+  newline-separated value does not fit an `EnvironmentFile` assignment — that is a real design
+  question, not a typing task), and the four-place promise rewrite with its pinning test.
+- **`/admin/active`'s empty case is asserted one layer down.** It cannot be observed through the
+  route: reading it IS a request the admin limiter admitted a moment earlier, so the reader is always
+  in its own answer. The HTTP test pins the shape and the absence of any contributor;
+  `TheRateLimiterTests` pins the genuinely empty list. The first version of that test asserted an
+  empty list over HTTP and went red for exactly this reason.
+
 ### Story 3 — the Users tab *(Opus)*
 
 - A button in the existing Bugz section (`src_vs_code/src/bugzView.ts`), opening a panel beside
@@ -548,17 +601,24 @@ authenticated `/admin/keys` afterwards. The send path's own tests, per story 5.
 - [x] No table carrying a `key_id` carries a clock time, asserted over the schema.
 - [x] One server per data directory, enforced rather than assumed.
 
-**Story 2 — not started.**
+**Story 2 — code complete, deviations recorded above; not yet tagged.**
 
-- [ ] Admin keys: array + `FixedTimeEquals`, no early return, derived ids, absent-variable log.
-- [ ] Admin API: the shapes in *"Story 2's contract as the plan round RESOLVED it"* — **not the route
+- [x] Admin keys: array + `FixedTimeEquals`, no early return (pinned structurally, teeth proved by
+      adding one), derived ids, absent-variable log — a WARNING rather than Information, and read
+      by a test.
+- [x] Admin API: the shapes in *"Story 2's contract as the plan round RESOLVED it"* — **not the route
       table above it, which is superseded** — keyset paging, `total` for keys only, notes validated,
       one transaction per mutation+audit, only the issuance response carrying a key.
-- [ ] `/admin/active`, from the limiter, persisting nothing, keys only, shape invariant when empty.
-- [ ] `COAI_BUGS_ADMIN_RATE_PER_MINUTE` as its own setting, default 120, validated and capped.
-- [ ] An admin uploads through `AcceptAdmin`, with no counter and no month, and the reason the
-      in-force re-check does not apply is stated in the code.
-- [ ] Admin routes in the scenario harness, over the real binary, catalogued in `module_tests.md`.
+- [x] `/admin/active`, from the limiter, persisting nothing, keys only, shape invariant — reading
+      BOTH limiters, and its empty case asserted one layer down where it can exist.
+- [x] `COAI_BUGS_ADMIN_RATE_PER_MINUTE` as its own setting, default 120, validated and capped, and
+      an illegal value names the ADMIN variable rather than the contributor one.
+- [x] An admin uploads through `AcceptAdmin` — now actually WIRED, through an `Uploader` union at
+      the gate — with no counter and no month, and the reason the in-force re-check does not apply
+      stated in the code and asserted by `Accept` refusing the id `AcceptAdmin` stores under.
+- [x] Admin routes in the scenario harness, over the real binary, catalogued in `module_tests.md`:
+      issue, list, audit, active, revoke, the revoked key really refused, an out-of-range admin
+      limit exiting 78, and the variable absent.
 
 **Stories 3–5 — not started.**
 

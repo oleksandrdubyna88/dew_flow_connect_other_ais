@@ -72,7 +72,7 @@ public sealed class TheRevokedKeyTests
         var (key, id) = server.IssueKey();
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeOfType<Revoked.Now>();
         }
 
         using var http = server.CreateClient();
@@ -119,7 +119,7 @@ public sealed class TheRevokedKeyTests
             keyId.Should().Be(id.Value, "the gate: in force");
             using (var operating = Corpus.Open(db))
             {
-                operating.Revoke(id, Audit.By(AdminId.Cli, clock)).Should().BeTrue("the operator's revoke lands between");
+                operating.Revoke(id, Audit.By(AdminId.Cli, clock)).Should().BeOfType<Revoked.Now>("the operator's revoke lands between");
             }
 
             serving.Accept(new KeyId(keyId), UtcMonth.Now(clock), scope => scope.Keep("CSharp", "a", "b"))

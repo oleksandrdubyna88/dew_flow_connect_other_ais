@@ -27,6 +27,29 @@ public sealed record RatePerMinute
     /// <summary>The largest value accepted.</summary>
     public const int Most = 1_000;
 
+    /// <summary>
+    /// WHICH limit is being read — there are two surfaces and they cannot share one number.
+    /// </summary>
+    /// <remarks>
+    /// <para>The type is WIDENED rather than copied: the validation, the cap, the refusal sentence
+    /// and the `0`-disables rule are identical for both, and a second near-identical setting type
+    /// would be two places to fix the next time one of those rules changes.</para>
+    /// <para><b>Why two numbers at all.</b> The contributor limit is flood control on a public
+    /// endpoint, and 10 a minute is deliberately tight. The admin surface is a closed set of
+    /// authenticated people driving a UI, and the arithmetic nobody had done says the tight number
+    /// makes that UI unusable: the audit retains 50 000 rows and pages at most 200, so reading it is
+    /// 250 requests — a `429` after ten pages and 25 minutes for the table. Raising the shared
+    /// default was the wrong trade, because it would loosen flood control to suit a UI.</para>
+    /// </remarks>
+    public sealed record Surface(string Variable, int Default)
+    {
+        /// <summary>A contributor key on <c>/ingest</c>.</summary>
+        public static readonly Surface Contributor = new(RatePerMinute.Variable, RatePerMinute.Default);
+
+        /// <summary>An administrator on <c>/admin/*</c>.</summary>
+        public static readonly Surface Administrator = new("COAI_BUGS_ADMIN_RATE_PER_MINUTE", 120);
+    }
+
     /// <summary>Requests a minute; zero means no limit.</summary>
     public int Value { get; }
 
@@ -35,15 +58,20 @@ public sealed record RatePerMinute
 
     private RatePerMinute(int value) => Value = value;
 
-    /// <summary>Reads the setting, or says why it cannot be used.</summary>
-    public static Parsed Parse(string? raw)
+    /// <summary>Reads the contributor setting, or says why it cannot be used.</summary>
+    public static Parsed Parse(string? raw) => Parse(raw, Surface.Contributor);
+
+    /// <summary>Reads one of the two settings, or says why it cannot be used.</summary>
+    /// <param name="raw">The variable's value, or <c>null</c> when it is absent.</param>
+    /// <param name="surface">Which limit this is — it decides the name in the message and the default.</param>
+    public static Parsed Parse(string? raw, Surface surface)
     {
         // Only ABSENT is the default. `COAI_BUGS_RATE_PER_MINUTE=` in a unit's environment file is a
         // value somebody meant to fill in, and it is refused with the range rather than quietly
         // becoming 10. (Code round, gemini.)
         if (raw is null)
         {
-            return new Parsed.Rate(new RatePerMinute(Default));
+            return new Parsed.Rate(new RatePerMinute(surface.Default));
         }
 
         var digits = int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var value);
@@ -51,8 +79,8 @@ public sealed record RatePerMinute
         return digits && value <= Most
             ? new Parsed.Rate(new RatePerMinute(value))
             : new Parsed.Refused(
-                $"{Variable} is '{raw}'; it must be a whole number from 0 (no limit) to {Most}, "
-                + $"and unset means {Default}");
+                $"{surface.Variable} is '{raw}'; it must be a whole number from 0 (no limit) to "
+                + $"{Most}, and unset means {surface.Default}");
     }
 
     /// <summary>What reading the setting came to: a rate, or the reason there is none.</summary>

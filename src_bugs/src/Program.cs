@@ -142,11 +142,27 @@ internal sealed class Program
             return new Startup.Refused(unusableRate.Why);
         }
 
+        // The ADMIN limit is its own setting, validated identically. One number cannot serve both
+        // surfaces: the contributor default is flood control on a public endpoint, and using it here
+        // makes the Users tab refuse itself after ten pages of a 250-page audit.
+        var adminSurface = RatePerMinute.Surface.Administrator;
+        var adminRate = RatePerMinute.Parse(
+            Environment.GetEnvironmentVariable(adminSurface.Variable), adminSurface);
+        if (adminRate is RatePerMinute.Parsed.Refused unusableAdminRate)
+        {
+            return new Startup.Refused(unusableAdminRate.Why);
+        }
+
         var keywords = SkeletonKeywords.From(Keywords());
 
         return WhyUnusable(keywords) is { Length: > 0 } unusable
             ? new Startup.Refused(unusable)
-            : new Startup.Ready(new ServerSecret(secret), keywords, ((RatePerMinute.Parsed.Rate)rate).Value);
+            : new Startup.Ready(
+                new ServerSecret(secret),
+                keywords,
+                ((RatePerMinute.Parsed.Rate)rate).Value,
+                ((RatePerMinute.Parsed.Rate)adminRate).Value,
+                AdminKeys.Read(Environment.GetEnvironmentVariable(AdminKeys.Variable), secret));
     }
 
     private static async Task<int> RefuseAsync(string why)
@@ -185,18 +201,27 @@ internal sealed class Program
         var app = Built(args, ready);
         SayUp(app, ready, corpus);
         WatchTheEdge(app);
-        var gate = new IngestGate(corpus, app.Services.GetRequiredService<RateLimiter>(), ready.Secret);
+        var limiter = app.Services.GetRequiredService<RateLimiter>();
+        var adminLimiter = app.Services.GetRequiredKeyedService<RateLimiter>(AdminLimiter);
+        var gate = new IngestGate(corpus, ready.Admins, limiter, adminLimiter, ready.Secret);
         app.Use(gate.InvokeAsync);
 
         // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
         // would be an unauthenticated read of how much anybody has contributed. The limit is a
         // SETTING, not a fact about anybody, and an operator confirming a deploy wants to see it.
+        // The admin gate is a PREFIX match on /admin, so a route added later is protected by
+        // default rather than by somebody remembering to protect it.
+        var admin = new AdminGate(ready.Admins, adminLimiter, ready.Secret);
+        app.Use(admin.InvokeAsync);
+
+        app.MapAdmin(corpus, limiter, adminLimiter, ready.Secret, app.Services.GetRequiredService<TimeProvider>());
+
         app.MapGet("/health", () => Results.Ok(new Health("ok")));
 
         app.MapPost(
             "/ingest",
-            (UploadRequest? request, HttpContext http, TimeProvider clock, RateLimiter limiter) =>
-                Judged(corpus, ready.Keywords, request, IngestGate.KeyOf(http), clock, limiter));
+            (UploadRequest? request, HttpContext http, TimeProvider clock) =>
+                Judged(corpus, ready.Keywords, request, IngestGate.WhoOf(http), clock, limiter));
 
         await app.RunAsync();
 
@@ -230,6 +255,12 @@ internal sealed class Program
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(services =>
             new RateLimiter(ready.Rate, services.GetRequiredService<TimeProvider>()));
+
+        // A SECOND limiter for the admin surface, keyed to its own setting. Sharing one instance
+        // would give one window per subject but one LIMIT for both, which is the thing the separate
+        // setting exists to avoid.
+        builder.Services.AddKeyedSingleton(AdminLimiter, (IServiceProvider services, object _) =>
+            new RateLimiter(ready.AdminRate, services.GetRequiredService<TimeProvider>()));
         builder.Services.AddHostedService<LimiterSweep>();
 
         return builder.Build();
@@ -266,10 +297,39 @@ internal sealed class Program
         {
             app.Logger.LogInformation(
                 "coai-bugs is up: {Languages} keyword lists, {Waiting} waiting, {Held} in the corpus, "
-                + "{Rate} requests a minute per key (0 = no limit)",
-                ready.Keywords.Count, corpus.WaitingCount(), corpus.Held(), ready.Rate.Value);
+                + "{Rate} requests a minute per key (0 = no limit), {Admins} administrators at "
+                + "{AdminRate} a minute",
+                ready.Keywords.Count,
+                corpus.WaitingCount(),
+                corpus.Held(),
+                ready.Rate.Value,
+                ready.Admins.Count,
+                ready.AdminRate.Value);
+        }
+
+        // The ONE place the operator can learn this, and the reason it is a separate line at Warning.
+        // `/admin/*` answers 401 to everybody when no administrator is configured, and it answers it
+        // identically to a wrong credential — deliberately, so the endpoint is not an oracle for
+        // whether administration is enabled here. That disclosure rule is what leaves the operator
+        // with no way to tell a missing variable from their own typo, so the server says it on the
+        // host, where only they can read it. `AdminKeys` and `AdminGate` both promise this line.
+        if (ready.Admins.None)
+        {
+            app.Logger.LogWarning(
+                "no administrators are configured: {Variable} is absent or holds no key, so every "
+                + "/admin request will be refused. That is a legitimate way to run this server; if "
+                + "it is not what you meant, the variable is the place to look",
+                AdminKeys.Variable);
         }
     }
+
+    /// <summary>The key the ADMIN limiter is registered under, so it cannot be resolved by accident.</summary>
+    /// <remarks>
+    /// Two <see cref="RateLimiter"/> instances live in the container and they are not
+    /// interchangeable: one holds the contributor limit and one the administrator limit. A keyed
+    /// registration makes asking for the wrong one a compile-time choice rather than a silent one.
+    /// </remarks>
+    private const string AdminLimiter = "coai-bugs.admin-limiter";
 
     /// <summary>The forwarding-header watch, BEFORE routing, so it sees every request.</summary>
     /// <remarks>
@@ -310,7 +370,7 @@ internal sealed class Program
         Corpus corpus,
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
         UploadRequest? request,
-        KeyId key,
+        Uploader uploader,
         TimeProvider clock,
         RateLimiter limiter)
     {
@@ -325,10 +385,35 @@ internal sealed class Program
                 new Problem($"a batch carries at most {Ingest.MostPerBatch} pairs"));
         }
 
-        var accepted = corpus.Accept(key, UtcMonth.Now(clock), scope => Ingest.Take(scope, items, keywords));
-
-        return Answer(accepted, key, limiter);
+        return Taken(corpus, uploader, UtcMonth.Now(clock), limiter, scope => Ingest.Take(scope, items, keywords));
     }
+
+    /// <summary>Stores the batch down the path its credential belongs to.</summary>
+    /// <remarks>
+    /// <para>The two are not interchangeable, which is why the gate hands over a
+    /// <see cref="Uploader"/> and not a string. A contributor's batch counts against a key row and
+    /// can still be refused inside the transaction — a `--revoke` in another process between the
+    /// gate and the write — so it answers a union. An administrator has no row to count and no set
+    /// that can change while the process lives, so <see cref="Corpus.AcceptAdmin"/> has nothing to
+    /// refuse and answers the batch.</para>
+    /// <para>The month is computed ONCE, above, and passed to whichever path runs: reading the clock
+    /// twice is how a batch on the stroke of midnight gets stamped with two different months.</para>
+    /// </remarks>
+    private static Answered Taken(
+        Corpus corpus,
+        Uploader uploader,
+        UtcMonth month,
+        RateLimiter limiter,
+        Func<IngestScope, UploadAnswer> take) =>
+        uploader switch
+        {
+            Uploader.Contributor contributor =>
+                Answer(corpus.Accept(contributor.Key, month, take), contributor.Key, limiter),
+            Uploader.Administrator administrator =>
+                TypedResults.Ok(corpus.AcceptAdmin(administrator.Id, month, take)),
+            _ => throw new InvalidOperationException(
+                "the gate answers 401 to nobody; an unauthenticated request never reaches here"),
+        };
 
     /// <summary>
     /// The per-item results — or the 401 a key revoked between the gate and the write is owed.
@@ -510,7 +595,9 @@ internal sealed class Program
         public sealed record Ready(
             ServerSecret Secret,
             IReadOnlyDictionary<string, IReadOnlySet<string>> Keywords,
-            RatePerMinute Rate) : Startup;
+            RatePerMinute Rate,
+            RatePerMinute AdminRate,
+            AdminKeys Admins) : Startup;
 
         /// <summary>One setting the server will not start with, and the sentence to print.</summary>
         public sealed record Refused(string Why) : Startup;
@@ -550,8 +637,24 @@ public sealed record Health(string Status);
 public sealed record Problem(string Why);
 
 /// <summary>The serializer's whole world: nothing reflective, as every binary here is built.</summary>
+/// <remarks>
+/// <b>The naming policy belongs HERE, not at the call sites.</b> A route's
+/// <c>TypedResults.BadRequest</c> is written through the host's JSON options, which camel-case
+/// property names; a gate writes its body with one of this context's <c>JsonTypeInfo</c> objects
+/// directly, which uses THIS context's options. With none declared, the same <see cref="Problem"/>
+/// left the server as `why` from a route and `Why` from a gate, so a client reading errors needed
+/// two spellings for one server. Declaring it on the context makes the two paths agree by
+/// construction, and a test reads the bytes of all three refusal paths.
+/// </remarks>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(UploadRequest))]
 [JsonSerializable(typeof(UploadAnswer))]
 [JsonSerializable(typeof(Health))]
 [JsonSerializable(typeof(Problem))]
+[JsonSerializable(typeof(AdminWire.KeysPage))]
+[JsonSerializable(typeof(AdminWire.Issued))]
+[JsonSerializable(typeof(AdminWire.Revocation))]
+[JsonSerializable(typeof(AdminWire.AuditPage))]
+[JsonSerializable(typeof(AdminWire.ActiveNow))]
+[JsonSerializable(typeof(AdminWire.IssueRequest))]
 internal sealed partial class BugsJson : JsonSerializerContext;
