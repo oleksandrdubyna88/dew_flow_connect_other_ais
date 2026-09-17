@@ -199,6 +199,21 @@ Secrets on every deploy; the admin keys do not — that is the deploy half of st
 on the host by hand in `/etc/coai-bugs/env`. Said plainly because the failure is quiet: a release
 starts perfectly and answers `401` to every admin call.
 
+**When it does land, the value will travel base64-encoded** — operator decision, 2026-09-17. A
+newline-separated value cannot live in an `EnvironmentFile` assignment, and a custom separator would
+put a second parsing rule into a credential boundary. So the whole variable is one base64 blob on the
+wire and in the file, and the server decodes it:
+
+```bash
+# what you will paste into Actions Secrets, and what the file will hold
+printf '# alice\n<alice-key>\n# bob\n<bob-key>\n' | base64 -w0
+```
+
+Until then the file holds the raw newline-separated form, because that is what today's binary reads.
+**Do not pre-encode it now** — this server has no decode step yet, so a base64 blob would be read as
+one very long administrator key that matches nothing, and every admin call would answer `401` with
+the startup log claiming one administrator is configured.
+
 ### Why the secret travels on stdin
 
 The workflow pipes it to the forced command, which writes `/etc/coai-bugs/env` itself. It is
