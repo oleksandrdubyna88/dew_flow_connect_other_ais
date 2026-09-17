@@ -5,18 +5,17 @@
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
   "sites": 109,
-  "direct": 54,
+  "direct": 32,
   "modal": 16,
   "events": 93,
   "inTheFunnel": 3,
-  "routed": 55,
+  "routed": 77,
   "byApi": {
-    "showInformationMessage": 11,
-    "showWarningMessage": 42,
+    "showInformationMessage": 7,
+    "showWarningMessage": 24,
     "showErrorMessage": 1
   },
   "perFile": {
-    "src/chatCommand.ts": 22,
     "src/helpPanel.ts": 1,
     "src/panelProvider.ts": 31
   }
