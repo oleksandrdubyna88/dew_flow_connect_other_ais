@@ -251,3 +251,17 @@ parse found something before it asserts anything about what it found.
 The facet OPTIONS are still built from the merged rows, so the Vendor list in the conversations view
 can offer a vendor that only ever answered a round. Choosing it gives an empty result, which is
 honest but not helpful; building options per view is a render-time change and wants its own plan.
+It has one, extracted 2026-09-17:
+[PLAN_a_facet_offers_only_what_its_view_holds.md](../todo/PLAN_a_facet_offers_only_what_its_view_holds.md),
+which also names the mirror defect — a selection the view switch hides but does not clear.
+
+### The boundary with that plan
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| The two views, the per-view row filter, the CSS hiding round-only facets | **this plan** | consumes all of it unchanged | shipped first |
+| The OPTION LISTS inside the facets both views keep | [PLAN_a_facet_offers_only_what_its_view_holds.md](../todo/PLAN_a_facet_offers_only_what_its_view_holds.md) | recorded here as an open tail | after this one |
+| Clearing a selection the view switch hides | that plan | not noticed here | with the above |
+
+**Disjoint**: this plan decides which ROWS a view shows; the child decides which VALUES its selects
+offer. The row filter, the search, the sort and the slice are untouched by it.

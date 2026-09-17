@@ -202,7 +202,20 @@ clean before the round opened.
 Parsing a stated wait — *retry after 20 seconds*, *try again at 15:45* — and comparing it against what
 is left of the reviewer's deadline. That is the general form of this rule and it would subsume the
 vocabulary; it needs a sample of the string from a vendor this product actually runs, which nothing
-has produced yet.
+has produced yet. Extracted 2026-09-17 into
+[PLAN_a_stated_wait_is_read_rather_than_matched.md](../todo/PLAN_a_stated_wait_is_read_rather_than_matched.md),
+which is BLOCKED on that sample by design and carries the empty table it has to fill first.
+
+### The boundary with that plan
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| The `Spent` vocabulary, `Hopeless`, the two-pass `Reason` | **this plan** | keeps all three | shipped first |
+| Reading a STATED wait and comparing it to the remaining deadline | [PLAN_a_stated_wait_is_read_rather_than_matched.md](../todo/PLAN_a_stated_wait_is_read_rather_than_matched.md) | recorded here as an open tail | blocked on a sample |
+| Deciding an answer that states no wait at all | **this plan**, unchanged | falls back to it | frozen |
+
+**Disjoint**: the vocabulary is neither replaced nor deleted by the child. It becomes the answer for the
+case where nothing was stated, which is most of them.
 
 ## What shipped, and what the code round has yet to say
 

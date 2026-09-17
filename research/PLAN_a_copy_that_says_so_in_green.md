@@ -178,4 +178,20 @@ built.
 ## Open tail
 
 The two pre-existing private CSS parsers should move onto `cssRules.ts`. Not done here, deliberately;
-it wants its own change, and the helper was written to take them.
+it wants its own change, and the helper was written to take them. It has that change now, extracted
+2026-09-17 into
+[PLAN_one_reader_for_a_page_stylesheet.md](../todo/PLAN_one_reader_for_a_page_stylesheet.md), which
+names both sites — including the one that ranks rules by array index rather than by specificity.
+
+### The boundary with that plan
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| `cssRules.ts`, and converting the third private parser that made the code round call it Blocking | **this plan** | consumes it unchanged, and adds nothing to it | shipped first |
+| The two survivors in `chatPage.test.ts` — `rules()` and the inline reader in the arrow-hiding test | [PLAN_one_reader_for_a_page_stylesheet.md](../todo/PLAN_one_reader_for_a_page_stylesheet.md) | recorded them here as an open tail | after this one |
+| The single-rule `split('.foo {')[1]` lookups in `panelView`, `phrasesPage`, `phrasesSection` | neither — they are a one-rule lookup, not a parser | — | out of scope |
+
+**Disjoint**: this plan's work is complete. The child is test-side only and touches nothing under
+`src/`. The same tail is restated in
+[PLAN_a_copy_you_can_see_landing.md](PLAN_a_copy_you_can_see_landing.md) (issue #313), which carries the
+chat tab's half of the copy work.

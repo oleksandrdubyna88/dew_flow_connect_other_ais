@@ -154,4 +154,20 @@ raised it; the cost is a char loop with no allocation against markdown tokenisat
 by orders of magnitude, so it was not worth changing `renderAnswer`'s single-string contract for. If
 a measurement ever shows otherwise, having `renderAnswer` return its lazy signature is the move.
 
-Also still open from #322: the two pre-existing private CSS parsers should move onto `cssRules.ts`.
+Also still open from #322, where this tail originates
+([PLAN_a_copy_that_says_so_in_green.md](PLAN_a_copy_that_says_so_in_green.md)): the two pre-existing
+private CSS parsers should move onto `cssRules.ts`.
+Extracted 2026-09-17 into
+[PLAN_one_reader_for_a_page_stylesheet.md](../todo/PLAN_one_reader_for_a_page_stylesheet.md), which
+names both sites and the one that ranks rules by array index.
+
+### The boundary with that plan
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| `cssRules.ts`, and converting the third private parser that made the round call it Blocking | **this plan** | consumes it unchanged | shipped first |
+| The two survivors in `chatPage.test.ts` — `rules()` and the inline reader that ranks by array index | [PLAN_one_reader_for_a_page_stylesheet.md](../todo/PLAN_one_reader_for_a_page_stylesheet.md) | recorded them here as an open tail | after this one |
+| The double `signatureOf` pass per message | neither — measured on this plan's round and declined | — | closed |
+
+**Disjoint**: this plan's work is complete. The child adds no capability to `cssRules.ts` and touches
+nothing under `src/`.
