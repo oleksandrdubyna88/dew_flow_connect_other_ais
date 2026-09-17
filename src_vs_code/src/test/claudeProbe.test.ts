@@ -282,3 +282,16 @@ test('the three ways a run fails all read as a failure, and a good run does not'
   assert.equal(probeSucceeded(abandoned), false, 'the panel was hidden and the run stopped');
   assert.equal(probeSucceeded(HELD), true, 'and a run that reached them all and confirmed one did not fail');
 });
+
+test('two failures with an answer between them are two hiccups, not an absent binary', async () => {
+  // The counter reset is what says so, and nothing could see it: the existing case fails only the
+  // FIRST candidate, so one failure never reaches the give-up bound whether or not the reset is
+  // there. Separated failures are the only shape that observes it. (CodeRabbit, PR #335.)
+  const fake = cli({ haiku: -1, sonnet: 'claude-sonnet-5', opus: -1, fable: 'claude-fable-5-1' });
+  const found = await probeClaudeModels(fake);
+
+  assert.deepEqual(fake.asked.map((args) => args[args.indexOf('--model') + 1]),
+    ['haiku', 'sonnet', 'opus', 'fable'],
+    'it gave up after the second failure, though an answer had come between them');
+  assert.deepEqual(found?.models.map((m) => m.asked), ['sonnet', 'fable']);
+});

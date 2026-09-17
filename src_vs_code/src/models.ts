@@ -110,6 +110,17 @@ export function modelsFor(
   allowedRemote: readonly string[] = [],
   /** What the CLI answered when it was last asked which Claude families it reaches. */
   claudeProbe?: ProbeResult,
+  /**
+   * Which Claude binary THIS caller will actually run, when it knows.
+   *
+   * <p>A probe belongs to the installation that produced it. Two Claude CLIs at one version are two
+   * installations and very possibly two accounts, so labelling a row from another one's answers
+   * means a person picks an alias that row's CLI may not know — and an unknown alias exits 0 and
+   * runs the DEFAULT. The panel compared this; the chat did not, so its picker took the panel's
+   * labels for a row on a different binary. Empty means the caller does not know, and a caller that
+   * does not know is not second-guessed. (CodeRabbit, PR #335.)</p>
+   */
+  claudeExecutable = '',
 ): ModelChoice[] {
   // A Team server's allowlist is as authoritative as an installed-model list, and for the same
   // reason: it is what this server will actually accept THIS minute. So the dropdown is discovered,
@@ -158,7 +169,7 @@ export function modelsFor(
     runtime === 'codex'
       ? [...discoveredCodex]
       : runtime === 'claude'
-        ? claudeModels(claudeProbe, CURATED_CLAUDE_MODELS)
+        ? claudeModels(probeFor(claudeProbe, claudeExecutable), CURATED_CLAUDE_MODELS)
         : runtime === 'antigravity'
           ? [...(discoveredAgy.length > 0 ? discoveredAgy : ANTIGRAVITY_MODELS)]
           : [...CURATED_GEMINI_MODELS];
@@ -260,6 +271,21 @@ function allowedNote(remote: RemoteProvenance): string {
     : `the ${remote.models.length} models this Team server allows for '${remote.named}'.`;
 }
 
+/**
+ * The probe a caller may draw on — which is only ever one taken from the binary it will run.
+ *
+ * <p>Both halves of "does not know" are permissive on purpose: a record written before the field
+ * existed names no binary, and a caller holding no executable has made no claim about one.
+ * Withholding on either would throw away good answers to guard a case neither side is in.</p>
+ */
+export function probeFor(probe: ProbeResult | undefined, executable: string): ProbeResult | undefined {
+  if (probe === undefined || executable.length === 0 || (probe.executable ?? '').length === 0) {
+    return probe;
+  }
+
+  return probe.executable === executable ? probe : undefined;
+}
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
@@ -298,12 +324,19 @@ export function modelsProvenance(
     if (askingClaude) {
       return ASKING_CLAUDE;
     }
-    const answered = (claudeProbe?.models ?? []).filter((m) => m.verified).length;
-    if (answered === 0) {
+    if (claudeProbe === undefined) {
       return 'a curated list — the Claude CLI has not been asked yet. Any exact id can be typed in.';
     }
+    const answered = claudeProbe.models.filter((m) => m.verified).length;
+    const asked = claudeProbe.checkedUtc.slice(0, 10);
+    // ASKED AND CONFIRMED NOTHING is its own sentence. It used to fall into "not asked yet", which
+    // hid the one thing a person can act on: the request WAS made, on that date, and no family
+    // answered as itself — which is exactly what a spent allowance looks like. (CodeRabbit, #335.)
+    if (answered === 0) {
+      return `the Claude CLI was asked ${asked} and confirmed no family — the curated list stands. Any exact id can be typed in.`;
+    }
 
-    return `${answered} families the Claude CLI answered as themselves, asked ${(claudeProbe?.checkedUtc ?? '').slice(0, 10)}. Any exact id can be typed in.`;
+    return `${answered} families the Claude CLI answered as themselves, asked ${asked}. Any exact id can be typed in.`;
   }
   if (runtime === 'antigravity') {
     // The truth about where the list came from, which this line used to state wrongly: it claimed

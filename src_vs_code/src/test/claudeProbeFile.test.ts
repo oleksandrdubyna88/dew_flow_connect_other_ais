@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseProbe, writeProbe } from '../claudeProbeFile';
+import { LONGEST_FILE, parseProbe, writeProbe } from '../claudeProbeFile';
 import { stillGood } from '../claudeModels';
 import type { ProbeResult } from '../claudeModels';
 
@@ -87,4 +87,30 @@ test('a file that has grown beyond anything this writes is refused', () => {
   });
 
   assert.equal(parseProbe(huge), undefined, 'a version string this long was not written by this product');
+});
+
+test('a file far larger than anything this writes is refused before it is parsed', () => {
+  // `MOST_ENTRIES` applies AFTER `JSON.parse`, so a cache grown by something else is fully parsed
+  // into extension-host memory first. The data directory is one a person chooses. (CodeRabbit.)
+  const huge = `{"cliVersion":"2.1.0","checkedUtc":"2026-09-16T10:00:00.000Z","models":[${
+    Array.from({ length: 40_000 }, (_, i) => `{"asked":"m${i}","answered":"x","verified":true}`).join(',')
+  }]}`;
+
+  assert.ok(huge.length > LONGEST_FILE, 'the fixture is not actually oversized');
+  assert.equal(parseProbe(huge), undefined, 'a cache this size was parsed rather than refused');
+});
+
+test('an entry whose strings run away is dropped, and the rest survive it', () => {
+  const read = parseProbe(JSON.stringify({
+    cliVersion: '2.1.0',
+    checkedUtc: '2026-09-16T10:00:00.000Z',
+    models: [
+      { asked: 'x'.repeat(5_000), answered: 'claude-sonnet-5', verified: true },
+      { asked: 'sonnet', answered: 'y'.repeat(5_000), verified: true },
+      { asked: 'opus', answered: 'claude-opus-5', verified: true },
+    ],
+  }));
+
+  assert.deepEqual(read?.models.map((m) => m.asked), ['opus'],
+    'a model id longer than any this product writes reached a dropdown');
 });

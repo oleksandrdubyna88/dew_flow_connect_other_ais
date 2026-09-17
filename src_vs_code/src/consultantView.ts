@@ -239,7 +239,10 @@ function placed(
   // had never asked an engine. (issue #301.)
   const engine = one.runtime === 'local' ? (state.enginesByEndpoint ?? {})[one.baseUrl] : undefined;
   const models = placeable
-    ? modelsFor(one.runtime, state.codexModels ?? [], one.model, engine, state.agyModels ?? [], [], state.claudeProbe)
+    ? modelsFor(
+      one.runtime, state.codexModels ?? [], one.model, engine, state.agyModels ?? [], [], state.claudeProbe,
+      one.executablePath,
+    )
     : [];
 
   return {

@@ -166,3 +166,40 @@ test('the command line is parsed, and a bad one costs nothing', () => {
   assert.equal((fresh.match(/process\.exit\(2\)/gu) ?? []).length, 3,
     'the three usage errors — no NEW_CONVERSATION, a bad --number, an unknown vendor — do not all exit 2');
 });
+
+/**
+ * The model probe's live check imports NAMED symbols, which is a second way to rot.
+ *
+ * <p>The two chat scripts pass an argument whose SHAPE can drift; this one names three functions in
+ * an `import` from the compiled output. A rename reddens nothing — `.mjs` is never compiled, and the
+ * script is only ever run by hand, so the first sign would be an ImportError weeks later, in the one
+ * check that exists to tell us the CLI's contract still holds. (CodeRabbit, PR #335.)</p>
+ */
+test('the Claude probe live script imports symbols that still exist', () => {
+  const text = scriptText('live-claude-models.mjs');
+  const imported = /import \{([^}]*)\} from '\.\.\/out\/claudeModels\.js';/u.exec(text);
+  assert.ok(imported, 'live-claude-models.mjs no longer imports from the compiled claudeModels');
+
+  const named = (imported[1] ?? '').split(',').map((one) => one.trim()).filter((one) => one.length > 0);
+  assert.ok(named.length >= 3, `it imports ${named.length} symbols, which is not the shape this guards`);
+
+  // Against the DECLARATIONS, not against a list kept here: a list would be a third place to update.
+  const source = fs.readFileSync(path.join(HERE, 'src', 'claudeModels.ts'), 'utf8');
+  for (const one of named) {
+    assert.match(
+      source,
+      new RegExp(`export (?:function|const) ${one}\\b`, 'u'),
+      `live-claude-models.mjs imports '${one}', which claudeModels.ts no longer exports — the script `
+      + 'would throw on import the next time somebody ran it to ask whether the CLI contract holds',
+    );
+  }
+});
+
+test('the Claude probe live script is reachable as an npm script', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const named = Object.values(manifest.scripts).some((one) => one.includes('live-claude-models.mjs'));
+
+  assert.ok(named, 'nothing in package.json runs it, so nobody will');
+});
