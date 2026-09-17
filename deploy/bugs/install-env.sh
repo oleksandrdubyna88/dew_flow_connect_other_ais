@@ -28,10 +28,16 @@ set -eu
 
 ENV_FILE=/etc/coai-bugs/env
 
-# One line, from stdin. `head -c` bounds what the caller can send; `tr -d` removes the newline a
-# shell pipeline adds, which would otherwise become part of the secret and hash differently from
-# the one the client thinks it sent.
-SECRET=$(head -c 4096 | head -1 | tr -d '\r\n')
+# TWO lines, from stdin: the server's secret, then the administrator list. `head -c` bounds what the
+# caller can send; `tr -d` removes the carriage return a Windows-written secret box adds, which would
+# otherwise become part of the value and hash differently from the one the client thinks it sent.
+#
+# THE SECOND LINE MAY BE EMPTY, and that is not a failure: a server with no administrators answers
+# 401 to every /admin call, which is a legitimate way to run this one — it says so in its own startup
+# log. What would be a failure is guessing, so the line is always written, empty or not.
+INPUT=$(head -c 65536)
+SECRET=$(printf '%s\n' "$INPUT" | sed -n '1p' | tr -d '\r')
+ADMINS=$(printf '%s\n' "$INPUT" | sed -n '2p' | tr -d '\r')
 [ -n "$SECRET" ] || { printf 'no secret arrived on stdin\n' >&2; exit 1; }
 
 install -d -m 0750 -o root -g coai-bugs /etc/coai-bugs
@@ -42,14 +48,21 @@ trap 'rm -f "$TMP"' EXIT
 # Both values in ONE file so the daemon and every maintenance command read the same database.
 # Setting the data directory in the unit and not here is how keys get issued into a file the server
 # never opens, and every upload is then rejected with a 401 nobody can explain.
+# The administrators travel BASE64 — the list is newline-separated and an EnvironmentFile assignment
+# cannot hold a newline. Base64's alphabet is `A-Za-z0-9+/=`, so the value needs no quoting here and
+# systemd reads it back byte for byte; the server decodes it and refuses anything else, because a
+# server that fell back to the raw text would start with the WRONG administrators and say nothing.
 {
   printf 'COAI_BUGS_SECRET=%s\n' "$SECRET"
   printf 'COAI_BUGS_DATA=/opt/coai-bugs/data\n'
+  printf 'COAI_BUGS_ADMIN_KEYS=%s\n' "$ADMINS"
 } > "$TMP"
 chown root:coai-bugs "$TMP"
 chmod 0640 "$TMP"
 mv -f "$TMP" "$ENV_FILE"
 trap - EXIT
 
-# The VALUE is never printed. A helper that confirmed it would put it in a CI log.
+# NEITHER VALUE is printed, and the administrator count is not printed either — it would be one more
+# thing in a CI log that says something about the credentials. A helper that confirmed them would put
+# them there.
 printf 'the environment file is written\n'

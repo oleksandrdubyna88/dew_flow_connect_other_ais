@@ -23,9 +23,10 @@ public static class Ingest
     /// <summary>The most pairs one request may carry.</summary>
     /// <remarks>
     /// With the body cap this bounds one REQUEST. What bounds a key holder across requests is
-    /// <see cref="Corpus.MostWaiting"/> — `submissions` is a counter without a clock and is not a
-    /// rate limit, which the plan said after a reviewer pointed out that a lifetime count has no
-    /// window and no reset.
+    /// <see cref="Corpus.MostWaiting"/> and the rate limiter — `submissions` is a lifetime COUNT and
+    /// is not a rate limit, which the plan said after a reviewer pointed out that a lifetime count
+    /// has no window and no reset. The only clock on a key is `last_seen_month`, which is a month
+    /// and not a date, so it cannot answer when a request was made either.
     /// </remarks>
     public const int MostPerBatch = 200;
 

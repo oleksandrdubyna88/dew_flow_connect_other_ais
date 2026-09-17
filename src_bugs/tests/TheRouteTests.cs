@@ -117,9 +117,10 @@ public sealed class TheRouteTests
 
     /// <summary>A batch past the cap is refused before anything is read.</summary>
     /// <remarks>
-    /// With the body limit this is what actually bounds abuse: `submissions` is a counter without a
-    /// clock and is not a rate limit, which the plan says after a reviewer pointed out that a lifetime
-    /// count has no window and no reset.
+    /// With the body limit this is what actually bounds abuse: `submissions` is a lifetime COUNT and
+    /// is not a rate limit, which the plan says after a reviewer pointed out that a lifetime count has
+    /// no window and no reset. The rate limiter is what bounds a minute; `last_seen_month` is a month
+    /// and bounds nothing.
     /// </remarks>
     [Fact]
     public async Task ABatchPastTheCapIsRefused()

@@ -51,17 +51,112 @@ public sealed class AdminKeys
 
     private AdminKeys(byte[][] hashes) => _hashes = hashes;
 
-    /// <summary>Reads the variable and hashes every configured key with the server's secret.</summary>
-    /// <param name="raw">The variable's value, or <c>null</c> when it is absent.</param>
+    /// <summary>Reads the DELIVERED variable — base64 — or says why the server cannot start.</summary>
+    /// <param name="delivered">The variable's value, or <c>null</c> when it is absent.</param>
     /// <param name="secret">The server secret, so a stolen database is not a rainbow-table exercise.</param>
     /// <remarks>
-    /// An absent variable and one holding only comments come to the same thing — no administrators —
-    /// and that is not a startup failure. An admin API with no administrators answers 401 to
-    /// everybody, which is a legitimate way to run this server and is the reason
-    /// <see cref="None"/> is reported at startup rather than thrown.
+    /// <para>An absent variable and an empty one come to the same thing — no administrators — and
+    /// that is not a startup failure. An admin API with no administrators answers 401 to everybody,
+    /// which is a legitimate way to run this server and is the reason <see cref="None"/> is reported
+    /// at startup rather than thrown.</para>
+    /// <para><b>Anything else is BASE64, always.</b> See <see cref="Decode"/> for why there is no
+    /// fallback to the raw list and why "it decodes" is not the whole test.</para>
     /// </remarks>
-    public static AdminKeys Read(string? raw, string secret) =>
-        new([.. Lines(raw).Select(key => Encoding.UTF8.GetBytes(Corpus.HashOf(key, secret)))]);
+    public static Configured Read(string? delivered, string secret) =>
+        string.IsNullOrEmpty(delivered)
+            ? new Configured.Admins(Of(string.Empty, secret))
+            : Decode(delivered, secret);
+
+    /// <summary>The administrators a key list NAMES: one per line, blank lines and comments dropped.</summary>
+    /// <remarks>
+    /// The text, never the wire. <see cref="Read"/> is what the environment goes through; this is
+    /// what the text inside it means, and it is separate because the two are different questions —
+    /// one is a delivery format and one is the operator's list.
+    /// </remarks>
+    public static AdminKeys Of(string text, string secret) =>
+        new([.. Lines(text).Select(key => Encoding.UTF8.GetBytes(Corpus.HashOf(key, secret)))]);
+
+    /// <summary>
+    /// The delivered value, decoded — or the reason this server will not start with it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>There is no fallback to the raw list, deliberately.</b> A raw list and an encoded one
+    /// are both non-empty text, so a server that tried base64 and fell back would turn a typo into a
+    /// server running with the WRONG administrators — configured, and wrong, with nothing in the
+    /// startup log saying so. An unusable value exits 78 naming the variable, like every other
+    /// setting here.</para>
+    /// <para><b>And "it is valid base64" is not the whole test, which is the part that is easy to
+    /// miss.</b> The two shapes genuinely overlap: a 64-character hex key is inside the base64
+    /// alphabet and its length is a multiple of four, and <see cref="Convert.TryFromBase64String"/>
+    /// IGNORES whitespace — so a raw two-line list can decode, silently, to nonsense. Three rules
+    /// make them disjoint: no whitespace in the encoded value (`base64 -w0` produces none, a raw
+    /// list always has some), strict UTF-8 on the bytes, and no control characters in the text.
+    /// (Plan round, all three reviewers.)</para>
+    /// </remarks>
+    private static Configured Decode(string delivered, string secret)
+    {
+        if (delivered.Any(char.IsWhiteSpace))
+        {
+            return Unusable("contains a space, a line break or a carriage return");
+        }
+
+        // Three base64 characters carry two bytes, so the encoded length is always enough room.
+        var bytes = new byte[delivered.Length];
+
+        return Convert.TryFromBase64String(delivered, bytes, out var written)
+            ? Decoded(bytes.AsSpan(0, written), secret)
+            : Unusable("is not base64");
+    }
+
+    /// <summary>The decoded bytes as the operator's list, or the reason they are not one.</summary>
+    private static Configured Decoded(ReadOnlySpan<byte> bytes, string secret) =>
+        Text(bytes, out var text)
+            ? new Configured.Admins(Of(text, secret))
+            : Unusable("does not decode to text");
+
+    /// <summary>
+    /// Whether the bytes are text a person could have typed.
+    /// </summary>
+    /// <remarks>
+    /// STRICT UTF-8 — the decoder throws rather than substituting replacement characters — and no
+    /// control characters beyond the ones the format is made of. Between them they refuse a payload
+    /// that decoded cleanly and means nothing, which is what a raw key list does when it happens to
+    /// be valid base64: 48 bytes of binary nobody can present, configured as an administrator.
+    /// </remarks>
+    private static bool Text(ReadOnlySpan<byte> bytes, out string text)
+    {
+        try
+        {
+            text = Strict.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            text = string.Empty;
+
+            return false;
+        }
+
+        return !text.Any(character => char.IsControl(character) && character is not ('\r' or '\n' or '\t'));
+    }
+
+    /// <summary>A UTF-8 decoder that refuses rather than substituting. One instance; it is stateless.</summary>
+    private static readonly UTF8Encoding Strict = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
+    /// The one refusal sentence, which names what to edit and the command that produces it.
+    /// </summary>
+    /// <remarks>
+    /// One sentence rather than one per rule: every one of these has the same fix, and an operator
+    /// reading it at 02:00 needs the command more than they need to know which rule fired. The
+    /// carriage return is named because this repository's operators work on Windows, where an editor
+    /// adds one nobody can see. (Plan round, gemini.)
+    /// </remarks>
+    private static Configured Unusable(string what) =>
+        new Configured.Refused(
+            $"{Variable} {what}. It must be the key list encoded as base64 on ONE line — no spaces, "
+            + "no line breaks, no carriage returns — which is what `base64 -w0` produces. It is "
+            + "never the raw key list: the two shapes overlap, so a server that guessed would start "
+            + "with the wrong administrators and nothing would say so.");
 
     /// <summary>The administrator a presented key belongs to, or nothing.</summary>
     /// <remarks>
@@ -131,6 +226,22 @@ public sealed class AdminKeys
         (raw ?? string.Empty)
             .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(line => !line.StartsWith('#'));
+
+    /// <summary>What the delivered variable came to: administrators, or the reason there are none.</summary>
+    /// <remarks>Mirrors <c>RatePerMinute.Parsed</c>, which is how every other unusable setting here
+    /// reaches <c>Startup.Refused</c> and exit 78.</remarks>
+    public abstract record Configured
+    {
+        private Configured()
+        {
+        }
+
+        /// <summary>A usable value — including one that names nobody.</summary>
+        public sealed record Admins(AdminKeys Keys) : Configured;
+
+        /// <summary>A value the server will not start with, and the sentence that says so.</summary>
+        public sealed record Refused(string Why) : Configured;
+    }
 
     /// <summary>What a presented credential came to.</summary>
     public abstract record Presented

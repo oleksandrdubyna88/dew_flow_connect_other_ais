@@ -4,9 +4,12 @@
 # THIS FILE EXISTS TO KEEP A PROMISE THE APPLICATION CANNOT KEEP ALONE.
 #
 # `coai-bugs` accepts anonymous before/after code skeletons from anybody holding a key. The
-# key carries no identity: the key table has no name, no address and no `last_seen_utc`, and
-# `submissions` is a counter without a clock — deliberately, because with timestamps it would
-# be a record of when a person we handed a key to was working.
+# key carries no identity: the key table has no name and no address, `submissions` is a lifetime
+# COUNT rather than a log of events, and the one clock on a key is `last_seen_month` — the MONTH,
+# `yyyy-MM`, and never a date or a time of day. An administrator can therefore see that a key is
+# still in use and which month it was last used in, and cannot see when anybody was working.
+# That is the line, and the month is on the far side of it deliberately: without it, the only way
+# to tell a live key from an abandoned one is to revoke it and wait for a complaint.
 #
 # The route reads no client address and the server registers no request-logging middleware.
 # THAT PROVES NOTHING ON ITS OWN. nginx writes `$remote_addr` to the access log before the
