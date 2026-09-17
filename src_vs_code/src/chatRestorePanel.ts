@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import { restoreConversation } from './chatCommand';
+import { restoreConversation } from './chatConversationRestore';
 import { chatTabIcon } from './chatIcon';
 import { ChatPanels } from './chatPanels';
 import {

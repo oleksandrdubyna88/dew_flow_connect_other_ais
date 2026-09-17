@@ -150,7 +150,9 @@ test('a closed tab is forgotten, not merely disposed', () => {
   // The map outlived every tab that had ever been opened, and an answer arriving after a close then
   // posted state into a webview VS Code had already torn down. Forgetting the thread makes both
   // impossible at once, because every reader of it starts by looking it up.
-  const text = read(join('src', 'chatCommand.ts'));
+  // The page hooks moved to `chatHooks.ts` when the command file was split — still ONE object
+  // built in ONE place, which is what these assert.
+  const text = read(join('src', 'chatHooks.ts'));
 
   assert.match(
     text,
@@ -163,7 +165,9 @@ test('a stop reaches the thread it names, and only while that thread is running'
   // The guarantee the plan states as "a double press cannot stop the NEXT turn". The session refuses
   // a stop that names nothing, but the host must refuse one that names the WRONG thing: a bridge
   // message can be late, and by the time it lands the next turn may already be in flight.
-  const text = read(join('src', 'chatCommand.ts'));
+  // The page hooks moved to `chatHooks.ts` when the command file was split — still ONE object
+  // built in ONE place, which is what these assert.
+  const text = read(join('src', 'chatHooks.ts'));
 
   assert.match(
     text,
@@ -360,6 +364,8 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
     'chatArchive.ts',
     'chatLaunch.ts',
     'chatTurn.ts',
+    'chatHooks.ts',
+    'chatConversationRestore.ts',
     'chatLaunch.ts',
   ].map((one) => read(join('src', one))).join('\n');
 
@@ -394,7 +400,9 @@ test('a mark set AFTER a switch reaches the conversation that switch had already
   // fill `carry` ahead of the next question. Pressing the button after switching and before asking
   // moved the rule, drew the line, and sent the entire conversation anyway — which is the one case
   // this feature exists for. (gemini, the code round.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // The page hooks moved to `chatHooks.ts` when the command file was split — still ONE object
+  // built in ONE place, which is what these assert.
+  const text = read(join('src', 'chatHooks.ts'));
 
   assert.match(
     text,
@@ -408,7 +416,9 @@ test('the mark only ever moves FORWARD, however the page asks', () => {
   // the mark already set. A lower one is a stale page or a forged message, and taking it would put
   // back a conversation somebody deliberately excluded — on a Team server, at a price. (codex, as a
   // security finding.)
-  const text = read(join('src', 'chatCommand.ts'));
+  // The page hooks moved to `chatHooks.ts` when the command file was split — still ONE object
+  // built in ONE place, which is what these assert.
+  const text = read(join('src', 'chatHooks.ts'));
 
   assert.match(
     text,

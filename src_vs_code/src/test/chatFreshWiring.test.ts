@@ -25,7 +25,9 @@ test('the gesture that has always been there now does something', () => {
   // `chatPage.ts` has rendered *Start a new conversation* in the capped notice since the cap
   // existed, `chatMessages.ts` has parsed it and `chatPanel.ts` has dispatched it — to a hook that
   // was literally `() => undefined`. A shipped button that did nothing.
-  const command = source('chatCommand.ts');
+  // The page hooks moved to `chatHooks.ts` when the command file was split — still ONE object
+  // built in ONE place, which is what these assert.
+  const command = source('chatHooks.ts');
 
   assert.doesNotMatch(command, /onRestart: \(\) => undefined/u, 'the restart hook is still a stub');
   assert.match(command, /onRestart: \(id\) => \{[\s\S]{0,400}freshStart\(entry\)/u, 'the restart hook does not reach the reset');
@@ -300,7 +302,7 @@ test('a conversation nobody said anything in is not archived, and the dead sessi
   assert.match(command, /function closedSession\(note: string\): ChatSession \{/u);
   // THE CALLER is still in the command file: the reload path is an entry point, and it reaches for
   // the one stub rather than building a second.
-  assert.match(source('chatCommand.ts'), /const closed = closedSession\(reloadedNote\(saved\.modelId\)\);/u,
+  assert.match(source('chatConversationRestore.ts'), /const closed = closedSession\(reloadedNote\(saved\.modelId\)\);/u,
     'the reload path still builds its own copy of the dead session');
 });
 

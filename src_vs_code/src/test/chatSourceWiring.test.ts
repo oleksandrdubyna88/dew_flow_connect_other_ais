@@ -215,7 +215,8 @@ test('a restored conversation that lost its session source pins again — the se
   // for ever. A record that already HAS its source is left alone: pinning walks folders, and doing
   // that for every restored tab on every reload is a directory walk to rediscover what is already
   // written down. (codex, the code round.)
-  const command = source('chatCommand.ts');
+  // The restore moved to `chatConversationRestore.ts` when the command file was split.
+  const command = source('chatConversationRestore.ts');
   const restore = command.slice(command.indexOf('export function restoreConversation('));
 
   assert.match(restore, /if \(saved\.fromSession && saved\.source\.kind === 'none'\) \{/u,

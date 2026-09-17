@@ -35,7 +35,8 @@ test('the extension starts housekeeping on the store’s own directory, after th
 });
 
 test('the chat pulses the heartbeat at every place the set of open conversations changes', () => {
-  const command = source('chatCommand.ts');
+  // The places a conversation is opened, closed or re-minted are three modules since the split.
+  const command = source('chatCommand.ts') + source('chatHooks.ts') + source('chatConversationRestore.ts');
   const host = source('chatHost.ts');
   // The write queue moved to `chatPersist.ts` when the command file was split — it had to come out
   // BEFORE the session join, because `adoptFound` calls `keepQueued`. What it must do is unchanged.
