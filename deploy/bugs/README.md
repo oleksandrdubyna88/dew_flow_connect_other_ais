@@ -349,10 +349,23 @@ created `coai-bugs.db` as `0644` — readable by anyone who can reach the direct
 directory's `0750` was the only thing keeping the corpus private. The mask is what we ASK for; what
 it achieves is read back, never assumed: after the first start under this unit,
 `stat -c %a /opt/coai-bugs/data/coai-bugs.db /opt/coai-bugs/data/coai-bugs.db-wal` should read
-`640`. Two things it does not do on its own: a file the earlier unit already created keeps its old
-mode until `chmod 0640 /opt/coai-bugs/data/coai-bugs.db` is run once, as `coai-bugs`; and the
-`-wal`/`-shm` companions take the mode of the database they belong to, so that one `chmod` is what
-makes them `640` too. Record the `stat` output here when it has been read.
+`640`.
+
+**What the mask does NOT do: fix the files that already exist.** A file the earlier unit created
+keeps its old mode, and — this was wrong here until a review caught it — **the `-wal` and `-shm`
+companions do not inherit anything from the database.** They are separate files with their own modes,
+created when SQLite opens the database, so a `chmod` on the `.db` alone leaves the sidecars
+world-readable and the `.db` is not the only file holding corpus rows. Stop the service first, so
+nothing recreates them mid-change:
+
+```bash
+systemctl stop coai-bugs
+chmod 0640 /opt/coai-bugs/data/coai-bugs.db*      # the db AND its -wal / -shm
+systemctl start coai-bugs
+stat -c '%n %U:%G %a' /opt/coai-bugs/data/coai-bugs.db*
+```
+
+Record that `stat` output here when it has been read. Every line should end `640`.
 
 ### Installing it
 

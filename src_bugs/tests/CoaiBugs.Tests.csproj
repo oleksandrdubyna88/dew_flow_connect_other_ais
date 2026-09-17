@@ -33,7 +33,10 @@
          first host's database already contains. Copied beside the runner rather than located by
          walking up to the repository: a scenario over the published binary runs wherever the release
          workflow puts it. -->
-    <None Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- `Update`, not `Include`: the SDK's default `None` items already cover these files, so an
+         `Include` adds a SECOND item for each one. It does not warn here today, which is exactly
+         why it is worth fixing now rather than when something changes and it does. (CodeRabbit.) -->
+    <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

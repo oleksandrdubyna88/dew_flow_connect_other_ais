@@ -529,8 +529,6 @@ internal sealed class Program
     }
 }
 
-/// <summary>What `/health` says: that the server is up, and the limit it was configured with.</summary>
-/// <remarks>Nothing about the corpus — a count here would be an unauthenticated read of how much anybody has contributed.</remarks>
 /// <summary>What <c>/health</c> answers: that the server is up, and deliberately nothing else.</summary>
 /// <remarks>
 /// <para><b>The configured rate limit was added here and taken out again.</b> A code-round finding
@@ -543,6 +541,8 @@ internal sealed class Program
 /// (<c>"{Rate} requests a minute per key (0 = no limit)"</c>), the journal is where an operator
 /// already looks, and story 2's authenticated <c>/admin/*</c> is where a UI will read it. The
 /// existing test that caught this — <c>HealthSaysNothingAboutTheCorpus</c> — was the messenger.</para>
+/// <para><b>Nothing about the corpus either.</b> A count here would be an unauthenticated read of
+/// how much anybody has contributed.</para>
 /// </remarks>
 public sealed record Health(string Status);
 

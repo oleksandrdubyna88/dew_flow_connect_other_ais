@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace CoaiBugs;
 
 /// <summary>
@@ -9,7 +11,7 @@ namespace CoaiBugs;
 /// 2's API would otherwise be one call away from writing whatever a caller handed it into that
 /// record. The two ways in are <see cref="Cli"/> and <see cref="Of"/>.
 /// </remarks>
-public sealed record AdminId
+public sealed partial record AdminId
 {
     /// <summary>The administrator behind a one-shot mode: somebody with a shell on the host.</summary>
     public static readonly AdminId Cli = new("cli");
@@ -31,10 +33,25 @@ public sealed record AdminId
     /// </remarks>
     public static AdminId Of(string keyHash)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(keyHash.Length, 8, nameof(keyHash));
+        // The DOCUMENTED contract, enforced. It used to accept any string of eight characters or
+        // more, so `Of("not-a-hash-at-all")` produced a perfectly plausible `admin-not-a-ha` and the
+        // sixty-four-hex-character requirement lived only in this comment. Story 2 will call it with
+        // whatever it authenticated, and a boundary that documents a shape without checking it is a
+        // boundary that will one day be handed something else. (CodeRabbit, #348.)
+        if (!Hash().IsMatch(keyHash))
+        {
+            throw new ArgumentException(
+                "an administrator id is derived from Corpus.HashOf's sixty-four lowercase hex "
+                + "characters; anything else is a programming error at this boundary, not an input",
+                nameof(keyHash));
+        }
 
         return new("admin-" + keyHash[..8]);
     }
+
+    /// <summary>What <see cref="Corpus.HashOf"/> produces, which is the only thing <see cref="Of"/> takes.</summary>
+    [GeneratedRegex("^[0-9a-f]{64}$")]
+    private static partial Regex Hash();
 
     /// <summary>An id read back from the audit, as this type wrote it.</summary>
     internal static AdminId Stored(string value) => new(value);

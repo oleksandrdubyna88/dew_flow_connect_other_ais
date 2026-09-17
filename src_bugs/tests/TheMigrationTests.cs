@@ -182,18 +182,23 @@ public sealed class TheMigrationTests : IDisposable
         writer.Open();
         var hold = TimeSpan.FromMilliseconds(2_500);
 
+        // SIGNALLED, not slept for. A fixed delay does not prove the writer took SQLite's write
+        // lock: if the scheduler is slow, `corpus.Issue` runs first, meets no lock at all, and the
+        // elapsed-time assertion below measures nothing. The writer says when the lock is really
+        // held. (CodeRabbit, #348.)
+        using var locked = new SemaphoreSlim(0, 1);
         var holding = Task.Run(async () =>
         {
             using var transaction = writer.BeginTransaction();
             using var write = writer.CreateCommand();
             write.CommandText = "INSERT INTO admin_audit (admin_id, action, target, at_utc) VALUES ('cli', 'issue', 'held', 'now')";
             write.ExecuteNonQuery();
+            locked.Release();
             await Task.Delay(hold, TestContext.Current.CancellationToken);
             transaction.Commit();
         }, TestContext.Current.CancellationToken);
 
-        // Let the writer take the lock before the corpus tries to write behind it.
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await locked.WaitAsync(TestContext.Current.CancellationToken);
         var waited = Stopwatch.StartNew();
         var issuing = () => corpus.Issue(new KeyId("waited-for"), "hash", "note", Audit.By(AdminId.Cli, clock));
 

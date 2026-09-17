@@ -28,7 +28,12 @@ public sealed partial record UtcMonth
     public static UtcMonth Now(TimeProvider clock) => Of(clock.GetUtcNow());
 
     /// <summary>What a stored value must look like. The tests assert it on the value READ BACK.</summary>
-    [GeneratedRegex(@"^\d{4}-\d{2}$")]
+    /// <remarks>
+    /// The month is bounded to <c>01</c>–<c>12</c>, not merely two digits. `^\d{4}-\d{2}$` accepted
+    /// `2026-00` and `2026-13`, so <see cref="Read"/> answered <c>LastSeen.In</c> for a value this
+    /// server could not have written — reporting corruption as an ordinary month. (CodeRabbit, #348.)
+    /// </remarks>
+    [GeneratedRegex(@"^\d{4}-(0[1-9]|1[0-2])$")]
     public static partial Regex Shape();
 
     /// <summary>
