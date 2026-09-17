@@ -790,6 +790,14 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**A comment promised laziness the call did not have, and that is a worse defect than a wrong type.**
+`keepOnDisk` builds `ours` as a function under a comment saying the array is built only for the one
+branch that needs it — and three lines below passed `ours()`, invoked eagerly, into a parameter typed
+`readonly string[]`. A 10 000-message conversation therefore copied its whole text on every
+SUCCESSFUL save, for a comparison only a refusal runs. A gate reviewer reported it as a type mismatch
+and that was rejected with a measurement: the types agreed perfectly. Fixed 2026-09-17 by making
+`nextAfterSave` take the supplier and call it in the one branch. A wrong type is caught by a
+compiler; a comment that lies is carried forward by every reader.
 **Closing a conversation lets go of BOTH its process and its directory, whatever the other did.**
 Three places did it as two bare statements — `thread.session.dispose(); thread.home.release();` — so a
 throw from the first meant the second never ran, and a vendor process AND its temporary directory
