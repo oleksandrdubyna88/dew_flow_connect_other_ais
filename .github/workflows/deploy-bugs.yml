@@ -228,7 +228,7 @@ jobs:
         id: edge
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 20); do
+          for _ in $(seq 1 20); do
             if curl -fsS --max-time 5 https://bugs.remsoft.dev/health | grep -q ok; then
               echo "bugs.remsoft.dev answers /health"
               exit 0
