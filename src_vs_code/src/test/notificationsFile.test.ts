@@ -10,6 +10,7 @@ import {
   SERVER_NOTICES_FILE,
   notificationsPath,
   readNewest,
+  readNewestPlaced,
   readNotifications,
   readServerNotices,
   recordNotification,
@@ -224,4 +225,93 @@ test('a write that never settles does not hold the window open, and says so', as
 test('a drain with no time left gives up at once rather than starting a wait it cannot finish', async () => {
   assert.equal(await flushLedgers(0), false, 'no time is not a little time');
   assert.equal(await flushLedgers(-5), false);
+});
+
+test('every record comes back with the byte offset its own line starts at', async () => {
+  // The unit the watermark is written in. An acknowledgement says "bytes [start, end) of this
+  // ledger were loaded", and a reader that returned records without saying WHERE they were could
+  // only ever acknowledge the whole file - which claims the person read the thousands that were
+  // never rendered. A byte offset on an append-only file is also monotone by construction, which a
+  // `utc` from each writer's own clock is not.
+  const dir = home();
+  try {
+    const path = join(dir, 'n.jsonl');
+    const rows = [
+      notificationLine(record({ code: 'one' })).trim(),
+      notificationLine(record({ code: 'two', title: 'сообщение об ошибке — многобайтное' })).trim(),
+      notificationLine(record({ code: 'three' })).trim(),
+    ];
+    writeFileSync(path, rows.join(NEWLINE) + NEWLINE);
+
+    const read = await readNewestPlaced(path, 10);
+
+    assert.deepEqual(read.records.map((p) => p.record.code), ['one', 'two', 'three']);
+    let at = 0;
+    for (const [index, placed] of read.records.entries()) {
+      assert.equal(placed.at, at, `record ${index} starts at ${at}`);
+      at += Buffer.byteLength(rows[index] as string, 'utf8') + 1;
+    }
+    assert.equal(read.start, 0, 'the whole file was loaded');
+    assert.equal(read.end, at, 'and `end` is the file, which ends on a newline');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a half-written line moves neither the records nor the end offset', async () => {
+  // A snapshot can catch another process midway through an append. Acknowledging through a partial
+  // line would skip that record for ever once it was finished - it would fall below a watermark
+  // that had already passed it. Found by measuring against a real file: the first version of this
+  // counted the partial line as complete and put `end` one byte past the file.
+  const dir = home();
+  try {
+    const path = join(dir, 'n.jsonl');
+    const whole = notificationLine(record({ code: 'landed' }));
+    writeFileSync(path, whole + '{"utc":"2026-09-17T09:00:01.000Z","cla');
+
+    const read = await readNewestPlaced(path, 10);
+
+    assert.deepEqual(read.records.map((p) => p.record.code), ['landed']);
+    assert.equal(read.end, Buffer.byteLength(whole, 'utf8'), 'the last COMPLETE newline, not the size');
+    assert.ok(
+      read.end < readFileSync(path).length,
+      'and the file really is longer than that, or this test is not testing anything',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the newest few start where the newest few start, not where the window did', async () => {
+  // `start` is the offset of the first record KEPT, not of the 64 KB window the walk stopped in.
+  // Acknowledging from the window boundary would cover records that were read off the disk and
+  // then dropped for being older than the limit.
+  const dir = home();
+  try {
+    const path = join(dir, 'n.jsonl');
+    const rows = Array.from({ length: 8 }, (_, n) => notificationLine(record({ code: `c-${n}` })).trim());
+    writeFileSync(path, rows.join(NEWLINE) + NEWLINE);
+    const before = rows.slice(0, 5).reduce((total, row) => total + Buffer.byteLength(row, 'utf8') + 1, 0);
+
+    const read = await readNewestPlaced(path, 3);
+
+    assert.deepEqual(read.records.map((p) => p.record.code), ['c-5', 'c-6', 'c-7']);
+    assert.equal(read.start, before, 'the first kept record, counted by hand');
+    assert.equal(read.records[0]?.at, before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a ledger that is not there acknowledges an empty range rather than everything', async () => {
+  const dir = home();
+  try {
+    const read = await readNewestPlaced(join(dir, 'absent.jsonl'), 10);
+
+    assert.deepEqual(read.records, []);
+    assert.equal(read.start, 0);
+    assert.equal(read.end, 0, 'nothing was read, so nothing may be marked read');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

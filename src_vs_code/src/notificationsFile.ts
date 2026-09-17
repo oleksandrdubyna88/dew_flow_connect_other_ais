@@ -122,8 +122,39 @@ export async function readNewest(
   limit: number,
   windowBytes: number = WINDOW,
 ): Promise<readonly NotificationRecord[]> {
+  return (await readNewestPlaced(path, limit, windowBytes)).records.map((placed) => placed.record);
+}
+
+/** One record and the byte offset its line begins at. */
+export interface PlacedRecord {
+  readonly record: NotificationRecord;
+  /** Where this line starts in the file. The unit the watermark is written in. */
+  readonly at: number;
+}
+
+/**
+ * The newest records, each with the byte offset of its own line, and the range they came from.
+ *
+ * <p><b>Offsets, because the watermark is written in them.</b> An acknowledgement says "this window
+ * read bytes [start, end) of this ledger", and the unread set is what falls outside the union of
+ * those intervals — so a reader that returned records without saying where they were could only
+ * ever acknowledge the whole file, which claims the person read the 7000 records that were never
+ * rendered. A byte offset on an append-only file is also monotone by construction, which a `utc`
+ * from each writer's own clock is not: a WSL distro after a resume writes a record stamped EARLIER
+ * than one already acknowledged, and it would then never be counted at all.</p>
+ *
+ * <p>`end` is the offset just past the last COMPLETE newline, never the file size: a snapshot can
+ * catch another process halfway through a line, and acknowledging through a partial line would skip
+ * that record for ever once it was finished.</p>
+ */
+export async function readNewestPlaced(
+  path: string,
+  limit: number,
+  windowBytes: number = WINDOW,
+): Promise<{ readonly records: readonly PlacedRecord[]; readonly start: number; readonly end: number }> {
+  const nothing = { records: [], start: 0, end: 0 };
   if (limit <= 0) {
-    return [];
+    return nothing;
   }
 
   let handle;
@@ -134,7 +165,7 @@ export async function readNewest(
       console.error('ConnectOtherAIs: the notifications ledger exists but could not be opened', reason);
     }
 
-    return [];
+    return nothing;
   }
 
   try {
@@ -163,10 +194,58 @@ export async function readNewest(
     // the start of the file, where it is the genuine first line. Empties go BEFORE the slice, not
     // after: the final newline leaves one, and `slice(-limit)` counting it as a record is the same
     // off-by-one a second time, one step further along.
-    const whole = (offset > 0 ? lines.slice(1) : lines).filter((line) => line.trim().length > 0);
+    const dropped = offset > 0 ? 1 : 0;
+    const kept = lines.slice(dropped);
 
-    return parseNotifications(whole.slice(-limit).join('\n'));
+    const skipped = dropped === 0
+      ? 0
+      : Buffer.byteLength(lines[0] ?? '', 'utf8') + 1;
+
+    return placeThem(kept, offset + skipped, limit);
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * The last `limit` real records out of a run of lines, each placed at its own byte offset.
+ *
+ * <p>The arithmetic walks the lines rather than measuring the joined text, because a blank line
+ * anywhere in the file would make the joined length wrong by one byte per blank and put every
+ * offset after it out by that much — silently, and only on a file that had been interrupted.</p>
+ *
+ * <p><b>A COMPLETE line is any element but the last.</b> Splitting on the newline leaves, as its
+ * final element, whatever followed the last newline: the empty string when the file ends properly,
+ * and a half-written line when another process is midway through appending one. Either way it is
+ * not a line this snapshot may count or acknowledge. The first version of this counted a newline
+ * for that element too, which put `end` one byte past the file and — worse — let a torn tail
+ * acknowledge a record that had not finished being written. Both were caught by measuring against
+ * a real file before any of this had a test.</p>
+ */
+function placeThem(
+  lines: readonly string[],
+  from: number,
+  limit: number,
+): { readonly records: readonly PlacedRecord[]; readonly start: number; readonly end: number } {
+  const placed: PlacedRecord[] = [];
+  let at = from;
+  for (const line of lines.slice(0, -1)) {
+    if (line.trim().length > 0) {
+      const [record] = parseNotifications(line);
+      if (record !== undefined) {
+        placed.push({ record, at });
+      }
+    }
+    at += Buffer.byteLength(line, 'utf8') + 1;
+  }
+  const newest = placed.slice(-limit);
+
+  return {
+    records: newest,
+    // `at` is now just past the last complete newline, which is the furthest an acknowledgement may
+    // ever reach. `start` falls back to it when nothing was kept, so an empty snapshot acknowledges
+    // an empty range rather than everything behind it.
+    start: newest[0]?.at ?? at,
+    end: at,
+  };
 }
