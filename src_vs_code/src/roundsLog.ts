@@ -4,12 +4,13 @@ import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
-import { shortNumber, UsageEntry, Window, WINDOWS } from './usage';
+import { PriceLookup, consultationCost, priceOfLine, shortNumber, UsageEntry, Window, WINDOWS } from './usage';
+import { outcomeSaid } from './consultations';
 import { Vendor } from './vendors';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
-  BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
+  BlindSpot, countsByRound, DbConsultation, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
   findingsByRound, resolvedByRound, roundKeyOf,
 } from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
@@ -1001,7 +1002,17 @@ function facetOptions(rows: readonly LogRow[], key: Facet): string {
  * the point of the row — a table of ids and numbers would say a consultation happened and nothing
  * about whether it helped.</p>
  */
-export function consultationsHtml(log: DbLog): string {
+export function consultationsHtml(
+  log: DbLog,
+  /**
+   * The reviewer rows and the published price lists, so a consultation whose vendor printed no money
+   * can still be priced — the two inputs `priceOfLine` already takes for every round and every
+   * conversation in the ledger. Optional because a fixture has neither and the column then says what
+   * it always said: a dash. (issue #309.)
+   */
+  vendors: readonly Vendor[] = [],
+  listed: PriceLookup = () => undefined,
+): string {
   if (log.consultations.length === 0) {
     return '<div class="empty">No consultations yet. One happens when a stuck AI calls <code>consult</code> —'
       + ' the <b>Consultant</b> section of the panel says who it asks.</div>';
@@ -1013,12 +1024,12 @@ export function consultationsHtml(log: DbLog): string {
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
     <td><span class="badge ${badgeOf(one.status)}">${escapeHtml(one.status)}</span>${one.reason.length > 0 ? ` <span class="decided" title="${escapeHtml(one.reason)}">why…</span>` : ''}</td>
-    <td class="num">${one.tokensIn + one.tokensOut > 0 ? escapeHtml(shortNumber(one.tokensIn + one.tokensOut)) : '—'}</td>
-    <td class="num cost">${escapeHtml(money(one.costUsd))}</td>
+    <td>${escapeHtml(outcomeSaid(one.outcome))}</td>
+    ${costCell(one, vendors, listed)}
     <td class="what">${escapeHtml(one.problem)}</td>
     <td class="what">${escapeHtml(one.advice)}</td>
   </tr>${one.alert.length === 0 ? '' : `
-  <tr><td colspan="9" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
+  <tr><td colspan="10" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
 
   // The server answers the newest N for the same N the rounds use. Said out loud when the list is
   // AT that number, because an older consultation silently not existing is a page telling a lie
@@ -1029,9 +1040,24 @@ export function consultationsHtml(log: DbLog): string {
 
   return `${capped}<table><thead><tr>
     <th>Started</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
-    <th>How it ended</th><th class="num">Tokens</th><th class="num">Cost</th>
+    <th>How it ended</th><th>Outcome</th><th class="num">Tokens</th><th class="num">Cost</th>
     <th>What was stuck</th><th>What was advised</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/**
+ * The Tokens and Cost cells, priced the way every other table here prices.
+ *
+ * <p>Its own function because the decision is `consultationCost`'s and the MARK is this cell's: an
+ * estimate gets the class the reviewers' estimates already wear, so one look tells a bill from a
+ * guess without reading the tilde. (issue #309.)</p>
+ */
+function costCell(one: DbConsultation, vendors: readonly Vendor[], listed: PriceLookup): string {
+  const tokens = one.tokensIn + one.tokensOut;
+  const cost = consultationCost(one.costUsd, one.tokensIn, one.tokensOut, priceOfLine(one.vendor, one.model, vendors, listed));
+
+  return `<td class="num">${tokens > 0 ? escapeHtml(shortNumber(tokens)) : '—'}</td>
+    <td class="num cost${cost.estimated ? ' est' : ''}">${escapeHtml(cost.text)}</td>`;
 }
 
 /** The caller kind as a person names it, never the raw word from the wire. */

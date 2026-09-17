@@ -82,6 +82,20 @@ public sealed record ConsultationRecord(
 
     public string Reason { get; init; } = string.Empty;
 
+    /// <summary>
+    /// How it ENDED, as against why it stopped — <c>solved</c>, <c>not_solved</c>, <c>abandoned</c>,
+    /// or the server's own <c>lapsed</c>. Empty on every record written before this field existed.
+    /// </summary>
+    /// <remarks>
+    /// <para>Beside <see cref="Reason"/> rather than inside it, because they answer two different
+    /// questions and one string was answering only the first: a consultation that did its job and one
+    /// that was useless both ended <c>closed</c> with a sentence about the budget. (issue #309.)</para>
+    /// <para><b>Empty is not a verdict</b>, and neither is <c>lapsed</c>. Nothing anywhere may read
+    /// either as one — a reader that inferred <c>solved</c> from a closed status would turn a spent
+    /// budget into a success.</para>
+    /// </remarks>
+    public string Outcome { get; init; } = string.Empty;
+
     public int RunnerPid { get; init; }
 
     /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>
