@@ -1,6 +1,7 @@
 import { ChatMemory, ChatProvider } from './chatModels';
 import { ChatHome } from './cliChatLaunch';
-import { ChatMessage, ChatModelChoice } from './chatPage';
+import { ChatMessage } from './chatPage';
+import { ChatModelChoice } from './chatContracts';
 import { ChatSession } from './chatSession';
 import { ConversationSource } from './chatStore';
 import { TurnSpend } from './chatSpend';

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatModelChoice, ChatPageState, NO_MARKS, chatPageHtml, chatWaitingHtml } from '../chatPage';
+import { ChatPageState, NO_MARKS, chatPageHtml, chatWaitingHtml } from '../chatPage';
+import { ChatModelChoice } from '../chatContracts';
 
 /**
  * The composer while an answer is running — issue #288.
