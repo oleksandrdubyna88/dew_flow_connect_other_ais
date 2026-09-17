@@ -121,6 +121,19 @@ here should be derived from the text itself so it cannot drift by inattention.
   nothing else is.
 - The page renders one note, not two, when an article is both fallback and (impossibly) stale.
 
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan owns staleness.** The notifications plan writes its notice text in English only and
+says so: translating the ~111 messages it routes is deliberately out of its scope until the
+mechanism here lands, because adding five languages to a set of sentences that no guard can tell
+are stale is how the invisible-stale-translation defect gets multiplied by five.
+
+When this plan ships, the notification text becomes part of what it covers.
+
 ## Definition of Done
 
 - [ ] Editing an English article and running the suite fails, naming every language now behind.

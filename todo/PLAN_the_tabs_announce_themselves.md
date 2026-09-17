@@ -160,6 +160,19 @@ Existing suites that must stay green untouched: `roundsLogPage.test.ts`, `rounds
 `id="tab-spots"` — the section ids deliberately do not move), `bundledPage.test.ts`,
 `editRolesInTabs.test.ts`, `rolesPageScript.test.ts`.
 
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan owns the rounds log's tab ARIA.** The notifications plan does not touch it: its S6
+changes only which ids the rounds-log tab handler derives, not how a tab announces itself.
+
+Its own NEW page (S5, a tab per notification class) ships with the roles-page ARIA pattern from the
+first commit, so it adds nothing to the backlog this plan is working through — and if the pattern
+this plan settles on differs, the new page follows it rather than keeping its own.
+
 ## Definition of Done
 
 - [ ] The rounds log's tabs are a tablist, with every tab naming the panel it reveals and every panel

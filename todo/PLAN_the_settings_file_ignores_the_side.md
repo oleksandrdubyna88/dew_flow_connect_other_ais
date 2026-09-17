@@ -75,6 +75,20 @@ storage section in the first place. This plan assumes partitioned, and the round
 | 4 | a side with no settings file of its own adopts the root's, once, and says so | it starts on defaults and nobody is told |
 | 5 | the shared vectors carry a `settingsPath` per case, asserted by both suites | each half is self-consistent and blind to the other |
 
+## The boundary with the notifications plan
+
+> Reciprocal of the *Who builds what* table in
+> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), which is
+> MANDATORY on both sides — a boundary named once is not a boundary.
+
+**This plan goes FIRST, and the notifications plan's S8 depends on it.** That step writes
+`server-notices.jsonl` into the server's data directory and must use `PanelSettings.ResolveDataDir`
+rather than `SettingsFile.DataDirFrom` — the bare `COAI_DATA_DIR` read this plan is here to fix. On
+a side-partitioned install the two halves would otherwise disagree about where the file is, and
+neither would say so.
+
+Until this lands, S8 must not be built.
+
 ## Definition of Done
 
 - [ ] Every test above written RED first, with its failure message recorded.

@@ -721,7 +721,7 @@ goes into each plan below in the same task.
 
 | Item | This plan | The sibling |
 |---|---|---|
-| `rowMatches`' haystack (`roundsLog.ts:820`) | S6 adds the summary sentence to it | [PLAN_the_log_searches_the_findings.md](PLAN_the_log_searches_the_findings.md) queries `findings_fts`; its point 5 keeps the row-text filter. **It cites this function at a different line — reconcile by opening the file before either lands, and this plan goes first** |
+| `rowMatches`' haystack (`roundsLog.ts:801`) | S6 adds the summary sentence to it | [PLAN_the_log_searches_the_findings.md](PLAN_the_log_searches_the_findings.md) queries `findings_fts`; its point 5 keeps the row-text filter. **The two plans cited two different lines — 820 here, 474 there, both written from an older file. Reconciled 2026-09-17 by opening it: 801. This plan goes first** |
 | The rounds log's tab ARIA | not started here | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) owns it; S6 changes only which ids the handler derives |
 | Page tests that run the page | the new page ships this way from the start | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the backlog of existing source-text assertions |
 | Notification text in five languages | not done | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns staleness; translation is out of scope until it lands |
@@ -896,7 +896,11 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 - [ ] `research/module_extension.md`, `research/module_server.md` and **`research/module_tests.md`**
       updated — the last gains the notifications page row and says what it does not prove — and
       `research/architecture.md` gains the ledger under *The one interface neither container owns*.
-- [ ] The reciprocal boundary line is in all six sibling plans, not only in this one.
+- [x] The reciprocal boundary line is in all six sibling plans, not only in this one. *(Done
+      2026-09-17, one section per plan above its Definition of Done. The reconciliation the
+      `rowMatches` row asked for was done at the same time: this plan said `roundsLog.ts:820`,
+      the sibling said `:474`, and both were written from an older file — it is at 801, and
+      both are corrected.)*
 - [ ] The `Currently open` table in [README.md](README.md) carries this plan.
 - [ ] **Promotion waits for S8.** The second draft said promote on S7 and extract S8, which
       contradicted every S8 line still in this DoD: a plan promoted with unchecked promises and no
