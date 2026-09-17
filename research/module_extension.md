@@ -6790,3 +6790,51 @@ unrelated repainted the panel.
 **The server's output is validated at the boundary**, field by field, before a row is rendered: a
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
+
+## The chat command file is split (2026-09-17)
+
+`chatCommand.ts` was 4 183 lines against the 800 the coding-style rule allows, with 53 imports, 20
+exports and one 326-line function. It is **543** now, in fifteen modules and seven commits under
+[PLAN_the_command_file_is_too_big.md](PLAN_the_command_file_is_too_big.md), with no behaviour change
+anywhere in the series.
+
+| Module | What it owns | Imports `vscode` |
+|---|---|---|
+| `chatThread.ts` | the `Thread` type and the `threads` registry | **no** |
+| `chatHost.ts` | the three handles a window binds once: the memento, the store, the heartbeat | **no** |
+| `chatPersist.ts` | the store write queue, and what its answer does to the tab | **no** |
+| `chatRegistry.ts` | what this window holds open, and how a conversation is revealed or rebound | **no** |
+| `chatFollow.ts` | a conversation following the file it was opened from | **no** |
+| `chatRoots.ts` | where a conversation is looked for, which root it is filed under, path to uri both ways | yes |
+| `chatConfig.ts` | what the chat reads out of the settings, and the host it reads the panel's discoveries on | yes |
+| `chatCapture.ts` | what this side reads out of the editor, the tabs and the clipboard | yes |
+| `chatShow.ts` | what the page is told, and the five facts every caller needs first | yes |
+| `chatSessionJoin.ts` | joining a tab to the Claude Code session behind it | yes |
+| `chatArchive.ts` | New chat: ending, filing, and the clean slate | yes |
+| `chatLaunch.ts` | starting a vendor process, and switching the model | yes |
+| `chatTurn.ts` | one turn, and the gestures that are turns under another name | yes |
+| `chatHooks.ts` | everything a page can ask of the host, and the composer writers | yes |
+| `chatConversationRestore.ts` | how a reloaded tab comes back | yes |
+| `chatCommand.ts` | the entry points: the command, the two doors, `newConversation` | yes |
+
+**Five of them need no editor at all**, which is the half of this a line count does not show. They
+are outside `sonar.coverage.exclusions` — that list is exactly the modules importing `vscode`,
+asserted in both directions by `sonarExclusions.test.ts` — so they can gain real tests, where every
+line that stayed behind is still covered only by reading its own source.
+
+**The order was forced by cycles, not chosen.** `Thread` and the three bind-once handles come out
+first because every later module reads them; the write queue precedes the session join because
+`adoptFound` calls `keepQueued`; the page push precedes the archive, the launch, the turn and the
+hooks because all four call `show`; and `vendorFor` sits in `chatConfig` rather than with the launch
+because `show` reads `pairOf`, `pairOf` calls `vendorFor`, and `switchModel` calls `show`.
+
+**What proves a move changed nothing.** Not the test count — it survives a test renamed out of one
+file and into another — but the collected test NAMES diffed against a baseline measured by stashing
+each tier on the same commit (3 261, identical throughout); `npm run bundle`, the only check here
+that a cycle fails; and `scripts/prove-move.mjs`, which asserts every body line of every new module
+appears verbatim in the pre-split original (3 388 lines, zero residue). That last one exists because
+a first attempt at this split, built on a stale base, would have silently reverted the notifications
+ledger for every call site it moved — with a green suite, a clean typecheck and a passing gate.
+
+Nothing in this repository can start an extension host, so a runtime regression in a moved callback
+would still pass all of it. The plan says so in its own words rather than claiming otherwise.
