@@ -189,6 +189,29 @@ else
         || die "the publish failed"
 fi
 
+# THE GROUP, PUT BACK, because the copy above took it away.
+#
+# `releases` is setgid (2750) so that a release directory created under it inherits the group
+# `coai-bugs` and the service reaches its binary by GROUP. That is what the ownership model is for:
+# the deploy account writes, the service reads, and nothing else has any access at all.
+#
+# `cp -a "$found/." "$RELEASE/"` undoes it. The trailing `/.` makes cp apply the SOURCE directory's
+# mode, group and timestamps to the destination, so `$RELEASE` came out `0755` in the deploy
+# account's own group — and the running service then reached the binary through the WORLD bits.
+# It worked, for a reason nobody chose, and it would have stopped working the day an archive was
+# packed with a directory mode of 0750.
+#
+# Measured on the host, in a scratch directory, because a claim about setgid is worth checking:
+# a plain `mkdir` under the 2750 parent came out `coai-bugs 2755`; after
+# `cp -a source/. copied/` the same directory read `root 755`.
+#
+# `--reference` takes the group from the parent rather than naming it, so this stays correct if the
+# service account is ever renamed. `-R` because the FILES have to be group-readable too — the
+# binary to execute and `e_sqlite3` to dlopen.
+chgrp -R --reference="$RELEASES" "$RELEASE" \
+    || say "could not set the group on $RELEASE; the service may not be able to read it"
+chmod 0750 "$RELEASE"
+
 # INSPECTED before it is trusted, because a release that ships without this is the one defect this
 # server cannot report about itself.
 [[ -f "$RELEASE/$SERVICE" ]] || die "$RELEASE carries no $SERVICE"

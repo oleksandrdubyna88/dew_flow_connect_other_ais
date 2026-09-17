@@ -210,6 +210,12 @@ install -d -m 0750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs
 # which is in `coai-bugs`, would be reading the binary through the world bits or not at all. The
 # setgid bit makes every release directory inherit `coai-bugs`, so group access is what the service
 # actually uses and `releases` can stay closed to everybody else.
+#
+# The setgid bit alone is NOT enough, and the first deployment proved it: `release.sh` unpacks with
+# `cp -a "$found/." "$RELEASE/"`, and that trailing `/.` applies the ARCHIVE directory's mode and
+# group to the release directory, wiping the inherited group on the line after it was granted. The
+# script puts it back explicitly — see the `chgrp --reference` in `release.sh`. Both halves are
+# needed: this bit for the `dotnet publish` path, that line for the archive path.
 install -d -m 2750 -o coai-bugs-deploy -g coai-bugs /opt/coai-bugs/releases
 
 # The DATA belongs to the service, and the deploy account is deliberately not in reach of it: it
