@@ -43,6 +43,7 @@ written.
 | `notificationsGlance.ts` | the cheap look: two stats and a newline count, no record parsed |
 | `notificationsPage.ts` + `notificationsRows.ts` + `notificationsPageStyle.ts` | the page, pure |
 | `notificationsSeenCache.ts` | the acknowledgement file read once and then only where it grew — with the seam checked |
+| `notificationsSnapshot.ts` | what one draw FOUND, turned into what the page is handed. Pure, so the decisions have tests |
 | `notificationsPanel.ts` | the host — a webview, two messages, and the one write |
 | `writeGap.ts` | what the ledger could not keep, and over what window. Pure arithmetic |
 | `withinTheClock.ts` | waiting for something, but not for ever. One of these, shared with `jsonlLedger` |
@@ -182,6 +183,14 @@ without a number, which is what keeps the walk bounded by the tail in every case
 **The refresh is single-flight with a GENERATION.** A NAS read can outlive the 5000 ms tick, so
 reads overlap; a completion whose generation is stale is discarded rather than rendered, or an older
 answer would overwrite a newer count silently.
+
+**The page and the CLAIM are one decision, made outside the host.** `snapshotOf` answers both at
+once: what the page renders, and what window may be acknowledged once it says it rendered it. They
+are one function because computing them apart is how a snapshot that failed to render still marked
+three thousand records read — an unreadable draw offers no window at all. It is pure, which is the
+point: the half-dozen decisions in it used to live inside the module that imports `vscode` and could
+therefore be asserted by nothing, in the one place where getting them wrong marks records read that
+nobody saw.
 
 **Nothing is marked read until the PAGE says it was shown.** The host does not acknowledge because
 it sent markup; the page posts `shown`, carrying the generation it was drawn for and whether a filter
