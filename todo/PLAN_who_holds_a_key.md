@@ -554,6 +554,79 @@ own line.
   assertion over page source, and a list with a destructive button is exactly where a control wired to
   the wrong row is the defect that matters.
 
+#### Story 3's contract as the plan round RESOLVED it (2026-09-17)
+
+The round returned `good_enough` with 18 findings and **all 18 were accepted** — which is not
+agreeableness: the questions put to it were the ones this story was least sure of, and every answer
+came back with a specific this plan had not written down. Where a finding's proposed FIX is not what
+is being built, that is said here, because accepting a finding commits you to the problem and not to
+its suggested cure.
+
+**1. ONE honest state for every 401, and it must not name a cause.** The plan said "empty, invalid
+and rotated keys each have a state". Two reviewers refused that independently: story 2 makes an
+absent `COAI_BUGS_ADMIN_KEYS`, a wrong key and a revoked one *deliberately indistinguishable* — same
+status, same body — so a tab claiming "your key is invalid" sends an administrator to re-enter a
+correct key when the server simply has none configured. There is one rejected state. It renders the
+server's own `why`, offers **Set the bugs admin key**, and names BOTH possible causes without
+choosing: the key held here, or the server's own configuration, which only its startup log can
+settle.
+
+**2. The issuance is COMMITTED before the panel can show it, so a modal cannot keep the promise.**
+Three reviewers found this, and it is the sharpest thing the round produced. `POST /admin/keys`
+creates the key; the panel then displays it. A webview cannot veto its own disposal — the editor's
+tab control, a window close and an extension-host reload all dispose it — so "will not dismiss until
+copied" is enforced by nothing, and the key is unrecoverable because story 2 returns it exactly once.
+
+> So the guarantee moves OUT of the modal. The moment the `201` arrives, the extension writes a
+> **pending issuance** (id and key) to `SecretStorage`, and clears it only on an explicit copy or an
+> explicit discard. Whenever the tab opens it checks for one and surfaces it: *a key was issued and
+> never copied*, with **Copy** and **Revoke**. **Discard REVOKES through the API** rather than
+> forgetting — a discarded key that stays alive is the exact defect the rule was written against.
+
+Rejected fix: gemini suggested generating keys client-side and sending only hashes. That is a server
+contract change in a UI story, and it would move key generation off the box that owns the secret.
+
+**3. Paging is a client-side cursor STACK, and there are no page numbers anywhere.** `nextBefore` is
+opaque and forward-only; a client never composes one, so "previous" cannot be computed and a `page N
+of M` cannot be rendered. Each page pushes the cursor that fetched it; **Back** pops; Back is
+disabled at the root. `total` on the keys page is shown as *"N keys"* — a count of the table, never a
+page count. Rejected fix: local suggested querying the server for a previous page, which this
+contract cannot answer.
+
+**4. The audit and `/admin/active` are NOT in this story**, and that is now written down rather than
+discovered. Story 3's bullets name the keys listing, issuance, revocation and the key-entry flow.
+Three findings arrived about an audit view with no `total`; the honest answer is that this tab does
+not render one yet, so the rule they imply is recorded for whoever does: **cursor/batch navigation,
+Next enabled only while `nextBefore` is present, and no claim about how much is left.** Shipping the
+audit API with no reader is a known gap from today, not a surprise later.
+
+**5. Every answer the server can give has a state.** The plan listed three and the round found five
+more:
+
+| What arrives | What the tab does |
+|---|---|
+| `401` | The one rejected state of point 1. Never a diagnosis. |
+| `429` | Says it is rate-limited and when to try again, from `Retry-After` and `why`. **No automatic retry** — a silent retry hides the limit and spends the next window. |
+| A network failure, or nothing at all | *Cannot reach the server* — explicitly NOT a credential problem, because that is the misreading that sends somebody to rotate a working key. |
+| `400` | The server's `why`, verbatim. It is written to be read. |
+| `404` on revoke | No such key: the row is stale, so the listing refreshes. |
+| `200` with `changed:false` | Already revoked — show the ORIGINAL `revokedUtc` the server returned, not the time of this attempt. |
+
+**6. An issuance is never retried automatically.** If the request fails without an answer the key may
+exist: the tab refreshes the newest-first listing and says so, because that ordering IS story 2's
+lost-issuance recovery and this is the case it was designed for.
+
+**7. After any mutation the row is re-read from the server, never patched locally.** State drifts —
+another administrator, another window, the CLI on the host — and a tab that edits its own copy is a
+tab that disagrees with the truth silently.
+
+**8. The page test RUNS the page, and its load-bearing assertions are named here** so "it executes"
+cannot be mistaken for "it is tested": with **two** keys rendered, clicking each row's revoke control
+asserts the confirmation names THAT row's note and month; the copy and discard branches each assert a
+changed rendering; and a click must not also trigger row navigation. A list with a destructive button
+is exactly where a control wired to the neighbouring row is the defect that matters, and that is the
+one a source-text assertion cannot see.
+
 ### Story 4 — the promise, the deployment, and the scenario *(Opus)*
 
 - The promise's REMAINING wording — "four places" is no longer the count. Story 1 already rewrote it

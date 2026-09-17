@@ -143,7 +143,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // and it speaks four times — no server installed, a consultation swept out of the log, a server too
 // old for the mode, and the server's own refusal. Every one of them is a REASON a button a person
 // just pressed did nothing, which is the shape this funnel was bought for.
-const PLACES_THIS_SPEAKS = 115;
+// 115 → 117 on 2026-09-17, story 3 of PLAN_who_holds_a_key: the Users tab speaks twice. It ASKS
+// before revoking a contributor key — naming the note and the last-use month rather than the id,
+// because hex ids look alike and the action is immediate and final — and it says so when an action
+// could not be finished at all. Both are new flows rather than routed ones.
+const PLACES_THIS_SPEAKS = 117;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

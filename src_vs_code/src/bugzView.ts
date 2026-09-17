@@ -132,6 +132,7 @@ export function bugzBody(state: BugzViewState = {
   escape(collectLabel(run))}</button>
     <button type="button" class="run" data-command="reviewBugs"${
   state.corpus.funnel.collected > 0 ? '' : ' disabled'}>Review bugs</button>
+    <button type="button" class="run" data-command="bugsKeys">Who holds a key</button>
   </div>
   <button type="button" class="run" data-command="setBugsServer">${
   state.server.length > 0 ? `Ingest server: ${escape(state.server)}` : 'Set the ingest server…'}</button>

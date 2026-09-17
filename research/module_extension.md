@@ -6886,6 +6886,57 @@ unrelated repainted the panel.
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
 
+## The Users tab — who holds a key
+
+A panel beside the review window (`bugsKeysPanel.ts`), opened by **Who holds a key** in the Bugz
+section, listing the contributor keys of `coai-bugs` with what each has sent and the one button that
+ends it.
+
+**The admin key lives in `SecretStorage`, and this is the repository's first use of it.** Settings
+sync — across machines, into a profile, sometimes into a repository — and an admin credential that
+follows somebody to another machine is a credential nobody can account for. It is typed either
+through **ConnectOtherAIs: Set the bugs admin key** or through the tab's own button; there is a
+command as well as a button because the tab cannot be opened usefully without a key, and a door that
+exists only behind the thing it unlocks is not a door.
+
+**The issuance guarantee is NOT a modal, and could not be.** `POST /admin/keys` commits the key
+before the panel can display it, and a webview cannot veto its own disposal — the editor's tab
+control, a closed window and an extension-host reload all take it away. So "the panel will not
+dismiss until the key is copied" was a promise enforced by nothing, and the key is unrecoverable
+because the server returns it exactly once. The key is therefore written to `SecretStorage` the
+instant the server answers and cleared only by an explicit copy or an explicit discard — **and a
+discard REVOKES it through the API** rather than forgetting it, because a discarded key that stays
+alive is the defect the rule was written against. Whatever becomes of the window, the next open
+finds the pending issuance and offers both ways out. Three plan reviewers found this independently.
+
+**The tab cannot diagnose a 401, and says so.** `coai-bugs` answers an absent
+`COAI_BUGS_ADMIN_KEYS`, a wrong key and a revoked one identically, on purpose, so that the endpoint
+cannot be asked whether administration is enabled. A tab claiming "your key is invalid" would send an
+administrator to re-enter a key that was always correct. There is one rejected state; it renders the
+server's own `why`, names both possible causes without choosing, and points at the server's startup
+log, which is the only place the difference is visible.
+
+**Paging is a remembered cursor stack.** `nextBefore` is opaque and forward-only, so a previous page
+cannot be computed or asked for — each page pushes the cursor that fetched it and Back pops one.
+There are no page numbers anywhere: `total` is rendered as *"N keys"*, which is what it is.
+
+**Every answer the server can give has a state**, because the plan listed three and the round found
+five more: a 429 with its wait (and no automatic retry, which would spend the next window), an
+unreachable server said plainly to be *not* a credential problem, a 400 with the server's own words,
+a 404 on revoke meaning the row was stale, and a `200 changed:false` meaning somebody else revoked it
+first — reported with the ORIGINAL revocation time, not the moment of this attempt.
+
+**An issuance is never retried.** The server commits before it answers, so a retry can leave two live
+keys and only one of them known. The tab refreshes the newest-first listing and says a key may exist
+and where to look, which is exactly what that ordering was designed for.
+
+**What it cannot show, it says**: a key is displayed once and never again, and administrators are not
+rows in `api_keys` at all — their credentials come from the server's environment and their own
+uploads are counted against nothing, so they appear nowhere in the list.
+
+**Not in this tab yet:** `/admin/audit` and `/admin/active`. Both ship with no reader, which is
+recorded rather than discovered; whichever story takes them inherits the cursor rule above.
+
 ## The chat command file is split (2026-09-17)
 
 `chatCommand.ts` was 4 183 lines against the 800 the coding-style rule allows, with 53 imports, 20

@@ -143,6 +143,11 @@
     ],
     "commands": [
       {
+        "command": "coai.setBugsAdminKey",
+        "title": "Set the bugs admin key",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.editChatPresets",
         "title": "Edit chat presets",
         "category": "ConnectOtherAIs"

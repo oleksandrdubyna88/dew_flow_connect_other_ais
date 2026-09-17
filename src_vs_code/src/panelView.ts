@@ -2708,6 +2708,7 @@ export const PANEL_COMMANDS = [
   'closeConsultation',
   'collectBugs',
   'reviewBugs',
+  'bugsKeys',
   'setBugsServer',
 ] as const;
 

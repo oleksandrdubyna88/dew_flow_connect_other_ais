@@ -458,6 +458,24 @@ closed the same race for an in-process listener; the code is deliberately not sh
 one catches an exception carrying an errno and this one can only observe that a separate process
 exited and what it printed.
 
+**The Users tab is RUN by its test, and the assertions are named rather than implied.**
+`bugsKeysPage.test.ts` executes the shipped script against a DOM shim and asserts on what it POSTS.
+Its load-bearing case renders **two** keys, clicks each row's own revoke control and asserts the
+posted ids are `[first, second]` — a page that always posts the first row's id, or always the last,
+passes every assertion anybody could write about the markup and fails this one. Teeth proved by
+wiring every button to the first row's id and watching it name that defect.
+
+The rest of the file covers what the plan round added: a revoked row offers no control at all, a
+stray click posts nothing, Back and Next render disabled when the extension says there is nowhere to
+go, a pending key offers copy AND discard and says discarding revokes, the rejected face carries the
+server's words while **refusing to name a cause**, an unreachable server says it is not the key, and
+a note that is markup is escaped.
+
+`bugsKeysFlow.test.ts` holds the decisions themselves, with no webview in sight: that Back is a
+remembered cursor rather than a computed one, that a `changed:false` revoke reports the ORIGINAL
+time, that a 404 means a stale row, and that a failed issuance says a key MAY exist and points at the
+newest row instead of inviting a retry.
+
 **Three suites that exist because the code round moved the code out from under them.**
 
 `TheEdgeIsWatchedTests` drives the real server and asserts on **what it logged**, because the edge
