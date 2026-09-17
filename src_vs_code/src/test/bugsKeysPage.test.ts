@@ -123,7 +123,16 @@ function run(users: Users): Page {
 }
 
 const listing = (rows: readonly KeyRow[], over: Partial<Extract<View, { kind: 'keys' }>> = {}): Users => ({
-  view: { kind: 'keys', rows, total: rows.length, hasNext: false, hasBack: false, said: '', ...over },
+  view: {
+    kind: 'keys',
+    rows,
+    total: rows.length,
+    hasNext: false,
+    hasBack: false,
+    said: '',
+    pagedPastTheEnd: false,
+    ...over,
+  },
 });
 
 test('the page script is a program, not a string that looks like one', () => {
@@ -202,8 +211,16 @@ test('back and next are disabled when the extension says there is nowhere to go'
  */
 test('a key that was never copied offers copy and discard, and says discard revokes', () => {
   const page = run({
-    view: { kind: 'keys', rows: [], total: 0, hasNext: false, hasBack: false, said: '' },
-    pending: { id: 'aaaa1111', key: 'the-key-itself', note: 'a workshop', createdUtc: '2026-09-17T10:00:00.0000000Z' },
+    view: {
+      kind: 'keys', rows: [], total: 0, hasNext: false, hasBack: false, said: '', pagedPastTheEnd: false,
+    },
+    pending: {
+      id: 'aaaa1111',
+      key: 'the-key-itself',
+      note: 'a workshop',
+      createdUtc: '2026-09-17T10:00:00.0000000Z',
+      server: 'https://bugs.example',
+    },
   });
 
   page.click(page.control('copy'));
@@ -222,7 +239,7 @@ test('a key that was never copied offers copy and discard, and says discard revo
  * picked one would be guessing, and the wrong guess sends somebody to replace a working key.</p>
  */
 test('a rejected key says the server would not accept it and does NOT say why', () => {
-  const page = run({ view: { kind: 'rejected', why: "an administrator's key is required" } });
+  const page = run({ view: { kind: 'rejected', why: "an administrator's key is required", said: '' } });
 
   assert.match(page.html, /did not accept this key/u);
   assert.match(page.html, /whether the key is wrong, has been revoked, or no administrators/u);
@@ -243,7 +260,7 @@ test('a rejected key says the server would not accept it and does NOT say why', 
 
 /** An unreachable server must not read as a credential problem. */
 test('an unreachable server says so, and says it is not the key', () => {
-  const page = run({ view: { kind: 'unreachable', why: 'fetch failed' } });
+  const page = run({ view: { kind: 'unreachable', why: 'fetch failed', said: '' } });
 
   assert.match(page.html, /could not be reached/u);
   assert.match(page.html, /not a problem with your key/u);
@@ -253,7 +270,12 @@ test('an unreachable server says so, and says it is not the key', () => {
 /** A 429 says what to wait, and says nothing is retried behind the person's back. */
 test('a rate-limited tab names the wait and refuses to retry silently', () => {
   const page = run({
-    view: { kind: 'limited', why: 'at most 120 requests a minute per administrator', retryAfterSeconds: 42 },
+    view: {
+      kind: 'limited',
+      why: 'at most 120 requests a minute per administrator',
+      retryAfterSeconds: 42,
+      said: '',
+    },
   });
 
   assert.match(page.html, /42 s/u);
@@ -261,7 +283,7 @@ test('a rate-limited tab names the wait and refuses to retry silently', () => {
 });
 
 test('with no key at all, the tab offers to set one and says why not settings', () => {
-  const page = run({ view: { kind: 'no-key' } });
+  const page = run({ view: { kind: 'no-key', said: '' } });
 
   assert.match(page.html, /secret storage/iu);
   assert.match(page.html, /settings sync/iu);
@@ -314,4 +336,79 @@ test('standing says in force or when it ended', () => {
 
 test('safe escapes every character that could close an attribute or open a tag', () => {
   assert.equal(safe(`<&>"'`), '&lt;&amp;&gt;&quot;&#39;');
+});
+
+/** While something is in flight, nothing that would queue a second action is pressable. */
+test('every control is disabled while an action is in flight', () => {
+  const page = run({
+    view: {
+      kind: 'keys',
+      rows: [key('aaaa1111', 'alice')],
+      total: 1,
+      hasNext: true,
+      hasBack: true,
+      said: '',
+      pagedPastTheEnd: false,
+    },
+    busy: true,
+  });
+
+  for (const id of ['issue', 'refresh', 'back', 'next']) {
+    assert.match(page.html, new RegExp(`id="${id}" disabled`, 'u'), `${id} must not be pressable`);
+  }
+
+  assert.match(page.html, /data-revoke="aaaa1111" disabled/u, 'least of all a revoke');
+  assert.match(page.html, /id="busy"/u, 'and it must SAY that something is happening');
+});
+
+/** The sentence an action produced is shown above every face, not only the listing. */
+test('what the last action said is rendered on a face that is not the listing', () => {
+  const warned = 'a key MAY have been created — check the newest row';
+  const page = run({ view: { kind: 'unreachable', why: 'fetch failed', said: warned } });
+
+  assert.ok(page.html.includes('a key MAY have been created'), 'the warning must survive the face');
+});
+
+/** The end of a walk says so, rather than claiming the server has no keys. */
+test('paging past the end says it is the end, not that none exist', () => {
+  const page = run(listing([], { pagedPastTheEnd: true, hasBack: true }));
+
+  assert.match(page.html, /end of the list/u);
+  assert.doesNotMatch(page.html, /No keys have been issued yet/u);
+});
+
+test('an empty first page still says none have been issued', () => {
+  assert.match(run(listing([])).html, /No keys have been issued yet/u);
+});
+
+/** An orphaned attempt cannot show the key, so it says what IS knowable. */
+test('an issuance nobody heard the answer to points at the newest row', () => {
+  const page = run({
+    view: { kind: 'keys', rows: [], total: 0, hasNext: false, hasBack: false, said: '', pagedPastTheEnd: false },
+    orphaned: { server: 'https://bugs.example', note: 'the tuesday workshop' },
+  });
+
+  assert.match(page.html, /may have been issued/u);
+  assert.match(page.html, /NEWEST row/u);
+  assert.ok(page.html.includes('https://bugs.example'), 'and which server it was asked of');
+
+  page.click(page.control('dismiss'));
+  assert.deepEqual(page.posted.map((m) => m.type), ['ready', 'dismiss']);
+});
+
+/** An address that may not carry a key blames neither the key nor the server. */
+test('an unsafe address says the key was not sent anywhere', () => {
+  const page = run({ view: { kind: 'unsafe', why: 'it is not https', said: '' } });
+
+  assert.match(page.html, /not sent anywhere/u);
+  assert.doesNotMatch(page.html, /did not accept this key/u, 'the key was never offered');
+});
+
+/** A server that refused is not a server that could not be reached. */
+test('a refusal says the server answered and offers the way back', () => {
+  const page = run({ view: { kind: 'refused', why: "before is 'nonsense'", said: '' } });
+
+  assert.match(page.html, /refused that request/u);
+  assert.match(page.html, /not a connection problem/u);
+  assert.ok(page.html.includes("before is &#39;nonsense&#39;"), "the server's own words, escaped");
 });

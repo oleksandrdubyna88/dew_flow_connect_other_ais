@@ -1,3 +1,6 @@
+import { IssuedKey, KeysPage, Revocation } from './bugsAdminShapes';
+import { Read, readIssued, readKeysPage, readRevocation } from './bugsAdminWire';
+
 /**
  * The admin API of `coai-bugs`, as this extension asks it.
  *
@@ -20,41 +23,15 @@
  * page reads like the end of the list.</p>
  */
 
-/** One key, as the listing gives it. No key value and no hash: the wire has no field for either. */
-export interface KeyRow {
-  readonly id: string;
-  readonly note: string;
-  readonly createdUtc: string;
-  /** Absent while the key is in force. */
-  readonly revokedUtc?: string;
-  /** `yyyy-MM`, or absent for never used — never a date and never a clock time. */
-  readonly lastSeenMonth?: string;
-  readonly sent: number;
-  readonly waiting: number;
-}
-
-/** A page of keys. `nextBefore` is present only while another page may exist. */
-export interface KeysPage {
-  readonly items: readonly KeyRow[];
-  readonly limit: number;
-  readonly total: number;
-  readonly nextBefore?: string;
-}
-
-/** The one response in this product that carries a key, and it carries it once. */
-export interface IssuedKey {
-  readonly id: string;
-  readonly key: string;
-  readonly note: string;
-  readonly createdUtc: string;
-}
-
-/** What revoking came to. `changed` false means somebody else had already done it. */
-export interface Revocation {
-  readonly id: string;
-  readonly revokedUtc: string;
-  readonly changed: boolean;
-}
+/**
+ * The shapes this API answers with live in `bugsAdminShapes.ts` and are re-exported here.
+ *
+ * <p>They were declared in this file, and `bugsAdminWire.ts` — which checks them — imported them
+ * back, which is a cycle. The guard's sentence for it is the reason this is not a matter of taste:
+ * *it will bundle and fail at runtime*. Re-exported rather than merely moved, so a caller asking
+ * for the admin API's types need not know which of two files they were written in.</p>
+ */
+export type { IssuedKey, KeyRow, KeysPage, Revocation } from './bugsAdminShapes';
 
 /**
  * What asking the server came to.
@@ -74,7 +51,22 @@ export type Answer<T> =
   /** 404 — on revoke, a key this server does not have. */
   | { readonly kind: 'missing'; readonly why: string }
   /** No answer at all: unreachable, DNS, a timeout, a 5xx. NOT a credential problem. */
-  | { readonly kind: 'unreachable'; readonly why: string };
+  | { readonly kind: 'unreachable'; readonly why: string }
+  /**
+   * The server answered, and its answer is not the shape the contract promises.
+   *
+   * <p>Its own case rather than a thrown error or a silent cast, because what a person must do
+   * about it is different from every other case here: nothing was changed HERE, but the server may
+   * well have acted, so the listing is the thing to look at before trying anything again.</p>
+   */
+  | { readonly kind: 'malformed'; readonly why: string }
+  /**
+   * The address this would have been sent to is not one a credential may cross.
+   *
+   * <p>Refused BEFORE the request, so the key never leaves this machine. See
+   * <see cref="mayCarryAKey"/>.</p>
+   */
+  | { readonly kind: 'unsafe'; readonly why: string };
 
 /** How long any one request may take before it is called unreachable. */
 export const TIMEOUT_MS = 10_000;
@@ -96,7 +88,7 @@ export async function keys(admin: Admin, before = ''): Promise<Answer<KeysPage>>
     ? `?limit=${PAGE_SIZE}&before=${encodeURIComponent(before)}`
     : `?limit=${PAGE_SIZE}`;
 
-  return ask<KeysPage>(admin, `/admin/keys${query}`, 'GET');
+  return ask(admin, `/admin/keys${query}`, 'GET', readKeysPage);
 }
 
 /**
@@ -108,12 +100,48 @@ export async function keys(admin: Admin, before = ''): Promise<Answer<KeysPage>>
  * newest-first listing instead and lets a person see it — which is what that ordering is for.</p>
  */
 export async function issue(admin: Admin, note: string): Promise<Answer<IssuedKey>> {
-  return ask<IssuedKey>(admin, '/admin/keys', 'POST', { note });
+  return ask(admin, '/admin/keys', 'POST', readIssued, { note });
 }
 
 /** Ends one key. Idempotent: a second call answers 200 with `changed: false`. */
 export async function revoke(admin: Admin, id: string): Promise<Answer<Revocation>> {
-  return ask<Revocation>(admin, `/admin/keys/${encodeURIComponent(id)}/revoke`, 'POST');
+  return ask(admin, `/admin/keys/${encodeURIComponent(id)}/revoke`, 'POST', readRevocation);
+}
+
+/**
+ * Whether a credential may be sent to this address.
+ *
+ * <p><b>Checked before every request, and the reason is that the address is a SETTING.</b> It is
+ * edited by a button in the Bugz section, it is stored in `settings.json`, and it therefore syncs —
+ * so the host this extension will send the admin key to can change without anybody typing it here.
+ * Over `http` to a real host that key crosses the network in clear text; to a mistyped or hostile
+ * host it is disclosed even though the answer comes back 401. (Code round, codex.)</p>
+ *
+ * <p>Loopback is allowed over `http` because that is how the server is run while it is being
+ * written, and nothing leaves the machine. Everything else must be `https`.</p>
+ */
+export function mayCarryAKey(server: string): string {
+  let address: URL;
+  try {
+    address = new URL(trimmed(server));
+  } catch {
+    return `"${server}" is not an address this can send to. Set the ingest server in the Bugz `
+      + 'section first.';
+  }
+
+  if (address.protocol === 'https:') {
+    return '';
+  }
+
+  const loopback = address.hostname === 'localhost'
+    || address.hostname === '127.0.0.1'
+    || address.hostname === '[::1]'
+    || address.hostname === '::1';
+
+  return address.protocol === 'http:' && loopback
+    ? ''
+    : `the admin key will not be sent to ${address.origin}: it is not https, and only a loopback `
+      + 'address may be plain http. A key sent in clear text is a key you have to rotate.';
 }
 
 /**
@@ -128,8 +156,14 @@ async function ask<T>(
   admin: Admin,
   path: string,
   method: 'GET' | 'POST',
+  read: (body: unknown) => Read<T>,
   body?: unknown,
 ): Promise<Answer<T>> {
+  const unsafe = mayCarryAKey(admin.server);
+  if (unsafe.length > 0) {
+    return { kind: 'unsafe', why: unsafe };
+  }
+
   // Built in two pieces rather than with `body: undefined`: this repository compiles with
   // `exactOptionalPropertyTypes`, under which an explicit `undefined` is NOT the same as an absent
   // property — and `fetch` declares `body` as present-or-absent.
@@ -152,28 +186,33 @@ async function ask<T>(
   }
 
   if (response.ok) {
-    return read<T>(response);
+    return succeeded(response, read);
   }
 
   return refusal(response, await why(response));
 }
 
-/** Which case a failing status is. */
-function refusal<T>(response: Response, sentence: string): Answer<T> {
-  if (response.status === 401) {
-    return { kind: 'rejected', why: sentence };
-  }
+/**
+ * Which case a failing status is.
+ *
+ * <p>A table rather than a chain of `if`s: the chain was five branches in one function, over this
+ * repository's ceiling of four, and a table is what a list of equal alternatives actually is.</p>
+ */
+const REFUSALS: Readonly<Record<number, 'rejected' | 'limited' | 'refused' | 'missing'>> = {
+  400: 'refused',
+  401: 'rejected',
+  404: 'missing',
+  429: 'limited',
+};
 
-  if (response.status === 429) {
+function refusal<T>(response: Response, sentence: string): Answer<T> {
+  const named = REFUSALS[response.status];
+  if (named === 'limited') {
     return { kind: 'limited', why: sentence, retryAfterSeconds: seconds(response) };
   }
 
-  if (response.status === 400) {
-    return { kind: 'refused', why: sentence };
-  }
-
-  if (response.status === 404) {
-    return { kind: 'missing', why: sentence };
+  if (named !== undefined) {
+    return { kind: named, why: sentence };
   }
 
   // A 5xx is the server failing rather than refusing, which is the same thing to a reader as not
@@ -182,13 +221,23 @@ function refusal<T>(response: Response, sentence: string): Answer<T> {
   return { kind: 'unreachable', why: `the server answered ${response.status}: ${sentence}` };
 }
 
-/** The body of a success, or the one failure that is not the server's fault. */
-async function read<T>(response: Response): Promise<Answer<T>> {
+/** The body of a success, READ rather than cast — see `bugsAdminWire.ts` for why. */
+async function succeeded<T>(
+  response: Response,
+  read: (body: unknown) => Read<T>,
+): Promise<Answer<T>> {
+  let body: unknown;
   try {
-    return { kind: 'ok', value: (await response.json()) as T };
+    body = await response.json();
   } catch (error_: unknown) {
-    return { kind: 'unreachable', why: `the server's answer could not be read: ${because(error_)}` };
+    return { kind: 'malformed', why: `the server's answer could not be read: ${because(error_)}` };
   }
+
+  const value = read(body);
+
+  return value.kind === 'read'
+    ? { kind: 'ok', value: value.value }
+    : { kind: 'malformed', why: value.why };
 }
 
 /** The server's own sentence, or a stand-in when it sent none. */

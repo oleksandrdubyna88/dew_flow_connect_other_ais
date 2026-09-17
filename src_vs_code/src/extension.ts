@@ -3,7 +3,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { BugsKeysPanel } from './bugsKeysPanel';
+import { usersPanel } from './bugsKeysPanel';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -381,7 +381,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // A command as well as a button because the tab cannot be opened usefully without a key, and a
     // door that only exists behind the thing it unlocks is not a door.
     vscode.commands.registerCommand('coai.setBugsAdminKey', async () => {
-      await new BugsKeysPanel(
+      // The SAME panel the section button opens, so a key set here redraws a tab that is already
+      // open instead of leaving it on the face it had before the key existed.
+      await usersPanel(
         context.secrets,
         () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
       ).askForKey();

@@ -60,7 +60,7 @@ import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, writeKeep } from './roundsDbRead';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
-import { BugsKeysPanel } from './bugsKeysPanel';
+import { usersPanel } from './bugsKeysPanel';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
@@ -2535,9 +2535,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The review window, held so a second press returns to it rather than opening another. */
   private review: BugzReviewPanel | undefined;
 
-  /** The Users tab. Built once and kept, like the review window beside it. */
-  private userKeys: BugsKeysPanel | undefined;
-
   /**
    * What the corpus and the last run look like now.
    *
@@ -2819,12 +2816,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * stale copy would ask the wrong host and blame the key.</p>
    */
   private async bugsKeys(): Promise<void> {
-    this.userKeys ??= new BugsKeysPanel(
+    await usersPanel(
       this.context.secrets,
       () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
-    );
-
-    await this.userKeys.show();
+    ).show();
   }
 
   private async setBugsServer(): Promise<void> {

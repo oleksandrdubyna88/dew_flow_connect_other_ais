@@ -6934,6 +6934,33 @@ and where to look, which is exactly what that ordering was designed for.
 rows in `api_keys` at all — their credentials come from the server's environment and their own
 uploads are counted against nothing, so they appear nowhere in the list.
 
+**The window that remains is narrowed, not closed — and that is said rather than papered over.**
+The server commits the key before this process hears anything, so a host death in that instant
+leaves a live key with no local record, and two commits cannot be made atomic from one side. So an
+ATTEMPT is written before the request leaves: it cannot name the key, but the next open says one may
+exist and points at the newest row. Closing it completely needs a server-side idempotency record,
+which is a change to `coai-bugs` rather than to the extension.
+
+**Three more things the code round made true**, each of which was a way to lose a key:
+
+- **Issuing is refused while a key is pending.** There is one slot, so a second issuance overwrote
+  the first — destroying the only copy of a credential the server had already committed.
+- **The pending record carries its ISSUER.** The address is a setting and can change while a key is
+  held; a 404 from a server that never had it would otherwise be read as proof it was gone.
+- **The admin key is never sent over plain `http`** except to loopback, and the address is checked
+  before the request rather than after the answer — a key disclosed to a mistyped host is disclosed
+  even when the reply is 401.
+
+**Every answer is READ, not cast.** `bugsAdminWire.ts` checks each success body field by field,
+because the cast that preceded it let a `201` without a `key` reach `SecretStorage` and be rejected
+on the way back out — destroying the sole copy of a committed key — and turned `items: null` into a
+crash during the redraw with nothing on screen to say so.
+
+**What an action said survives whichever face follows it.** The sentence used to be rendered only by
+the listing and cleared after every draw, so the one most worth keeping — *a key may exist, do not
+ask again, look at the newest row* — was thrown away precisely when the server was unwell and a
+different face appeared.
+
 **Not in this tab yet:** `/admin/audit` and `/admin/active`. Both ship with no reader, which is
 recorded rather than discovered; whichever story takes them inherits the cursor rule above.
 

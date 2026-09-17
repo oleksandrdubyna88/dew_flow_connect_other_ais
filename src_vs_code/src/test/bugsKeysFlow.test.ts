@@ -206,3 +206,82 @@ test('walking the trail leaves the previous one untouched', () => {
   assert.deepEqual(first.used, [''], 'forward must not mutate what it was given');
   assert.deepEqual(second.used, ['', 'cursor-one']);
 });
+
+/**
+ * A server that ANSWERED and refused is not a server that could not be reached.
+ *
+ * <p>Folding the two said the wrong thing twice: it blamed the connection for a reply, and it
+ * offered a Try again that would repeat the same refused request. A stale cursor is the ordinary
+ * way to arrive here, so the way out is back to the newest page. (Code round, codex.)</p>
+ */
+test('a 400 gets its own face and is not called unreachable', () => {
+  const face = faceOf({ kind: 'refused', why: "before is 'nonsense'" }, START, '');
+
+  assert.equal(face.kind, 'refused');
+  assert.equal(face.kind === 'refused' && face.why, "before is 'nonsense'");
+});
+
+test('a 404 and a malformed answer are refusals too, because the server answered', () => {
+  assert.equal(faceOf({ kind: 'missing', why: 'no such thing' }, START, '').kind, 'refused');
+  assert.equal(faceOf({ kind: 'malformed', why: 'not a page' }, START, '').kind, 'refused');
+});
+
+test('an address that may not carry a key has a face that blames neither the key nor the server', () => {
+  const face = faceOf({ kind: 'unsafe', why: 'it is not https' }, START, '');
+
+  assert.equal(face.kind, 'unsafe');
+});
+
+/**
+ * EVERY face carries `said`.
+ *
+ * <p>The sentence explaining what an action came to was rendered only by the listing, so a revoke
+ * that failed and then a listing that also failed told the person nothing about the revoke. The
+ * most valuable sentence this tab produces arrives exactly when the face is not the listing.</p>
+ */
+test('what the last action said survives whichever face the server earned', () => {
+  const warned = 'a key MAY have been created';
+
+  for (const answer of [
+    { kind: 'rejected', why: 'w' } as const,
+    { kind: 'unreachable', why: 'w' } as const,
+    { kind: 'refused', why: 'w' } as const,
+    { kind: 'unsafe', why: 'w' } as const,
+    { kind: 'limited', why: 'w', retryAfterSeconds: 1 } as const,
+  ]) {
+    assert.equal(faceOf(answer, START, warned).said, warned, `${answer.kind} must carry it`);
+  }
+
+  assert.equal(faceOf(page(), START, warned).said, warned, 'and so must the listing');
+});
+
+/** An empty page reached by FOLLOWING a cursor is the end of a walk, not an empty server. */
+test('the end of a walk is not the same as a server with no keys', () => {
+  const walked = faceOf(page({ items: [] }), forward(START, 'cursor-one'), '', true);
+  const firstPage = faceOf(page({ items: [] }), START, '', false);
+
+  assert.equal(walked.kind === 'keys' && walked.pagedPastTheEnd, true);
+  assert.equal(firstPage.kind === 'keys' && firstPage.pagedPastTheEnd, false);
+});
+
+test('a page that has rows is never the end of a walk, however it was reached', () => {
+  const face = faceOf(page(), forward(START, 'cursor-one'), '', true);
+
+  assert.equal(face.kind === 'keys' && face.pagedPastTheEnd, false);
+});
+
+/** An unsafe address means nothing was sent, so there is nothing to go looking for. */
+test('an issuance to an unsafe address says nothing was sent', () => {
+  const said = afterFailedIssue({ kind: 'unsafe', why: 'it is not https' });
+
+  assert.match(said, /nothing was sent/u);
+  assert.doesNotMatch(said, /MAY have been created/u, 'it cannot have been: it never left');
+});
+
+/** A malformed answer means the server DID act, so it gets the same warning as a timeout. */
+test('an issuance whose answer could not be read warns that a key may exist', () => {
+  const said = afterFailedIssue({ kind: 'malformed', why: 'not an issued key' });
+
+  assert.match(said, /MAY have been\s+created/u);
+  assert.match(said, /newest row/u);
+});

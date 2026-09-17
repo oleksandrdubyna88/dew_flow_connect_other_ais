@@ -53,7 +53,12 @@ export function canGoBack(trail: Trail): boolean {
  * mention a key: an unreachable server is not a credential problem, and a 401 names no cause because
  * the server refuses to distinguish three of them.</p>
  */
-export function faceOf(answer: Answer<KeysPage>, trail: Trail, said: string): View {
+export function faceOf(
+  answer: Answer<KeysPage>,
+  trail: Trail,
+  said: string,
+  followedACursor = false,
+): View {
   if (answer.kind === 'ok') {
     return {
       kind: 'keys',
@@ -62,21 +67,40 @@ export function faceOf(answer: Answer<KeysPage>, trail: Trail, said: string): Vi
       hasNext: (answer.value.nextBefore ?? '').length > 0,
       hasBack: canGoBack(trail),
       said,
+      // An empty page reached by FOLLOWING a cursor is the end of the walk, which the server's
+      // contract says always happens once. An empty first page is a server with no keys. Saying
+      // the second about the first tells an administrator who just paged through fifty of them
+      // that none exist. (Code round, gemini.)
+      pagedPastTheEnd: followedACursor && answer.value.items.length === 0,
     };
   }
 
   if (answer.kind === 'rejected') {
-    return { kind: 'rejected', why: answer.why };
+    return { kind: 'rejected', why: answer.why, said };
   }
 
   if (answer.kind === 'limited') {
-    return { kind: 'limited', why: answer.why, retryAfterSeconds: answer.retryAfterSeconds };
+    return {
+      kind: 'limited',
+      why: answer.why,
+      retryAfterSeconds: answer.retryAfterSeconds,
+      said,
+    };
   }
 
-  // A 400 or a 404 on the LISTING is not something a person can act on differently from a server
-  // that is not answering — neither names a key they hold. They are folded into one face carrying
-  // the server's own sentence rather than given a fifth panel that says the same thing.
-  return { kind: 'unreachable', why: answer.why };
+  if (answer.kind === 'unsafe') {
+    return { kind: 'unsafe', why: answer.why, said };
+  }
+
+  // A server that ANSWERED and refused is not a server that could not be reached, and the code
+  // round was right that folding them said the wrong thing twice: it blamed the connection for a
+  // reply, and it offered a Try again that would repeat the same refused request. A malformed body
+  // belongs here too — the server answered, and what came back was not the contract.
+  if (answer.kind === 'refused' || answer.kind === 'missing' || answer.kind === 'malformed') {
+    return { kind: 'refused', why: answer.why, said };
+  }
+
+  return { kind: 'unreachable', why: answer.why, said };
 }
 
 /**
@@ -120,8 +144,21 @@ export function afterFailedIssue(answer: Answer<unknown>): string {
     throw new Error('afterFailedIssue was given a successful issuance');
   }
 
+  if (answer.kind === 'unsafe') {
+    // Nothing left this machine, so there is nothing to look for and nothing to undo.
+    return `No key was issued, and nothing was sent: ${answer.why}`;
+  }
+
   if (answer.kind === 'refused' || answer.kind === 'rejected' || answer.kind === 'limited') {
     return `No key was issued: ${answer.why}`;
+  }
+
+  if (answer.kind === 'malformed') {
+    // The server ANSWERED, so it may well have created the key; what came back was simply not
+    // readable as one. That is the same danger as a timeout and gets the same warning.
+    return 'The server answered with something this could not read, so a key MAY have been '
+      + `created. It would be the newest row below — check it, and revoke it if you do not hold `
+      + `it. (${answer.why})`;
   }
 
   return 'The server did not answer, so a key MAY have been created. It would be the newest row '

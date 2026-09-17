@@ -2,11 +2,15 @@ import { randomBytes } from 'node:crypto';
 
 import * as vscode from 'vscode';
 
-import { Admin, KeyRow, issue, keys, revoke } from './bugsAdminApi';
+import { Admin, Answer, KeyRow, issue, keys, mayCarryAKey, revoke } from './bugsAdminApi';
 import {
+  Pending,
   Secrets,
   adminKey,
+  beginIssuance,
+  endIssuance,
   holdIssuance,
+  issuanceAttempt,
   pendingIssuance,
   releaseIssuance,
   setAdminKey,
@@ -34,10 +38,16 @@ import { notify, notifyAndAsk } from './notify';
  *
  * <p><b>The issuance guarantee does not live in this panel, and cannot.</b> A webview is disposed by
  * the editor's tab control, by closing the window and by an extension-host reload, and it cannot
- * veto any of them — so "the panel will not dismiss until the key is copied" is a promise a panel is
- * unable to keep. The key is written to `SecretStorage` the instant the server answers and is
- * cleared only by a copy or by a discard that REVOKES it; whatever becomes of this window, the next
- * open finds it. (Three plan reviewers, independently.)</p>
+ * veto any of them. The key is written to `SecretStorage` the instant the server answers and is
+ * cleared only by a copy or by a discard the ISSUING server confirmed.</p>
+ *
+ * <p><b>And the window that remains is narrowed rather than denied.</b> The code round found it
+ * three times: the server commits the key before this process hears anything, so a death in that
+ * instant leaves a live key with no local record, and two commits cannot be made atomic from one
+ * side. So an ATTEMPT is recorded before the request leaves. It cannot name the key — nothing here
+ * ever can — but the next open says a key may exist and points at the newest row, which is what
+ * story 2 ordered the listing for. Closing it completely needs a server-side idempotency record,
+ * and that is a change to `coai-bugs` rather than to this file.</p>
  */
 export class BugsKeysPanel {
   private panel: vscode.WebviewPanel | undefined;
@@ -45,20 +55,24 @@ export class BugsKeysPanel {
   /** Where in the listing we are, as cursors already used. */
   private trail: Trail = START;
 
-  /** What the last action said, shown once above the table. */
+  /**
+   * What the last action said.
+   *
+   * <p>Cleared only once it has actually been RENDERED. It used to be cleared at the end of every
+   * draw, including a draw whose face could not show it — so the one sentence most worth keeping,
+   * *a key may exist and must not be asked for again*, was thrown away precisely when the server
+   * was unwell and that face appeared. (Three findings, two reviewers.)</p>
+   */
   private said = '';
 
   /** The rows currently on screen, so a revoke can name the one it is about. */
   private rows: readonly KeyRow[] = [];
 
-  /**
-   * The cursor the page on screen offered for the NEXT page, or empty at the end.
-   *
-   * <p>Kept from the draw rather than fetched again when Next is pressed. Asking twice was a wasted
-   * request and a race with itself: the second answer can differ from the one the person is looking
-   * at, so Next would step onto a cursor that belongs to a listing they never saw.</p>
-   */
+  /** The cursor the page on screen offered for the NEXT page, or empty at the end. */
   private nextCursor = '';
+
+  /** Whether an action is in flight, so the page can disable what would queue another. */
+  private busy = false;
 
   /** Posts and redraws in order; two actions in flight would race the redraw between them. */
   private inFlight: Promise<void> = Promise.resolve();
@@ -93,7 +107,15 @@ export class BugsKeysPanel {
     this.panel?.reveal(vscode.ViewColumn.Active);
   }
 
-  /** Asks for the key and stores it, from the command as well as from the tab. */
+  /**
+   * Asks for the key and stores it, from the command as well as from the tab.
+   *
+   * <p>The redraw afterwards is a no-op when no panel is open, which is what makes it safe to share
+   * ONE instance between the command and the section button. Two instances was the defect the code
+   * round found: setting the key through the command left an open tab sitting on its rejected face
+   * until somebody pressed Refresh, because the key went into one object and the webview belonged
+   * to another. (Code round, codex.)</p>
+   */
   async askForKey(): Promise<void> {
     const typed = await vscode.window.showInputBox({
       title: 'The bugs admin key',
@@ -106,8 +128,7 @@ export class BugsKeysPanel {
     }
 
     await setAdminKey(this.secrets, typed);
-    this.trail = START;
-    await this.draw();
+    await this.draw(START);
   }
 
   /** One action at a time, then a redraw from the server. */
@@ -115,6 +136,7 @@ export class BugsKeysPanel {
     this.inFlight = this.inFlight
       .then(() => this.act(type, id))
       .catch(async (error_: unknown) => {
+        this.busy = false;
         await notify({
           as: 'error',
           class: 'failure',
@@ -126,69 +148,83 @@ export class BugsKeysPanel {
       });
   }
 
+  /**
+   * What each message does.
+   *
+   * <p>A table rather than a chain of `if`s: seven branches in one method was over this
+   * repository's complexity ceiling, and a list of equal alternatives is what a table is for.</p>
+   */
   private async act(type: string, id: string): Promise<void> {
-    if (type === 'ready') {
+    const doing: Readonly<Record<string, () => Promise<void>>> = {
+      setkey: () => this.askForKey(),
+      refresh: () => this.draw(START),
+      next: () => this.step('next'),
+      back: () => this.step('back'),
+      issue: () => this.issueOne(),
+      revoke: () => this.revokeOne(id),
+      copy: () => this.settlePending('copy'),
+      discard: () => this.settlePending('discard'),
+      dismiss: () => this.dismissOrphan(),
+    };
+
+    const what = doing[type];
+    if (what === undefined) {
+      // `ready`, and anything a future page posts that this build has never heard of.
       return;
     }
 
-    if (type === 'setkey') {
-      await this.askForKey();
-
-      return;
+    this.busy = true;
+    try {
+      await what();
+    } finally {
+      // A failure must not leave every control disabled for ever; `queue` reports it and the next
+      // draw is honest about what is there.
+      this.busy = false;
     }
-
-    if (type === 'refresh') {
-      await this.draw();
-
-      return;
-    }
-
-    if (type === 'next' || type === 'back') {
-      await this.step(type);
-
-      return;
-    }
-
-    if (type === 'issue') {
-      await this.issueOne();
-
-      return;
-    }
-
-    if (type === 'revoke') {
-      await this.revokeOne(id);
-
-      return;
-    }
-
-    if (type === 'copy' || type === 'discard') {
-      await this.settlePending(type);
-    }
-  }
-
-  /** Next uses the cursor the last page handed over; Back pops one already used. */
-  private async step(type: 'next' | 'back'): Promise<void> {
-    if (type === 'back') {
-      this.trail = back(this.trail);
-      await this.draw();
-
-      return;
-    }
-
-    if (this.nextCursor.length > 0) {
-      this.trail = forward(this.trail, this.nextCursor);
-    }
-
-    await this.draw();
   }
 
   /**
-   * Issues one key and holds it before anything can be shown.
+   * One page forward or back.
    *
-   * <p>The write to `SecretStorage` happens between the server's answer and the redraw, which is the
-   * window that loses a key. It is never retried: the server commits before it replies.</p>
+   * <p>The trail is committed only when the page it names actually ARRIVES — see
+   * <see cref="users"/>. It used to be assigned before the draw, so a Next onto a page the server
+   * then refused left the trail on a cursor belonging to a listing nobody had seen, and Back from
+   * there walked a history that never happened. (Code round, gemini.)</p>
+   */
+  private async step(type: 'next' | 'back'): Promise<void> {
+    const wanted = type === 'back'
+      ? back(this.trail)
+      : (this.nextCursor.length > 0 ? forward(this.trail, this.nextCursor) : this.trail);
+
+    await this.draw(wanted);
+  }
+
+  /**
+   * Issues one key: the attempt before the request, the key before anything is shown.
+   *
+   * <p><b>Refused while a pending key is held.</b> There is one slot, so a second issuance would
+   * overwrite the first — leaving a live key whose only copy was in the record just destroyed. The
+   * plan's rule is that a key is copied or discarded; this is that rule enforced rather than
+   * hoped for. (Two reviewers.)</p>
    */
   private async issueOne(): Promise<void> {
+    if (await pendingIssuance(this.secrets) !== undefined) {
+      this.said = 'Copy or discard the key you already have before issuing another: there is one '
+        + 'place to keep it, and a second issuance would overwrite the first.';
+      await this.draw();
+
+      return;
+    }
+
+    const server = this.server();
+    const unsafe = mayCarryAKey(server);
+    if (unsafe.length > 0) {
+      this.said = unsafe;
+      await this.draw();
+
+      return;
+    }
+
     const note = await vscode.window.showInputBox({
       title: 'What is this key for?',
       prompt: 'Our record of why it exists — "the tuesday workshop". Never the holder\'s name or address.',
@@ -198,19 +234,38 @@ export class BugsKeysPanel {
       return;
     }
 
-    const answer = await issue(await this.admin(), note);
+    // BEFORE the request leaves. Everything after this line can die and the next open still knows
+    // that a key may exist.
+    await beginIssuance(this.secrets, { server, note });
+    const answer = await issue({ server, key: await adminKey(this.secrets) }, note);
     if (answer.kind !== 'ok') {
-      this.said = afterFailedIssue(answer);
-      this.trail = START;
-      await this.draw();
+      await this.failedIssue(answer);
 
       return;
     }
 
-    await holdIssuance(this.secrets, answer.value);
+    await holdIssuance(this.secrets, { ...answer.value, server });
     this.said = 'A key was issued. Copy it now — it cannot be read back.';
-    this.trail = START;
-    await this.draw();
+    await this.draw(START);
+  }
+
+  /**
+   * An issuance that did not come back.
+   *
+   * <p>The attempt is FORGOTTEN when the server certainly did not act — a refusal, a rejected
+   * credential, a rate limit, an address never sent to — and KEPT when it may have: a timeout, a
+   * dead connection, an answer that could not be read. Keeping it is what makes the next open able
+   * to say so.</p>
+   */
+  private async failedIssue(answer: Answer<unknown>): Promise<void> {
+    const certainlyNot = answer.kind === 'refused' || answer.kind === 'rejected'
+      || answer.kind === 'limited' || answer.kind === 'unsafe';
+    if (certainlyNot) {
+      await endIssuance(this.secrets);
+    }
+
+    this.said = afterFailedIssue(answer);
+    await this.draw(START);
   }
 
   /** Revoke asks first, naming the note and the month rather than the id. */
@@ -224,9 +279,7 @@ export class BugsKeysPanel {
     }
 
     // THROUGH THE FUNNEL, like every other thing this extension says. `notify.ts` is the one door
-    // and a ratchet counts the call sites that bypass it — this one went red on the first run,
-    // which is exactly what that counter is for. It also means the question and the answer are both
-    // recorded, and a destructive action somebody was asked about is worth having on the record.
+    // and a ratchet counts the call sites that bypass it — this one went red on the first run.
     const pressed = await notifyAndAsk({
       as: 'warning',
       class: 'confirmation',
@@ -245,12 +298,7 @@ export class BugsKeysPanel {
     await this.draw();
   }
 
-  /**
-   * A pending key is copied, or discarded — and discarding REVOKES it.
-   *
-   * <p>Forgetting it instead would leave a live key nobody holds, which is the whole defect the
-   * copy-before-dismiss rule was written against.</p>
-   */
+  /** A pending key is copied, or discarded — and discarding REVOKES it. */
   private async settlePending(type: 'copy' | 'discard'): Promise<void> {
     const pending = await pendingIssuance(this.secrets);
     if (pending === undefined) {
@@ -260,6 +308,8 @@ export class BugsKeysPanel {
     }
 
     if (type === 'copy') {
+      // The release is AFTER the write, so a clipboard that refuses keeps the key: the rejection
+      // reaches `queue`'s catch and nothing is forgotten.
       await vscode.env.clipboard.writeText(pending.key);
       await releaseIssuance(this.secrets);
       this.said = 'The key is on the clipboard. It cannot be shown again.';
@@ -268,16 +318,37 @@ export class BugsKeysPanel {
       return;
     }
 
-    const answer = await revoke(await this.admin(), pending.id);
+    await this.discard(pending);
+  }
+
+  /**
+   * Revokes a held key against its OWN issuer, and forgets it only on proof.
+   *
+   * <p>The issuer is carried on the record because the address is a setting and can be changed
+   * while a key is held: a 404 from a server that never had it would otherwise be read as proof
+   * that the key was gone, while it stayed alive on the one that issued it. (Code round, codex.)</p>
+   */
+  private async discard(pending: Pending): Promise<void> {
+    const issuer = pending.server.length > 0 ? pending.server : this.server();
+    const answer = await revoke({ server: issuer, key: await adminKey(this.secrets) }, pending.id);
     if (answer.kind === 'ok' || answer.kind === 'missing') {
-      // Gone from the server, so it is safe to forget here. Anything else keeps it: a key still
-      // alive that this extension has dropped is exactly what must not happen.
       await releaseIssuance(this.secrets);
       this.said = 'The key was discarded and revoked, so nothing is left alive that nobody holds.';
-    } else {
-      this.said = `It is still active: ${answer.why} — it is kept here until it can be revoked.`;
+      await this.draw();
+
+      return;
     }
 
+    // NOT "it is still active". A 401 says the credential was refused and says NOTHING about the
+    // key, which another administrator may already have revoked; claiming a state the server
+    // declined to report is the same mistake the rejected face exists to avoid. (Code round, codex.)
+    this.said = `The key could not be revoked, so it is kept here until it can be: ${answer.why}`;
+    await this.draw();
+  }
+
+  /** The person has checked the listing after an orphaned attempt; stop saying it. */
+  private async dismissOrphan(): Promise<void> {
+    await endIssuance(this.secrets);
     await this.draw();
   }
 
@@ -285,39 +356,75 @@ export class BugsKeysPanel {
     return { server: this.server(), key: await adminKey(this.secrets) };
   }
 
-  private async draw(): Promise<void> {
+  /**
+   * Draws, optionally moving to another page first.
+   *
+   * <p><c>wanted</c> is committed only when its page arrives, so a refused or unreachable answer
+   * leaves the tab where it was rather than on a cursor nobody has seen.</p>
+   */
+  private async draw(wanted: Trail = this.trail): Promise<void> {
     if (this.panel === undefined) {
       return;
     }
 
-    const users = await this.users();
+    const users = await this.users(wanted);
     if (this.panel === undefined) {
       // Disposed while the server was being asked. Painting now is the `Webview is disposed` this
-      // repository has been caught by once already.
+      // repository has been caught by once — and `said` is deliberately NOT cleared here, so
+      // whatever the last action reported is still waiting when the tab is opened again.
       return;
     }
 
     this.panel.webview.html = usersPageHtml(users, nonce());
+    // Cleared only now, and only because it has just been rendered: every face carries `said`, so
+    // reaching this line means the sentence was shown.
     this.said = '';
   }
 
-  /** What to draw: the pending key if there is one, and whichever face the server earned. */
-  private async users(): Promise<Users> {
+  /** What to draw: the pending key, an orphaned attempt, and whichever face the server earned. */
+  private async users(wanted: Trail): Promise<Users> {
     const pending = await pendingIssuance(this.secrets);
+    const attempt = pending === undefined ? await issuanceAttempt(this.secrets) : undefined;
     const held = await adminKey(this.secrets);
+    const around = {
+      ...(pending === undefined ? {} : { pending }),
+      ...(attempt === undefined ? {} : { orphaned: attempt }),
+      busy: this.busy,
+    };
+
     if (held.length === 0) {
       this.rows = [];
 
-      return pending === undefined ? { view: { kind: 'no-key' } } : { view: { kind: 'no-key' }, pending };
+      return { view: { kind: 'no-key', said: this.said }, ...around };
     }
 
-    const answer = await keys({ server: this.server(), key: held }, here(this.trail));
-    this.rows = answer.kind === 'ok' ? answer.value.items : [];
-    this.nextCursor = answer.kind === 'ok' ? answer.value.nextBefore ?? '' : '';
-    const view = faceOf(answer, this.trail, this.said);
+    const answer = await keys({ server: this.server(), key: held }, here(wanted));
+    if (answer.kind === 'ok') {
+      // The page ARRIVED, so this is where we are now — and not a moment earlier.
+      this.trail = wanted;
+      this.rows = answer.value.items;
+      this.nextCursor = answer.value.nextBefore ?? '';
+    }
 
-    return pending === undefined ? { view } : { view, pending };
+    return { view: faceOf(answer, this.trail, this.said, here(wanted).length > 0), ...around };
   }
+}
+
+/**
+ * The ONE Users panel this extension has.
+ *
+ * <p>The command and the section button both reach it. They used to build one each, and the code
+ * round found what that costs: setting the key through the command stored it in one object while
+ * the webview belonged to another, so an open tab sat on its rejected face until somebody pressed
+ * Refresh. One instance means the key and the window are the same object's business. (codex.)</p>
+ */
+let theOne: BugsKeysPanel | undefined;
+
+/** The Users panel, built once. */
+export function usersPanel(secrets: Secrets, server: () => string): BugsKeysPanel {
+  theOne ??= new BugsKeysPanel(secrets, server);
+
+  return theOne;
 }
 
 /** One nonce per paint: the CSP admits our one script and nothing else. */
