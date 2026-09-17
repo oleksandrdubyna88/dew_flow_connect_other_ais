@@ -118,12 +118,14 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --depth 1 origin "$BASE_SHA"
+          ABSENT=
           if git cat-file -e "$BASE_SHA:.github/changelog-baseline.json" 2>/dev/null; then
             git show "$BASE_SHA:.github/changelog-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
           else
             echo '{}' > "$RUNNER_TEMP/base-baseline.json"
+            ABSENT=--base-absent
           fi
-          node .github/scripts/baseline-only-grows.mjs             .github/changelog-baseline.json "$RUNNER_TEMP/base-baseline.json"
+          node .github/scripts/baseline-only-grows.mjs ${ABSENT:+"$ABSENT"}             .github/changelog-baseline.json "$RUNNER_TEMP/base-baseline.json"
 
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs

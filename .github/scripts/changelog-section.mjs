@@ -34,9 +34,20 @@ import { LINES, lineOf } from './changelog-names-the-release.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHANGELOG = path.resolve(here, '..', '..', 'src_vs_code', 'CHANGELOG.md');
 
+/**
+ * A word is data, and it is about to become part of a regular expression.
+ *
+ * <p>Today's words are `Server`, `Extension` and `Team server` and none of them contains a
+ * metacharacter — but the registry is a list somebody will add to, and a line called `Tool (CLI)` or
+ * `C++` would silently build either an invalid pattern or one that matches the wrong thing. Escaping
+ * at the boundary costs a line; noticing it later costs a release with the wrong notes.</p>
+ */
+const quoted = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+
 /** The words this changelog heads its releases with, longest first so `Team server` wins. */
 const WORDS = [...new Set(LINES.map((l) => l.word).filter(Boolean))]
-  .sort((a, b) => b.length - a.length);
+  .sort((a, b) => b.length - a.length)
+  .map(quoted);
 
 /**
  * Where one release's section stops.
@@ -63,13 +74,13 @@ const NEXT_RELEASE = new RegExp(
  * release.</p>
  */
 export function sectionFor(changelog, line, version) {
-  const { word } = line;
-  const v = version.replace(/\./g, String.raw`\.`);
+  const word = quoted(line.word);
+  const v = quoted(version);
   const shapes = [
     // `## Server 0.28.0 — …`, and the joint `## Extension 0.32.3 · Server 0.18.17 — …`.
     String.raw`(?:[^\r\n]*? · )?${word} ${v}(?=\s|$)`,
     // `## 0.31.0 — 2026-09-06 (server 0.18.3)`.
-    String.raw`[^\r\n]*\(${word.toLowerCase()} ${v}\)`,
+    String.raw`[^\r\n]*\(${quoted(line.word.toLowerCase())} ${v}\)`,
   ];
   if (line.bare === true) {
     // Only the line that OWNS the bare form, or `## 0.31.0` would hand an mcp release the

@@ -273,3 +273,50 @@ test('a notes path that is a directory is refused, not read', { skip: needsShell
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the extension release line is deliberately NOT wired, and that is recorded', () => {
+  // Raised on the second code round: an `extension-v*` tag with a changelog entry still publishes
+  // the old fixed sentence. True, and scoped out on purpose — but "scoped out" and "forgotten" look
+  // identical in a workflow, so this case is what makes it a decision somebody can find.
+  //
+  // It also pins what was found while checking: the `extension` job carries its OWN inline
+  // create-or-reuse block, a FOURTH copy of the policy `draft-release.sh` exists to keep in one
+  // place — and it has already drifted, because the script now refreshes a reused draft's notes and
+  // the copy does not. That is the follow-up, written into the plan's open tail.
+  const workflow = workflowText();
+  const start = workflow.indexOf('\n  extension:') + 1;
+  assert.notEqual(start, 0, 'the extension release job still exists');
+  // From INSIDE the heading line, or the search finds this job's own heading at offset zero.
+  const nextAt = workflow.slice(start + 2).search(/^ {2}[a-z0-9-]+:$/m);
+  const job = workflow.slice(start, nextAt === -1 ? undefined : start + 2 + nextAt);
+
+  assert.ok(!job.includes('changelog-section.mjs'),
+    'if somebody wires it, this case should be the thing that makes them update the plan too');
+  assert.match(job, /gh release create/,
+    'it drafts its own release inline rather than through draft-release.sh');
+
+  const plan = fs.readFileSync(
+    path.join(repoRoot, 'research', 'PLAN_a_release_says_what_it_shipped.md'), 'utf8');
+  assert.match(plan, /extension release line/i,
+    'the plan records which line is not covered');
+  assert.match(plan, /inline|fourth copy|own create-or-reuse/i,
+    'and that the job holds a duplicate of the create-or-reuse policy, which has already drifted');
+});
+
+test('no run block carries a literal backslash-n where a line break belongs', () => {
+  // This caught a real break in this very change, three times: a `\` line continuation written
+  // through a shell heredoc arrives as the two characters `\n`, which bash reads as an argument
+  // rather than as "the command continues". YAML still parses, every other assertion here still
+  // passes, and the release fails on the day. Cheap to forbid outright.
+  const both = ['release.yml', 'ci.yml'].map((name) => ({
+    name,
+    text: fs.readFileSync(path.join(repoRoot, '.github', 'workflows', name), 'utf8'),
+  }));
+
+  for (const { name, text } of both) {
+    for (const [at, line] of text.replace(/\r\n/g, '\n').split('\n').entries()) {
+      assert.doesNotMatch(line, /\n {2,}/,
+        `${name}:${at + 1} has a literal "\n" where a line continuation belongs: ${line.trim()}`);
+    }
+  }
+});

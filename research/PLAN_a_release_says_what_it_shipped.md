@@ -269,6 +269,17 @@ real script against a stub `gh` rather than by reading it.
 
 ## The open tail
 
-- The **extension release line** does not use `draft-release.sh`, so story 2 does not reach it. Its
-  39 documented releases out of 90 are the largest readership of the four.
+- The **extension release line** does not use `draft-release.sh`, so story 2 does not reach it: an
+  `extension-v*` tag with a changelog entry still publishes the old fixed sentence. Its 39
+  documented releases out of 90 are the largest readership of the four, so this is the most valuable
+  follow-up here. Raised on the second code round and scoped out deliberately rather than
+  overlooked; a test pins the job as unwired so that wiring it has to be a decision.
+
+  **And it is worse than not wired, which is what makes it a follow-up rather than a preference.**
+  The `extension` job carries its OWN inline create-or-reuse block — a FOURTH copy of the policy
+  `draft-release.sh` was extracted to hold in one place, for exactly the reason its header gives:
+  *"this was written twice, and the create/reuse policy is exactly the kind of thing that gets
+  tightened in one copy and left in the other."* It has already drifted: the script now refreshes a
+  reused draft's notes and the inline copy does not, so a retried extension release keeps the body
+  of its failed first attempt. Wiring the extension line and deleting that copy is one change.
 - The 33 `mcp-v*` releases below 0.18.15 keep no notes, by the previous plan's accepted decision.

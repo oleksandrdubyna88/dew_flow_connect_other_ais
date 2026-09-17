@@ -57,9 +57,16 @@ export function lost(base, current) {
   return gone;
 }
 
-const [currentPath, basePath] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// The caller VOUCHES for the absence; the script never infers it from emptiness. Raised on the
+// second code round and it is the sharper half of the empty-base question: if a truncated `{}` ever
+// lands on the base branch, every later pull request would see an empty base, take the "nothing can
+// have been lost" path and leave the ratchet silently dead. Whether the file exists is a fact CI
+// establishes with `git cat-file -e`, so CI is what says so.
+const baseAbsent = argv.includes('--base-absent');
+const [currentPath, basePath] = argv.filter((a) => !a.startsWith('--'));
 if (currentPath === undefined || basePath === undefined) {
-  console.error('usage: baseline-only-grows.mjs <current.json> <base.json>');
+  console.error('usage: baseline-only-grows.mjs <current.json> <base.json> [--base-absent]');
   process.exit(2);
 }
 
@@ -82,12 +89,18 @@ for (const [what, value] of [['current', current], ['base', base]]) {
 }
 
 if (Object.keys(base).length === 0) {
-  // Absent and EMPTY are different accidents and this says which it saw. A base that is literally
-  // `{}` can also be a file somebody truncated, so the message does not claim more than it knows.
-  console.log(`the base baseline at ${basePath} is empty — it records no releases, so nothing can `
-    + 'have been lost. That is expected for the commit that introduces the file; if the base was '
-    + 'supposed to hold entries, this check just passed on a truncated file.');
-  process.exit(0);
+  if (baseAbsent) {
+    console.log('the base commit carries no baseline file at all, so nothing can have been lost — '
+      + 'this is the commit that introduces one.');
+    process.exit(0);
+  }
+
+  console.error(`the base baseline at ${basePath} exists and is EMPTY, which is a truncated file `
+    + 'rather than a first commit — and treating it as a pass would disarm this check for every '
+    + 'pull request after it.\n'
+    + 'If the base genuinely has no baseline file, the caller says so with --base-absent; that is a '
+    + 'fact about git history, not something this script may infer from an empty object.');
+  process.exit(2);
 }
 
 const gone = lost(base, current);
