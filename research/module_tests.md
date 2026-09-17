@@ -391,6 +391,11 @@ it. It is verified by reading the deployed stack's logs after a real ingest.
 | `credentialWords.test.ts` | the one shared word list | `?author=octocat` refused as a credential; `client_secret` written to a file |
 | `notificationSites.test.mjs` | the site counter, against the real tree and against fixtures | a call site added outside the funnel; a `.tsx` file the scan cannot see; a number in a comment counted as a call |
 
+The inventory that counter writes is read by a test in the other suite: every `code` literal the
+product can emit is in it, and `notifications.test.ts` asserts that redaction rewrites none of them.
+That is what a durable key needs, and it is there instead of an exemption that would have put a hole
+in the redaction invariant.
+
 **Why the counter has tests of its own.** It is the enforcement of the whole completeness promise,
 so a defect in it is a promise that goes on being made while being false. Two were found this way:
 the scan read only `.ts`, and it counted API names written in PROSE — this subsystem's files being

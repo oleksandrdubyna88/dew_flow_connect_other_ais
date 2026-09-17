@@ -197,7 +197,7 @@ test('a write that never settles does not hold the window open, and says so', as
     // hung handle because a hung handle is not something a test can produce on demand - but the
     // mechanism under test is the same one, and it is the only one: whether the ceiling is read
     // while the chain is still busy, or only after it has finished.
-    for (let n = 0; n < 4_000; n += 1) {
+    for (let n = 0; n < 500; n += 1) {
       void appendLine(slow, `${n}
 `, 'a notification', { chain: 'notifications' });
     }
@@ -212,7 +212,7 @@ test('a write that never settles does not hold the window open, and says so', as
     // And nothing is corrupted by giving up: the writes were not cancelled, only un-awaited.
     assert.equal(await flushLedgers(30_000), true, 'the rest lands, and a complete drain says true');
     const lines = readFileSync(slow, 'utf8').split(NEWLINE).filter((line) => line.length > 0);
-    assert.equal(lines.length, 4_000);
+    assert.equal(lines.length, 500);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

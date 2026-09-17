@@ -559,10 +559,15 @@ export async function deactivate(): Promise<void> {
   // this point in the lifecycle, since the panel and every webview are already gone, and a record
   // saying "records were lost" cannot be written to the ledger that is what failed.
   if (!await flushChatUsage()) {
+    // What it says is exactly what is known, and no more. Giving up on the WAIT does not cancel the
+    // writes — they are already queued and they land if the host lives long enough — so "records
+    // were lost" would be an overstatement, and an alarm that overstates is one people learn to
+    // ignore. What is true is that nobody confirmed them. (local reviewer, the code round.)
     console.error(
-      'ConnectOtherAIs: the ledgers could not be drained before this window closed. Records written '
-      + 'in the last moments may be missing — the usual cause is a data directory on a drive that '
-      + 'stopped answering.',
+      'ConnectOtherAIs: the ledgers were still writing when this window closed, and the drain gave '
+      + 'up waiting. The queued records are not cancelled and normally still land; if the host was '
+      + 'killed first, they did not. The usual cause is a data directory on a drive that stopped '
+      + 'answering.',
     );
   }
 }
