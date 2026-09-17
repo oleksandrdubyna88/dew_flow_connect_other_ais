@@ -1,12 +1,34 @@
 # PLAN — a question can wait its turn
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `src_vs_code/src/chatPage.ts`,
+> Status: **IMPLEMENTED, 2026-09-17.** Scope: `src_vs_code/src/chatPage.ts`,
 > `src_vs_code/src/chatCommand.ts`, `src_vs_code/src/chatMessages.ts`, `src_vs_code/src/chatPanel.ts`
 > — the composer while an answer is running.
 >
 > Issue: [#288](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/288).
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md).
 >
+> **What shipped differently from this document**, which is the part of a record worth keeping:
+>
+> 1. **The queue decisions are their own module, `chatQueue.ts`.** The plan put them in
+>    `chatCommand.ts`, which needs a `vscode` host the suite has none of — so every rule in it
+>    would have been hoped at rather than driven. The decisions moved out beside `answerCopy` and
+>    `chatLedger`; only the wiring stayed.
+> 2. **All FOUR doors go through one transition, not two.** The plan noticed the composer and the
+>    keybinding. It missed that a re-ask and a retry called `oneTurn` directly, so either could
+>    overtake a question already waiting — harmless while the composer locked, because then
+>    nothing could be waiting, and not harmless afterwards. `enqueue` is the one door now.
+> 3. **The queue does NOT own the composer-appending rule.** A first draft wrote
+>    `returnedToComposer`, which is a second implementation of what `pushChatDraft` and the page
+>    already do and `chatPage.test.ts` already drives. It was deleted before it shipped;
+>    `drained` hands back words in order and nothing else.
+> 4. **Eleven existing tests asserted the old lock**, not the two or three the build order
+>    implied — including one in the BUNDLED page suite, and a source-structure assertion pinning
+>    what a turn is told. Each was rewritten to the new truth rather than deleted, and the one
+>    that asserted a second Enter could not reach the host now asserts that it does, because that
+>    was the bug.
+> 5. **The page stopped locking itself on send.** The plan did not mention it and it is half the
+>    fix: the page disabled its own composer the instant it posted, to close a window "the width
+>    of a second Enter". That window is the feature.
 > **Through the plan gate on 2026-09-17** — `good_enough`, 16 findings, 14 accepted and 2 rejected
 > with reasons. The accepted ones changed the design rather than decorating it: withdrawal has to
 > CANCEL and not merely un-draw, nothing typed may be silently dropped, the queue needs a ceiling,
@@ -234,26 +256,26 @@ measurement; they are written here so that changing them is a decision somebody 
 
 ## Definition of Done
 
-- [ ] A RED test observed failing before each half, naming the real symptom.
-- [ ] Send is live while an answer is running, and the question goes into the queue rather than down
+- [x] A RED test observed failing before each half, naming the real symptom.
+- [x] Send is live while an answer is running, and the question goes into the queue rather than down
       the pipe — asserted on the page as the product builds it.
-- [ ] A capped conversation still locks, and a question reaching one through ANY door is refused at
+- [x] A capped conversation still locks, and a question reaching one through ANY door is refused at
       the boundary with `asked` unmoved — proved by breaking it.
-- [ ] A withdrawn question makes no model call and leaves no transcript line — asserted, because
+- [x] A withdrawn question makes no model call and leaves no transcript line — asserted, because
       un-drawing a row while its callback still runs is the defect this design exists to avoid.
-- [ ] A queued question is NOT in `thread.messages` until it runs, so a forgetful model is never
+- [x] A queued question is NOT in `thread.messages` until it runs, so a forgetful model is never
       handed a question nobody has asked.
-- [ ] Two questions queued in a row land in the transcript in the order they were typed.
-- [ ] Nothing typed is ever silently dropped: withdrawal, reset and a refusal all return the words.
-- [ ] The ceiling refuses the ninth question with a sentence and keeps the words.
-- [ ] A failed turn does not strand the questions behind it — asserted.
-- [ ] A reload comes back with an empty queue, and `ConversationRecord` never carried it.
-- [ ] A waiting row renders hostile text as text.
-- [ ] One test crosses the page→host boundary.
-- [ ] Whole extension suite green from a cleaned `out/`; the server suite green; `plan-lifecycle` clean.
-- [ ] `research/module_extension.md` updated, including the correction to the "the composer is
+- [x] Two questions queued in a row land in the transcript in the order they were typed.
+- [x] Nothing typed is ever silently dropped: withdrawal, reset and a refusal all return the words.
+- [x] The ceiling refuses the ninth question with a sentence and keeps the words.
+- [x] A failed turn does not strand the questions behind it — asserted.
+- [x] A reload comes back with an empty queue, and `ConversationRecord` never carried it.
+- [x] A waiting row renders hostile text as text.
+- [x] One test crosses the page→host boundary.
+- [x] Whole extension suite green from a cleaned `out/`; the server suite green; `plan-lifecycle` clean.
+- [x] `research/module_extension.md` updated, including the correction to the "the composer is
       disabled while a turn runs, and that is a feature" paragraph, which this change makes false.
-- [ ] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
+- [x] Promoted to `research/` with `IMPLEMENTED <date>` and its deviations; both READMEs updated.
 
 ## Open questions for the operator
 
@@ -264,3 +286,11 @@ Neither blocks the build.
    `CONVERSATION_VERSION` bump.
 2. **Are 8 questions and 64 KB the right ceiling?** They are a judgement. The only thing measured is
    that no ceiling at all is wrong.
+
+### The suites, as run
+
+- `cd src_vs_code && npm test` — from a cleaned `out/`: **3365 tests, 0 failed**, 1 skipped.
+- `node .agents/conventions/tools/plan-lifecycle.mjs` — clean.
+- Teeth: the lock put back, the page locking itself on send put back, and the waiting rows
+  un-drawn — six tests red, including the seam one that proves a second question reaches the
+  host; then restored and green.
