@@ -19,7 +19,9 @@ jobs:
     name: build · test · family checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # Only the rules submodule — never `submodules: recursive`, which would drag whatever
       # code submodules appear later into a markdown walk (conventions ROLLOUT.md).
@@ -35,7 +37,7 @@ jobs:
           npm ci --ignore-scripts --prefix .agents/conventions
           node .agents/conventions/tools/rules.mjs check --repo .
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
@@ -181,8 +183,9 @@ jobs:
       # this repository has actually had. Without this input the tag list is EMPTY and `git tag`
       # still exits 0 — so the case would not error, it would report every recorded release as a
       # phantom and fail naming the wrong cause. Tags only; the shallow fetch is untouched.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-tags: true
 
       # The snippet the ⋯ menu hands out and the shared rule six repositories load must be the same

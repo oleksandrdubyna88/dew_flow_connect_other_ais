@@ -25,8 +25,9 @@ jobs:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 0 # blame and new-code detection need the whole history
       # This job runs the extension's tests for their coverage, and one of them compares the shared
       # rule with the snippet the menu hands out — so it needs the rule on disk for the same reason
@@ -40,11 +41,11 @@ jobs:
         run: |
           npm ci --ignore-scripts --prefix .agents/conventions
           node .agents/conventions/tools/rules.mjs check --repo .
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: zulu
           java-version: 21
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
       - name: Install the scanner and the coverage tool
