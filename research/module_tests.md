@@ -562,3 +562,33 @@ here calls `consult`, no branch was added, and the only executable part is the c
 paste, which these assertions run end to end through the real generator. A scenario harness would
 have to drive another vendor's model to observe anything at all, which is what `PLAN_consultant`'s
 phase 0 is for and is measured by hand on purpose.
+
+## What a tool description promises (2026-09-17)
+
+`TheGateSaysWhenToConsultTests` reads `Tools.cs` as TEXT, the way `TheServerSaysWhatOnlyTheRuleSaidTests`
+does and for the same reason: the registry needs a live host to enumerate, and this is a check about
+text. Six cases — the consultant trigger, what makes an answer usable, the six verdicts, the pointer
+in BOTH gate rounds, the plan counter-example, and that no description offers a severity the parser
+rejects.
+
+**Every case is scoped to ONE tool's description, and that is the part worth copying.** A file-wide
+`Contain` passes when a pointer lands in `review_document` while `review_code` keeps its old text —
+which is exactly the accident this story could have shipped, since the parent plan had already
+widened its scope and updated only one of two. A reviewer raised it on the plan round and it was
+accepted, so `DescriptionOf(tool)` slices the literal belonging to the named tool and a phrase in the
+wrong one is red. It throws rather than falling back to the file, because a helper that silently
+widens its scope on a rename turns every case back into the check it replaced.
+
+The verdict case asserts the whole SET rather than "the new one is present and the old string is
+gone": a typo in one of the other five coexists happily with a correct sixth, and re-punctuating the
+list evades an exact-string check while still handing a caller an incomplete answer.
+
+Phrases are matched against a whitespace-flattened copy. These literals are prose hard-wrapped at
+about a hundred columns and a raw string keeps every later line's indentation, so a phrase worth
+pinning will wrap eventually — and an assertion that fails on a reflow is complaining about layout,
+which is a test nobody trusts. The same fix was made one story earlier in the extension's half.
+
+RED observed before the descriptions moved: **5 of 6 failed**, each quoting only the description it
+was scoped to, which is itself the evidence that the slicing works. The sixth — no description says
+`critical` — passed from the start and says so in its own remarks: it is a standing guard, not a
+RED-first case, and the word appears nowhere in the file today.
