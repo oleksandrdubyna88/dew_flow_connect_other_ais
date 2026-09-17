@@ -28,7 +28,7 @@ NOTES_FILE=${3:?usage: draft-release.sh <tag> <title> <notes-file>}
 # A FILE, not a string. The body is a release's changelog section: multiline markdown that can begin
 # a line with `-`. As an argument it is word-split, cut at the first newline, or read as a flag by
 # whatever parses it next — so `changelog-section.mjs --out` writes it and this takes the path.
-[ -f "$NOTES_FILE" ] && [ -r "$NOTES_FILE" ] || { echo "notes file is not a readable file: $NOTES_FILE" >&2; exit 1; }
+[[ -f "$NOTES_FILE" && -r "$NOTES_FILE" ]] || { echo "notes file is not a readable file: $NOTES_FILE" >&2; exit 1; }
 
 # Reused only while it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release too, so
 # a re-run against a tag somebody had published by hand would otherwise send every leg uploading

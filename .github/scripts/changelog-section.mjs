@@ -85,7 +85,7 @@ export function sectionFor(changelog, line, version) {
   if (line.bare === true) {
     // Only the line that OWNS the bare form, or `## 0.31.0` would hand an mcp release the
     // extension's notes. One number belongs to two lines otherwise.
-    shapes.push(String.raw`${v}(?=\s|$)`);
+    shapes.push(`${v}(?=\\s|$)`);
   }
   const heading = new RegExp(String.raw`^## (?:${shapes.join('|')})`, 'm');
 
