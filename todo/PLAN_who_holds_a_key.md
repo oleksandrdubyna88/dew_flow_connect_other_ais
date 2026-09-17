@@ -272,6 +272,92 @@ GET  /admin/active                200 { items:[ {id,inWindow,limited} ], windowS
 - `note` is validated: it is the one field where somebody types a name out of habit, and an
   email-shaped note is refused as a cheap guard on the promise.
 
+#### Story 2's contract as the plan round RESOLVED it (2026-09-17)
+
+The round returned 21 findings — 18 accepted, 3 rejected. Four of them were questions this plan had
+left open and I put to the round rather than deciding alone; all three providers converged on the
+same two, which is why the answers below are the contract and the table above is superseded where
+they disagree. **Story 3 consumes this section, not the table.**
+
+**1. Paging is KEYSET everywhere, and `total` is gone.** The table's `?skip&limit` with
+`total,skip,limit` contradicts what story 1 shipped: a code round replaced `AuditTrail`'s `OFFSET`
+with keyset paging because page one was the first day of the deployment and recent history cost an
+`O(N)` scan while holding the corpus gate. Three providers said the same thing, and one added the
+part I had missed — **offset paging is not insert-stable for `/admin/keys` either**: issuing a key
+between page one and page two shifts the boundary and duplicates or hides a row.
+
+```
+GET /admin/keys?limit&before    200 { items:[…], limit, nextBefore? }
+GET /admin/audit?limit&before   200 { items:[…], limit, nextBefore? }
+```
+
+Both newest-first, `limit` default 50 and capped 200, `before` an exclusive id. `nextBefore` is
+present only when another page exists, so it doubles as `hasMore`; a client pages until it is
+absent. No `skip` and no `total` on either: with keyset paging `total` is the one field that cannot
+be answered cheaply, and on `admin_audit` it is a `COUNT(*)` over 50 000 rows on every page while
+holding the gate. `limit=0` is **400**, not "everything" — a limit nobody can exceed is how a
+listing endpoint becomes a full-table read. A `before` past the end returns `items: []` and no
+`nextBefore`, which is not an error.
+
+**2. Constant-time means constant with respect to the CREDENTIAL, not to the number of admins.** The
+DoD's "independent of how many admins are configured" is impossible and two providers said so: N
+comparisons take O(N). The guarantee that matters is that timing reveals nothing about the presented
+credential — no early return, so it cannot leak WHICH configured key matched or whether one matched
+early. The count of configured administrators is not a secret: it is in the operator's own secret
+store, and nothing about it is inferable from a 401 that always costs the same walk.
+
+**3. An admin key uploads through its OWN path, and the in-force re-check is not bypassed — it does
+not apply.** This was the question with no good answer, and all three providers refused to let it
+stand. `Corpus.Accept` re-checks `InForce(key)` inside its transaction against `api_keys`, which an
+admin credential is deliberately absent from, so the plan's "an admin key may also upload" was
+either a rejection, a silent weakening of story 1's revoke-race guard, or an uncounted write.
+
+The resolution: a separate `Corpus.AcceptAdmin` path, validated against the in-memory admin set.
+**Why that is not the weakening it looks like** — the in-force re-check exists for a race that
+cannot happen to an admin credential. A contributor key is revoked by a `--revoke` one-shot that can
+commit between the gate and the write, in another process, against the same file. An admin
+credential is rotated by editing the Actions secret and redeploying, which **restarts the process**:
+the in-memory set is immutable for the lifetime of the server that authenticated against it, so
+there is no window between the gate and the write for it to change in. The guard is not skipped;
+there is nothing for it to guard.
+
+The quarantine row carries the derived `admin-…` id. No counter and no `last_seen_month` are
+recorded, because admin credentials are not rows in `api_keys` and there is nothing to increment —
+so an admin's contributions are invisible to the Users tab, which the plan already accepts and which
+story 3 must say out loud.
+
+**4. Recovering a lost issuance needs no token, but it does need the listing.** The plan rejected an
+idempotency token, and the round pointed out what that leaves: if the row commits and the response is
+lost, a retry creates a second key and with duplicate or empty notes there is no handle to find the
+first — an unknown valid credential stays active. The recovery is the listing, and it only works
+because of point 1: `/admin/keys` is **newest-first with `createdUtc`**, so an admin who lost a
+response sees a key created moments ago that they do not hold, and revokes it. That path is tested
+rather than asserted. A committed transaction cannot be rolled back after the fact and the audit row
+cannot be moved outside it, so those were not available fixes.
+
+**5. Absent and invalid admin credentials are indistinguishable from outside.** The same JSON 401,
+the same body, no body binding, and no admission to the contributor limiter. A distinct status for
+"no administrators are configured" was proposed and refused: it turns the admin surface into an
+oracle for whether administration is enabled, answerable by anybody. The operator learns it from the
+startup log, which is on the host.
+
+**6. `Corpus.Revoke` must distinguish "no such key" from "already revoked".** A `bool` cannot, so
+the route could not answer 404 against 200 `changed:false` without a second query and a race between
+them. It returns a closed union instead.
+
+**7. `/admin/active`'s shape never varies** — an empty limiter answers `{ items: [], windowSeconds }`,
+not a different document.
+
+**8. The scenario harness covers the admin routes in THIS story**, not story 4. Story 2 can pass
+in-process and over HTTP while the deployed binary, the environment parsing and the real
+authentication are untested; deferring that is how a broken shipped route gets accepted as complete.
+
+Rejected, with reasons recorded in the gate: a compensating delete or an audit row written after the
+response (a committed transaction cannot be undone, and moving the audit out of it reintroduces the
+defect story 1 closed); a distinct status for the absent variable (see point 5); and a retention
+policy for `api_keys` (the plan's own growth budget already sets it — none, because a revoked row IS
+the record that the key existed and was stopped).
+
 ### Story 3 — the Users tab *(Opus)*
 
 - A button in the existing Bugz section (`src_vs_code/src/bugzView.ts`), opening a panel beside
