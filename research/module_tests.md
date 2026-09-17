@@ -321,6 +321,8 @@ reply for it to order.
 | `TheRateLimiterTests` | the limiter on a frozen clock, and THREADS released by a barrier | a fixed bucket; an over-admit under a race; a stamp evicted from under an admit |
 | `TheLastSeenMonthTests` | the real server on a frozen clock, either side of a UTC month boundary | a day or an hour stored; the month moved by a 401, a 429, a 400 or an admin call; an increment lost to a race |
 | `TheRevokedKeyTests` | the real `--revoke` one-shot against the running server | the operator's stop button stopping nothing; a revoked key reaching the limiter |
+| `TheQuarantineHoldsNoClockTests` | every table that carries a `key_id`, read from the SCHEMA | a clock time stored beside a contributor's key — the promise made false by a column |
+| `TheGateComesBeforeTheBodyTests` | the order of the middleware, over real requests | a body parsed before the key is checked, so a flood is deserialized before it is refused |
 | `TheAuditTests` | `admin_audit` through `Issue`/`Revoke`, and the sweep over a small and the REAL bound | a note, a key or a hash in the audit; a sweep keeping the wrong rows; a mutation committed without its audit row |
 | `TheServeLockTests` | the exclusive open, and a one-shot beside it | two servers on one data directory; a one-shot locked out |
 
@@ -405,6 +407,24 @@ that takes longer than a blink. `SqliteMigratorTests`, in the mcp suite, covers 
 itself: it was `RoundsDb.Migrate` with one test of its own (the step that fails part-way, still
 there), and it gained its contract when it became shared.
 
+`TheQuarantineHoldsNoClockTests` is the strong form of the privacy promise, and it exists because the
+promise was **false when it was first written**. The code round found `quarantine.received_utc` — an
+exact ISO-8601 instant — sitting beside `key_id`, so for any pair awaiting review the database could
+be asked precisely which day and hour a contributor worked, while the document said "no date, no
+clock time, no history". The tempting fix was to reword the promise to carve quarantine out; the plan
+records an earlier draft arguing "a date is materially different from a timestamp" and a reviewer
+refusing that as evasion, and carving out the hole is the same move. So step 3 writes
+`received_month` instead and this test asserts the general rule rather than the one column: it reads
+the SCHEMA, takes every table carrying a `key_id`, and fails if any of them carries a clock. A fourth
+such table added later is covered without anybody remembering to.
+
+`TheGateComesBeforeTheBodyTests` pins an ORDER, which is the kind of thing no unit test sees. Binding
+`UploadRequest?` from the body makes ASP.NET deserialize before the handler runs, so a hundred
+one-megabyte bodies at a limit of ten were all parsed before ninety of them were refused, and a
+malformed body got a framework 400 before the intended 401. Authentication and rate admission are
+middleware ahead of binding now, and this suite drives real requests to prove it — an assertion about
+"which runs first" that reads the source would survive the wiring being changed back.
+
 `TheRateLimiterTests` races THREADS released by a barrier, not tasks: a race a scheduler may
 serialise proves nothing, and the finding it answers was eleven simultaneous requests all reading one
 window and all passing a limit of ten. Sixty-four against ten, twenty-five rounds, exactly ten
@@ -412,7 +432,7 @@ admitted each round; and thirty-two admits against a sweep that wants to evict t
 every stamp kept. The rest is the sliding window on a frozen clock — a fixed bucket admits twice the
 limit across its boundary, and one test says so in as many words.
 
-`TheLastSeenMonthTests` asserts the STORED value against `LastSeenMonth.Shape()` and against the
+`TheLastSeenMonthTests` asserts the STORED value against `UtcMonth.Shape()` and against the
 month the frozen clock said, one second before midnight on the 30th and at midnight on the 1st. The
 month is a promise about what the server records, so each way of not being an accepted ingest has a
 test: a 401, a 429 (thirty seconds into October, still inside September's minute), a malformed body,

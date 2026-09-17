@@ -38,6 +38,11 @@ narrowest thing that answers "is this key alive", took the month:
 > to ask which day a contributor worked, or at what hour, or what a key did in any month but its
 > last.
 >
+> **Nothing that carries a key id carries a clock.** A pair awaiting review records the MONTH it
+> arrived, not the instant — the one column that broke this promise was found by a review round and
+> changed, rather than the promise being reworded around it. A test reads the schema and refuses any
+> table that carries both a key id and a clock time.
+>
 > **About administrators**, the server records exact times: when a key was issued, when it was
 > revoked, and who did it. That is a log about the people holding administrative power, not about
 > the people contributing.

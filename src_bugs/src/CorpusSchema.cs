@@ -20,7 +20,41 @@ namespace CoaiBugs;
 internal static class CorpusSchema
 {
     /// <summary>The steps, in the order every file runs them. Append; never reorder, never edit.</summary>
-    internal static readonly string[] Steps = [Tables, WhoUsedItAndWhoAdministeredIt];
+    internal static readonly string[] Steps = [Tables, WhoUsedItAndWhoAdministeredIt, TheMonthAPairArrived];
+
+    /// <summary>
+    /// Step 3 — the month a pair arrived, so that no table carrying a key id carries a clock.
+    /// Appended 2026-09-17, the same day as step 2, after the code round read the promise against
+    /// step 1.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why.</b> Step 1's <c>quarantine.received_utc</c> is an exact instant BESIDE
+    /// <c>key_id</c>: for any pair awaiting review one could ask precisely which day and hour that
+    /// contributor worked, while the promise said no such question could be asked. The plan records
+    /// that an earlier draft argued a DATE is materially different from a TIMESTAMP and a reviewer
+    /// refused it as evasion; carving quarantine out of the promise would be the same move. So the
+    /// DATA changes, and the promise can be stated in its strong form: no table that carries
+    /// <c>key_id</c> carries a clock time.</para>
+    /// <para><b>What.</b> <c>received_month</c> (<c>yyyy-MM</c>, UTC) is what is written from now on.
+    /// <c>received_utc</c> STAYS — step 1 is frozen and steps are append-only — and is <b>deliberately
+    /// dead</b>: <c>Corpus</c> writes it as the empty string (it is <c>NOT NULL</c> without a default),
+    /// and <c>TheQuarantineHoldsNoClockTests</c> asserts every <c>_utc</c> column of every table with a
+    /// <c>key_id</c> is empty on every row. The instant had two jobs and neither needs a clock: the
+    /// review queue is ordered by <c>rowid</c> — insertion order among live rows, which is the only
+    /// property <c>--waiting</c> uses; a VACUUM renumbers but keeps that order, and a deleted newest
+    /// row's number reused by a newer row still puts the newer row last — and undoing one contributor's
+    /// batch is by <c>key_id</c>.</para>
+    /// <para><b>No scrub.</b> The host's table held ZERO rows when this step was written (nothing
+    /// waiting, nothing promoted — checked on 2026-09-17), so there is no instant to erase and this is
+    /// as cheap as it will ever be. A future reader wondering why no <c>UPDATE</c> clears old values:
+    /// there were none.</para>
+    /// <para><c>corpus.promoted_utc</c> is untouched: <c>corpus</c> carries no <c>key_id</c>, so a
+    /// promotion time is a person's decision about a pair and is attributable to nobody who
+    /// contributed. That distinction is why one exact time is fine and the other was not.</para>
+    /// </remarks>
+    internal const string TheMonthAPairArrived = """
+        ALTER TABLE quarantine ADD COLUMN received_month TEXT NOT NULL DEFAULT '';
+        """;
 
     /// <summary>Step 1 — the whole schema as released in <c>bugs-v0.1.0</c>. NEVER EDIT.</summary>
     internal const string Tables = """

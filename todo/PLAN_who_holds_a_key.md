@@ -176,6 +176,44 @@ leave an accepted pair with a stale month. The update is conditional
   bucket.
 - **The order on `/ingest` is 401 → 429 → 400 → work**, stated in code and tested: a malformed body
   from an authenticated key consumes a slot; nothing but an accepted ingest touches the key's row.
+
+**What the CODE round then changed (2026-09-17, 48 findings — 29 accepted, 19 rejected).**
+
+- **The promise was false, and the DATA changed rather than the wording.** `quarantine.received_utc`
+  is an exact instant beside `key_id`, so a pair awaiting review could be asked which day and hour a
+  contributor worked. **Step 3** adds `received_month`; `received_utc` stays as a deliberately dead
+  column because step 1 is frozen. `TheQuarantineHoldsNoClockTests` now asserts the general rule —
+  every table carrying a `key_id` carries no clock — so the next such table is covered by default.
+  Rewording the promise to exempt quarantine was refused for the reason an earlier draft's
+  "a date is not a timestamp" was refused: it is the same evasion.
+- **The counter and the month are ONE `UPDATE`.** The conditional month write was justified as
+  sparing a row rewrite, and the round refuted it: the counter rewrites that row on every ingest
+  anyway, so the condition bought a second statement and a second B-tree lookup and saved nothing.
+  `MonthAdvanced` went with it, and the test that asserted it now asserts what is true instead —
+  three ingests count three, and the month follows the clock.
+- **A revoke racing the write is refused by the write.** `KeyFor` authenticates before the limiter,
+  and a `--revoke` can commit in the gap; `Corpus.Accept` re-checks inside its own transaction and
+  answers `Accepted<T>.KeyNotInForce`, so nothing is stored, counted or stamped for a dead key.
+- **Authentication and admission are middleware, ahead of body binding.** Binding `UploadRequest?`
+  from the body made ASP.NET deserialize before the handler ran, so a flood was parsed in full
+  before most of it was refused. `TheGateComesBeforeTheBodyTests` pins the order over real requests.
+- **The audit trail reads NEWEST FIRST, paged by an id to read before** — not `OFFSET`. Page one was
+  the first day of the deployment, and recent history cost a scan across everything before it.
+- **`Usage` is a union, and absent is not zero.** `UsageOf` answers `NoSuchKey` or
+  `Known(SubmissionCount, LastSeen)`, and `LastSeen` is `Never` or `In(UtcMonth)` — so a UI cannot
+  render a blank for "never", and a rolled-back issuance reads as no such key rather than as a key
+  that has sent nothing. The test helper deliberately THROWS on the absent case instead of
+  answering 0, because a convenience that defaulted would put the same collapse back into the tests.
+- **`/health` does NOT report the rate limit.** A finding asked for the limit to be visible and the
+  problem is fair, but the first implementation put it on the unauthenticated public endpoint, where
+  it tells a flooder exactly how fast it may go unrefused — and the same reasoning had already kept
+  the VERSION out of `/health`. The existing test `HealthSaysNothingAboutTheCorpus` is what caught
+  it. The limit is named in the startup log on every boot, and story 2's authenticated `/admin/*` is
+  where a UI will read it.
+- **Nineteen findings were rejected with reasons**, most of them from one reviewer asserting the
+  audit sweep runs outside the mutation transaction (it does not; the drop-the-table test pins it),
+  that a missing `admin_audit` is reachable (it is not — `Corpus.Open` migrates before handing out a
+  `Corpus`), and that the 429 lacks a `Retry-After` it demonstrably sets.
 - **The unit gains `UMask=0027`** (finding 13), so the `.db`, `-wal` and `-shm` this process creates
   are not world-readable by construction; the directory's `0750` stays the primary boundary, and the
   file the earlier unit created needs one `chmod`.

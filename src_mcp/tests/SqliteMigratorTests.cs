@@ -93,6 +93,64 @@ public sealed class SqliteMigratorTests : IDisposable
         Column(db, "SELECT name FROM pragma_table_info('a')").Should().Equal(["x", "y"]);
     }
 
+    /// <summary>
+    /// Two migrators racing on one file: the second WAITS and re-reads, and never re-runs a step.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect, made reproducible. Step 1 is slow enough — three hundred thousand rows built
+    /// by a recursive query — that the second opener reaches its version read while the first is
+    /// still inside step 1. With the version read OUTSIDE the transaction both read 0; the second then
+    /// re-ran step 1 (a no-op), set the version BACK to 1, and failed step 2's <c>ALTER</c> with
+    /// <c>duplicate column name</c> — a file at version 1 with the column present, which no later open
+    /// could repair. The real steps close that window in a millisecond, which is why the ten
+    /// barrier-released rounds over the real corpus in <c>TheMigrationTests</c> never saw it; the
+    /// property is the runner's, so it is pinned here with the delay injected.</para>
+    /// <para>Fixed by taking an IMMEDIATE transaction and reading the version inside it: the second
+    /// opener waits on the busy timeout and then reads what the first one left.</para>
+    /// </remarks>
+    [Fact]
+    public void TwoMigratorsRacing_TheSecondWaitsAndNeverReRunsAStep()
+    {
+        var path = Path.Combine(_dir, "race.db");
+        string[] steps =
+        [
+            """
+            CREATE TABLE IF NOT EXISTS t (a TEXT);
+            CREATE TABLE IF NOT EXISTS slow AS
+                WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 300000)
+                SELECT x FROM c;
+            """,
+            "ALTER TABLE t ADD COLUMN b TEXT;",
+        ];
+        var failures = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+        using var gate = new Barrier(2);
+        var migrators = Enumerable.Range(0, 2).Select(_ => new Thread(() =>
+        {
+            gate.SignalAndWait();
+            try
+            {
+                using var db = new SqliteConnection(
+                    $"Data Source={path};Pooling=False;{SqliteMigrator.DefaultTimeoutFragment}");
+                db.Open();
+                SqliteMigrator.Migrate(db, steps);
+            }
+            catch (Exception e)
+            {
+                failures.Add(e);
+            }
+        })).ToList();
+        migrators.ForEach(migrator => migrator.Start());
+        migrators.ForEach(migrator => migrator.Join());
+
+        failures.Should().BeEmpty(
+            "both must migrate or wait, never fail — got: "
+            + string.Join(" | ", failures.Select(failure => failure.Message)));
+        using var read = new SqliteConnection($"Data Source={path};Pooling=False");
+        read.Open();
+        SqliteMigrator.Version(read).Should().Be(2, "every step ran exactly once, whichever opener ran it");
+        Column(read, "SELECT name FROM pragma_table_info('t')").Should().Equal(["a", "b"]);
+    }
+
     /// <summary>The two pragmas a second opener depends on, read back from the connection.</summary>
     [Fact]
     public void TheFileIsLeftInWalModeWithTheBusyTimeoutSet()

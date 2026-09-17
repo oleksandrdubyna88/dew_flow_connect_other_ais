@@ -49,14 +49,14 @@ public sealed class TheRevokedKeyTests
 
         (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK, "before: the key works");
 
-        Admin.Run(["--revoke", "--id", id], BugsServer.Secret, server.DataDir, server.Clock)
+        Admin.Run(["--revoke", "--id", id.Value], BugsServer.Secret, server.DataDir, server.Clock)
             .Should().Be(0, "the operator's stop button, while the server serves");
 
         (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.Unauthorized, "after: it does not");
 
         using var corpus = server.Reading();
         corpus.WaitingCount().Should().Be(1, "the second request wrote nothing");
-        corpus.UsageOf(id).Submissions.Should().Be(1, "and counted nothing");
+        corpus.UsageOf(id).Count().Should().Be(1, "and counted nothing");
     }
 
     /// <summary>The refusal happens BEFORE the limiter: a revoked key never gets a window.</summary>
@@ -72,7 +72,7 @@ public sealed class TheRevokedKeyTests
         var (key, id) = server.IssueKey();
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminIdentity.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
         }
 
         using var http = server.CreateClient();
@@ -86,5 +86,52 @@ public sealed class TheRevokedKeyTests
 
         server.Services.GetRequiredService<RateLimiter>().Tracked.Should().Be(
             0, "the limiter never saw the key, so it holds no window for it");
+    }
+
+    /// <summary>
+    /// A key revoked between the gate's check and the write stores nothing and counts nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>The gate authenticates and the handler writes, in two steps, and a <c>--revoke</c> can
+    /// commit between them: the key was in force when it was checked and is not when it writes. So
+    /// the check is repeated INSIDE the write transaction, which is opened IMMEDIATE so no revoke can
+    /// land between the re-check and the writes; a key found revoked there is a 401 with no row, no
+    /// count and no month, and the limiter's stamp is given back.</para>
+    /// <para>This drives the two steps exactly as <c>Program</c> does, with the revoke landing between
+    /// them through a second connection — the operator's one-shot. An HTTP test cannot interleave a
+    /// request deterministically, which is why the seam is exercised directly.</para>
+    /// </remarks>
+    [Fact]
+    public void AKeyRevokedBetweenTheGateAndTheWriteStoresNothing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "coai-interleave-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        var db = Path.Combine(dir, "coai-bugs.db");
+        var clock = new FrozenClock(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
+        try
+        {
+            using var serving = Corpus.Open(db);
+            const string Key = "a-key-about-to-be-revoked";
+            var id = new KeyId(Guid.NewGuid().ToString("N")[..16]);
+            serving.Issue(id, Corpus.HashOf(Key, "s"), string.Empty, Audit.By(AdminId.Cli, clock));
+
+            var keyId = serving.KeyFor(Key, "s");
+            keyId.Should().Be(id.Value, "the gate: in force");
+            using (var operating = Corpus.Open(db))
+            {
+                operating.Revoke(id, Audit.By(AdminId.Cli, clock)).Should().BeTrue("the operator's revoke lands between");
+            }
+
+            serving.Accept(new KeyId(keyId), UtcMonth.Now(clock), scope => scope.Keep("CSharp", "a", "b"))
+                .Should().BeOfType<Accepted<(Kept Kept, string EntryId)>.KeyNotInForce>(
+                    "the key was revoked between the gate and the write, so the write must refuse itself");
+
+            serving.WaitingCount().Should().Be(0, "a key revoked before the write must store nothing");
+            serving.UsageOf(id).Count().Should().Be(0, "and count nothing");
+        }
+        finally
+        {
+            Scratch.Delete(dir);
+        }
     }
 }

@@ -1,15 +1,14 @@
-using System.Globalization;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.ServiceDefaults;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Data.Sqlite;
 using Serilog;
 using Answered = Microsoft.AspNetCore.Http.HttpResults.Results<
     Microsoft.AspNetCore.Http.HttpResults.Ok<CoaiMcp.Core.Collecting.UploadAnswer>,
     Microsoft.AspNetCore.Http.HttpResults.UnauthorizedHttpResult,
-    Microsoft.AspNetCore.Http.HttpResults.BadRequest<CoaiBugs.Problem>,
-    Microsoft.AspNetCore.Http.HttpResults.JsonHttpResult<CoaiBugs.Problem>>;
+    Microsoft.AspNetCore.Http.HttpResults.BadRequest<CoaiBugs.Problem>>;
 
 namespace CoaiBugs;
 
@@ -20,13 +19,17 @@ namespace CoaiBugs;
 /// <para><b>A binary of its own, not an endpoint on `coai-server`.</b> The operator's decision on
 /// 2026-09-15: that server sits behind Entra and a domain allow-list, which is load-bearing there and
 /// exactly wrong here — anyone should be able to contribute, not only people with a Team server.</para>
-/// <para><b>About a contributor it records almost nothing.</b> A key grants write access and carries
-/// no identity: the key table has no name and no address, and of WHEN a key was used it holds only
-/// the calendar month it was last used — no date, no clock time, no history — plus a lifetime count.
-/// The route logs no client address. That last one this process cannot guarantee on its own — see
-/// the note on `/ingest`.</para>
+/// <para><b>About a contributor it records almost nothing, and no table that carries a key id carries
+/// a clock time.</b> A key grants write access and carries no identity: the key table has no name
+/// and no address, and of WHEN a key was used it holds only the calendar month it was last used —
+/// no date, no clock time, no history — plus a lifetime count. A pair in quarantine carries the month
+/// it arrived, beside its key id; its <c>received_utc</c> column is frozen in step 1 and written
+/// empty for ever. The route logs no client address, which this process cannot guarantee on its own
+/// — see `IngestGate` and the deploy notes.</para>
 /// <para><b>About administrators it records exact times</b>: who issued or revoked a key, and when.
-/// That is a log about the people holding administrative power, not about the people contributing.</para>
+/// That is a log about the people holding administrative power, not about the people contributing.
+/// <c>corpus.promoted_utc</c> is exact too, and may be: <c>corpus</c> carries no key id, so a
+/// promotion is a person's decision about a pair, attributable to nobody who contributed.</para>
 /// </remarks>
 // NOT static: `WebApplicationFactory<Program>` takes it as a type argument, which is how the
 // tests host this server in-process — and a static class cannot be a type argument at all.
@@ -53,6 +56,9 @@ internal sealed class Program
     /// secret at all.
     /// </remarks>
     private const string SecretVariable = "COAI_BUGS_SECRET";
+
+    /// <summary>The database, under the data directory, beside `logs/`.</summary>
+    internal const string DatabaseFileName = "coai-bugs.db";
 
     private static async Task<int> Main(string[] args)
     {
@@ -91,11 +97,11 @@ internal sealed class Program
     /// Everything after the one-shot modes: the configuration, then the transport.
     /// </summary>
     /// <remarks>
-    /// Three methods rather than one so that none exceeds the cyclomatic bound of four the C#
-    /// doctrine sets: <see cref="Configure"/> reads and refuses, this decides, and
-    /// <see cref="ListenAsync"/> builds and serves. `Main` is three decisions — is this an admin
-    /// mode, is this a mode at all, otherwise serve — which is also the clearest statement of what
-    /// this binary does.
+    /// Several small methods rather than one so that none exceeds the cyclomatic bound of four the
+    /// C# doctrine sets: <see cref="Configure"/> reads and refuses, this decides, and
+    /// <see cref="ListenAsync"/> takes what must be held and serves. `Main` is three decisions — is
+    /// this an admin mode, is this a mode at all, otherwise serve — which is also the clearest
+    /// statement of what this binary does.
     /// </remarks>
     private static async Task<int> ServeAsync(string[] args) => Configure() switch
     {
@@ -140,7 +146,7 @@ internal sealed class Program
 
         return WhyUnusable(keywords) is { Length: > 0 } unusable
             ? new Startup.Refused(unusable)
-            : new Startup.Ready(secret, keywords, ((RatePerMinute.Parsed.Rate)rate).Value);
+            : new Startup.Ready(new ServerSecret(secret), keywords, ((RatePerMinute.Parsed.Rate)rate).Value);
     }
 
     private static async Task<int> RefuseAsync(string why)
@@ -151,7 +157,54 @@ internal sealed class Program
     }
 
     /// <summary>The transport: one server per data directory, one connection, two routes.</summary>
+    /// <remarks>
+    /// <para><b>The lock FIRST, before a logger or a listener is configured</b> — a server that will
+    /// not serve should build nothing — and the database next, so a file that is not a database
+    /// refuses here with its reason rather than as a stack trace. Both are held for the life of the
+    /// host through <c>using</c>; a throw anywhere below releases them.</para>
+    /// <para>The order of the request pipeline is the contract: the edge watch sees every request,
+    /// the <see cref="IngestGate"/> answers 401 and 429 BEFORE any body is read, and only a request
+    /// that passed both reaches the endpoint, where the body is bound and judged.</para>
+    /// </remarks>
     private static async Task<int> ListenAsync(string[] args, Startup.Ready ready)
+    {
+        var taken = ServeLock.Take(Data());
+        if (taken is ServeLock.Taken.Refused refusedLock)
+        {
+            return await RefuseAsync(refusedLock.Why);
+        }
+
+        using var serving = ((ServeLock.Taken.Held)taken).Lock;
+        var opened = Opened(Path.Combine(Data(), DatabaseFileName));
+        if (opened is Database.Refused refusedDb)
+        {
+            return await RefuseAsync(refusedDb.Why);
+        }
+
+        using var corpus = ((Database.Ready)opened).Corpus;
+        var app = Built(args, ready);
+        SayUp(app, ready, corpus);
+        WatchTheEdge(app);
+        var gate = new IngestGate(corpus, app.Services.GetRequiredService<RateLimiter>(), ready.Secret);
+        app.Use(gate.InvokeAsync);
+
+        // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
+        // would be an unauthenticated read of how much anybody has contributed. The limit is a
+        // SETTING, not a fact about anybody, and an operator confirming a deploy wants to see it.
+        app.MapGet("/health", () => Results.Ok(new Health("ok")));
+
+        app.MapPost(
+            "/ingest",
+            (UploadRequest? request, HttpContext http, TimeProvider clock, RateLimiter limiter) =>
+                Judged(corpus, ready.Keywords, request, IngestGate.KeyOf(http), clock, limiter));
+
+        await app.RunAsync();
+
+        return 0;
+    }
+
+    /// <summary>Everything the host is made of, before anything listens.</summary>
+    private static WebApplication Built(string[] args, Startup.Ready ready)
     {
         var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -179,19 +232,34 @@ internal sealed class Program
             new RateLimiter(ready.Rate, services.GetRequiredService<TimeProvider>()));
         builder.Services.AddHostedService<LimiterSweep>();
 
-        // ONE server per data directory, enforced: the limiter is per process, and two servers on
-        // one directory would each admit the whole limit. Held until the host stops.
-        var taken = ServeLock.Take(Data());
-        if (taken is ServeLock.Taken.Refused refusedLock)
+        return builder.Build();
+    }
+
+    /// <summary>Opens the database, or says why the server cannot start on it.</summary>
+    /// <remarks>
+    /// A file that is not a database — truncated, overwritten, a stray byte — surfaced as an unhandled
+    /// <see cref="SqliteException"/> and a stack trace, which under `Restart=always` is a crash loop
+    /// with the reason scrolling past every five seconds. It is one sentence and 78 now: the fault is
+    /// permanent, and the unit does not restart on 78.
+    /// </remarks>
+    private static Database Opened(string path)
+    {
+        try
         {
-            return await RefuseAsync(refusedLock.Why);
+            return new Database.Ready(Corpus.Open(path));
         }
+        catch (SqliteException e)
+        {
+            return new Database.Refused(
+                $"{path} cannot be opened as this server's database: {e.Message} (SQLite error "
+                + $"{e.SqliteErrorCode}). Nothing here can repair it; restore it from the backup or "
+                + "move it aside.");
+        }
+    }
 
-        using var serving = ((ServeLock.Taken.Held)taken).Lock;
-        var app = builder.Build();
-        using var corpus = Corpus.Open(Path.Combine(Data(), "coai-bugs.db"));
-
-        // Guarded, because two of those three arguments are COUNT queries: an installation that has
+    private static void SayUp(WebApplication app, Startup.Ready ready, Corpus corpus)
+    {
+        // Guarded, because two of those arguments are COUNT queries: an installation that has
         // turned Information off would pay for them anyway, on every start, to build a line nobody
         // reads. (SonarCloud CA1873.)
         if (app.Logger.IsEnabled(LogLevel.Information))
@@ -201,21 +269,6 @@ internal sealed class Program
                 + "{Rate} requests a minute per key (0 = no limit)",
                 ready.Keywords.Count, corpus.WaitingCount(), corpus.Held(), ready.Rate.Value);
         }
-
-        WatchTheEdge(app);
-
-        // Unauthenticated, and it says nothing about the corpus: a health probe that reported a count
-        // would be an unauthenticated read of how much anybody has contributed.
-        app.MapGet("/health", () => Results.Ok(new Health("ok")));
-
-        app.MapPost(
-            "/ingest",
-            (UploadRequest? request, HttpRequest http, RateLimiter limiter, TimeProvider clock) =>
-                Accept(corpus, ready.Keywords, request, http, ready.Secret, limiter, clock));
-
-        await app.RunAsync();
-
-        return 0;
     }
 
     /// <summary>The forwarding-header watch, BEFORE routing, so it sees every request.</summary>
@@ -245,90 +298,21 @@ internal sealed class Program
             await next(context);
         });
 
-    /// <summary>What reading the configuration came to.</summary>
-    private abstract record Startup
-    {
-        private Startup()
-        {
-        }
-
-        /// <summary>Everything the server needs, read and validated.</summary>
-        public sealed record Ready(
-            string Secret,
-            IReadOnlyDictionary<string, IReadOnlySet<string>> Keywords,
-            RatePerMinute Rate) : Startup;
-
-        /// <summary>One setting the server will not start with, and the sentence to print.</summary>
-        public sealed record Refused(string Why) : Startup;
-    }
-
     /// <summary>
-    /// One batch: authenticated once, then every item judged on its own.
+    /// The body judged, and — only then — the key's row moved with it, in one commit.
     /// </summary>
     /// <remarks>
-    /// <para><b>200 with a result per item, not a 4xx for the batch.</b> A whole-batch refusal is a
-    /// batch the client retries unchanged for ever, with every valid pair stranded behind the invalid
-    /// one. (Plan round, gemini.)</para>
-    /// <para><b>No client address is read or logged.</b> `HttpRequest` is taken for its headers and
-    /// nothing else, and no request-logging middleware is registered — but THIS PROCESS CANNOT KEEP
-    /// THAT PROMISE ALONE. A reverse proxy writes `remote_addr` before the request reaches any route.
-    /// The promise is a deployment obligation, written in the deploy notes with the nginx and Kestrel
-    /// settings that keep it, and verified by reading the deployed stack's logs after a real ingest.
-    /// Three reviewers said an in-process test cannot prove it, and they were right.</para>
+    /// The key arrives from the <see cref="IngestGate"/>, which answered 401 and 429 before the body
+    /// was read; what is left to decide here is the body (400) and the work. The key is checked once
+    /// more INSIDE the write transaction, because a revoke can commit between the gate and the write.
     /// </remarks>
-    /// <remarks>
-    /// <para><b>The order is the contract: 401, then 429, then 400, then the work.</b> A revoked or
-    /// unknown key is refused BEFORE the limiter and before any write — `KeyFor` never answers a
-    /// revoked key, which is what makes revoking actually stop an ingest. A key that is flooding is
-    /// told to wait before its body is judged. Neither a 401, a 429 nor a malformed body touches the
-    /// key's row: only an accepted ingest counts, and only an accepted ingest moves the month.</para>
-    /// </remarks>
-    private static Answered Accept(
-        Corpus corpus,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
-        UploadRequest? request,
-        HttpRequest http,
-        string secret,
-        RateLimiter limiter,
-        TimeProvider clock)
-    {
-        var keyId = corpus.KeyFor(Presented(http), secret);
-        if (keyId.Length == 0)
-        {
-            // A revoked key and one that never existed answer the same thing, so this cannot be used
-            // to discover which keys are real.
-            return TypedResults.Unauthorized();
-        }
-
-        var admission = limiter.Admit(LimiterSubject.Contributor(keyId));
-
-        return admission.Admitted
-            ? Judged(corpus, keywords, request, keyId, clock)
-            : TooMany(http, admission, limiter.Limit);
-    }
-
-    /// <summary>429, with <c>Retry-After</c> and a body naming the limit.</summary>
-    /// <remarks>A 429 with no number is a client that retries immediately for ever.</remarks>
-    private static JsonHttpResult<Problem> TooMany(HttpRequest http, Admission admission, RatePerMinute limit)
-    {
-        http.HttpContext.Response.Headers.RetryAfter =
-            admission.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
-
-        return TypedResults.Json(
-            new Problem(
-                $"at most {limit.Value} requests a minute per key; try again in "
-                + $"{admission.RetryAfterSeconds} s"),
-            BugsJson.Default.Problem,
-            statusCode: StatusCodes.Status429TooManyRequests);
-    }
-
-    /// <summary>The body judged, and — only then — the key's row moved with it, in one commit.</summary>
     private static Answered Judged(
         Corpus corpus,
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
         UploadRequest? request,
-        string keyId,
-        TimeProvider clock)
+        KeyId key,
+        TimeProvider clock,
+        RateLimiter limiter)
     {
         if (request?.Items is not { } items)
         {
@@ -341,26 +325,29 @@ internal sealed class Program
                 new Problem($"a batch carries at most {Ingest.MostPerBatch} pairs"));
         }
 
-        var now = clock.GetUtcNow();
-        var ingested = corpus.Ingesting(
-            keyId,
-            LastSeenMonth.Of(now),
-            () => Ingest.Take(
-                corpus, items, keywords, keyId, now.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)));
+        var accepted = corpus.Accept(key, UtcMonth.Now(clock), scope => Ingest.Take(scope, items, keywords));
 
-        return TypedResults.Ok(ingested.Answer);
+        return Answer(accepted, key, limiter);
     }
 
-    /// <summary>The key a request presents, from the one header that carries it.</summary>
+    /// <summary>
+    /// The per-item results — or the 401 a key revoked between the gate and the write is owed.
+    /// </summary>
     /// <remarks>
-    /// The scheme is matched case-insensitively, as RFC 6750 requires: a proxy that normalises the
-    /// header to `bearer` is not an attacker, and a 401 for it is a morning somebody loses.
+    /// Nothing was written and nothing counted for a key found not in force, and the stamp the gate
+    /// granted is given back: the request did nothing, so it costs the key nothing.
     /// </remarks>
-    private static string Presented(HttpRequest http) =>
-        http.Headers.Authorization.ToString() is { Length: > 7 } header
-        && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? header[7..]
-            : string.Empty;
+    private static Answered Answer(Accepted<UploadAnswer> accepted, KeyId key, RateLimiter limiter)
+    {
+        if (accepted is Accepted<UploadAnswer>.Stored stored)
+        {
+            return TypedResults.Ok(stored.Answer);
+        }
+
+        limiter.Forgive(LimiterSubject.Contributor(key.Value));
+
+        return TypedResults.Unauthorized();
+    }
 
     /// <summary>
     /// Arguments the HOST understands, which are not modes and are not this binary's to refuse.
@@ -511,9 +498,52 @@ internal sealed class Program
 
     /// <summary>What the embedded keyword file is called inside the assembly.</summary>
     internal const string ResourceName = "CoaiBugs." + SkeletonKeywords.FileName;
+
+    /// <summary>What reading the configuration came to.</summary>
+    private abstract record Startup
+    {
+        private Startup()
+        {
+        }
+
+        /// <summary>Everything the server needs, read and validated.</summary>
+        public sealed record Ready(
+            ServerSecret Secret,
+            IReadOnlyDictionary<string, IReadOnlySet<string>> Keywords,
+            RatePerMinute Rate) : Startup;
+
+        /// <summary>One setting the server will not start with, and the sentence to print.</summary>
+        public sealed record Refused(string Why) : Startup;
+    }
+
+    /// <summary>The database, opened — or the sentence saying why the server cannot start on it.</summary>
+    private abstract record Database
+    {
+        private Database()
+        {
+        }
+
+        public sealed record Ready(Corpus Corpus) : Database;
+
+        public sealed record Refused(string Why) : Database;
+    }
 }
 
-/// <summary>What `/health` says, which is nothing about the corpus.</summary>
+/// <summary>What `/health` says: that the server is up, and the limit it was configured with.</summary>
+/// <remarks>Nothing about the corpus — a count here would be an unauthenticated read of how much anybody has contributed.</remarks>
+/// <summary>What <c>/health</c> answers: that the server is up, and deliberately nothing else.</summary>
+/// <remarks>
+/// <para><b>The configured rate limit was added here and taken out again.</b> A code-round finding
+/// asked for the limit to be visible, and it is a fair problem — an operator could not see it — but
+/// this endpoint is the wrong place to answer it. <c>/health</c> is unauthenticated and faces the
+/// public internet, and the same reasoning already kept the VERSION out of it: a banner here tells
+/// anybody what is running. A published rate limit is worse than a version, because it tells a
+/// flooder exactly how fast it may go without ever being refused.</para>
+/// <para>Where the limit IS visible: the startup log names it on every boot
+/// (<c>"{Rate} requests a minute per key (0 = no limit)"</c>), the journal is where an operator
+/// already looks, and story 2's authenticated <c>/admin/*</c> is where a UI will read it. The
+/// existing test that caught this — <c>HealthSaysNothingAboutTheCorpus</c> — was the messenger.</para>
+/// </remarks>
 public sealed record Health(string Status);
 
 /// <summary>Why a request was refused, in words rather than a code.</summary>

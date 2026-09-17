@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
+using CoaiMcp.Storage;
+using Microsoft.Data.Sqlite;
 
 namespace CoaiBugs;
 
@@ -28,6 +32,9 @@ internal static class Admin
     internal static readonly string[] Modes =
         ["--issue-key", "--revoke", "--promote", "--waiting"];
 
+    /// <summary>A run that took this long waited on something, and a person is owed a sentence about it.</summary>
+    private static readonly TimeSpan WorthMentioning = TimeSpan.FromSeconds(1);
+
     /// <summary>Whether these arguments name a mode this binary runs instead of listening.</summary>
     internal static bool Knows(string[] args) =>
         args.Length > 0 && Array.IndexOf(Modes, args[0]) >= 0;
@@ -38,6 +45,13 @@ internal static class Admin
     /// one-shot is not a server, and running one while the service serves is what the database's
     /// busy timeout exists for.
     /// </param>
+    /// <remarks>
+    /// <para><b>The two faults a one-shot meets at the database are said in one line each</b>, at
+    /// this edge, with an exit code a script can read — instead of a stack trace, which is what an
+    /// unhandled <see cref="SqliteException"/> was. A file that is not a database (74) and a file that
+    /// stayed locked past the busy timeout (75) are different situations for the person holding the
+    /// terminal, and only one of them is worth trying again.</para>
+    /// </remarks>
     internal static int Run(string[] args, string secret, string dataDir, TimeProvider clock)
     {
         if (secret.Length == 0)
@@ -47,23 +61,78 @@ internal static class Admin
             return 78; // EX_CONFIG
         }
 
-        using var corpus = Corpus.Open(Path.Combine(dataDir, "coai-bugs.db"));
+        var path = Path.Combine(dataDir, Program.DatabaseFileName);
+        var started = Stopwatch.StartNew();
+        try
+        {
+            return Running(args, secret, path, clock, started);
+        }
+        catch (SqliteException e)
+        {
+            return e.SqliteErrorCode == 5 ? Busy(path, e) : Unusable(path, e);
+        }
+    }
+
+    private static int Running(string[] args, string secret, string path, TimeProvider clock, Stopwatch started)
+    {
+        using var corpus = Corpus.Open(path);
 
         // Whoever runs a one-shot has a shell on the host: the audit names them `cli`, and the
-        // exact time — this is a record about an administrator, which the promise allows.
-        var by = Audit.By(AdminIdentity.Cli, clock);
+        // exact time — this is a record about an administrator, which the promise allows. One
+        // stamp for the whole run, so a key's creation time and its audit row agree to the tick.
+        var by = Audit.By(AdminId.Cli, clock);
 
         // Every arm is a mode in `Modes`, and `Knows` is what let this be reached — so the default
         // is unreachable rather than a silent fallback to `--waiting`.
-        return args[0] switch
+        var code = args[0] switch
         {
             "--issue-key" => Issue(corpus, args, secret, by),
             "--revoke" => Revoke(corpus, args, by),
-            "--promote" => Promote(corpus, args, by.AtUtc),
+            "--promote" => Promote(corpus, args, by.At),
             "--waiting" => Waiting(corpus, args),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(args), args[0], $"is in {nameof(Modes)} but has no arm here"),
         };
+        Waited(started.Elapsed);
+
+        return code;
+    }
+
+    /// <summary>Says so when the run waited on the database — a silent wait reads as a hang.</summary>
+    /// <remarks>
+    /// A one-shot beside the running server waits for the server's write on the busy timeout, and a
+    /// terminal that stops for seconds with nothing said is a person reaching for Ctrl+C. Said after
+    /// the fact, because nothing can know in advance; one second is where a person starts to wonder.
+    /// </remarks>
+    private static void Waited(TimeSpan elapsed)
+    {
+        if (elapsed >= WorthMentioning)
+        {
+            Say(
+                $"that took {elapsed.TotalSeconds.ToString("F1", CultureInfo.InvariantCulture)} s: the "
+                + "database was busy — the server was mid-write — and a one-shot waits up to "
+                + $"{SqliteMigrator.BusyTimeoutMilliseconds / 1000} s for it");
+        }
+    }
+
+    private static int Busy(string path, SqliteException e)
+    {
+        Say(
+            $"{path} stayed locked for longer than the {SqliteMigrator.BusyTimeoutMilliseconds / 1000} s "
+            + $"a one-shot waits ({e.Message}); the server is mid-write, or something else holds the "
+            + "file — try again");
+
+        return 75; // EX_TEMPFAIL
+    }
+
+    private static int Unusable(string path, SqliteException e)
+    {
+        Say(
+            $"{path} cannot be used as this server's database: {e.Message} (SQLite error "
+            + $"{e.SqliteErrorCode}); nothing here can repair it — restore it from the backup or move "
+            + "it aside");
+
+        return 74; // EX_IOERR
     }
 
     /// <summary>
@@ -79,11 +148,11 @@ internal static class Admin
         var note = Flag(args, "--note");
         var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        var id = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
+        var id = new KeyId(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)));
 
         corpus.Issue(id, Corpus.HashOf(key, secret), note, by);
 
-        Say($"issued {id}" + (note.Length > 0 ? $" ({note})" : string.Empty));
+        Say($"issued {id.Value}" + (note.Length > 0 ? $" ({note})" : string.Empty));
         Say("the key is printed once and stored only as a hash — keep it or issue another");
         Console.Out.WriteLine(key);
 
@@ -105,7 +174,7 @@ internal static class Admin
             return 65; // EX_DATAERR
         }
 
-        if (!corpus.Revoke(id, by))
+        if (!corpus.Revoke(new KeyId(id), by))
         {
             Say($"no key {id} is in force");
 
@@ -124,7 +193,7 @@ internal static class Admin
     /// seeing the row. A confirmation prompt was asked for instead; this is the same protection
     /// without making a one-shot mode unusable from a script. (Code round, local.)
     /// </remarks>
-    private static int Promote(Corpus corpus, string[] args, string now)
+    private static int Promote(Corpus corpus, string[] args, UtcInstant at)
     {
         // Lowercased because the id is hex from `IdOf` and SQLite compares text byte for byte:
         // an id pasted from a terminal that upper-cased it would answer "nothing in quarantine"
@@ -140,7 +209,7 @@ internal static class Admin
         // Read BEFORE the move, because after it the row is gone from quarantine and there is
         // nothing left to describe.
         var moving = corpus.Find(id);
-        if (!corpus.Promote(id, now))
+        if (!corpus.Promote(id, at))
         {
             Say($"nothing in quarantine with id {id}");
 

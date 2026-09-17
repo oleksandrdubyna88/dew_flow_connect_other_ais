@@ -67,12 +67,27 @@ public static class SqliteMigrator
     {
         Run(db, "PRAGMA journal_mode=WAL"); // outside: a journal mode cannot be set in a transaction
         Run(db, $"PRAGMA busy_timeout={BusyTimeoutMilliseconds}");
-        var version = Version(db);
-        for (var step = version; step < steps.Count; step++)
+        while (true)
         {
-            using var applying = db.BeginTransaction();
-            Run(db, steps[step]);
-            Run(db, $"PRAGMA user_version={step + 1}");
+            // IMMEDIATE, and the version is read INSIDE it. Read outside, two openers — the service
+            // and a one-shot starting together — both read 0, both ran step 1, and the second then
+            // failed step 2's ALTER with `duplicate column name` after its own step-1 transaction had
+            // set the version BACK to 1: a file at version 1 with the column present, which no later
+            // open could repair. The write lock is taken before the read, so the second opener waits
+            // (busy_timeout) and then reads what the first one left. Raised by codex on the story-1
+            // code round; reproduced by the test that injects a step slow enough to hold the window
+            // open, because the real steps close it in a millisecond.
+            using var applying = db.BeginTransaction(deferred: false);
+            var version = Version(db);
+            if (version >= steps.Count)
+            {
+                applying.Commit();
+
+                return;
+            }
+
+            Run(db, steps[version]);
+            Run(db, $"PRAGMA user_version={version + 1}");
             applying.Commit();
         }
     }

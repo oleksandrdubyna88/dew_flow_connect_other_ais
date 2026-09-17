@@ -32,21 +32,28 @@ public static class Ingest
     /// <summary>The largest body this server reads, in bytes.</summary>
     public const int MostBytes = 1024 * 1024;
 
-    /// <summary>Judges every item, stores what it can, and answers each one.</summary>
+    /// <summary>
+    /// Judges every item, stores what it can inside the batch's transaction, and answers each one.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="scope"/> IS the batch: <see cref="Corpus.Accept"/> opened one transaction for
+    /// one key in one month and hands this exactly what may be written inside it. An explicit
+    /// argument, where an ambient flag used to let <c>Keep</c> ask the corpus whether a batch
+    /// happened to be open — a leaky abstraction that stops being true the moment anything on this
+    /// path becomes async. (Code round, gemini.)
+    /// </remarks>
     public static UploadAnswer Take(
-        Corpus corpus,
+        IngestScope scope,
         IReadOnlyList<UploadedPair> items,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
-        string keyId,
-        string nowUtc)
+        IReadOnlyDictionary<string, IReadOnlySet<string>> keywords)
     {
         // Read ONCE for the batch, not per item: the room's size is a property of the room, and a
         // count per pair would be two hundred queries to answer the same question.
-        var room = Corpus.MostWaiting - corpus.WaitingCount();
+        var room = Corpus.MostWaiting - scope.WaitingCount();
         var results = new List<UploadResult>(items.Count);
         foreach (var item in items)
         {
-            var result = One(corpus, item, keywords, keyId, nowUtc, room > 0);
+            var result = One(scope, item, keywords, room > 0);
             room -= result.Took == Took.Accepted ? 1 : 0;
             results.Add(result);
         }
@@ -55,11 +62,9 @@ public static class Ingest
     }
 
     private static UploadResult One(
-        Corpus corpus,
+        IngestScope scope,
         UploadedPair pair,
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
-        string keyId,
-        string nowUtc,
         bool room)
     {
         // Every field read through `Whole()`, which is where a null the deserializer produced stops.
@@ -85,7 +90,7 @@ public static class Ingest
         // The id comes BACK from the store, which derives it: two places computing one identity is
         // how they come to disagree. This one is still computed above, for the refusals that never
         // reach the store at all, and the two are asserted equal by `TheIdIsAFunctionOfThePair`.
-        var (kept, stored) = corpus.Keep(name, before, after, keyId, nowUtc);
+        var (kept, stored) = scope.Keep(name, before, after);
 
         return new UploadResult(
             stored, kept is Kept.Stored ? Took.Accepted : Took.Duplicate, string.Empty);

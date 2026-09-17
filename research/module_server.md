@@ -2200,6 +2200,26 @@ narrowest option that answers it, took the MONTH:
 > revoked, and who did it. That is a log about the people holding administrative power, not about
 > the people contributing.
 
+**The promise was FALSE when it was first written, and a code round caught it.** `quarantine` held
+`received_utc` — an exact ISO-8601 instant — beside `key_id`, so for any pair awaiting review the
+database could be asked precisely which day and hour a contributor worked. `corpus`, the permanent
+table, carries no `key_id` at all and so its `promoted_utc` is attributable to nobody; but a
+quarantine row was, for as long as it sat there.
+
+The fix is in the DATA, not the wording. Rewording the promise to carve quarantine out was the
+obvious move and the wrong one: this plan already records an earlier draft arguing that "a DATE is
+materially different from a TIMESTAMP" and a reviewer refusing that as evasion, and an exemption for
+the one table that breaks the rule is the same argument in a new coat. So **step 3** adds
+`quarantine.received_month` (`yyyy-MM`, UTC, from the same injected clock) and that is what is
+written from now on. `received_utc` remains a column — step 1 is frozen and steps are append-only —
+and is deliberately dead, which its step comment says so that a future reader does not revive it.
+The live table held **zero rows** when this shipped, so nothing had to be scrubbed and it was as
+cheap as it will ever be.
+
+What holds the promise now is not the wording but `TheQuarantineHoldsNoClockTests`, which reads the
+schema, takes every table carrying a `key_id`, and fails if any of them carries a clock. A fourth
+such table added later is covered without anybody remembering to.
+
 `api_keys.last_seen_month` is `yyyy-MM`, UTC, from a `TimeProvider` the host injects — named
 `_month`, not `_utc` or `_date`, because `_utc` reads as a timestamp and invites one. It moves
 **only on an accepted ingest**: a 401, a 429, a malformed body and an administrative one-shot each

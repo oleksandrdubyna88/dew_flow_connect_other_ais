@@ -23,7 +23,9 @@ public sealed class TheMigrationTests : IDisposable
     private readonly string _dir =
         Path.Combine(Path.GetTempPath(), "coai-migrate-" + Guid.NewGuid().ToString("N")[..8]);
 
-    private const string TheOldBuildsKey = "deadbeefcafef00d";
+    private const string TheOldBuildsKeyValue = "deadbeefcafef00d";
+
+    private static readonly KeyId TheOldBuildsKey = new(TheOldBuildsKeyValue);
 
     public TheMigrationTests() => Directory.CreateDirectory(_dir);
 
@@ -39,7 +41,7 @@ public sealed class TheMigrationTests : IDisposable
         TestSql.Run(path, File.ReadAllText(TheSchemaIsFrozenTests.FixturePath));
         TestSql.Run(
             path,
-            $"INSERT INTO api_keys (id, key_hash, created_utc, note) VALUES ('{TheOldBuildsKey}', "
+            $"INSERT INTO api_keys (id, key_hash, created_utc, note) VALUES ('{TheOldBuildsKeyValue}', "
             + "'a-hash-the-old-build-wrote', '2026-09-17T00:00:00Z', 'issued before the migration')");
         TestSql.Scalar(path, "PRAGMA user_version").Should().Be(
             "0", "the fixture must reproduce the field: the released build never stamped the file");
@@ -75,8 +77,8 @@ public sealed class TheMigrationTests : IDisposable
         using var corpus = Corpus.Open(DbPath);
 
         corpus.UsageOf(TheOldBuildsKey).Should().Be(
-            new KeyUsage(0, string.Empty), "a row the old build wrote reads as never used, not as a blank");
-        corpus.Revoke(TheOldBuildsKey, Audit.By(AdminIdentity.Cli, clock)).Should().BeTrue();
+            new Usage.Known(new SubmissionCount(0), new LastSeen.Never()), "a row the old build wrote reads as never used, not as a blank");
+        corpus.Revoke(TheOldBuildsKey, Audit.By(AdminId.Cli, clock)).Should().BeTrue();
         corpus.AuditTrail(10).Should().ContainSingle().Which.Target.Should().Be(TheOldBuildsKey);
     }
 
@@ -97,6 +99,56 @@ public sealed class TheMigrationTests : IDisposable
             CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Two openers racing on the field's file both succeed, and the file is whole.
+    /// </summary>
+    /// <remarks>
+    /// <para>The defect a code round traced: two openers both read <c>user_version = 0</c>, both run
+    /// step 1, and the second then fails step 2's <c>ALTER</c> with <c>duplicate column name</c> —
+    /// and because its own step-1 transaction had already set the version BACK to 1, the file is left
+    /// at version 1 with the column present, so every later open fails the same way and the service
+    /// cannot start on the field's database. The service and a one-shot starting together is exactly
+    /// how it happens.</para>
+    /// <para>Serialised by the runner taking an IMMEDIATE transaction and reading the version while
+    /// holding it, so the second opener waits and then sees the version the first one left. Ten
+    /// rounds on ten fresh files, released by a barrier: a race the scheduler is left to arrange is a
+    /// race the scheduler may hide.</para>
+    /// </remarks>
+    [Fact]
+    public void TwoOpenersRacingOnTheFieldsFile_BothSucceedAndTheFileIsWhole()
+    {
+        for (var round = 0; round < 10; round++)
+        {
+            var path = Path.Combine(_dir, $"race-{round}.db");
+            WriteAFileFromStepOneOnly(path);
+            var failures = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+            using var gate = new Barrier(2);
+            var openers = Enumerable.Range(0, 2).Select(_ => new Thread(() =>
+            {
+                gate.SignalAndWait();
+                try
+                {
+                    Corpus.Open(path).Dispose();
+                }
+                catch (Exception e)
+                {
+                    failures.Add(e);
+                }
+            })).ToList();
+            openers.ForEach(opener => opener.Start());
+            openers.ForEach(opener => opener.Join());
+
+            failures.Should().BeEmpty(
+                $"round {round}: both openers must migrate or wait, never fail — "
+                + $"got: {string.Join(" | ", failures.Select(failure => failure.Message))}");
+            TestSql.Scalar(path, "PRAGMA user_version").Should().Be(
+                CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture), $"round {round}");
+            TestSql.Column(path, "SELECT name FROM pragma_table_info('api_keys')")
+                .Count(column => column == "last_seen_month")
+                .Should().Be(1, $"round {round}: the column exists exactly once");
+        }
+    }
+
     [Fact]
     public void AFreshFileGetsEveryStepAndIsUsable()
     {
@@ -104,7 +156,7 @@ public sealed class TheMigrationTests : IDisposable
 
         TestSql.Scalar(DbPath, "PRAGMA user_version").Should().Be(
             CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture));
-        corpus.Keep("CSharp", "a", "b", "key", "2026-09-17T12:00:00Z").Kept.Should().Be(Kept.Stored);
+        corpus.Keep("CSharp", "a", "b", new KeyId("key"), UtcMonth.Of(DateTimeOffset.UnixEpoch)).Kept.Should().Be(Kept.Stored);
         corpus.AuditCount().Should().Be(0);
     }
 
@@ -143,14 +195,14 @@ public sealed class TheMigrationTests : IDisposable
         // Let the writer take the lock before the corpus tries to write behind it.
         await Task.Delay(300, TestContext.Current.CancellationToken);
         var waited = Stopwatch.StartNew();
-        var issuing = () => corpus.Issue("waited-for", "hash", "note", Audit.By(AdminIdentity.Cli, clock));
+        var issuing = () => corpus.Issue(new KeyId("waited-for"), "hash", "note", Audit.By(AdminId.Cli, clock));
 
         issuing.Should().NotThrow("the opener must wait for the writer, not fail with SQLITE_BUSY");
         await holding;
 
         waited.Elapsed.Should().BeGreaterThan(
             TimeSpan.FromSeconds(1), "it really waited behind the lock rather than slipping in before it");
-        corpus.UsageOf("waited-for").Should().Be(new KeyUsage(0, string.Empty), "and the write landed");
+        corpus.UsageOf(new KeyId("waited-for")).Should().Be(new Usage.Known(new SubmissionCount(0), new LastSeen.Never()), "and the write landed");
     }
 
     public void Dispose() => Scratch.Delete(_dir);

@@ -176,12 +176,12 @@ public sealed class TheBuiltBinariesTests : IDisposable
             using var http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
 
-            var before = LastSeenMonth.Now(TimeProvider.System).Value;
+            var before = UtcMonth.Now(TimeProvider.System).Value;
             (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
-            var after = LastSeenMonth.Now(TimeProvider.System).Value;
+            var after = UtcMonth.Now(TimeProvider.System).Value;
             var usage = UsageOf(database, id);
-            usage.LastSeenMonth.Should().MatchRegex(LastSeenMonth.Shape().ToString()).And.BeOneOf(before, after);
-            usage.Submissions.Should().Be(1);
+            usage.Month().Should().MatchRegex(UtcMonth.Shape().ToString()).And.BeOneOf(before, after);
+            usage.Count().Should().Be(1);
 
             (await Ingest(http)).StatusCode.Should().Be(HttpStatusCode.OK);
             using var third = await Ingest(http);
@@ -191,7 +191,7 @@ public sealed class TheBuiltBinariesTests : IDisposable
             third.Headers.RetryAfter!.Delta.Should().BeGreaterThan(TimeSpan.Zero);
             (await third.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
                 .Should().Contain("2 requests a minute", "the body names the limit");
-            UsageOf(database, id).Submissions.Should().Be(2, "a 429 counts nothing");
+            UsageOf(database, id).Count().Should().Be(2, "a 429 counts nothing");
 
             Run(BugsExe, $"--revoke --id {id}", _dir).Code.Should().Be(
                 0, "the operator's stop button, run while the server serves — a real concurrent opener");
@@ -227,11 +227,11 @@ public sealed class TheBuiltBinariesTests : IDisposable
         http.PostAsJsonAsync("/ingest", OnePair, TestContext.Current.CancellationToken);
 
     /// <summary>What the key has done, read from the FILE by a third opener while the server serves.</summary>
-    private static KeyUsage UsageOf(string database, string id)
+    private static Usage UsageOf(string database, string id)
     {
         using var corpus = Corpus.Open(database);
 
-        return corpus.UsageOf(id);
+        return corpus.UsageOf(new KeyId(id));
     }
 
     /// <summary>Mints a key through the real one-shot and reads its id off stderr, where the one-shot says it.</summary>

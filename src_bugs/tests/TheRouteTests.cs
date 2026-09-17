@@ -85,7 +85,7 @@ public sealed class TheRouteTests
         var (key, id) = server.IssueKey();
         using (var corpus = server.Reading())
         {
-            corpus.Revoke(id, Audit.By(AdminIdentity.Cli, server.Clock)).Should().BeTrue();
+            corpus.Revoke(id, Audit.By(AdminId.Cli, server.Clock)).Should().BeTrue();
         }
 
         using var http = server.CreateClient();
@@ -158,7 +158,7 @@ public sealed class TheRouteTests
         using var http = server.CreateClient();
         using (var corpus = server.Reading())
         {
-            corpus.Keep("CSharp", "a", "b", "key", "now");
+            corpus.Keep("CSharp", "a", "b", new KeyId("key"), UtcMonth.Of(DateTimeOffset.UnixEpoch));
         }
 
         var reply = await http.GetAsync("/health", TestContext.Current.CancellationToken);

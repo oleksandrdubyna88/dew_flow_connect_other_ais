@@ -35,6 +35,17 @@ public enum Kept
 /// both do if the id is a pure function of the payload: the server computes it, nothing extra
 /// crosses, identical pairs from different people deduplicate for free, and there is no second copy
 /// to disagree with the first.</para>
+/// <para><b>Two kinds of write, and the difference is the transaction.</b> <see cref="Keep"/>,
+/// <see cref="Issue"/>, <see cref="Revoke"/> and <see cref="Promote"/> each open and commit their own.
+/// <see cref="Accept"/> opens ONE for a whole batch and hands the callee an <see cref="IngestScope"/>
+/// that writes inside it, so the pairs, the key's count and the key's month are one commit — the
+/// atomicity a reviewer asked for, made explicit rather than ambient.</para>
+/// <para><b>Every write transaction is IMMEDIATE.</b> In WAL a deferred transaction that reads and
+/// then writes can find its snapshot stale when another connection — a one-shot beside the running
+/// server — committed in between, and SQLite refuses the upgrade with <c>SQLITE_BUSY_SNAPSHOT</c>,
+/// which no busy timeout retries. Taking the write lock first makes every read inside the
+/// transaction a read of the latest commit, which is also what lets <see cref="Accept"/> re-check a
+/// key with nothing able to revoke it in between.</para>
 /// </remarks>
 public sealed class Corpus : IDisposable
 {
@@ -51,10 +62,18 @@ public sealed class Corpus : IDisposable
     /// <summary>How many administrative actions the audit keeps: the newest this many.</summary>
     /// <remarks>
     /// One row per administrative action at ~150 bytes is ~7 MB here, and decades of hand-driven
-    /// administration. The sweep runs inside the transaction of every write that could cross the
+    /// administration. The trim runs inside the transaction of every write that could cross the
     /// mark, so the table is bounded from its first row rather than by a mode nobody will ask for.
     /// </remarks>
     public const int MostAudit = 50_000;
+
+    /// <summary>The most audit rows one page answers, whatever a caller asks for.</summary>
+    /// <remarks>
+    /// The trail is read under <see cref="_gate"/>, and an unbounded page is a request that holds
+    /// the server's one connection for as long as the table is long. Two hundred is the admin API's
+    /// own ceiling (story 2), so the two numbers are one.
+    /// </remarks>
+    public const int MostAuditPage = 200;
 
     /// <summary>
     /// One connection, one server, many requests — so the connection is guarded.
@@ -69,17 +88,6 @@ public sealed class Corpus : IDisposable
 
     private readonly SqliteConnection _db;
 
-    /// <summary>
-    /// Whether an <see cref="Ingesting"/> batch holds the transaction, so the writes inside it join
-    /// it rather than open one of their own.
-    /// </summary>
-    /// <remarks>
-    /// <c>SqliteConnection</c> refuses a nested transaction, and the batch is what makes the accepted
-    /// pairs, the counter and the month ONE commit. Set and cleared under <see cref="_gate"/>, which
-    /// is reentrant, so a <see cref="Keep"/> called from inside the batch sees it.
-    /// </remarks>
-    private bool _batching;
-
     private Corpus(SqliteConnection db) => _db = db;
 
     /// <summary>Opens the file and brings it up to date.</summary>
@@ -88,11 +96,14 @@ public sealed class Corpus : IDisposable
     /// order, <c>user_version</c> recording how far the file has come. The file <c>bugs-v0.1.0</c>
     /// created on the first host has every table of step 1 and <c>user_version = 0</c> — it was made
     /// by a build that ran the schema as one statement and never stamped it — so on this build's first
-    /// open step 1 runs as a no-op (<c>IF NOT EXISTS</c>), the file is stamped 1, and step 2 adds
-    /// what is new. A test migrates exactly that shape, because a fresh file proves nothing.</para>
+    /// open step 1 runs as a no-op (<c>IF NOT EXISTS</c>), the file is stamped 1, and the later steps
+    /// add what is new. A test migrates exactly that shape, because a fresh file proves nothing.</para>
     /// <para>The connection's timeout comes from the runner too, so the pragma it sets and the
     /// provider's own retry are one number: a one-shot mode opening this file while the server is
     /// mid-write WAITS rather than failing with <c>SQLITE_BUSY</c>.</para>
+    /// <para>A file that is not a database throws <see cref="SqliteException"/> from here. That is an
+    /// infrastructure fault, not an expected answer, and the two process edges — the server's start
+    /// and a one-shot's run — catch it and say what and where.</para>
     /// </remarks>
     public static Corpus Open(string path)
     {
@@ -114,36 +125,48 @@ public sealed class Corpus : IDisposable
         PairId.Of(language, before, after);
 
     /// <summary>
-    /// Stores a pair, or says it was already held.
+    /// Stores a pair on its own, or says it was already held.
     /// </summary>
     /// <remarks>
-    /// <b>The corpus is asked BEFORE the insert, in one transaction.</b> It inserted first and asked
-    /// afterwards — so a pair that had already been promoted (and therefore deleted from quarantine)
-    /// was written back into quarantine, answered <c>duplicate</c>, and then sat in `--waiting` for
-    /// ever: promoting it again is a no-op, because the corpus already holds that id. Three reviewers
-    /// found the same row, from three directions. The check and the insert are now one statement's
-    /// worth of truth. (Code round, codex/gemini.)
+    /// <para>Its own transaction. Inside a batch the same write goes through
+    /// <see cref="IngestScope.Keep"/>, which is the batch's transaction; this is for a caller that
+    /// has no batch — a test, an import — and there is deliberately no way to ask the corpus whether
+    /// a batch happens to be open.</para>
+    /// <para><b>The corpus is asked BEFORE the insert, in one transaction.</b> It inserted first and
+    /// asked afterwards — so a pair that had already been promoted (and therefore deleted from
+    /// quarantine) was written back into quarantine, answered <c>duplicate</c>, and then sat in
+    /// `--waiting` for ever: promoting it again is a no-op, because the corpus already holds that
+    /// id. Three reviewers found the same row, from three directions. (Code round, codex/gemini.)</para>
     /// </remarks>
     /// <returns>Whether it was stored, and the id it is stored under.</returns>
     public (Kept Kept, string EntryId) Keep(
-        string language, string before, string after, string keyId, string nowUtc)
+        string language, string before, string after, KeyId key, UtcMonth month)
     {
-        // DERIVED HERE, not taken from the caller. It was a parameter, and a parameter is a way for
-        // an importer or a replay to store the same three fields under two different ids — which is
-        // precisely the idempotency this table exists to have. The identity of a pair belongs to the
-        // boundary that persists it. (Code round, codex.)
-        var entryId = IdOf(language, before, after);
         lock (_gate)
         {
-            // Its own transaction when called alone; the batch's when called from `Ingesting`,
-            // which is how the pairs and the key's row become one commit.
-            return Transacting(() => Keeping(entryId, language, before, after, keyId, nowUtc));
+            using var transaction = _db.BeginTransaction(deferred: false);
+            var kept = KeepInside(language, before, after, key, month);
+            transaction.Commit();
+
+            return kept;
         }
     }
 
-    private (Kept Kept, string EntryId) Keeping(
-        string entryId, string language, string before, string after, string keyId, string nowUtc)
+    /// <summary>The write itself, inside whatever transaction the caller holds.</summary>
+    /// <remarks>
+    /// <para>The entry id is DERIVED HERE, not taken from the caller. It was a parameter, and a
+    /// parameter is a way for an importer or a replay to store the same three fields under two
+    /// different ids — which is precisely the idempotency this table exists to have. (Code round,
+    /// codex.)</para>
+    /// <para><b><c>received_utc</c> is written EMPTY, for ever.</b> It is an exact instant beside
+    /// <c>key_id</c>, which the promise forbids; step 1 is frozen so the column cannot go, and it is
+    /// <c>NOT NULL</c> without a default so it must be written. What a pair carries about its arrival
+    /// is <c>received_month</c>; what orders the queue is <c>rowid</c>.</para>
+    /// </remarks>
+    internal (Kept Kept, string EntryId) KeepInside(
+        string language, string before, string after, KeyId key, UtcMonth month)
     {
+        var entryId = IdOf(language, before, after);
         if (Promoted(entryId))
         {
             return (Kept.AlreadyHeld, entryId);
@@ -152,37 +175,22 @@ public sealed class Corpus : IDisposable
         using var write = _db.CreateCommand();
         write.CommandText = """
             INSERT INTO quarantine
-                (entry_id, language, skeleton_before, skeleton_after, received_utc, key_id)
-            VALUES ($id, $language, $before, $after, $now, $key)
+                (entry_id, language, skeleton_before, skeleton_after, received_utc, received_month, key_id)
+            VALUES ($id, $language, $before, $after, '', $month, $key)
             ON CONFLICT(entry_id) DO NOTHING
             """;
         Bind(write, "$id", entryId);
         Bind(write, "$language", language);
         Bind(write, "$before", before);
         Bind(write, "$after", after);
-        Bind(write, "$now", nowUtc);
-        Bind(write, "$key", keyId);
+        Bind(write, "$month", month.Value);
+        Bind(write, "$key", key.Value);
 
         // DO NOTHING answers zero rows for a pair quarantine already holds. That is a success for
         // the caller: it may stop sending it.
         var stored = write.ExecuteNonQuery() == 1;
 
         return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId);
-    }
-
-    /// <summary>Runs <paramref name="body"/> in a transaction: its own, or the open batch's.</summary>
-    private T Transacting<T>(Func<T> body)
-    {
-        if (_batching)
-        {
-            return body();
-        }
-
-        using var transaction = _db.BeginTransaction();
-        var result = body();
-        transaction.Commit();
-
-        return result;
     }
 
     /// <summary>How many pairs are waiting for a person right now.</summary>
@@ -206,13 +214,73 @@ public sealed class Corpus : IDisposable
         return read.ExecuteScalar() is not null;
     }
 
+    /// <summary>
+    /// One accepted ingest: the pairs it stores, the key's count and the key's month — one commit.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The key is checked again, inside the transaction.</b> The gate authenticated it a
+    /// moment ago, and a <c>--revoke</c> can commit in that moment; the transaction is IMMEDIATE, so
+    /// once this check passes nothing can revoke the key before the writes commit. A key found not in
+    /// force answers <see cref="Accepted{T}.KeyNotInForce"/> with nothing written and nothing counted,
+    /// and the caller answers 401. (Code round, codex.)</para>
+    /// <para><b>One UPDATE moves the count and the month.</b> They were two — the month written only
+    /// when it differed, "so a busy key rewrites its row at most once a month" — and a reviewer
+    /// pointed out that the counter rewrites the same row on every ingest, so the conditional saved
+    /// nothing and its justification was false. <c>submissions = submissions + 1</c> stays in SQL,
+    /// never read-then-write, which loses an increment when two ingests race.</para>
+    /// <para><b>Only an ACCEPTED ingest reaches here.</b> A 401, a 429 and a malformed body are
+    /// answered before it, and an administrative one-shot never calls it — each is a test, because
+    /// the month is a promise about what the server records and not only a column.</para>
+    /// </remarks>
+    public Accepted<T> Accept<T>(KeyId key, UtcMonth month, Func<IngestScope, T> take)
+    {
+        lock (_gate)
+        {
+            using var transaction = _db.BeginTransaction(deferred: false);
+            if (!InForce(key))
+            {
+                transaction.Commit();
+
+                return new Accepted<T>.KeyNotInForce();
+            }
+
+            var answer = take(new IngestScope(this, key, month));
+            Record(key, month);
+            transaction.Commit();
+
+            return new Accepted<T>.Stored(answer);
+        }
+    }
+
+    private bool InForce(KeyId key)
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = "SELECT 1 FROM api_keys WHERE id = $id AND revoked_utc = ''";
+        Bind(read, "$id", key.Value);
+
+        return read.ExecuteScalar() is not null;
+    }
+
+    private void Record(KeyId key, UtcMonth month)
+    {
+        using var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE api_keys SET submissions = submissions + 1, last_seen_month = $month WHERE id = $id
+            """;
+        Bind(write, "$month", month.Value);
+        Bind(write, "$id", key.Value);
+        write.ExecuteNonQuery();
+    }
+
     /// <summary>The key this request may write as, or empty.</summary>
     /// <remarks>
     /// <para><b>Hashed with a server secret and compared in constant time.</b> A bare hash makes a
     /// stolen database a rainbow-table exercise; an ordinary string comparison leaks the prefix
     /// through timing. Both were named by the plan round.</para>
     /// <para><b>A revoked key and an unknown key answer the same thing</b>, so the endpoint cannot be
-    /// used to discover which keys exist.</para>
+    /// used to discover which keys exist. A revoked key is one whose <c>revoked_utc</c> is non-empty,
+    /// and this never answers one — which is what makes revoking stop an ingest, at the gate; the
+    /// check is repeated inside <see cref="Accept"/> for the moment between.</para>
     /// </remarks>
     public string KeyFor(string presented, string secret)
     {
@@ -254,83 +322,26 @@ public sealed class Corpus : IDisposable
             HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(key)));
 
     /// <summary>
-    /// One accepted ingest: the pairs it stores, the key's count, and the key's month — one commit.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>One transaction</b>, so a kill between the writes cannot leave an accepted batch
-    /// with a stale month or an uncounted key. <see cref="Keep"/>, called from inside
-    /// <paramref name="take"/>, joins this transaction rather than opening its own.</para>
-    /// <para><b>The counter is <c>submissions = submissions + 1</c> in SQL</b> — never read-then-write,
-    /// which loses an increment when two ingests race. <b>The month is conditional</b>
-    /// (<c>AND last_seen_month &lt;&gt; $month</c>), so a busy key rewrites its row at most once a
-    /// month; whether it did is answered, so a test can see a same-month row left alone.</para>
-    /// <para><b>Only an ACCEPTED ingest reaches here.</b> A 401, a 429 and a malformed body are
-    /// answered before it, and an administrative one-shot never calls it — each of those is a test,
-    /// because the month is a promise about what the server records and not only a column.</para>
-    /// </remarks>
-    public Ingested<T> Ingesting<T>(string keyId, LastSeenMonth month, Func<T> take)
-    {
-        lock (_gate)
-        {
-            using var transaction = _db.BeginTransaction();
-            _batching = true;
-            try
-            {
-                var answer = take();
-                Count(keyId);
-                var advanced = Touch(keyId, month);
-                transaction.Commit();
-
-                return new Ingested<T>(answer, advanced);
-            }
-            finally
-            {
-                _batching = false;
-            }
-        }
-    }
-
-    private void Count(string keyId)
-    {
-        using var write = _db.CreateCommand();
-        write.CommandText = "UPDATE api_keys SET submissions = submissions + 1 WHERE id = $id";
-        Bind(write, "$id", keyId);
-        write.ExecuteNonQuery();
-    }
-
-    private bool Touch(string keyId, LastSeenMonth month)
-    {
-        using var write = _db.CreateCommand();
-        write.CommandText = """
-            UPDATE api_keys SET last_seen_month = $month
-             WHERE id = $id AND last_seen_month <> $month
-            """;
-        Bind(write, "$month", month.Value);
-        Bind(write, "$id", keyId);
-
-        return write.ExecuteNonQuery() == 1;
-    }
-
-    /// <summary>
     /// Records a new key and the administrator who minted it, in one transaction. The key itself is
     /// the caller's to print once.
     /// </summary>
     /// <remarks>
-    /// The audit row and the sweep that bounds the table commit with the key, so the caller can never
-    /// report an issuance that was not audited — nor an audit of a key that was not issued.
+    /// The audit row and the trim that bounds the table commit with the key, so the caller can never
+    /// report an issuance that was not audited — nor an audit of a key that was not issued. The key's
+    /// creation time is the audit's instant: one clock, one stamp, two columns.
     /// </remarks>
-    public void Issue(string id, string keyHash, string note, Audit by)
+    public void Issue(KeyId id, string keyHash, string note, Audit by)
     {
         lock (_gate)
         {
-            using var transaction = _db.BeginTransaction();
+            using var transaction = _db.BeginTransaction(deferred: false);
             using var write = _db.CreateCommand();
             write.CommandText = """
                 INSERT INTO api_keys (id, key_hash, created_utc, note) VALUES ($id, $hash, $now, $note)
                 """;
-            Bind(write, "$id", id);
+            Bind(write, "$id", id.Value);
             Bind(write, "$hash", keyHash);
-            Bind(write, "$now", by.AtUtc);
+            Bind(write, "$now", by.At.Stored);
             Bind(write, "$note", note);
             write.ExecuteNonQuery();
             Audited(AuditAction.Issue, id, by);
@@ -340,20 +351,18 @@ public sealed class Corpus : IDisposable
 
     /// <summary>Ends a key, audited. Answers whether there was one to end.</summary>
     /// <remarks>
-    /// <b>A revoked key is one whose <c>revoked_utc</c> is non-empty</b>, and <see cref="KeyFor"/>
-    /// never answers one — so the refusal happens before the rate limiter and before any write, and
-    /// a test proves that revoking actually stops an ingest. A revoke that changed nothing (no such
-    /// key, or already revoked) writes no audit row: there was no mutation to leave unaudited.
+    /// A revoke that changed nothing — no such key, or already revoked — writes no audit row: there
+    /// was no mutation to leave unaudited.
     /// </remarks>
-    public bool Revoke(string id, Audit by)
+    public bool Revoke(KeyId id, Audit by)
     {
         lock (_gate)
         {
-            using var transaction = _db.BeginTransaction();
+            using var transaction = _db.BeginTransaction(deferred: false);
             using var write = _db.CreateCommand();
             write.CommandText = "UPDATE api_keys SET revoked_utc = $now WHERE id = $id AND revoked_utc = ''";
-            Bind(write, "$now", by.AtUtc);
-            Bind(write, "$id", id);
+            Bind(write, "$now", by.At.Stored);
+            Bind(write, "$id", id.Value);
             var changed = write.ExecuteNonQuery() == 1;
             if (changed)
             {
@@ -367,26 +376,29 @@ public sealed class Corpus : IDisposable
     }
 
     /// <summary>
-    /// The audit row for a mutation, and the sweep that keeps the table bounded — inside the
-    /// caller's transaction.
+    /// The audit row for a mutation, and the trim that keeps the table bounded — inside the caller's
+    /// transaction.
     /// </summary>
     /// <remarks>
-    /// <c>target</c> is the key's id and nothing else: not its note, never the key, never its hash.
-    /// That is the privacy boundary of this table and a test pins it.
+    /// <para><c>target</c> is the key's id and nothing else: not its note, never the key, never its
+    /// hash. That is the privacy boundary of this table and a test pins it.</para>
+    /// <para><b>The trim is inside the transaction on purpose.</b> The write that crosses the bound and
+    /// the deletion that restores it commit together, so the table is never observed over the bound
+    /// and a crash between them cannot leave it there.</para>
     /// </remarks>
-    private void Audited(AuditAction action, string target, Audit by)
+    private void Audited(AuditAction action, KeyId target, Audit by)
     {
         using var write = _db.CreateCommand();
         write.CommandText = """
             INSERT INTO admin_audit (admin_id, action, target, at_utc)
             VALUES ($admin, $action, $target, $at)
             """;
-        Bind(write, "$admin", by.AdminId);
+        Bind(write, "$admin", by.Who.Value);
         Bind(write, "$action", action.Word());
-        Bind(write, "$target", target);
-        Bind(write, "$at", by.AtUtc);
+        Bind(write, "$target", target.Value);
+        Bind(write, "$at", by.At.Stored);
         write.ExecuteNonQuery();
-        Sweeping(MostAudit);
+        TrimAudit(MostAudit);
     }
 
     /// <summary>Keeps the newest <paramref name="keep"/> audit rows and deletes the rest.</summary>
@@ -395,34 +407,36 @@ public sealed class Corpus : IDisposable
     /// newest rows survive; the real bound is crossed too, from a seeded table. The production path
     /// is <see cref="Audited"/>, which always passes <see cref="MostAudit"/>.
     /// </remarks>
-    internal void SweepAudit(int keep)
+    internal void TrimAuditTo(int keep)
     {
         lock (_gate)
         {
-            Sweeping(keep);
+            TrimAudit(keep);
         }
     }
 
-    private void Sweeping(int keep)
+    private void TrimAudit(int keep)
     {
         // An INDEXED cutoff: the one id at the boundary is found through the primary key, and the
         // delete is a range below it. `DELETE … WHERE id NOT IN (SELECT …)` is a latency spike and a
         // lock risk inside a request. With fewer rows than `keep` the subquery is NULL, the
         // comparison is NULL, and nothing is deleted.
-        using var sweep = _db.CreateCommand();
-        sweep.CommandText = """
+        using var trim = _db.CreateCommand();
+        trim.CommandText = """
             DELETE FROM admin_audit
              WHERE id <= (SELECT id FROM admin_audit ORDER BY id DESC LIMIT 1 OFFSET $keep)
             """;
-        Bind(sweep, "$keep", keep);
-        sweep.ExecuteNonQuery();
+        Bind(trim, "$keep", keep);
+        trim.ExecuteNonQuery();
     }
 
-    /// <summary>What is waiting for a person to look at it.</summary>
+    /// <summary>What is waiting for a person to look at it, in order of arrival.</summary>
     /// <remarks>
-    /// <paramref name="skip"/> exists because the view showed the first fifty and said "50 waiting",
-    /// which is indistinguishable from fifty being all of them — and nothing could reach row 51
-    /// without disposing of the first fifty one at a time. (Code round, codex/local.)
+    /// <para><paramref name="skip"/> exists because the view showed the first fifty and said "50
+    /// waiting", which is indistinguishable from fifty being all of them — and nothing could reach row
+    /// 51 without disposing of the first fifty one at a time. (Code round, codex/local.)</para>
+    /// <para>Ordered by <c>rowid</c>, never by a time: the only thing the order is for is a person
+    /// reading the queue oldest-first, and insertion order among live rows is exactly that.</para>
     /// </remarks>
     public IReadOnlyList<(string EntryId, string Language, string Before, string After)> Waiting(
         int limit, int skip = 0)
@@ -462,7 +476,7 @@ public sealed class Corpus : IDisposable
         using var read = _db.CreateCommand();
         read.CommandText = """
             SELECT entry_id, language, skeleton_before, skeleton_after
-              FROM quarantine ORDER BY received_utc, entry_id LIMIT $limit OFFSET $skip
+              FROM quarantine ORDER BY rowid LIMIT $limit OFFSET $skip
             """;
         Bind(read, "$limit", limit);
         Bind(read, "$skip", skip);
@@ -484,18 +498,20 @@ public sealed class Corpus : IDisposable
     /// deleted when the INSERT reported a row, so a pair the corpus already held stayed in the queue
     /// and no command could ever clear it. What this promises is "the corpus holds it and quarantine
     /// does not", and that is true in both cases. (Code round, gemini.)</para>
+    /// <para><paramref name="at"/> is an exact time and may be: <c>corpus</c> carries no <c>key_id</c>,
+    /// so a promotion is attributable to nobody who contributed.</para>
     /// </remarks>
-    public bool Promote(string entryId, string nowUtc)
+    public bool Promote(string entryId, UtcInstant at)
     {
         lock (_gate)
         {
-            return Moving(entryId, nowUtc);
+            return Moving(entryId, at);
         }
     }
 
-    private bool Moving(string entryId, string nowUtc)
+    private bool Moving(string entryId, UtcInstant at)
     {
-        using var transaction = _db.BeginTransaction();
+        using var transaction = _db.BeginTransaction(deferred: false);
         using var here = _db.CreateCommand();
         here.CommandText = "SELECT 1 FROM quarantine WHERE entry_id = $id";
         Bind(here, "$id", entryId);
@@ -513,7 +529,7 @@ public sealed class Corpus : IDisposable
               FROM quarantine WHERE entry_id = $id
             ON CONFLICT(entry_id) DO NOTHING
             """;
-        Bind(move, "$now", nowUtc);
+        Bind(move, "$now", at.Stored);
         Bind(move, "$id", entryId);
         move.ExecuteNonQuery();
 
@@ -552,41 +568,57 @@ public sealed class Corpus : IDisposable
         }
     }
 
-    /// <summary>What a key has done: its lifetime count and the month it was last used.</summary>
-    /// <remarks>Zero and empty for a key that does not exist, which is also what "never used" reads as.</remarks>
-    public KeyUsage UsageOf(string keyId)
+    /// <summary>What a key has done — or that there is no such key, which is not the same as nothing.</summary>
+    /// <remarks>
+    /// It answered zero and empty for a key that does not exist, and a reviewer was right that absent
+    /// is not zero: an operator reading "0 submissions, never used" about a mistyped id would believe
+    /// the key exists and is idle.
+    /// </remarks>
+    public Usage UsageOf(KeyId key)
     {
         lock (_gate)
         {
             using var read = _db.CreateCommand();
             read.CommandText = "SELECT submissions, last_seen_month FROM api_keys WHERE id = $id";
-            Bind(read, "$id", keyId);
+            Bind(read, "$id", key.Value);
             using var rows = read.ExecuteReader();
 
             return rows.Read()
-                ? new KeyUsage(rows.GetInt32(0), rows.GetString(1))
-                : new KeyUsage(0, string.Empty);
+                ? new Usage.Known(new SubmissionCount(rows.GetInt32(0)), UtcMonth.Read(rows.GetString(1)))
+                : new Usage.NoSuchKey();
         }
     }
 
-    /// <summary>The audit, oldest first, paged.</summary>
-    public IReadOnlyList<AuditRow> AuditTrail(int limit, int skip = 0)
+    /// <summary>The audit, newest first, one indexed range per page.</summary>
+    /// <param name="limit">Rows wanted; clamped to <see cref="MostAuditPage"/>.</param>
+    /// <param name="before">Read rows older than this id; the default reads from the newest.</param>
+    /// <remarks>
+    /// Oldest-first paging by <c>OFFSET</c> made page one the first day of the deployment and recent
+    /// history an <c>O(N)</c> scan while holding the gate. Keyset paging by id — the page after this
+    /// one starts at its last row's <c>Id</c> — costs one indexed range whatever the table has grown
+    /// to, and the newest actions are the ones an administrator opens the trail for.
+    /// </remarks>
+    public IReadOnlyList<AuditRow> AuditTrail(int limit, long before = long.MaxValue)
     {
         lock (_gate)
         {
             using var read = _db.CreateCommand();
             read.CommandText = """
                 SELECT id, admin_id, action, target, at_utc
-                  FROM admin_audit ORDER BY id LIMIT $limit OFFSET $skip
+                  FROM admin_audit WHERE id < $before ORDER BY id DESC LIMIT $limit
                 """;
-            Bind(read, "$limit", limit);
-            Bind(read, "$skip", skip);
+            Bind(read, "$before", before);
+            Bind(read, "$limit", Math.Clamp(limit, 1, MostAuditPage));
             using var rows = read.ExecuteReader();
             var trail = new List<AuditRow>();
             while (rows.Read())
             {
                 trail.Add(new AuditRow(
-                    rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3), rows.GetString(4)));
+                    rows.GetInt64(0),
+                    AdminId.Stored(rows.GetString(1)),
+                    AuditActions.Parse(rows.GetString(2)),
+                    new KeyId(rows.GetString(3)),
+                    UtcInstant.Read(rows.GetString(4))));
             }
 
             return trail;
@@ -610,12 +642,3 @@ public sealed class Corpus : IDisposable
 
     public void Dispose() => _db.Dispose();
 }
-
-/// <summary>What an accepted ingest came to: the answer, and whether the key's month moved.</summary>
-public sealed record Ingested<T>(T Answer, bool MonthAdvanced);
-
-/// <summary>A key's lifetime count and the month it was last used — empty for never.</summary>
-public sealed record KeyUsage(int Submissions, string LastSeenMonth);
-
-/// <summary>One administrative action, as the audit holds it.</summary>
-public sealed record AuditRow(long Id, string AdminId, string Action, string Target, string AtUtc);
