@@ -87,11 +87,39 @@ rather than skipping, because a skip in CI is how a changed snippet merges behin
 
 ### Story 2 — the release body is the changelog section
 
-`draft-release.sh` gains an optional mode: given a tag and a heading word, it extracts that
-release's section from `CHANGELOG.md` and uses it as the body, **falling back to the literal
-sentence when the section does not exist**. The fallback is not a nicety — `extension-v*` and
-`server-v*` have 51 and 5 releases with no entry, and a release must not fail because of a gap this
-plan is not fixing.
+**Not inside `draft-release.sh`.** That script has one job — create the draft once, or reuse the
+one already there — and it is deliberately shared by three release lines. Reading and slicing
+markdown inside it would put untestable text handling in a bash file that only runs on a release
+day, which is the exact shape `TheArchiveCheckTests` exists to punish.
+
+Instead: `.github/scripts/changelog-section.mjs <tag>` prints that release's section to stdout, or
+the fallback sentence when there is none, and the workflow passes its output as the third argument
+`draft-release.sh` already takes. `draft-release.sh` does not change at all.
+
+**It reuses the guard's registry rather than parsing headings a second time.** A second
+implementation of "which heading word belongs to this tag" is a defect from the moment it compiles,
+because the two will drift and nothing will notice. `changelog-names-the-release.mjs` already
+exports `lineOf`; the extractor imports it.
+
+That needs one widening of `LINES`, and it is a better model than what is there now: **`word` and
+`guarded` are orthogonal.** `word` says which heading this line's entries carry; `guarded` says
+whether a missing entry blocks the release. Today only the guarded line has a `word`, which
+conflates the two. After:
+
+| prefix | `word` | `guarded` |
+|---|---|---|
+| `mcp-v` | `Server` | **true** |
+| `extension-v` | `Extension` | false |
+| `server-v` | `Team server` | false |
+| `bugs-v` | *(none — this line has no headings in the file)* | false |
+
+Measured from the file itself: 52 `## Extension`, 18 `## Server`, 1 `## Team server`, 51 bare `## `
+(the early extension releases), and **zero** headings for `coai-bugs`. Adding a `word` changes no
+guard behaviour, because the guard keys on `guarded`.
+
+**Falling back to the literal sentence when the section does not exist** is not a nicety:
+`extension-v*` and `server-v*` have 51 and 5 releases with no entry, `bugs-v*` has no heading shape
+at all, and a release must not fail because of a gap this plan is not fixing.
 
 Three details that decide whether this works:
 
@@ -122,10 +150,11 @@ row together.
 2. Make the case refuse to report on a tagless checkout; watch the message change to name the cause.
 3. `fetch-tags: true` in `ci.yml`; re-run against the shallow clone and watch it pass for the right
    reason.
-4. **RED for story 2**: cases over `draft-release.sh` — a tag whose section exists, a tag whose
-   section does not, a joint heading, a section that runs to the next `## `.
-5. Implement the extraction and the fallback; green.
-6. Wire the three `*-draft` jobs.
+4. **RED for story 2**: cases over `changelog-section.mjs` — a tag whose section exists, a tag
+   whose section does not, a joint heading, a section that runs to the next `## `, and a line
+   with no `word` at all.
+5. Widen `LINES` with `word` for every line; implement the extractor and the fallback; green.
+6. Wire the three `*-draft` jobs to pass its output as the notes argument.
 7. Story 3: the baseline cannot shrink.
 8. `npm test` from a clean `out/`, the family checks, the MTP executable — no `src_mcp` change, so
    its count must not move from **2147**.
@@ -137,8 +166,8 @@ row together.
 |---|---|---|
 | a tagless checkout makes the phantom case REFUSE, not mis-report | `changelogNamesTheRelease.test.ts` | the defect this plan opens with; reproduce with `--depth 1 --no-tags` |
 | CI's own checkout now carries tags | `install.test.ts` workflow assertions | a test that only passes locally is the thing being fixed |
-| the body of a release with an entry IS that entry | new cases over `draft-release.sh` | otherwise the guard makes people write into a void |
-| a release with no entry still drafts, with the literal | same | 51 extension and 5 server releases have no entry and must not break |
+| the body of a release with an entry IS that entry | new cases over `changelog-section.mjs` | otherwise the guard makes people write into a void |
+| a line with no entry, and a line with no `word`, fall back to the literal | same | 51 extension and 5 server releases have no entry and must not break |
 | a joint `## Extension A · Server X` heading is used whole | same | it is accurate and it is what somebody wrote at the time |
 | the section stops at the next `## ` | same | a body carrying the entire changelog is worse than the sentence |
 | the baseline cannot shrink | new check over the origin/main comparison | the residual hole |
