@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { adoptionSentence, defaultSideName, FolderReport, sideRefusal, sidesIn } from './dataChoice';
 import { chosenRoot, coaiDataDir, DATABASE_FILE, DATA_TO_MOVE, dataSideName, defaultDataDir, directoryFor, serverEnv } from './dataDir';
 import { destinationPlaceRefusal, destinationRefusal, logsStrandedInTheRoot, mayDeleteTheOldCopy, MoveRecord, sourceChangedSince, sourceRefusal, sourceWarning, StorageFingerprint, verificationFailure } from './dataMove';
+import { notify, notifyAndAsk, notifyThen } from './notify';
 import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
 import { serverPath } from './installer';
@@ -112,11 +113,17 @@ export async function askWhereDataLives(
   // what they had adopted only once adopting it was done — and adopting the wrong folder is not
   // obviously recoverable. (local, plan round.)
   const go = found.hasDatabase ? 'Continue this history' : 'Use this folder';
-  const confirmed = await vscode.window.showInformationMessage(
-    `Keep this installation's data in ${resolved}?`,
-    { modal: true, detail: adoptionSentence(resolved, found) },
-    go,
-  );
+  const confirmed = await notifyAndAsk({
+    as: 'information',
+    class: 'confirmation',
+    source: 'dataDirectory',
+    code: 'adopt-a-data-directory',
+    subject: resolved,
+    modal: true,
+    title: `Keep this installation's data in ${resolved}?`,
+    detail: adoptionSentence(resolved, found),
+    action: go,
+  });
   if (confirmed !== go) {
     return 'unchanged';
   }
@@ -142,16 +149,18 @@ export async function askWhereDataLives(
  */
 async function offerAReload(directory: string): Promise<void> {
   const RELOAD = 'Reload Window';
-  const choice = await vscode.window.showInformationMessage(
-    `Reload this window so everything in it reads ${directory}?`,
-    {
-      modal: false,
-      detail: 'The panel and the config block are already correct. The escalation watcher, the '
-        + 'consultation watcher and the chat store were built when this window opened and still hold '
-        + 'the old folder, so questions and chats would be read from there until a reload.',
-    },
-    RELOAD,
-  );
+  const choice = await notifyAndAsk({
+    as: 'information',
+    class: 'offer',
+    source: 'dataDirectory',
+    code: 'reload-after-the-folder-changed',
+    subject: directory,
+    title: `Reload this window so everything in it reads ${directory}?`,
+    detail: 'The panel and the config block are already correct. The escalation watcher, the '
+      + 'consultation watcher and the chat store were built when this window opened and still hold '
+      + 'the old folder, so questions and chats would be read from there until a reload.',
+    action: RELOAD,
+  });
   if (choice === RELOAD) {
     await vscode.commands.executeCommand('workbench.action.reloadWindow');
   }
@@ -214,9 +223,15 @@ async function saveChoice(
 async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory: string): Promise<void> {
   const server = serverPath(context.globalStorageUri);
   if (server === undefined) {
-    void vscode.window.showInformationMessage(
-      `This window now reads ${directory}. Install the MCP server, then paste the block it gives you `
-      + 'into your MCP client — until you do, the server writes where its own entry tells it to.');
+    void notify({
+      as: 'information',
+      class: 'outcome',
+      source: 'dataDirectory',
+      code: 'folder-changed-server-not-installed',
+      subject: directory,
+      title: `This window now reads ${directory}. Install the MCP server, then paste the block it gives you `
+        + 'into your MCP client — until you do, the server writes where its own entry tells it to.',
+    });
 
     return;
   }
@@ -230,18 +245,21 @@ async function tellClientsToCatchUp(context: vscode.ExtensionContext, directory:
   void offerAReload(directory);
 
   await vscode.env.clipboard.writeText(mcpServerBlock(server.fsPath, serverEnv()));
-  void vscode.window.showWarningMessage(
-    `This window now reads ${directory}, and the updated MCP config block is on your clipboard.`,
-    {
-      modal: true,
-      detail: 'Paste it into your MCP client and restart it. Until you do, the server it starts keeps '
-        + 'writing to the folder its own entry names — which is the old one.\n\nThe path has to be the '
-        + 'one that names this folder where the SERVER runs: the same drive is reached by a different '
-        + 'route from Windows and from WSL.\n\nOther windows of this side keep the old folder until '
-        + 'they are reloaded.',
-    },
-    'I have pasted it',
-  );
+  void notifyAndAsk({
+    as: 'warning',
+    class: 'confirmation',
+    source: 'dataDirectory',
+    code: 'paste-the-updated-block',
+    subject: directory,
+    modal: true,
+    title: `This window now reads ${directory}, and the updated MCP config block is on your clipboard.`,
+    detail: 'Paste it into your MCP client and restart it. Until you do, the server it starts keeps '
+      + 'writing to the folder its own entry names — which is the old one.\n\nThe path has to be the '
+      + 'one that names this folder where the SERVER runs: the same drive is reached by a different '
+      + 'route from Windows and from WSL.\n\nOther windows of this side keep the old folder until '
+      + 'they are reloaded.',
+    action: 'I have pasted it',
+  });
 }
 
 /**
@@ -385,7 +403,13 @@ export async function moveDataDirectory(
   const activity = await whatIsRunningIn(from);
   const busy = sourceRefusal(activity);
   if (busy.length > 0) {
-    void vscode.window.showWarningMessage(busy);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'dataDirectory',
+      code: 'move-refused-something-is-running',
+      title: busy,
+    });
 
     return;
   }
@@ -420,14 +444,30 @@ export async function moveDataDirectory(
   // directories are disjoint.
   const place = destinationPlaceRefusal(from, landing.fsPath, isInside);
   if (place.length > 0) {
-    void vscode.window.showWarningMessage(place);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'dataDirectory',
+      code: 'move-refused-where-it-would-land',
+      subject: landing.fsPath,
+      title: place,
+    });
 
     return;
   }
 
   const clash = destinationRefusal(await historyIn(landing));
   if (clash.length > 0) {
-    void vscode.window.showWarningMessage(clash);
+    // A different CODE from the one above: "you cannot put it there" and "there is already a
+    // history there" send a person to two different places.
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'dataDirectory',
+      code: 'move-refused-destination-holds-a-history',
+      subject: landing.fsPath,
+      title: clash,
+    });
 
     return;
   }
@@ -449,19 +489,22 @@ export async function moveDataDirectory(
   const rootLogsPath = join(chosenRoot().length === 0 ? defaultDataDir() : chosenRoot(), 'logs');
   const stranded = logsStrandedInTheRoot(side, rootLogsPath, before);
   const go = 'Copy it';
-  const confirmed = await vscode.window.showWarningMessage(
-    `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${landing.fsPath}?`,
-    {
-      modal: true,
-      detail: `Nothing is deleted. ${from} is left exactly as it is, and you can delete it yourself `
-        + 'once you have seen your history in the new folder.\n\nOn a network drive this can take '
-        + 'minutes: the chat conversations and the sessions are thousands of small files, and the '
-        + 'progress names each entry as it starts rather than each file.\n\nWhat is copied: '
-        + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`
-        + `${stranded.length === 0 ? '' : `\n\n${stranded}`}`,
-    },
-    go,
-  );
+  const confirmed = await notifyAndAsk({
+    as: 'warning',
+    class: 'confirmation',
+    source: 'dataDirectory',
+    code: 'copy-the-data-directory',
+    subject: landing.fsPath,
+    modal: true,
+    title: `Copy ${before.rounds} rounds and ${before.sessions} sessions to ${landing.fsPath}?`,
+    detail: `Nothing is deleted. ${from} is left exactly as it is, and you can delete it yourself `
+      + 'once you have seen your history in the new folder.\n\nOn a network drive this can take '
+      + 'minutes: the chat conversations and the sessions are thousands of small files, and the '
+      + 'progress names each entry as it starts rather than each file.\n\nWhat is copied: '
+      + `${DATA_TO_MOVE.join(', ')}.${sidecars.length === 0 ? '' : `\n\n${sidecars}`}`
+      + `${stranded.length === 0 ? '' : `\n\n${stranded}`}`,
+    action: go,
+  });
   if (confirmed !== go) {
     return;
   }
@@ -489,7 +532,14 @@ export async function moveDataDirectory(
     // NOTHING is recorded. A record written here could never be cleared except by another whole
     // move, and a record that cannot be cleared is a state a person is trapped in. (gemini.)
     await context.globalState.update(MOVE_RECORD, undefined);
-    void vscode.window.showErrorMessage(copied);
+    void notify({
+      as: 'error',
+      class: 'failure',
+      source: 'dataDirectory',
+      code: 'copy-did-not-complete',
+      subject: landing.fsPath,
+      title: copied,
+    });
 
     return;
   }
@@ -501,10 +551,17 @@ export async function moveDataDirectory(
     // The settings did not land, so this window still reads the OLD folder. Recording the move as
     // verified here would enable a delete of the directory in use. (codex, code round.)
     await context.globalState.update(MOVE_RECORD, undefined);
-    void vscode.window.showWarningMessage(
-      `Everything was copied to ${landing.fsPath} and reads back the same, but this window could not `
-      + 'be pointed at it. Nothing has been deleted; set the folder yourself in Settings, as '
-      + 'coai.dataDirectory.');
+    void notify({
+      as: 'warning',
+      class: 'failure',
+      source: 'dataDirectory',
+      code: 'copied-but-the-window-was-not-pointed-at-it',
+      subject: landing.fsPath,
+      title: `Everything was copied to ${landing.fsPath} and reads back the same, but this window could not `
+        + 'be pointed at it. Nothing has been deleted; set the folder yourself in Settings, as '
+        + 'coai.dataDirectory.',
+      cure: 'Set coai.dataDirectory in Settings. Nothing was deleted.',
+    });
 
     return;
   }
@@ -520,10 +577,16 @@ export async function moveDataDirectory(
     held: before,
   } satisfies MoveRecord);
 
-  void vscode.window.showInformationMessage(
-    `Your data is in ${landing.fsPath} and reads back the same ${before.rounds} rounds. ${from} still `
-    + 'holds the original — delete it from the Command Palette, with "ConnectOtherAIs: Delete the old '
-    + 'data folder", once you are sure.');
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'dataDirectory',
+    code: 'data-directory-moved',
+    subject: landing.fsPath,
+    title: `Your data is in ${landing.fsPath} and reads back the same ${before.rounds} rounds. ${from} still `
+      + 'holds the original — delete it from the Command Palette, with "ConnectOtherAIs: Delete the old '
+      + 'data folder", once you are sure.',
+  });
 
   if (stranded.length > 0) {
     // "Copy that folder yourself" named a path and offered nothing, which two reviewers called close
@@ -531,11 +594,22 @@ export async function moveDataDirectory(
     // second copy flow for one directory — its own destination, refusals and verification — would be
     // a feature rather than a fix.
     const SHOW = 'Show me the logs';
-    void vscode.window.showWarningMessage(stranded, SHOW).then((choice) => {
-      if (choice === SHOW) {
-        void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(rootLogsPath));
-      }
-    });
+    void notifyThen(
+      {
+        as: 'warning',
+        class: 'offer',
+        source: 'dataDirectory',
+        code: 'logs-stranded-in-the-root',
+        subject: rootLogsPath,
+        title: stranded,
+        action: SHOW,
+      },
+      (choice) => {
+        if (choice === SHOW) {
+          void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(rootLogsPath));
+        }
+      },
+    );
   }
   await tellClientsToCatchUp(context, landing.fsPath);
 }
@@ -569,11 +643,17 @@ export async function deleteTheOldDataFolder(
 ): Promise<void> {
   const record = context.globalState.get<MoveRecord>(MOVE_RECORD);
   if (!mayDeleteTheOldCopy(record)) {
-    void vscode.window.showInformationMessage(
-      record === undefined
+    void notify({
+      as: 'information',
+      class: 'refusal',
+      source: 'dataDirectory',
+      code: 'nothing-to-delete',
+      subject: record === undefined ? 'no-move' : 'move-did-not-verify',
+      title: record === undefined
         ? 'Nothing has been moved from this window, so there is no old folder to delete.'
         : 'That move did not check out, so its old folder is the only copy of anything it missed. '
-          + 'Nothing will be deleted until a move verifies.');
+          + 'Nothing will be deleted until a move verifies.',
+    });
 
     return;
   }
@@ -581,20 +661,25 @@ export async function deleteTheOldDataFolder(
   const old = record!.from;
 
   const go = 'Delete it';
-  const confirmed = await vscode.window.showWarningMessage(
-    `Delete ${old}?`,
-    {
-      modal: true,
-      detail: `Its contents were copied to ${record!.to} and read back the same.\n\nBefore you press `
-        + 'this: every MCP client must already have been given the new block and restarted. A client '
-        + 'still configured for this folder will recreate it and write there, and you will be reading '
-        + 'one history while it writes another.\n\nWhat is checked is that nothing has been ADDED to '
-        + 'or removed from the old folder since the copy. A file edited in place is not something '
-        + 'this can see.\n\nThis cannot be undone, and it is the last copy of anything the move did '
-        + 'not take — the sign-in tokens and the scratch worktrees are deliberately not copied.',
-    },
-    go,
-  );
+  // The most destructive question this product asks, so both the asking and the answer are written
+  // down — including a decline, which is the case nobody can otherwise account for afterwards.
+  const confirmed = await notifyAndAsk({
+    as: 'warning',
+    class: 'confirmation',
+    source: 'dataDirectory',
+    code: 'delete-the-old-data-folder',
+    subject: old,
+    modal: true,
+    title: `Delete ${old}?`,
+    detail: `Its contents were copied to ${record!.to} and read back the same.\n\nBefore you press `
+      + 'this: every MCP client must already have been given the new block and restarted. A client '
+      + 'still configured for this folder will recreate it and write there, and you will be reading '
+      + 'one history while it writes another.\n\nWhat is checked is that nothing has been ADDED to '
+      + 'or removed from the old folder since the copy. A file edited in place is not something '
+      + 'this can see.\n\nThis cannot be undone, and it is the last copy of anything the move did '
+      + 'not take — the sign-in tokens and the scratch worktrees are deliberately not copied.',
+    action: go,
+  });
   if (confirmed !== go) {
     return;
   }
@@ -609,7 +694,14 @@ export async function deleteTheOldDataFolder(
   // made before it opened. The last thing before the delete is the read. (CodeRabbit, Minor.)
   const moved = sourceChangedSince(record!, await countAt(old));
   if (moved.length > 0) {
-    void vscode.window.showWarningMessage(moved);
+    void notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'dataDirectory',
+      code: 'delete-refused-the-old-folder-changed',
+      subject: old,
+      title: moved,
+    });
 
     return;
   }
@@ -617,13 +709,28 @@ export async function deleteTheOldDataFolder(
   try {
     await vscode.workspace.fs.delete(vscode.Uri.file(old), { recursive: true, useTrash: true });
   } catch (error) {
-    void vscode.window.showErrorMessage(`${old} was not deleted: ${asText(error)}`);
+    void notify({
+      as: 'error',
+      class: 'failure',
+      source: 'dataDirectory',
+      code: 'old-folder-not-deleted',
+      subject: old,
+      title: `${old} was not deleted: ${asText(error)}`,
+      detail: asText(error),
+    });
 
     return;
   }
 
   await context.globalState.update(MOVE_RECORD, undefined);
-  void vscode.window.showInformationMessage(`${old} is gone. Your data is in ${record!.to}.`);
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'dataDirectory',
+    code: 'old-folder-deleted',
+    subject: old,
+    title: `${old} is gone. Your data is in ${record!.to}.`,
+  });
 }
 
 /** What the data directory says is running against it right now, and what was left beside it. */
