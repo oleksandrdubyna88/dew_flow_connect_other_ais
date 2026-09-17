@@ -64,6 +64,8 @@ interface Running {
   readonly posted: readonly Record<string, unknown>[];
   readonly click: (on: string, matching?: Record<string, Record<string, unknown>>) => void;
   readonly box: { value: string; disabled: boolean };
+  /** A host state message, delivered the way the webview delivers one. */
+  readonly push: (data: Record<string, unknown>) => void;
 }
 
 /**
@@ -80,6 +82,7 @@ function runPage(over: Partial<ChatPageState> = {}): Running {
   assert.ok(body.length > 0, 'the page has no script to run');
 
   const posted: Record<string, unknown>[] = [];
+  let onMessage: ((event: { data: unknown }) => void) | undefined;
   const listeners = new Map<string, (event: { target: unknown }) => void>();
   const box = { value: '', disabled: false, style: {}, scrollHeight: 0, focus() {}, addEventListener() {} };
   const made = (id: string): Record<string, unknown> => ({
@@ -121,7 +124,9 @@ function runPage(over: Partial<ChatPageState> = {}): Running {
   new Function('document', 'window', 'acquireVsCodeApi', body)(
     document_,
     {
-      addEventListener() {},
+      addEventListener(kind: string, fn: (event: { data: unknown }) => void) {
+        if (kind === 'message') { onMessage = fn; }
+      },
       matchMedia: () => ({ matches: false, addEventListener() {} }),
       requestAnimationFrame: () => 0,
       setTimeout: () => 0,
@@ -137,6 +142,10 @@ function runPage(over: Partial<ChatPageState> = {}): Running {
   return {
     posted,
     box,
+    push: (data: Record<string, unknown>) => {
+      assert.ok(onMessage, 'the page is not listening for host state, so this test delivers nothing');
+      onMessage({ data });
+    },
     click: (on: string, matching: Record<string, Record<string, unknown>> = {}) => {
       const fire = listeners.get(`${on}:click`);
       assert.ok(fire, `the page registered no click listener on #${on}, so this test drives nothing`);
@@ -235,4 +244,35 @@ test('the turn that begins asks the queue by name, so a withdrawn question never
   assert.equal(isWanted(afterWithdrawal, 'w2'), false, 'the withdrawn question would still have run');
   // And the one that does run leaves the queue as it begins, so a row means "not yet started".
   assert.deepEqual(began(afterWithdrawal, 'w1'), []);
+});
+
+// ---------- the lock, as the RUNNING page applies it ----------
+
+test('a running turn pushed to the live page leaves its controls alone', () => {
+  // The markup half is asserted where the page is rendered. This is the half that only running it
+  // can see: `lock()` is applied on every push, and a page whose markup was right could still
+  // disable the box the moment the host said a turn had started. (codex, the code round.)
+  const page = runPage();
+
+  page.push({ type: 'state', running: true, capped: false });
+
+  assert.equal(page.box.disabled, false, 'a pushed running turn killed the composer');
+});
+
+test('and a FULL conversation pushed to the live page locks them', () => {
+  const page = runPage();
+
+  page.push({ type: 'state', running: false, capped: true });
+
+  assert.equal(page.box.disabled, true, 'a conversation with no turns left stayed open');
+});
+
+test('the lock lifts again when the cap does', () => {
+  // Both directions, so this cannot pass by never unlocking.
+  const page = runPage();
+  page.push({ type: 'state', running: false, capped: true });
+
+  page.push({ type: 'state', running: true, capped: false });
+
+  assert.equal(page.box.disabled, false, 'the composer stayed locked after the cap went away');
 });

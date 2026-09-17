@@ -4784,6 +4784,11 @@ A reload. The queue is runtime state on `Thread` and is deliberately not part of
 died with it and the promise that would have run the question died too. Restoring the row would draw
 somebody a question that can never run.
 
+So the promise above is about a window that LIVES — a reload takes the queue with it and nothing can
+hand the words back, because the host that held them is gone. The code round was right that the
+unqualified sentence overclaims. What a reload does not lose is anything that was actually asked, and
+it already killed the running turn before this feature existed.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
