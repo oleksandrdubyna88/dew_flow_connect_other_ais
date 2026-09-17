@@ -1,8 +1,11 @@
 # PLAN — a structural check parses rather than greps
 
 > Status: **plan only, nothing implemented yet. Tech debt, opened by operator ruling on 2026-09-17.**
-> Scope: the two C# tests that assert on SOURCE TEXT — `src_bugs/tests/TheAdminKeysTests.cs:174` and
-> `src_bugs/tests/TheDocblocksAreAttachedTests.cs:40` — and the rule that governs any future one.
+> Scope: the C# tests that assert on SOURCE TEXT — `src_bugs/tests/TheAdminKeysTests.cs:174` and
+> `src_bugs/tests/TheDocblocksAreAttachedTests.cs:40` — the TypeScript ones that do the same
+> (`src_vs_code/src/test/bugsKeysWiring.test.ts`, added 2026-09-17 by story 3's second code round,
+> which strips comments with a regex for exactly the reason below; the older `*Wiring.test.ts` files
+> do not strip at all and are the same debt undeclared) — and the rule that governs any future one.
 >
 > Related docs: [module_tests.md](../research/module_tests.md),
 > [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) (the story that produced both tests),
