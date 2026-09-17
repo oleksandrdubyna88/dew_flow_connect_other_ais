@@ -4694,6 +4694,96 @@ class tokens now. And the view's *back to page one* test passed with `firstPage(
 `render`'s clamp pulls an out-of-range page back by itself when the other view holds only one page;
 it is written over two views of two pages each now, and deleting `firstPage()` reddens it.
 
+## A question can wait its turn (2026-09-17, issue #288)
+
+> *"я задал вопрос, и не могу нажать сенд, пока не ответит. но это долго ждать, мне нужно уже
+> переключаться дальше."*
+
+Send was dead until the answer arrived. A real explanation was measured at **9.4 s**, eight of them
+silent, and a person who wants to type the next question and move on could not.
+
+**The queue already existed.** `ask` has chained onto `thread.turns` since the chain was built, so a
+second question asked through the KEYBINDING already waited its turn and landed in order. The only
+door that could not reach it was the composer, which the page locked — and the page's own reason for
+locking, *"two turns down one NDJSON pipe would interleave"*, had stopped being load-bearing: the
+session refuses to interleave and the chain orders the transcript, so the lock was belt-and-braces
+over two guarantees that enforce it properly, and the belt cost the person the nine seconds.
+
+So `locked` was two facts wearing one name, and they are now separate:
+
+| | while it runs | while it is FULL |
+|---|---|---|
+| composer | **live**, and Send queues | locked, unchanged |
+
+A cap is not a wait — a full remote conversation can never take another turn however long anybody
+waits — so queueing into one would promise something that cannot happen.
+
+### What is waiting is drawn, and taking it back CANCELS it
+
+`chatWaitingHtml` draws the queue under the thinking line, dimmed, each row with its own ✕. Its own
+region rather than part of that line, because the line is replaced on every push and carries the stop
+control: a queue living inside it would be destroyed and rebuilt whenever a turn's status moved,
+taking the keyboard off a cross somebody was reaching for.
+
+**The ✕ is a cancellation, not an un-drawing, and that is the rule the whole design turns on.**
+Removing a row does not un-create the `thread.turns.then(() => oneTurn(…))` callback — that was made
+the moment Send was pressed, and a promise chain cannot be un-chained. So every queued question
+carries a stable id, and `oneTurn` asks `isWanted` about that id **at the moment it begins**. A
+withdrawn question begins nothing, sends nothing and appends nothing, instead of running invisibly
+and billing somebody for a question they took back. Keying on the TEXT would not do: the same words
+typed twice is an ordinary thing to do, and withdrawing the second would cancel the first.
+
+**A queued question is not transcript.** It joins `thread.messages` in `oneTurn`, when its own turn
+begins — never when it is queued. `messages` is what was actually said and it is what a forgetful
+model is handed as `carry`, so a question appended early would be re-sent to the model answering the
+turn in FRONT of it, as though the person had said two things at once, and billed for.
+
+### The decisions live in `chatQueue.ts`
+
+`chatCommand.ts` needs a `vscode` host the suite has none of, so nothing in it can be executed by a
+test. The decisions — joining, the ceiling, withdrawal, what a reset hands back — are in a pure
+module beside `answerCopy`, `chatLedger` and `chatUsage`, which is this codebase's standing answer
+to that. One rule is deliberately NOT there: putting words back into the composer is `pushChatDraft`,
+and the page appends them below what is in the box. A first draft wrote that rule a second time in
+the queue, which is the duplicate the reuse rule forbids.
+
+### Four doors, one transition
+
+The composer, the keybinding, a re-ask and a retry are four ways to ask, and they were not four ways
+of doing the same thing: two joined the chain and two called the turn directly, which is a question
+that can overtake one already waiting. Harmless while the composer locked, because then nothing could
+be waiting. All four go through `enqueue` now.
+
+### Nothing typed is ever silently dropped
+
+Three reviewers reached this from three directions — withdrawal with a non-empty composer, a reset
+with several queued, and a dropped-count that contradicted itself. One answer covers all three, and
+it is this codebase's own: *the words go back to the composer, which is where they were typed.*
+A withdrawal returns its row's words; a reset returns every waiting question, oldest first, before
+the slate moves; a refusal keeps them where they are. The page appends each below what is already
+there, so a half-written question survives.
+
+### A ceiling, and a cap that finally refuses
+
+The queue holds **8 questions and 64 KB across them**. Eight is a judgement, written down so that
+changing it is a decision; that there must be a limit is not, and two reviewers reached it
+independently — nothing otherwise stops a person holding Enter until the host carries a stack of
+prompts that will all be billed.
+
+And the three-turn cap on a remote conversation **became a boundary**. `remoteIsFull` was read at
+exactly one place — to draw the `capped` flag the page shows — so nothing refused a turn: the
+keybinding could already ask a full Team conversation a fourth time, past the cap that exists because
+the bill for turn N is the bill for everything before it. A queue makes that reachable a new way,
+since a question queued while there was room can arrive after the cap is hit. It is enforced in
+`oneTurn` now, where the turn begins. *A picker is not an enforcement; the boundary refuses.*
+
+### What does NOT survive
+
+A reload. The queue is runtime state on `Thread` and is deliberately not part of
+`ConversationRecord`: a reload kills the extension host, so the turn a question was waiting behind
+died with it and the promise that would have run the question died too. Restoring the row would draw
+somebody a question that can never run.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was

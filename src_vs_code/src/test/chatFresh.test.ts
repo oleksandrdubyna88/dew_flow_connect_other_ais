@@ -58,6 +58,8 @@ test('the slate a reset installs is exactly these fields, and nothing else', () 
     // forget, its thread id being instance state of a session object that is now gone.
     reopen: true,
     running: false,
+    // And nothing waiting: the questions went back to the composer before the slate moved.
+    waiting: [],
     // A new slate has failed at nothing, so it offers no retry of anything.
     failedWith: '',
     createdAt: 1_700_000_000_000,

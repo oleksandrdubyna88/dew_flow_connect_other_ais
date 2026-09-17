@@ -33,9 +33,21 @@ import { pastedImage } from './chatImage';
  * down is the conversation, which is what the page scrolls to anyway. Two scrollbars on one page was
  * the price of the old arrangement and the operator named it.</p>
  *
- * <p><b>The composer is disabled while a turn runs, and that is a feature.</b> A real explanation
- * took 9.4 s when it was measured, and eight of those seconds are silent. Two turns down one NDJSON
- * pipe would interleave; the page makes that impossible rather than the session refusing it late.</p>
+ * <p><b>The composer STAYS LIVE while a turn runs, and a second question waits its turn.</b> This
+ * paragraph said the opposite until issue #288, and the reasoning it gave was sound when it was
+ * written: a real explanation took 9.4 s when it was measured, eight of those seconds are silent,
+ * and two turns down one NDJSON pipe would interleave.
+ *
+ * <p>What changed is not the hazard but who defends against it. The session refuses to interleave,
+ * and the host chains the turns so the transcript cannot be written out of order — so the lock was
+ * belt-and-braces over two guarantees that enforce it properly, and the belt cost the person the
+ * nine seconds they would rather have spent typing the next question. What is drawn instead is the
+ * QUEUE: what is typed and not yet asked, under the thinking line, each row with a cross that takes
+ * it back.</p>
+ *
+ * <p>One half of the old lock survives and is now the whole of it: a CAPPED conversation. That is
+ * not a wait — a full remote conversation can never take another turn however long anybody waits —
+ * so queueing into one would promise something that cannot happen.</p>
  */
 
 /** One thing said, by one of the two parties. */
@@ -1791,6 +1803,18 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // and the HOST decides, which is where the workspace root and the scheme are actually known.
   // Delegated on the region that HOLDS the line rather than bound to the button, because the line is
   // replaced wholesale on every push and a listener bound to the old button dies with it.
+  // THE CROSS ON A WAITING ROW. Delegated, because the rows are replaced wholesale on every push
+  // and a listener bound to one of them would be bound to an element that no longer exists.
+  const waitingRegion = document.getElementById('waiting');
+  if (waitingRegion) {
+    waitingRegion.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') { return; }
+      const cross = target.closest('[data-command="withdraw"]');
+      if (!cross) { return; }
+      vscode.postMessage({ type: 'command', command: 'withdraw', id: cross.getAttribute('data-id') });
+    });
+  }
   const thinkingRegion = document.getElementById('thinking');
   if (thinkingRegion) {
     thinkingRegion.addEventListener('click', function (event) {
@@ -2116,6 +2140,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     let wrote = false;
     const messages = document.getElementById('messages');
     const thinking = document.getElementById('thinking');
+    const waiting = document.getElementById('waiting');
     const capped = document.getElementById('capped');
     const failure = document.getElementById('failure');
     // A CHANGE, not an assignment. A retry, or a poll that pushes the state again, assigns the same
@@ -2131,6 +2156,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // markup says, so a copy that landed a moment ago would lose its tick to an arriving answer.
       // The page remembers which ones landed and paints them again.
       paintCopied();
+      wrote = true;
+    }
+    // ITS OWN REGION, not part of the thinking line. That line is replaced on every push and
+    // carries the stop control, so a queue living inside it would be destroyed and rebuilt whenever
+    // a turn's status moved - taking the keyboard off a cross somebody was reaching for.
+    if (waiting && typeof data.waitingHtml === 'string' && lastWritten.waiting !== data.waitingHtml) {
+      waiting.innerHTML = data.waitingHtml;
+      lastWritten.waiting = data.waitingHtml;
       wrote = true;
     }
     if (thinking && typeof data.thinkingHtml === 'string' && lastWritten.thinking !== data.thinkingHtml) {

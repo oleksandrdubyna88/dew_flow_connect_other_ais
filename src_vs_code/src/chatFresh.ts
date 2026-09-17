@@ -1,4 +1,4 @@
-import { ChatMessage } from './chatPage';
+import { ChatMessage, WaitingQuestion } from './chatPage';
 import { TurnSpend } from './chatSpend';
 
 /**
@@ -92,6 +92,15 @@ export interface Freshened {
   /** Whatever was in flight has been ended and waited for, so nothing is running. */
   readonly running: boolean;
   /**
+   * And nothing is waiting either — the queue is emptied by the reset that produced this slate.
+   *
+   * <p>The words are not lost: they go back to the composer before the generation moves, which is
+   * this codebase's own rule for a question that will not be asked. Leaving the queue in place
+   * would be worse than either — the questions belong to a conversation that no longer exists, and
+   * the generation guard would drop each of them one at a time with nobody told. (issue #288.)</p>
+   */
+  readonly waiting: readonly WaitingQuestion[];
+  /**
    * Nothing has failed in a conversation that has said nothing, so there is no retry to offer.
    *
    * <p>Carrying it over would put *Try again* on a new slate for a question the transcript no longer
@@ -123,6 +132,7 @@ export function freshened(saveId: string, now: number): Freshened {
     passage: '',
     reopen: true,
     running: false,
+    waiting: [],
     failedWith: '',
     createdAt: now,
     usedAt: now,

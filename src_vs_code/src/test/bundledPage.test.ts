@@ -433,6 +433,9 @@ function bundledChatPage(over: Record<string, unknown> = {}): { bundle: string; 
       modelPresets: [],
       modelId: 'g',
       running: false,
+      // Typed `unknown` on purpose here — this suite drives the BUNDLE rather than the source — so
+      // the compiler cannot supply this the way it does at every real construction site.
+      waiting: [],
       failure: '',
       draft: '',
       promptId: '',
@@ -619,7 +622,11 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
   const sends = posted.filter((message) => message['command'] === 'send');
   assert.strictEqual(sends.length, 1, 'the shipped Send button did not send exactly one turn');
   assert.strictEqual(sends[0]?.['text'], 'does the shipped button work');
-  assert.strictEqual(nodes['say']['disabled'], true, 'the shipped page left the composer open after a send');
+  // AND IT STAYS OPEN. This asserted the opposite until issue #288: the page locked itself the
+  // instant it posted, so the next question could not be typed until the answer arrived. The turns
+  // are serialised by the host chain and the session refuses to interleave them, so what the page
+  // owes the person is a box they can keep using.
+  assert.strictEqual(nodes['say']['disabled'], false, 'the shipped page locked the composer after a send');
 
   // And a real push, which is what exercises the function the page carries as EMBEDDED SOURCE. A
   // free identifier in it — a default parameter, a transpiler helper, a constant it closed over —
