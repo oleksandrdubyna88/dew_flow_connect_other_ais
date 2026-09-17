@@ -6934,6 +6934,45 @@ unrelated repainted the panel.
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
 
+## Sending — the last thing the Bugz section could not do
+
+The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
+--server …` with `COAI_BUGS_KEY` in the environment: a CLI invocation a person made by hand, having
+got the key from somewhere the extension could not tell them about. **And the setting that looked
+like it worked did not** — `state.server` was read in exactly one place, to render its own button's
+label, so *Set the ingest server…* stored a value nothing consumed.
+
+**Send runs the real one-shot**, through `uploadRun` — the one door in this extension that can put a
+credential into a child process, named so that the answer to "what can" is one grep with one result.
+The key goes in the ENVIRONMENT: never an argument, which is in `ps`, in `/proc` and in a shell
+history, and never a file, which is a credential on disk with a cleanup a crash skips. The address
+IS an argument, because an address is not a secret.
+
+**Everything is judged before the child exists.** `mayStart` reads the address, the key and the
+database's own send row, in that order, so the most actionable sentence is the one a person gets: an
+address nobody set, an address a credential must not cross, no key, nothing waiting, or a send
+already running. The CLI refuses the same things — belt and braces, deliberately — but only the
+preflight runs before the key moves.
+
+**The in-flight state is the server's, not the panel's.** A pair is marked sent only on the server's
+acknowledgement, which is what makes a killed upload safe to retry — and it is also why the funnel
+cannot answer "is a send happening": for the whole of a multi-minute run the counts say what they
+said before it started. So `coai-mcp` opens an `upload_runs` row before the first request, beats it
+per batch, and ends it in a `finally`; `--bugs-json` carries the row as `lastSend`, and the button,
+its label and its disabled state are read from THAT. A reload shows the send that is still going, and
+a second Send is refused rather than started beside the first. Three plan reviewers arrived at this
+independently.
+
+**Every ending has a sentence**, including the two that are about this machine rather than about the
+pairs: exit 64 is an installed `coai-mcp` older than sending — *update it, nothing was lost* — and a
+run whose summary cannot be read claims nothing at all rather than reporting zero sent. A transport
+failure (69) says try again and says why that is safe: nothing was marked, and the server is
+idempotent on the derived pair id, so a pair it already holds is a no-op the second time.
+
+**The contributor key lives in `SecretStorage`**, beside the admin key and apart from it: one issues
+and revokes, the other uploads, and a person who holds both can remove either. Same storage for the
+same reason — settings sync.
+
 ## The Users tab — who holds a key
 
 A panel beside the review window (`bugsKeysPanel.ts`), opened by **Who holds a key** in the Bugz

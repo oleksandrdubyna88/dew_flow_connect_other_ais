@@ -37,6 +37,52 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
     public async Task<UploadSummary> RunAsync(
         RoundsDb db, Uri server, string key, int limit, CancellationToken ct = default)
     {
+        // OPENED BEFORE THE FIRST REQUEST, and this is the whole reason the row exists: a pair is
+        // marked only on an acknowledgement, so for the length of a send the funnel says exactly
+        // what it said before it started. A panel reading it shows an idle button, a reload shows an
+        // idle button, and a second Send starts a second process against the same pairs. It is
+        // written HERE rather than by the caller so that every way of starting a send — the one-shot
+        // by hand, the extension's button, a future scheduler — records it. (Plan round, all three.)
+        var runId = Guid.NewGuid().ToString("N");
+        db.StartUploadRun(runId, server.ToString(), offered: 0);
+
+        var total = new UploadSummary();
+        try
+        {
+            total = await BatchesAsync(db, server, key, limit, runId, ct);
+        }
+        finally
+        {
+            db.EndUploadRun(
+                runId, Ended(total), total.Offered, total.Accepted, total.Duplicate, total.Refused,
+                total.Trouble);
+        }
+
+        Say(Summarise(total));
+
+        return total;
+    }
+
+    /// <summary>Which ending this was, in the vocabulary the panel reads.</summary>
+    /// <remarks>
+    /// Trouble is the only thing that makes a run FAILED. Refusals are a count and a success of a
+    /// kind: the server read the pair and said our normaliser spoiled it, which `--requeue-refused`
+    /// exists to answer once the normaliser is repaired.
+    /// </remarks>
+    private static string Ended(UploadSummary total) =>
+        total.Trouble.Length > 0 ? UploadRunState.Failed : UploadRunState.Done;
+
+    /// <summary>
+    /// As many batches as it takes, beating after each one.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from <see cref="RunAsync"/> when the run row arrived: the loop plus the lifecycle
+    /// plus the `finally` was past the cyclomatic bound of four the C# doctrine sets, which is the
+    /// same measurement that split <see cref="OnceAsync"/> out of <see cref="SendAsync"/>.
+    /// </remarks>
+    private async Task<UploadSummary> BatchesAsync(
+        RoundsDb db, Uri server, string key, int limit, string runId, CancellationToken ct)
+    {
         var total = new UploadSummary();
         while (total.Offered < limit && total.Trouble.Length == 0)
         {
@@ -48,9 +94,12 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
 
             Say($"sending {sendable.Count} pair(s) to {server}");
             total = Add(total, await OnceAsync(db, sendable, server, key, ct));
-        }
 
-        Say(Summarise(total));
+            // PER BATCH, which is what makes this a heartbeat rather than a second write at the end:
+            // a run with nothing to say for ten minutes is presumed gone by the sweep, and a send of
+            // two thousand pairs is ten batches that each take their own time.
+            db.BeatUploadRun(runId, total.Offered, total.Accepted, total.Duplicate, total.Refused);
+        }
 
         return total;
     }

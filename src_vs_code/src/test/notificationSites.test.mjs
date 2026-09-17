@@ -151,7 +151,12 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // one press from Copy and it revokes — the same irreversible act the table's Revoke button already
 // confirmed — so the two are confirmed the same way rather than one of them being a rule nobody can
 // rely on.
-const PLACES_THIS_SPEAKS = 118;
+// 118 → 121 on 2026-09-17, story 5 of PLAN_who_holds_a_key: the Bugz section can SEND. It speaks
+// three times — the server binary is not installed, the send was refused before anything left (an
+// address that must not carry a key, no key, nothing waiting, or a send already running), and what
+// the run came to. The last one is the story: uploading used to be a CLI invocation whose result
+// nobody in the editor ever saw.
+const PLACES_THIS_SPEAKS = 121;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

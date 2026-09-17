@@ -510,6 +510,28 @@ go, a pending key offers copy AND discard and says discarding revokes, the rejec
 server's words while **refusing to name a cause**, an unreachable server says it is not the key, and
 a note that is markup is escaped.
 
+`bugsSend.test.ts` holds the decisions a send is made of, with no editor in sight: what may start and
+why not, the summary read field by field, and a sentence for every exit the CLI can answer. Its
+liveliest test is one a fixture could not have produced — `bugzLiveContract.test.ts` runs the REAL
+`coai-mcp --upload-pairs` against a fresh data directory and parses what it actually prints, and that
+caught the reader on its first run: the server writes its summary with indentation on, so the real
+output is six lines and the last one is `}`. Every unit test had passed, because every fixture was
+written on one line. Both sides agreed with each other and disagreed with the binary, which is the
+failure that whole style of test exists for. The same file asserts that an unknown mode really does
+exit 64, because "update your server" is a sentence the panel only earns if that is what the binary
+answers.
+
+`bugsSendWiring.test.ts` pins what `vscode` puts out of reach: that `mayStart` runs BEFORE
+`uploadRun` — a plan reviewer named the failure precisely, a stored key and an `http://` address
+meaning the credential reaches a process pointed at an address it must not cross — that the key is
+neither an argument nor a file, and that `COAI_BUGS_KEY` appears in exactly one place in this
+extension. Its teeth were proved by moving the spawn above the preflight and watching it name that.
+
+`TheSendsThemselvesTests` is the durable half, in the server: a send is running before anything has
+been sent, a REOPENED database still says so, a beat moves the heartbeat, a kill is swept to
+`interrupted` rather than left running for ever, and a live run survives the sweep. Breaking it by
+recording a send as already over turns three of them red.
+
 `bugsKeysTurns.test.ts` drives the coordinator that serialises the tab's actions — that a second
 action waits, that the page is told at the START of one and told again at the END, and that neither a
 failed action, a failed repaint nor a failed reporter can poison the chain and leave a panel silently

@@ -196,7 +196,7 @@ Confirm it took: an authenticated `GET /admin/keys` with the removed key must an
 
 **The deploy delivers this variable**, from Actions Secrets, on every run — the same path as
 `COAI_BUGS_SECRET` and in the same step, two lines on stdin. It did not, until story 4 of
-[PLAN_who_holds_a_key.md](../../todo/PLAN_who_holds_a_key.md), and the failure was quiet in
+[PLAN_who_holds_a_key.md](../../research/PLAN_who_holds_a_key.md), and the failure was quiet in
 exactly the way that matters: a release started perfectly, served `/health`, and answered `401` to
 every admin call with nothing in CI noticing.
 

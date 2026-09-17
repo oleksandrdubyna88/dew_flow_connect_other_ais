@@ -84,6 +84,17 @@ public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Can
     /// </remarks>
     public CollectRunRow LastRun { get; init; } = new();
 
+    /// <summary>The most recent SEND, or an empty row when none has ever started.</summary>
+    /// <remarks>
+    /// <para>It rides here for the reason <see cref="LastRun"/> does — one spawn answers both — and
+    /// it has to exist for the reason the funnel cannot answer: a pair is marked sent only on the
+    /// server's acknowledgement, so while a send runs the counts say what they said before it began.
+    /// Without this the panel cannot tell "nothing to send" from "sending right now".</para>
+    /// <para>An older binary emits no <c>lastSend</c> key. A reader must treat that as "no send",
+    /// which is the same state an empty id means.</para>
+    /// </remarks>
+    public UploadRunRow LastSend { get; init; } = new();
+
     /// <summary>The vendors that may be shown a finding's own words.</summary>
     /// <remarks>
     /// <para><b>On the wire, so the picker reads the list that ENFORCES rather than a copy of it.</b>
@@ -249,6 +260,7 @@ public static class BugsQuery
             return new BugCorpus(Funnel(db), Candidates(db, Math.Clamp(limit, 1, MaxLimit), all))
             {
                 LastRun = LastRun(db),
+                LastSend = LastSend(db),
             };
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteError && TooOld(e))
@@ -273,6 +285,9 @@ public static class BugsQuery
     /// different run states from one table. (Code round, codex, twice.)
     /// </remarks>
     private static CollectRunRow LastRun(SqliteConnection db) => CollectRuns.Last(db);
+
+    /// <summary>The most recent send, through the one place that query lives.</summary>
+    private static UploadRunRow LastSend(SqliteConnection db) => UploadRuns.Last(db);
 
     private static BugFunnel Funnel(SqliteConnection db)
     {

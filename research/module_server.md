@@ -2675,6 +2675,18 @@ persists it, so `Keep` computes it and answers the id it used.
 **It sends as many batches as it takes.** It sent one, so two thousand kept pairs answered "200
 accepted" and exit code 0 with eighteen hundred still queued and nothing saying so.
 
+**And it writes down that it is sending.** `upload_runs` is opened before the first request, beaten
+after each batch and ended in a `finally`, because the pairs themselves cannot carry that state: one
+is marked only on the server's acknowledgement — the rule that makes a killed send safe to retry — so
+for the whole of a multi-minute run the funnel says exactly what it said before it started. A panel
+reading the funnel shows an idle button, a reload shows an idle button, and a second Send starts a
+second process against the same pairs. The row rides out on `--bugs-json` as `lastSend`, so the
+extension's button is disabled by what the DATABASE says rather than by a flag that dies with the
+window. A heartbeat rather than a process id, because the data directory can be a NAS where a pid
+belongs to another machine; a send silent for ten minutes is swept to `interrupted`, and nothing is
+lost by being wrong in that direction — the pairs are simply offered again, and the server is
+idempotent on the derived id.
+
 **An acknowledgement is matched by ID, not by position.** The id is a pure function of the
 payload, so the client derives exactly what the server will. Matching by order works until the
 day the server reorders anything, and then every acknowledgement goes to the wrong local pair,
