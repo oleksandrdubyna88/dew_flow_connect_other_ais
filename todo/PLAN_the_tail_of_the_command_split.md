@@ -34,9 +34,13 @@
 > backlog deliberately; it is not an oversight.
 >
 > Related: [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) — the other
-> standing tech-debt plan over the same files. It governs how the page is TESTED; this one governs
-> what the host DOES. They meet in story 6, which needs a scenario in that plan's running-page
-> harness rather than a twelfth source-text assertion.
+> standing tech-debt plan over the same files. It governs how the WEBVIEW PAGE is tested; this one
+> governs what the host DOES, and story 13 builds the harness for the host.
+>
+> **The two plans do NOT meet, and an earlier draft of this line said they did.** Story 6's refusal is
+> drawn by a native `createQuickPick`, not by a page script, so that plan's harness is the wrong
+> surface for it — established by reading `conversationPickerCommand.ts:197`, after two rounds of
+> review had sent story 6 there. Neither plan blocks the other.
 
 ## The goal
 
