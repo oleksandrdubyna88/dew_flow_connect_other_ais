@@ -1,7 +1,7 @@
 # PLAN — the chat command file is five times the ceiling
 
 > Status: **IMPLEMENTED, 2026-09-17.** `src_vs_code/src/chatCommand.ts` went from **4 183 lines to
-> 543**, under the 800 the coding-style rule allows, in fifteen modules and seven commits. No
+> 543**, under the 800 the coding-style rule allows, in fifteen modules and nine commits. No
 > behaviour change anywhere in the series, and that is measured rather than asserted.
 >
 > Scope: `chatCommand.ts` and the eleven test files that read its SOURCE TEXT.
@@ -83,7 +83,7 @@ which `chatRoots` already owned).
 
 ## What proves nothing changed
 
-Four independent checks, run at every tier:
+Six checks. Four ran at every tier; two were added by the gate and run over the finished series:
 
 1. **The collected test NAMES**, dumped, sorted and `diff`ed against a baseline measured by stashing
    that tier on the same commit. **3 261 names, identical at every tier.** The count alone is not
@@ -92,9 +92,17 @@ Four independent checks, run at every tier:
    `clean && tsc` and stops on a non-zero exit, so stale output cannot be what answered.
 3. **`npm run bundle`** — esbuild resolving the whole graph from `extension.ts` is the only check
    here that a cycle or an unresolvable import fails.
-4. **`scripts/prove-move.mjs`** — every body line of every new module must appear VERBATIM in
-   `origin/main`'s `chatCommand.ts`. **3 388 lines checked, zero residue**, with only the `export`
-   keyword forgiven.
+4. **`scripts/prove-move.mjs`** — every body line of every new module must appear VERBATIM in the
+   original, IN ORDER, walked as contiguous runs against a **pinned SHA** rather than a branch name
+   that moves. **3 388 lines across 15 modules, 33 contiguous runs against 27 regions actually cut,
+   zero residue, at `36771078`**, with only the `export` keyword forgiven. The caller declares the
+   region count (`PROVE_MOVE_REGIONS`) so fragmentation fails rather than being reported and ignored.
+5. **`src/test/importCycles.test.mjs`** — the import graph, because a bundle succeeding is not
+   evidence that it is acyclic. **No module of this split is in a cycle**; the nine that predate the
+   check are frozen by name so a tenth is named the day it appears.
+6. **`src/test/theBundleLoads.test.mjs`** — the shipped bundle is loaded against a stubbed editor and
+   `activate` must be there. Module-level code really runs at load here (an empty stub throws on
+   `ThemeIcon`), which is exactly where a cycle bites.
 
 Roughly sixty source-reading assertions followed moved functions, and **every one was watched going
 red against the old file** before being accepted. Several fixed-width slices became `bodyOf` reads
@@ -136,12 +144,18 @@ the word without doing the thing, and is then wrong in the quiet direction.
 
 ## What none of this can see
 
-**Nothing in this repository runs the extension.** A moved callback or a changed initialisation
-order could make opening a chat, switching a model or archiving a conversation throw at runtime with
-every check above green. The bundle proves the graph links, not that it behaves. Three reviewers
-named this at the plan round and it is **not closed** by this work. The honest mitigations are a
-manual pass over those gestures in a fresh window before release, and the activation harness that
-[module_tests.md](module_tests.md) records as this repository's largest gap.
+The gate's plan round called this Blocking from all three reviewers, and two of the three gaps
+they named are now closed: the import graph is checked, and the bundle is LOADED rather than merely
+built. What is still open is the third and largest.
+
+**No behaviour is exercised.** `activate` is never called; no chat is opened, no model switched, no
+conversation archived. A moved callback that throws only when a person presses something, or an
+ordering change inside a callback, passes every check here. Calling `activate` would need a context,
+a workspace, a filesystem and a webview, and a stub deep enough to survive that would be a fiction
+whose agreement with VS Code nobody checks — which is why this stops at the honest question a stub
+can answer. The real close is the activation harness that
+[module_tests.md](module_tests.md) records as this repository's largest gap, and a manual pass over
+the four gestures in a fresh window before release.
 
 ## Definition of Done
 
@@ -150,13 +164,37 @@ manual pass over those gestures in a fresh window before release, and the activa
 - [x] Collected test NAMES identical per tier, against a baseline measured on the same commit.
 - [x] `npm run bundle` succeeds per tier.
 - [x] Every followed source-reading assertion watched going red against the old file.
-- [x] Every moved line proved verbatim against the pre-split original — 3 388 lines, 0 residue.
+- [x] Every moved line proved verbatim against the pre-split original, in order, at a pinned SHA —
+      3 388 lines, 33 runs, 0 residue.
+- [x] No module of the split sits in an import cycle, and the nine pre-existing ones are frozen.
+- [x] The shipped bundle loads against a stubbed editor and exports `activate`.
 - [x] `sonar.coverage.exclusions` names every `vscode`-importing module and only those, with the
       prose count beside it measured rather than typed: **32 of 187**.
 - [x] [module_extension.md](module_extension.md) and [module_tests.md](module_tests.md) updated.
 
 `research/architecture.md` is deliberately unchanged: its module map is feature-level, and it never
 named this file.
+
+## The gate
+
+A plan round and a code round. The plan round: `good_enough`, all three reviewers, 14 findings, **10
+accepted and 4 rejected with measurements**. The four rejections, because a rejection is only honest
+if it says what it rests on:
+
+- *chatHooks and chatSessionJoin risk the size rule* — measured: 670 and 332 against a maximum of
+  800, and both carry the header the rule asks for when the typical 400 is exceeded.
+- *the plan belongs in `todo/`, not `research/`* — the work is complete on the branch and the status
+  line says `IMPLEMENTED`; `plan-lifecycle.mjs` reports clean, and that tool is the one that fails on
+  an unstarted plan in `research/`. Unmerged is not unimplemented.
+- *`nextAfterSave` has a type mismatch* — it does not; `ours()` returns exactly the array the
+  parameter takes. The real defect is the COMMENT above it claiming laziness the call does not have,
+  which is in the tail below with its evidence.
+- *the plan lacks a status and knowledge-base sync* — both were already done and are checkable.
+
+Four accepted findings needed code, and all four are in the series: the import-cycle check, the
+bundle-load smoke test, the ordered comparison in `prove-move.mjs`, and its pinned SHA. Two more
+accepted findings widened the exact counts from a named list of modules to the WHOLE source tree,
+because a count over a list passes if the next call goes somewhere the list was never told about.
 
 ## Tail — noticed while moving, left for their own work
 
