@@ -1,5 +1,21 @@
 # Changelog
 
+## Extension 0.50.0 — 2026-09-17
+
+**The Asked button looks in the right folder now — it never found a repository whose name has an
+underscore or a dot in it** (#340). Claude Code keeps a session under a folder named after your
+working directory with every character that is not a letter or a digit turned into a dash. This
+extension turned three of them — the slashes and the drive colon — so a checkout called
+`dew_flow_payroll` was looked for under `dew_flow_payroll` while its sessions sat under
+`dew-flow-payroll`, and the answer was that no session existed.
+
+Found on a Mac and measured here over 84 real pairs of session folder and working directory: the old
+rule was right for 51 of them, the new one for all 84. On this machine it means five of six
+repositories had never worked — every one of them has an underscore in its name.
+
+A folder written under the older spelling is still found, because the rule belongs to Claude Code
+rather than to us and is not written down anywhere.
+
 ## Extension 0.49.0 — 2026-09-16
 
 **The Asked button finds the session your tab is named after, even after you rename it** (#330).

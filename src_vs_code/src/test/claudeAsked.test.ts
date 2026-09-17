@@ -1198,3 +1198,57 @@ test('a walk cut short by its budget is carried as UNREADABLE, not as an absence
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+/**
+ * WHAT CLAUDE CODE REALLY CALLS THE FOLDER — measured, not read off three separators.
+ *
+ * <p>The rule here was `[\\/:]` and it was verified, honestly, against a real `~/.claude/projects`
+ * — on a machine whose paths happen to contain nothing else. A person on a Mac found the rest of it:
+ * a repository called `dew_flow_payroll` has its sessions under `…-dew-flow-payroll`, and the
+ * extension looked for `…-dew_flow_payroll` and said no session existed.</p>
+ *
+ * <p>Measured on 84 pairs of (the `cwd` a transcript records, the folder that transcript is in) from
+ * this machine on 2026-09-17: the shipped rule was right for 51 of them, and replacing everything
+ * that is not a letter or a digit is right for all 84. The characters actually seen changing were
+ * `\` `:` `.` and `_` — the last two are what the shipped rule missed, and between them they cover
+ * every `dew_flow_*` repository here and every temp folder with a dotted suffix.</p>
+ */
+test('every character that is not a letter or a digit becomes a dash', () => {
+  // The pair that started it, from the report: a repo with underscores in its name.
+  assert.strictEqual(projectDirName('/Users/mark/Desktop/Development/RSDPay/dew_flow_payroll'),
+    '-Users-mark-Desktop-Development-RSDPay-dew-flow-payroll',
+    'a repository with underscores in its path is looked for under a name Claude Code never uses');
+
+  // And on this machine, measured: D:\rsd\dew_flow_benchmark really is D--rsd-dew-flow-benchmark.
+  assert.strictEqual(projectDirName('D:\\rsd\\dew_flow_benchmark'), 'D--rsd-dew-flow-benchmark');
+
+  // A DOT too, which the report did not mention and the measurement found: 33 of the 84 folders on
+  // this machine are temp directories whose dotted suffix the shipped rule kept.
+  assert.strictEqual(projectDirName('C:\\Users\\me\\AppData\\Local\\Temp\\coai-noworkspace-4lxvwi4g.1op'),
+    'C--Users-me-AppData-Local-Temp-coai-noworkspace-4lxvwi4g-1op');
+
+  // The three the rule always had are unchanged, so the old cases stay covered.
+  assert.strictEqual(projectDirName('D:\\rsd\\ClaudeRag'), 'D--rsd-ClaudeRag');
+  assert.strictEqual(projectDirName('/home/me/work/app'), '-home-me-work-app');
+});
+
+test('a folder spelled the OLD way is still found, because the rule is somebody else’s', async () => {
+  // The rule is Anthropic's, undocumented, and measured on one machine — so a folder written by a
+  // version that spelled it the old way is looked for as well, rather than the person being told
+  // their sessions do not exist. Exact first, old spelling second, and the case-blind pass after
+  // both; two names derived from one path cannot collide.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const root = join(home, '.claude', 'projects');
+    const oldWay = join(root, 'D--rsd-dew_flow_benchmark');
+    mkdirSync(oldWay, { recursive: true });
+    writeFileSync(join(oldWay, 'one.jsonl'), `${titled('An older folder')}\n${said('still here')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\rsd\\dew_flow_benchmark', true, 'An older folder');
+
+    assert.strictEqual(found.kind, 'one',
+      'a folder written under the older spelling was reported as no sessions at all');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

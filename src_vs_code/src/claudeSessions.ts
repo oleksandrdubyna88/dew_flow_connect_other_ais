@@ -26,11 +26,37 @@ export interface ReadFailure {
 /**
  * The directory name Claude Code gives a working folder.
  *
- * <p>Every separator becomes a dash, the drive colon included: `D:\\rsd\\ClaudeRag` is
- * `D--rsd-ClaudeRag`. Verified against a real `~/.claude/projects` on this machine rather than
- * assumed — the shape is Anthropic's and undocumented, which is exactly why it was measured.</p>
+ * <p>EVERY character that is not a letter or a digit becomes a dash, separators and the drive colon
+ * among them: `D:\\rsd\\ClaudeRag` is `D--rsd-ClaudeRag`, and `D:\\rsd\\dew_flow_benchmark` is
+ * `D--rsd-dew-flow-benchmark`.</p>
+ *
+ * <p><b>It used to replace three characters and it was verified — on a machine whose paths contained
+ * nothing else.</b> A person on a Mac found the rest: a repository called `dew_flow_payroll` keeps
+ * its sessions under `…-dew-flow-payroll`, this looked for `…-dew_flow_payroll`, and the answer was
+ * that no session existed. Re-measured 2026-09-17 over 84 pairs of (the `cwd` a transcript records,
+ * the folder that transcript sits in): the three-character rule was right for 51 of them and this one
+ * for all 84. The characters actually seen changing were `\` `:` `.` and `_`; between the last two
+ * they cover every `dew_flow_*` repository on this machine and every temp folder with a dotted
+ * suffix.</p>
+ *
+ * <p><b>What is still not known</b> is what happens to a letter outside A–Z: no measured path has
+ * one, so a Cyrillic or CJK folder name is a guess either way. This rule dashes them, and
+ * {@link projectDirIn} looks for the older spelling too — so a folder written under either rule is
+ * still found rather than reported as no sessions at all.</p>
  */
 export function projectDirName(cwd: string): string {
+  return cwd.replace(/[^A-Za-z0-9]/g, '-');
+}
+
+/**
+ * The name this rule used to produce — kept as a SECOND thing to look for, never as the answer.
+ *
+ * <p>The rule is Anthropic's and undocumented, so a folder on disk may have been written by a build
+ * that spelled it the old way, and a person whose sessions are all under the old name should not be
+ * told they have none. Two names derived from one path cannot name two different projects, so
+ * looking for both costs nothing and risks nothing.</p>
+ */
+function olderDirName(cwd: string): string {
   return cwd.replace(/[\\/:]/g, '-');
 }
 
@@ -54,15 +80,20 @@ export function projectDirIn(
   names: readonly string[],
   caseBlind: boolean,
 ): string {
+  // THE CURRENT SPELLING FIRST, then the one this rule used to produce — a folder written by an
+  // older build is still this project's, and the alternative is telling somebody their sessions do
+  // not exist. Both are derived from the same path, so neither can name a different project.
   const wanted = projectDirName(cwd);
-  const exact = names.find((name) => name === wanted);
+  const spellings = [wanted, olderDirName(cwd)];
+  const exact = names.find((name) => spellings.includes(name));
   if (exact !== undefined) {
     return path.join(root, exact);
   }
   if (!caseBlind) {
     return '';
   }
-  const loose = names.filter((name) => name.toLowerCase() === wanted.toLowerCase());
+  const folded = spellings.map((one) => one.toLowerCase());
+  const loose = names.filter((name) => folded.includes(name.toLowerCase()));
 
   // Two names that differ only in case, on a host that cannot tell them apart, is not a thing that
   // happens — and if it does, picking one of them is the guess this module exists to refuse.
