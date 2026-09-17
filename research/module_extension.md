@@ -790,6 +790,31 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**A stale answer and a stale WRITE are two questions, and only one of them was being asked.**
+`chatTurn` fenced its answers twice — a generation check before a turn begins and a slate check
+before it writes — while the write path had neither. `keepQueued` chained `keepOnDisk` onto
+`thread.writes`, which read `thread.saveId` when it RAN rather than when it was queued, and `settle`
+then assigned `thread.rev = next.rev` to whatever thread it held. A save issued before a reset and
+resolving after one therefore stamped the conversation that REPLACED it, posted that save's note to
+the replacement's page, or forked it. Fixed 2026-09-17: the write captures `began` as it joins the
+chain, `sameSlate` refuses before the disk is touched, and `ifStillOurs` refuses again after the
+await — because the reset can land while the write is in flight. A revision is not cosmetic: it is
+the baseline the NEXT save is checked against, so a thread carrying a number the disk never gave it
+fails its next write as a conflict and forks a conversation nobody split.
+
+**And an abandoned turn now hands NOTHING back to the conversation that replaced it.** `thread.running
+= false` ran five lines ABOVE the question that decides whether this turn still owns the thread, and
+the branch that answered *no* went on to call `show(entry, false, '')` — both on the replacement. A
+chat mid-answer could be shown as finished by a turn the person had discarded. The question and the
+handover are one unit now (`turnEnded` in `chatFresh.ts`), so they cannot drift apart again. The
+comment on that branch was accurate about what it covered — the ledger write is below the return —
+which is exactly why it read as complete.
+
+**Still unbounded, and measured rather than assumed:** `await thread.writes` in `ended()`. Both
+session kinds bound a TURN (`cliChatSession` has an injectable turn budget, `remoteChatSession` a
+deadline) and `ended()` already calls `session.stop()` — but nothing bounds a disk write, and the
+data directory can be a NAS. Left open deliberately: abandoning that wait is how the archive saves
+against a revision the disk does not hold.
 **And it is not a comparison over the path AS WRITTEN either — that was a defect, fixed 2026-09-17.**
 `openWorkspaceFile` used `isInside(folder.uri.path, target.path)`, which decides on the spelling, and
 then called `stat` and `showTextDocument`, both of which follow links. A workspace holding

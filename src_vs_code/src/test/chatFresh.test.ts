@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened, sameSlate } from '../chatFresh';
+import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened, sameSlate, turnEnded } from '../chatFresh';
 
 /**
  * *New chat* — what a reset replaces, and what it must leave alone.
@@ -124,4 +124,41 @@ test('both sentences say what happened, and the failure says what stopped it', (
   // And it says the conversation is still usable, because it is: the next question opens it a
   // process the way a reload does.
   assert.match(failed, /next question/u, 'nothing tells the person the conversation still works');
+});
+
+/**
+ * An abandoned turn hands NOTHING back to the conversation that replaced it.
+ *
+ * <p>`sameSlate` above says whether a turn still owns the thread, and `chatTurn` asked it — five
+ * lines too late. `thread.running = false` ran BEFORE the question and `show(entry, false, '')` ran
+ * inside the branch that had just answered no, so a turn belonging to a conversation the person had
+ * already discarded cleared the replacement's running flag and painted it idle. A conversation
+ * mid-answer could be shown as finished by a turn that was not its own.</p>
+ *
+ * <p>The comment on that branch was accurate about what it covered — *“Nothing is recorded anywhere,
+ * ledger included”*, and the ledger write is below the return — which is exactly why it read as
+ * complete. The guard was built to stop a stale answer being RECORDED and it does that; nobody asked
+ * whether the two statements bracketing it also touched the new conversation.</p>
+ *
+ * <p>So the question and the handover are ONE unit now. A caller cannot ask and then forget to act
+ * on the answer, because acting is what asking does.</p>
+ */
+
+test('a turn that no longer owns the thread hands nothing back to it', () => {
+  const replacement = { running: true, saveId: 'the-conversation-that-replaced-it' };
+
+  assert.equal(turnEnded(replacement, 'the-one-that-was-archived'), false,
+    'an abandoned turn was told it still owned the thread');
+  assert.equal(replacement.running, true,
+    'an abandoned turn cleared the RUNNING flag of the conversation that replaced it, so a chat'
+    + ' mid-answer is shown as finished');
+});
+
+test('a turn that still owns the thread hands it back, or nothing would ever finish', () => {
+  // The companion the case above needs. A version that refused every turn would pass it while
+  // leaving every conversation thinking for ever.
+  const mine = { running: true, saveId: 'one-and-the-same' };
+
+  assert.equal(turnEnded(mine, 'one-and-the-same'), true, 'a turn that still owns its thread was refused');
+  assert.equal(mine.running, false, 'the turn finished and the conversation is still marked as running');
 });

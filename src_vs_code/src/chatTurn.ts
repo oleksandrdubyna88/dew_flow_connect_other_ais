@@ -7,7 +7,7 @@ import { readyToChat, taskOf, vendorFor } from './chatConfig';
 import { TurnResult } from './chatSession';
 import { isRemote, memoryOf } from './chatModels';
 import { reaskFrom, retryFrom } from './chatPresets';
-import { sameSlate } from './chatFresh';
+import { sameSlate, turnEnded } from './chatFresh';
 import { imageTurn } from './chatImage';
 import { carriedFrom, carryMark } from './chatCarry';
 import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn } from './chatPrompt';
@@ -440,8 +440,7 @@ export async function oneTurn(
       show(entry, true, '', position);
     }
   });
-  thread.running = false;
-  if (!sameSlate(mySlate, thread.saveId)) {
+  if (!turnEnded(thread, mySlate)) {
     // THE SLATE WAS WIPED WHILE THIS TURN WAS IN FLIGHT. Not the same question as the generation
     // check above: a reset bumps the generation first and clears the conversation only once this
     // chain has finished, so a turn that ends DURING that wait is still writing into the old
@@ -450,11 +449,17 @@ export async function oneTurn(
     // recorded anywhere, ledger included: a cost line filed against a conversation that never asked
     // the question is worse than a cost line missing. (local and gemini, D1's plan round.)
     //
+    // AND NOTHING ON THE THREAD EITHER, which is the 2026-09-17 correction. `thread.running = false`
+    // used to run ABOVE this question and `show(entry, false, '')` inside this branch — and by here
+    // `thread` and `entry` are the conversation that REPLACED the one this turn belonged to. So a
+    // discarded turn cleared the replacement's running flag and painted it idle: a chat mid-answer
+    // shown as finished by a turn that was not its own. The handover now happens inside `turnEnded`,
+    // on the owning branch only, so the two cannot drift apart again.
+    //
     // SAID, though — on the console rather than to the person, whose tab is showing a conversation
     // this answer has nothing to do with. Swallowing it silently would make a turn that cost money
     // and produced nothing invisible to anyone looking for why. (gemini, the code round.)
     console.warn(`ConnectOtherAIs: an answer arrived after its conversation was reset, and was dropped: ${mySlate}`);
-    show(entry, false, '');
 
     return;
   }

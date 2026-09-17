@@ -3,7 +3,8 @@ import { ChatEntry } from './chatPanels';
 import { Thread } from './chatThread';
 import { memory, pulse, store } from './chatHost';
 import { CONVERSATION_VERSION, ConversationRecord } from './chatStore';
-import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
+import { CONTINUED_ELSEWHERE, WriteNext, ifStillOurs, nextAfterSave } from './chatStoreWrite';
+import { sameSlate } from './chatFresh';
 import { pushChatNote } from './chatPanel';
 
 /**
@@ -30,12 +31,19 @@ import { pushChatNote } from './chatPanel';
  * window.</p>
  */
 export function keepQueued(entry: ChatEntry, thread: Thread): void {
-  const step = (): Promise<void> => keepOnDisk(entry, thread).catch((reason: unknown) => {
+  // WHICH CONVERSATION THIS WRITE IS FOR, captured as it JOINS the chain rather than as it runs —
+  // the same capture `enqueue` makes for a turn, and for the same reason. A write queued behind
+  // another waits, and *New chat* pressed while it waits replaces the conversation underneath it.
+  // Without this the write path had no fence at all while the turn path had two. (2026-09-17.)
+  const began = thread.saveId;
+  const step = (): Promise<void> => keepOnDisk(entry, thread, began).catch((reason: unknown) => {
     // The outer edge of a detached call, and therefore a catch that SAYS something: the store
     // answers in outcomes and never rejects, so anything arriving here is a defect rather than a
     // disk, and the page is told as well as the console.
     console.error('ConnectOtherAIs: a conversation could not be written to the store', reason);
-    pushChatNote(entry, thread.saveId, 'This conversation could not be written to disk just now.');
+    // Said to the conversation this write was FOR. `thread.saveId` would be the replacement's, so a
+    // reset would put an old write's failure on a page that never asked for it.
+    pushChatNote(entry, began, 'This conversation could not be written to disk just now.');
   });
   thread.writes = thread.writes.then(step, step);
 }
@@ -76,8 +84,15 @@ export function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
  * reading it: nothing below can lose a conversation, because the transcript is on the thread and the
  * disk is only where it is kept for tomorrow.</p>
  */
-async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
+async function keepOnDisk(entry: ChatEntry, thread: Thread, began: string): Promise<void> {
   if (store === undefined) {
+    return;
+  }
+  // ASKED BEFORE THE DISK IS TOUCHED. A write queued for a conversation the tab no longer holds has
+  // nothing left to save: the words it would write are the OLD transcript, and the record it would
+  // write them into belongs to the conversation that replaced it. `sameSlate` here and
+  // `ifStillOurs` below are ONE rule in two shapes — there is no outcome yet to hand back.
+  if (!sameSlate(began, thread.saveId)) {
     return;
   }
   // MAPPED ONLY WHEN IT IS ASKED FOR. The words are needed by one branch of one outcome — the
@@ -97,30 +112,39 @@ async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
     if (next.began !== undefined) {
       thread.createdAt = next.began;
     }
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours()));
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours()), began);
 
     return;
   }
-  await settle(entry, thread, next);
+  await settle(entry, thread, next, began);
 }
 
 /** This conversation's words, for the one comparison that asks for them. */
 const ours0 = (thread: Thread): readonly string[] => thread.messages.map((message) => message.text);
 
 /** What one answer does to the thread and to the page. Never called with `adopt`, which is a retry. */
-async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promise<void> {
-  if (next.kind === 'kept') {
-    thread.rev = next.rev;
-    if (next.note !== undefined) {
+async function settle(entry: ChatEntry, thread: Thread, next: WriteNext, began: string): Promise<void> {
+  // AND ASKED AGAIN AFTER THE AWAIT, because the reset can land while the disk is being written to.
+  // This is the assignment that made it worth fencing: `thread.rev` is the baseline the NEXT save is
+  // checked against, so a stale outcome stamping the replacement makes its next write refuse as a
+  // conflict and fork a conversation nobody split. The note and the fork below are as wrong to apply
+  // and were just as unguarded.
+  const mine = ifStillOurs(next, began, thread.saveId);
+  if (mine === undefined) {
+    return;
+  }
+  if (mine.kind === 'kept') {
+    thread.rev = mine.rev;
+    if (mine.note !== undefined) {
       // A half-commit, said once and only where it matters: the transcript is safe on disk and the
       // row that finds it again is behind, which the next read of it repairs.
-      pushChatNote(entry, thread.saveId, next.note);
+      pushChatNote(entry, thread.saveId, mine.note);
     }
 
     return;
   }
-  if (next.kind === 'said') {
-    pushChatNote(entry, thread.saveId, next.note);
+  if (mine.kind === 'said') {
+    pushChatNote(entry, thread.saveId, mine.note);
 
     return;
   }
