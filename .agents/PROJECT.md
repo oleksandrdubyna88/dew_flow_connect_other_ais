@@ -68,7 +68,15 @@ node .agents/conventions/tools/pin-check.mjs
   `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
   2026-09-07 and was right to; a code round read it literally again on 2026-09-15, when the corpus
   collector had added three modes and named none of them here.
-  **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
+  **Adding a one-shot mode means adding it here — in THIS file, `.agents/PROJECT.md`.** Two
+  reviewers on 2026-09-17 sent a change to `rules/common/vendor-routing.md` instead, independently
+  and in the same round, because this document names that file in its own opening paragraph and a
+  reader joins the two. That file is about which CLI a model runs on and says nothing about one-shot
+  modes; it now says so out loud. The list lives here because it is THIS product's surface rather
+  than shared guidance — the operator's rule for what belongs in `conventions` and what belongs to
+  the product it describes (2026-09-17). `ARequestFaultIsNotAnOldBinaryTests` reads the modes off
+  the switch in `Program.cs` and fails when one of them is missing from the list above, so this is
+  now a red test rather than a paragraph anybody has to remember. Inside `ServeAsync`
   the rule is unchanged and absolute.
 
   The rule names **64 and only 64**: a mode whose ARGUMENTS are wrong answers another non-zero

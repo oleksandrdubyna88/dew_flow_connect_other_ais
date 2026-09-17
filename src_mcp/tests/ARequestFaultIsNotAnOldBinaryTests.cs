@@ -52,11 +52,43 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
         var document = Path.Combine(RepoRoot(), ".agents", "PROJECT.md");
         File.Exists(document).Should().BeTrue(document);
 
-        var text = File.ReadAllText(document);
+        var named = File.ReadAllText(document);
 
-        text.Should().Contain(
-            "--close-consult",
-            "a one-shot mode the document does not name is a mode whose exit-code contract nobody agreed to");
+        // EVERY mode the binary actually has, read off the switch that selects them rather than
+        // listed here a second time. A hand-kept list in a test is a third copy of the same fact,
+        // and the third copy is the one nobody updates. The first version of this asserted ONE
+        // flag — the one that story happened to add — which would have stayed green through every
+        // mode added after it.
+        foreach (var mode in Modes())
+        {
+            named.Should().Contain(
+                mode,
+                $"`{mode}` is a one-shot mode this binary HAS, and a mode the document does not name "
+                + "is a mode whose exit-code contract nobody agreed to");
+        }
+    }
+
+    /// <summary>The one-shot modes, taken from the switch that selects them.</summary>
+    /// <remarks>
+    /// <para>This project's own source, not another program's — the distinction
+    /// <see cref="NothingReadsAnotherProgramsSourceTests"/> draws. And it is a POSITIVE read: it
+    /// derives the list the document must contain, so a switch that stops matching fails loudly on
+    /// the count below rather than deriving an empty list every assertion passes over.</para>
+    /// </remarks>
+    private static IReadOnlyList<string> Modes()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Program.cs"));
+        var modes = System.Text.RegularExpressions.Regex
+            .Matches(source, "\"(--[a-z-]+)\" => Startup\\.")
+            .Select(match => match.Groups[1].Value)
+            .Distinct()
+            .ToList();
+
+        // The guard the rule about source-reading tests asks for: a regular expression that stops
+        // matching answers nothing, and nothing passes every assertion above in silence.
+        modes.Should().HaveCountGreaterThan(10, "the switch that selects one-shot modes was not found");
+
+        return modes;
     }
 
     /// <summary>Walks up to the repository root, which the test binary sits four folders under.</summary>
