@@ -47,11 +47,10 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. **Fifty-five of the 109 sites are routed** — all of
-`extension.ts`, `dataCommands.ts`, `escalationWatcher.ts`, `sideConfig.ts`, `rolesPanel.ts`,
-`conversationPickerCommand.ts`, `chatGotoCommand.ts`, `bugzReviewPanel.ts` and `installer.ts` — and
-the constant stands at **54**. What is left is `panelProvider` (31), `chatCommand` (22), and
-`helpPanel`'s single call, which waits for the defect that rewires it.
+test that matches nothing passes for ever. **108 of the 109 sites are routed** and the constant
+stands at **1**. The one that is left is `helpPanel.ts`'s settings refusal, held back on purpose:
+defect 3 rewires it through `reportRefusal`, and touching that line twice is worse than touching it
+once.
 
 **The counter reports a population and a remainder, and the distinction is load-bearing.** `sites`
 is every place this extension speaks to a person, routed or not, and it does not fall — it is what

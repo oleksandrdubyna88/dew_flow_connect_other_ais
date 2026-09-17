@@ -142,6 +142,7 @@ import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { asText } from './asText';
+import { notify, notifyAndAsk } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
@@ -1251,16 +1252,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   async forgetUsage(provider: string): Promise<void> {
     const forget = 'Forget';
-    const answer = await vscode.window.showWarningMessage(
-      `Clear ${provider}'s recorded runs from the spending chart?`,
-      {
-        modal: true,
-        detail:
-          'The chart stops counting what this vendor has recorded so far. Nothing is deleted from '
-          + 'the ledger on disk, and the row comes back the next time this vendor runs.',
-      },
-      forget,
-    );
+    const answer = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'spending',
+      code: 'forget-vendor-spending',
+      subject: provider,
+      modal: true,
+      title: `Clear ${provider}'s recorded runs from the spending chart?`,
+      detail: 'The chart stops counting what this vendor has recorded so far. Nothing is deleted from '
+        + 'the ledger on disk, and the row comes back the next time this vendor runs.',
+      action: forget,
+    });
     if (answer !== forget) {
       return;
     }
@@ -1305,16 +1308,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   async forgetChatUsage(provider: string, model: string): Promise<void> {
     const named = model.length > 0 ? `${provider} · ${model}` : provider;
     const forget = 'Forget';
-    const answer = await vscode.window.showWarningMessage(
-      `Clear ${named}'s recorded chat from the spending chart?`,
-      {
-        modal: true,
-        detail:
-          'The chart stops counting what this model has recorded so far. Nothing is deleted from '
-          + 'the ledger on disk, and the row comes back the next time this model answers.',
-      },
-      forget,
-    );
+    const answer = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'spending',
+      code: 'forget-chat-spending',
+      subject: named,
+      modal: true,
+      title: `Clear ${named}'s recorded chat from the spending chart?`,
+      detail: 'The chart stops counting what this model has recorded so far. Nothing is deleted from '
+        + 'the ledger on disk, and the row comes back the next time this model answers.',
+      action: forget,
+    });
     if (answer !== forget) {
       return;
     }
@@ -1433,7 +1438,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const terminal = vscode.window.createTerminal({ name: `coai · ${vendor.id}` });
     terminal.show();
     if (note.length > 0) {
-      void vscode.window.showInformationMessage(note);
+      void notify({
+        as: 'information',
+        class: 'outcome',
+        source: 'vendorTerminal',
+        code: 'vendor-terminal-note',
+        subject: vendor.id,
+        title: note,
+      });
     }
     terminal.sendText(command, true);
     if (usageCommand.length > 0) {
@@ -1484,7 +1496,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const install = commandFor(vendor, hostPlatform());
     if (install.command.length === 0) {
       const open = 'Open the instructions';
-      const choice = await vscode.window.showInformationMessage(install.note, open);
+      const choice = await notifyAndAsk({
+        as: 'information',
+        class: 'offer',
+        source: 'vendorInstall',
+        code: 'no-install-command-for-this-vendor',
+        subject: vendor.id,
+        title: install.note,
+        action: open,
+      });
       if (choice === open) {
         await vscode.env.openExternal(vscode.Uri.parse(install.docs));
       }
@@ -1494,7 +1514,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const terminal = vscode.window.createTerminal({ name: `coai · ${verb} ${vendor.id}` });
     terminal.show();
     if (install.note.length > 0) {
-      void vscode.window.showInformationMessage(install.note);
+      void notify({
+        as: 'information',
+        class: 'outcome',
+        source: 'vendorInstall',
+        code: 'vendor-install-note',
+        subject: vendor.id,
+        title: install.note,
+      });
     }
 
     // Both lines are typed, newest last, so the prompt holds the install command itself: a machine
@@ -1614,10 +1641,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       console.error('coai: the discovered model lists could not be stored', error);
       if (!this.discoveryWarned) {
         this.discoveryWarned = true;
-        void vscode.window.showWarningMessage(
-          'ConnectOtherAIs could not store the discovered model lists, so a chat may open on the model'
-          + ' its reviewer row is set to rather than the one chosen in the panel.',
-        );
+        void notify({
+          as: 'warning',
+          class: 'failure',
+          source: 'modelDiscovery',
+          code: 'discovered-models-not-stored',
+          title: 'ConnectOtherAIs could not store the discovered model lists, so a chat may open on the model'
+            + ' its reviewer row is set to rather than the one chosen in the panel.',
+          detail: asText(error),
+        });
       }
     }
   }
@@ -2049,11 +2081,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async fixWslNetwork(): Promise<void> {
     const path = await windowsWslconfigPath();
     if (path.length === 0) {
-      void vscode.window.showWarningMessage(
-        'The Windows side of this machine could not be reached through interop, so nothing was '
-        + 'written. Put these two lines in %USERPROFILE%\\.wslconfig by hand, then run '
-        + `\`wsl --shutdown\` from Windows:\n\n${mirroredLines('mirrored')}`,
-      );
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'wslNetwork',
+        code: 'windows-side-unreachable',
+        title: 'The Windows side of this machine could not be reached through interop, so nothing was '
+          + 'written. Put these two lines in %USERPROFILE%\\.wslconfig by hand, then run '
+          + `\`wsl --shutdown\` from Windows:\n\n${mirroredLines('mirrored')}`,
+        cure: 'Put the two lines in %USERPROFILE%\\.wslconfig by hand and run `wsl --shutdown`.',
+      });
 
       return;
     }
@@ -2080,18 +2117,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async mirroredIsAlreadyWritten(path: string, existing: string): Promise<void> {
     const restart = 'Copy `wsl --shutdown`';
     const revert = 'Put it back to nat';
-    const choice = await vscode.window.showInformationMessage(
-      `${path} already says networkingMode=mirrored.`,
-      {
-        modal: true,
-        detail:
-          'It takes effect when WSL next starts cold: run `wsl --shutdown` from Windows, then reopen '
-          + 'this window. Nothing here can run it — it would terminate the distro this window is '
-          + 'attached to, mid-call.',
-      },
-      restart,
-      revert,
-    );
+    const choice = await notifyAndAsk({
+      as: 'information',
+      class: 'confirmation',
+      source: 'wslNetwork',
+      code: 'mirrored-is-already-written',
+      subject: path,
+      modal: true,
+      title: `${path} already says networkingMode=mirrored.`,
+      detail: 'It takes effect when WSL next starts cold: run `wsl --shutdown` from Windows, then reopen '
+        + 'this window. Nothing here can run it — it would terminate the distro this window is '
+        + 'attached to, mid-call.',
+      actions: [restart, revert],
+    });
     if (choice === restart) {
       await vscode.env.clipboard.writeText('wsl --shutdown');
     }
@@ -2104,55 +2142,90 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async setNetworkingMode(path: string, existing: string, mode: NetworkingMode): Promise<void> {
     const merged = wslconfigWith(existing, mode);
     if (merged.refused.length > 0) {
-      void vscode.window.showWarningMessage(
-        `${merged.refused}. Set it by hand instead:\n\n${mirroredLines(mode)}`,
-      );
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'wslNetwork',
+        code: 'wslconfig-merge-refused',
+        subject: path,
+        title: `${merged.refused}. Set it by hand instead:\n\n${mirroredLines(mode)}`,
+        cure: 'Set networkingMode by hand, then run `wsl --shutdown`.',
+      });
 
       return;
     }
     if (!merged.changed) {
-      void vscode.window.showInformationMessage(`${path} already says networkingMode=${mode}.`);
+      void notify({
+        as: 'information',
+        class: 'outcome',
+        source: 'wslNetwork',
+        code: 'wslconfig-already-says-this',
+        subject: path,
+        title: `${path} already says networkingMode=${mode}.`,
+      });
 
       return;
     }
 
     const write = 'Write it';
-    const confirmed = await vscode.window.showWarningMessage(
-      `Set networkingMode=${mode} in ${path}?`,
-      {
-        modal: true,
-        // The WHOLE file, not the two lines this adds: the question a person needs answered before
-        // approving a global change is whether their other settings survive it, and a preview that
-        // shows only the addition cannot answer it.
-        detail:
-          `${previewOf(merged.text)}\n\nThis file is global: every WSL distro on this machine reads `
-          + 'it, docker-desktop included. Nothing changes until WSL is restarted, which this cannot '
-          + 'do for you — it would terminate the distro this window is attached to.',
-      },
-      write,
-    );
+    const confirmed = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'wslNetwork',
+      code: 'write-the-wslconfig',
+      subject: `${path}:${mode}`,
+      modal: true,
+      title: `Set networkingMode=${mode} in ${path}?`,
+      // The WHOLE file, not the two lines this adds: the question a person needs answered before
+      // approving a global change is whether their other settings survive it, and a preview that
+      // shows only the addition cannot answer it.
+      detail: `${previewOf(merged.text)}\n\nThis file is global: every WSL distro on this machine reads `
+        + 'it, docker-desktop included. Nothing changes until WSL is restarted, which this cannot '
+        + 'do for you — it would terminate the distro this window is attached to.',
+      action: write,
+    });
     if (confirmed !== write) {
       return;
     }
 
     const outcome = await writeWslconfig(path, merged.text);
     if (!outcome.written) {
-      void vscode.window.showErrorMessage(outcome.message);
+      void notify({
+        as: 'error',
+        class: 'failure',
+        source: 'wslNetwork',
+        code: 'wslconfig-not-written',
+        subject: path,
+        title: outcome.message,
+      });
 
       return;
     }
     if (outcome.message.length > 0) {
       // Written, but something about confirming it did not go to plan. Saying "it failed" here
       // would be a lie about a file that HAS changed, and the next press would offer to undo it.
-      void vscode.window.showWarningMessage(outcome.message);
+      // A different CODE from the failure above for exactly that reason.
+      void notify({
+        as: 'warning',
+        class: 'outcome',
+        source: 'wslNetwork',
+        code: 'wslconfig-written-but-unconfirmed',
+        subject: path,
+        title: outcome.message,
+      });
     }
 
     const copy = 'Copy the command';
-    const next = await vscode.window.showInformationMessage(
-      `${path} now says networkingMode=${mode}. Run \`wsl --shutdown\` from Windows (not from here), `
-      + 'then reopen this window — the setting is read when WSL next starts cold.',
-      copy,
-    );
+    const next = await notifyAndAsk({
+      as: 'information',
+      class: 'offer',
+      source: 'wslNetwork',
+      code: 'wslconfig-written-restart-wsl',
+      subject: `${path}:${mode}`,
+      title: `${path} now says networkingMode=${mode}. Run \`wsl --shutdown\` from Windows (not from here), `
+        + 'then reopen this window — the setting is read when WSL next starts cold.',
+      action: copy,
+    });
     if (next === copy) {
       await vscode.env.clipboard.writeText('wsl --shutdown');
     }
@@ -2270,20 +2343,25 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       },
       confirmApplication: async (server, applicationId) => {
         const go = 'Sign in';
-        const answer = await vscode.window.showWarningMessage(
-          `Sign in to ${server.name}?`,
-          {
-            modal: true,
-            detail: `${canonicalTeamServerUrl(server.url)} is asking for a token for Microsoft `
-              + `application ${applicationId}. Only continue if that is your company's `
-              + `ConnectOtherAIs server — a token minted here can be used by whoever runs it.`,
-          },
-          go,
-        );
+        const answer = await notifyAndAsk({
+          as: 'warning',
+          class: 'confirmation',
+          source: 'teamServerAuth',
+          code: 'approve-the-microsoft-application',
+          subject: `${server.name}:${applicationId}`,
+          modal: true,
+          title: `Sign in to ${server.name}?`,
+          detail: `${canonicalTeamServerUrl(server.url)} is asking for a token for Microsoft `
+            + `application ${applicationId}. Only continue if that is your company's `
+            + `ConnectOtherAIs server — a token minted here can be used by whoever runs it.`,
+          action: go,
+        });
 
         return answer === go;
       },
-      say: (message) => void vscode.window.showInformationMessage(message),
+      say: (message) => void notify({
+        as: 'information', class: 'outcome', source: 'teamServerAuth', code: 'team-server-said', title: message,
+      }),
     };
   }
 
@@ -2409,8 +2487,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async collectBugs(): Promise<void> {
     const server = serverPath(this.context.globalStorageUri);
     if (server === undefined) {
-      await vscode.window.showWarningMessage(
-        'The MCP server is not installed yet, so there is nothing to collect with.');
+      await notifyAndAsk({
+        as: 'warning',
+        class: 'refusal',
+        source: 'bugz',
+        code: 'server-not-installed-for-collecting',
+        title: 'The MCP server is not installed yet, so there is nothing to collect with.',
+      });
 
       return;
     }
@@ -2464,7 +2547,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (code !== 0) {
       // Its own words: the collector says why it refused, and paraphrasing them here would be a
       // second copy of a rule that lives in the core.
-      await vscode.window.showWarningMessage(output.trim() || 'The collector could not run.');
+      // The collector's own words when it gave any, and a sentence of ours when it gave none — the
+      // plan round named this as one of the six that say nothing at all when the output is empty.
+      await notifyAndAsk({
+        as: 'warning',
+        class: 'failure',
+        source: 'bugz',
+        code: 'collector-refused',
+        title: output.trim() || 'The collector could not run.',
+        detail: output.trim(),
+      });
     }
 
     this.bugzAt = 0;
@@ -2490,8 +2582,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private async reviewBugs(): Promise<void> {
     const server = serverPath(this.context.globalStorageUri);
     if (server === undefined) {
-      await vscode.window.showWarningMessage(
-        'The MCP server is not installed yet, so there is nothing to review.');
+      await notifyAndAsk({
+        as: 'warning',
+        class: 'refusal',
+        source: 'bugz',
+        code: 'server-not-installed-for-reviewing',
+        title: 'The MCP server is not installed yet, so there is nothing to review.',
+      });
 
       return;
     }
@@ -2596,15 +2693,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const anyway = 'Add it anyway';
-    const answer = await vscode.window.showWarningMessage(
-      `${server.name} could not be checked: ${config.message}`,
-      {
-        modal: true,
-        detail: 'A server that is only down right now is not a mistake — but a wrong address is, '
-          + 'and it would otherwise surface as a broken reviewer days from now.',
-      },
-      anyway,
-    );
+    const answer = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'teamServer',
+      code: 'add-a-server-that-could-not-be-checked',
+      subject: server.name,
+      modal: true,
+      title: `${server.name} could not be checked: ${config.message}`,
+      detail: 'A server that is only down right now is not a mistake — but a wrong address is, '
+        + 'and it would otherwise surface as a broken reviewer days from now.',
+      action: anyway,
+    });
 
     return answer === anyway;
   }
@@ -2643,7 +2743,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (result.ok) {
       await this.refreshCatalog(server);
     } else {
-      void vscode.window.showWarningMessage(result.message);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'teamServer',
+        code: 'sign-in-failed',
+        subject: server.name,
+        title: result.message,
+      });
     }
   }
 
@@ -2655,7 +2762,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     const result = await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
     if (!result.ok) {
-      void vscode.window.showWarningMessage(result.message);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'teamServer',
+        code: 'sign-out-failed',
+        subject: server.name,
+        title: result.message,
+      });
     }
 
     delete this.catalogs[server.id];
@@ -2682,18 +2796,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       (v) => v.runtime === 'remote' && rowBelongsTo(v, server),
     );
     const both = rows.length === 1 ? 'Remove it and 1 reviewer' : `Remove it and ${rows.length} reviewers`;
-    const answer = await vscode.window.showWarningMessage(
-      `Remove ${server.name}?`,
-      {
-        modal: true,
-        detail: rows.length === 0
-          ? 'You will be signed out of it and its token deleted from this machine.'
-          : `You will be signed out of it and its token deleted. These reviewers point at it and `
-            + `cannot work without it: ${rows.map((r) => r.id).join(', ')}. Their spending history `
-            + `is kept either way.`,
-      },
-      ...(rows.length === 0 ? ['Remove'] : [both, 'Remove the server only']),
-    );
+    const answer = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'teamServer',
+      code: 'remove-a-team-server',
+      subject: server.name,
+      modal: true,
+      title: `Remove ${server.name}?`,
+      detail: rows.length === 0
+        ? 'You will be signed out of it and its token deleted from this machine.'
+        : `You will be signed out of it and its token deleted. These reviewers point at it and `
+          + `cannot work without it: ${rows.map((r) => r.id).join(', ')}. Their spending history `
+          + `is kept either way.`,
+      actions: rows.length === 0 ? ['Remove'] : [both, 'Remove the server only'],
+    });
     if (answer === undefined) {
       return;
     }
@@ -2702,7 +2819,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // failure is SHOWN: a token file that survived removal is a credential nobody is watching for.
     const gone = await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
     if (!gone.ok) {
-      void vscode.window.showWarningMessage(gone.message);
+      // The same code as the ordinary sign-out failure: it is the same condition, and the removal
+      // carries on either way.
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'teamServer',
+        code: 'sign-out-failed',
+        subject: server.name,
+        title: gone.message,
+      });
     }
 
     delete this.catalogs[server.id];
@@ -2866,7 +2992,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const token = await readToken(coaiDataDir(), server.url);
     const answer = await catalogOf(server, token);
     if (!answer.ok) {
-      void vscode.window.showWarningMessage(`${server.name}: ${answer.message}`);
+      void notify({
+        as: 'warning',
+        class: 'failure',
+        source: 'teamServer',
+        code: 'catalog-could-not-be-read',
+        subject: server.name,
+        title: `${server.name}: ${answer.message}`,
+      });
 
       return undefined;
     }
@@ -2878,17 +3011,27 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const usable = (answer.value.vendors ?? []).filter((v) => isUsableVendorId(v.id));
     const refused = (answer.value.vendors ?? []).length - usable.length;
     if (refused > 0) {
-      void vscode.window.showWarningMessage(
-        `${server.name} offered ${refused} vendor(s) whose name this extension will not use as an `
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'teamServer',
+        code: 'catalog-offered-unusable-ids',
+        subject: server.name,
+        title: `${server.name} offered ${refused} vendor(s) whose name this extension will not use as an `
           + 'id. They are not listed.',
-      );
+      });
     }
 
     const offered = usable;
     if (offered.length === 0) {
-      void vscode.window.showWarningMessage(
-        `${server.name} offers no vendors yet — the operator has not added any accounts to it.`,
-      );
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'teamServer',
+        code: 'catalog-is-empty',
+        subject: server.name,
+        title: `${server.name} offers no vendors yet — the operator has not added any accounts to it.`,
+      });
 
       return undefined;
     }
@@ -3064,7 +3207,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
     if (vendors.some((v) => v.id === vendor.id)) {
-      void vscode.window.showWarningMessage(`${vendor.id} is already a reviewer.`);
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'reviewers',
+        code: 'reviewer-already-added',
+        subject: vendor.id,
+        title: `${vendor.id} is already a reviewer.`,
+      });
 
       return;
     }
@@ -3081,18 +3231,27 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
     if (vendors.length <= 1) {
-      void vscode.window.showWarningMessage('A review panel needs at least one reviewer.');
+      void notify({
+        as: 'warning',
+        class: 'refusal',
+        source: 'reviewers',
+        code: 'the-last-reviewer-stays',
+        title: 'A review panel needs at least one reviewer.',
+      });
       return;
     }
 
-    const confirmed = await vscode.window.showWarningMessage(
-      `Remove ${id} from the review panel?`,
-      {
-        modal: true,
-        detail: "Its model and endpoint settings go with it. Every vendor can be added back from the presets.",
-      },
-      'Remove',
-    );
+    const confirmed = await notifyAndAsk({
+      as: 'warning',
+      class: 'confirmation',
+      source: 'reviewers',
+      code: 'remove-a-reviewer',
+      subject: id,
+      modal: true,
+      title: `Remove ${id} from the review panel?`,
+      detail: 'Its model and endpoint settings go with it. Every vendor can be added back from the presets.',
+      action: 'Remove',
+    });
     if (confirmed !== 'Remove') {
       return;
     }
@@ -3263,9 +3422,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.promptWriteFailed = why;
-    void vscode.window.showWarningMessage(
-      `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
-    );
+    void notify({
+      as: 'warning',
+      class: 'failure',
+      source: 'consultant',
+      code: 'consultant-prompt-not-saved',
+      title: `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
+      detail: why,
+    });
   }
 
   private async readUsage(): Promise<UsageEntry[]> {
