@@ -2,7 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 
+import { asText } from './asText';
 import { coaiDataDir } from './dataDir';
+import { notify, notifyAndAsk } from './notify';
 import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './roles';
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
 import { DEFAULT_ROLE_TAB, nextTab, roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
@@ -310,7 +312,13 @@ async function store(command: RolesCommand): Promise<boolean> {
     return false;
   }
   if (outcome.kind === 'refused') {
-    void vscode.window.showInformationMessage(outcome.why);
+    void notify({
+      as: 'information',
+      class: 'refusal',
+      source: 'rolesPage',
+      code: 'role-edit-refused',
+      title: outcome.why,
+    });
 
     // A refusal DOES redraw: the control has just moved to a state that was not saved, and putting
     // it back is what makes the message about it true.
@@ -337,17 +345,33 @@ async function store(command: RolesCommand): Promise<boolean> {
  */
 async function removeRole(id: string): Promise<boolean> {
   if (isBuiltIn(id)) {
-    void vscode.window.showInformationMessage('That is a role this product ships — it can be switched off, but not removed.');
+    void notify({
+      as: 'information',
+      class: 'refusal',
+      source: 'rolesPage',
+      code: 'shipped-role-not-removable',
+      subject: id,
+      title: 'That is a role this product ships — it can be switched off, but not removed.',
+    });
 
     return true;
   }
 
   const name = rows().find((r) => r.id === id)?.name ?? id;
-  const answer = await vscode.window.showWarningMessage(
-    `Remove the role “${name}”?`,
-    { modal: true, detail: 'Its prompts and everything you wrote in them are deleted. Rounds already recorded keep their findings.' },
-    'Remove',
-  );
+  // A question, so both the asking and the answer are written down. What a person DECLINED to
+  // delete is as much a fact as what they deleted, and the 2026-09-16 incident turned on a role
+  // whose removal nobody could later account for.
+  const answer = await notifyAndAsk({
+    as: 'warning',
+    class: 'confirmation',
+    source: 'rolesPage',
+    code: 'remove-role',
+    subject: id,
+    modal: true,
+    title: `Remove the role “${name}”?`,
+    detail: 'Its prompts and everything you wrote in them are deleted. Rounds already recorded keep their findings.',
+    action: 'Remove',
+  });
   if (answer !== 'Remove') {
     return false;
   }
@@ -412,5 +436,16 @@ async function writeText(roleId: string, promptId: string, text: string): Promis
  */
 function report(message: string, error: unknown): void {
   console.error('[coai] roles page:', message, error);
-  void vscode.window.showErrorMessage(message);
+  // One code for the whole page's failures, with the SENTENCE as the subject: they are five
+  // different things going wrong (a prompt that would not read, a page that would not draw, a
+  // prompt file that would not delete) and giving them one counter would hide four behind one.
+  void notify({
+    as: 'error',
+    class: 'failure',
+    source: 'rolesPage',
+    code: 'roles-page-failure',
+    subject: message,
+    title: message,
+    detail: asText(error),
+  });
 }
