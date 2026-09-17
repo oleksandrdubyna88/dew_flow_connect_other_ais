@@ -182,7 +182,7 @@ test('a turn knows which conversation it was ASKED in, and cannot write into ano
   // second is what a withdrawal acts on — the callback that will run it cannot be un-chained, so
   // the turn asks the queue by name at the moment it begins, and a turn given only the generation
   // would run a question somebody had taken back.
-  assert.match(queue, /oneTurn\(entry, text, began, joined\.id\)/u,
+  assert.match(queue, /oneTurn\(entry, text, began, joined\.id, ready\)/u,
     'the turn is not told which conversation it belongs to, or which question it is');
 
   const turn = between(command, 'async function oneTurn(', 'function outcomeOf(');
@@ -337,4 +337,23 @@ test('the page is told in its own message — and the SENTENCE travels with the 
   // warning when there was one, and otherwise that the conversation was archived.
   assert.match(command, /show\(entry, false, note\.length > 0 \? note : ARCHIVED\);/u,
     'the sentence is not carried by the state push, so it cannot survive it');
+});
+
+test('a reset hands every waiting question back BEFORE the slate moves', () => {
+  // The one a re-home nearly lost. `freshening` moved to `chatArchive.ts` when the command file
+  // was split, and the drain that belongs at the top of it did not come with it — so New chat
+  // silently discarded whatever was queued. codex caught it on the second code round; this is what
+  // catches it next time. (issue #288.)
+  const archive = source('chatArchive.ts');
+  const reset = between(archive, 'export async function freshening(', 'function keepTheOldOne(');
+
+  const drain = reset.indexOf('drained(thread.waiting)');
+  const slate = reset.indexOf('thread.generation += 1');
+
+  assert.ok(drain >= 0, 'a reset discards the queued questions instead of returning the words');
+  assert.ok(slate >= 0, 'the reset no longer moves the slate at all');
+  assert.ok(drain < slate,
+    'the words are returned AFTER the slate moves, by which time the generation guard has dropped them');
+  assert.match(reset.slice(drain, drain + 400), /pushChatDraft\(entry, unasked\)/u,
+    'the drained questions go nowhere a person can see');
 });
