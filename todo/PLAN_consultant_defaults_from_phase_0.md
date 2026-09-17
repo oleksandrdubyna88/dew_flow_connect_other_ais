@@ -67,3 +67,18 @@ machine if they do.
       stayed, with the same number saying why.
 - [ ] This plan is promoted to `research/` with `IMPLEMENTED <date>`, or CLOSED with the result that
       ended it.
+
+## What this plan still decides, after 2026-09-17
+
+[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../research/PLAN_a_finding_that_changes_everything_calls_the_consultant.md)
+shipped a sixth trigger on 2026-09-17 and **took nothing away from this one**. The boundary:
+
+| Item | Who owns it |
+|---|---|
+| the turn cap, the calls-per-session cap, which vendor answers which caller kind | **this plan** — the measurement decides them |
+| whether an AUTOMATIC consultation ever fires, and on what number | **this plan**. `consult_missed` still measures and calls nothing |
+| a PROSE trigger a caller reads and decides on | that plan, shipped |
+
+The distinction is the one `StuckFindings` already states: a machine trigger that fired before
+anybody had read the number would be the same guess with a cost attached. What shipped on 2026-09-17
+is not that machine — it is an instruction, and a caller can decline it with a reason like any other.

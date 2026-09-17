@@ -2819,7 +2819,7 @@ owns the ADVICE and what goes on the clipboard for a mount.
 ### A finding that changes everything is the fifth reason to ask, and agreement is earned (2026-09-16)
 
 Story 2.1 of
-[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../todo/PLAN_a_finding_that_changes_everything_calls_the_consultant.md).
+[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md).
 The five triggers in `consultantRule.md` all described being STUCK, and the most consequential moment
 of a gate round is the opposite one: the caller reads a finding, writes *this changes everything*,
 and acts on it — the whole decision taken by the one model whose work is under review. So the list

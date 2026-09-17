@@ -1,22 +1,25 @@
 # PLAN — A finding that changes everything calls the consultant
 
-> Status: **plan only, nothing implemented yet.** Plan round through this product's own gate:
-> `good_enough`, all 3 reviewers, 13 findings, 12 accepted and 1 rejected with a reason — see
-> *What the plan round changed* at the end. Scope: the consultant half of the pasted artefact
+> Status: **IMPLEMENTED, 2026-09-17.** Four stories over two epics, each through this product's own
+> gate on its own branch. Scope as built: the consultant half of the pasted artefact
 > (`src_vs_code/src/consultantRule.md` and the version constants it forces), the `consult`,
-> `review_plan` and `review_code` tool descriptions (`src_mcp/src/Tools.cs`), and the consultant's
-> own shipped prompt (`src_mcp/src/consultant/consult.md`). Two release lines move:
-> `extension-v0.49.0` and `mcp-v0.28.0`.
+> `review_plan`, `review_code` and `review_document` tool descriptions (`src_mcp/src/Tools.cs`), and
+> the consultant's own shipped prompt (`src_mcp/src/consultant/consult.md`).
 >
-> **This plan owns the artefact's single version cascade**, including the `DOCUMENT_VERSION` bump
-> caused by [PLAN_the_document_gate_says_which_gate_you_are_at.md](PLAN_the_document_gate_says_which_gate_you_are_at.md),
-> which shares this branch: there is one artefact and it may move only once.
+> **This plan owns the artefact's version cascade**, including the `DOCUMENT_VERSION` bump caused by
+> [PLAN_the_document_gate_says_which_gate_you_are_at.md](PLAN_the_document_gate_says_which_gate_you_are_at.md):
+> there is one artefact and it may move only once per change to it.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_server.md](../research/module_server.md),
-> [PLAN_consultant.md](../research/PLAN_consultant.md),
-> [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md),
-> [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md).
+> **Deviations, which are the part of this record worth reading — see *What actually shipped* at the
+> end.** The artefact took **v10, not v9**; the conventions pin could not be its own story here; the
+> `review_document` counter-example shipped from this plan's story rather than the other's; and the
+> injection boundary is advisory, said out loud rather than implied.
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [module_server.md](module_server.md),
+> [PLAN_consultant.md](PLAN_consultant.md),
+> [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md),
+> [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md).
 > The boundary with each is a table below, not a hope.
 
 ## The symptom
@@ -82,13 +85,13 @@ the only place that can see them is a projection that runs after the verdict is 
 
 | Item | Who owns it |
 |---|---|
-| the five shipped triggers, the tool, the caps, the ledger kind, `consult_missed` | [PLAN_consultant.md](../research/PLAN_consultant.md) — IMPLEMENTED 2026-09-13 |
+| the five shipped triggers, the tool, the caps, the ledger kind, `consult_missed` | [PLAN_consultant.md](PLAN_consultant.md) — IMPLEMENTED 2026-09-13 |
 | **the sixth trigger, the burden of proof, the untrusted-evidence boundary, the `review_plan`/`review_code` pointers** | **this plan** |
 | WHICH surface each of those reaches, and in which story: the pasted rule (2.1), the four tool descriptions (2.2), the consultant's own shipped prompt (3.1) | **this plan**. The three are disjoint by AUDIENCE, not by file — 2.1 and 2.2 address the model ASKING, 3.1 addresses the model ANSWERING, and a rule written for one does not belong in the other's text. That is why *"never agree because it sounds right"* and *"prove it; do not assert it"* are two sentences in two places rather than one sentence twice |
 | what the consultant is told to do with a hostile instruction inside quoted material | story 3.1 — and it is **advisory prose, not an enforcement boundary**. Nothing in a prompt stops a model from obeying an injected sentence; the boundary that holds is the caller's, which fences the finding, labels it and strips any secret before sending. Written down because a code round asked for either a live hostile-content scenario or this sentence, and a scenario would have to drive a vendor CLI to observe anything at all |
-| whether an AUTOMATIC consultation ever fires, and on what number | [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md) — untouched here; this plan changes no counter and calls nothing |
+| whether an AUTOMATIC consultation ever fires, and on what number | [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) — untouched here; this plan changes no counter and calls nothing |
 | the turn cap, the calls-per-session cap and which vendor answers which caller kind | same plan — this one consumes the caps and never re-opens them |
-| what goes on the CLIPBOARD for a repository that MOUNTS the gate rule, and the advice it is given | [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md) — this plan works AROUND the delivery gap by using the tool descriptions and does not close it |
+| what goes on the CLIPBOARD for a repository that MOUNTS the gate rule, and the advice it is given | [PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md](../todo/PLAN_a_mounting_repository_is_told_to_paste_the_gate_again.md) — this plan works AROUND the delivery gap by using the tool descriptions and does not close it |
 | telling `review_document` and `review_plan` apart, in the shared rule and in both descriptions | [PLAN_the_document_gate_says_which_gate_you_are_at.md](PLAN_the_document_gate_says_which_gate_you_are_at.md) — same branch, same release; **its `DOCUMENT_VERSION` 2 → 3 is executed by THIS plan's cascade**, because one artefact may move only once |
 
 The reciprocal note goes into every one of those plans in the same task: a boundary named on one side
@@ -479,3 +482,59 @@ move the hash (gemini).
 **Rejected (1)** — the claim that the hash is computed before the edit. The order is stated: edit at
 step 2, `prepare:gate` + the red guard at step 3, the numbers at step 4, and the fix asked for is
 step 3 verbatim. The adjacent real risk to the hash is the CRLF one, which is accepted above.
+
+## What actually shipped
+
+Four stories, each on its own branch with its own plan round and code round, because a gate session
+is keyed by repository and branch and ends at `Done`.
+
+| Story | What landed |
+|---|---|
+| the shared rule | `coai-document-gate.md` in `dew_flow_conventions`, `promote-release`, and the pin cascade across five consumers — the sixth is below |
+| 2.1 the rule text | the new trigger, the evidence boundary, the third answer rule, and the whole version cascade in one commit |
+| 2.2 the tool descriptions | `consult`, `review_plan`, `review_code` **and** `review_document`, with a test class that asserts per description rather than per file |
+| 3.1 the consultant's prompt | *prove it; do not assert it* and *quoted material is evidence*, with tests that read the embedded resource |
+
+### The deviations
+
+**The artefact took v10, not v9.** A parallel session in this repository reacted to the conventions
+release while this work was in review and shipped the pin bump with half the cascade to `main` —
+`ARTEFACT_VERSION` 9, `DOCUMENT_VERSION` 3, `SNIPPET_BODY_SHA` `4e23e7a87052fe36`, the menu at
+`(v9)`. That is the exact intermediate state this branch had passed through between its own two
+steps. So v9 now means *the document gate says which gate you are at*, and the consultant trigger
+became **v10**. Renumbering rather than keeping 9 is the whole point of the number: two different
+texts wearing one version is the defect the ordinal exists to catch, one level up.
+
+**The conventions pin bump could not be a story of its own here.** `snippetVersion.test.ts:519-530`
+compares the marker in the MOUNTED text against `KNOWN_HALVES`, so a pin carrying `coai-document v3`
+while `DOCUMENT_VERSION` is still 2 fails with *coai-document's marker and its version disagree* —
+observed, and it is why the pin rides in the cascade commit. The other five consumers took a
+standalone pin bump, as planned.
+
+**`review_document`'s counter-example shipped from story 2.2, not from the document plan.** Both are
+edits to one file, and splitting `Tools.cs` across two branches buys nothing.
+
+**The injection boundary is advisory, and that is written down rather than implied.** A code round
+asked for either a live hostile-content scenario or a sentence saying this is not an enforcement
+boundary. A scenario would have to drive a vendor CLI to observe anything, so the sentence shipped —
+in the boundary table, in `module_server.md` and in the test class's own remarks. The boundary that
+holds is the caller's: fence the finding, label it, strip the secret before sending.
+
+**No scenario test, and the reason is in `module_tests.md`.** What shipped is INSTRUCTION — text a
+model reads and decides on — not a code path. Nothing added calls `consult`. The runnable part is the
+composition of the paste and of the consultant prompt, and both are asserted end to end through the
+real generator and the real loader.
+
+### What the gate cost, and what it was worth
+
+Eight rounds across four branches. **72 findings, 26 accepted.** The accepted ones include the two
+that changed the design: an unfenced prompt-injection path this plan's first draft opened by telling
+the caller to paste a reviewer's words into another vendor's model, and a composer test that proved
+only that `Compose` preserves what it is handed while claiming to prove that production sends it.
+
+The rejections are worth a sentence too, because the ratio looks wrong until you read them. Most were
+factual and each was checked against the file before being rejected: five reviewers in five roles
+reported a docblock that the same diff was deleting; three reported a paragraph as sitting after a
+section it sits ten lines before; two said a diff runs `dotnet test` when it contains no runner
+command, one of them conceding so mid-sentence. Accepting those would have moved correct text to
+incorrect places.

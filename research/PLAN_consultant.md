@@ -712,3 +712,21 @@ says whether the trigger should exist, is the guess this whole story was written
 - [x] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded.
       Phase 0's Unstuck rate is the OPERATOR's to record, from 2026-09-14, and it is the subject of
       the extracted plan rather than a box this document can tick for itself.
+
+## What was added on top of this, and by whom (2026-09-17)
+
+[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md)
+owns everything about the consultant that this plan did not build, and the boundary is worth naming
+here because a reader starting from this document would otherwise rebuild it:
+
+| Item | Who owns it |
+|---|---|
+| the five shipped triggers, the tool, the caps, the ledger kind, `consult_missed` | **this plan** — IMPLEMENTED 2026-09-13 |
+| a SIXTH trigger — a gate finding that has just changed the caller's mind — and the burden of proof on the answer | that plan, IMPLEMENTED 2026-09-17 |
+| the untrusted-evidence boundary around a quoted finding, on both sides of the wire | that plan |
+| the same rules on the `consult`, `review_plan` and `review_code` tool descriptions | that plan |
+| whether an AUTOMATIC consultation ever fires | [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md), still open — neither plan changed a counter |
+
+Story 5 of this plan shipped five triggers in the pasted snippet; the sixth is the one that is not
+about being stuck, and it is anchored on the caller's own verdict rather than on a reviewer's
+`severity`.

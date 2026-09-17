@@ -90,3 +90,21 @@ So the duplication is **accepted for now and written down**, rather than carried
       passes it.
 - [ ] The clipboard agrees with the advice in every state the panel can report.
 - [ ] `research/module_extension.md` describes the mounted state and why it is not `older`.
+
+## What 2026-09-17 changed about this, and what it did not
+
+[PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../research/PLAN_a_finding_that_changes_everything_calls_the_consultant.md)
+measured the delivery gap this plan is about and found it wider than recorded here: across every
+checkout on the machine and the user profile there are **zero pasted copies of the artefact**. The
+consultant half is mounted nowhere — it is this product's own file, not a conventions rule — and it
+cannot be pasted into a family repository at all, because the shared adapter refuses a `CLAUDE.md`
+that is anything but `@AGENTS.md`.
+
+That plan worked AROUND the gap rather than closing it: the two rules it shipped also travel in the
+`consult`, `review_plan` and `review_code` tool descriptions, which reach every session with no paste,
+no mount and no pin cascade.
+
+**This plan is untouched and still open.** The advice a mounting repository is given, what goes on its
+clipboard, and recognising a mount at all are still unbuilt. The tool-description channel does not
+answer any of them — it means a rule can reach a mounting repository, not that the panel stops telling
+it to paste a gate rule its submodule already provides.

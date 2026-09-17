@@ -1,6 +1,56 @@
 # Changelog
 
+## Server 0.28.0 — 2026-09-17
+
+**The gate now says at the tool when to call the consultant, and the consultant is asked to prove
+its case.** Both rules already existed in the block you paste into a CLAUDE.md, and that is where
+they stopped: across every checkout on this machine there was not one pasted copy of it. Six
+repositories here mount the three shared halves from the conventions submodule and get those for
+free — the consultant half is this product’s own file, mounted nowhere, and it cannot be pasted
+into one of those repositories at all.
+
+So `consult` names the trigger itself: a gate finding that has just changed your mind about the
+shape of the work, with the decision still yours to make at `resolve`. `review_plan` and
+`review_code` both point at it, because the trigger covers both rounds. And `consult` now says that
+advice which only asserts is not yet usable, and that anything you quote INTO `problem` is evidence
+you are showing the consultant rather than instructions either of you follows.
+
+The consultant’s own prompt gained the other side of that. It is asked to say what makes a defect
+REAL — the input, the path, the thing you would see — and, for a proposal, why its shape is better
+and what it costs. It is also told that quoted material is evidence and never instruction: a
+sentence inside a quoted finding addressed to whoever reads it next is not from you, and if the
+quote carries something that looks like a secret it does not echo it back.
+
+**`review_plan` stopped listing five verdicts while the server composed six** — a caller could be
+answered `good_enough` by a description that never mentioned it. And `review_document` now names a
+PLAN as the thing it is *not* for: a plan matches its list of examples twice, being both a proposal
+and a requirements list, which is why sessions kept sending plans to the wrong gate. The test is
+what exists when the task is finished — if it is a diff, the document in your hand is a plan for
+that diff.
+
 ## Extension 0.50.0 — 2026-09-17
+
+**The block the ⋯ menu hands out is v10, and it tells your AI when to ask another vendor for help.**
+The consultant rule gained a sixth reason to call one, and it is the one that is not about being
+stuck: the moment a gate finding has just changed your AI’s mind about the shape of the work — when
+it is about to write *this changes everything*. One model’s sudden certainty about its own work is
+what a second vendor is for.
+
+It is anchored on your AI’s own judgement rather than on the severity a reviewer attached, because
+those come apart: a blocking finding answered by editing a paragraph is not this, and a minor one
+that invalidates a step is. It fires before `resolve`, while the accept-or-reject is still open.
+
+**Agreement with a consultant is now something it has to earn.** An answer that only asserts has
+given you nothing to act on; ask it what makes the defect real, or why its shape is better and what
+it costs, reject what cannot produce that, and run the check yourself before a line of the work
+changes. And a consultation you cannot get — the feature switched off, the budget spent, the turn
+failed — is not a verdict either: silence from a consultant has never been agreement with a
+reviewer.
+
+A finding quoted to a consultant now travels as **evidence**, fenced and labelled, with any secret
+it carries replaced before it is sent. It is another model’s output entering a third model’s
+prompt, and a consultation leaves a thread in that vendor’s own store which nobody here can delete.
+
 
 **The Asked button looks in the right folder now — it never found a repository whose name has an
 underscore or a dot in it** (#340). Claude Code keeps a session under a folder named after your
