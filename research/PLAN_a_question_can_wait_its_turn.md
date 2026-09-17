@@ -202,7 +202,13 @@ measurement; they are written here so that changing them is a decision somebody 
 
 ## What this does NOT do
 
-- **It does not persist the queue across a reload, and it is EXPLICITLY excluded (gate).** The queue
+- **It does not persist the queue across a reload, and it is EXPLICITLY excluded (gate).** So
+  "nothing typed is ever silently dropped" is a promise about a WINDOW THAT LIVES, and the code
+  round was right to say the unqualified version overclaims: a reload takes the queue with it and
+  nothing can hand the words back, because the host that held them is gone. What a reload does NOT
+  do is lose anything that was asked — the transcript is on disk — and it already killed the running
+  turn before this feature existed. Whether that is good enough is question 1 below, and it is the
+  operator's. The queue
   is exactly as durable as the turn it waits behind: a reload kills the extension host, the running
   turn dies with it, and a restored tab deliberately starts no process until it is spoken to again
   (`chatCommand.ts:2007-2011`). `waiting` is therefore runtime state on `Thread` and is deliberately
@@ -291,6 +297,20 @@ Neither blocks the build.
 
 - `cd src_vs_code && npm test` — from a cleaned `out/`: **3365 tests, 0 failed**, 1 skipped.
 - `node .agents/conventions/tools/plan-lifecycle.mjs` — clean.
-- Teeth: the lock put back, the page locking itself on send put back, and the waiting rows
-  un-drawn — six tests red, including the seam one that proves a second question reaches the
-  host; then restored and green.
+### The RED observations, with what they said
+
+The testing rule asks for the step-2 failure message and not only the fact of a failure, and the
+first version of this record gave only the count. What each guard said when it was broken:
+
+| guard, broken | the test that went red | what it said |
+|---|---|---|
+| `locked = running \|\| capped` put back | *Send is live while an answer is on its way* | `the composer is dead while an answer is on its way` |
+| the page locking itself on send put back | *two questions typed in a row both reach the host* | `the second question never reached the host, which is the whole of issue #288` |
+| `chatWaitingHtml` returning nothing | *a question waiting its turn is shown* | `the words are not on the page at all` |
+| the same | *the whole page carries the waiting rows* | `the page does not render its own waiting list` |
+| the delegated withdraw handler unwired | *PRESSING the cross on a waiting row crosses the seam* | `pressing the cross posted nothing at all` |
+
+And before any of it, the two that named the defect itself: `Send is live while an answer is on its
+way` and the four waiting-row cases failed against the unchanged page, which is the symptom the
+issue describes. All green after the change; all red again when each guard was broken and green once
+more when it was restored.
