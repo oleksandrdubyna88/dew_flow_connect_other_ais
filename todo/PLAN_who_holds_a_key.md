@@ -569,6 +569,29 @@ own line.
   was right that nothing would have caught its absence: a release can start perfectly and answer 401
   to every admin call. The forced command's `secret` verb takes both, and the deploy asserts an
   authenticated `/admin/keys` afterwards.
+- **They travel BASE64-ENCODED, and the operator decided so on 2026-09-17.** The problem story 2
+  surfaced: `COAI_BUGS_ADMIN_KEYS` is newline-separated, the forced command reads ONE line from
+  stdin, and a systemd `EnvironmentFile` assignment cannot hold a newline. Three answers were
+  possible and only one was taken.
+
+  > **No custom separators in an `EnvironmentFile`.** The value is base64 on the wire and base64 in
+  > the file; the server decodes it.
+
+  Rejected, and why it matters that they were: a second separator (`,`, `;`) would put a SECOND
+  parsing rule into a credential boundary — `AdminKeys.Lines` splits on newlines, so the delivery
+  path and the code would disagree about what a key is, and a key containing the separator would
+  silently become two keys that match nothing. Quoted escapes in the unit file depend on systemd
+  version-specific parsing of `\n` inside double quotes, which is a thing to discover on a host at
+  02:00 rather than to rely on.
+
+  What this costs story 4, stated now so it is not discovered later: `AdminKeys.Read` gains a decode
+  step, and the two shapes must not be ambiguous — a base64 payload and a raw newline-separated one
+  can both be non-empty text, so the variable is base64 ALWAYS, not "base64 if it decodes". A value
+  that is not valid base64 is a startup refusal naming the variable, like every other unusable
+  setting here; it must not fall back to reading the raw text, because a fallback turns a typo into
+  a server that starts with the wrong administrators. `deploy/bugs/README.md` gains the
+  `base64 -w0` line an operator actually types, and the real-binary scenario feeds the variable the
+  way the workflow will.
 - **A scenario over the real artefacts**, catalogued in `research/module_tests.md`: the built binary
   with real environment, issuance, listing, revocation, and a revoked key refused. The unit and HTTP
   suites can all pass while the deployed binary, the SecretStorage wiring and the webview fail
