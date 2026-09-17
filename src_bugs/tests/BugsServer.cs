@@ -29,26 +29,43 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
 
     public string DataDir { get; }
 
-    public BugsServer()
+    /// <summary>
+    /// The clock the server reads — frozen, so a test can sit either side of a month boundary and
+    /// walk a rate-limit window forward by the second.
+    /// </summary>
+    /// <remarks>
+    /// The one thing a factory CAN hand this server: `TimeProvider` is a service, resolved when the
+    /// host is built, so a registration added in <see cref="ConfigureWebHost"/> replaces the
+    /// system clock the server registers first. Everything else is environment variables.
+    /// </remarks>
+    public FrozenClock Clock { get; } = new(new DateTimeOffset(2026, 9, 17, 10, 0, 0, TimeSpan.Zero));
+
+    /// <param name="ratePerMinute">
+    /// The limit to serve with; unset means the server's default. Set explicitly to nothing
+    /// otherwise, so a variable in the machine's environment cannot leak into a test.
+    /// </param>
+    public BugsServer(int? ratePerMinute = null)
     {
         DataDir = Path.Combine(Path.GetTempPath(), "coai-bugs-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(DataDir);
 
         Set("COAI_BUGS_SECRET", Secret);
         Set("COAI_BUGS_DATA", DataDir);
+        Set(RatePerMinute.Variable, ratePerMinute?.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>A key this server will accept, and the id it was issued under.</summary>
     /// <remarks>
     /// Issued through the same `Corpus` the server reads, rather than by inserting a row by hand: a
-    /// fixture that wrote its own hash would pass while the real hashing was wrong.
+    /// fixture that wrote its own hash would pass while the real hashing was wrong. Audited as the
+    /// CLI would audit it, on the frozen clock, so a test can read the audit back exactly.
     /// </remarks>
     public (string Key, string Id) IssueKey(string note = "a test")
     {
         using var corpus = Corpus.Open(Path.Combine(DataDir, "coai-bugs.db"));
         var key = "test-key-" + Guid.NewGuid().ToString("N");
         var id = Guid.NewGuid().ToString("N")[..16];
-        corpus.Issue(id, Corpus.HashOf(key, Secret), note, DateTime.UtcNow.ToString("O"));
+        corpus.Issue(id, Corpus.HashOf(key, Secret), note, Audit.By(AdminIdentity.Cli, Clock));
 
         return (key, id);
     }
@@ -82,16 +99,19 @@ internal sealed class BugsServer : WebApplicationFactory<Program>
     private readonly StringWriter _said = new();
 
     /// <summary>
-    /// Adds a logging provider AFTER the server has cleared its own and installed Serilog.
+    /// Adds a logging provider and the frozen clock AFTER the server has registered its own.
     /// </summary>
     /// <remarks>
     /// The class note above says configuration must go through process environment variables because
-    /// `Program` reads them before `Build()`. Logging providers are the exception and for the
-    /// opposite reason: they are resolved when the host is built, which is after this runs, so a
-    /// provider added here survives the `ClearProviders()` the server does on its way there.
+    /// `Program` reads them before `Build()`. Services are the exception and for the opposite
+    /// reason: they are resolved when the host is built, which is after this runs, so a provider
+    /// added here survives the `ClearProviders()` the server does on its way there, and a
+    /// `TimeProvider` registered here is the one the server's limiter and month stamp resolve.
     /// </remarks>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-        builder.ConfigureLogging(logging => logging.AddProvider(new Capture(_said)));
+        builder
+            .ConfigureLogging(logging => logging.AddProvider(new Capture(_said)))
+            .ConfigureServices(services => services.AddSingleton<TimeProvider>(Clock));
 
     /// <summary>A provider that keeps every line, because the log IS the behaviour under test.</summary>
     private sealed class Capture(StringWriter said) : ILoggerProvider

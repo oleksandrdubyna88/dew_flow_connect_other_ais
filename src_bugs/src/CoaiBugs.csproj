@@ -56,6 +56,10 @@
          word list. They travel as `shared/skeleton-keywords.txt`, pinned by a test. -->
     <ProjectReference Include="..\..\src_mcp\core\CoaiMcp.Core.csproj" />
     <ProjectReference Include="..\..\src_mcp\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+    <!-- The one migration runner, shared with `coai-mcp`: ordered steps, `user_version`, one
+         transaction per step. This database has a file in the field since 2026-09-17, and the gate
+         ruled against a second copy of the runner that already brought coai.db forward. -->
+    <ProjectReference Include="..\..\src_mcp\storage\CoaiMcp.Storage.csproj" />
   </ItemGroup>
 
 </Project>
