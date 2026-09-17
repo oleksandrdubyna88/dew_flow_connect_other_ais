@@ -41,12 +41,24 @@ test('the count is internally consistent, which the hand-written one was not', (
   assert.ok(counted.sites > 0, 'a counter that finds nothing would pass every other assertion here');
 });
 
-test('the POPULATION does not fall while the work proceeds', () => {
-  // The completeness promise is made over this number, so it must mean the same thing on the day
-  // the funnel lands as on the day the last site is routed. An earlier version of this script made
-  // `sites` mean "still direct", and the first routed modal quietly moved `events` from 93 to 89 —
-  // the population appearing to shrink because the work was going well.
-  assert.equal(count().sites, 109, 'the number of places this extension speaks to a person');
+/**
+ * How many places this extension speaks to a person.
+ *
+ * <p>It started at 109 and is 110: S3 SURFACES something never shown before — the server's own
+ * list of settings it could not understand, which crossed the wire on every probe and was dropped
+ * by the parser. A new message rather than a routed one, and that is the only sanctioned way this
+ * number moves up.</p>
+ */
+const PLACES_THIS_SPEAKS = 110;
+
+test('the POPULATION changes only on purpose', () => {
+  // Routing must not move it in either direction: the completeness promise is made over this
+  // number, so it has to mean the same thing on the day the funnel lands as on the day the last
+  // site is routed. An earlier version of the script made `sites` mean "still direct", and the
+  // first routed modal quietly moved `events` from 93 to 89 — the population appearing to shrink
+  // because the work was going well. Raising this constant is a deliberate act with a reason
+  // beside it, which is what made the S3 addition visible instead of silent.
+  assert.equal(count().sites, PLACES_THIS_SPEAKS, 'the number of places this extension speaks to a person');
 });
 
 /**

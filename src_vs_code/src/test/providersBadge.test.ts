@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { availabilityOf, parseProviders, ProviderHealth } from '../providers';
+import { availabilityOf, NO_NOTES, parseProviderNotes, parseProviders, ProviderHealth } from '../providers';
 import { PanelState, panelHtml } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { Vendor } from '../vendors';
@@ -80,7 +80,7 @@ const UNAVAILABLE: Record<string, ProviderHealth> = {
 };
 
 test('a reviewer the server cannot run is badged, with the reason', () => {
-  const html = page({ providers: { reported: UNAVAILABLE, asked: true, answered: true } });
+  const html = page({ providers: { reported: UNAVAILABLE, asked: true, answered: true, notes: NO_NOTES } });
 
   assert.match(html, /cannot review/);
   assert.ok(html.includes('not signed in to the Team server'), 'the count is not actionable; the reason is');
@@ -91,7 +91,7 @@ test('a reviewer the server CAN run is badged with nothing', () => {
     'remsoftdev-claude': { provider: 'remsoftdev-claude', auth: 'server token', note: '1 of 1 account(s) ready' },
   };
 
-  assert.ok(!page({ providers: { reported: fine, asked: true, answered: true } }).includes('cannot review'));
+  assert.ok(!page({ providers: { reported: fine, asked: true, answered: true, notes: NO_NOTES } }).includes('cannot review'));
 });
 
 test('a probe that answered nothing badges nothing — unknown is not unavailable', () => {
@@ -100,7 +100,7 @@ test('a probe that answered nothing badges nothing — unknown is not unavailabl
   // already refuse to guess for exactly this reason.
   assert.ok(!page().includes('cannot review'), 'no answer at all');
   assert.ok(
-    !page({ providers: { reported: {}, asked: true, answered: false } }).includes('cannot review'),
+    !page({ providers: { reported: {}, asked: true, answered: false, notes: NO_NOTES } }).includes('cannot review'),
     'an answer that could not be read',
   );
 });
@@ -134,6 +134,39 @@ test('a body that is not a providers answer is undefined, not an empty one', () 
   );
 });
 
+test('what the server says about ITSELF is read, and used to be thrown away', () => {
+  // `--providers` has always answered these two and the panel's parser took {provider, auth, note}
+  // off each row and discarded the rest — so a COAI_ROLES the server could not read was visible
+  // only in a log nobody opens. Three lines of parser closed it.
+  const notes = parseProviderNotes(JSON.stringify({
+    providers: [],
+    vaultNote: 'no COAI_CREDS_KEY configured — keyless vendors still work on their own auth',
+    unrecognised: ['Role2: named more than once — the first row wins', 'COAI_ROUNDS_X is not a number'],
+  }));
+
+  assert.equal(notes.unrecognised.length, 2);
+  assert.match(notes.unrecognised[0]!, /named more than once/u);
+  assert.match(notes.vaultNote, /COAI_CREDS_KEY/u);
+});
+
+test('a body with no notes in it, or no body at all, is two empties rather than a throw', () => {
+  // Advisory, so their absence is not an error: a build too old to send them and a body that is
+  // not JSON at all must both leave the panel saying nothing rather than saying something wrong.
+  assert.deepEqual(parseProviderNotes('{"providers":[]}'), NO_NOTES);
+  assert.deepEqual(parseProviderNotes('not json'), NO_NOTES);
+  assert.deepEqual(parseProviderNotes('null'), NO_NOTES);
+});
+
+test('a complaint that is not a sentence is dropped rather than rendered', () => {
+  const notes = parseProviderNotes(JSON.stringify({
+    unrecognised: ['a real one', '', 7, null, { nope: 1 }],
+    vaultNote: 42,
+  }));
+
+  assert.deepEqual([...notes.unrecognised], ['a real one']);
+  assert.equal(notes.vaultNote, '', 'a number is not a note, and "42" on screen would be worse than nothing');
+});
+
 test('the parser keeps what it can read and defaults what it cannot', () => {
   const one = parseProviders('{"providers":[{"provider":"codex","auth":"own auth"}]}');
 
@@ -146,7 +179,7 @@ test('the Server section says when the installed binary could not report at all'
   // one would be a badge that lies. It IS a fact about this binary, and silence about a failed CHECK
   // is the class of defect this whole plan is about. Four reviewers raised it on the plan round.
   const html = page({
-    providers: { reported: {}, asked: true, answered: false },
+    providers: { reported: {}, asked: true, answered: false, notes: NO_NOTES },
     openSections: ['reviewers', 'server'],
   });
 
@@ -156,7 +189,7 @@ test('the Server section says when the installed binary could not report at all'
 
 test('a binary that answered with no reviewers is not a binary that failed', () => {
   const html = page({
-    providers: { reported: {}, asked: true, answered: true },
+    providers: { reported: {}, asked: true, answered: true, notes: NO_NOTES },
     openSections: ['reviewers', 'server'],
   });
 
@@ -165,7 +198,7 @@ test('a binary that answered with no reviewers is not a binary that failed', () 
 
 test('a binary that was never asked says nothing — that section already says the server is absent', () => {
   const html = page({
-    providers: { reported: {}, asked: false, answered: false },
+    providers: { reported: {}, asked: false, answered: false, notes: NO_NOTES },
     openSections: ['reviewers', 'server'],
   });
 

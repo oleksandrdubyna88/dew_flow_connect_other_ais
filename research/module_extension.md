@@ -47,10 +47,21 @@ the mechanism built against it. That is why there are three doors rather than on
 it is not enforcement. Instead `notification-sites.json` carries the count of calls still made
 directly, and `notificationSites.test.mjs` holds a constant that may only ever be LOWERED — with a
 companion assertion that the scan still finds the calls inside `notify.ts`, because a structural
-test that matches nothing passes for ever. **108 of the 109 sites are routed** and the constant
+test that matches nothing passes for ever. **109 of the 110 sites are routed** and the constant
 stands at **1**. The one that is left is `helpPanel.ts`'s settings refusal, held back on purpose:
 defect 3 rewires it through `reportRefusal`, and touching that line twice is worse than touching it
 once.
+
+**The population went from 109 to 110, and that took a deliberate act.** S3 surfaces what
+`--providers` has always answered and the panel has always dropped: `unrecognised`, the server's own
+list of settings it could not understand — a malformed `COAI_ROLES`, a role row it refused — each
+already written as a sentence meant to be acted on. `oneProvider` read `{provider, auth, note}` off
+each row and discarded everything beside it, so those complaints were visible only in a log file
+nobody opens. The panel now records each one once per session, keyed by the sentence.
+
+It would **not** have caught the 2026-09-16 incident — that role was accepted rather than dropped,
+and its complaint came at round time — and saying so is the point: it closes a real gap, not the one
+that prompted the work.
 
 **The counter reports a population and a remainder, and the distinction is load-bearing.** `sites`
 is every place this extension speaks to a person, routed or not, and it does not fall — it is what

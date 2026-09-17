@@ -804,7 +804,11 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
   counts, and a Serilog line from S8. `src_vs_code/README.md:316` promises nothing leaves the machine,
   and changing that is a product decision, not a detail of this plan.
 - **Does not add a one-shot CLI mode.**
-- **Does not change which messages are shown.**
+- **Does not change which messages are shown — with one deliberate exception, S3.** Routing is
+  additive: no toast is removed, reworded or added by it. S3 exists precisely to ADD one, because
+  the server's list of settings it could not understand has always crossed the wire and always been
+  dropped on the floor. These two sentences contradicted each other in this plan until the
+  population test went red on the day S3 landed, which is what that test is for.
 - **Does not touch the rounds log beyond S6's two changes**, or `src_server` at all.
 
 ## Open questions
