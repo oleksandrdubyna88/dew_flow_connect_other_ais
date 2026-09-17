@@ -28,6 +28,9 @@ import { asInstant, compareRows } from '../pageTables';
 
 const AT = Date.UTC(2026, 8, 17, 9, 0, 0);
 
+/** Spelled rather than written: a literal one here would end this file's own template literals. */
+const BACKTICK = String.fromCharCode(96);
+
 function row(over: Partial<Grouped> = {}): Grouped {
   const when = over.when ?? new Date(AT).toISOString();
 
@@ -488,6 +491,17 @@ test('nothing embedded in the page can end the script tag it lives in', () => {
 
   assert.ok(!closes.test(script), 'and nothing else in the rendered script does either');
   assert.ok(script.length > 500, 'the whole script is there, not a fragment ended early');
+  // And the other way the same page can be cut in half: this script is built inside a TEMPLATE
+  // LITERAL, so one backtick anywhere in it — in an embedded function, in a comment inside one —
+  // ends the literal there. The rounds log has had this guard since it was bitten; the newer page
+  // did not, and the omission was found by breaking the older one. Three times in this repository.
+  assert.ok(!script.includes(BACKTICK), 'a backtick would end the template literal the script is built in');
+  for (const embedded of [compareRows, asInstant]) {
+    assert.ok(
+      !embedded.toString().includes(BACKTICK),
+      embedded.name + ' carries a backtick into every page that embeds it',
+    );
+  }
 });
 
 test('every value that reaches the page is escaped, at every sink', () => {
