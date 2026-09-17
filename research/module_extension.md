@@ -120,6 +120,30 @@ exists to stop. The cost is that a genuinely new `(code, subject)` of an ordinar
 once the budget is spent — which is what the reserve above is for, and why it is load-bearing rather
 than a nicety.
 
+**A record keeps what this build has never heard of.** The two halves ship separately — the Team
+server is deployed by hand — so an extension one release behind reading a `server-notices.jsonl`
+written by a newer server is routine. An unknown field is kept in a bag and flattened back on the
+way out, so a record read and written again is the record that arrived. Strings and finite numbers
+only, at most 32 of them, and each is redacted on the way out like every other field: a
+forward-compatibility bag that skipped the redactor would be a hole in a security measure dressed as
+tolerance. It is the same bargain the parser already took for an unknown CLASS.
+
+**Every string field is redacted, identity fields included — and that was re-decided under
+pressure.** The code round asked for `class`, `source`, `code` and `run` to be exempt: they are
+literals chosen in the source, so there is nothing in them to redact, and rewriting one risks a
+persisted key that no longer matches the key the suppressor admitted. The exemption was written, and
+the test that puts a secret-bearing string into EVERY field rejected it. That test is right —
+`security.md` names "a measure applied at SOME of its sites" as the defect this family keeps
+writing. So the concern is answered by a GUARD instead: `notification-sites.json` carries every
+`code` literal the product can emit (109 today), and a test asserts redaction is a no-op on each.
+Verified by planting `sk-refresh-failed`, which the vendor-key pattern really would rewrite, and
+watching the test fail. A code that the redactor would touch now fails on the day it is added.
+
+**The buttons a question offered are on the record.** `action` carried the single case; a two-button
+notice left the ledger holding an answer with no record of what it was an answer to. The `.wslconfig`
+modal offers *Copy `wsl --shutdown`* and *Put it back to nat*, and the second changes a machine's
+networking.
+
 **Counting is counting ROWS, at read time.** Never `seq`, never the in-memory map. A map can be
 evicted and a process can die, and a number on screen a reader cannot re-derive from the file is a
 number that will be wrong one day. `seq` is on the record as a diagnostic and nothing a reader sees

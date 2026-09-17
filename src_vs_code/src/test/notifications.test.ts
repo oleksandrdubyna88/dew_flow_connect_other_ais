@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import {
   DETAIL_LIMIT,
@@ -237,4 +239,107 @@ test('a URL survives being written down, because a sentence that loses its endpo
   });
 
   assert.ok(line.includes('https://coai.example.com:8443/api/v1/rounds'), line);
+});
+
+test('a field a newer writer adds survives an older reader', () => {
+  // The two halves ship SEPARATELY - the Team server is deployed by hand - so an extension one
+  // release behind reading a server-notices.jsonl written by a newer server is routine, not exotic.
+  // The parser already keeps a CLASS it has never heard of for this reason; it used to drop a FIELD
+  // it had never heard of on the same line. (codex, the code round.)
+  const back = parseNotificationLine(JSON.stringify({
+    utc: '2026-09-17T09:00:00.000Z',
+    class: 'failure',
+    source: 'coai-mcp',
+    code: 'server-refused',
+    serverOnlyField: 'a fact this build has no name for',
+    serverOnlyCount: 7,
+  }));
+
+  assert.equal(back?.more?.['serverOnlyField'], 'a fact this build has no name for');
+  assert.equal(back?.more?.['serverOnlyCount'], 7);
+});
+
+test('an unknown field is flattened back on the way out, so a round trip is what arrived', () => {
+  const line = JSON.stringify({
+    utc: '2026-09-17T09:00:00.000Z', class: 'failure', source: 's', code: 'c', novelty: 'kept',
+  });
+  const twice = notificationLine(parseNotificationLine(line) as NotificationRecord).trim();
+
+  assert.equal(JSON.parse(twice).novelty, 'kept');
+  assert.equal('more' in JSON.parse(twice), false, 'the bag is an implementation detail, not a field');
+});
+
+test('an unknown field is redacted like any other, and is not a hole in the measure', () => {
+  const back = parseNotificationLine(JSON.stringify({
+    utc: '2026-09-17T09:00:00.000Z', class: 'failure', source: 's', code: 'c',
+    whatTheServerSent: 'the call failed with api_key: abc123def456',
+  }));
+  const line = notificationLine(back as NotificationRecord);
+
+  assert.ok(!line.includes('abc123def456'), line);
+});
+
+test('an unknown value that is not flat is dropped, because a line here has to stay flat', () => {
+  const back = parseNotificationLine(JSON.stringify({
+    utc: '2026-09-17T09:00:00.000Z', class: 'failure', source: 's', code: 'c',
+    nested: { a: 1 }, list: [1, 2], nothing: null,
+  }));
+
+  assert.equal(back?.more, undefined, 'none of the three is a string or a finite number');
+});
+
+test('the identity of a row is cleaned but never rewritten', () => {
+  // `class`, `source`, `code` and `run` are literals chosen in the source, not text anybody typed,
+  // so there is nothing in them to redact - and rewriting them risks the one thing that must not
+  // happen here: a persisted key that no longer matches the key the suppressor admitted, which
+  // would make a row ungroupable with its own repeats. (codex, the code round.)
+  const line = notificationLine({
+    utc: '2026-09-17T09:00:00.000Z',
+    class: 'failure',
+    source: 'auth-probe',
+    code: 'oauth-token-expired',
+    run: 'a1c9f0d3e5b7',
+  });
+  const back = JSON.parse(line);
+
+  assert.equal(back.code, 'oauth-token-expired');
+  assert.equal(back.source, 'auth-probe');
+  assert.equal(back.run, 'a1c9f0d3e5b7');
+});
+
+test('an identity field is still bounded and still stripped of what cannot be read back', () => {
+  // Not redacted is not "not cleaned". A control character in a code makes a line no JSON.parse can
+  // read, which costs the whole row rather than the field.
+  const line = notificationLine({
+    utc: '2026-09-17T09:00:00.000Z',
+    class: 'failure',
+    source: `a${String.fromCharCode(0)}b`,
+    code: 'x'.repeat(TITLE_LIMIT + 50),
+  });
+  const back = JSON.parse(line);
+
+  assert.equal(back.source, 'ab');
+  assert.ok(back.code.length < TITLE_LIMIT + 50, 'bounded');
+  assert.deepEqual(typeof back.code, 'string');
+});
+
+test('the redactor rewrites no code this product can emit', () => {
+  // The guard that replaced an exemption. The code round asked for identity fields to skip
+  // redaction, on the ground that a code like `oauth-token-expired` could come back as
+  // `oauth-[redacted]-expired` and stop matching the key the suppressor admitted. Exempting them
+  // broke the older and better invariant - EVERY string field is redacted, because "a measure
+  // applied at SOME of its sites" is the defect security.md names - and an existing test said so.
+  //
+  // So the invariant stays whole and the concern becomes this: every `code` literal the product
+  // can write is in the generated inventory, and redaction must be a no-op on all of them. A code
+  // that the redactor would rewrite now fails here on the day it is added, rather than producing a
+  // row that silently cannot be grouped with its own repeats.
+  const inventory = JSON.parse(
+    readFileSync(join(__dirname, '..', '..', 'notification-sites.json'), 'utf8'),
+  ) as { readonly codes: readonly string[] };
+
+  assert.ok(inventory.codes.length > 50, `only ${inventory.codes.length} codes found - has the scan broken?`);
+  for (const code of inventory.codes) {
+    assert.equal(safeText(code, TITLE_LIMIT), code, `redaction rewrites the code ${code}`);
+  }
 });

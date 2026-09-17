@@ -34,7 +34,16 @@ export interface Notice {
    * round.</p>
    */
   readonly code: string;
-  /** Which resource this one is about, when a `code` can be about more than one. */
+  /**
+   * Which resource this one is about, when a `code` can be about more than one.
+   *
+   * <p><b>It is half the suppression key</b>, which is what a new call site has to know about it.
+   * Omitting it where a code really is about two things merges them under one counter, so recovering
+   * one resets the other and the second never reaches a storm; supplying something that CHANGES per
+   * occurrence — a timestamp, a round number, a rendered sentence — mints a fresh key every time,
+   * which is precisely the defect that made this plan stop keying repeats on titles. Name the
+   * resource: a path, a server, a role. (local reviewer, the code round.)</p>
+   */
   readonly subject?: string;
   /** What the person sees. */
   readonly title: string;
@@ -111,6 +120,11 @@ function given(notice: Notice): Partial<NotificationRecord> {
  * function may not mint anything; the pid for the same reason.</p>
  */
 export function noticeRecord(notice: Notice, run: string, pid: number, at: Date): NotificationRecord {
+  // The whole decision surface, when there was more than one choice on it. `action` already carries
+  // the single case through `given`, and a one-button notice needs nothing more; a two-button one
+  // left the ledger holding an answer with no record of what it was an answer to.
+  const buttons = buttonsOf(notice);
+
   return {
     utc: at.toISOString(),
     class: notice.class,
@@ -119,6 +133,7 @@ export function noticeRecord(notice: Notice, run: string, pid: number, at: Date)
     run,
     pid,
     ...given(notice),
+    ...(buttons.length > 1 ? { offered: buttons.join(' · ') } : {}),
   };
 }
 

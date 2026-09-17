@@ -162,6 +162,16 @@ function readOneFile(file) {
   return {
     byApi,
     inTheFunnel,
+    // Every `code` literal this file can emit. It is the KEY a repeat is counted on, so it has two
+    // jobs beyond being counted: `notifications.test.ts` asserts that redaction is a no-op on each
+    // one — a code the redactor would rewrite is a row that cannot be grouped with its own repeats —
+    // and a reader gets the list of everything the product can say without grepping for it. The
+    // pattern takes a kebab-case LITERAL only, which is the convention it also describes: a composed
+    // code mints a fresh key per occurrence, and that is the defect this whole plan turns on. The
+    // shape matters for a second reason - `code:` is an ordinary property name, and `rolesPage.ts`
+    // has a TAB_NAMES map whose `code` key holds 'Code review'. Requiring the shape tells the two
+    // apart without this script having to understand which object it is looking at.
+    codes: [...text.matchAll(/\bcode:\s*'([a-z][a-z0-9-]{1,120})'/gu)].map((hit) => hit[1]),
     // The funnel's own `modal: true` is how it PASSES the flag on, not a question it asks. Counting
     // it moved the event total from 93 to 92 the moment the funnel landed, which is the shape of
     // error this whole script exists to stop.
@@ -191,6 +201,7 @@ function readOneFile(file) {
 export function count(dir = SOURCE) {
   const byApi = Object.fromEntries(APIS.map((api) => [api, 0]));
   const perFile = {};
+  const codes = new Set();
   let modal = 0;
   let inTheFunnel = 0;
   let routed = 0;
@@ -205,6 +216,9 @@ export function count(dir = SOURCE) {
     modal += here.modal;
     inTheFunnel += here.inTheFunnel;
     routed += here.routed;
+    for (const code of here.codes) {
+      codes.add(code);
+    }
     if (direct > 0) {
       perFile[relative(EXTENSION, file).replaceAll('\\', '/')] = direct;
     }
@@ -240,6 +254,15 @@ export function count(dir = SOURCE) {
     routed,
     byApi,
     perFile,
+    /**
+     * Every `code` a call site can write, sorted. The key a repeat is counted on.
+     *
+     * <p>Checked in so a test can assert that the redactor rewrites none of them: a code that came
+     * back from the serialiser altered would be a row that cannot be grouped with its own repeats,
+     * and it would happen silently. Raised on the code round as a reason to exempt identity fields
+     * from redaction; this is the answer that keeps the redaction invariant whole instead.</p>
+     */
+    codes: [...codes].sort(),
   };
 }
 

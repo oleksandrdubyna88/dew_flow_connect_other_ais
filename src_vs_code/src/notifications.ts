@@ -66,6 +66,15 @@ export interface NotificationRecord {
   readonly cure?: string;
   /** The button offered, when one was. */
   readonly action?: string;
+  /**
+   * Every button offered, in order, when there was more than one.
+   *
+   * <p>An audit that can see what somebody chose but not what they were choosing between is half an
+   * audit. The call site this matters most for is the `.wslconfig` modal, which offers *Copy `wsl
+   * --shutdown`* and *Put it back to nat* — the second of which changes a machine's networking, and
+   * neither of which the record mentioned. (codex, the code round.)</p>
+   */
+  readonly offered?: string;
   /** What the person pressed — recorded for a confirmation, whose ANSWER is the event. */
   readonly answer?: string;
   /**
@@ -98,6 +107,21 @@ export interface NotificationRecord {
   readonly session?: string;
   readonly provider?: string;
   readonly role?: string;
+  /**
+   * Fields this build has never heard of, kept rather than dropped.
+   *
+   * <p>The same bargain the class field already makes: *"a newer build writing a class this one has
+   * never heard of must not make its records vanish from an older reader"*. It applies harder to the
+   * server's file than to this side's, because the two halves ship SEPARATELY — the Team server is
+   * deployed by hand — so an extension one release behind reads a `server-notices.jsonl` written by
+   * a newer server as a matter of routine. Without this, a field S8 adds is dropped in silence while
+   * both halves appear to have accepted the row. (codex, the code round.)</p>
+   *
+   * <p>It is flattened back on the way out, so a record that is read and written again is the record
+   * that arrived. Strings and finite numbers only, and bounded: an unknown value that is an object
+   * or an array is not kept, because the one thing a line in this file must stay is flat.</p>
+   */
+  readonly more?: Readonly<Record<string, string | number>>;
 }
 
 /**
@@ -223,6 +247,25 @@ function limitFor(field: string): number {
 }
 
 /**
+ * <b>Every string field is redacted, identity fields included — and that was re-decided.</b>
+ *
+ * <p>The code round asked for `class`, `source`, `code` and `run` to be exempt: they are literals
+ * chosen in the source rather than text anybody typed, so there is nothing in them to redact, and
+ * rewriting one risks a persisted key that no longer matches the key the suppressor admitted. The
+ * exemption was written, and an existing test rejected it — the one that puts a secret-bearing
+ * string into EVERY field and asserts none of them reaches the line. It is right and the exemption
+ * was wrong: `security.md` names "a measure applied at SOME of its sites" as the defect this family
+ * keeps writing, and trading a tested invariant for a guarantee about a case that does not occur is
+ * how that defect gets written again.</p>
+ *
+ * <p>The concern was real even though the example was not, so it is answered by a GUARD instead of
+ * an exemption: `notification-sites.json` carries every `code` literal the product can emit, and a
+ * test asserts that redaction is a no-op on each one. A code that the redactor would rewrite now
+ * fails a test on the day it is added, which is strictly better than an exemption — the invariant
+ * stays whole and the key stays stable, and neither rests on anybody remembering.</p>
+ */
+
+/**
  * The record as one line of JSONL, with the newline — redacted on the way out.
  *
  * <p>The redaction happens HERE, at the one road onto the disk, and iterates the record's own
@@ -232,8 +275,13 @@ function limitFor(field: string): number {
  * which `testing.md` says will not notice the third entry.</p>
  */
 export function notificationLine(record: NotificationRecord): string {
+  const { more, ...named } = record;
+  // Flattened FIRST, so fields this build does not know are cleaned and redacted exactly like the
+  // ones it does. A forward-compatibility bag that skipped the redactor would be a hole in a
+  // security measure, dressed as tolerance.
+  const flat: Record<string, unknown> = { ...named, ...(more ?? {}) };
   const safe = Object.fromEntries(
-    Object.entries(record).map(([field, value]) =>
+    Object.entries(flat).map(([field, value]) =>
       [field, typeof value === 'string' ? safeText(value, limitFor(field)) : value]),
   );
 
@@ -250,11 +298,36 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * Fields this build does not know, kept so a newer writer's record survives an older reader.
+ *
+ * <p>Bounded in three ways, because this reads a file another process appends to: at most
+ * `MOST_UNKNOWN_FIELDS` of them, strings and finite numbers only — an object or an array is dropped,
+ * since a line here must stay flat — and each one goes through the serialiser's own cleaning on the
+ * way out like every other field.</p>
+ */
+function strangers(row: Record<string, unknown>, known: ReadonlySet<string>): Record<string, string | number> {
+  const kept: Record<string, string | number> = {};
+  for (const [field, value] of Object.entries(row)) {
+    if (known.has(field) || Object.keys(kept).length >= MOST_UNKNOWN_FIELDS) {
+      continue;
+    }
+    if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) {
+      kept[field] = value;
+    }
+  }
+
+  return kept;
+}
+
+/** How many unknown fields one record may carry. A bound, because the file is written by others. */
+export const MOST_UNKNOWN_FIELDS = 32;
+
 /** Only the optional fields that are present, so a record round-trips as what it was. */
 function optional(row: Record<string, unknown>): Partial<NotificationRecord> {
   const text: Array<keyof NotificationRecord> = [
-    'subject', 'title', 'detail', 'cure', 'action', 'answer', 'run', 'repo', 'branch', 'session',
-    'provider', 'role',
+    'subject', 'title', 'detail', 'cure', 'action', 'offered', 'answer', 'run', 'repo', 'branch',
+    'session', 'provider', 'role',
   ];
   const kept: Record<string, unknown> = {};
   for (const field of text) {
@@ -268,6 +341,10 @@ function optional(row: Record<string, unknown>): Partial<NotificationRecord> {
     if (value !== undefined) {
       kept[field] = value;
     }
+  }
+  const unknown = strangers(row, new Set([...text, ...['class', 'source', 'code', 'utc', 'pid', 'seq', 'bound']]));
+  if (Object.keys(unknown).length > 0) {
+    kept['more'] = unknown;
   }
 
   return kept as Partial<NotificationRecord>;

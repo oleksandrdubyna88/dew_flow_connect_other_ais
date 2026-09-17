@@ -116,3 +116,24 @@ test('how a notice is PRESENTED does not reach the record', () => {
   assert.equal('modal' in record, false);
   assert.equal('actions' in record, false);
 });
+
+test('the buttons a question offered are on the record, not only the one pressed', () => {
+  // The `.wslconfig` modal offers *Copy `wsl --shutdown`* and *Put it back to nat*, and the second
+  // changes a machine's networking. The ledger held the answer and no trace of what it was an
+  // answer to, which is half an audit. (codex, the code round.)
+  const record = noticeRecord(
+    notice({ actions: ['Copy `wsl --shutdown`', 'Put it back to nat'], modal: true }),
+    'r',
+    1,
+    NOON,
+  );
+
+  assert.equal(record.offered, 'Copy `wsl --shutdown` · Put it back to nat');
+  assert.equal(answered(record, 'Put it back to nat').offered, record.offered, 'and the answer keeps it');
+});
+
+test('a single button needs no second field, because `action` already says what it was', () => {
+  assert.equal(noticeRecord(notice({ action: 'Reload Window' }), 'r', 1, NOON).offered, undefined);
+  assert.equal(noticeRecord(notice({ action: 'Reload Window' }), 'r', 1, NOON).action, 'Reload Window');
+  assert.equal(noticeRecord(notice(), 'r', 1, NOON).offered, undefined, 'and no buttons, no field');
+});
