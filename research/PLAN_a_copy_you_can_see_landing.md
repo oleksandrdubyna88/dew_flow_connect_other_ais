@@ -165,7 +165,7 @@ names both sites and the one that ranks rules by array index.
 
 | Item | Which plan builds it | The other plan's part | Order |
 |---|---|---|---|
-| `cssRules.ts`, and converting the third private parser that made the round call it Blocking | **this plan** | consumes it unchanged | shipped first |
+| `cssRules.ts`, and converting the third private parser that made the round call it Blocking | [PLAN_a_copy_that_says_so_in_green.md](PLAN_a_copy_that_says_so_in_green.md) (#322) — **not this plan** | **this plan** consumes it unchanged; the child consumes it unchanged too | shipped first |
 | The two survivors in `chatPage.test.ts` — `rules()` and the inline reader that ranks by array index | [PLAN_one_reader_for_a_page_stylesheet.md](../todo/PLAN_one_reader_for_a_page_stylesheet.md) | recorded them here as an open tail | after this one |
 | The double `signatureOf` pass per message | neither — measured on this plan's round and declined | — | closed |
 

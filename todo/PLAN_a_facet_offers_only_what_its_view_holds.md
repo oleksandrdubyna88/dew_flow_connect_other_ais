@@ -82,15 +82,21 @@ is the defect's mirror image and it is the part most likely to be got wrong; it 
 
 ## Build order
 
-1. A failing test first: in the conversations view, a vendor that only a round has must not be among the
-   Vendor options.
-2. A second failing test: choosing that vendor in the rounds view and switching to conversations must
-   leave the conversations view unfiltered, with the select showing `any`.
-3. Split the option source per view; wire the switch.
+1. **RED 1 — `AVendorOnlyARoundHasIsNotOfferedInTheConversationsView`**: in the conversations view, a
+   vendor that only a round has must not be among the Vendor options.
+2. **RED 2 — `SwitchingViewClearsASelectionTheNewViewCannotOffer`**: choosing that vendor in the rounds
+   view and switching to conversations must leave the conversations view unfiltered, with the select
+   showing `any`.
+3. Split the option source per view; wire the switch. Both tests above go green; neither existing
+   roundsLog test changes.
+
+The two names are used verbatim in the test plan below, so the order a reader meets them in is the order
+they are written.
 
 ## Test plan
 
-- The two RED tests above, observed red with the real symptom before the change.
+- **RED 1** and **RED 2** from the build order, each observed red with the real symptom — an offered
+  value that matches nothing, and a hidden selection still filtering — before the change.
 - The page is RUN, not asserted over as text, per
   [generated-code-tests.md](../.agents/conventions/common/generated-code-tests.md) and
   [PROJECT.md:102](../.agents/PROJECT.md#L102) — these are behavioural assertions, so the carve-out for

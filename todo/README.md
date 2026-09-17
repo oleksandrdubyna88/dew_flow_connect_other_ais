@@ -75,8 +75,11 @@ a reader has to be able to tell "checked, nothing open" from "never looked".
 | #288 | [PLAN_a_question_can_wait_its_turn.md](../research/PLAN_a_question_can_wait_its_turn.md) | none | **nothing open.** Its two open questions were ANSWERED by the operator on 2026-09-17 and recorded in the plan: the queue does not survive a window reload, and eight questions / 64 KB is the right ceiling. |
 
 Boundaries are named on both sides per
-[planning-docs.md](../.agents/conventions/common/planning-docs.md) — eight pairs, verified in both
-directions rather than assumed.
+[planning-docs.md](../.agents/conventions/common/planning-docs.md) — **nine** pairs, verified in both
+directions rather than assumed. They are: the stylesheet reader against each of its two parents (#322
+and #313) and against the page-test backlog; the facet plan against its parent and against the tab-strip
+plan; the candidate plan against its parent and against the probing-state plan; the probing-state plan
+against that same parent; and the stated-wait plan against its parent.
 
 ## Promoted
 
