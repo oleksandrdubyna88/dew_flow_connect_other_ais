@@ -10,7 +10,10 @@
 > than in `chatPersist`), `chatPage.ts` and `chatModels.ts` (story 11 moves a type out from under
 > both). One is new: `chatContracts.ts`. The second round added two more that are EXTENDED rather
 > than fixed: `atomicFile.ts` (story 4 teaches `writeFileAtomically` to take bytes) and
-> `chatStoreSweep.ts` (story 4 widens the sweep's reach to `pictures/<id>`).
+> `chatStoreSweep.ts` (story 4 widens the sweep's reach to `pictures/<id>`). **Story 13 reaches
+> outside `src` altogether** — `src_vs_code/package.json` (a dev dependency and a test script),
+> `.github/workflows/ci.yml` (a job and an `xvfb-run`), a new suite, and
+> `research/module_tests.md`, whose twelve “not covered” rows are what it exists to start closing.
 >
 > **The first draft listed eight and missed four**, which is worth leaving on the record rather than
 > quietly correcting: it named the module each story's *Where* line quotes and forgot the ones the
@@ -70,6 +73,12 @@ genuinely new is one persistence surface, in story 5, and it is named there as s
 
 **The consultation also cost me two of my own conclusions, and found a twelfth defect.** Both are
 recorded where they belong — story 6 and story 12 — rather than smoothed over here.
+
+**A thirteenth story was added after all of that, by the operator's decision.** Story 6's dead end —
+a native `createQuickPick` that nothing in this repository can drive — is one of TWELVE rows in
+`research/module_tests.md` ending “not covered … needs an extension host”. Twelve honest admissions
+is a pattern, not an omission, and the operator's call was to build the harness **in this plan**
+rather than in a document of its own, because story 6 cannot finish without it.
 
 ---
 
@@ -316,12 +325,16 @@ is the repository's first `createQuickPick` against six `showQuickPick` sites. P
 the bundled page would prove the page renders a message; it would prove nothing about the path from
 `chatFollow` through a native QuickPick, which is the path that is broken.
 
-**So the honest statement is:** this story's visible half needs an extension-host harness, which this
-repository does not have and which `research/module_tests.md` already records as its largest single
-gap. It is **not** blocked on the page-tests plan — that plan governs a different surface. What this
-story ships without one: the guard, the classification of the failure, and a unit test that the
-refusal is RAISED. What it cannot yet prove is that the refusal is SEEN, and that limit is written
-into the story rather than papered over with a test of the wrong surface.
+**So the honest statement is:** this story's visible half needs an extension-host harness. It is
+**not** blocked on the page-tests plan — that plan governs a different surface.
+
+**And that is why this plan grew a thirteenth story rather than an excuse.** The first draft of this
+paragraph ended by writing the limit down and shipping around it: the guard, the classification, a
+unit test that the refusal is RAISED, and a note that nobody can prove it is SEEN. That is an honest
+note and a permanent one — `research/module_tests.md` already carries twelve of them. **Story 13
+builds the harness**, and story 6's scenario is its first and only conversion, watched red against
+this very defect before the guard exists. Story 6 therefore ships with its visible half proved, and
+is sequenced after story 13 for that reason.
 
 ---
 
@@ -543,6 +556,99 @@ It is also the only one whose benefit a test states out loud.
 
 ---
 
+## Story 13 — the extension-host harness, which twelve rows of the test map are waiting for
+
+> Added on 2026-09-17, after story 6 ran into it. It is in THIS plan rather than a plan of its own
+> by the operator's decision — story 6 cannot be finished without it and a second document would
+> put the dependency in a place neither plan owns.
+
+**Where:** `src_vs_code/package.json`, `.github/workflows/ci.yml`, and a new suite.
+
+**The gap is already written down, and `research/module_tests.md:175` is where:**
+
+> *“There is no extension-host harness here yet: `@vscode/test-electron` downloads a VS Code build
+> and runs a suite inside it, which no workflow does today. **This is the largest single gap in the
+> repository.**”*
+
+It is not a lone note. **Fourteen places in that file mention an extension host, and twelve of them
+are table rows ending “NOT covered … which is the row below”** — a picker nobody has driven, a
+command's six arms checked by reading its source, a rename event simulated rather than raised, two
+hosts contending for one settings lock proved by interleaving a fake. Every one of those rows is an
+honest admission, and twelve of them is a pattern rather than an omission.
+
+**What story 6 hit, and why it is what finally justifies this.** Story 6 must show a refusal when
+`index.refresh()` throws. The refusal is drawn by `vscode.window.createQuickPick<Item>()` at
+`conversationPickerCommand.ts:197` — measured, the **only** `createQuickPick` call in `src`, beside
+seven `showQuickPick` calls. A native control cannot be reached by `bundledPage.test.ts`, which runs
+webview scripts, and it cannot be reached by a unit test, which sees the decision and not the
+drawing. There is no third option: either the host runs, or story 6 ships a guard whose visible half
+is unproven.
+
+### The design decisions, each with its reason
+
+1. **`@vscode/test-electron`, NOT `@vscode/test-cli`.** The CLI wrapper is the friendlier package and
+   it brings **mocha**. This repository runs `node --test` across **211 TypeScript test files and six
+   `.mjs` ones**, and a second test framework beside that is precisely the duplicate the reuse rule
+   calls a defect from the moment it compiles — two runners, two reporters, two ways to filter, two
+   places CI has to read a failure from. `test-electron` is the lower-level package: it downloads a
+   build, launches it, and runs **whatever runner you hand it**. It costs a `runTests` entry point
+   and buys keeping one runner.
+2. **It runs in its own `node --test` invocation.** The rule this repository learned on 2026-09-17
+   and wrote into `theBundleLoads.test.mjs`: a test that drives the build gets an invocation to
+   itself, because `node --test` parallelises files and a build rewrites the tree others are reading.
+   A test that launches a whole editor is that rule's larger case — and the guard already there
+   detects a build-runner by its source, so a new suite spawning `npm`/`code` is caught by it rather
+   than by a flake weeks later.
+3. **CI needs a display, and today has none.** Both jobs are `runs-on: ubuntu-latest` and `grep -rn
+   "xvfb" .github/` returns **nothing**. A headless VS Code on Linux needs `xvfb-run`; that is one
+   line, and it is named here because an unnamed prerequisite is how this lands as a red pipeline
+   nobody can read.
+4. **It is a SEPARATE job, and it is not required to merge — at first.** An extension-host suite
+   downloads an editor and launches it: it is slow and it can be flaky for reasons that have nothing
+   to do with the change under review. Made required on day one it becomes a tax on every pull
+   request, and the pressure is then to weaken it. It runs, it reports, and it is promoted to
+   required only after it has been **green on twenty consecutive runs of `main`** — a number, so the
+   promotion is a measurement rather than a mood.
+
+### The scope discipline, which matters more than the harness
+
+**This story builds the harness and converts ONE row: story 6's.** It does not convert the other
+eleven. Two reasons, and the second is the one that will be argued with:
+
+- A harness with twelve scenarios written before any of them has ever caught anything is twelve
+  guesses about what is worth driving. One scenario, chosen because a story needed it, is evidence.
+- **An extension-host test is not automatically better than the value test beside it.** This
+  repository's architecture is decisions-as-values with a thin host layer, and
+  `sonarExclusions.test.ts` asserts the host half stays a **small minority** — measured today,
+  **33 of 196 modules in `src` import `vscode` directly** (35 cannot load without one, counting
+  transitively). If the harness becomes the place to test decisions, that architecture erodes and the
+  suite gets slower for nothing. The harness is for what a value CANNOT answer: a control being
+  drawn, an event being raised, two hosts contending. Anything a pure function can answer stays a
+  pure function.
+
+### The test, which is the harness proving itself
+
+A harness whose first scenario passes on arrival has demonstrated nothing. The first scenario is
+story 6's, **and it is watched going red against the unfixed code** — `index.refresh()` rejects, and
+the picker on screen still offers the moved names. Then the guard lands and it goes green. That
+sequence is the deliverable; the harness is what makes it possible.
+
+Second, and it is the one that stops this being decoration: **the harness is reverted and the
+scenario must fail to run at all.** A suite that silently skips when the editor cannot start is worse
+than no suite — it is a green tick over nothing, which is the exact shape of the CodeRabbit check
+that reported `pass` while rate-limited during this very series.
+
+### What this story also fixes, because it is measuring the same thing
+
+`research/module_tests.md` states **“Seventeen of the hundred and thirty-five modules in `src`”**.
+Measured today: `ls *.ts | wc -l` is **196**, and `grep -l "from 'vscode'" *.ts | wc -l` is **33**.
+The prose is two counts stale in both numbers — the same defect the parent plan already fixed once
+for the Sonar exclusion list, where tooling now measures it instead of a typed number. The row that
+describes the gap is rewritten when the gap changes, and the counts beside it become measured rather
+than typed.
+
+---
+
 ## The six SonarCloud findings on moved lines
 
 The quality gate **passed** on PR #351 — 100 % coverage on new code, no hotspots, no duplication.
@@ -586,12 +692,15 @@ somebody imagined.)*
    turn abandoned by a reset must neither write into the replacement (8) nor repaint it (12), and both
    are the same identity check applied at two points. Then a scope that closes in a `finally`, then a
    single-entry latch. Everything after this posts into the surface these four settle.
-3. **Stories 2, 6, 7** — the three failures that are currently invisible, now written against a
-   surface that has settled. Story 6 additionally waits on the running-page harness.
-4. **Stories 3, 4, 5** — the three data-shaped changes (a supplier, an atomic replace with a sweep, a
+3. **Story 13** — the extension-host harness, with story 6's scenario as its first and only
+   conversion, watched red before story 6's guard exists. Its own pull request: it touches CI and a
+   dependency and nothing else here does.
+4. **Stories 2, 6, 7** — the three failures that are currently invisible, now written against a
+   surface that has settled, and with story 6's visible half now provable.
+5. **Stories 3, 4, 5** — the three data-shaped changes (a supplier, an atomic replace with a sweep, a
    resumable job). **One pull request each**: story 4 and story 5 both grew a persistence contract at
    the gate and neither is a small diff any more.
-5. **Story 11**, then **the six Sonar findings**, in that order and one pull request.
+6. **Story 11**, then **the six Sonar findings**, in that order and one pull request.
 
 Stories inside a group are independent. The groups are not.
 
@@ -644,7 +753,16 @@ new test that drives the build gets its own invocation.
 - [ ] Nothing was re-implemented that the repository already has. Story 4 EXTENDS `atomicFile`, story 5
       USES `abreast` and `refile`, story 8 CALLS `ChatSession.stop` — and any deviation from that says
       in its commit why reuse failed.
-- [ ] Story 6 says in the code what it cannot prove, rather than testing the wrong surface.
+- [ ] Story 13's harness was proved twice: story 6's scenario watched RED against the unfixed code,
+      and the harness reverted so the scenario FAILS TO RUN rather than silently skipping.
+- [ ] Story 13 converted exactly ONE row of `research/module_tests.md`, and the other eleven still say
+      what they do not cover. A harness that grew twelve scenarios before one of them caught anything
+      has been built on guesses.
+- [ ] `@vscode/test-cli` was NOT added; the repository still has one test runner.
+- [ ] The extension-host job is not required to merge, and the promotion rule — twenty consecutive
+      green runs of `main` — is written where the job is defined, not only here.
+- [ ] The stale counts in `research/module_tests.md` (“seventeen of the hundred and thirty-five”) are
+      corrected to what a command measures, or replaced by tooling that measures them.
 - [ ] The six Sonar findings on moved lines closed, and `chatHost.ts`'s three `export let` reports
       left standing with their reason.
 - [ ] `importCycles.test.mjs`'s `KNOWN` ratchet is **eight entries, not nine** — `chatModels ↔
