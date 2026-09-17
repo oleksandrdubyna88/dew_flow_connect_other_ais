@@ -441,26 +441,29 @@ the real symptom, report both observations.
 
 ## Definition of Done
 
-- [ ] Six triggers in the rule, the new one anchored on the caller's own verdict and never on
+- [x] Six triggers in the rule, the new one anchored on the caller's own verdict and never on
       `severity`; the word `critical` appears in none of the three texts this plan writes.
-- [ ] Three rules about the answer; the consultant is told to prove, the caller is told to check.
-- [ ] A quoted finding is fenced as evidence on both sides — the rule and the consultant prompt.
-- [ ] A consultation that cannot happen is named as such and never read as agreement.
-- [ ] `consult`, `review_plan` AND `review_code` carry the trigger, so a session that never pasted
+- [x] Three rules about the answer; the consultant is told to prove, the caller is told to check.
+- [x] A quoted finding is fenced as evidence on both sides — the rule and the consultant prompt.
+- [x] A consultation that cannot happen is named as such and never read as agreement.
+- [x] `consult`, `review_plan` AND `review_code` carry the trigger, so a session that never pasted
       the snippet still gets it.
-- [ ] `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` 9, `CONSULTANT_VERSION` 2, `DOCUMENT_VERSION` 3, both
+- [x] `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` 9, `CONSULTANT_VERSION` 2, `DOCUMENT_VERSION` 3, both
       markers and the `package.json` title all moved together in ONE cascade; `SNIPPET_VERSION` and
       `CALLER_VERSION` did not; the file is still LF.
-- [ ] `review_document` names a plan as the counter-example and `review_plan` says it is the gate
+- [x] `review_document` names a plan as the counter-example and `review_plan` says it is the gate
       that unlocks `review_code` — the other plan's text, shipped in this release.
-- [ ] RED observed and reported for every new assertion, in the runner that owns it — `npm test` and
+- [x] RED observed and reported for every new assertion, in the runner that owns it — `npm test` and
       the MTP executable, never `dotnet test`.
-- [ ] `module_extension.md` and `module_server.md` updated; the stale `ARTEFACT_VERSION = 6` sentence
+- [x] `module_extension.md` and `module_server.md` updated; the stale `ARTEFACT_VERSION = 6` sentence
       fixed; the reciprocal boundary note added to the three related plans.
-- [ ] A `review_code` round per story reached its verdict and every finding was resolved with a reason.
-- [ ] `extension-v0.49.0` and the `mcp-v*` tag pushed ONE AT A TIME, each run confirmed started, and
-      BOTH artefacts verified by content — not "successfully installed".
-- [ ] This plan promoted to `research/` with its deviations, `todo/README.md` updated, and
+- [x] A `review_code` round per story reached its verdict and every finding was resolved with a reason.
+- [ ] **The one item still open:** `extension-v0.50.0` and `mcp-v0.28.0` pushed ONE AT A TIME, each
+      run confirmed started, and BOTH artefacts verified by content — not "successfully installed".
+      The release follows this promotion rather than preceding it, and the numbers are 0.50.0 and
+      0.28.0 rather than the 0.49.0 this plan predicted: 0.49.0 shipped somebody else’s work while
+      this was in review.
+- [x] This plan promoted to `research/` with its deviations, `todo/README.md` updated, and
       `plan-lifecycle.mjs` green.
 
 ## What the plan round changed

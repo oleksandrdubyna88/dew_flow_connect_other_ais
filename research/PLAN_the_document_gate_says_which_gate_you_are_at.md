@@ -144,19 +144,19 @@ task.
 
 ## Definition of Done
 
-- [ ] The counter-example sits against the list that causes the mistake, not elsewhere in the file.
-- [ ] The same discriminator — *what exists when the task is finished* — appears in all three places,
+- [x] The counter-example sits against the list that causes the mistake, not elsewhere in the file.
+- [x] The same discriminator — *what exists when the task is finished* — appears in all three places,
       in the same words.
-- [ ] `coai-document v3`, the marker still first after the frontmatter, `rule-bodies.json` updated by
+- [x] `coai-document v3`, the marker still first after the frontmatter, `rule-bodies.json` updated by
       the tool and not by hand.
-- [ ] **Both new tool names declared with `owns:` comments, and no ambiguous noun left behind a
+- [x] **Both new tool names declared with `owns:` comments, and no ambiguous noun left behind a
       definite article.** A shared rule may not name a product's tools undeclared, tokens are matched
       exactly, and `ownership-check.mjs` is a CI step that `npm test` does not run — which is how this
       reached CI red with a green local suite.
-- [ ] `promote-release` run, and `pin-check` green in all six consumers.
-- [ ] Both tool-description assertions hold in both directions.
-- [ ] `DOCUMENT_VERSION` 2 → 3 recorded here and EXECUTED by the consultant plan's single cascade.
-- [ ] Promoted to `research/` with its deviations; `todo/README.md` updated; `plan-lifecycle.mjs` green.
+- [x] `promote-release` run, and `pin-check` green in all six consumers.
+- [x] Both tool-description assertions hold in both directions.
+- [x] `DOCUMENT_VERSION` 2 → 3 recorded here and EXECUTED by the consultant plan's single cascade.
+- [x] Promoted to `research/` with its deviations; `todo/README.md` updated; `plan-lifecycle.mjs` green.
 
 ## What actually shipped
 

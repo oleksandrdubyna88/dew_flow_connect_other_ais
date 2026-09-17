@@ -28,6 +28,9 @@ and a requirements list, which is why sessions kept sending plans to the wrong g
 what exists when the task is finished — if it is a diff, the document in your hand is a plan for
 that diff.
 
+The pasted block carries the same two rules for anyone who does use it — see **Extension 0.50.0**
+above, where they arrive as the consultant rule and the artefact moves to v10.
+
 ## Extension 0.50.0 — 2026-09-17
 
 **The block the ⋯ menu hands out is v10, and it tells your AI when to ask another vendor for help.**
@@ -50,6 +53,11 @@ reviewer.
 A finding quoted to a consultant now travels as **evidence**, fenced and labelled, with any secret
 it carries replaced before it is sent. It is another model’s output entering a third model’s
 prompt, and a consultation leaves a thread in that vendor’s own store which nobody here can delete.
+
+The same two rules also reach a session that never pasted this block — see **Server 0.28.0** below,
+which puts them on the `consult`, `review_plan` and `review_code` tool descriptions. That is not a
+duplicate release of one change: this half is the text you paste, that half is what the server tells
+a caller at the moment it reaches for the tool, and most repositories only ever see the second.
 
 
 **The Asked button looks in the right folder now — it never found a repository whose name has an

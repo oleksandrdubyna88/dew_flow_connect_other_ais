@@ -2781,7 +2781,7 @@ left open, and the operator reported it twice.
 
 `ARTEFACT_VERSION` is the answer: an ordinal for the composed paste, introduced at 6 because the menu
 had been showing 5 for the whole artefact and the next one was 6 — and moved on every change to the
-paste since, to 9 on 2026-09-16 (see *A finding that changes everything is the fifth reason to ask*
+paste since, to 10 on 2026-09-17 (see *A finding that changes everything is the sixth reason to ask*
 below). That number is a dated record too; `ARTEFACT_VERSION` itself is what the menu, the panel
 note and the notification all read, and the value to check against. It numbers a different thing
 from `SNIPPET_VERSION`, which stays 5 and stays the gate rule's
@@ -2816,7 +2816,13 @@ is no block, and the clipboard still carries the gate half its submodule already
 which stays open. The boundary: this change owns the NUMBER and the shape of the sentence; that plan
 owns the ADVICE and what goes on the clipboard for a mount.
 
-### A finding that changes everything is the fifth reason to ask, and agreement is earned (2026-09-16)
+### A finding that changes everything is the sixth reason to ask, and agreement is earned (2026-09-17)
+
+> **It is the SIXTH trigger and it sits at position five**, which is not a contradiction: the
+> list has six entries and the person’s own request keeps the last place, because it is the one
+> that needs no judgement from the reader. And the artefact took **v10, not v9** — a parallel
+> session shipped the conventions pin bump with half the cascade while this was in review, so v9
+> means *the document gate says which gate you are at*.
 
 Story 2.1 of
 [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md).
