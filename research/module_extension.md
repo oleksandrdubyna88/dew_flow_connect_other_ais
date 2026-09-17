@@ -790,6 +790,21 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**Following a rename now says something, and until 2026-09-17 it said nothing at all.** Every failure
+on that path went to the console: a conversation that could not be refiled, and an `index.refresh()`
+that threw AFTER records had been refiled. The second is the one that earns an interruption — the
+data is then right and the SCREEN is wrong, so the picker goes on offering names that have moved and
+nothing else says so. The refresh has its own guard now, and `followReport` chooses ONE sentence
+from the counts, because a folder refactor moves many conversations at once and a notification each
+would be a wall of them for one gesture. A stale list outranks a conversation that could not follow:
+the second is still findable under its old name, while a list nobody can trust makes every row
+suspect.
+
+**Two stories of the tail plan pointed here and measuring collapsed them into one.** The plan said a
+permission failure was retried five times and reported exactly as a lock is. It is not:
+`chatStoreLock` returns `false` only on `EEXIST` and throws for anything else, so a permission error
+arrives as `failed` and `follow` gives up at once without retrying. The classification that story
+wanted to add already existed, one layer down — what was missing was anybody being told.
 **A reset now keeps something on screen for the whole of itself.** The progress notification covered
 the ending and the archive and then CLOSED, after which `publish` awaited `thread.writes` with
 nothing showing — so on a slow store the indicator was gone and the new conversation had not
