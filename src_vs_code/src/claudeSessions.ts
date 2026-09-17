@@ -40,24 +40,40 @@ export interface ReadFailure {
  * suffix.</p>
  *
  * <p><b>What is still not known</b> is what happens to a letter outside A–Z: no measured path has
- * one, so a Cyrillic or CJK folder name is a guess either way. This rule dashes them, and
- * {@link projectDirIn} looks for the older spelling too — so a folder written under either rule is
- * still found rather than reported as no sessions at all.</p>
+ * one, so a Cyrillic or CJK folder name is a guess either way. {@link projectDirNames} therefore
+ * offers every spelling this path could have and the lookup tries them all, which is what makes the
+ * unknown cost nothing.</p>
+ *
+ * <p><b>Measured against Claude Code 2.1.272</b>, the version every session file on that machine was
+ * written by. The rule belongs to Anthropic, is undocumented, and has already changed once under this
+ * extension — so when a folder stops being found, re-run the measurement before editing the regex:
+ * pair each transcript's own `cwd` with the folder it sits in and see which rule explains all of
+ * them. A candidate that is wrong is cheap here; a candidate that is missing is the bug.</p>
  */
 export function projectDirName(cwd: string): string {
-  return cwd.replace(/[^A-Za-z0-9]/g, '-');
+  return cwd.replace(/[^\p{L}\p{N}]/gu, '-');
 }
 
 /**
- * The name this rule used to produce — kept as a SECOND thing to look for, never as the answer.
+ * Every name this folder could be under, in the order they are preferred.
  *
- * <p>The rule is Anthropic's and undocumented, so a folder on disk may have been written by a build
- * that spelled it the old way, and a person whose sessions are all under the old name should not be
- * told they have none. Two names derived from one path cannot name two different projects, so
- * looking for both costs nothing and risks nothing.</p>
+ * <p>Three, and each is a rule somebody could reasonably have written. The first keeps any
+ * LETTER — Cyrillic and CJK included — because "not a letter or a digit" is what the shape says.
+ * The second keeps only A-Z0-9, which is what that same sentence means to an author thinking in
+ * ASCII. The third is what this extension itself produced until 2026-09-17. No measured path has a
+ * letter outside A-Z, so the first two are indistinguishable on the evidence and only the third is
+ * ruled out; looking for all three costs one array and settles it for somebody whose folder is
+ * named in their own language. All three are derived from ONE path, so they cannot name two
+ * different projects. (gemini and codex, the plan round.)</p>
  */
-function olderDirName(cwd: string): string {
-  return cwd.replace(/[\\/:]/g, '-');
+export function projectDirNames(cwd: string): readonly string[] {
+  const candidates = [
+    projectDirName(cwd),
+    cwd.replace(/[^A-Za-z0-9]/g, '-'),
+    cwd.replace(/[\\/:]/g, '-'),
+  ];
+
+  return [...new Set(candidates)];
 }
 
 /** Where the projects live for a given home directory. */
@@ -80,24 +96,70 @@ export function projectDirIn(
   names: readonly string[],
   caseBlind: boolean,
 ): string {
-  // THE CURRENT SPELLING FIRST, then the one this rule used to produce — a folder written by an
-  // older build is still this project's, and the alternative is telling somebody their sessions do
-  // not exist. Both are derived from the same path, so neither can name a different project.
-  const wanted = projectDirName(cwd);
-  const spellings = [wanted, olderDirName(cwd)];
-  const exact = names.find((name) => spellings.includes(name));
-  if (exact !== undefined) {
-    return path.join(root, exact);
-  }
-  if (!caseBlind) {
-    return '';
-  }
-  const folded = spellings.map((one) => one.toLowerCase());
-  const loose = names.filter((name) => folded.includes(name.toLowerCase()));
+  return projectDirsIn(root, cwd, names, caseBlind)[0] ?? '';
+}
 
-  // Two names that differ only in case, on a host that cannot tell them apart, is not a thing that
-  // happens — and if it does, picking one of them is the guess this module exists to refuse.
-  return loose.length === 1 ? path.join(root, loose[0]!) : '';
+/**
+ * EVERY folder that could be this project's, most likely first.
+ *
+ * <p>More than one can exist: an upgrade leaves the old folder where it was and Claude Code
+ * starts writing the new one. Which of them holds the sessions is a question about the disk, so
+ * this answers with the candidates and the caller looks inside — {@link projectDirIn} takes the
+ * first, which is what every reader wanted before there was more than one spelling.</p>
+ */
+export function projectDirsIn(
+  root: string,
+  cwd: string,
+  names: readonly string[],
+  caseBlind: boolean,
+): readonly string[] {
+  const found: string[] = [];
+  for (const wanted of projectDirNames(cwd)) {
+    const exact = names.find((name) => name === wanted);
+    if (exact !== undefined) {
+      found.push(path.join(root, exact));
+      continue;
+    }
+    if (!caseBlind) {
+      continue;
+    }
+    const loose = names.filter((name) => name.toLowerCase() === wanted.toLowerCase());
+
+    // Two names that differ only in case, on a host that cannot tell them apart, is not a thing
+    // that happens — and if it does, picking one of them is the guess this module exists to refuse.
+    if (loose.length === 1) {
+      found.push(path.join(root, loose[0]!));
+    }
+  }
+
+  return [...new Set(found)];
+}
+
+/**
+ * The candidate folder that actually HOLDS sessions, or the preferred one when none does.
+ *
+ * <p>Two spellings of one path can both exist, and the preferred name is then an empty directory
+ * shadowing the transcripts — which would keep the very refusal this change is about. So the first
+ * candidate with a `.jsonl` in it wins; when none has one, the preference order decides and the
+ * answer is what it would have been anyway.</p>
+ *
+ * <p>At most three listings, and only where a name matched something. The ordinary case is one
+ * folder and one listing. (gemini and codex, the plan round, independently.)</p>
+ */
+async function theOneWithSessions(candidates: readonly string[]): Promise<string> {
+  for (const dir of candidates) {
+    try {
+      if ((await fs.readdir(dir)).some((name) => name.endsWith('.jsonl'))) {
+        return dir;
+      }
+    } catch {
+      // Gone or unreadable between the listing and now: the next candidate is tried, and a folder
+      // nobody can read is not one to answer with.
+      continue;
+    }
+  }
+
+  return candidates[0] ?? '';
 }
 
 /**
@@ -649,7 +711,7 @@ async function projectDirFor(
       ? { kind: 'none', why: 'unmatched', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
       : { kind: 'none', why: 'unreadable', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
-  const dir = projectDirIn(root, cwd, names, caseBlind);
+  const dir = await theOneWithSessions(projectDirsIn(root, cwd, names, caseBlind));
 
   return dir.length > 0 ? dir : {
     kind: 'none',
