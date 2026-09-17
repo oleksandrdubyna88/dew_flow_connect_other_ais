@@ -1,11 +1,23 @@
 # PLAN — the eleven defects the split was not allowed to fix
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `chatHooks.ts`, `chatFollow.ts`,
-> `chatArchive.ts`, `chatPersist.ts`, `chatCapture.ts`, `chatTurn.ts`, `chatSessionJoin.ts` and
-> `chatPage.ts` — the modules
-> [PLAN_the_command_file_is_too_big.md](../research/PLAN_the_command_file_is_too_big.md) created.
+> Status: **plan only, nothing implemented yet, 2026-09-17.**
 >
-> **Extracted from that plan when it was promoted on 2026-09-17.** Everything here is recorded in its
+> **Scope — every module a story below MODIFIES, not only the ones it quotes.** Nine of them came
+> out of [PLAN_the_command_file_is_too_big.md](../research/PLAN_the_command_file_is_too_big.md):
+> `chatHooks.ts`, `chatFollow.ts`, `chatArchive.ts`, `chatLaunch.ts`, `chatTurn.ts`,
+> `chatPersist.ts`, `chatCapture.ts`, `chatSessionJoin.ts`, `chatThread.ts`. Three predate it and
+> are reached anyway: `chatStoreWrite.ts` (story 3 changes `nextAfterSave`, which lives there rather
+> than in `chatPersist`), `chatPage.ts` and `chatModels.ts` (story 11 moves a type out from under
+> both). One is new: `chatContracts.ts`.
+>
+> **The first draft listed eight and missed four**, which is worth leaving on the record rather than
+> quietly correcting: it named the module each story's *Where* line quotes and forgot the ones the
+> story's own text goes on to touch — `chatLaunch.ts` is in story 2's “check all four while here”,
+> and `chatModels.ts` is the entire point of story 11. A scope line built from headings describes
+> the reading, not the work. (CodeRabbit on PR #356 named `chatLaunch.ts`; re-reading each story
+> against what it edits found the other three.)
+>
+> **Extracted from the parent plan when it was promoted on 2026-09-17.** Everything here is recorded in its
 > tail rather than ticked, and a named gap in a shipped plan reads as done to everybody who was not
 > there — which is the whole reason `planning-docs.md` asks for this document.
 >
