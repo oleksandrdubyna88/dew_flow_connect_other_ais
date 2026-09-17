@@ -19,7 +19,7 @@ public sealed class TheRateLimiterTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 9, 17, 10, 0, 0, TimeSpan.Zero);
 
-    private static readonly LimiterSubject Key = LimiterSubject.Contributor("key-1");
+    private static readonly LimiterSubject Key = LimiterSubject.Contributor(new KeyId("key-1"));
 
     private static RatePerMinute Rate(int perMinute) =>
         ((RatePerMinute.Parsed.Rate)RatePerMinute.Parse(perMinute.ToString(CultureInfo.InvariantCulture))).Value;
@@ -89,9 +89,9 @@ public sealed class TheRateLimiterTests
     {
         var (limiter, _) = At(1);
 
-        limiter.Admit(LimiterSubject.Contributor("a")).Admitted.Should().BeTrue();
-        limiter.Admit(LimiterSubject.Contributor("b")).Admitted.Should().BeTrue();
-        limiter.Admit(LimiterSubject.Contributor("a")).Admitted.Should().BeFalse();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("a"))).Admitted.Should().BeTrue();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("b"))).Admitted.Should().BeTrue();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("a"))).Admitted.Should().BeFalse();
         limiter.Tracked.Should().Be(2);
     }
 
@@ -106,7 +106,7 @@ public sealed class TheRateLimiterTests
     {
         var hash = Corpus.HashOf("an-admin-key", "secret");
         var admin = LimiterSubject.Administrator(hash);
-        var lookalike = LimiterSubject.Contributor(AdminId.Of(hash).Value);
+        var lookalike = LimiterSubject.Contributor(new KeyId(AdminId.Of(hash).Value));
         var (limiter, _) = At(1);
 
         admin.Key.Should().Be(AdminId.Of(hash).Value).And.StartWith("admin-");
@@ -136,15 +136,15 @@ public sealed class TheRateLimiterTests
     public void TheSweepDropsIdleWindowsAndKeepsLiveOnes()
     {
         var (limiter, clock) = At(5);
-        limiter.Admit(LimiterSubject.Contributor("idle")).Admitted.Should().BeTrue();
-        limiter.Admit(LimiterSubject.Contributor("busy")).Admitted.Should().BeTrue();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("idle"))).Admitted.Should().BeTrue();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("busy"))).Admitted.Should().BeTrue();
 
         clock.Advance(TimeSpan.FromSeconds(61));
-        limiter.Admit(LimiterSubject.Contributor("busy")).Admitted.Should().BeTrue();
+        limiter.Admit(LimiterSubject.Contributor(new KeyId("busy"))).Admitted.Should().BeTrue();
 
         limiter.Sweep().Should().Be(1, "only the window with no stamp inside the minute is dropped");
         limiter.Tracked.Should().Be(1);
-        limiter.StampsOf(LimiterSubject.Contributor("busy")).Should().Be(1, "the expired stamp left with the admit that replaced it");
+        limiter.StampsOf(LimiterSubject.Contributor(new KeyId("busy"))).Should().Be(1, "the expired stamp left with the admit that replaced it");
     }
 
     [Fact]

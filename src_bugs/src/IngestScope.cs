@@ -1,24 +1,26 @@
 namespace CoaiBugs;
 
 /// <summary>
-/// What an ingest may do INSIDE the transaction <see cref="Corpus.Accept"/> opened for it.
+/// The batch, while it is open: what a caller may do inside one accepted ingest and nowhere else.
 /// </summary>
 /// <remarks>
-/// <para><b>Explicit, where an ambient flag was.</b> <c>Keep</c> used to ask the corpus whether a
-/// batch happened to be open and join it if so — a leaky abstraction that a code round called
-/// blocking: it is true only while everything on that path is synchronous and on one thread, and it
-/// stops being true silently the moment anything becomes async. The scope IS the transaction from the
-/// callee's side. It exists only for the length of <c>take</c>, it writes for one key in one month,
-/// and there is no way to hold one outside a batch.</para>
-/// <para>What it offers is exactly what a batch needs and nothing more: the room left in quarantine,
-/// and storing a pair. Everything else on <see cref="Corpus"/> — issuing, revoking, promoting — is not
-/// something an ingest does.</para>
+/// <para>It carries the key and the month so a caller cannot store a pair under a different key than
+/// the one the batch was authenticated for — the values come from <see cref="Corpus.Accept"/>, not
+/// from the caller.</para>
+/// <para><b>It is a LEASE, and it expires when the batch commits.</b> The code round found that a
+/// caller could keep this object, let <c>Accept</c> return, revoke the key, and then call
+/// <see cref="Keep"/>: the write would land on the connection with no transaction around it, no
+/// re-check of the key and no counter — quarantine rows for a revoked key that were never part of an
+/// accepted ingest. A captured reference is a capability, and nothing was revoking it. So
+/// <c>Accept</c> spends the scope on its way out, whichever way it leaves, and every operation here
+/// refuses afterwards rather than writing outside the transaction it was made for. (codex.)</para>
 /// </remarks>
 public sealed class IngestScope
 {
     private readonly Corpus _corpus;
     private readonly KeyId _key;
     private readonly UtcMonth _month;
+    private bool _spent;
 
     internal IngestScope(Corpus corpus, KeyId key, UtcMonth month)
     {
@@ -27,10 +29,33 @@ public sealed class IngestScope
         _month = month;
     }
 
+    /// <summary>Ends the lease. Called by <see cref="Corpus.Accept"/> however the batch finishes.</summary>
+    internal void Spend() => _spent = true;
+
     /// <summary>Stores a pair inside the batch, for the batch's key, stamped with the batch's month.</summary>
-    public (Kept Kept, string EntryId) Keep(string language, string before, string after) =>
-        _corpus.KeepInside(language, before, after, _key, _month);
+    public (Kept Kept, string EntryId) Keep(string language, string before, string after)
+    {
+        MustBeOpen();
+
+        return _corpus.KeepInside(language, before, after, _key, _month);
+    }
 
     /// <summary>How many pairs are waiting, as this transaction sees them.</summary>
-    public int WaitingCount() => _corpus.WaitingCount();
+    public int WaitingCount()
+    {
+        MustBeOpen();
+
+        return _corpus.WaitingCount();
+    }
+
+    private void MustBeOpen()
+    {
+        if (_spent)
+        {
+            throw new InvalidOperationException(
+                "this ingest batch has already committed; its scope cannot be used afterwards. A "
+                + "write through a spent scope would have no transaction around it, no re-check of "
+                + "the key and no counter — hold the scope only for the body of the callback.");
+        }
+    }
 }

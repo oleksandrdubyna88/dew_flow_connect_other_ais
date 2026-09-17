@@ -43,7 +43,10 @@ internal sealed class IngestGate(Corpus corpus, RateLimiter limiter, ServerSecre
             return;
         }
 
-        var admission = limiter.Admit(LimiterSubject.Contributor(keyId));
+        // Typed once, here, and carried as a KeyId from this point on — the limiter and the request
+        // item then take the same value and neither can be handed an unchecked string.
+        var key = new KeyId(keyId);
+        var admission = limiter.Admit(LimiterSubject.Contributor(key));
         if (!admission.Admitted)
         {
             await TooManyAsync(http, admission);
@@ -51,7 +54,7 @@ internal sealed class IngestGate(Corpus corpus, RateLimiter limiter, ServerSecre
             return;
         }
 
-        http.Items[KeyItem] = new KeyId(keyId);
+        http.Items[KeyItem] = key;
         await next(http);
     }
 

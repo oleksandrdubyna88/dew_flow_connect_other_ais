@@ -32,7 +32,12 @@ public readonly record struct LimiterSubject
     }
 
     /// <summary>A contributor key, by the id <see cref="Corpus.KeyFor"/> answered, on <c>/ingest</c>.</summary>
-    public static LimiterSubject Contributor(string keyId) => new(SubjectKind.Contributor, keyId);
+    /// <remarks>
+    /// It takes a <see cref="KeyId"/> and not a string: the typed id exists so an unchecked value
+    /// cannot reach a key-identifying context, and a factory taking <c>string</c> is a hole straight
+    /// through that boundary. (Code round, gemini.)
+    /// </remarks>
+    public static LimiterSubject Contributor(KeyId key) => new(SubjectKind.Contributor, key.Value);
 
     /// <summary>
     /// An administrator, by the id derived from the presented admin key's hash, on <c>/admin/*</c>.

@@ -134,4 +134,49 @@ public sealed class TheRevokedKeyTests
             Scratch.Delete(dir);
         }
     }
+
+    /// <summary>The scope handed to the callback is dead the moment the batch commits.</summary>
+    /// <remarks>
+    /// <para><b>The hole this closes.</b> <see cref="Corpus.Accept"/> hands the callback an
+    /// <see cref="IngestScope"/> that holds the corpus, the key and the month. Nothing stopped a
+    /// caller keeping that object, letting <c>Accept</c> return and commit, revoking the key, and
+    /// then calling <c>Keep</c> on it: the write would land on the connection with no transaction
+    /// around it, no re-check of the key, and no counter — quarantine rows for a revoked key that
+    /// were never part of an accepted ingest.</para>
+    /// <para>The scope is a LEASE now: <c>Accept</c> closes it on the way out, whichever way it
+    /// leaves, and every operation on a closed scope refuses. Found by the code round, which was
+    /// right that a captured reference is a capability nobody revoked. (codex.)</para>
+    /// </remarks>
+    [Fact]
+    public void AScopeCannotOutliveTheBatchThatMadeIt()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "coai-scope-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        var clock = new FrozenClock(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
+        try
+        {
+            using var corpus = Corpus.Open(Path.Combine(dir, "coai-bugs.db"));
+            var id = new KeyId(Guid.NewGuid().ToString("N")[..16]);
+            corpus.Issue(id, Corpus.HashOf("a-key", "s"), string.Empty, Audit.By(AdminId.Cli, clock));
+
+            IngestScope? escaped = null;
+            corpus.Accept(id, UtcMonth.Now(clock), scope =>
+            {
+                escaped = scope;
+
+                return scope.Keep("CSharp", "a", "b");
+            }).Should().BeOfType<Accepted<(Kept Kept, string EntryId)>.Stored>();
+
+            var after = () => escaped!.Keep("CSharp", "c", "d");
+
+            after.Should().Throw<InvalidOperationException>(
+                "the batch committed, so the scope is spent — a write through it would have no "
+                + "transaction, no key check and no counter");
+            corpus.WaitingCount().Should().Be(1, "and nothing was written by the attempt");
+        }
+        finally
+        {
+            Scratch.Delete(dir);
+        }
+    }
 }

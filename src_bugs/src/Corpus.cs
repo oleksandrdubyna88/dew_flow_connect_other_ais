@@ -237,6 +237,11 @@ public sealed class Corpus : IDisposable
         lock (_gate)
         {
             using var transaction = _db.BeginTransaction(deferred: false);
+
+            // CHECKED AGAIN, inside the transaction. The gate authenticated this key a moment ago
+            // and a `--revoke` one-shot can commit in that moment — a separate process, on the same
+            // file. Trusting the gate's answer here would store pairs, count a submission and stamp
+            // a month for a key the operator had already stopped. (Code round, codex.)
             if (!InForce(key))
             {
                 transaction.Commit();
@@ -244,7 +249,22 @@ public sealed class Corpus : IDisposable
                 return new Accepted<T>.KeyNotInForce();
             }
 
-            var answer = take(new IngestScope(this, key, month));
+            // SPENT on the way out, whichever way that is. The scope holds this corpus, the key and
+            // the month, so a caller who kept it could write through it after the commit — outside
+            // the transaction, without the key being re-checked and without the counter moving.
+            // A `finally` rather than a line after the call, because a throwing callback escapes
+            // here too and leaves the same live capability behind. (Code round, codex.)
+            var scope = new IngestScope(this, key, month);
+            T answer;
+            try
+            {
+                answer = take(scope);
+            }
+            finally
+            {
+                scope.Spend();
+            }
+
             Record(key, month);
             transaction.Commit();
 
@@ -252,6 +272,12 @@ public sealed class Corpus : IDisposable
         }
     }
 
+    /// <summary>Does this key exist and remain unrevoked?</summary>
+    /// <remarks>
+    /// <c>revoked_utc = ''</c> and not <c>IS NULL</c>, because the column ships
+    /// <c>NOT NULL DEFAULT ''</c>: an unrevoked key holds the empty string and a revoked one holds a
+    /// time, so there is no NULL to test for and a <c>IS NULL</c> check would match nothing at all.
+    /// </remarks>
     private bool InForce(KeyId key)
     {
         using var read = _db.CreateCommand();
