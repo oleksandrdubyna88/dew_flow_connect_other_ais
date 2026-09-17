@@ -84,6 +84,15 @@ export interface NotificationRecord {
    * count computed from rows cannot be.</p>
    */
   readonly seq?: number;
+  /**
+   * Which bound a `storm` record marks, and nothing else carries it.
+   *
+   * <p>The once-only promise for a storm is a READ-time invariant, not a write-time one: there is no
+   * test-and-set on an append-only file, so two windows crossing the same threshold for the same
+   * fault each write one. The page groups on `(code, subject, bound)` and shows one row, which is
+   * why the threshold has to be a field rather than a sentence inside `detail`.</p>
+   */
+  readonly bound?: number;
   readonly repo?: string;
   readonly branch?: string;
   readonly session?: string;
@@ -229,7 +238,7 @@ function optional(row: Record<string, unknown>): Partial<NotificationRecord> {
       kept[field] = value;
     }
   }
-  for (const field of ['pid', 'seq']) {
+  for (const field of ['pid', 'seq', 'bound']) {
     const value = asNumber(row[field]);
     if (value !== undefined) {
       kept[field] = value;

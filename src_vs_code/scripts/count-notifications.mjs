@@ -87,8 +87,15 @@ export function count() {
     }
     // Call sites that have been routed. The definitions themselves are not calls, so the funnel
     // and the pure half are left out of this count as well.
+    //
+    // EVERY DOOR HAS TO BE NAMED HERE. `notifyOnce` arrived in S4 and this pattern did not know
+    // it, so routing a call site through it took the POPULATION from 111 down to 110 - the one
+    // number that must never fall, falling because the work was going well. The test held, and
+    // the lesson is that a door missing from this list reads as a message that stopped existing.
+    // `notifyResolved` is deliberately NOT matched: it clears a counter and says nothing to
+    // anybody.
     if (!isFunnel && !file.endsWith('notice.ts')) {
-      routed += text.match(/\bnotify(?:AndAsk|Then)?\(/gu)?.length ?? 0;
+      routed += text.match(/\bnotify(?:AndAsk|Then|Once)?\(/gu)?.length ?? 0;
     }
     if (here > 0) {
       perFile[relative(EXTENSION, file).replaceAll('\\', '/')] = here;

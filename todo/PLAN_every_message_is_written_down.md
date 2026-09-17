@@ -437,11 +437,26 @@ So, per `(code, subject)`, per run:
    page shows the runs separately, so it reads as "it happened again after a restart" rather than as
    one number silently growing.
 4. **The budget protects the disk, never the point.** The run-wide bound of *The growth budget* applies
-   **only to repeating records** — second and later occurrences of a `(code, subject)` already seen in
-   this run. A first occurrence is never suppressed by it, and `failure` and `stand-down` records keep a
-   reserved allowance of their own. Otherwise a churn loop across subjects spends the budget and the
-   settings refusal that arrives afterwards is dropped — the log protecting storage at the cost of the
-   one record it existed for. Operator ruling, 2026-09-16.
+   **only to repeating records**, and `failure` and `stand-down` keep a reserved allowance of their own.
+   Otherwise a churn loop across subjects spends the budget and the settings refusal that arrives
+   afterwards is dropped — the log protecting storage at the cost of the one record it existed for.
+   Operator ruling, 2026-09-16.
+
+   **What counts as a repeat had to be corrected at build time, and this is the fifth place this plan
+   leant on something that does not hold.** It said a repeat was a second or later occurrence of a
+   `(code, subject)` already seen this run, and named the hole that bound was there to close: *"a loop
+   churning 512 distinct subjects evicts its own counter and writes for ever."* **It does not close it.**
+   An evicted key comes back looking like a first occurrence, a first occurrence is never charged, so the
+   budget never engages at all. Measured against the implementation on 2026-09-17, with the plan's own
+   rule restored: a churn loop of 15 000 occurrences across distinct subjects wrote **15 000 records** —
+   every one, no bound reached, exactly the failure the row promised to prevent.
+
+   So the budget is charged against **the first time each `code` speaks in the run** instead. Codes are
+   string literals at call sites, so that set is finite (111 today), is never evicted, and cannot be
+   reset by the churn it exists to stop. The cost is real and is stated rather than buried: once the
+   budget is spent, a genuinely new `(code, subject)` of an ordinary class is not written either. That is
+   what the `failure`/`stand-down` reserve is for, and why it stops being a nicety and becomes load
+   bearing — it is the only reason the settings refusal still lands after a churn loop.
 4. **The key carries a subject, because one call site can fail for two things at once.** A `code` alone
    is the call site; two simultaneous failures from it — two Team servers, two prompt files — must not
    share a counter, and recovering one must not reset the other. `subject` is the resource, absent
@@ -608,8 +623,8 @@ draft missed.
 | `notifications-seen.jsonl` | one ~80 B line per page-open; a few hundred a year | kept; compactable at any time by taking the maximum, since it is append-only like everything else | nothing to interrupt — a torn last line is dropped and the previous maximum stands, which errs toward "unread" |
 | Per-`(code, subject)` counters (memory) | `code` is finite — a string literal per call site — but **`subject` is not**: a path or a server name is unbounded, so the map is an **LRU capped at 512 entries**. Eviction is safe for *counts* (those are counted from rows, never from this map) but **not** for the ceiling — see the row below | process exit | nothing a reader sees is derived from it |
 | `storm` records | at most 2 per `(code, subject)` per run | — | — |
-| Records per repeating fault | **Two bounds, because one is evictable.** A per-`(code, subject)` ceiling of 1000 per run, *and* a **run-wide budget of 5000 REPEATING records** that no eviction can reset — otherwise a loop churning 512 distinct subjects evicts its own counter and writes for ever. At either bound one record says which was hit, and writing of that kind stops until recovery | — | resets per run, by design (see *E*) |
-| Reserved capacity | The run-wide budget counts **only repeats** — second and later occurrences of a `(code, subject)` already seen this run. **A first occurrence is never suppressed**, and `failure` and `stand-down` keep a reserved allowance besides. A budget that could starve the settings refusal arriving after a churn loop would protect the disk at the cost of the record the log exists for | — | — |
+| Records per repeating fault | **Two bounds, because one is evictable.** A per-`(code, subject)` ceiling of 1000 per run, *and* a **run-wide budget of 5000 records beyond each code's first** that no eviction can reset — otherwise a loop churning 512 distinct subjects evicts its own counter and writes for ever. (The budget was first written as one on `(code, subject)` repeats, which does **not** close that hole — see *E*.4; measured at 15 000 of 15 000 written.) At either bound one record says which was hit, and writing of that kind stops until recovery | — | resets per run, by design (see *E*) |
+| Reserved capacity | The run-wide budget counts **only repeats** — everything after the first time a `code` speaks in this run. **A code's first occurrence is never suppressed**, and `failure` and `stand-down` keep a reserved allowance of 1000 besides, which nothing else may spend. A budget that could starve the settings refusal arriving after a churn loop would protect the disk at the cost of the record the log exists for, and with the budget charged per code that reserve is the only thing standing between a churn loop and exactly that | — | — |
 | Run markers | one small file per run, both halves | its own run, after its ledgers drain; startup sweeps **every** stale one | a stale marker IS the record — that is its job |
 | The page's row set | newest N only, never the file | — | — |
 | The defect-1 retry's record rate | bounded by reset-on-recovery + back-off, **not** one record per 5 s tick | — | — |
@@ -845,8 +860,10 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
       tombstone stranded by a permanent stand-down can be finished from the roles page.
 - [ ] The `.NET` writer applies the same redaction and caps as the TypeScript one, proven by
       secret-bearing seam vectors through both.
-- [ ] The run-wide budget counts only repeats; a first occurrence and the reserved `failure`/`stand-down`
-      allowance are never suppressed by it.
+- [x] The run-wide budget counts only repeats — everything after a `code`'s first in the run, which is
+      the eviction-proof reading; a code's first occurrence and the reserved `failure`/`stand-down`
+      allowance are never suppressed by it. *(S4. Both bounds and the reserve are under test, including
+      the churn loop that defeated the rule as originally written.)*
 - [ ] `server-notices.jsonl` has a computed projected size before its first write, not a promise to
       measure later.
 - [ ] `code` is a string literal at every call site, enforced by the same scan.
