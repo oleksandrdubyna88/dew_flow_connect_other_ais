@@ -233,6 +233,27 @@ diff nobody can review. They are below with what each rests on. The security one
 
 ## Tail — noticed while moving, left for their own work
 
+> **All of it is now [../todo/PLAN_the_tail_of_the_command_split.md](../todo/PLAN_the_tail_of_the_command_split.md),
+> extracted on 2026-09-17 when this plan was promoted.** The list below is kept verbatim as the record
+> of what was found while the file was being carved up; the extracted plan is where it is ordered,
+> sequenced and given tests. Read that one to do the work, this one to see where it came from.
+>
+> Three items below were **re-measured while extracting them and are not open work**: the three copies
+> of `bodyOf` (already deduplicated into `src/test/sourceReading.ts` in this very series), the mixed
+> line endings in `chatFreshWiring.test.ts` (the committed blob is uniformly CRLF with one bare CR, on
+> `main` and on the branch alike, and this series' diff to it is 53/19 — a hazard note for whoever
+> edits it next, not a defect), and the typed Sonar-exclusion count (tooling measures it now).
+>
+> One item turned out **larger** than it is written here. `ChatModelChoice` is not merely untidy:
+> `chatModels.ts:1` is its only import from `chatPage.ts`, and it is therefore the **sole return edge
+> of the `chatModels ↔ chatPage` cycle** that `importCycles.test.mjs` freezes. Moving the interface
+> deletes a ratchet entry, which is a thing a test can state.
+>
+> And **the ceiling was re-measured**: eight files in `src_vs_code/src` are over 800 lines, not the six
+> the table at the top of this document implies, and every row they share has grown since it opened
+> (`panelProvider.ts` 3 095 → 3 762). That table is left as it was measured, because what it says about
+> the direction is the point.
+
 ### Accepted at the code round, each needing its own change
 
 - **A symlink can escape the workspace when a model-supplied link is opened.** `openWorkspaceFile`
