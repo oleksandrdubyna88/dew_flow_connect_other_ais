@@ -106,8 +106,10 @@ test('a dropped comment is NOT residue, so the count is reported beside it', () 
   assert.equal(checked, 3, 'dropping a comment changed something other than the count');
 });
 
-test('reordering whole functions is a move, because a reader can see that in the diff', () => {
-  const { residue } = movedVerbatim(ORIGINAL, [{
+test('moving whole functions is a move, and the run count says how many regions were cut', () => {
+  // Taking two functions out in the other order is still a move: each keeps its own lines in their
+  // own order. What the caller reads is the RUN count — two regions cut, two runs.
+  const { residue, runs } = movedVerbatim(ORIGINAL, [{
     name: 'both.ts',
     text: moved(
       'export function beta(): void {',
@@ -120,7 +122,51 @@ test('reordering whole functions is a move, because a reader can see that in the
     ),
   }]);
 
-  assert.equal(residue.length, 0, 'a reordering was reported as a rewrite');
+  assert.equal(residue.length, 0, 'moving two whole functions was reported as a rewrite');
+  assert.equal(runs, 2, 'the run count does not say how many regions were cut');
+});
+
+test('reordering two statements INSIDE a function shatters the run count', () => {
+  // The case three reviewers named at the plan round. Every line is still present, so residue alone
+  // cannot see it — what gives it away is FRAGMENTATION: a four-line function that moved whole is
+  // one run, and the same four lines reordered cannot be walked without restarting at each of them.
+  //
+  // This is why the caller declares how many regions it cut and the run count is checked against
+  // that budget, rather than the tool guessing what "too many" means.
+  const ordered = ['function gamma(): void {', '  first();', '  second();', '}'].join('\n');
+  const faithful = movedVerbatim(ordered, [{
+    name: 'gamma.ts',
+    text: moved('export function gamma(): void {', '  first();', '  second();', '}'),
+  }]);
+  const swapped = movedVerbatim(ordered, [{
+    name: 'gamma.ts',
+    text: moved('export function gamma(): void {', '  second();', '  first();', '}'),
+  }]);
+
+  assert.equal(faithful.runs, 1, 'one function moved whole was not one contiguous run');
+  assert.ok(swapped.runs > faithful.runs,
+    'two statements were swapped inside a function and the walk did not fragment, so nothing can see it');
+});
+
+test('a line borrowed from another function shows as an extra run, not as a clean move', () => {
+  // A four-thousand-line file repeats idioms, so "this line exists somewhere" is a weak question.
+  // In order, a statement lifted out of a different function cannot follow the one before it.
+  const twice = [
+    'function gamma(): void {', '  first();', '}',
+    'function delta(): void {', '  second();', '}',
+  ].join('\n');
+  const borrowed = movedVerbatim(twice, [{
+    name: 'gamma.ts',
+    text: moved('export function gamma(): void {', '  second();', '}'),
+  }]);
+  const honest = movedVerbatim(twice, [{
+    name: 'gamma.ts',
+    text: moved('export function gamma(): void {', '  first();', '}'),
+  }]);
+
+  assert.equal(honest.runs, 1, 'one function moved whole was not one contiguous run');
+  assert.ok(borrowed.runs > honest.runs,
+    'a statement borrowed from another function walked as though it belonged where it was put');
 });
 
 test('the residue names the module it is in, so a fifteen-module series can be read', () => {
