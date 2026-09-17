@@ -1,12 +1,17 @@
 # PLAN — The document gate says which gate you are at
 
-> Status: **plan only, nothing implemented yet.** Scope: `common/coai-document-gate.md` in the
-> `dew_flow_conventions` submodule, and the `review_document` and `review_plan` tool descriptions in
-> `src_mcp/src/Tools.cs`. A conventions commit, so a `promote-release` and the six-consumer pin
-> cascade come with it.
+> Status: **IMPLEMENTED, 2026-09-17.** Scope as built: `common/coai-document-gate.md` in the
+> `dew_flow_conventions` submodule — shipped as that repository's PR #41, promoted to `release` as
+> `fba970b` — and the `review_document` and `review_plan` tool descriptions in `src_mcp/src/Tools.cs`.
+> The pin cascade ran across all six consumers.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md).
+> **Deviations — see *What actually shipped* at the end.** The tool descriptions shipped from the
+> consultant plan's story rather than this one's; this repository's own pin bump could not be a
+> standalone story; a content test had to be invented in conventions because the body freeze cannot
+> see meaning; and the ownership check refused the first attempt for a reason nobody had predicted.
+>
+> Related docs: [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md).
 > Boundary table below — the version cascade this change contributes to belongs to
 > [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md).
 
@@ -98,9 +103,9 @@ The same discriminator from the other side, one sentence:
 | Item | Who owns it |
 |---|---|
 | the wording that tells the two gates apart, in the shared rule and in both tool descriptions | **this plan** |
-| `DOCUMENT_VERSION` 2 → 3, `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` → 9 and the `(v9)` menu title | [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md) — **there is one artefact and it may move only once**, so both plans' text changes land before a single cascade |
+| `DOCUMENT_VERSION` 2 → 3, `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` → 10 and the `(v10)` menu title | [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md) — **there is one artefact and it may move only once**, so both plans' text changes land before a single cascade |
 | the sixth consultant trigger, the burden of proof, the untrusted-evidence boundary | that plan |
-| what the document gate DOES once you are correctly at it — `purposeText`, the per-document session, `notes` | [PLAN_consultant.md](../research/PLAN_consultant.md) and the shipped rule; untouched here |
+| what the document gate DOES once you are correctly at it — `purposeText`, the per-document session, `notes` | [PLAN_consultant.md](PLAN_consultant.md) and the shipped rule; untouched here |
 
 **Ordering consequence, and it is the whole reason these two plans share a branch:** editing
 `coai-document-gate.md` changes `DOCUMENT_RULE`, which changes the composed artefact, which changes
@@ -152,3 +157,52 @@ task.
 - [ ] Both tool-description assertions hold in both directions.
 - [ ] `DOCUMENT_VERSION` 2 → 3 recorded here and EXECUTED by the consultant plan's single cascade.
 - [ ] Promoted to `research/` with its deviations; `todo/README.md` updated; `plan-lifecycle.mjs` green.
+
+## What actually shipped
+
+The shared rule went first, as its own branch in `dew_flow_conventions` with its own plan and code
+round — `fix/a-plan-is-not-a-document`, three commits, merged and promoted to `release` as `fba970b`.
+The tool descriptions followed in the consultant plan's story 2.2.
+
+### The deviations
+
+**The tool descriptions shipped from the other plan's story.** `review_document` and `review_plan`
+are edits to one file, `Tools.cs`, which story 2.2 was already rewriting for the consultant pointers.
+Splitting one file across two branches buys nothing and costs a rebase.
+
+**This repository's own pin bump could not be a standalone story.** The other five consumers took one;
+`connect_other_ais` could not, because `snippetVersion.test.ts:519-530` compares the marker in the
+MOUNTED text against `KNOWN_HALVES` — a pin carrying `coai-document v3` with `DOCUMENT_VERSION` still
+2 fails with *coai-document's marker and its version disagree*. It rode in the cascade commit.
+
+**A content test had to be invented, and the reason is worth keeping.** The conventions body freeze
+(`rules.test.mjs` against `research/rule-bodies.json`) proves an edit was RECORDED, never that the
+text still says the thing it exists to say: record a new hash beside any replacement and it goes
+green. A gate reviewer put it plainly — an editor could rewrite this paragraph, run
+`rule-bodies.mjs --update`, pass everything, and leave an agent holding a plan calling
+`review_document` exactly as often as before. So `tools/gate-routing.test.mjs` is new, with a
+companion case that splices the paragraph out and requires every pinned phrase to vanish with it.
+
+**The ownership check refused the first attempt, and neither I nor twelve gate reviewers saw it
+coming.** The new paragraph introduced `mcp__coai__review_plan` and `mcp__coai__review_code` into a
+SHARED rule whose `owns:` declarations covered only `mcp__coai__review_document`; tokens are matched
+exactly, so one declaration says nothing about the others. It also flagged `the gate`, an ambiguous
+noun behind a definite article that the sentence never needed. The reason it was missed locally is
+the durable lesson: **`npm test` does not run the family checks.** `ownership-check`, `plan-lifecycle`,
+`pin-check` and `adapter-check` are separate CI steps in every repository here, so a green unit suite
+is not a green pull request.
+
+**And fixing that turned the new content test red**, which is the test doing its job: declaring the
+two names put them in the body OUTSIDE the paragraph, so a bare-name assertion would have survived
+the paragraph being deleted. The two bare-name entries were removed rather than exempted — the
+directional phrase requires both names, their order and the verb between them, which is strictly more
+than either bare case asserted.
+
+### The discriminator, as it finally reads
+
+> The test is what exists when the task is FINISHED. If the answer is a DIFF — source, configuration,
+> a schema, a migration, a generated asset, anything this repository carries afterwards — then the
+> document in your hand is a plan for that diff, and it goes to `mcp__coai__review_plan`.
+
+The enumeration is not decoration: the plan round found that *"if it is code"* leaves a JSON config
+or an SQL migration ambiguous, and that ambiguity is the whole failure mode being fixed.
