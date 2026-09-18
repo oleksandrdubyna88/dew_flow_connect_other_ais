@@ -23,9 +23,23 @@ public static class SettingsFile
 {
     public const string Name = "settings.json";
 
-    /// <summary>Reads the file as an env-shaped lookup, so the caller's precedence stays one line.</summary>
+    /// <summary>
+    /// Reads the file as an env-shaped lookup, so the caller's precedence stays one line.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It adopts first, and that is why the adoption lives here rather than in startup.</b>
+    /// <c>--providers</c> can be the first thing that ever runs against an installation partitioned
+    /// before the settings file knew about sides: it would read an absent side file, report defaults
+    /// for a machine whose configuration exists, and a normal start afterwards would adopt and answer
+    /// differently about that same machine. Whatever reads the settings adopts first, so there is one
+    /// road. (The plan round found the seam; the consultation named the check.)</para>
+    /// <para>What it does NOT do is say so — this returns a lookup and has nowhere to put a sentence.
+    /// The startup path calls <see cref="AdoptRootSettings"/> itself and logs what comes back, so the
+    /// adoption is CORRECT everywhere and ANNOUNCED where there is a surface to announce it on.</para>
+    /// </remarks>
     public static Func<string, string?> Layer(string dataDir, Func<string, string?> environment)
     {
+        AdoptRootSettings(environment);
         var fromFile = Read(Path.Combine(dataDir, Name));
         return name => environment(name) is { Length: > 0 } fromEnv ? fromEnv : fromFile.GetValueOrDefault(name);
     }
@@ -67,12 +81,128 @@ public static class SettingsFile
     }
 
     /// <summary>
-    /// Where the data directory is, decided the same way twice: this must agree with
-    /// <see cref="PanelSettings.DefaultDataDir"/>, because the file lives there before any of the
-    /// settings in it have been read.
+    /// Where the data directory is — the same rule the rest of the product uses, ASKED rather than
+    /// repeated.
     /// </summary>
+    /// <remarks>
+    /// <para>It used to be its own rule: <c>environment("COAI_DATA_DIR") is { Length: &gt; 0 } dir ?
+    /// dir : DefaultDataDir</c>, with no side and no trim. So <c>coai.db</c> and <c>sessions/</c>
+    /// went to <c>&lt;root&gt;/&lt;side&gt;/</c> while <c>settings.json</c> and <c>logs/</c> stayed
+    /// in <c>&lt;root&gt;/</c>, and two installations that share one NAS — the whole reason
+    /// <c>COAI_DATA_SIDE</c> exists — overwrote each other's configuration in silence. A whitespace
+    /// <c>COAI_DATA_DIR</c> was a configured directory to this and an unset one to the other, so the
+    /// two halves disagreed about that too.</para>
+    /// <para><b>Seven callers read this</b>: two one-shot modes, the LOG ROOT (through
+    /// <c>CoaiLogPath.RootFor</c>), the <c>--providers</c> layer, the settings layer the server runs
+    /// on, and the file its change watcher stats. One correction reaches all of them, and the log
+    /// root partitions as a consequence rather than by a rule of its own.</para>
+    /// </remarks>
     public static string DataDirFrom(Func<string, string?> environment) =>
-        environment("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : PanelSettings.DefaultDataDir;
+        PanelSettings.DataDirectoryFor(environment);
+
+    /// <summary>
+    /// A side that has no settings file of its own takes the one both sides used to share.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it exists.</b> Before the side reached <c>settings.json</c>, every partitioned
+    /// installation read <c>&lt;root&gt;/settings.json</c>. Moving that file under the side without
+    /// adopting what is in it would start those installations on DEFAULTS — a person's vendors, keys
+    /// and round budgets gone at the moment they upgrade, and nothing saying so.</para>
+    /// <para><b>Why it is HERE and not in startup.</b> <c>--providers</c> runs before any normal
+    /// start, reads the settings layer, and would otherwise report defaults for an installation
+    /// whose configuration exists. Every reader reaches this, so the adoption sits with the read.
+    /// (The plan round, and the consultation named the check for it.)</para>
+    /// <para><b>The protocol, and each step answers a way of getting it wrong that a reviewer
+    /// named.</b> The root file is NEVER removed, or the second side to start finds nothing and
+    /// reverts to defaults. The copy is written to a temporary sibling and published by rename, or
+    /// a kill mid-write leaves a partial file that blocks adoption for ever. The rename does NOT
+    /// overwrite, so two sides racing end with the winner's file and a loser that says so rather
+    /// than last-writer-wins. And a root file that does not PARSE is named and left alone, because
+    /// publishing an unreadable file to a second location is copying a defect into a second
+    /// place.</para>
+    /// <para>A genuinely new side adopts it too, and that is deliberate: it is what that side would
+    /// have read yesterday, so adopting preserves behaviour where starting on defaults would be the
+    /// surprise.</para>
+    /// </remarks>
+    /// <returns>What a person should be told, or empty when nothing happened.</returns>
+    public static IReadOnlyList<string> AdoptRootSettings(Func<string, string?> environment)
+    {
+        var dataDir = PanelSettings.DataDirectoryFor(environment);
+        var root = PanelSettings.DataRootFor(environment);
+        if (string.Equals(dataDir, root, StringComparison.Ordinal))
+        {
+            // No side asked for: there is one settings file and this must not invent a second.
+            return [];
+        }
+
+        var destination = PathFor(dataDir);
+        var legacy = PathFor(root);
+        if (File.Exists(destination) || !File.Exists(legacy))
+        {
+            return [];
+        }
+
+        string text;
+        try
+        {
+            text = File.ReadAllText(legacy);
+            using var parsed = JsonDocument.Parse(text);
+            if (parsed.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return [Unreadable(legacy, "it is not a JSON object")];
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return [Unreadable(legacy, e.Message)];
+        }
+
+        return Publish(text, destination, legacy);
+    }
+
+    private static IReadOnlyList<string> Publish(string text, string destination, string legacy)
+    {
+        var beside = $"{destination}.{Environment.ProcessId}.tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllText(beside, text);
+
+            // `overwrite: false` is what makes a concurrent winner safe: the loser throws here, says
+            // so, and the file that is already published stands.
+            File.Move(beside, destination, overwrite: false);
+
+            return [
+                $"This side had no settings of its own, so it adopted {legacy} — the file both sides "
+                + $"read before they were partitioned. It is now {destination}, and the original is "
+                + "left where it is for any other side that has not started yet."];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Another side published first, or the directory will not take the file. Either way this
+            // side reads what is there rather than replacing it.
+            return File.Exists(destination)
+                ? []
+                : [$"{legacy} could not be adopted into {destination}: {e.Message}. This side is "
+                   + "starting on defaults, and the original file is untouched."];
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(beside);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A temporary file that outlives its run is swept by the next adoption, which writes
+                // its own name. Failing the start over it would be the worse trade.
+            }
+        }
+    }
+
+    private static string Unreadable(string legacy, string why) =>
+        $"{legacy} exists and could not be read ({why}), so this side did not adopt it and is "
+        + "starting on defaults. Nothing was changed.";
 
     /// <summary>The settings file itself — what a change watcher has to stat.</summary>
     public static string PathFor(string dataDir) => Path.Combine(dataDir, Name);

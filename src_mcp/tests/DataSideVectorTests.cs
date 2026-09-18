@@ -29,6 +29,8 @@ public sealed class DataSideVectorTests : IDisposable
         string DataDir,
         string DataSide,
         string Dir,
+        string SettingsPath,
+        string LogsPath,
         bool Refused,
         bool RootHasDatabase,
         bool DirExists,
@@ -50,6 +52,8 @@ public sealed class DataSideVectorTests : IDisposable
             v.GetProperty("dataDir").GetString() ?? "",
             v.GetProperty("dataSide").GetString() ?? "",
             v.GetProperty("dir").GetString() ?? "",
+            v.GetProperty("settingsPath").GetString() ?? "",
+            v.GetProperty("logsPath").GetString() ?? "",
             v.GetProperty("refused").GetBoolean(),
             v.GetProperty("rootHasDatabase").GetBoolean(),
             v.GetProperty("dirExists").GetBoolean(),
@@ -98,6 +102,39 @@ public sealed class DataSideVectorTests : IDisposable
         }
 
         resolving().Should().Be(Expected(vector), vector.Why);
+    }
+
+    /// <summary>
+    /// The settings file and the log root land where the extension says they do.
+    /// </summary>
+    /// <remarks>
+    /// Added 2026-09-18, when <c>SettingsFile.DataDirFrom</c> stopped being a second resolver. Until
+    /// then these two were the only things in the data directory that did NOT move with the side, so
+    /// two installations sharing one NAS — the whole reason a side exists — shared one settings file
+    /// and overwrote each other in silence. Asserting the DIRECTORY alone could not see it: the
+    /// directory was already right.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void EveryVectorPutsTheSettingsFileAndTheLogsWhereTheExtensionPutsThem(int index)
+    {
+        var vector = Vectors[index];
+        if (vector.Refused)
+        {
+            return;
+        }
+
+        var dir = Expected(vector);
+
+        SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(vector)))
+            .Should().Be(Path.Combine(dir, "settings.json"), vector.Why);
+        ServiceDefaults.CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(vector)))
+            .Should().Be(Path.Combine(dir, "logs"), vector.Why);
+
+        // And the vector itself says the same thing, so the fixture cannot drift away from the two
+        // implementations it is here to hold together.
+        vector.SettingsPath.Should().Be(vector.Dir + "/settings.json");
+        vector.LogsPath.Should().Be(vector.Dir + "/logs");
     }
 
     [Theory]

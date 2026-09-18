@@ -510,6 +510,36 @@ public sealed record PanelSettings
         return notes;
     }
 
+    /// <summary>
+    /// The ONE rule for where a side's data directory is.
+    /// </summary>
+    /// <remarks>
+    /// <para>Public because it was not, and a second implementation grew beside it:
+    /// <see cref="SettingsFile.DataDirFrom"/> was a bare <c>COAI_DATA_DIR</c> read with no side and
+    /// no trim, so <c>coai.db</c> and <c>sessions/</c> went to <c>&lt;root&gt;/&lt;side&gt;/</c>
+    /// while <c>settings.json</c> and <c>logs/</c> stayed in <c>&lt;root&gt;/</c> — two sides meant
+    /// to be independent sharing one settings file and overwriting each other in silence.</para>
+    /// <para>The fix is a CALL rather than a copy. Copying this logic would commit the same defect a
+    /// second time, and the next rule added to one of them would part them again.</para>
+    /// </remarks>
+    public static string DataDirectoryFor(Func<string, string?> env) => ResolveDataDir(env);
+
+    /// <summary>
+    /// The directory BEFORE the side is applied — what an unpartitioned installation would use.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only one caller needs this and it needs it for one reason: an installation that was
+    /// partitioned before the settings file knew about sides has its configuration in the ROOT, and
+    /// <see cref="SettingsFile.AdoptRootSettings"/> has to be able to name that file. Everything
+    /// else asks <see cref="DataDirectoryFor"/> and should keep doing so — a second way to get "the
+    /// directory" is how this pair of functions came to disagree in the first place.</para>
+    /// <para>It goes through the same resolver with the side removed, rather than re-reading
+    /// <c>COAI_DATA_DIR</c>: the trim, the default and the refusal of an unusable side all still
+    /// apply, and a caller asking for the root must not thereby escape the refusal.</para>
+    /// </remarks>
+    public static string DataRootFor(Func<string, string?> env) =>
+        ResolveDataDir(name => name == "COAI_DATA_SIDE" ? null : env(name));
+
     private static string ResolveDataDir(Func<string, string?> env)
     {
         // Whitespace is not a configured directory. `COAI_DATA_DIR=' '` reaching Path.GetFullPath
