@@ -234,6 +234,12 @@ jobs:
     name: extension · a real editor
     runs-on: ubuntu-latest
     continue-on-error: true
+    # `actions: read` is for the streak step at the end: listing this workflow's own runs and their
+    # jobs is an Actions read, not a contents one. Job-level, so the rest of the workflow keeps the
+    # contents-only default it has.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -259,6 +265,22 @@ jobs:
       - name: Run the scenarios in a real editor
         working-directory: src_vs_code
         run: xvfb-run -a npm run test:host
+
+      # HOW CLOSE THIS JOB IS TO BEING REQUIRED, printed where somebody will see it. The comment at
+      # the top of this job has said "twenty consecutive green runs of main" since the day it was
+      # written, and nobody counted — so the plan that promoted this work had to record the promotion
+      # as pending with no figure, because none had been measured. A rule whose number has to be
+      # assembled by hand is a rule that stays unassembled.
+      #
+      # It REPORTS. Promotion means editing branch protection, which is the operator's to do; this
+      # only makes the number impossible to not know. `if: always()` because the streak is most worth
+      # reading on the run that just broke it.
+      - name: How close this job is to being required
+        if: always()
+        working-directory: src_vs_code
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/host-job-streak.mjs
 
   # ---------------------------------------------------------------------------
   # The workflows themselves are code, and nothing checked them until now.

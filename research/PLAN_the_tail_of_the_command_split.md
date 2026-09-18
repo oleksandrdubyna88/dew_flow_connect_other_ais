@@ -1310,10 +1310,15 @@ And the rest:
   importers, none imported back by the page — so it buys tidiness rather than a ratchet drop and was
   left as its own change.
 - **The extension-host job’s PROMOTION to required.** The rule is twenty consecutive green runs of
-  `main`; the job first ran 2026-09-17 and **nobody is counting yet**. It is pending rather than
-  abandoned — recorded here because a CI operator reading only the Definition of Done would see
-  “not required to merge” and have no way to tell which. No figure is given because none was
-  measured. *(codex, the document round.)*
+  `main`. When this was written nobody was counting and no figure was given, because none had
+  been measured — *(codex, the document round)*. **A machine counts it now**, 2026-09-18:
+  `src_vs_code/scripts/host-job-streak.mjs` asks the Actions API for this job's conclusion in
+  each run of `main`, newest first, and the CI job prints the streak into its own summary on
+  every run, including the run that just broke one. First measured answer: **13 of 20**. It
+  REPORTS rather than gates — promotion means editing branch protection, which is the
+  operator's to do; what has changed is that the number can no longer be unknown. The counter
+  treats a run still in flight as ENDING the streak rather than skipping it, so it can never
+  read twenty while the newest run is failing.
 - **The eleven remaining rows of `research/module_tests.md`** that still end *"NOT covered … needs
   an extension host"*. Story 13 converted exactly one, on purpose: a harness that grew twelve
   scenarios before one of them caught anything has been built on guesses.
