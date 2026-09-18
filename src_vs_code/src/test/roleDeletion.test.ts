@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   DeletionWorld, RoleDeletions, STRANDED_AFTER_MS, Tombstone, TombstoneStore, reserved,
 } from '../roleDeletion';
+import { payloadMentionsRole, serverSettingsJson } from '../serverSettingsFile';
+import { DEFAULTS } from '../settingsShape';
 
 /**
  * Deleting a role, and what happens when the mirror does not carry it.
@@ -13,8 +15,13 @@ import {
  */
 
 /** A store in memory, which is the whole point of the store being a parameter. */
-function kept(): TombstoneStore & { readonly held: Map<string, Tombstone> } {
+function kept(): TombstoneStore & {
+  readonly held: Map<string, Tombstone>;
+  /** Run just before a claim, so a test can be the OTHER window finishing in that instant. */
+  beforeClaim?: () => void;
+} {
   const held = new Map<string, Tombstone>();
+  const claimed = new Set<string>();
 
   return {
     held,
@@ -25,14 +32,49 @@ function kept(): TombstoneStore & { readonly held: Map<string, Tombstone> } {
     all: async () => [...held.values()],
     drop: async (roleId) => {
       held.delete(roleId);
+      claimed.delete(roleId);
+    },
+    reservedIds: async () => new Set([...held.keys()].map((one) => one.toLowerCase())),
+    // The rename, modelled: the nonce is checked INSIDE it, and a second claimant finds it taken.
+    claim: async function claim(this: { beforeClaim?: () => void }, roleId, nonce) {
+      this.beforeClaim?.();
+      if (held.get(roleId)?.nonce !== nonce || claimed.has(roleId)) {
+        return false;
+      }
+      claimed.add(roleId);
+
+      return true;
     },
   };
+}
+
+/**
+ * The payload a mirror would have carried for these roles, built by the REAL builder.
+ *
+ * <p>Through `serverSettingsJson` rather than a hand-written string, so the question the coordinator
+ * asks of a payload is asked of a payload shaped the way the mirror actually writes one. A stub here
+ * would let the two drift, and the drift would be a deletion that finishes against a write that
+ * still carried the role.</p>
+ */
+function payloadFor(ids: readonly string[]): string {
+  const rows = ids.map((id) => ({
+    id,
+    name: id,
+    stage: 'code',
+    programmingTask: true,
+    active: true,
+    prompts: [],
+  }));
+
+  return serverSettingsJson({ ...DEFAULTS, roles: rows }, []);
 }
 
 interface Seen {
   readonly pruned: string[];
   readonly forgotten: string[];
   readonly said: string[];
+  /** When the page was told to come back, in ms. `0` is "now". */
+  readonly redrawIn: number[];
 }
 
 /** A world whose configuration is a set of live role ids, so `gone` is a real question. */
@@ -43,7 +85,7 @@ function world(live: Set<string>, at = new Date('2026-09-18T12:00:00Z')): {
   clock: Date;
 } {
   const store = kept();
-  const seen: Seen = { pruned: [], forgotten: [], said: [] };
+  const seen: Seen = { pruned: [], forgotten: [], said: [], redrawIn: [] };
   const holder = { clock: at };
 
   return {
@@ -61,12 +103,13 @@ function world(live: Set<string>, at = new Date('2026-09-18T12:00:00Z')): {
         seen.pruned.push(roleId);
         live.delete(roleId);
       },
-      gone: (roleId) => !live.has(roleId),
+      mentions: payloadMentionsRole,
       forget: async (promptIds) => {
         seen.forgotten.push(...promptIds);
       },
       now: () => holder.clock,
       say: (tombstone, reason) => seen.said.push(`${tombstone.roleId}: ${reason}`),
+      changed: (inMs) => seen.redrawIn.push(inMs),
     },
   };
 }
@@ -81,7 +124,7 @@ test('a mirror that does not carry it leaves the TEXT on disk, and says why', as
   const deletions = new RoleDeletions(one.world, () => 'n1');
 
   await deletions.begin(ROLE);
-  await deletions.settled(false, 'another window is writing the settings');
+  await deletions.settled(false, '', 'another window is writing the settings');
 
   assert.deepEqual(one.seen.forgotten, [], 'the prose was deleted before the server had lost the role');
   assert.equal(one.store.held.size, 1, 'the tombstone was cleared although nothing finished');
@@ -94,8 +137,8 @@ test('the same reason twice over is said once, because a condition is not an att
   const deletions = new RoleDeletions(one.world, () => 'n1');
 
   await deletions.begin(ROLE);
-  await deletions.settled(false, 'the settings could not be written');
-  await deletions.settled(false, 'the settings could not be written');
+  await deletions.settled(false, '', 'the settings could not be written');
+  await deletions.settled(false, '', 'the settings could not be written');
 
   assert.equal(one.seen.said.length, 1, 'a mirror failing twice is one condition, not two');
 });
@@ -110,7 +153,7 @@ test('a mirror that carries it prunes the row, forgets the text and clears the t
   assert.deepEqual(one.seen.pruned, ['Role2'], 'the row and its four records go FIRST, with each other');
   assert.deepEqual(one.seen.forgotten, [], 'and the text does not go with them');
 
-  await deletions.settled(true, '');
+  await deletions.settled(true, payloadFor([...live]), '');
 
   assert.deepEqual(one.seen.forgotten, ['role2-general']);
   assert.equal(one.store.held.size, 0, 'the tombstone outlived the deletion it recorded');
@@ -127,12 +170,12 @@ test('the LISTENER owns the sync and the deletion is told busy: the cleanup stil
 
   await deletions.begin(ROLE);
   // The schedule's attempt, which this deletion did not start and does not own.
-  await deletions.settled(false, 'another window is writing the settings');
+  await deletions.settled(false, '', 'another window is writing the settings');
 
   assert.deepEqual(one.seen.forgotten, []);
 
   // And now the listener's own sync lands.
-  await deletions.settled(true, '');
+  await deletions.settled(true, payloadFor([...live]), '');
 
   assert.deepEqual(one.seen.forgotten, ['role2-general'],
     'the deletion needed a reactivation or a force to finish something that had already succeeded');
@@ -152,12 +195,12 @@ test('a sync landing BETWEEN two of step two writes does not finish it; the next
     askedAt: '2026-09-18T12:00:00.000Z', nonce: 'n1', reason: '', failedAt: '',
   });
   // The row is still there: this is the sync that landed before step 2 finished.
-  await deletions.settled(true, '');
+  await deletions.settled(true, payloadFor([...live]), '');
 
   assert.deepEqual(one.seen.forgotten, [], 'a half-written removal was treated as carried');
 
   await deletions.sweep();
-  await deletions.settled(true, '');
+  await deletions.settled(true, payloadFor([...live]), '');
 
   assert.deepEqual(one.seen.forgotten, ['role2-general']);
 });
@@ -192,7 +235,7 @@ test('interrupted at each REAL gap, the sweep and the next outcome finish it', a
     const next = new RoleDeletions(one.world, () => 'n2');
 
     await next.sweep();
-    await next.settled(true, '');
+    await next.settled(true, payloadFor([...live]), '');
 
     assert.deepEqual(one.seen.pruned, ['Role2'],
       `interrupted ${gap.name}, the row was not pruned again - and a host that died before writing it `
@@ -204,28 +247,57 @@ test('interrupted at each REAL gap, the sweep and the next outcome finish it', a
 
 test('a worker whose tombstone was cleared and whose id came back deletes NOTHING', async () => {
   // Idempotence protects a repeated operation on unchanged state. It does not protect a NEW role
-  // that reuses an identity: without the nonce, this deletes the new role's text. (codex, the plan
-  // round.)
+  // that reuses an identity.
+  //
+  // The FIRST version of this test passed with the nonce guard removed, and the round said so: it
+  // put the new role back into the live set, so the payload still mentioned it and the coordinator
+  // stopped one step earlier, at a check that has nothing to do with nonces. The role is absent
+  // from the payload here on purpose, so the only thing that can refuse the deletion is the claim.
+  // (codex, the code round, Blocking.)
   const live = new Set(['Role2']);
   const one = world(live);
   const slow = new RoleDeletions(one.world, () => 'n1');
 
   await slow.begin(ROLE);
-
-  // Another window finishes the same deletion, and the person creates a role that takes the id back.
-  await one.world.store.drop('Role2');
   one.seen.forgotten.length = 0;
-  live.add('Role2');
-  await one.world.store.put({
-    roleId: 'Role2', name: 'A new role', promptIds: ['role2-general'],
-    askedAt: '2026-09-18T13:00:00.000Z', nonce: 'LATER', reason: '', failedAt: '',
-  });
 
-  // The slow worker wakes up holding the OLD tombstone.
-  await slow.settled(true, '');
+  // The other window finishes IN THE INSTANT between this worker reading the tombstone and acting
+  // on it, and the person creates a role that takes the released id. That instant is the whole
+  // defect: a check and a delete are two operations with an await between them.
+  one.store.beforeClaim = () => {
+    one.store.held.set('Role2', {
+      roleId: 'Role2', name: 'A new role', promptIds: ['role2-general'],
+      askedAt: '2026-09-18T13:00:00.000Z', nonce: 'LATER', reason: '', failedAt: '',
+    });
+  };
+  await slow.settled(true, payloadFor([]), '');
 
   assert.deepEqual(one.seen.forgotten, [],
     'a stale worker deleted the text of the role that took the freed id');
+  assert.equal(one.store.held.get('Role2')?.nonce, 'LATER',
+    'and it dropped the NEW deletion on its way out');
+});
+
+test('a write that landed carrying the role does NOT finish the deletion', async () => {
+  // The other half of the same lesson, and the one the round called Blocking twice. A mirror can
+  // finish writing a payload that still contains the role and only then call back; asking "is the
+  // role absent from the settings NOW" answers yes, because `begin` has pruned them in the
+  // meantime. Current configuration is not evidence of what was acknowledged.
+  const live = new Set(['Role2']);
+  const one = world(live);
+  const deletions = new RoleDeletions(one.world, () => 'n1');
+  const stale = payloadFor(['Role2']);
+
+  await deletions.begin(ROLE);
+  await deletions.settled(true, stale, '');
+
+  assert.deepEqual(one.seen.forgotten, [],
+    'the text went on the strength of a write that still carried the role');
+  assert.equal(one.store.held.size, 1);
+
+  await deletions.settled(true, payloadFor([]), '');
+
+  assert.deepEqual(one.seen.forgotten, ['role2-general'], 'and the write that DID carry it finished nothing');
 });
 
 test('a tombstoned id is not handed to a new role, and is again once it clears', async () => {
@@ -244,7 +316,7 @@ test('a tombstone is stranded only after it has FAILED, and not while the write 
   await deletions.begin(ROLE);
   assert.deepEqual(await deletions.stranded(), [], 'a deletion that has not failed is not stranded');
 
-  await deletions.settled(false, 'the settings could not be written');
+  await deletions.settled(false, '', 'the settings could not be written');
   assert.deepEqual(await deletions.stranded(), [],
     'a write that failed one second ago is shown to somebody as though it were stuck');
 
@@ -260,9 +332,31 @@ test('finishing it anyway releases the id, and takes the text with it', async ()
   const deletions = new RoleDeletions(one.world, () => 'n1');
 
   await deletions.begin(ROLE);
-  await deletions.settled(false, 'a newer build owns the settings file');
+  await deletions.settled(false, '', 'a newer build owns the settings file');
   await deletions.finishAnyway('Role2');
 
   assert.deepEqual(one.seen.forgotten, ['role2-general']);
   assert.equal(one.store.held.size, 0, 'the id is still held, so the role cannot be recreated');
+});
+
+test('the page is told when to come back, and told again when there is nothing to show', async () => {
+  // The controls appeared only by accident before this. `remove` redraws the page before anything
+  // can be stranded — that needs a terminal failure and then ten more seconds — and recording the
+  // failure only writes a file. A person who left the Roles tab open was told to go there and found
+  // nothing. (codex, the code round.)
+  const one = world(new Set(['Role2']));
+  const deletions = new RoleDeletions(one.world, () => 'n1');
+
+  await deletions.begin(ROLE);
+  assert.deepEqual(one.seen.redrawIn, [], 'a deletion that has not failed has nothing to show yet');
+
+  await deletions.settled(false, '', 'the settings could not be written');
+
+  assert.deepEqual(one.seen.redrawIn, [STRANDED_AFTER_MS],
+    'the page was never told when the deletion would become stranded');
+
+  await deletions.settled(true, payloadFor([]), '');
+
+  assert.deepEqual(one.seen.redrawIn, [STRANDED_AFTER_MS, 0],
+    'a resolved deletion sat on the page until something unrelated redrew it');
 });

@@ -55,7 +55,8 @@ import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsS
 import { lockIsStale } from './settingsLock';
 import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { STOOD_DOWN } from './roleDeletion';
-import { roleDeletions } from './rolesPanel';
+import { RoleDeletions } from './roleDeletion';
+import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
@@ -253,7 +254,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // Every deletion a crashed or reloaded window left half-done: step 2 again, idempotent, and then
   // it waits for the mirror like every other one. Nothing FINISHES here, because nothing has been
   // carried yet — `tellTheDeletions` is where that happens.
-  void roleDeletions().sweep().catch((raised: unknown) => {
+  theDeletions = roleDeletions(context);
+  void theDeletions.sweep().catch((raised: unknown) => {
     console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', raised);
   });
 
@@ -668,13 +670,23 @@ function mirrorSettings(settingsSync: ServerSettingsSync): void {
  * succeed, and nothing would resume the cleanup. It is told here instead, on whatever the schedule
  * reaches. (codex, the deletion plan's round.)</p>
  */
+/** This window's deletions, bound at activation so the mirror's callback can reach them. */
+let theDeletions: RoleDeletions | undefined;
+
 function tellTheDeletions(outcome: SyncOutcome): void {
+  if (theDeletions === undefined) {
+    return;
+  }
   const carried = outcome === 'written' || outcome === 'unchanged';
+  // The PAYLOAD the mirror actually carried, not the settings as they read now. A write that
+  // landed may have carried one that still contained the role, and the local configuration moves
+  // on underneath. (codex, the deletion code round.)
+  const payload = carried ? mirroring?.carried() ?? '' : '';
   // `?? ''` because `noUncheckedIndexedAccess` is on, and an outcome this map has no row for is a
   // reason nobody wrote rather than a crash.
   const reason = carried ? '' : REASONS[outcome] ?? '';
 
-  void roleDeletions().settled(carried, reason).catch((raised: unknown) => {
+  void theDeletions.settled(carried, payload, reason).catch((raised: unknown) => {
     console.error('ConnectOtherAIs: a role deletion could not be carried on with', raised);
   });
 }
@@ -691,6 +703,10 @@ function forgetTheMirror(): void {
   schedule?.cancel();
   schedule = undefined;
   mirroring = undefined;
+  // The deletions go with it: a coordinator left behind is one bound to the PREVIOUS activation's
+  // settings reader, and the next window would prune through a context that has gone.
+  theDeletions = undefined;
+  forgetTheDeletions();
 }
 
 /**

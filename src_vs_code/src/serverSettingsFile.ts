@@ -22,6 +22,73 @@ export const WRITTEN_BY = 'COAI_WRITTEN_BY';
  * unaffected: `PanelSettings.UnknownValues` reports unknown VALUES of known keys, never unknown
  * keys, so nothing is raised by its presence.</p>
  */
+/**
+ * Does this payload still say anything about that role?
+ *
+ * <p>The question a role deletion asks of the write the mirror actually CARRIED, and the reason it
+ * asks the payload rather than the configuration: a write that landed a moment ago may have carried
+ * a payload that still contained the role, and by the time anybody looks, the local settings have
+ * moved on. Current configuration is not evidence of what was acknowledged. (codex, the deletion
+ * code round, twice from two roles.)</p>
+ *
+ * <p>It asks about all five places an id can be — the rows in `COAI_ROLES`, the three per-role env
+ * keys, and the map in `COAI_PROMPTS_PER_ROUND` — rather than searching the text, because a text
+ * search cannot tell `Role2` from `Role20` and would hold a deletion open for ever on a role that
+ * merely shares a prefix.</p>
+ */
+export function payloadMentionsRole(payload: string, roleId: string): boolean {
+  const env = objectOf(payload);
+  const upper = roleId.toUpperCase();
+  const keyed = [`COAI_ROUNDS_${upper}`, `COAI_THRESHOLD_${upper}`, `COAI_ENABLED_${upper}`];
+  if (keyed.some((key) => key in env)) {
+    return true;
+  }
+  if (Object.keys(objectOf(asText(env['COAI_PROMPTS_PER_ROUND']))).includes(roleId)) {
+    return true;
+  }
+
+  return rowIds(asText(env['COAI_ROLES'])).includes(roleId);
+}
+
+function asText(held: unknown): string {
+  return typeof held === 'string' ? held : '';
+}
+
+/** An empty payload mentions nothing, which is what "before the first write" honestly means. */
+function objectOf(text: string): Record<string, unknown> {
+  if (text === '') {
+    return {};
+  }
+  try {
+    const held: unknown = JSON.parse(text);
+
+    return typeof held === 'object' && held !== null && !Array.isArray(held)
+      ? held as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rowIds(text: string): readonly string[] {
+  if (text === '') {
+    return [];
+  }
+  try {
+    const held: unknown = JSON.parse(text);
+
+    return Array.isArray(held)
+      ? held.flatMap((row) => {
+        const id: unknown = (row as { id?: unknown } | null)?.id;
+
+        return typeof id === 'string' ? [id] : [];
+      })
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export function serverSettingsJson(
   settings: CoaiSettings,
   vendors: readonly Vendor[],

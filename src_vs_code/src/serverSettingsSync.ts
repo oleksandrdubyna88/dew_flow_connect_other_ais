@@ -92,6 +92,21 @@ export class ServerSettingsSync {
   private lastWritten = '';
 
   /**
+   * The payload the server has, as far as this window knows — what the last successful write put
+   * there, or empty before one.
+   *
+   * <p>It exists because a caller waiting for its OWN change to reach the server cannot ask "did a
+   * write land": a write that landed a moment ago may have carried a payload that still contained
+   * what the caller was removing, and by the time the caller looks, the local configuration has
+   * moved on. Current configuration is not evidence of what was acknowledged. So the
+   * acknowledgement carries the payload with it and the caller asks about THAT. (codex, the
+   * role-deletion code round, twice from two roles.)</p>
+   */
+  carried(): string {
+    return this.lastWritten;
+  }
+
+  /**
    * Which stamp this window has already complained about.
    *
    * <p>The version rather than a bare flag, and cleared on a successful write. A boolean makes the

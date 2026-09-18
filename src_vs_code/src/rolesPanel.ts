@@ -12,8 +12,7 @@ import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
-import { RoleDeletions, Tombstone, reserved } from './roleDeletion';
-import { tombstonesIn } from './roleDeletionStore';
+import { roleDeletions, whenDeletionsChange } from './roleDeletionsHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 /**
@@ -85,85 +84,6 @@ async function write(next: readonly RoleRow[]): Promise<void> {
   await saveSetting(side(), config(), KEY, next);
 }
 
-/**
- * Every setting keyed by a role id, and there are four of them.
- *
- * <p>Deleting a role left all four behind, so the next role that took the freed id opened with a
- * stranger’s round budget, threshold and enabled flag. They are part of the payload the mirror
- * writes, which is why they are pruned WITH the row rather than after the mirror carries it —
- * pruned afterwards, the server holds orphaned keys until some unrelated setting changes, possibly
- * for ever. (antigravity, the plan round, blocking.)</p>
- */
-const KEYED_BY_ROLE = ['rounds', 'thresholds', 'roleEnabled', 'promptsPerRound'] as const;
-
-/** Step 2: the row and the four records, in one act. Idempotent, so the sweep may redo it. */
-async function pruneRole(roleId: string): Promise<void> {
-  const current = rows();
-  if (current.some((row) => row.id === roleId)) {
-    await write(current.filter((row) => row.id !== roleId));
-  }
-  const read = readerFor(side(), config());
-  for (const key of KEYED_BY_ROLE) {
-    const held = read(key);
-    if (typeof held === 'object' && held !== null && roleId in (held as Record<string, unknown>)) {
-      const { [roleId]: dropped, ...rest } = held as Record<string, unknown>;
-
-      void dropped;
-      await saveSetting(side(), config(), key, rest);
-    }
-  }
-}
-
-/**
- * Half of the condition a deletion finishes on: is the role absent from the configuration NOW?
- *
- * <p>The other half is the mirror having carried a write, and it takes both — `pruneRole` is
- * several `config.update` calls and each one fires the configuration listener, so a sync that landed
- * between the first and the last carried an incomplete removal.</p>
- */
-function goneFromSettings(roleId: string): boolean {
-  if (rows().some((row) => row.id === roleId)) {
-    return false;
-  }
-  const read = readerFor(side(), config());
-
-  return !KEYED_BY_ROLE.some((key) => {
-    const held = read(key);
-
-    return typeof held === 'object' && held !== null && roleId in (held as Record<string, unknown>);
-  });
-}
-
-/** The deletions of this window, built once the page has its context. */
-let deletions: RoleDeletions | undefined;
-
-export function roleDeletions(): RoleDeletions {
-  deletions ??= new RoleDeletions({
-    store: tombstonesIn(() => coaiDataDir()),
-    prune: pruneRole,
-    gone: goneFromSettings,
-    forget,
-    now: () => new Date(),
-    say: sayNotDeleted,
-  });
-
-  return deletions;
-}
-
-/** Said through the funnel: the ledger keeps it whether or not anybody sees the toast. */
-function sayNotDeleted(tombstone: Tombstone, reason: string): void {
-  void notify({
-    as: 'warning',
-    class: 'stand-down',
-    source: 'rolesPage',
-    code: 'role-not-deleted-yet',
-    subject: tombstone.roleId,
-    title: `“${tombstone.name}” was removed here, and the server has not been told yet.`,
-    detail: reason,
-    cure: 'Its prompts are kept until the server has it. The Roles tab can finish the deletion anyway.',
-  });
-}
-
 /** The body of every prompt that has one, by id — absent means "what this product ships". */
 async function texts(): Promise<Record<string, string>> {
   const ids = [...promptIdsInUse(rows())];
@@ -217,9 +137,24 @@ export function openRoles(extension: vscode.ExtensionContext): void {
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
   const scale = pushUiScaleTo(panel.webview);
+  // A deletion that becomes stranded while this page is OPEN has to appear on it. Nothing else
+  // redraws in that sequence: the failure is recorded in a file, and the stranding boundary is
+  // ten seconds after that. `inMs` says when to come back, so the page waits rather than polls.
+  // (codex, the code round.)
+  const deletionsChanged = whenDeletionsChange((inMs) => {
+    if (inMs <= 0) {
+      redrawSoon();
+
+      return;
+    }
+    // `unref` so a pending redraw cannot keep the host alive; the tab may close first, and `redraw`
+    // is a no-op once it has.
+    setTimeout(redrawSoon, inMs).unref?.();
+  });
   panel.webview.onDidReceiveMessage((message: unknown) => { queue(roleEdit(message)); });
   panel.onDidDispose(() => {
     scale.dispose();
+    deletionsChanged.dispose();
     panel = undefined;
     // Whatever is still settling belongs to a person who typed it. Losing it because they closed the
     // tab would be the one data loss this page can cause.
@@ -274,6 +209,16 @@ export function rolesKnowTheServer(version: string): void {
   void render().catch((error: unknown) => report('ConnectOtherAIs could not draw the roles page.', error));
 }
 
+/** A redraw that is safe to schedule: the tab may be gone by the time it runs. */
+function redrawSoon(): void {
+  if (panel === undefined) {
+    return;
+  }
+  void render().catch((error: unknown) => {
+    console.error('[coai] the roles page could not be redrawn for a deletion', error);
+  });
+}
+
 async function render(): Promise<void> {
   if (panel === undefined) {
     return;
@@ -287,7 +232,7 @@ async function render(): Promise<void> {
       perSide: config().get('perSideSettings') === true,
       tab,
       uiScale: currentUiScale(),
-      stranded: await roleDeletions().stranded(),
+      stranded: await roleDeletions(side()).stranded(),
     },
     nonce(),
   );
@@ -391,7 +336,7 @@ async function apply(command: RolesCommand): Promise<boolean> {
     return false;
   }
   if (command.kind === 'finishDeletion') {
-    await roleDeletions().finishAnyway(command.id);
+    await roleDeletions(side()).finishAnyway(command.id);
 
     return true;
   }
@@ -420,9 +365,9 @@ function sayRefused(why: string): void {
 async function store(command: RolesCommand): Promise<boolean> {
   // Only `add` needs them, and only `add` pays for the read: an id whose deletion has not finished
   // is not free, because the four records keyed by it are still there.
-  const taken = command.kind === 'add'
-    ? reserved(await tombstonesIn(() => coaiDataDir()).all())
-    : new Set<string>();
+  // Through the coordinator, not around it: it owns the store, and a reservation read from a second
+  // instance would miss whatever the coordinator knows. (antigravity, the code round.)
+  const taken = command.kind === 'add' ? await roleDeletions(side()).reserved() : new Set<string>();
   const outcome = rowsAfter(rows(), command, taken);
   if (outcome.kind === 'unchanged') {
     return false;
@@ -498,7 +443,7 @@ async function removeRole(id: string): Promise<boolean> {
   if (outcome.kind === 'unchanged') {
     return false;
   }
-  await roleDeletions().begin({ id, name, promptIds: outcome.forget });
+  await roleDeletions(side()).begin({ id, name, promptIds: outcome.forget });
 
   return true;
 }

@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
 import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { STOOD_DOWN } from '../roleDeletion';
 import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
 
 /**
@@ -354,9 +353,10 @@ const stuck = (over = {}) => ({
 test('a deletion the server has not been told about is SHOWN, with its reason and its cost', () => {
   const html = rolesHtml(state({ stranded: [stuck()] }), 'n');
 
+  // What the page SAYS, which is what this file is for. That the controls are DRAWN and that
+  // pressing them reaches the host is `rolesPageScript.test.ts`, where the page is run.
   assert.ok(html.includes('Role 2'), 'the role is not named, so nobody knows which deletion is stuck');
   assert.ok(html.includes('the settings could not be written'), 'stranded without its reason is a dead end');
-  assert.ok(html.includes('data-finish="Role2"'), 'there is no way out, so the id is barred for ever');
   // The COST, in the words the plan round asked for. "The server may still carry the row" describes
   // the same fact without naming what it does to the person: rounds run the role, find no text, and
   // complain each time.
@@ -369,19 +369,8 @@ test('a deletion the server has not been told about is SHOWN, with its reason an
 test('nothing stuck draws nothing at all', () => {
   const html = rolesHtml(state({}), 'n');
 
-  assert.ok(!html.includes('data-finish='), 'an empty list left an empty box on the page');
-  assert.ok(!html.includes('Deletions the server has not been told about'));
-});
-
-test('Reload Window is offered for a STAND-DOWN and for nothing else', () => {
-  // The cure for one condition offered for another is worse than no cure: reloading does nothing
-  // about a settings directory that cannot be written, and the person who tries it learns nothing.
-  const down = rolesHtml(state({ stranded: [stuck({ reason: STOOD_DOWN })] }), 'n');
-  const other = rolesHtml(state({ stranded: [stuck()] }), 'n');
-
-  assert.ok(down.includes('data-reload="1"'), 'a stand-down was shown without the one thing that ends it');
-  assert.ok(!other.includes('data-reload="1"'),
-    'a disk that will not take a write was offered a reload, which cannot help it');
+  assert.ok(!html.includes('Deletions the server has not been told about'),
+    'an empty list left an empty box on the page');
 });
 
 test('both new presses are read, and an id that is not one is refused', () => {
