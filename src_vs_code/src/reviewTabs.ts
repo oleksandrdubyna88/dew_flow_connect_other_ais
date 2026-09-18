@@ -1,5 +1,5 @@
 import { ReviewPair } from './bugzReviewPage';
-import { askedOnce, identityOf, MarkReader, UNKNOWN_PROJECT } from './projectIdentity';
+import { identityOf, MarkReader, ProjectIdentity, UNKNOWN_PROJECT } from './projectIdentity';
 import { openedFrom, Tab } from './tabStrip';
 
 /**
@@ -67,14 +67,27 @@ interface Bucket {
   readonly pairs: readonly ReviewPair[];
 }
 
-function pushedInto(buckets: Map<string, ReviewPair[]>, key: string, pair: ReviewPair): void {
-  const held = buckets.get(key);
-  if (held === undefined) {
-    buckets.set(key, [pair]);
-    return;
+/**
+ * The pairs of each key, in the order they arrived.
+ *
+ * <p><b>Nothing the caller owns is mutated, which a code reviewer asked for and the repository's
+ * own practice agrees with.</b> The map and every array in it are created and finished HERE and
+ * handed back; the earlier shape took the accumulator as a parameter, which made a function whose
+ * job was to change somebody else's collection. `remember` in `bugzReviewPanel` is the precedent:
+ * it copies the set it was given and then fills the copy — what the rule forbids is mutating what
+ * you were handed, not writing into what you just made. Rebuilding an immutable map per pair would
+ * be quadratic on a corpus this is meant to scale to.</p>
+ */
+function groupedBy(pairs: readonly ReviewPair[], keyOf: (pair: ReviewPair) => string): ReadonlyMap<string, readonly ReviewPair[]> {
+  const grouped = new Map<string, ReviewPair[]>();
+
+  for (const pair of pairs) {
+    const key = keyOf(pair);
+    const held = grouped.get(key);
+    grouped.set(key, held === undefined ? [pair] : [...held, pair]);
   }
 
-  held.push(pair);
+  return grouped;
 }
 
 /**
@@ -95,44 +108,30 @@ function whereItIs(key: string, full: string, reachable: boolean): string {
 }
 
 function projectBuckets(pairs: readonly ReviewPair[], read: MarkReader): readonly Bucket[] {
-  const once = askedOnce(read);
-  const grouped = new Map<string, ReviewPair[]>();
-  const names = new Map<string, Bucket>();
+  const names = new Map<string, ProjectIdentity>();
+  const grouped = groupedBy(pairs, (pair) => {
+    const one = identityOf(pair.repoPath, read);
+    names.set(one.key, one);
 
-  for (const pair of pairs) {
-    const one = identityOf(pair.repoPath, once);
-    pushedInto(grouped, one.key, pair);
-    names.set(one.key, {
-      key: one.key,
-      label: one.label,
-      title: whereItIs(one.key, one.full, one.reachable),
-      pairs: [],
-    });
-  }
+    return one.key;
+  });
 
-  const buckets = [...grouped.entries()].map(([key, inIt]) => ({
-    ...(names.get(key) as Bucket),
-    pairs: inIt,
+  return ordered([...grouped.entries()].map(([key, inIt]) => {
+    const one = names.get(key) as ProjectIdentity;
+
+    return { key, label: one.label, title: whereItIs(key, one.full, one.reachable), pairs: inIt };
   }));
-
-  return ordered(buckets);
 }
 
 function languageBuckets(pairs: readonly ReviewPair[]): readonly Bucket[] {
-  const held = new Map<string, ReviewPair[]>();
+  const grouped = groupedBy(pairs, (pair) => pair.language);
 
-  for (const pair of pairs) {
-    pushedInto(held, pair.language, pair);
-  }
-
-  const buckets = [...held.entries()].map(([key, inIt]) => ({
+  return ordered([...grouped.entries()].map(([key, inIt]) => ({
     key,
     label: key === '' ? 'Unknown language' : key,
     title: '',
     pairs: inIt,
-  }));
-
-  return ordered(buckets);
+  })));
 }
 
 /**
@@ -173,9 +172,10 @@ function openedOr(tabs: readonly Tab[], held: string): string {
 /**
  * The two strips and the pairs they leave, from the pairs and what was last chosen.
  *
- * <p>`read` is the filesystem, injected — {@link readGitMark} in the panel, a table in a test. Each
- * distinct path is asked about once per call, because the draw this feeds already spends 468 ms
- * tokenising and a filesystem call per ROW is the first thing that would make that worse.</p>
+ * <p>`read` is the filesystem, injected — a table in a test, and in the panel a reader wrapped in
+ * `askedOnce` whose lifetime is the pairs themselves. **It is the CALLER's job to memoise it**, and
+ * that is not an implementation detail: memoising in here made every filter press re-probe all 91
+ * paths of the live corpus synchronously on the extension host, which two code reviewers caught.</p>
  */
 export function reviewTabs(
   pairs: readonly ReviewPair[],

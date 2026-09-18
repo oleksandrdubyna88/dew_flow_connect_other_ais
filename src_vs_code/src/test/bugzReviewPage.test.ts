@@ -128,7 +128,14 @@ class Strip {
 
 /** One tab. It has an `id`, like the real button, and a strip above it. */
 class TabButton {
+  /** Whether the page put the keyboard on this one. */
+  focused = false;
+
   constructor(readonly id: string, readonly key: string, private readonly strip: Strip) {}
+
+  focus(): void {
+    this.focused = true;
+  }
 
   getAttribute(name: string): string | null {
     return name === 'data-tab' ? this.key : null;
@@ -297,6 +304,7 @@ interface Options {
   readonly languages?: readonly Tab[];
   readonly project?: string;
   readonly language?: string;
+  readonly focus?: { readonly strip: string; readonly key: string };
   readonly trouble?: string;
   readonly expanded?: ReadonlySet<number>;
   readonly uiScale?: number;
@@ -399,7 +407,11 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
 
       return (among as readonly (Region | Toggle)[]).find((e) => e.key === one[2]);
     },
-    getElementById: (id: string): Control | undefined => controls[id],
+    // Tabs as well as controls, because the page looks one up BY ID to give the keyboard back
+    // what it was on, and a shim that knew only the controls would be green through that being
+    // wired to nothing.
+    getElementById: (id: string): Control | TabButton | undefined =>
+      controls[id] ?? tabs.find((one) => one.id === id),
     body: { style },
   };
 
@@ -1068,4 +1080,45 @@ test('a page with nothing to choose between renders no strip at all', () => {
 
   assert.deepEqual(page.tabs, []);
   assert.equal(page.boxes.length, 1, 'and the pairs are still there');
+});
+
+
+test('the keyboard gets back the tab it just activated', () => {
+  // Every repaint replaces the document, so a person who tabbed to a project and pressed Enter was
+  // returned to the top of a new page and had to navigate the whole thing again to reach the
+  // language strip beside it — once per press. Found on the code round.
+  const page = run([pair(1)], {
+    projects: PROJECTS,
+    languages: LANGUAGES,
+    project: 'd:/rsd/repo_b',
+    language: '*all*',
+    focus: { strip: 'project', key: 'd:/rsd/repo_b' },
+  });
+
+  const focused = page.tabs.filter((one) => one.focused);
+
+  assert.deepEqual(focused.map((one) => one.id), ['project-tab-1'],
+    'exactly the activated tab, found by the key the host named rather than by position');
+});
+
+test('a draw nobody pressed does not move anybody\'s focus', () => {
+  // The companion, and it is not symmetry for its own sake: a poll comes back every few seconds,
+  // and a page that focused something on each one would take the keyboard away mid-sentence.
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+
+  assert.deepEqual(page.tabs.filter((one) => one.focused), []);
+});
+
+test('a focus the tabs cannot account for is not chased', () => {
+  // A held press whose tab is gone — the corpus was recollected under it. Nothing is focused, and
+  // nothing throws.
+  const page = run([pair(1)], {
+    projects: PROJECTS,
+    languages: LANGUAGES,
+    project: '*all*',
+    language: '*all*',
+    focus: { strip: 'project', key: 'd:/rsd/deleted' },
+  });
+
+  assert.deepEqual(page.tabs.filter((one) => one.focused), []);
 });

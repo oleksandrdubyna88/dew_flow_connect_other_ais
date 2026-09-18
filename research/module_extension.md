@@ -7721,6 +7721,59 @@ click handler tells a project press from a language press — the mutation that 
 instead of reading the ancestor reports a C# press as a project press, and the suite goes red naming
 exactly that.
 
+**Four things the code round found, and three of them were real defects in this story's own code.**
+
+1. **A RELATIVE gitdir merged unrelated products** — the very failure the module exists to prevent,
+   arriving through the door built to prevent it. Git writes the gitdir relative when
+   `worktree.useRelativePaths` is set (2.48+) or `--relative-paths` was passed, so two worktrees in
+   two different products can carry the identical line `gitdir: ../repo/.git/worktrees/wt`; read as
+   text both answered `../repo`. It is now resolved against the worktree that holds the file — pure
+   string work, with no `node:path` and no current directory, because `path.resolve` would fold in
+   the process's cwd and answer with backslashes.
+2. **Every filter press re-probed the whole corpus.** `askedOnce` was created INSIDE the grouping, so
+   it memoised within one repaint and was discarded: pressing a language tab probed all 91 paths
+   again, synchronously, on the extension host — 41 % of which do not exist, and one recorded UNC
+   path on a sleeping server blocks the host until the filesystem gives up, for a project that may
+   not even be on screen. The reader is now the panel's, replaced on every `draw` (a checkout can
+   appear or vanish between reads) and reused across repaints. Two providers found this
+   independently, and it defeated half of what splitting `draw` was for.
+3. **The repaint threw away the keyboard.** A person who tabbed to a project and pressed Enter was
+   returned to the top of a new document and had to navigate the whole page again to reach the
+   language strip beside it, once per press. The panel now remembers which strip and which key were
+   pressed and the page focuses that button on load — by an id the page composes from its own slug,
+   never by a key from the database reaching `querySelector`. A draw nobody pressed focuses nothing,
+   because a poll that took the keyboard away mid-sentence would be the same rudeness reversed.
+4. **The composed ids are escaped once, over the whole value.** The prefixes are constants at every
+   call site, and a builder that is safe only because of what its callers happen to pass is a site
+   that is not safe whatever it is handed.
+
+`identitiesOf` is gone rather than patched. It keyed its map by the RESOLVED project key, so a caller
+holding a path could not look an identity up in it — which a reviewer pointed out is exactly why the
+grouping had to iterate for itself. A memoised reader is the honest shape of the same saving, because
+it answers the question the caller actually asks.
+
+**And one finding was rejected, on a ruling this repository had already made.** `narrow` ignores a
+strip name it does not know, against `coding-style.md`'s "an unknown name fails naming the legal
+values, never a silent fallback". `chatMessages.ts` reconciles that rule with this boundary at
+length, at a code reviewer's request on an earlier round: a retained webview can be older OR newer
+than the extension talking to it, so a host that refused a word it did not know would break the half
+that had done nothing wrong. `asReviewMessage`, twenty lines above `narrow` in the same file, already
+drops an unknown message TYPE the same way — so accepting would have made one function refuse what
+its neighbour ignores. The cross-reference is now in `narrow`'s own docblock so the next reader does
+not have to re-derive it.
+
+**What this story CANNOT do, and it is now a plan rather than a silence.** The key is a checkout
+LOCATION resolved against today's filesystem, not a recorded project identity. Two clones of one
+project are two tabs; and a directory later reused by another project makes the page file the first
+project's history under the second — wrong rather than untidy, and unfixable by any read-time rule,
+because the evidence of which checkout produced the session is gone. Both were raised on the code
+round and both are accepted. Reading `.git/config`'s origin url was measured as the cheap answer and
+**would merge nothing on the live corpus** (10 identities by origin against the same 10 by root, 9 of
+10 having an origin at all), so the fix is to record the identity where git already runs:
+`todo/PLAN_a_session_records_which_project_it_was.md`, a `project_id` on `sessions` written at
+`open`, with this rule kept as the fallback for legacy rows — 100 % of the sessions that exist
+today.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

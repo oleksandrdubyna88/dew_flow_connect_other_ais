@@ -29,6 +29,27 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
  * recovered <b>only</b> when exactly one segment follows `/worktrees/`; anything longer, and every
  * `/.git/modules/…` gitdir (which git writes relative), is its own project.</p>
  *
+ * <p><b>What this rule CANNOT do, named here because it is not obvious from the code.</b> The key
+ * is a checkout LOCATION resolved against today's filesystem, not a recorded project identity — two
+ * code reviewers on the code round said so and they are right:</p>
+ *
+ * <ol>
+ *   <li><b>Two clones of one project are two tabs.</b> Both `.git` entries are directories, the
+ *       paths differ, and nothing about a location says what it is a copy of. Measured: reading
+ *       `.git/config`'s origin url would merge NOTHING on the live corpus — 10 identities by origin
+ *       against the same 10 by root, with 9 of 10 having an origin at all — so the cheap-looking
+ *       answer buys a file read per project and changes no grouping that exists.</li>
+ *   <li><b>A directory reused by another project misfiles history</b>, and this one is wrong rather
+ *       than untidy: pairs collected in `_wt/review` for project A, the worktree deleted, a new one
+ *       for project B made in its place, and A's sessions now read B's `.git`. No read-time rule can
+ *       fix it, because the evidence of which checkout produced the session is gone.</li>
+ * </ol>
+ *
+ * <p>Both follow from reconstructing an identity instead of recording one, so the fix is server-side
+ * and is planned as `todo/PLAN_a_session_records_which_project_it_was.md`: a `project_id` on
+ * `sessions`, written where git already runs. This rule then stays as the fallback for legacy rows,
+ * which is 100 % of the 106 sessions that exist today.</p>
+ *
  * <p><b>Absence is an answer, not a failure.</b> 41 % of the corpus no longer exists on disk. An
  * identity that can only be learned from a filesystem is thus unavailable two times in five, so an
  * unreachable path becomes its own single-project bucket rather than being merged with a neighbour
@@ -94,10 +115,65 @@ export function normalisePath(raw: string): string {
   return slashed.length > 1 ? slashed.replace(/\/$/u, '') : slashed;
 }
 
-/** The repository a linked worktree's gitdir names, or empty when it names something else. */
-function parentOf(mark: GitMark): string {
+/** A drive-qualified path, a POSIX root, or a UNC share — anything else is relative. */
+const ABSOLUTE = /^([a-z]:\/|\/)/u;
+
+/** Which root a resolved path keeps: a UNC share's two separators, a POSIX root's one, or neither. */
+function leadOf(base: string): string {
+  if (base.startsWith('//')) return '//';
+
+  return base.startsWith('/') ? '/' : '';
+}
+
+function stepped(walked: string[], part: string): void {
+  if (part === '..') {
+    walked.pop();
+
+    return;
+  }
+
+  if (part !== '.' && part !== '') {
+    walked.push(part);
+  }
+}
+
+/**
+ * A relative gitdir, resolved against the directory whose `.git` file carried it.
+ *
+ * <p><b>A code reviewer found why this is not optional.</b> Git writes the gitdir relative when
+ * `worktree.useRelativePaths` is set (2.48 and later) or `--relative-paths` was passed, so two
+ * worktrees in two unrelated products can carry the IDENTICAL line
+ * `gitdir: ../repo/.git/worktrees/wt`. Read as text both answer `../repo`, and the two products land
+ * in one tab — the exact merge this module exists to prevent, arriving through the door built to
+ * prevent it. Resolved against the worktree that holds the file, they answer
+ * `d:/products/a/repo` and `d:/products/b/repo`.</p>
+ *
+ * <p>Pure string work, with no `node:path` and no current directory: `path.resolve` would fold in
+ * the process's cwd for a relative base and would answer with backslashes on Windows, and the keys
+ * here are normalised forward-slash text by definition.</p>
+ */
+function resolvedAgainst(base: string, said: string): string {
+  const walked: string[] = [];
+
+  for (const part of `${base}/${said}`.split('/')) {
+    stepped(walked, part);
+  }
+
+  return `${leadOf(base)}${walked.join('/')}`;
+}
+
+/**
+ * The repository a linked worktree's gitdir names, or empty when it names something else.
+ *
+ * <p>`path` is the worktree itself, which is what a relative gitdir is relative TO.</p>
+ */
+function parentOf(path: string, mark: GitMark): string {
   if (mark.kind !== 'linked') return '';
-  const found = LINKED.exec(normalisePath(mark.gitdir));
+
+  const said = normalisePath(mark.gitdir);
+  const where = ABSOLUTE.test(said) ? said : resolvedAgainst(path, said);
+  const found = LINKED.exec(where);
+
   return found === null ? '' : found[1];
 }
 
@@ -111,7 +187,7 @@ function unknownProject(): ProjectIdentity {
 }
 
 function identified(path: string, mark: GitMark): ProjectIdentity {
-  const parent = parentOf(mark);
+  const parent = parentOf(path, mark);
   const key = parent === '' ? path : parent;
   return { key, label: lastSegment(key), full: key, reachable: mark.kind !== 'gone' };
 }
@@ -122,7 +198,21 @@ export function identityOf(raw: string, read: MarkReader): ProjectIdentity {
   return NO_IDENTITY.has(path) ? unknownProject() : identified(path, read(path));
 }
 
-/** Wraps a reader so a path is asked about once however many sessions share it. */
+/**
+ * Wraps a reader so a path is asked about once however many sessions share it.
+ *
+ * <p><b>Its LIFETIME is the point, and two code reviewers found that out the hard way.</b> Created
+ * inside the grouping, it memoised within one draw and threw the answers away — so every press of
+ * a language tab probed all 91 paths of the live corpus again, synchronously, on the extension
+ * host. 41 % of them do not exist, and one recorded UNC path on a sleeping server blocks the host
+ * until the filesystem answers. So the panel holds one of these for as long as the pairs it
+ * describes, and a filter press touches no disk at all.</p>
+ *
+ * <p>Which is also why there is no `identitiesOf` here any more: a map of identities keyed by the
+ * RESOLVED key cannot be looked up by the path a caller holds — a reviewer pointed out that this
+ * is exactly why the grouping had to iterate for itself — and a memoised reader is the honest
+ * shape of the same saving, because it answers the question the caller actually asks.</p>
+ */
 export function askedOnce(read: MarkReader): MarkReader {
   const held = new Map<string, GitMark>();
 
@@ -135,28 +225,6 @@ export function askedOnce(read: MarkReader): MarkReader {
 
     return fresh;
   };
-}
-
-/**
- * Every project a batch of paths belongs to, reading each distinct path at most once.
- *
- * <p>The draw this feeds already spends 468 ms tokenising 200 pairs (measured, story 1.2), and a
- * filesystem call per ROW would be the first thing to make that worse. The whole live corpus has 91
- * distinct paths and 10 identities, so in practice this is ten reads per panel.</p>
- */
-export function identitiesOf(
-  paths: readonly string[],
-  read: MarkReader,
-): ReadonlyMap<string, ProjectIdentity> {
-  const once = askedOnce(read);
-  const found = new Map<string, ProjectIdentity>();
-
-  for (const raw of paths) {
-    const one = identityOf(raw, once);
-    found.set(one.key, one);
-  }
-
-  return found;
 }
 
 function gitdirIn(said: string): string {

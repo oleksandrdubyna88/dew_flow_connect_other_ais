@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { GitMark, identitiesOf, identityOf, normalisePath, UNKNOWN_PROJECT } from '../projectIdentity';
+import { askedOnce, GitMark, identityOf, normalisePath, UNKNOWN_PROJECT } from '../projectIdentity';
 
 /**
  * Which sessions belong to the SAME project, decided without spawning anything.
@@ -98,6 +98,36 @@ test('a submodule INSIDE a worktree is its own project, not the worktree parent'
   assert.notEqual(one.key, 'd:/rsd/dew_flow_connect_other_ais');
 });
 
+test('a RELATIVE gitdir is resolved against the worktree that holds it', () => {
+  // A code reviewer found this: git writes a relative gitdir when `worktree.useRelativePaths` is
+  // on (2.48+) or `--relative-paths` was passed, and two worktrees in two different products can
+  // then carry the IDENTICAL line `gitdir: ../repo/.git/worktrees/wt`. Resolved as text, both
+  // answer `../repo` and land in one tab — the very merge this module exists to prevent, arriving
+  // through the door that was supposed to prevent it.
+  const read = marksFrom({
+    'd:/products/a/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
+    'd:/products/b/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
+  });
+
+  const a = identityOf('D:/products/a/wt', read);
+  const b = identityOf('D:/products/b/wt', read);
+
+  assert.equal(a.key, 'd:/products/a/repo');
+  assert.equal(b.key, 'd:/products/b/repo');
+  assert.notEqual(a.key, b.key, 'two products wrote the same nine characters and are not one project');
+});
+
+test('a relative gitdir joins its worktree to the same tab as the absolute form would', () => {
+  // The companion: resolving to SOMETHING unique would pass the test above while still splitting a
+  // worktree from its own main checkout.
+  const read = marksFrom({
+    'd:/rsd/_wt/wt-a': { kind: 'linked', gitdir: '../../dew_flow_x/.git/worktrees/wt-a' },
+    'd:/rsd/dew_flow_x': { kind: 'checkout' },
+  });
+
+  assert.equal(identityOf('D:/rsd/_wt/wt-a', read).key, identityOf('D:/rsd/dew_flow_x', read).key);
+});
+
 test('a submodule in a main checkout, whose gitdir git writes relative, is its own project', () => {
   const read = marksFrom({
     'd:/rsd/some_repo/vendor/thing': { kind: 'linked', gitdir: '../../.git/modules/vendor/thing' },
@@ -130,22 +160,31 @@ test('a relative or empty repo_path is one explicit unknown', () => {
   assert.equal(identityOf('.', read).label, 'Unknown project');
 });
 
-test('each distinct path is asked about ONCE however many sessions share it', () => {
+test('a memoised reader answers each distinct path once, and KEEPS answering it', () => {
   // The draw already spends 468 ms highlighting; the identity rule must not add a read per row.
+  //
+  // The second half is what two code reviewers caught: a cache built inside the grouping memoised
+  // within one draw and was thrown away, so every press of a language tab re-probed all 91 paths of
+  // the live corpus synchronously on the extension host. The saving only exists if the reader
+  // OUTLIVES the call, which is why it is the caller that wraps it.
   let asked = 0;
-  const read = (path: string): GitMark => {
+  const once = askedOnce((path) => {
     asked += 1;
+
     return path === 'd:/rsd/repo' ? { kind: 'checkout' } : { kind: 'gone' };
-  };
+  });
 
-  const found = identitiesOf(
-    ['D:\\rsd\\repo', 'd:/rsd/repo', 'D:/rsd/repo/', 'D:\\rsd\\other', '.', '.'],
-    read,
-  );
+  const keys = ['D:\\rsd\\repo', 'd:/rsd/repo', 'D:/rsd/repo/', 'D:\\rsd\\other', '.', '.']
+    .map((raw) => identityOf(raw, once).key);
 
-  assert.equal(asked, 2, 'six paths, two distinct normalised ones that exist on disk');
-  assert.equal(found.size, 3, 'repo, other, and the unknown');
-  assert.equal(found.get('d:/rsd/repo')?.label, 'repo');
+  assert.equal(asked, 2, 'six paths, two distinct normalised ones, and `.` is answered without asking');
+  assert.deepEqual([...new Set(keys)], ['d:/rsd/repo', 'd:/rsd/other', UNKNOWN_PROJECT]);
+
+  // Used again, as the panel uses it across repaints: still two.
+  identityOf('D:/rsd/repo', once);
+  identityOf('D:\\rsd\\other', once);
+
+  assert.equal(asked, 2, 'a reader held across draws must not probe the filesystem a second time');
 });
 
 test('normalising is separators, a trailing slash and case — and nothing else', () => {
