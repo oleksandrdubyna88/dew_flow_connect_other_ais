@@ -2,10 +2,21 @@
 //
 // WHY IT COULD NOT. `typescript-eslint` declares peer `typescript: ">=4.8.4 <6.1.0"` — true of
 // `latest` (8.70.0) and of the alpha canary alike, checked against the registry. This package was on
-// `typescript ^7.0.2`, so the parser refused to install and the largest TypeScript package in the
-// family had no linter at all. TypeScript 7 arrived as an ordinary `chore(deps)` bump (7c08d6a8),
-// not to satisfy anything the code needs: measured before moving it back, 5.9.3 typechecks this
-// source with ZERO errors and the whole suite passes, 3583 to 0.
+// `typescript ^7.0.2`, so the parser refused to install; forced past that with `--legacy-peer-deps`
+// it refuses at RUN time too, and by name: "typescript-eslint does not support TS 7.0", pointing at
+// issue #10940. So the largest TypeScript package in the family had no linter at all.
+//
+// WHY 6.0.3, AND NOT THE 5.9.3 THE FIRST MEASUREMENT CHOSE. TypeScript 7 arrived here as an ordinary
+// `chore(deps)` bump (7c08d6a8), and on the morning of 2026-09-18 this source typechecked clean on
+// 5.9.3 — measured, and the suite passed 3583 to 0. It stopped being true the same day:
+// `codeHighlight.ts` landed on main with `shiki@^4.4.3`, which is ESM-only (`"type": "module"`) and
+// is imported by subpath from a CommonJS module. `require()` of an ESM package is legal under TS 7's
+// semantics and not under 5.9.3, which reports TS1479 five times — and the page depends on the
+// SYNCHRONOUS `createHighlighterCoreSync`, so `await import()` would be a redesign of that feature
+// rather than a fix belonging in a CI change.
+//
+// `typescript@6.0.3` is the one version that does BOTH: it compiles this source with ZERO errors,
+// shiki included, and it satisfies the parser's `<6.1.0`. Measured: 3756 tests to 0.
 //
 // THE TYPE-AWARE RULE IS THE POINT. `no-floating-promises` cannot be had from a syntax-only config,
 // and it is the rule the hardening plan names. A plain `eslint` would have passed a gate having
