@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { answerToCopy, blockToCopy } from '../answerCopy';
+import {
+  answerToCopy, blockToCopy, stillAnswering, theAnswerControlCopies, theBlockControlCopies,
+  type Answered,
+} from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
 import { chatMessagesHtml } from '../chatPage';
 import { textCopier, type CopyPorts, type Said } from '../copyText';
@@ -468,4 +471,153 @@ test('two presses leave the clipboard holding the second one', async () => {
   await Promise.all([one, two]);
 
   assert.deepEqual(wrote, ['first', 'second'], 'the presses did not land in the order they were made');
+});
+
+/**
+ * THE GUARD, which until now had no test at all.
+ *
+ * <p>A code round added it: a press can be queued behind a slow write, and by the time its turn comes
+ * the message at that index may be a different one — a later answer, or the person's next question.
+ * The guard refuses instead of copying whatever is there now. It lived inline in `chatHooks.ts`,
+ * which imports `vscode` on line 3 and therefore runs under no test in this suite, so the guard was
+ * asserted by nothing. It is a named unit in this module now for exactly that reason.</p>
+ */
+
+/** What the thread hands the guard. The second field is only read when the first says `model`. */
+const ANSWER: Answered = { role: 'model', text: 'the answer that was there' };
+
+test('the answer that is still there is the one copied', () => {
+  const decision = stillAnswering(ANSWER, answerToCopy);
+
+  assert.equal(decision.kind, 'copy');
+  assert.equal(decision.kind === 'copy' ? decision.text : '', ANSWER.text,
+    'the control copied something other than the answer it was pressed on');
+});
+
+test('an answer that is gone is refused rather than guessed at', () => {
+  // The conversation was cleared, or the index is off the end: `messages[index]` is `undefined`.
+  const decision = stillAnswering(undefined, answerToCopy);
+
+  assert.equal(decision.kind, 'refused');
+  assert.match(decision.kind === 'refused' ? decision.said : '', /not on this page any more/u);
+});
+
+test('a press whose answer became the person\'s turn is refused', () => {
+  // The real race the guard exists for, and the case `undefined` does not cover: there IS a message
+  // at that index, it is simply no longer an answer. Copying it would put the person's own question
+  // on the clipboard under a control that says it copies a reply.
+  const decision = stillAnswering({ role: 'you', text: 'what about the other file?' }, answerToCopy);
+
+  assert.equal(decision.kind, 'refused',
+    'the control copied the person\'s own question as though it were an answer');
+});
+
+test('nothing is asked of the text of a message that is refused', () => {
+  // Short-circuiting is part of the guarantee, not an optimisation: `blockToCopy` walks the markdown
+  // and resolves a signature against it, and running that over a message that moved is how a stale
+  // block reaches a clipboard by a second road.
+  let asked = 0;
+
+  const decision = stillAnswering(undefined, (markdown) => {
+    asked += 1;
+
+    return answerToCopy(markdown);
+  });
+
+  assert.equal(decision.kind, 'refused');
+  assert.equal(asked, 0, 'the refused press still went and read the message it had just refused');
+});
+
+/**
+ * WHEN each control looks, which is the half no test could see.
+ *
+ * <p>The two copy controls resolve the message at deliberately different moments — the whole-answer
+ * one at the press, the block one inside the queued job — and until 2026-09-18 that difference was
+ * carried by the SHAPE of two expressions in `chatHooks.ts` and by nothing else. A plan reviewer put
+ * the consequence exactly: a block handler that captured `messages[index]` before its queued job ran
+ * would leave every `stillAnswering` case above green while the real control copied the wrong text.</p>
+ *
+ * <p>So each control has its OWN entry point, and they do not take the same arguments — a message
+ * against a thunk, and the block control owns the coordinates only it has. That is the code round's
+ * correction to the first attempt, which was two interchangeable moments: swapping those at the call
+ * sites would have compiled, and every case here would have stayed green. Neither of these fits the
+ * other's site.</p>
+ */
+
+/** A message list a test can move under a decision that has already been built. */
+function moving(first: Answered): { at: () => Answered | undefined; becomes: (next: Answered) => void } {
+  let here = first;
+
+  return { at: () => here, becomes: (next) => { here = next; } };
+}
+
+const LATER: Answered = { role: 'model', text: 'a later answer that arrived in between' };
+const DRAWN_FROM = [FENCE, 'the block the control was drawn for', FENCE].join('\n');
+const REWRITTEN = [FENCE, 'something else entirely', FENCE].join('\n');
+
+test('the whole-answer control copies what was there when it was PRESSED', () => {
+  // It sends no signature, so it has nothing to check a late lookup against: whatever it found when
+  // the queue reached it, it would copy. Resolving at the press is the only thing standing between a
+  // person and an answer they never pressed on.
+  const list = moving(ANSWER);
+
+  const decide = theAnswerControlCopies(list.at());
+  list.becomes(LATER);
+  const decision = decide();
+
+  assert.equal(decision.kind, 'copy');
+  assert.equal(decision.kind === 'copy' ? decision.text : '', ANSWER.text,
+    'the press copied an answer that arrived after it — the lookup was hoisted out of the press');
+});
+
+test('the block control checks its signature against what is there WHEN THE QUEUE REACHES IT', () => {
+  // The mirror image, and the proof is that the staleness check actually FIRES. Late resolution hands
+  // `blockToCopy` the rewritten answer, whose signature no longer matches the one the control carries,
+  // so it refuses. A control that had captured the message at the press would instead hand over the
+  // text it was drawn from, signature matching, and copy it happily — which is the defect.
+  const list = moving({ role: 'model', text: DRAWN_FROM });
+
+  const decide = theBlockControlCopies(list.at, 0, signatureOf(DRAWN_FROM));
+  list.becomes({ role: 'model', text: REWRITTEN });
+
+  assert.equal(decide().kind, 'refused',
+    'the queued press resolved against a message it had already captured, so the signature check '
+    + 'never saw the text that had replaced it');
+});
+
+test('and the same control copies the block when nothing moved under it', () => {
+  // The other half of the case above: refusing everything would satisfy it just as well, and would be
+  // a control that never works.
+  const list = moving({ role: 'model', text: DRAWN_FROM });
+
+  const decision = theBlockControlCopies(list.at, 0, signatureOf(DRAWN_FROM))();
+
+  assert.equal(decision.kind === 'copy' ? decision.text : '', 'the block the control was drawn for',
+    'the block control refused a block that had not changed at all');
+});
+
+test('an answer that went away before the queue reached it is refused, not copied', () => {
+  // The late lookup has to find the guard too, or looking late would be strictly worse than not.
+  let here: Answered | undefined = { role: 'model', text: DRAWN_FROM };
+
+  const decide = theBlockControlCopies(() => here, 0, signatureOf(DRAWN_FROM));
+  here = undefined;
+
+  assert.equal(decide().kind, 'refused', 'the queued press copied an answer that had gone');
+});
+
+test('both controls refuse in the same words', () => {
+  // The Definition of Done says the refusal sentence exists in one place. Asserting the two paths
+  // produce the SAME sentence says it behaviourally, where counting occurrences of a string literal
+  // in the source would pass just as happily on two copies that happen to agree today.
+  const now = theAnswerControlCopies(undefined)();
+  const late = theBlockControlCopies(() => undefined, 0, 'whatever')();
+
+  assert.equal(now.kind, 'refused');
+  assert.equal(late.kind, 'refused');
+  assert.equal(
+    now.kind === 'refused' ? now.said : 'one',
+    late.kind === 'refused' ? late.said : 'other',
+    'the two controls tell a person the same thing in different words',
+  );
 });
