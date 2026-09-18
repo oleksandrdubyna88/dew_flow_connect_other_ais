@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { answerToCopy, blockToCopy } from '../answerCopy';
+import { answerToCopy, blockToCopy, stillAnswering, type Answered } from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
 import { chatMessagesHtml } from '../chatPage';
 import { textCopier, type CopyPorts, type Said } from '../copyText';
@@ -468,4 +468,59 @@ test('two presses leave the clipboard holding the second one', async () => {
   await Promise.all([one, two]);
 
   assert.deepEqual(wrote, ['first', 'second'], 'the presses did not land in the order they were made');
+});
+
+/**
+ * THE GUARD, which until now had no test at all.
+ *
+ * <p>A code round added it: a press can be queued behind a slow write, and by the time its turn comes
+ * the message at that index may be a different one — a later answer, or the person's next question.
+ * The guard refuses instead of copying whatever is there now. It lived inline in `chatHooks.ts`,
+ * which imports `vscode` on line 3 and therefore runs under no test in this suite, so the guard was
+ * asserted by nothing. It is a named unit in this module now for exactly that reason.</p>
+ */
+
+/** What the thread hands the guard. The second field is only read when the first says `model`. */
+const ANSWER: Answered = { role: 'model', text: 'the answer that was there' };
+
+test('the answer that is still there is the one copied', () => {
+  const decision = stillAnswering(ANSWER, answerToCopy);
+
+  assert.equal(decision.kind, 'copy');
+  assert.equal(decision.kind === 'copy' ? decision.text : '', ANSWER.text,
+    'the control copied something other than the answer it was pressed on');
+});
+
+test('an answer that is gone is refused rather than guessed at', () => {
+  // The conversation was cleared, or the index is off the end: `messages[index]` is `undefined`.
+  const decision = stillAnswering(undefined, answerToCopy);
+
+  assert.equal(decision.kind, 'refused');
+  assert.match(decision.kind === 'refused' ? decision.said : '', /not on this page any more/u);
+});
+
+test('a press whose answer became the person\'s turn is refused', () => {
+  // The real race the guard exists for, and the case `undefined` does not cover: there IS a message
+  // at that index, it is simply no longer an answer. Copying it would put the person's own question
+  // on the clipboard under a control that says it copies a reply.
+  const decision = stillAnswering({ role: 'you', text: 'what about the other file?' }, answerToCopy);
+
+  assert.equal(decision.kind, 'refused',
+    'the control copied the person\'s own question as though it were an answer');
+});
+
+test('nothing is asked of the text of a message that is refused', () => {
+  // Short-circuiting is part of the guarantee, not an optimisation: `blockToCopy` walks the markdown
+  // and resolves a signature against it, and running that over a message that moved is how a stale
+  // block reaches a clipboard by a second road.
+  let asked = 0;
+
+  const decision = stillAnswering(undefined, (markdown) => {
+    asked += 1;
+
+    return answerToCopy(markdown);
+  });
+
+  assert.equal(decision.kind, 'refused');
+  assert.equal(asked, 0, 'the refused press still went and read the message it had just refused');
 });

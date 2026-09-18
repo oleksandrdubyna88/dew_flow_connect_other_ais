@@ -1101,6 +1101,23 @@ plan for this feature specified an end-to-end test that could not have been run,
 was found. The hook is now two delegations; `blockToCopy` and `answerToCopy` are pure and are what
 `answerCopy.test.ts` drives from the rendered markup all the way to a fake clipboard.
 
+**The guard in front of them moved there too, 2026-09-18 — it was the last part of this pair no test
+could reach.** *Is the message at this index still the answer the control was pressed on?* stood
+inline in both hooks, guard and refusal sentence duplicated, and the argument against that shape is
+the one the file's own warning funnel already makes: a second copy of a sentence a person reads is
+the same defect as a second copy of a sentence a person hears. It is `stillAnswering(said, copy)` in
+`answerCopy.ts` now — the caller passes what to do with the text, because the two controls differ
+only there. **What is deliberately NOT unified is WHEN each looks the message up**: the answer
+control resolves at press time, since it carries no signature and a press queued behind a slow write
+would otherwise copy whatever had replaced that index; the block control resolves inside the queued
+job, because its signature is checked against what it finds. Four cases in `answerCopy.test.ts`,
+three of them red when the guard is removed.
+
+SonarCloud had flagged both sites as **S6582** — `said === undefined || said.role !== 'model'` is
+exactly `said?.role !== 'model'`, which is what the extracted unit carries. The equivalence was
+measured rather than assumed: removing the narrowing makes `tsc` report `TS18048: 'said' is possibly
+'undefined'` at the `said.text` beneath it, and restoring it is what makes the compile green.
+
 **The signature covers the whole stored markdown of the message** — every byte of
 `messages[index].text`, never the selected block and never a count. A signature over the block alone
 would accept a control after a paragraph elsewhere in the answer changed, and the promise is that a

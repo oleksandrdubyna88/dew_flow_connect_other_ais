@@ -80,6 +80,48 @@ export function answerToCopy(markdown: string): CopyDecision {
   };
 }
 
+/** A message as this guard needs to see it: what turn it was, and what was said. */
+export interface Answered {
+  readonly role: string;
+  readonly text: string;
+}
+
+/**
+ * The answer a press named, if it is still that answer — and the refusal that says it is not.
+ *
+ * <p><b>Why this is a named unit and not the two lines it replaces.</b> It stood twice in
+ * `chatHooks.ts`, once per copy control, guard and refusal sentence both. The file's own funnel
+ * comment makes the argument against that shape better than this one can: <i>"a second inline
+ * `showWarningMessage` beside the first is how one of them ends up without the other's wording"</i>.
+ * Two copies of a sentence a person reads is the same defect as two copies of a sentence a person
+ * hears.</p>
+ *
+ * <p><b>And it is what makes the guard testable at all.</b> `chatHooks.ts` imports `vscode` on line
+ * 3, so nothing in it runs under `node --test`; the guard a code round added — refuse a press whose
+ * answer moved out from under it while the write queue was busy — therefore had no test, in a file
+ * with none. `testing.md` says to prefer making such logic testable over recording it as skipped,
+ * and one exported function in a module that already had a test file is the whole cost of that.</p>
+ *
+ * <p><b>The optional chain is the expression, not a tidy-up of it.</b> SonarCloud reported both sites
+ * as S6582 and `said === undefined || said.role !== 'model'` is exactly `said?.role !== 'model'` —
+ * measured, not assumed: removing the narrowing makes `tsc` say `TS18048: 'said' is possibly
+ * 'undefined'` at the `said.text` below, and restoring it is what makes the compile green. The chain
+ * also answers a `null` the longer form would have thrown on, which no caller can produce today.</p>
+ *
+ * <p>The caller passes what to do with the text rather than the text itself, because the two controls
+ * differ only there — the whole answer for one, one block of it for the other — and WHEN each looks
+ * the message up is deliberately different: the answer control resolves at press time because it
+ * carries no signature, the block control inside the queued job because it does.</p>
+ */
+export function stillAnswering(
+  said: Answered | undefined,
+  copy: (markdown: string) => CopyDecision,
+): CopyDecision {
+  return said?.role !== 'model'
+    ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+    : copy(said.text);
+}
+
 /** Where a copy control sits: which message, which block of it, and what it was drawn against. */
 export interface CopiedControl {
   readonly index: number;

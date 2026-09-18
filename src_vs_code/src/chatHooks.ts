@@ -15,17 +15,16 @@ import { chatInstruction, openingTurn, reinstructed, reinstructedHead, stillOurs
 import { chatSettingsFrom } from './chatSettings';
 import { carriedFrom, carryMark } from './chatCarry';
 import { imageFileName, imageRefusal, pastedImage } from './chatImage';
-import { acknowledgement, answerToCopy, blockToCopy } from './answerCopy';
+import { acknowledgement, answerToCopy, blockToCopy, stillAnswering } from './answerCopy';
 import { textCopier, type CopyDecision, type CopyReport } from './copyText';
 import { coaiDataDir } from './dataDir';
 import { writeFileAtomically } from './atomicFile';
 import { pictureDir } from './pictureStore';
 import { insideReally, promptsFrom } from './claudeSessions';
-import { createChatPanel, pushChatCopied, setChatDraft } from './chatPanel';
+import { createChatPanel, pushChatCopied, pushChatDraft, setChatDraft } from './chatPanel';
 import { notify } from './notify';
 import { retire } from './retireSession';
 import { withdraw } from './chatQueue';
-import { pushChatDraft } from './chatPanel';
 
 /**
  * Everything a chat page can ask of the host, and the three writers that put words in its composer.
@@ -527,23 +526,16 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         // signature and is refused if the answer changed under it; this one carries nothing, so a
         // press queued behind a slow write could otherwise copy whatever had replaced the message at
         // that index by the time it ran. (codex, the code round.)
-        const said = threads.get(id)?.messages[index];
-        const decision: CopyDecision = said === undefined || said.role !== 'model'
-          ? { kind: 'refused', said: 'That answer is not on this page any more.' }
-          : answerToCopy(said.text);
+        const decision: CopyDecision = stillAnswering(threads.get(id)?.messages[index], answerToCopy);
         tellThePage(warn, panels, id, index, undefined, sig, answerCopier.copy(() => decision));
       },
       onCopyBlock: (id, index, block, sig) => {
         // The SAME markdown the page was drawn from, walked by the SAME function that numbered the
         // control. Nothing the page sent becomes text: it named a position and echoed a signature,
         // and both are checked here against what this host holds.
-        tellThePage(warn, panels, id, index, block, sig, answerCopier.copy(() => {
-          const said = threads.get(id)?.messages[index];
-
-          return said === undefined || said.role !== 'model'
-            ? { kind: 'refused', said: 'That answer is not on this page any more.' }
-            : blockToCopy(said.text, block, sig);
-        }));
+        tellThePage(warn, panels, id, index, block, sig, answerCopier.copy(() =>
+          stillAnswering(threads.get(id)?.messages[index],
+            (markdown) => blockToCopy(markdown, block, sig))));
       },
   };
 }
