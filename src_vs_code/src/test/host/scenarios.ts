@@ -121,6 +121,8 @@ async function pressingCopiesNothing(act: () => void): Promise<string> {
   await new Promise((settle) => { setTimeout(settle, 1500); });
 
   return vscode.env.clipboard.readText();
+}
+
 /**
  * Wait for something to become true, or say what did not happen.
  *
@@ -232,6 +234,9 @@ const SCENARIOS: readonly Scenario[] = [
       assert.notEqual(held, ANSWER,
         'the block control copied the WHOLE answer, which is what being wired to the other control '
         + 'looks like from the clipboard');
+    },
+  },
+  {
     name: 'a changed setting reaches the file the server reads, written by the extension itself',
     run: async (): Promise<void> => {
       // THE FLOW THIS STORY OWNS, end to end in a real editor. Everything else about the mirror is
