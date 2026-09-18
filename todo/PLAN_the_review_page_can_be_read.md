@@ -43,8 +43,16 @@ is the test that says so, and it must stay green through every story here.
 ## Story 1 — the page can be read at all *(presentation only)*
 
 > Split into **1.1** (collapse, zoom, tone — **shipped 2026-09-17**), **1.2** (highlighting, after the
-> `.vsix` size measurement) and **1.3** (the diff). Four features and a measurement fork cannot pass
-> one review-fix-doc-commit cycle as a unit.
+> `.vsix` size measurement — **shipped 2026-09-17**) and **1.3** (the diff — **shipped 2026-09-18**).
+> Four features and a measurement fork cannot pass one review-fix-doc-commit cycle as a unit.
+>
+> **Story 1.3's own measurement changed its algorithm.** Anonymisation INVENTS differences: the
+> normaliser numbers placeholders in order of declaration, so a fix adding one line renumbers
+> everything below it, and a plain line diff marked **7** lines where **1** had changed. The
+> comparison therefore runs over masked names and the display keeps the real text — at the cost,
+> stated in the module, that a difference consisting only of an index is reported as no difference,
+> which cannot be told from a genuine change of variable because the skeleton no longer carries what
+> would distinguish them. Measured on a constructed pair; no real corpus was on the machine.
 
 Nothing new is fetched; this is rendering.
 

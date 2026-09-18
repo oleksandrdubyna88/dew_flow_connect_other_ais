@@ -1,4 +1,5 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
+import { pairDiff } from './lineDiff';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml } from './webviewHtml';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
@@ -121,6 +122,10 @@ function row(pair: ReviewPair, open: boolean): string {
   // the whole line was the button. A code reviewer (codex, UX) found it. They are spans rather
   // than divs because a `button` takes phrasing content: a `div` in there is invalid markup that
   // browsers merely tolerate.
+  // What differs, computed once per pair and handed to BOTH sides — the two panes must agree about
+  // which lines are opposite which, and two independent diffs would not have to.
+  const differs = pairDiff(pair.skeletonBefore, pair.skeletonAfter);
+
   return `<tr class="pair" data-row="${id}">
   <td class="pick"><input type="checkbox" data-pick="${id}"></td>
   <td class="what">
@@ -140,10 +145,10 @@ function row(pair: ReviewPair, open: boolean): string {
   <td>
     <div class="sides">
       <div class="side">
-        <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language)}
+        <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language, differs.before)}
       </div>
       <div class="side">
-        <div class="sideName">After</div>${highlight(pair.skeletonAfter, pair.language)}
+        <div class="sideName">After</div>${highlight(pair.skeletonAfter, pair.language, differs.after)}
       </div>
     </div>
   </td>

@@ -4,6 +4,7 @@ import typescript from '@shikijs/langs/typescript';
 import { createCssVariablesTheme, createHighlighterCoreSync, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
+import { type LineMark } from './lineDiff';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -200,15 +201,20 @@ function touch(key: string, html: string): string {
  * failure falls back to the same escaped text rather than to an empty row, because a row rendering
  * nothing is indistinguishable from a pair that was never collected.</p>
  */
-export function highlight(code: string, language: string): string {
+export function highlight(
+  code: string, language: string, marks: readonly LineMark[] = [],
+): string {
   const grammar = GRAMMARS[keyFor(language)];
   if (grammar === undefined) {
     // No cache entry: this path is a string concatenation, and caching it would spend the bound on
     // the blocks that cost nothing to make.
-    return plain(code, 'plain');
+    return plain(code, 'plain', marks);
   }
 
-  const key = `${grammar}::${code}`;
+  // The marks are PART of the key. They are not: the same skeleton diffed against a different
+  // counterpart is different markup, and a key that ignored them would serve the first pair's
+  // colouring to the second — a row confidently wrong about which of its lines changed.
+  const key = `${grammar}::${marks.join('')}::${code}`;
 
 
   const already = rendered.get(key);
@@ -219,7 +225,21 @@ export function highlight(code: string, language: string): string {
   try {
     tokenised += 1;
 
-    return remember(key, highlighter().codeToHtml(code, { lang: grammar, theme: THEME }));
+    return remember(key, highlighter().codeToHtml(code, {
+      lang: grammar,
+      theme: THEME,
+      // Shiki puts the class on the line's own node, so the diff rides ON TOP of the tokens
+      // without a string replace ever touching the markup — which is the one way to add a class
+      // per line that cannot cut a token or an entity in half.
+      transformers: [{
+        line(node, line) {
+          const mark = marks[line - 1];
+          if (mark !== undefined && mark !== 'same') {
+            this.addClassToHast(node, `dl-${mark}`);
+          }
+        },
+      }],
+    }));
   } catch (reason: unknown) {
     // NOT the same answer as an unknown language, which is the distinction two reviewers asked for
     // and they were right: both render uncoloured, and without this a person cannot tell "we do not
@@ -228,7 +248,7 @@ export function highlight(code: string, language: string): string {
     // this module is PURE — it cannot reach the funnel — and the row says it in the markup.
     console.warn(`[coai] the ${grammar} grammar could not colour a skeleton:`, reason);
 
-    return plain(code, 'failed');
+    return plain(code, 'failed', marks);
   }
 }
 
@@ -249,11 +269,13 @@ export function highlight(code: string, language: string): string {
  * deliberately. What remains unproven is that `highlight` routes a real grammar failure here, and
  * `research/module_tests.md` says so rather than leaving it to be assumed.</p>
  */
-export function plainBlock(code: string, why: 'plain' | 'failed'): string {
-  return plain(code, why);
+export function plainBlock(
+  code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [],
+): string {
+  return plain(code, why, marks);
 }
 
-function plain(code: string, why: 'plain' | 'failed'): string {
+function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = []): string {
   // A failure gets a line a PERSON can read. Two reviewers said the attribute alone is a difference
   // only a parser can see: uncoloured is uncoloured, so somebody scrolling past assumes "we do not
   // read this language" and never learns that a grammar broke on their corpus. It is inside the
@@ -262,7 +284,16 @@ function plain(code: string, why: 'plain' | 'failed'): string {
     ? '<span class="hlFailed">syntax highlighting failed for this block</span>'
     : '';
 
-  return `<pre class="shiki" data-highlight="${why}">${said}<code><span class="line">${escapeHtml(code)}</span></code></pre>`;
+  // Line by line, and joined by a real newline, exactly as Shiki emits them — so an uncoloured
+  // block still shows which lines differ, and one stylesheet dresses both.
+  const lines = code.split('\n').map((line, at) => {
+    const mark = marks[at];
+    const dl = mark !== undefined && mark !== 'same' ? ` dl-${mark}` : '';
+
+    return `<span class="line${dl}">${escapeHtml(line)}</span>`;
+  }).join('\n');
+
+  return `<pre class="shiki" data-highlight="${why}">${said}<code>${lines}</code></pre>`;
 }
 
 /**
@@ -301,6 +332,40 @@ export const HIGHLIGHT_CSS = `
   }
   pre.shiki code { font-family: inherit; }
   pre.shiki .line { display: block; }
+  /* What differs, the way the editor's own diff shows it — and through the editor's own diff
+     colours, which is the one family of variables a webview IS given for this. insertedLine
+     rather than insertedText: these mark whole lines, and the text variant is the tighter
+     highlight a character-level diff would use. The gutter letter is a ::before so it costs the
+     code no indentation and cannot be selected into a copy. */
+  pre.shiki .line[class*="dl-"] {
+    display: block; margin: 0 -6px; padding: 0 6px 0 0; border-radius: 2px;
+  }
+  pre.shiki .line[class*="dl-"]::before {
+    display: inline-block; width: 1.1em; opacity: .65; font-weight: 600;
+  }
+  pre.shiki .dl-added {
+    background: var(--vscode-diffEditor-insertedLineBackground,
+                    var(--vscode-diffEditor-insertedTextBackground, rgba(63, 185, 80, .15)));
+  }
+  pre.shiki .dl-added::before { content: "+"; }
+  pre.shiki .dl-removed {
+    background: var(--vscode-diffEditor-removedLineBackground,
+                    var(--vscode-diffEditor-removedTextBackground, rgba(248, 81, 73, .15)));
+  }
+  pre.shiki .dl-removed::before { content: "−"; }
+  /* The editor has no "changed line" colour of its own — a diff shows a rewrite as a removal
+     beside an addition — so this borrows the gutter's modified marker, which is the colour a
+     person already reads as "this line moved". */
+  pre.shiki .dl-changed {
+    background: color-mix(in srgb,
+      var(--vscode-editorGutter-modifiedBackground, #0c7d9d) 14%, transparent);
+  }
+  pre.shiki .dl-changed::before { content: "~"; }
+  /* A line with no mark keeps the gutter's width, or the code would step sideways wherever a
+     difference begins and the eye would follow the indentation instead of the change. */
+  pre.shiki .line:not([class*="dl-"])::before {
+    content: " "; display: inline-block; width: 1.1em;
+  }
   /* Said quietly: it explains an absence, and it must not shout over the code it is about. */
   .hlFailed {
     display: block; font-size: .8em; letter-spacing: .04em; text-transform: uppercase;
