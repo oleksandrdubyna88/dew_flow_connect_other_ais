@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- 1362 lines, over the 800 this package sets for NEW code.
+   The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
+   review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { NotificationsPanel } from './notificationsPanel';
 import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
@@ -97,9 +100,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // and the file would hold whichever write finished last while both reported success.
   const exportQueue = oneAtATime();
   // Declared before the panel so the hooks can reach it; assigned right after.
-  let roundsLog: RoundsLogPanel;
   let panelRef: PanelProvider;
-  roundsLog = new RoundsLogPanel({
+  const roundsLog = new RoundsLogPanel({
     onAnswer: async (id) => {
       const question = watcher.openQuestions.find((q) => q.id === id);
       if (question !== undefined) {

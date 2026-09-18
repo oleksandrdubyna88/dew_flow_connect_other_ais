@@ -249,7 +249,7 @@ function helpBody(
 }
 
 // One template literal — the page script — so it is one "function" only in the way TypeScript counts.
-// eslint-disable-next-line max-lines-per-function
+ 
 function helpScript(nonce: string, language: HelpLanguage, index: ReturnType<typeof searchIndex>): string {
   const ui = UI[language];
   const articles = Object.fromEntries(HELP_ARTICLES.map((a) => [a.id, articleHtml(a.id, language)]));

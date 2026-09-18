@@ -217,6 +217,18 @@ jobs:
         working-directory: src_vs_code
         run: npm ci
 
+      # Before the tests: a lint failure is read in a second and a suite failure in a minute. The
+      # config lives in the package, so this step says nothing about which rules are in force and
+      # cannot drift from what a developer runs locally.
+      #
+      # This package had no linter at all until now — `typescript-eslint` declares peer
+      # `typescript: ">=4.8.4 <6.1.0"` and the package was on 7.0.2, so the parser would not install.
+      # The compiler moved back to 5.9.3 in the same change, measured: zero typecheck errors, whole
+      # suite green.
+      - name: Lint
+        working-directory: src_vs_code
+        run: npm run lint
+
       - name: Test
         working-directory: src_vs_code
         run: npm test

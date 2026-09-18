@@ -98,7 +98,7 @@ function run(buttons: readonly Button[], phrases: readonly Phrase[] = PHRASES): 
     documentElement: { style: { setProperty: () => undefined } },
   };
   const script = pageScript(panelHtml(state(phrases), 'test-nonce'));
-  // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test. A scan of
+   
   // its text once passed over a syntax error that made every control in the panel dead.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(

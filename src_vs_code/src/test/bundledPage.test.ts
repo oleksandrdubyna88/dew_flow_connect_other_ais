@@ -836,7 +836,7 @@ test('a control the renderer drew, pressed on the shipped page, copies that bloc
     assert.strictEqual(command.kind, 'copyBlock', 'the host refused a message its own page produced');
 
     const wrote: string[] = [];
-    // eslint-disable-next-line no-await-in-loop
+     
     await textCopier({
       writeText: (text) => { wrote.push(text); return Promise.resolve(); },
       say: () => ({ dispose: () => undefined }),

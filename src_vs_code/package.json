@@ -543,7 +543,9 @@
         },
         "coai.alsoWatchDataDirectories": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "markdownDescription": "Data folders belonging to **other installations**, whose questions this window should also answer. A round that calls for a human writes its question into the data folder of whichever installation is running it — so a Claude Code session inside **WSL** writes into the WSL folder, and a Windows window watching only its own never shows the modal while that round blocks. Name the other folder here and its questions appear beside your own; the answer is written back next to the question, where the server that asked is looking. Only the questions are shared — no database is opened across the boundary. From a Windows window a WSL folder must be named the way Windows can reach it, `\\\\wsl.localhost\\<distro>\\home\\<user>\\.local\\share\\coai-mcp`; a path starting with `/` is refused and says so, because guessing which distribution you meant would mean watching a folder you never chose. *Where this window keeps its data* lists what is being watched and what could not be read."
         },
@@ -752,10 +754,22 @@
         "coai.consultants": {
           "type": "object",
           "default": {
-            "claude": { "vendor": "codex", "model": "" },
-            "codex": { "vendor": "claude", "model": "" },
-            "gemini": { "vendor": "codex", "model": "" },
-            "other": { "vendor": "codex", "model": "" }
+            "claude": {
+              "vendor": "codex",
+              "model": ""
+            },
+            "codex": {
+              "vendor": "claude",
+              "model": ""
+            },
+            "gemini": {
+              "vendor": "codex",
+              "model": ""
+            },
+            "other": {
+              "vendor": "codex",
+              "model": ""
+            }
           },
           "markdownDescription": "Who a stuck AI asks, by the kind of AI that is stuck. Edit it in the **Consultant** section of the panel. The shipped pairs never send a caller to itself — a model cannot see its own blind spot — but the same vendor is allowed as a deliberate choice, which is how you put a stronger model of your own assistant behind a weaker one.",
           "additionalProperties": {
@@ -971,6 +985,7 @@
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "npm run clean && tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
+    "lint": "eslint src",
     "test": "npm run compile && node scripts/run-tests.mjs",
     "test:host": "npm run compile && node scripts/run-host.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
@@ -989,13 +1004,17 @@
     "measure:consultant-skew": "npm run compile && node scripts/measure-consultant-skew.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.4.1",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.0.0",
     "c8": "^12.0.0",
     "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0"
   },
   "activationEvents": [
     "onStartupFinished"

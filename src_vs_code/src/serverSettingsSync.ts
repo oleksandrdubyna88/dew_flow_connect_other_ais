@@ -169,7 +169,9 @@ export class ServerSettingsSync {
     // epic was 0.4 seconds wide, which is four orders of magnitude more than this section holds.
     // Raised three times on this plan's own round.
     let outcome: SyncOutcome = 'failed';
-    let entered = false;
+    // Not initialised, for the reason the `catch` gives: it returns 'failed' rather than falling
+    // through, so nothing can read a placeholder.
+    let entered: boolean;
     try {
       entered = await this.critical(async () => {
         if (await this.wouldOverwriteANewerBuild()) {

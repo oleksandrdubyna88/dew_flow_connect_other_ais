@@ -351,7 +351,6 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     body: { style },
   };
 
-  // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test.
   const body = new Function('acquireVsCodeApi', 'document', 'window', pageScript(html));
   body(
     () => ({ postMessage: (m: Posted) => posted.push(m) }),

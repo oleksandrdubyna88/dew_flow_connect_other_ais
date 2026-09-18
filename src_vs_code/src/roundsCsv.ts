@@ -36,9 +36,13 @@ const BOM = '﻿';
  * on the plan round. A leading newline does the same thing — `"\n=HYPERLINK(…)"` — which is why the
  * skipped class covers the control characters as well as spaces.</p>
  */
+// The control characters ARE the subject here: a cell that begins with one still reaches a
+// spreadsheet as a formula, so the guard has to name them.
+// eslint-disable-next-line no-control-regex -- deliberate, see above
 const FORMULA = /^[\s\u0000-\u001f\u00a0\u200b-\u200d\u2060\ufeff]*[=+\-@|%]/;
 
 /** A cell BEGINNING with a control character is quoted as text whatever follows it. */
+// eslint-disable-next-line no-control-regex -- same reason as FORMULA above.
 const LEADING_CONTROL = /^[\u0000-\u001f]/;
 
 /**

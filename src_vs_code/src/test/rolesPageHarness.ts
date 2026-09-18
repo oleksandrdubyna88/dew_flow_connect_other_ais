@@ -47,6 +47,9 @@ export class Node {
     const exact = /^\[data-([a-z-]+)="([^"]*)"\]$/.exec(selector);
     const any = /^\[data-([a-z-]+)\]$/.exec(selector);
     const key = camel((exact ?? any)?.[1] ?? '');
+    // Walking up a DOM chain from this node IS the operation: the loop variable starts at `this`
+    // and is reassigned to each parent, which is not an alias kept around.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- deliberate, see above
     for (let at: Node | undefined = this; at !== undefined; at = at.parent) {
       const held = at.dataset[key];
       if (held !== undefined && (exact === null || held === exact[2])) {
@@ -114,7 +117,7 @@ export function runRolesPage(
   };
 
   const script = pageScript(rolesHtml(state, 'test-nonce'));
-  // eslint-disable-next-line no-new-func -- the shipped script is the thing under test, which is the
+   
   // whole point: a scan of its text cannot tell a matching selector from one that matches nothing.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(
