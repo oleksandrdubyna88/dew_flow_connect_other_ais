@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { askedOnce, GitMark, identityOf, normalisePath, UNKNOWN_PROJECT } from '../projectIdentity';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { askedOnce, GitMark, identityOf, normalisePath, readGitMark, UNKNOWN_PROJECT } from '../projectIdentity';
 
 /**
  * Which sessions belong to the SAME project, decided without spawning anything.
@@ -192,4 +196,50 @@ test('normalising is separators, a trailing slash and case — and nothing else'
   assert.equal(normalisePath('D:/rsd//A'), 'd:/rsd/a', 'a doubled separator is one');
   assert.equal(normalisePath('/'), '/', 'a root is not normalised away to nothing');
   assert.equal(normalisePath('d:/rsd/repo'), 'd:/rsd/repo', 'an already-normal path is untouched');
+});
+
+
+/**
+ * The real filesystem reader, against a real directory.
+ *
+ * <p>Every test above injects a table, which is what makes the RULE testable — and left the one
+ * function that actually reads a disk unexercised. Its docblock makes three claims, so all three are
+ * checked here rather than trusted: a `.git` directory is a checkout, a `.git` file is a linked
+ * worktree whose gitdir is the text after `gitdir: `, and anything unreadable answers the same as
+ * absent, because both mean the identity could not be learned.</p>
+ */
+test('the real reader tells a checkout from a worktree from nothing at all', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coai-identity-'));
+
+  try {
+    // A main checkout: `.git` is a directory.
+    const main = join(root, 'main');
+    mkdirSync(join(main, '.git'), { recursive: true });
+    assert.deepEqual(readGitMark(main), { kind: 'checkout' });
+
+    // A linked worktree: `.git` is a file, and the gitdir is the text after the marker. Written
+    // with a trailing newline, as git writes it, because a gitdir with a `\n` on the end resolves
+    // to nothing.
+    const linked = join(root, 'wt');
+    mkdirSync(linked, { recursive: true });
+    writeFileSync(join(linked, '.git'), 'gitdir: D:/rsd/repo/.git/worktrees/wt\n', 'utf8');
+    assert.deepEqual(readGitMark(linked), { kind: 'linked', gitdir: 'D:/rsd/repo/.git/worktrees/wt' });
+    assert.equal(identityOf(linked, readGitMark).key, 'd:/rsd/repo',
+      'the whole chain, through the real filesystem');
+
+    // A directory that is not a checkout, and one that does not exist — 41 % of the live corpus.
+    mkdirSync(join(root, 'plain'), { recursive: true });
+    assert.deepEqual(readGitMark(join(root, 'plain')), { kind: 'gone' });
+    assert.deepEqual(readGitMark(join(root, 'never-existed')), { kind: 'gone' });
+
+    // A `.git` file with no marker in it: readable, and says nothing. Not an error — the identity
+    // simply cannot be learned, so it falls back to the path.
+    const odd = join(root, 'odd');
+    mkdirSync(odd, { recursive: true });
+    writeFileSync(join(odd, '.git'), 'something else entirely', 'utf8');
+    assert.deepEqual(readGitMark(odd), { kind: 'linked', gitdir: '' });
+    assert.equal(identityOf(odd, readGitMark).key, normalisePath(odd));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
