@@ -103,9 +103,13 @@ async function pressing(act: () => void): Promise<string> {
 /**
  * The same, for a press that must reach the clipboard NOT AT ALL.
  *
- * <p>Waiting for a change cannot prove an absence, so this waits a fixed moment and reads once. The
- * window is generous next to a copy that lands in tens of milliseconds, and short enough that a
- * refusal does not cost five seconds of a run.</p>
+ * <p>Waiting for a change cannot prove an absence, so each attempt waits a fixed moment and reads
+ * once. The window is generous next to a copy that lands in tens of milliseconds, and short enough
+ * that a refusal does not cost five seconds of a run.</p>
+ *
+ * <p>It answers with the SENTENCE to fail with, or the empty string when nothing leaked — rather than
+ * with the clipboard's contents — because the three outcomes are not one value: nothing happened, the
+ * guard leaked, and somebody else wrote. A caller holding a string of text cannot tell them apart.</p>
  *
  * <p><b>And the scenario that uses this runs FIRST, which is part of the test rather than tidiness.</b>
  * `copyText.ts` re-asserts the newest text after a write it was overtaken during — a corrective write,
@@ -115,12 +119,38 @@ async function pressing(act: () => void): Promise<string> {
  * is refused writes nothing at all, so with nothing copied before it there is no corrective write in
  * flight to race.</p>
  */
-async function pressingCopiesNothing(act: () => void): Promise<string> {
-  await vscode.env.clipboard.writeText(UNTOUCHED);
-  act();
-  await new Promise((settle) => { setTimeout(settle, 1500); });
+async function pressingCopiesNothing(act: () => void, mustNotBe: string): Promise<string> {
+  // THREE ATTEMPTS, because the clipboard is one per MACHINE and this is the only scenario asserting
+  // that nothing reached it. Any write by anyone inside the window breaks that — a clipboard manager,
+  // a person pressing Ctrl+C, or a second `npm run test:host` from another checkout, which is what
+  // actually happened. Measured 2026-09-18: one run passes and two pass; THREE concurrent runs
+  // reproduce it, and this is the only one of the three clipboard scenarios that breaks, because the
+  // other two wait for a change they can RECOGNISE and this one waited for a change that must not
+  // come from anywhere.
+  //
+  // So interference is RETRIED and a leak is not. A refused press writes nothing, so a re-press costs
+  // nothing and the next attempt usually lands in a quiet window. What must never be retried away is
+  // the real defect, which is why the answer's own text fails on sight.
+  let interference = '';
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await vscode.env.clipboard.writeText(UNTOUCHED);
+    act();
+    await new Promise((settle) => { setTimeout(settle, 1500); });
+    const held = await vscode.env.clipboard.readText();
+    if (held === UNTOUCHED) {
+      return '';
+    }
+    if (held === mustNotBe) {
+      return 'a press whose answer had gone still reached the clipboard, so the guard is not in the path';
+    }
+    interference = held.slice(0, 50);
+  }
 
-  return vscode.env.clipboard.readText();
+  // Three windows in a row spoiled. NOT passed — a scenario that cannot observe anything must not
+  // report success, which is what a green tick over nothing looks like. Named so the reader re-runs it
+  // alone instead of going to look at the guard.
+  return 'could not be measured here: something outside this run wrote to the clipboard in all three '
+    + `attempts (${interference}). Another test:host, or a clipboard manager. Run it alone.`;
 }
 
 /**
@@ -185,12 +215,13 @@ const SCENARIOS: readonly Scenario[] = [
       ]);
       const hooks = conversationHooks(new ChatPanels());
 
-      const held = await pressingCopiesNothing(() => {
+      // The second argument is what a LEAKING guard would have put there — the person's own turn.
+      // Anything else on the clipboard came from outside this run; see `pressingCopiesNothing`.
+      const wrong = await pressingCopiesNothing(() => {
         hooks.onCopyAnswer?.(id, 1, signatureOf(ANSWER));
-      });
+      }, 'and one more thing');
 
-      assert.equal(held, UNTOUCHED,
-        'a press whose answer had gone still reached the clipboard, so the guard is not in the path');
+      assert.equal(wrong, '', wrong);
     },
   },
   {
