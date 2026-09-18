@@ -1,5 +1,52 @@
 # Changelog
 
+## Server 0.29.0 — 2026-09-18
+
+**A consultation can END now, and say how it went.** Nine tools and not one of them closed a
+consultation: it sat at `open` until a sweep took it, and `ConsultationStatuses.Closed` already
+existed but only a spent budget or an idle timeout ever reached it. `Reason` beside it answers why
+a consultation STOPPED, not whether it WORKED — so one that did its job and one that was useless
+ended identically.
+
+`close_consult` is the tenth tool, and `Outcome` is the second question, kept apart from the status
+for exactly that reason. `ConsultationClosing` decides who may answer it: `lapsed` is the server’s
+own word and not a verdict, a verdict is immutable once written while an absent one may still be
+filled, and a FAILED consultation takes none. The close records how it ended **under the same lock
+a turn takes** — a close that read the record outside it could overwrite an answer being written at
+that moment. Both automatic paths now write `lapsed` through one `Lapse`, so the sweep and the
+spent budget cannot disagree about the word.
+
+**And the panel can reach it.** The extension never speaks MCP to this binary; it drives one-shot
+modes selected from `args[0]` before any transport opens, the same door `--log`, `--findings-many`
+and `--providers` use. So the close control on a consultation card reaches the server through
+`--close-consult` or through nothing at all. That door is the PERSON’s and is deliberately not
+subject to the caller check: it runs on their own machine against their own data directory.
+
+A consultation’s tokens have a price attached now, and the cost column is wired — it was read by a
+page that nothing ever filled.
+
+**The review page can be read.** A `coai-bugs` pair says where it came from, what the reviewers
+said about it and how complex it is. The care in that story is the boundary it does not cross:
+`Pairs()` and `Sendable()` selected the same nine columns into the same record, and the upload
+reads that record — so widening it would have routed reasons, fixes and real paths through the
+type that leaves this machine. There is a page-facing `ReviewPair` instead, read by column NAME
+through a helper extracted from `BugsQuery` rather than copied, while `Sendable()` still reads by
+ordinal and is byte-identical. The extension can SEND a pair, and a send is something the database
+remembers; a lease is taken rather than asked for, so two windows cannot both claim one.
+
+**The privacy promise was false, and the DATA changed rather than the wording.** `quarantine.
+received_utc` is an exact ISO-8601 instant and it sits beside `key_id` — so for any pair awaiting
+review the file could be asked precisely which day and hour a contributor had worked, while the
+document said “no date, no clock time, no history”. `corpus` carries no `key_id`, so its
+`promoted_utc` is attributable to nobody; a quarantine row was.
+
+**One migration runner for both databases.** `RoundsDb.Migrate` — ordered steps, `user_version`,
+one transaction per step and its version bump, WAL and `busy_timeout` set outside it — is now
+`CoaiMcp.Storage`, referenced by `coai-mcp` and by `coai-bugs`. Deliberately not in `CoaiMcp.Core`,
+which is declared pure and holds that boundary by review. The gate ruled against a second copy the
+day the second database reached a host: two runners drift, and the one that drifts is the one
+nobody re-reads.
+
 ## Server 0.28.0 — 2026-09-17
 
 **The gate now says at the tool when to call the consultant, and the consultant is asked to prove
