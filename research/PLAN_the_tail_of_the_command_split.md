@@ -967,6 +967,18 @@ cost the last two findings.
 > gate caught that before it became the next reader’s false negative. The `files=` and `components=`
 > parameters are ignored on this endpoint — filter by rule server-side, or paginate.
 >
+> **The closure, measured 2026-09-18 against `main` after #387 merged**, with that command:
+>
+> | rule | `total` | returned | in `chatHooks.ts` |
+> |---|---|---|---|
+> | `typescript:S6582` | 17 | 17 | **none** |
+> | `typescript:S3863` | 15 | 15 | **none** |
+>
+> `total` equals `returned` in both, so nothing is hiding on a second page — which is the check
+> this paragraph exists to demand of itself. The same query before the fix listed `chatHooks.ts`
+> lines 531 and 543 for `S6582` and 24 and 28 for `S3863`. The seventeen and fifteen that remain
+> are in other files and were never in this plan’s six.
+>
 > One call, filtered to the rule, named both — `chatHooks.ts` lines 531 and 543, `typescript:S6582`,
 > `OPEN`. (Its `files=` / `components=` filters are ignored on this endpoint; fetch and filter
 > client-side.)
