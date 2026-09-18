@@ -288,6 +288,21 @@ export interface PlacedRecord {
 }
 
 /**
+ * What one backwards read found, and whether it could look at all.
+ *
+ * <p>`readable` is the same distinction `Counted` carries, in the other reader: a MISSING ledger is
+ * an ordinary first run and reads as empty-and-readable, while a ledger that is there and will not
+ * answer is a fact the page has to say rather than render as an empty table. Without it a
+ * permission error looked exactly like a fresh install. (CodeRabbit, on the pull request.)</p>
+ */
+export interface Placed {
+  readonly records: readonly PlacedRecord[];
+  readonly start: number;
+  readonly end: number;
+  readonly readable: boolean;
+}
+
+/**
  * The newest records, each with the byte offset of its own line, and the range they came from.
  *
  * <p><b>Offsets, because the watermark is written in them.</b> An acknowledgement says "this window
@@ -306,8 +321,11 @@ export async function readNewestPlaced(
   path: string,
   limit: number,
   windowBytes: number = WINDOW,
-): Promise<{ readonly records: readonly PlacedRecord[]; readonly start: number; readonly end: number }> {
-  const nothing = { records: [], start: 0, end: 0 };
+): Promise<Placed> {
+  // READABLE is the default, and a MISSING file keeps it: a first run is not a failure. Only a
+  // ledger that is there and would not answer flips it.
+  const nothing = { records: [], start: 0, end: 0, readable: true };
+  const broken = { records: [], start: 0, end: 0, readable: false };
   if (limit <= 0) {
     return nothing;
   }
@@ -318,6 +336,12 @@ export async function readNewestPlaced(
   } catch (reason: unknown) {
     if (!missingRatherThanBroken(reason)) {
       console.error('ConnectOtherAIs: the notifications ledger exists but could not be opened', reason);
+
+      // A permission error, a share that stopped answering, a directory where the file should be.
+      // Returning `nothing` here made the PAGE render an empty ledger for a ledger it could not
+      // read — the same clean zero the count used to answer, in the other reader, and the one thing
+      // this whole feature exists to stop. (CodeRabbit, on the pull request.)
+      return broken;
     }
 
     return nothing;
@@ -375,6 +399,15 @@ export async function readNewestPlaced(
     }
 
     return placeThem(kept, offset + firstNewline + 1, limit);
+  } catch (reason: unknown) {
+    // The WHOLE walk, not only the open — the same lesson `countSince` learned. On Windows a
+    // directory where a file should be opens cleanly and fails at the first read, and on a share the
+    // failure can arrive at any window. Without this the read THREW past the page's draw, which logs
+    // it and leaves the window on the waiting page for ever; saying "could not be read" is the
+    // answer the rest of this feature gives.
+    console.error('ConnectOtherAIs: the notifications ledger could not be read', reason);
+
+    return broken;
   } finally {
     await handle.close();
   }
@@ -399,7 +432,7 @@ function placeThem(
   lines: readonly string[],
   from: number,
   limit: number,
-): { readonly records: readonly PlacedRecord[]; readonly start: number; readonly end: number } {
+): Placed {
   const placed: PlacedRecord[] = [];
   let at = from;
   for (const line of lines.slice(0, -1)) {
@@ -414,6 +447,9 @@ function placeThem(
   const newest = placed.slice(-limit);
 
   return {
+    // It read. Whether the ledger could be OPENED is decided by the caller above; what
+    // reaches here has already been read off the disk.
+    readable: true,
     records: newest,
     // `at` is now just past the last complete newline, which is the furthest an acknowledgement may
     // ever reach. `start` falls back to it when nothing was kept, so an empty snapshot acknowledges

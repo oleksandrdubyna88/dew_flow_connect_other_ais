@@ -175,7 +175,10 @@ export class NotificationsPanel {
   private async oneLedger(path: string, deadline: number): Promise<LedgerRead> {
     const read = await orNothing(readNewestPlaced(path, PAGE_LOADS), deadline - Date.now());
 
-    return read === undefined ? UNREADABLE_LEDGER : { ...read, readable: true };
+    // The reader says whether it could look; this only adds whether it answered in time. It used
+    // to assert `readable: true` for anything that returned, so a permission error rendered as an
+    // empty ledger. (CodeRabbit, on the pull request.)
+    return read ?? UNREADABLE_LEDGER;
   }
 
   /** Both ledgers, merged, grouped, and what of them has been seen. */
