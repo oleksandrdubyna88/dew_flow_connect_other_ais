@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { CUSTOM_ROLES_SINCE, type RolesPageState } from '../rolesPage';
 import { RESULT_STAGE, type RoleRow } from '../roles';
+import { STOOD_DOWN } from '../roleDeletion';
 import { Node, type Page, runRolesPage } from './rolesPageHarness';
 
 /**
@@ -55,6 +56,51 @@ const state = (over: Partial<RolesPageState> = {}): RolesPageState => ({
 function run(over: Partial<RolesPageState> = {}): Page {
   return runRolesPage(state(over));
 }
+
+// ---------- the deletions the server has not been told about ----------
+
+const stuck = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  roleId: 'Role2',
+  name: 'Role 2',
+  promptIds: ['role2-general'],
+  askedAt: '2026-09-18T12:00:00.000Z',
+  nonce: 'n1',
+  reason: 'the settings could not be written',
+  failedAt: '2026-09-18T12:00:01.000Z',
+  ...over,
+});
+
+test('pressing Finish the deletion anyway posts it for THAT role', () => {
+  // RUN, not read. The first version of this asserted that `data-finish="Role2"` appears in the
+  // markup, and both button handlers could have been deleted while it stayed green — which is the
+  // operator ruling this repository has: a webview page is tested by RUNNING it. (codex, the code
+  // round, Blocking.)
+  const page = runRolesPage(state({ stranded: [stuck()] } as never));
+  const pressed = new Node({ finish: 'Role2' }, 'BUTTON');
+
+  page.fire('click', pressed);
+
+  assert.deepEqual(page.posted, [{ type: 'finishDeletion', id: 'Role2' }],
+    'the control is drawn and pressing it reaches nobody');
+});
+
+test('pressing Reload Window posts the reload, and nothing about a role', () => {
+  const page = runRolesPage(state({ stranded: [stuck({ reason: STOOD_DOWN })] } as never));
+
+  page.fire('click', new Node({ reload: '1' }, 'BUTTON'));
+
+  assert.deepEqual(page.posted, [{ type: 'reloadWindow' }]);
+});
+
+test('a press somewhere else in the section posts nothing at all', () => {
+  // The companion every delegated handler needs: a listener on the document that answered every
+  // press would post on the name beside the buttons just as happily.
+  const page = runRolesPage(state({ stranded: [stuck()] } as never));
+
+  page.fire('click', new Node({}, 'B'));
+
+  assert.deepEqual(page.posted, []);
+});
 
 // ---------- the buttons ----------
 

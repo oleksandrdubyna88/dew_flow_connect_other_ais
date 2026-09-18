@@ -276,6 +276,78 @@ const SCENARIOS: readonly Scenario[] = [
       );
     },
   },
+  {
+    name: 'a deletion the mirror carries takes the prompt text with it, in a real host',
+    run: async (): Promise<void> => {
+      // The flow this story owns, driven where it actually lives. Everything decidable about a
+      // deletion is a value and is RUN against a map and an injected clock; what no value can
+      // answer is whether the REAL mirror, in a REAL editor, tells the REAL coordinator — the
+      // configuration listener, the schedule, the terminal callback, the claim on a real
+      // filesystem, and the unlink.
+      //
+      // What it does NOT drive is the webview press, and the FAILURE path. A stood-down mirror
+      // inside a real host needs a second build's stamp in the settings file, and that is a
+      // scenario of its own.
+      const home = process.env['COAI_DATA_DIR'] ?? '';
+
+      assert.ok(home.length > 0, 'the launcher did not give this host a data directory of its own');
+      const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
+
+      assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+      await extension.activate();
+
+      const role = 'HostRole';
+      const prompt = path.join(home, 'prompts', 'hostrole-general.md');
+      const tombstone = path.join(home, 'deletions', `${role}.json`);
+      const settings = path.join(home, 'settings.json');
+      const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
+
+      fs.mkdirSync(path.dirname(prompt), { recursive: true });
+      fs.mkdirSync(path.dirname(tombstone), { recursive: true });
+      fs.writeFileSync(prompt, 'Prose a person wrote.', 'utf8');
+      fs.writeFileSync(tombstone, JSON.stringify({
+        roleId: role,
+        name: 'A host role',
+        promptIds: ['hostrole-general'],
+        askedAt: new Date().toISOString(),
+        nonce: 'scenario',
+        reason: '',
+        failedAt: '',
+      }), 'utf8');
+
+      try {
+        // The row goes in first, so the payload the mirror carries mentions it and the deletion is
+        // refused — which is the guard, exercised rather than assumed.
+        await config().update('roles', [{
+          id: role,
+          name: 'A host role',
+          stage: 'code',
+          programmingTask: true,
+          active: false,
+          prompts: [{ id: 'hostrole-general', label: 'General', purpose: '' }],
+        }], vscode.ConfigurationTarget.Global);
+        await until(
+          () => fs.existsSync(settings) && fs.readFileSync(settings, 'utf8').includes(role),
+          'the role never reached the file the server reads, so nothing below is about a deletion',
+        );
+
+        assert.ok(fs.existsSync(prompt),
+          'the text was deleted while the server still had the role, which is the incident itself');
+
+        // And now the removal: the row leaves, the mirror carries it, and the coordinator is told.
+        await config().update('roles', [], vscode.ConfigurationTarget.Global);
+        await until(
+          () => !fs.existsSync(prompt),
+          'the mirror carried the removal and the prompt text was never deleted',
+        );
+        await until(() => !fs.existsSync(tombstone), 'the deletion finished and left its tombstone behind');
+      } finally {
+        await config().update('roles', undefined, vscode.ConfigurationTarget.Global);
+        fs.rmSync(prompt, { force: true });
+        fs.rmSync(tombstone, { force: true });
+      }
+    },
+  },
 ];
 
 /**

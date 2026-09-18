@@ -312,8 +312,14 @@ test('a new role does not take an id whose deletion has not finished', () => {
   // still there until the mirror carries the removal, so a new role taking a freed id opens with a
   // stranger's budget. That is what the 2026-09-16 incident's own role would have handed the next
   // one called the same thing.
-  const mine = [{ id: 'Reviewer', name: 'Reviewer', stage: 'code', programmingTask: true, active: true,
-    prompts: [] }] as unknown as Parameters<typeof rowsAfter>[0];
+  const mine: readonly RoleRow[] = [{
+    id: 'Reviewer',
+    name: 'Reviewer',
+    stage: RESULT_STAGE,
+    programmingTask: true,
+    active: true,
+    prompts: [],
+  }];
 
   const free = rowsAfter(mine, { kind: 'add' });
   const first = free.kind === 'rows' ? free.rows[free.rows.length - 1]?.id ?? '' : '';

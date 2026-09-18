@@ -42,11 +42,11 @@ test('the schedule is handed the deletions, and it is the SETTLED seat it is han
 test('activation SWEEPS what a dead host left behind, and does not finish it there', () => {
   const host = source('extension.ts');
 
-  assert.match(host, /void roleDeletions\(\)\.sweep\(\)/u,
+  assert.match(host, /void theDeletions\.sweep\(\)/u,
     'nothing resumes a deletion interrupted by a crash, so its prompts are orphaned for ever');
   // The other half, and it is the one a careless fix gets wrong: nothing has been CARRIED at
   // activation, so a sweep that finished deletions there would delete text the server still needs.
-  assert.doesNotMatch(host, /roleDeletions\(\)\.settled\(true/u,
+  assert.doesNotMatch(host, /\.settled\(true/u,
     'something tells the deletions a write landed without the mirror having said so');
 });
 
@@ -72,13 +72,24 @@ test('the outcome is translated where the host is, and the schedule stays ignora
     + 'compares against a different string');
 });
 
-test('the roles page reaches the same deletions the host sweeps', () => {
-  // One coordinator per window, or the page shows the tombstones of a store nothing writes.
-  const panel = source('rolesPanel.ts');
-
-  assert.match(panel, /export function roleDeletions\(\): RoleDeletions \{\s*deletions \?\?=/u,
+test('the roles page reaches the same deletions the host sweeps, from the same module', () => {
+  // One coordinator per window, or the page shows the tombstones of a store nothing writes. And it
+  // does NOT live in the panel: `extension.ts` reaches for it at activation and on every mirror
+  // outcome, and making background work import the webview module inverts the layering and pins the
+  // page into the activation path of a window nobody opened the Roles tab in. (antigravity, the code
+  // round.)
+  assert.match(source('roleDeletionsHost.ts'),
+    /export function roleDeletions\(context: vscode\.ExtensionContext\): RoleDeletions \{\s*deletions \?\?=/u,
     'the coordinator is rebuilt per call, so its store, clock and reporter differ between the page '
     + 'and the host that drives it');
-  assert.match(panel, /stranded: await roleDeletions\(\)\.stranded\(\)/u,
+  assert.match(source('rolesPanel.ts'), /stranded: await roleDeletions\(side\(\)\)\.stranded\(\)/u,
     'the page is drawn without the stranded deletions, so a tombstone that cannot clear is invisible');
+  // The panel itself is a legitimate import — `extension.ts` registers the command that opens it.
+  // What must not come from there is the COORDINATOR, which is what pinned the page into the
+  // activation path.
+  const fromPanel = /import \{([^}]*)\} from '\.\/rolesPanel';/u.exec(source('extension.ts'));
+
+  assert.ok(fromPanel !== null, 'the panel import is gone entirely, so this guard checks nothing');
+  assert.ok(!(fromPanel[1] ?? '').includes('roleDeletions'),
+    'the coordinator is imported from the webview panel again, which is the layering this moved');
 });

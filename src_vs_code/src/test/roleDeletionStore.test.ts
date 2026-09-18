@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -78,6 +79,64 @@ test('a file that does not parse strands ONE deletion, never all of them', async
 
     assert.deepEqual((await store.all()).map((one) => one.roleId), ['Role2'],
       'one unreadable entry took the readable ones with it, so four deletions wait on a fifth');
+  } finally {
+    held.dispose();
+  }
+});
+
+test('a claim is won by exactly one, and refused for a nonce that has moved on', async () => {
+  // The rename is the only thing a filesystem does atomically, and it is what stands between two
+  // windows and a deleted role's text. A read followed by a delete is two operations with an await
+  // between them; both windows pass the read. (codex, the code round, Blocking.)
+  const held = inATempDir();
+  try {
+    const store = tombstonesIn(() => held.dir);
+
+    await store.put(ONE);
+
+    assert.equal(await store.claim('Role2', 'n1'), true, 'the first claimant did not get it');
+    assert.equal(await store.claim('Role2', 'n1'), false, 'a second window claimed it as well');
+    // And the claimed deletion is still outstanding, because a window that dies holding a claim
+    // leaves work that has to finish.
+    assert.deepEqual((await store.all()).map((one) => one.roleId), ['Role2']);
+    assert.deepEqual([...await store.reservedIds()], ['role2']);
+
+    await store.drop('Role2');
+    assert.deepEqual(await store.all(), [], 'the claim outlived the deletion it belonged to');
+  } finally {
+    held.dispose();
+  }
+});
+
+test('a claim is refused when the id has come back under a NEW deletion', async () => {
+  const held = inATempDir();
+  try {
+    const store = tombstonesIn(() => held.dir);
+
+    await store.put({ ...ONE, nonce: 'LATER' });
+
+    assert.equal(await store.claim('Role2', 'n1'), false,
+      'a stale worker took a claim on a deletion that is not the one it read');
+  } finally {
+    held.dispose();
+  }
+});
+
+test('an unreadable tombstone still RESERVES its id', async () => {
+  // Releasing it would hand the id to a new role that then inherits the old one's prompt files —
+  // and the next successful read would have the startup sweep prune the replacement. A name is
+  // readable when a body is not. (codex, the code round.)
+  const held = inATempDir();
+  try {
+    const store = tombstonesIn(() => held.dir);
+
+    await store.put(ONE);
+    fs.writeFileSync(join(deletionsDir(held.dir), 'Broken.json'), '{ not json', 'utf8');
+
+    assert.deepEqual([...await store.reservedIds()].sort(), ['broken', 'role2'],
+      'an id whose deletion cannot be read was handed back to the next role of that name');
+    assert.deepEqual((await store.all()).map((one) => one.roleId), ['Role2'],
+      'and the unreadable one was offered as a tombstone anybody could act on');
   } finally {
     held.dispose();
   }

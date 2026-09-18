@@ -11,10 +11,9 @@
 > callback reports the OUTCOME rather than a reason: a schedule that knew what a role deletion is
 > would be a schedule with an opinion about roles, so `extension.ts` translates.
 >
-> One thing the plan asked for and did not get, on purpose: it listed a real-editor scenario for
-> deleting a role. The harness exists and the scenario is buildable; what stopped it is that the
-> interesting half is the FAILURE path, which needs a second build's stamp in the settings file, and
-> that is a scenario of its own rather than a line in this one. Recorded here rather than ticked.
+> The real-editor scenario the plan asked for IS built — the code round refused the excuse, and it
+> was right that difficulty with the failure case does not cover the successful one. What stays out
+> of a real host is the failure path, which needs a second build's stamp in the settings file.
 >
 > Defect 2 of the four in
 > [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md) (its S7).
@@ -213,6 +212,49 @@ supplies the host's own functions, the way `serverSettingsSync` is handed its re
 
 That is also what makes the crash cases testable at all: "kill the process between step 2 and step 3"
 is, in a module whose steps are functions, "call step 2, throw the object away, call the sweep".
+
+## What the code round changed
+
+Eight reviewers, sixteen findings, fifteen accepted — and four of them were correctness rather than
+shape. Three were mistakes of mine that no test here caught.
+
+- **The acknowledgement now carries the payload it acknowledged.** A mirror can finish writing a
+  payload that still contains the role and only then call back; while the callback awaits its first
+  read, `begin` finishes pruning the role from the live configuration, so a condition asking "is it
+  absent NOW" answers yes, the text goes, and if the next write fails the server holds the role
+  without its prompts. Current configuration is not evidence of what was acknowledged.
+  `payloadMentionsRole` asks the carried payload, and asks it about all five places an id can be
+  rather than searching the text — a search cannot tell `Role2` from `Role20`.
+- **The claim is a rename.** The nonce was checked and then acted on, which is two operations with
+  an `await` between them: two windows both pass the check, one finishes and releases the id, the
+  person creates a role that takes it, and the other resumes and deletes the new text. A rename is
+  the one thing a filesystem does atomically, and the nonce is checked inside it.
+- **`failed()` re-reads before it writes.** A notification in flight after another window finished
+  the same deletion would RESURRECT the tombstone, barring the id for ever against a role nobody is
+  deleting.
+- **An unreadable tombstone still reserves its id.** Releasing it hands the id to a new role that
+  inherits the old one's prompt files — and the next successful read has the sweep prune the
+  replacement. Reservations come from the FILENAMES now; a name is readable when a body is not.
+
+**And one of the round's findings was about a test of mine that did not test what it said.** The
+stale-worker case put the recreated role back into the live set, so the coordinator stopped one step
+earlier at a check that has nothing to do with nonces, and the case passed with the guard removed.
+It models the race properly now — the other window finishes in the instant between the read and the
+act — and planting the three reverted behaviours turns three cases red, each naming its symptom.
+
+The rest were structure and surface: the coordinator moved out of the webview module, because
+`extension.ts` reaches for it at activation and pinning the page into that path inverts the layering;
+`reserved()` goes through the coordinator instead of a second store; `ROLE_ID` and the Windows
+reserved names are imported rather than copied; filesystem failures are reported instead of read as
+absence; the page's two presses are RUN rather than matched in the markup; the page is told when a
+deletion will become stranded, instead of the controls appearing only when something unrelated
+redraws; and a real-editor scenario drives a carried deletion end to end.
+
+**One finding was rejected**, and recorded here rather than silently: splitting `RolesCommand` into
+a transport union and a row-editing one. The two new kinds never reach `rowsAfter` at runtime, the
+exclusion list they grew predates this change, `phrasesEdit.ts` has the same shape beside it, and
+the gate's own command for this task forbids starting a second round of splitting inside it. It is a
+tail, and it is a real one.
 
 ## Test plan
 

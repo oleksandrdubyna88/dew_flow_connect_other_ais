@@ -66,7 +66,10 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // RETURN without going on. That last part is the whole reason it is not the other shape: what the
   // flow does next is copy a client-entry block built from the choice, so a refusal it walked past
   // would put a directory in somebody's config that this window is not using.
-  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'dataCommands.ts'];
+    // `roleDeletionsHost.ts` is the fifth, and it takes the panel's shape for the same reason: a
+  // row that did not move makes everything after it meaningless, so it says so and returns.
+  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'dataCommands.ts',
+    'roleDeletionsHost.ts'];
   for (const file of callers) {
     assert.match(
       source(file),

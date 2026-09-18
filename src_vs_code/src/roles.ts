@@ -77,7 +77,15 @@ const ID_SUFFIX_ROOM = 14;
 const PROMPT_ID = /^[a-z0-9][a-z0-9-]*$/;
 
 /** A role id becomes `COAI_ROUNDS_<ID>`, so it is latin, starts with a letter, and has no hyphen. */
-const ROLE_ID = /^[A-Za-z][A-Za-z0-9_]*$/;
+/**
+ * What a role id may be: a letter, then letters, digits and underscores.
+ *
+ * <p>Exported because two other modules turn an id into a FILE PATH — `rolesPrompts` and
+ * `roleDeletionStore` — and each of them refuses anything this does not match. A second copy of
+ * the pattern would drift, and the drift would be silent in the worst direction: a prompt file
+ * accepted whose tombstone is refused. (antigravity, the deletion code round.)</p>
+ */
+export const ROLE_ID = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 /**
  * Names Windows will not give a file, whatever the extension.

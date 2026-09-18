@@ -48,6 +48,24 @@ export interface TombstoneStore {
   readonly all: () => Promise<readonly Tombstone[]>;
   readonly read: (roleId: string) => Promise<Tombstone | undefined>;
   readonly drop: (roleId: string) => Promise<void>;
+  /**
+   * Take exclusive ownership of a deletion, or answer that somebody else has it.
+   *
+   * <p>A rename, because it is the one thing a filesystem does atomically: two windows both reach
+   * it and exactly one succeeds. The nonce is checked inside the claim, so an id that has come back
+   * to life under a new tombstone is refused rather than deleted.</p>
+   */
+  readonly claim: (roleId: string, nonce: string) => Promise<boolean>;
+  /**
+   * Every id a deletion is outstanding for, taken from the FILENAMES.
+   *
+   * <p>Separate from {@link all} on purpose. A tombstone whose contents cannot be read is still a
+   * deletion that has not finished, and dropping it from the reservations would release the id to a
+   * new role that inherits the old one's prompt files — and the next successful read would have the
+   * startup sweep prune the replacement. A name is readable when a body is not. (codex, the code
+   * round.)</p>
+   */
+  readonly reservedIds: () => Promise<ReadonlySet<string>>;
 }
 
 export interface DeletionWorld {
@@ -61,21 +79,37 @@ export interface DeletionWorld {
    */
   readonly prune: (roleId: string) => Promise<void>;
   /**
-   * Half of step 3's condition: is the role absent from the configuration as it reads RIGHT NOW?
+   * Step 3's condition: does the payload the mirror actually CARRIED still mention this role?
    *
-   * <p>The other half is the mirror having carried a write, and it takes BOTH. Step 2 is several
-   * `config.update` calls and each one fires VS Code's configuration listener, so a sync that landed
-   * between the first and the last carried an incomplete removal. `sync()` writes what the settings
-   * say at the moment it runs, so a landed sync whose configuration no longer mentions the role is
-   * proof the server has the whole of it. Re-read every time rather than remembered, which is also
-   * what makes this step idempotent.</p>
+   * <p>It asks about the payload, not about the configuration as it reads now, and the difference
+   * is a defect this had for one round. A mirror can finish writing a payload that still contains
+   * the role and then call back; while the callback awaits its first read, `begin` finishes pruning
+   * the role from the live configuration; a condition asking "is it absent now" answers yes, the
+   * text is deleted, and if the NEXT write fails the server holds the role without its prompts —
+   * the incident this whole change exists to prevent. Current configuration is not evidence of what
+   * was acknowledged. (codex, the code round, twice from two roles.)</p>
+   *
+   * <p>It settles the half-written case for free, too: step 2 is several `config.update` calls and
+   * each one fires the listener, and a payload written between the first and the last still
+   * mentions the role.</p>
    */
-  readonly gone: (roleId: string) => boolean;
+  readonly mentions: (payload: string, roleId: string) => boolean;
   /** Step 4: the prompt override files. */
   readonly forget: (promptIds: readonly string[]) => Promise<void>;
   readonly now: () => Date;
   /** Said through the funnel when a deletion cannot finish. */
   readonly say: (tombstone: Tombstone, reason: string) => void;
+  /**
+   * Told whenever what a page would draw has changed — and when it will change NEXT.
+   *
+   * <p>Without it the recovery controls appear only by accident. `remove` redraws the page before
+   * anything can be stranded: that needs a terminal failure and then ten more seconds, and
+   * recording the failure writes a file. Nothing in that sequence redraws anything, so a person who
+   * leaves the Roles tab open is told to go there and finds no controls. `inMs` is how long until
+   * the tombstone crosses the stranding boundary, so the page can come back exactly then instead of
+   * polling. (codex, the code round.)</p>
+   */
+  readonly changed: (inMs: number) => void;
 }
 
 /**
@@ -147,9 +181,9 @@ export class RoleDeletions {
    * cleanup — a completed deletion that looks stranded. Calling `busy` "another attempt" does not
    * schedule that attempt. (codex, the plan round.)</p>
    */
-  async settled(carried: boolean, reason: string): Promise<void> {
+  async settled(carried: boolean, payload: string, reason: string): Promise<void> {
     for (const tombstone of await this.world.store.all()) {
-      if (carried && this.world.gone(tombstone.roleId)) {
+      if (carried && !this.world.mentions(payload, tombstone.roleId)) {
         await this.finish(tombstone);
         continue;
       }
@@ -179,6 +213,11 @@ export class RoleDeletions {
     }
   }
 
+  /** Ids no new role may take: every deletion on its way out, whether or not its file parses. */
+  async reserved(): Promise<ReadonlySet<string>> {
+    return await this.world.store.reservedIds();
+  }
+
   /** What a page shows: failed at least once, and long enough ago to not be a write in flight. */
   async stranded(): Promise<readonly Tombstone[]> {
     const by = this.world.now().getTime() - STRANDED_AFTER_MS;
@@ -190,12 +229,18 @@ export class RoleDeletions {
 
   /** Steps 4 and 5, guarded by the nonce because the id can be alive again by now. */
   private async finish(tombstone: Tombstone): Promise<void> {
-    const current = await this.world.store.read(tombstone.roleId);
-    if (current === undefined || current.nonce !== tombstone.nonce) {
+    // CLAIMED, not merely checked. A read followed by a delete is two operations with an await
+    // between them, and two windows can both pass the read: one deletes the prompts and drops the
+    // tombstone, the person creates a role that takes the released id and writes its prompts, and
+    // the other resumes at `forget` and deletes the new text. The claim is a rename, which exactly
+    // one of them wins. (codex, the code round, Blocking.)
+    if (!(await this.world.store.claim(tombstone.roleId, tombstone.nonce))) {
       return;
     }
     await this.world.forget(tombstone.promptIds);
     await this.world.store.drop(tombstone.roleId);
+    // A resolved deletion has to LEAVE the page, not wait there until something unrelated redraws.
+    this.world.changed(0);
   }
 
   /** The reason, on the tombstone and through the funnel — once per condition, not per attempt. */
@@ -203,10 +248,21 @@ export class RoleDeletions {
     if (tombstone.reason === reason) {
       return;
     }
+    // Re-read, because this can arrive after the deletion has finished: a notification in flight
+    // while another window completed the same deletion would otherwise RESURRECT the tombstone with
+    // `put`, stranding the id for ever against a role nobody is deleting any more. (antigravity,
+    // the code round.)
+    const current = await this.world.store.read(tombstone.roleId);
+    if (current === undefined || current.nonce !== tombstone.nonce) {
+      return;
+    }
     const noted = { ...tombstone, reason, failedAt: this.world.now().toISOString() };
 
     await this.world.store.put(noted);
     this.world.say(noted, reason);
+    // It is not stranded YET — a write that failed a second ago is a write in flight. The page is
+    // told when it will be.
+    this.world.changed(STRANDED_AFTER_MS);
   }
 }
 

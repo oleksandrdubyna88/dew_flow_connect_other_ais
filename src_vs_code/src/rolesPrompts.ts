@@ -22,8 +22,13 @@
 /** A prompt id is a slug: lower-case, digits and hyphens, starting with a letter or a digit. */
 const PROMPT_ID = /^[a-z0-9][a-z0-9-]*$/;
 
-/** Names Windows will not give a file, whatever the extension. Mirrors the server's own list. */
-const RESERVED = new Set([
+/**
+ * Names Windows will not give a file, whatever the extension. Mirrors the server own list.
+ *
+ * <p>Exported: `roleDeletionStore` writes into a sibling directory and needs the same refusal, and
+ * a second copy of a 22-entry list is a list that drifts. (antigravity, the deletion code round.)</p>
+ */
+export const RESERVED_FILE_NAMES = new Set([
   'con', 'prn', 'aux', 'nul',
   'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
   'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
@@ -41,7 +46,7 @@ export function promptsDir(dataDir: string): string {
  * came from somewhere it should not have, and quietly writing `....escaped.md` would hide that.</p>
  */
 export function promptFile(dataDir: string, promptId: string): string | undefined {
-  if (!PROMPT_ID.test(promptId) || RESERVED.has(promptId)) {
+  if (!PROMPT_ID.test(promptId) || RESERVED_FILE_NAMES.has(promptId)) {
     return undefined;
   }
 
