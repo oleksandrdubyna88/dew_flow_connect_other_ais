@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { type LineMark, pairDiff } from '../lineDiff';
+import { type LineMark, PLACEHOLDER_KINDS, pairDiff } from '../lineDiff';
 
 /**
  * What differs between two skeletons — and, first, what only LOOKS like it differs.
@@ -104,15 +106,70 @@ test('an uneven run pairs only as far as both sides go', () => {
 });
 
 /**
- * The mask is wider than the three kinds the normaliser emits today, deliberately.
+ * A REAL identifier that merely looks like a placeholder is not masked.
  *
- * <p>A fourth kind would otherwise stop being masked the day it is added, and the wall of false
- * changes would come back with nothing pointing at why.</p>
+ * <p>The first version matched any `([A-Za-z]+)_\d+`, so that a fourth placeholder kind would keep
+ * working. Two reviewers on two providers refused it, and the cost they named is this one: the
+ * corpus keeps string literals and comments verbatim, so `utf8_2`, `base64_128` and `token_1` are
+ * things a skeleton really contains — and masking them would report a line where one of them
+ * genuinely changed as UNCHANGED. Silently, on the page where somebody decides what leaves their
+ * machine.</p>
  */
-test('a placeholder kind nobody has invented yet is masked too', () => {
-  const diff = pairDiff('use(field_1);', 'use(field_2);');
+test('an identifier that only looks like a placeholder still counts as a change', () => {
+  for (const [was, now] of [['utf8_2', 'utf8_4'], ['base64_128', 'base64_256'], ['token_1', 'token_9']]) {
+    const diff = pairDiff(`use(${was});`, `use(${now});`);
 
-  assert.deepEqual([...diff.before], ['same'], 'an index shift is not a change');
+    assert.deepEqual([...diff.before], ['changed'], `${was} -> ${now} was masked away`);
+  }
+});
+
+/**
+ * Every kind the normaliser can emit is a kind this module masks — checked against the PRODUCER.
+ *
+ * <p>A narrow list is only safe while it is complete, and a list that agrees with its own unit tests
+ * drifts the day `Placeholders.cs` returns a fourth kind. So this reads that file and extracts the
+ * words it returns as a kind: the ones in a `return ("x", …)` and the ones on either arm of a
+ * ternary. `member_access_expression` and friends are node types, not kinds, and they carry
+ * underscores, which is what tells them apart.</p>
+ */
+test('every placeholder kind the normaliser emits is one this module masks', () => {
+  const file = join(__dirname, '..', '..', '..', 'src_mcp', 'normalizer', 'Placeholders.cs');
+  const text = readFileSync(file, 'utf8');
+
+  assert.match(text, /\$"\{kind\}_\{next\}"/u,
+    'the placeholder FORMAT changed — masking by "kind_number" may no longer be right at all');
+
+  const kinds = new Set<string>();
+  for (const found of text.matchAll(/[?:]\s*"([a-z]+)"/gu)) {
+    kinds.add(found[1] ?? '');
+  }
+  for (const found of text.matchAll(/\(\s*"([a-z]+)",\s*(?:true|false)\s*\)/gu)) {
+    kinds.add(found[1] ?? '');
+  }
+
+  assert.ok(kinds.size >= 2, 'the extraction found almost nothing — it is reading the wrong shape');
+  assert.deepEqual([...kinds].sort(), [...PLACEHOLDER_KINDS].sort(),
+    'the normaliser emits a placeholder kind this module does not mask, or masks one it never emits');
+});
+
+/**
+ * A pair too large to diff properly says so by marking everything, not by marking nothing.
+ *
+ * <p>The table is quadratic and `row()` builds one per pair including collapsed ones, so four
+ * reviewers asked for a ceiling. Past it the two sides are compared as wholes — which is visibly
+ * different from a confident diff, and from silence.</p>
+ */
+test('a pair beyond the ceiling is compared as a whole rather than line by line', () => {
+  const huge = Array.from({ length: 600 }, (_, at) => `line ${at};`).join('\n');
+  const differs = `${huge}\nand one more;`;
+
+  const same = pairDiff(huge, huge);
+  assert.ok(same.before.every((mark) => mark === 'same'),
+    'two identical skeletons must stay unmarked however large they are');
+
+  const apart = pairDiff(huge, differs);
+  assert.ok(apart.before.every((mark) => mark === 'removed'));
+  assert.ok(apart.after.every((mark) => mark === 'added'));
 });
 
 test('a genuine change to a line survives the mask', () => {
