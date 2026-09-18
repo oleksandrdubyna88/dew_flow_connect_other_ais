@@ -13,6 +13,8 @@
     "shared fixture can, which is why this file sits outside both and is asserted by both suites.",
     "Raised by codex and gemini independently on the plan round of the panel half (2026-09-14).",
     "",
+    "`settingsPath` and `logsPath` are where the SETTINGS FILE and the LOG ROOT land for that case, added 2026-09-18. They exist because `SettingsFile.DataDirFrom` was a bare COAI_DATA_DIR read with no side and no trim, so those two lived in `<root>/` while `coai.db` and `sessions/` lived in `<root>/<side>/` — two sides sharing one settings file and overwriting each other in silence. They are DERIVED from `dir` rather than spelled again: a second spelling is a second thing to keep level.",
+    "",
     "`dir` is the resolved directory with `<root>` standing for the absolute form of `COAI_DATA_DIR`,",
     "because the two languages spell an absolute path differently on one platform and identically on",
     "the other. `refused` means the side was asked for and cannot be used: the server refuses to",
@@ -35,7 +37,9 @@
       "refused": false,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "<default>/settings.json",
+      "logsPath": "<default>/logs"
     },
     {
       "why": "a chosen directory and no side — used exactly as chosen, as it always was",
@@ -45,7 +49,9 @@
       "refused": false,
       "rootHasDatabase": true,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "<root>/settings.json",
+      "logsPath": "<root>/logs"
     },
     {
       "why": "the operator's own case: two installations, one NAS, a side each",
@@ -55,7 +61,9 @@
       "refused": false,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "<root>/windows/settings.json",
+      "logsPath": "<root>/windows/logs"
     },
     {
       "why": "a side name is lower-cased, so the two halves agree on case as well as on shape",
@@ -65,7 +73,9 @@
       "refused": false,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "<root>/windows/settings.json",
+      "logsPath": "<root>/windows/logs"
     },
     {
       "why": "the history left behind by the flat layout — reported, never adopted",
@@ -75,7 +85,11 @@
       "refused": false,
       "rootHasDatabase": true,
       "dirExists": true,
-      "notes": ["loose-database"]
+      "notes": [
+        "loose-database"
+      ],
+      "settingsPath": "<root>/wsl/settings.json",
+      "logsPath": "<root>/wsl/logs"
     },
     {
       "why": "a mistyped NAS path is a creatable directory, and looks exactly like a fresh side",
@@ -85,7 +99,11 @@
       "refused": false,
       "rootHasDatabase": false,
       "dirExists": false,
-      "notes": ["new-directory"]
+      "notes": [
+        "new-directory"
+      ],
+      "settingsPath": "<root>/wsl/settings.json",
+      "logsPath": "<root>/wsl/logs"
     },
     {
       "why": "both at once: old history in the root, and this side has never run",
@@ -95,7 +113,12 @@
       "refused": false,
       "rootHasDatabase": true,
       "dirExists": false,
-      "notes": ["loose-database", "new-directory"]
+      "notes": [
+        "loose-database",
+        "new-directory"
+      ],
+      "settingsPath": "<root>/wsl/settings.json",
+      "logsPath": "<root>/wsl/logs"
     },
     {
       "why": "a plausible thing to type, and the one that must never fall back to the shared root",
@@ -105,7 +128,9 @@
       "refused": true,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "",
+      "logsPath": ""
     },
     {
       "why": "a colon is refused on Windows and accepted on Linux, so the grammar refuses it everywhere",
@@ -115,7 +140,9 @@
       "refused": true,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "",
+      "logsPath": ""
     },
     {
       "why": "dot and dot-dot are directory names no side may claim",
@@ -125,7 +152,9 @@
       "refused": true,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "",
+      "logsPath": ""
     },
     {
       "why": "a space is not in the grammar either — one rule, simple enough to write twice",
@@ -135,7 +164,9 @@
       "refused": true,
       "rootHasDatabase": false,
       "dirExists": true,
-      "notes": []
+      "notes": [],
+      "settingsPath": "",
+      "logsPath": ""
     }
   ]
 }
