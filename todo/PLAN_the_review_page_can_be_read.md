@@ -113,6 +113,12 @@ Three things then decide it:
 **What this costs if it is ever regretted:** one module, `highlight(code, language): string`. The page
 calls that and nothing else, so the engine behind it can be swapped without touching `bugzReviewPage.ts`.
 
+**The cost per draw, raised by three plan reviewers and then measured.** 200 pairs is 400
+`codeToHtml` calls and a draw happens after every decision: **468 ms and 400 blocks on the first
+draw, 2–3 ms and 0 blocks on every draw after**, once each block is memoised by its own text. Not the
+multi-second freeze the round predicted, but a person deciding about ninety pairs paid the first
+number ninety times.
+
 **Shipped, and the prediction checked against the real package.** The estimate above was made by
 deflating a probe bundle; the `.vsix` actually built afterwards came to **664,353 B — +98,763,
 +17.5 %** against the predicted +96,010, +17.0 %. Close enough that the estimate was worth making,

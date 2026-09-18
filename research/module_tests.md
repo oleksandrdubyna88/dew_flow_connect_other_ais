@@ -344,6 +344,22 @@ the module and at the PAGE, because the page is where the decision was made to s
 `escapeHtml` on skeletons: the call moved into the highlighter, and a later edit rendering a skeleton
 anywhere else would reintroduce what was removed. Both verified by mutation.
 
+**`Object.is` on two strings is not a cache test** (2026-09-17, story 1.2's code round). The first
+version of the memoisation test asserted that `highlight()` returned "the same string back" and
+stayed green with the cache deleted: strings in JavaScript are primitives, so `Object.is` compares
+their VALUE and there is no reference identity to observe. The map's SIZE cannot tell them apart
+either — re-setting an existing key leaves it unchanged. How often Shiki was ASKED is the only
+externally visible difference between a cache that works and one that does not, so `codeHighlight.ts`
+exports `timesTokenised()` and the test counts. Verified by mutation: with the cache read deleted it
+goes red, where the identity version did not.
+
+**Two things this module's tests deliberately do not cover, and say so in place.** `highlight()`'s
+`failed` branch cannot be entered from outside — no input makes a loaded Shiki grammar throw on
+demand — so `plainBlock` is exported and the two fallback shapes are asserted directly; what remains
+unproven is that a real grammar failure routes there. And the table of languages is pinned against
+`SourceLanguage` in `src_mcp` by reading the enum's declaration, because a table checked only against
+its own unit tests drifts silently the day the collector learns a fourth language.
+
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
 pairs. And the ranking has no transport, so `Ranking.Order` is exercised and nothing produces a real

@@ -50,11 +50,15 @@ const THEME = 'coai-vars';
 const GRAMMARS: Readonly<Record<string, string>> = {
   csharp: 'csharp',
   cs: 'csharp',
+  'c#': 'csharp',
   typescript: 'typescript',
   ts: 'typescript',
   javascript: 'javascript',
   js: 'javascript',
 };
+
+/** The one place a stored `language` becomes a key — trimmed, because a column is not a promise. */
+const keyFor = (language: string): string => language.trim().toLowerCase();
 
 /**
  * Built once, on first use — never at import.
@@ -77,7 +81,53 @@ function highlighter(): HighlighterCore {
 
 /** Whether this page will colour a pair written in this language. */
 export function canHighlight(language: string): boolean {
-  return GRAMMARS[language.toLowerCase()] !== undefined;
+  return GRAMMARS[keyFor(language)] !== undefined;
+}
+
+/**
+ * What a rendered block already cost, by its own text.
+ *
+ * <p><b>Measured before it was written, because three reviewers asked for the number.</b> A draw of
+ * 200 pairs is 400 `codeToHtml` calls, and a draw happens after every decision: fully expanded that
+ * is 316–485 ms, collapsed 209–222 ms. Not the multi-second freeze the round predicted, but a
+ * person deciding about ninety pairs pays it ninety times, and every one of those redraws re-renders
+ * skeletons that have not changed — the corpus is immutable between collections, so the same text
+ * yields the same markup for ever.</p>
+ *
+ * <p>The key is the text itself, which is what makes this safe rather than merely fast: a skeleton
+ * that changed is a different key, so nothing stale can be served. The bound is there because the
+ * corpus grows and a cache with no ceiling is a leak with a good reason; the oldest entries go
+ * first, which for a page rendered top to bottom is the rows furthest from where anybody is
+ * looking.</p>
+ */
+const rendered = new Map<string, string>();
+const MOST_BLOCKS_REMEMBERED = 1000;
+
+/**
+ * How many blocks this process has actually tokenised.
+ *
+ * <p>Exported so the cache can be OBSERVED, and the reason is a lesson rather than a convenience.
+ * The first version of the test asserted `Object.is(first, second)` — the same string back — and it
+ * stayed green with the cache deleted, because strings in JavaScript are primitives and `Object.is`
+ * compares their VALUE. There is no reference identity to observe. Nor does the map's SIZE tell the
+ * two apart: re-setting an existing key leaves it unchanged. The only externally visible difference
+ * between a cache that works and one that does not is how often Shiki was asked, so that is what is
+ * counted.</p>
+ */
+let tokenised = 0;
+
+export const timesTokenised = (): number => tokenised;
+
+function remember(key: string, html: string): string {
+  if (rendered.size >= MOST_BLOCKS_REMEMBERED) {
+    const oldest = rendered.keys().next();
+    if (!(oldest.done ?? false)) {
+      rendered.delete(oldest.value);
+    }
+  }
+  rendered.set(key, html);
+
+  return html;
 }
 
 /**
@@ -96,21 +146,60 @@ export function canHighlight(language: string): boolean {
  * nothing is indistinguishable from a pair that was never collected.</p>
  */
 export function highlight(code: string, language: string): string {
-  const grammar = GRAMMARS[language.toLowerCase()];
+  const grammar = GRAMMARS[keyFor(language)];
   if (grammar === undefined) {
-    return plain(code);
+    // No cache entry: this path is a string concatenation, and caching it would spend the bound on
+    // the blocks that cost nothing to make.
+    return plain(code, 'plain');
+  }
+
+  const key = `${grammar}::${code}`;
+
+
+  const already = rendered.get(key);
+  if (already !== undefined) {
+    return already;
   }
 
   try {
-    return highlighter().codeToHtml(code, { lang: grammar, theme: THEME });
-  } catch {
-    return plain(code);
+    tokenised += 1;
+
+    return remember(key, highlighter().codeToHtml(code, { lang: grammar, theme: THEME }));
+  } catch (reason: unknown) {
+    // NOT the same answer as an unknown language, which is the distinction two reviewers asked for
+    // and they were right: both render uncoloured, and without this a person cannot tell "we do not
+    // read Fortran" from "highlighting is broken", nor can anyone chasing a corpus-extraction defect
+    // tell which rows failed. It is reported through `console.warn` rather than `notify` because
+    // this module is PURE — it cannot reach the funnel — and the row says it in the markup.
+    console.warn(`[coai] the ${grammar} grammar could not colour a skeleton:`, reason);
+
+    return plain(code, 'failed');
   }
 }
 
-/** The same shape Shiki emits, so one stylesheet dresses both and a fallback is not a different page. */
-function plain(code: string): string {
-  return `<pre class="shiki"><code><span class="line">${escapeHtml(code)}</span></code></pre>`;
+/**
+ * The same shape Shiki emits, so one stylesheet dresses both and a fallback is not a different page.
+ *
+ * <p>`data-highlight` is what tells the two silences apart — `plain` is a language this page does
+ * not claim to colour, `failed` is one it does and could not. Uncoloured code looks identical
+ * either way, so without the attribute the difference exists only in a log nobody is reading.</p>
+ */
+/**
+ * The uncoloured block, both of its reasons, reachable by a test.
+ *
+ * <p>Exported for one reason and it is worth stating rather than hiding: the `failed` branch of
+ * {@link highlight} cannot be reached from outside, because there is no input that makes a loaded
+ * Shiki grammar throw on demand. A branch no test can enter is a branch that rots, so what IS
+ * testable — that the two reasons produce different markup, and that both escape — is exposed
+ * deliberately. What remains unproven is that `highlight` routes a real grammar failure here, and
+ * `research/module_tests.md` says so rather than leaving it to be assumed.</p>
+ */
+export function plainBlock(code: string, why: 'plain' | 'failed'): string {
+  return plain(code, why);
+}
+
+function plain(code: string, why: 'plain' | 'failed'): string {
+  return `<pre class="shiki" data-highlight="${why}"><code><span class="line">${escapeHtml(code)}</span></code></pre>`;
 }
 
 /**

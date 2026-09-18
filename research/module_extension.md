@@ -7271,6 +7271,26 @@ dimming a keyword towards the background is how a highlighted block stops being 
 point, so a module-level `createHighlighterCoreSync` would cost every window three grammars at
 activation whether or not anybody opened the page.
 
+**Each block is tokenised once, keyed by its own text.** Three plan reviewers raised the same cost
+independently and were right to ask for a number: a draw of 200 pairs is 400 `codeToHtml` calls, and
+a draw happens after every decision. Measured before and after, on 200 pairs fully expanded:
+
+| | first draw | every draw after |
+|---|---|---|
+| time | 468 ms | **2–3 ms** |
+| blocks tokenised | 400 | **0** |
+
+The key is the text itself, which is what makes it safe rather than merely fast — a skeleton that
+changed is a different key, so nothing stale can be served, and the corpus is immutable between
+collections anyway. The cache is bounded at a thousand blocks and evicts oldest-first; a cache with
+no ceiling is a leak with a good reason.
+
+**"We do not read this language" and "this language broke" are different answers.** Both render
+uncoloured, so the block carries `data-highlight="plain"` or `data-highlight="failed"`; without it
+nobody can tell a deliberate fallback from broken highlighting, nor which rows a corpus-extraction
+defect touched. A grammar failure also reaches `console.warn` — this module is pure and cannot reach
+the notification funnel, which is the honest limit of what it can say.
+
 **An unknown language renders as escaped plain text in the same wrapper**, and so does a grammar that
 throws — a row rendering nothing is indistinguishable from a pair that was never collected. That
 fallback path is the one a new corpus language reaches first, which is why it is escaped and tested
