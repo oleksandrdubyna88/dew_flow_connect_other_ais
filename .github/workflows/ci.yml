@@ -222,9 +222,11 @@ jobs:
       # cannot drift from what a developer runs locally.
       #
       # This package had no linter at all until now — `typescript-eslint` declares peer
-      # `typescript: ">=4.8.4 <6.1.0"` and the package was on 7.0.2, so the parser would not install.
-      # The compiler moved back to 5.9.3 in the same change, measured: zero typecheck errors, whole
-      # suite green.
+      # `typescript: ">=4.8.4 <6.1.0"`, the package was on 7.0.2, and the parser refuses that version
+      # at install AND at run time. The compiler moved to 6.0.3 in the same change: the one version
+      # that both compiles this source — shiki's ESM-only subpath imports included — and satisfies
+      # the parser. Measured: zero typecheck errors, whole suite green. The reasoning is in
+      # `src_vs_code/eslint.config.mjs`, next to the rules it explains.
       - name: Lint
         working-directory: src_vs_code
         run: npm run lint
