@@ -20,7 +20,7 @@
  * with no connection between the two events. This repository has three latches written in place —
  * `chatGotoCommand`, `chatStoreCache` and `bugzReviewPanel` — and this is the first one that is a
  * value, so the rule is asserted rather than described. Converting those three is named in
- * `todo/PLAN_the_tail_of_the_command_split.md` rather than done in passing.</p>
+ * `research/PLAN_the_tail_of_the_command_split.md` rather than done in passing.</p>
  *
  * <p><b>`PromiseLike`, not `Promise`.</b> The editor API answers in `Thenable`, and a door that
  * accepted only native promises would push every caller into wrapping one — a line of ceremony per

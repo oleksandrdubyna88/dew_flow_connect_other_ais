@@ -25,7 +25,7 @@ import * as path from 'node:path';
  * conversation "is what makes forgetting them possible: the tab closing removes it whole, the way
  * `chatOrphans.ts` ends the processes". Nothing removes it. Measured 2026-09-17: this is persistent
  * data under the extension's own folder, and no sweep anywhere reaches that tree. The retention is
- * open work in `todo/PLAN_the_tail_of_the_command_split.md`; what is true today is that a directory
+ * open work in `research/PLAN_the_tail_of_the_command_split.md`; what is true today is that a directory
  * per conversation at least makes such a sweep POSSIBLE, which one shared directory did not.</p>
  */
 export function pictureDir(root: string, conversation: { readonly saveId: string }): string {
