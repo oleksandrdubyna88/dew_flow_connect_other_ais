@@ -1513,6 +1513,69 @@ docblock says `--name-only` rides along "so a renamed file can still be read", a
 rename it does not — the collector cannot see a fix that landed after a rename. Named here rather
 than fixed, because it is the collector's behaviour and this story does not touch the collector.
 
+#### One file at the commit the reviewers read (`--file-at`, 2026-09-18, story 3.1)
+
+`coai-mcp --file-at --id <findingId>` answers ONE pair's whole file as it was at `head_sha`, on
+stdout, as `FileAtRevision` (`src_mcp/core/Collecting/FileAtRevision.cs`): `findingId`, `sha`,
+`path`, `reason`, `text`. It is `--real-method`'s door — the id names a row, the row supplies the
+checkout, the commit and the path, the answer is data at exit 0, **65** for a bad `--id` and never
+64, **74** for a database that will not open or read — and it exists because the review page's
+*Open at &lt;sha&gt;* must read an OBJECT: `head_sha` is orphaned 55.7 % of the time and 99.6 % of
+orphaned blobs still read, so the revision a person wants is usually unreachable as a ref and almost
+always readable as `git show <sha>:<path>`. The extension spawns no git; this mode is the read. The
+two one-pair modes share one body, `AnswerOnePairAsync`, written once when the second arrived rather
+than copied: two bodies opening the same database the same way is how one of them comes to answer 64.
+
+**The path is validated LEXICALLY, never against today's filesystem.** `GitHistory.IsRepoRelative`
+refuses empty, a NUL, a leading separator, a drive-qualified form and any `..` component under
+either separator — on the string the row stores — because a file deleted or renamed since the
+recorded revision has no current path to canonicalise, and canonicalising would refuse exactly the
+blob this mode exists to read (`AFileDeletedSince_StillReadsAtItsRevision` removes the file from the
+tree and reads it anyway). Ordinary metacharacters are NOT refused: `docs/notes;v2.md` and
+`src/[legacy].cs` are committed paths, and execution is exe-plus-argv, so a semicolon is a character
+in a filename. Measured on real git before the guard was written: git refuses every one of those
+shapes itself (*is outside repository*, *does not exist in*), so the guard is not what keeps the read
+inside the object database — the object spec is — it is what keeps a malformed row from costing a
+process, and what answers `path_refused` instead of a sentence from git. It sits on the ONE road
+into `sha:path`, `GitHistory.FileAtAsync`, so neither reader of a stored path can forget it
+(`TheRoadIntoShaColonPath_RefusesItToo`); `FileAtReader` also checks it — and the sha, through the
+one existing validator `IsCommitish`, now public — BEFORE the repository is probed, so a malformed
+row starts no process at all, asserted with a recording launcher. No second sha regex: `{7,40}` was
+proposed and would have been weaker in one direction and stricter in another.
+
+**`CommittedFile.ReadAsync`** (`src_mcp/runners/Collecting/CommittedFile.cs`) is the three-way read
+both readers now share — `cat-file -e <sha>^{commit}`, an OBJECT lookup that finds an orphan, before
+`show`, so `commit_unreachable` and `file_not_in_commit` stay two answers and git's own failure a
+third. It was `RealMethodReader`'s private pair of methods, extracted rather than copied, and
+`RealMethodReader` now delegates.
+
+**The repository is the store's, and nothing on argv can redirect it.** The story's brief asked for a
+caller-supplied `repo_path` to be resolved against the store's records and refused outside them;
+read against the code, there is no caller-supplied anything — `--real-method` takes an id and the
+row supplies the rest, and this mode takes the same door. That is a decision rather than an accident
+because `TheCoordinatesComeFromTheStore_AndNothingOnArgvCanRedirectThem` seeds a second repository,
+passes `--repo`, `--sha` and `--file` naming it, and gets the row's own repository back.
+
+**Reasons** are `FileAtReason`: `pair_not_found`, `repo_path_missing`, `git_failed`,
+`commit_unreachable`, `file_not_in_commit` — each the same word `--real-method` answers for the same
+fact — and one new one, `path_refused`, not added to `SkipReason` because the collector never writes
+it and a word it never writes would be a funnel bucket that is always zero. A malformed sha answers
+`commit_unreachable`, the word `--real-method` answers for the same row through `HasCommitAsync`'s
+own refusal.
+
+**Recorded, not fixed here: a SHA-256 repository is unsupported everywhere in this product.**
+`ObjectId` is exactly forty hex characters, so the collector, `--real-method` and this mode all
+refuse a sixty-four-character id. The one-line fix is `^[0-9a-fA-F]{40}$` → `^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`
+in `GitHistory.ObjectId`, with `Touched`'s `line.Length == 40` beside it. Widening it changes how
+every git read treats every repository, untested against a SHA-256 repository, and does not belong
+to a story that adds one read.
+
+**Shared test helpers.** `PairSeed.One` (the row a one-pair mode reads, written the way the product
+writes one) and `Stdout.OfAsync` (a mode's stdout and exit code) were `TheRealMethodTests`' private
+helpers, extracted for `TheFileAtRevisionTests`; that suite now delegates. Three older suites —
+`ThePairModesTests`, `ABatchFindingsReadTests`, `BugsQueryTests` — still carry their own copy of the
+eight-line stdout capture, named here rather than rewritten as a side effect of this story.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the
