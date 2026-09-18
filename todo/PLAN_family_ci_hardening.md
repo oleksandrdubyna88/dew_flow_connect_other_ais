@@ -170,7 +170,7 @@ that provably does nothing.
 
    | repository | required today | runs but is NOT required |
    |---|---|---|
-   | `rag_qln` | **no branch protection at all** | `build-test`, `contract`, `extension`, `plans`, `pr · semantic title`, `workflows · actionlint` |
+   | `rag_qln` | **none — and it CANNOT have any**, see below | `build-test`, `contract`, `extension`, `plans`, `pr · semantic title`, `workflows · actionlint` |
    | `creds_for_devs` | 3 | `build · test`, `clients · build · test` (×2 legs), `compose · scripts`, `http · contract suite`, `typecheck · test · package`, `SonarCloud Scan`, `workflows · actionlint` |
    | `connect_other_ais` | 3 | `SonarCloud Scan`, `pr · semantic title`, `workflows · actionlint` |
    | `mcp` / `benchmark` / `sidecar_rust` | 3 / 3 / 4 | `CodeQL`, `pr · semantic title`, `workflows · actionlint` |
@@ -189,9 +189,25 @@ that provably does nothing.
    it after twenty consecutive green runs on main), and `submit-nuget` (produced by no workflow in the
    repository, so when it runs is not something this plan knows).
 
-   **NOT APPLIED.** Writing branch protection is a privileged action on the operator's repositories
-   and needs their say-so; the audit above is the whole of the decision, so applying it is one call
-   per repository once that is given.
+   **`rag_qln`'s row is corrected, 2026-09-18, and the correction matters more than the row.** "No
+   branch protection at all" reads as an omission. It is not one: the API answers **HTTP 403,
+   *"Upgrade to GitHub Pro or make this repository public to enable this feature"*** — the repository
+   is PRIVATE on a plan without Pro, and branch protection is unavailable there entirely. Same root
+   cause as the secret scanning this plan already records it cannot have. Nothing can be applied to
+   it until it is public or the plan changes, and that is a decision rather than a task. The audit
+   said "nobody configured it" because the first pass asked the workflows instead of the API.
+
+   **THE DESIRED STATE IS NOW A FILE IN EVERY REPOSITORY**, which is what this line should have said
+   from the start: `.github/branch-protection.json` plus `.github/scripts/branch-protection.mjs`,
+   shipped 2026-09-18. Branch protection is settings rather than content, so nothing makes GitHub
+   read the file — what it buys is that the intent is REVIEWED and the drift from it is something a
+   command prints. `--selftest` runs in CI without a token and caught three bugs in the tool's own
+   normalisation on its first run; the comparison against the real branch needs repository admin and
+   stays a command somebody runs, which is also what item 3 below asks for.
+
+   **STILL NOT APPLIED.** Writing branch protection is a privileged action on the operator's
+   repositories and needs their say-so; the file is the whole of the decision, so applying it is
+   `--apply` once per repository once that is given.
 3. **BLOCKED — see requirement 8.** `tools/repo-settings-check.mjs`, with its selftest; run by hand
    for now (it needs a token), documented in the README. Its HOME is the open decision: conventions
    (as written) or one repository. Do not build it until requirement 8 records the answer — the
