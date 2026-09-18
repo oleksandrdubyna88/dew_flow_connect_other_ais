@@ -74,26 +74,29 @@ jobs:
       #     The release scripts. They are tested HARDER than most of this repository — the suite
       #     SPAWNS them and asserts their exit codes, because what has to be true of a guard is that
       #     it refuses, and a guard that prints a complaint and exits 0 stops nothing in a workflow.
-      #     No coverage instrumentation can see a child process, so a folder that gained 36 cases
-      #     arrives at the gate as 0 % of the new code. Analysis stays ON — this is the coverage
-      #     list, not `sonar.exclusions`, so real defects in these files are still reported. If they
+      #     No coverage instrumentation can see a child process, so a folder of them arrives at the
+      #     gate as 0 % of the new code however many cases it gained. Analysis stays ON — this is
+      #     the coverage list, not `sonar.exclusions`, so real defects in these files are still
+      #     reported. If they
       #     ever grow logic worth executing in-process, import it from a module under `src` and let
       #     that be covered normally.
       #
-      #   sonar.coverage.exclusions + the modules that CANNOT LOAD without `vscode` (39 today)
+      #   sonar.coverage.exclusions + the modules that CANNOT LOAD without `vscode`
       #     A module that imports `vscode` — or imports one that does, at any depth — cannot be
       #     loaded outside an extension host. `sonarExclusions.test.ts` asks that question
       #     transitively and fails when this list and the answer disagree, in EITHER direction, so
-      #     the list is checked rather than trusted — the count above is prose and the test is the
-      #     guard. There IS a harness now (`npm run test:host`, since 2026-09-17), and it does not
-      #     change this: it runs a handful of named SCENARIOS in a real editor, not the unit suite,
+      #     the list is checked rather than trusted, which is why no count is written here: a number
+      #     in a comment has nobody to keep it true, and this one had already drifted by the time
+      #     anybody read it. The test knows how many there are; the comment says why they are here.
+      #     There IS a harness now (`npm run test:host`, since 2026-09-17), and it does not change
+      #     this: it runs a handful of named SCENARIOS in a real editor, not the unit suite,
       #     so Node's runner still never executes a line of these modules and they still arrive at
       #     the gate as 0 % of whatever they contributed to new code: a number about the
       #     analysis rather than about the change, which is the same reason the extension's lcov is
       #     produced at all and the same reason `coai-server` was added to the collection above.
-      #     Thirty-eight of two hundred and eighteen files in `src`, and the split is deliberate — the
-      #     decisions live in the other hundred and fifty-two, which are tested as values and are at
-      #     96 % overall.
+      #     They are a MINORITY of `src`, and that split is deliberate rather than incidental: the
+      #     decisions live in the modules that take no editor, which are tested as values and carry
+      #     the coverage. A module here should hold wiring and nothing worth executing.
       #     What guards these instead is a source-read wiring test per feature (`chatWiring`,
       #     `chatGotoWiring`, `chatFreshWiring`, `conversationPickerWiring`, `chatSourceWiring`),
       #     which asserts which function each arm calls and that each dispatch is exhaustive.
