@@ -60,6 +60,12 @@ test('the review panel never waits for a person before it redraws', () => {
   );
   // The companion. Without it this file could stop notifying altogether and the assertion above
   // would go on passing for ever.
+  //
+  // It stays 3 through story 1.1 of PLAN_the_review_page_can_be_read, and that took a detour worth
+  // recording. The panel gained the ± zoom and ± tone controls and a fourth notice with them — a
+  // settings write that fails now says so — but a code round pointed out that `helpPanel.ts` had
+  // the identical helper privately, so the body moved to `settingWrite.ts` and both panels call it.
+  // The notice is still raised on this panel's behalf; it is simply no longer written here.
   assert.equal(
     (text.match(/\bawait notify\(/gu) ?? []).length,
     3,

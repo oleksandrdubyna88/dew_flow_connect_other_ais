@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { HELP_LANGUAGES, HelpLanguage } from './helpContent';
 import { renderHelpHtml } from './helpPage';
+import { settingWritten } from './settingWrite';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 
@@ -21,14 +22,16 @@ interface HelpMessage {
   delta?: number;
 }
 
-/** A settings write that failed is said out loud, never dropped into a discarded promise. */
-async function said(writing: Promise<void>): Promise<void> {
-  try {
-    await writing;
-  } catch (reason) {
-    void vscode.window.showWarningMessage('That setting could not be saved: ' + String(reason));
-  }
-}
+/**
+ * A settings write that failed is said out loud, never dropped into a discarded promise.
+ *
+ * <p>The body moved to `settingWrite.ts` when the review panel adopted the same two controls and
+ * grew a second copy of it; a code round named the duplication and this is the extracted half. The
+ * behaviour changed in one way, deliberately: it goes through `notify` rather than
+ * `showWarningMessage`, which was the last DIRECT notification call in this extension — the census
+ * ratchet in `notificationSites.test.mjs` only ever falls, and this takes it to zero.</p>
+ */
+const said = (writing: Promise<void>): Promise<void> => settingWritten(writing, 'help');
 
 async function onHelpMessage(message: HelpMessage): Promise<void> {
   const handlers: Record<string, () => Promise<void>> = {

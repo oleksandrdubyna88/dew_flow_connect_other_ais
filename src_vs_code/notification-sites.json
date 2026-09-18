@@ -5,19 +5,17 @@
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
   "sites": 123,
-  "direct": 1,
+  "direct": 0,
   "modal": 18,
   "events": 105,
   "inTheFunnel": 3,
-  "routed": 122,
+  "routed": 123,
   "byApi": {
     "showInformationMessage": 0,
-    "showWarningMessage": 1,
+    "showWarningMessage": 0,
     "showErrorMessage": 0
   },
-  "perFile": {
-    "src/helpPanel.ts": 1
-  },
+  "perFile": {},
   "codes": [
     "a-review-is-waiting",
     "add-a-server-that-could-not-be-checked",

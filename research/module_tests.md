@@ -289,12 +289,98 @@ of every wire field this product has shipped out of step.
 | `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success |
 | `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
 | `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
+| `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
+| `codeHighlight.test.ts` | the real Shiki, all three grammars | a skeleton becoming MARKUP; a language rendered by guesswork; colours baked in past the theme |
+| `lineDiff.test.ts` | the pure diff, nine cases | anonymisation's renumbering read as real change; a rewrite shown as an unrelated removal and addition |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
 source text, and story 4 earned that ruling: a model picker matched every regex written about it
 while being wired to nothing. The boxes the test drives are built from the ids the page ACTUALLY
 rendered — a hand-written fixture handed to the shim would pass with no checkbox on the page at all,
 which is the mistake its first version made.
+
+**The shim answers `closest` about ANCESTORS, not only about itself** (2026-09-17, story 1.1). Its
+elements used to each answer only for their own attribute, and a shim shaped that way is green
+through the one mutation this page is most likely to grow: a branch widened from the control to the
+row it sits in. Each pair's controls are now built inside a `Row` object, so `closest` walks the way
+it does in a browser.
+
+**Which mutations the collapse tests are actually red for — measured, not assumed.** PROJECT.md says
+to ask what an assertion would see if the behaviour were deleted, and asking produced a surprise
+worth recording: **removing the disclosure branch's early `return` changes nothing** (24 of 24 green
+both ways), because every branch below it compares `target.id` and neither the twist button nor the
+checkbox has one. The `roundsLog.ts` lesson does not transfer to this page unaltered, and the
+`return` stays as house style rather than as something a test defends. What the suite IS red for,
+both verified by mutation: rendering rows expanded (ten tests) and widening `closest('[data-toggle]')`
+to `closest('[data-row]')` — the latter caught by *pressing it again closes it*, since the row cannot
+report the state the button carries. Keying the open set by position instead of `findingId` is caught
+by the reorder test.
+
+**The shim decides a containment question rather than asserting about it.** Whether a summary line
+opens its pair depends on whether the severity/title spans are INSIDE the disclosure button, and no
+regex over markup is a behavioural assertion about that. So `run()` slices the button's own markup
+and parents each `Line` to the button or to the row accordingly — the fixture is derived from what
+the page rendered, exactly as the boxes are, and moving those spans back out turns *pressing the
+severity and title opens the pair* red with "the part of the row that says what the defect is is
+dead". Verified by mutation.
+
+**`bugzReviewWiring.test.ts` covers the one seam the page tests structurally cannot.** The page tests
+inject `expanded` straight into `reviewPageHtml`; if `received()` stopped recording an `expand`, or
+`draw()` stopped passing the panel's set, every one of them would stay green while the open row
+collapsed after the next decision. `bugzReviewPanel.ts` imports `vscode`, so no test here can import
+it — the constraint `noticesDoNotBlock.test.ts` documents for the same file — and what is left is
+reading the source with its comments stripped. TypeScript's own `noUnusedLocals` already catches the
+crudest break (dropping the argument leaves `keptOpen` unused); this file catches passing the WRONG
+thing, verified by making `draw()` intersect against an empty list. What it does not prove is that a
+row reopens after a decision: that needs an extension host, which this suite still does not have.
+
+**The escaping is asserted as a PROPERTY, never as an entity spelling** (2026-09-17, story 1.2). The
+two paths escape differently — Shiki writes `&#x3C;` for `<` and leaves the apostrophe alone,
+`escapeHtml` writes `&amp;` and `&#39;` — so a test looking for `&lt;` would have gone red on
+entirely correct behaviour, and one looking for "no raw `<`" would go red on Shiki's own markup. What
+is asserted instead is that the dangerous *sequences* (`</script>`, `<style`, `<img`, `<!--`) cannot
+appear in the code element **and that the text is still all there**, because an escaper that simply
+dropped the payload would pass every one of the first four. The same property is asserted twice, at
+the module and at the PAGE, because the page is where the decision was made to stop calling
+`escapeHtml` on skeletons: the call moved into the highlighter, and a later edit rendering a skeleton
+anywhere else would reintroduce what was removed. Both verified by mutation.
+
+**`Object.is` on two strings is not a cache test** (2026-09-17, story 1.2's code round). The first
+version of the memoisation test asserted that `highlight()` returned "the same string back" and
+stayed green with the cache deleted: strings in JavaScript are primitives, so `Object.is` compares
+their VALUE and there is no reference identity to observe. The map's SIZE cannot tell them apart
+either — re-setting an existing key leaves it unchanged. How often Shiki was ASKED is the only
+externally visible difference between a cache that works and one that does not, so `codeHighlight.ts`
+exports `timesTokenised()` and the test counts. Verified by mutation: with the cache read deleted it
+goes red, where the identity version did not.
+
+**Two things this module's tests deliberately do not cover, and say so in place.** `highlight()`'s
+`failed` branch cannot be entered from outside — no input makes a loaded Shiki grammar throw on
+demand — so `plainBlock` is exported and the two fallback shapes are asserted directly; what remains
+unproven is that a real grammar failure routes there. And the table of languages is pinned against
+`SourceLanguage` in `src_mcp` by reading the enum's declaration, because a table checked only against
+its own unit tests drifts silently the day the collector learns a fourth language.
+
+**The diff's own measurement is a test, not a comment** (2026-09-18, story 1.3). The number that
+shaped `lineDiff.ts` — one added line read as seven changed ones, because the normaliser renumbers
+placeholders in order of declaration — is asserted as a case, with the count, so the day a change
+brings the wall of false differences back it goes red with the figure in the message rather than
+looking merely noisier to whoever next opens the page.
+
+**That measurement was taken on a CONSTRUCTED pair.** No real corpus was present on the machine —
+the data directory was empty — so the shape is representative and the exact ratio is not a
+measurement of live data. Worth re-running against a real database before the ratio is quoted
+anywhere as a property of the corpus.
+
+**The producer scan has a known blind spot, written down rather than left to be discovered.** The
+placeholder-kind test reads `Placeholders.cs` and extracts the words it RETURNS as a kind, then
+demands the set equal what `lineDiff.ts` masks — so a fourth kind arrives as a red test naming it.
+Two reviewers pointed out the way it can still go quiet: a refactor that returns a new kind through
+a named constant rather than a literal leaves the extraction finding the same three, and the
+assertion passes over a set that is no longer complete. A companion assertion now demands the scan
+still finds a KNOWN instance, which catches the extraction matching NOTHING; it cannot catch it
+matching too little. The real fix is a generated contract shared by both sides, which is work in
+its own right.
 
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
