@@ -107,48 +107,12 @@ public sealed class TheRealMethodTests : IAsyncLifetime
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>One collected pair, pointing at these two commits in this checkout.</summary>
-    private long Seed(string headSha, string fixSha, string file = "Totals.cs", int line = 10, string? repoPath = null)
-    {
-        using var db = RoundsDb.Open(_dir, Serilog.Core.Logger.None)!;
-        var session = new SessionState("s1", repoPath ?? _git.Path, "main", new PanelConfig()) { Stage = Stage.CodeReview };
-        var found = new Finding(
-            Severity.Major, Category.Reliability, file, line, "a race", "it races", "hold the lock", ["codex"]);
-        db.RecordRound(
-            session,
-            new RoundRecord("CodeReview", 1, "revise", 1, "all answered", new DateTime(2026, 9, 18)),
-            [found],
-            new RoundContext("SCOPE", headSha, "claude-code"));
-        db.RecordDecisions("s1", "CodeReview", 1, [Decisions.Accept([found], 0)]);
+    /// <summary>One collected pair, pointing at these two commits in this checkout — through <see cref="PairSeed"/>.</summary>
+    private long Seed(string headSha, string fixSha, string file = "Totals.cs", int line = 10, string? repoPath = null) =>
+        PairSeed.One(_dir, repoPath ?? _git.Path, headSha, fixSha, file, line, Skeletons);
 
-        using var read = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
-        read.Open();
-        using var one = read.CreateCommand();
-        one.CommandText = "SELECT id FROM findings";
-        var id = (long)one.ExecuteScalar()!;
-
-        db.RecordCollect(id, "", "collected", "", fixSha, "run-1", Skeletons);
-
-        return id;
-    }
-
-    /// <summary>Whatever the mode wrote to stdout.</summary>
-    private static async Task<(string Out, int Code)> SpokenAsync(Func<Task<int>> mode)
-    {
-        var stdout = new StringWriter();
-        var was = Console.Out;
-        try
-        {
-            Console.SetOut(stdout);
-            var code = await mode();
-
-            return (stdout.ToString(), code);
-        }
-        finally
-        {
-            Console.SetOut(was);
-        }
-    }
+    /// <summary>Whatever the mode wrote to stdout — through <see cref="Stdout"/>.</summary>
+    private static Task<(string Out, int Code)> SpokenAsync(Func<Task<int>> mode) => Stdout.OfAsync(mode);
 
     /// <summary>The mode's answer for one pair, typed.</summary>
     private static async Task<RealMethod> AnswerAsync(long findingId)

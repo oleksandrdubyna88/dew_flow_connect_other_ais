@@ -76,6 +76,16 @@ internal static class Program
         /// </remarks>
         RealMethod,
 
+        /// <summary>One pair's FILE as it was at the commit the reviewers read — a VIEW for the page, never a payload.</summary>
+        /// <remarks>
+        /// The review page offers <i>Open at &lt;sha&gt;</i>; the extension spawns no git of its own, so
+        /// the read is this mode: <c>git show &lt;sha&gt;:&lt;path&gt;</c> against the object database,
+        /// which is what makes an orphaned commit — 55.7 % of recorded heads — still readable. Every
+        /// coordinate comes from the row the id names; nothing on argv can redirect it. (Story 3.1 of
+        /// the review-page plan.)
+        /// </remarks>
+        FileAt,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -194,6 +204,7 @@ internal static class Program
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
                 "--real-method" => Startup.RealMethod,
+                "--file-at" => Startup.FileAt,
                 "--upload-pairs" => Startup.UploadPairs,
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
@@ -252,6 +263,9 @@ internal static class Program
 
             case Startup.RealMethod:
                 return await RealMethodAsync(args);
+
+            case Startup.FileAt:
+                return await FileAtAsync(args);
 
             case Startup.UploadPairs:
                 return await UploadPairsAsync(args);
@@ -735,11 +749,49 @@ internal static class Program
     /// <para>Nothing is written on this path — not a row, not a column. A test asserts the file is
     /// byte-identical before and after.</para>
     /// </remarks>
-    internal static async Task<int> RealMethodAsync(string[] args)
+    internal static Task<int> RealMethodAsync(string[] args) =>
+        AnswerOnePairAsync("--real-method", args, RealMethodOfAsync, Server.ServerJsonContext.Default.RealMethod);
+
+    /// <summary>One pair's file as it was at the commit the reviewers read, on stdout.</summary>
+    /// <remarks>
+    /// <para>The same shape as <c>--real-method</c>, through the same door: <c>--id</c> names a pair,
+    /// the row supplies the checkout, the commit and the path, and the answer is data on stdout at
+    /// exit 0 whatever the repository has become since — a checkout gone, a commit pruned, a file
+    /// not at that path then, a stored path that is not repository-relative — because each sends a
+    /// person somewhere different and an exit code cannot say where. 65 for a bad <c>--id</c>, never
+    /// 64; 74 when the database will not open or read.</para>
+    /// <para><b>The repository is the store's, not the caller's.</b> There is no <c>--repo</c>, no
+    /// <c>--sha</c> and no <c>--file</c>: a row's coordinates are what the session and the finding
+    /// recorded, so a corrupted or model-written argument cannot point this at another repository on
+    /// the machine. <c>TheCoordinatesComeFromTheStore_AndNothingOnArgvCanRedirectThem</c> pins it.</para>
+    /// <para>Nothing is written on this path — not a row, not a column.</para>
+    /// </remarks>
+    internal static Task<int> FileAtAsync(string[] args) =>
+        AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision);
+
+    /// <summary>
+    /// The shape every one-pair mode shares: <c>--id</c> to a row, the row to an answer, the answer to
+    /// stdout — and the two exit codes that are not answers.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>65 and never 64 for a bad `--id`.</b> 64 is how a caller detects a binary too old for a
+    /// mode and falls back; a request fault wearing it would send the page down the fallback and hide
+    /// behind "your server is too old". This binary KNOWS the mode.</para>
+    /// <para>Only the database refusing to open or to be read is 74, as every database mode here. A
+    /// pair the database does not have is the answer's own business — <paramref name="answer"/> is
+    /// handed the null and says <c>pair_not_found</c> at exit 0.</para>
+    /// <para>Written once when <c>--file-at</c> arrived as the second such mode, rather than copied:
+    /// two bodies opening the same database the same way is how one of them comes to answer 64.</para>
+    /// </remarks>
+    private static async Task<int> AnswerOnePairAsync<T>(
+        string mode,
+        string[] args,
+        Func<long, Store.ReviewPair?, Task<T>> answer,
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> shape)
     {
         if (!FindingId(Flags(args), out var findingId))
         {
-            Note("--real-method needs --id <findingId>, a whole number");
+            Note($"{mode} needs --id <findingId>, a whole number");
             return 65; // EX_DATAERR
         }
 
@@ -762,10 +814,23 @@ internal static class Program
             return 74; // EX_IOERR
         }
 
-        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(
-            await RealMethodOfAsync(findingId, pair), Server.ServerJsonContext.Default.RealMethod));
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(await answer(findingId, pair), shape));
 
         return 0;
+    }
+
+    /// <summary>The pair's file read back out of git — or the answer that there is no such pair.</summary>
+    private static async Task<Core.Collecting.FileAtRevision> FileAtOfAsync(long findingId, Store.ReviewPair? pair)
+    {
+        if (pair is null)
+        {
+            return new Core.Collecting.FileAtRevision(findingId, Reason: Core.Collecting.FileAtReason.PairNotFound);
+        }
+
+        var reader = new Runners.Collecting.FileAtReader(new Runners.Collecting.GitHistory(new ProcessLauncher()));
+
+        return await reader.ReadAsync(
+            findingId, new Runners.Collecting.FilePlace(pair.RepoPath, pair.HeadSha, pair.File));
     }
 
     /// <summary>The `--id` a caller named, as a finding id — or not, when it named none or not a number.</summary>
@@ -1614,6 +1679,10 @@ internal static class Program
         stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
+        `--real-method --id <findingId>` prints one collected pair's method un-anonymised, at both of
+        its commits; `--file-at --id <findingId>` prints the pair's whole file as it was at the commit
+        the reviewers read. Both answer every way the repository can have changed since as a reason
+        on the document, exit 0; a bad `--id` is 65.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }
