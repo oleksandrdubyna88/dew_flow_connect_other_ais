@@ -275,7 +275,7 @@ function run(pageState: PageState): ReturnType<typeof shimFor> {
   const script = /<script nonce="a-nonce">([\s\S]*?)<\/script>/u.exec(html)?.[1];
   assert.ok(script !== undefined, 'the page rendered no script');
 
-  // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test.
+   
   const body = new Function('document', 'window', 'acquireVsCodeApi', script);
   body(shim.document, shim.window, () => ({ postMessage: (m: unknown) => shim.posted.push(m) }));
 
