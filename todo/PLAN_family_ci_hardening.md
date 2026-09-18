@@ -185,17 +185,36 @@ files no CI run exercises because they only execute on a tag. All eighteen were 
 shell, none by an ignore list, and the step now asserts `command -v shellcheck` so the same silent loss
 cannot recur.
 
-**One item is BLOCKED and is not being substituted with something weaker.** `connect_other_ais/src_vs_code`
-is on `typescript ^7.0.2`; `typescript-eslint` 8.70.0 declares peer `typescript: ">=4.8.4 <6.1.0"`
-(checked against the registry, 2026-09-17). So the largest TS package in the family cannot take the
-type-aware linter this epic specifies, and `no-floating-promises` — named above as the acceptance
-criterion — is a type-aware rule. Plain eslint would pass a gate while dropping the one rule that
-motivated it, so it is not a fallback. Downgrading the compiler to please a linter inverts the
-dependency. **Decision: leave it blocked, and revisit when typescript-eslint supports TS 7.** Epic 2
-does not close until this line says which way it went.
+**The one blocked item is UNBLOCKED, 2026-09-18, by asking a question nobody had put to the code.**
+`connect_other_ais/src_vs_code` was on `typescript ^7.0.2`; `typescript-eslint` 8.70.0 declares peer
+`typescript: ">=4.8.4 <6.1.0"` — true of `latest` and of the alpha canary alike. So the largest TS
+package in the family could not take the type-aware linter this epic specifies, and
+`no-floating-promises` — named above as the acceptance criterion — is type-aware. Plain eslint would
+have passed a gate while dropping the one rule that motivated it, so it was never a fallback.
 
-> **Consequence for Dependabot.** `rag_qln` has an open PR bumping ITS extension to TS 7, which would
-> break the eslint config being added there in the same week. A compiler bump past the parser's
+It was recorded as blocked the same day, pending typescript-eslint. The question that resolved it was
+the operator's: **does this package actually need TypeScript 7?** It does not. The bump was an
+ordinary `chore(deps)` (`7c08d6a8`); `tsconfig.json` asks for nothing newer than ES2022 and
+`exactOptionalPropertyTypes`. Measured before it was proposed: on 5.9.3 the source typechecks with
+**zero errors** and the suite passes **3583 to 0**. The compiler moved back, the linter went in, and
+TypeScript 7 returns the day the parser supports it.
+
+What the linter found on first contact is worth recording, because two of the three arguments were
+settled by counting rather than taste:
+
+| | measured | decision |
+|---|---|---|
+| `no-floating-promises` in `src/test` | 3,544 | `node:test`'s `test`/`it`/`describe` return a promise by design — `allowForKnownSafeCalls` names the PACKAGE, so a floating promise *inside* a `test()` body still fails |
+| `complexity: 4` / `max-lines-per-function` / `no-console` | 451 / 49 / 109 | LEFT OUT. In `rag_qln` the same set found 33 across 7 files — a boundary you can name. 451 is a wholesale rejection of how the package is written, and belongs to its own decision |
+| `no-await-in-loop` | 73, against 5 `eslint-disable` markers | LEFT OUT; the five decorative markers were removed instead |
+| `max-lines` (800) | 8 files | kept — nameable, and each file says its measured size at the top |
+
+And the escape findings were real defects rather than lint noise: `'C:\Users\strug'` in a JavaScript
+string is `C:Usersstrug`, so **two tests asserted on Windows paths that were never Windows paths** and
+passed because both sides carried the same mangling.
+
+> **Consequence for Dependabot, still standing.** `rag_qln` has an open PR bumping ITS extension to
+> TS 7, which would break the eslint config being added there. A compiler bump past the parser's
 > supported range must not merge on its own: require a clean install plus a lint run on the proposed
 > lockfile, with a floating-promise fixture proving the rule still fires.
 
@@ -336,8 +355,8 @@ as the ruleset intends** — a test tag left behind on a release pattern is a re
 
 - [ ] Every job of every repository is a required check, and no PR can skip one.
 - [ ] `dotnet format --verify-no-changes` / eslint / cargo fmt / actionlint fail a badly formatted PR.
-- [ ] **Epic 2's blocked line is resolved**: `src_vs_code` either has the type-aware linter or the
-      plan records why it still cannot, with the peer range that says so.
+- [x] **Epic 2's blocked line is resolved**, 2026-09-18: `src_vs_code` has the type-aware linter,
+      reached by moving TypeScript back to 5.9.3 rather than by weakening the gate.
 - [ ] `dependabot.yml`, the PR template and the semantic-title check exist in every repository.
 - [ ] release-please cuts the tags the release workflows already build from, with the narrative
       changelog untouched.
