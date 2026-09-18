@@ -362,7 +362,10 @@ internal static class Program
         {
             var configuration = Server.SettingsFile.Layer(
                 Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
-                Environment.GetEnvironmentVariable);
+                Environment.GetEnvironmentVariable,
+                // STDERR, through the channel this binary already prefixes: stdout carries the
+                // answer a caller parses (logging-serilog.md, a host whose stdout is a protocol).
+                Note);
             var settings = Server.PanelSettings.FromEnvironment(configuration);
             var launcher = new Runners.Processes.ProcessLauncher();
             // NO VAULT READ. Recording how a consultation ended talks to nobody — it reads a record
@@ -430,7 +433,9 @@ internal static class Program
         // configuration nobody has. The variable still outranks the file, key by key, as everywhere.
         var configuration = Server.SettingsFile.Layer(
             Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
-            Environment.GetEnvironmentVariable);
+            Environment.GetEnvironmentVariable,
+            // Same rule: this mode prints JSON on stdout and a person's migration is told on stderr.
+            Note);
         var settings = Server.PanelSettings.FromEnvironment(configuration);
         var launcher = new Runners.Processes.ProcessLauncher();
         // The same read `ServeAsync` does, so a vendor whose key is in the vault is reported as
@@ -1453,7 +1458,11 @@ internal static class Program
             // variable in the client is more specific than a file any window may rewrite.
             var configuration = SettingsFile.Layer(
                 SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
-                Environment.GetEnvironmentVariable);
+                Environment.GetEnvironmentVariable,
+                // The adoption of a legacy root settings file is exactly the class of thing the
+                // `data directory:` notes below carry, so it goes out the same way and reads the
+                // same in the log.
+                note => log.Warning("data directory: {Note}", note));
             var settings = PanelSettings.FromEnvironment(configuration);
             // The tracker is what lets a LATER server collect reviewers this one leaves behind if
             // it dies: the timeout kill is performed by the parent, so it cannot run when the

@@ -22,7 +22,7 @@
 >    probes had the same defect and the same cure. A test now refuses any second answer to "where does
 >    the data live" outside `dataDir.ts`.
 > 2. **The extracted tail is one plan, not two**, for the same reason:
->    [PLAN_the_settings_file_ignores_the_side.md](../todo/PLAN_the_settings_file_ignores_the_side.md),
+>    [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md),
 >    which is the server's half and needs a server release.
 > 3. **`ALWAYS_PER_SIDE` turned out to need only the WRITE path**, not the read. The plan assumed both;
 >    the two layers are read separately anyway — the overlay and the shared value — because the panel

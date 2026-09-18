@@ -714,7 +714,7 @@ The week of measurement then **revises** a number that already exists.
 with no side and no trim, while `PanelSettings.ResolveDataDir` (`PanelSettings.cs:513`) applies both —
 so on a side-partitioned install the two halves would disagree about where the file is and neither
 would say so. S8 uses `ResolveDataDir`, pinned by `shared/data-side-vectors.json`, and is ordered
-after [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md).
+after [PLAN_the_settings_file_ignores_the_side.md](../research/PLAN_the_settings_file_ignores_the_side.md).
 
 ### H. The gap the log cannot see by itself
 
@@ -919,7 +919,7 @@ goes into each plan below in the same task.
 | Notification text in five languages | not done | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns staleness; translation is out of scope until it lands |
 | The Team server's refusal vocabulary | not touched | [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md) owns `src_server` |
 | The SIZE of `roundsLog.ts` (2016) and `panelView.ts` (2850) | not touched here — the new page is under 400 lines a module from its first commit, so it joins no backlog | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) owns the split and is **blocked until S8 finishes**: S5 adds a fourth live region to `panelView.ts` and S6 changes `roundsLog.ts`, and a thousand-line move rebased across them throws away the review both are getting. Operator, 2026-09-17 |
-| Where the server resolves its data dir | S8 depends on it | [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md) goes first |
+| Where the server resolves its data dir | S8 depends on it | [PLAN_the_settings_file_ignores_the_side.md](../research/PLAN_the_settings_file_ignores_the_side.md) goes first |
 
 ## Build order
 

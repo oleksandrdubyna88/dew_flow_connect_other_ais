@@ -1,19 +1,19 @@
 # PLAN — the settings file and the logs ignore the side that partitions everything else
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope:
+> Status: **IMPLEMENTED, 2026-09-18.** Scope:
 > `src_mcp/src/Server/SettingsFile.cs`, `src_mcp/src/Server/PanelSettings.cs`, `src_mcp/tests`, and
 > the shared fixture [shared/data-side-vectors.json](../shared/data-side-vectors.json).
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](../research/PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md).
+> Related docs: [module_server.md](module_server.md),
+> [PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md](PLAN_the_data_directory_moves_and_each_side_keeps_its_own.md).
 >
 > Found while building
-> [PLAN_the_install_asks_where_the_data_lives.md](../research/PLAN_the_install_asks_where_the_data_lives.md)
+> [PLAN_the_install_asks_where_the_data_lives.md](PLAN_the_install_asks_where_the_data_lives.md)
 > and deliberately left out of it: this is the SERVER's half, it needs a server release, and it is
 > wrong today whether or not anything from that plan ships.
 >
 > **It is the declared prerequisite of S8** of
-> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md), whose own text
+> [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md), whose own text
 > reads *"Until this lands, S8 must not be built."* It is being built now because the release it
 > needs — `coai-mcp 0.29.0` — went out on 2026-09-18.
 >
@@ -158,7 +158,7 @@ environment reading differ between runtimes, and a static vector file cannot see
 ## The boundary with the notifications plan *(round: it must be a table)*
 
 Reciprocal of the *Who builds what* table in
-[PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md) — a boundary named
+[PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md) — a boundary named
 once is not a boundary.
 
 | Item | Built by | What the other one's part is |
@@ -175,11 +175,58 @@ that fixes it.
 
 **This plan goes FIRST.** S8's own text says so.
 
+## What shipped, and where it differs from the plan
+
+Built on `fix/the-settings-file-knows-its-side`, 2026-09-18. The shape above is what landed; four
+things are NOT what this document said before the code round, and they are the useful part of the
+record.
+
+**1. `Layer` has a required sink, which this plan never asked for.** The plan said the adoption
+should return what a person needs told, and the first build did — then dropped it on the floor, while
+the comment beside it claimed the startup path logged what came back. Nothing anywhere called
+`AdoptRootSettings`. Six reviewers across three vendors found the same thing independently in the
+code round, and they were describing the exact defect
+[PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md) exists for: a
+sentence composed and shown to nobody. `Layer(dataDir, environment, Action<string> said)` now takes a
+sink with **no default**, so the compiler asks every caller where its sentences go — `ServeAsync` and
+`PanelServiceHost.Build` pass the log, the two one-shot modes pass `Note`, which is stderr, because
+their stdout carries JSON. Planting the discard turns two tests red with *the collection is empty*.
+
+**2. The race test did not test the race.** As first written it created the destination BEFORE
+calling the adoption, so the existence check returned early and `File.Move(overwrite: false)` — the
+guarantee the case is named after — was never reached. It would have passed with the guard deleted,
+which is the same failure as the role-deletion nonce test. It drives a hook now
+(`SettingsFile.BetweenTheCheckAndThePublication`), so the other window publishes in the one instant
+between this side's check and its rename. Watched failing with `overwrite: true` planted: *the loser
+of the race overwrote the winner's file*.
+
+**3. The resolver property covers CLASSES of input, and agreement includes refusing alike.** The
+first version crossed five directories with five side names, all of them valid; a reviewer was right
+that the interesting inputs are the ones where the two could disagree by one THROWING and the other
+answering. It now crosses six directory shapes with eleven side shapes — `.`, `..`, separators,
+upper case, padding — and compares the refusal message when there is one.
+
+**4. Four reviewers asked why the adoption takes no lock, and the answer went into the code rather
+than only into a resolve reason.** The lock is the extension's (`settings.lock`, around a WRITE of
+this same file); the server has never had a client for it and does not need one, because
+`File.Move(overwrite: false)` makes this create-if-absent and atomic — stronger than an advisory lock
+file that can be stale, broken or ignored. The same paragraph answers the other recurring question,
+why a READ does a write at all: because the alternative puts `--providers` on defaults for a machine
+whose configuration exists, and because every failure here is caught and returned as a sentence, so a
+read stays a read on a filesystem that will not take the write.
+
+Rejected with reasons, and recorded here because a reader will wonder: moving the adoption into
+`DataDirFrom` (it is the LOG ROOT's resolver — resolving a log path would write a settings file);
+`Directory.CreateDirectory` on the wrong path (it is already the parent); path traversal through a
+side name (`IsSafeSide` admits no separator and refuses `.` and `..`); an identical-path check that
+already exists; and *adoption runs on every property access* (it runs once per `Layer`, of which
+there are four in the product, and after the first adoption it costs one `File.Exists`).
+
 ## Definition of Done
 
-- [ ] Every test above written RED first, with its failure message recorded.
-- [ ] Both suites green; the extension's suite green against the same vectors.
-- [ ] `research/module_server.md` records the rule, the migration protocol and where historical logs
-      remain.
+- [x] Every test above written RED first, with its failure message recorded.
+- [x] Both suites green; the extension's suite green against the same vectors.
+- [x] `research/module_server.md` records the rule, the migration protocol and where historical logs
+      remain — and `research/module_tests.md` names the scenario and the seam's fifth leg.
 - [ ] A server release, since this changes where a running server reads its settings.
-- [ ] Through `review_plan` (done — seven of seven accepted) and `review_code`.
+- [x] Through `review_plan` (seven of seven accepted) and `review_code`.

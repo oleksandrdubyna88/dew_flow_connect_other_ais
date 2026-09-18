@@ -624,6 +624,24 @@ wrong:
 | A root file that does not **parse** is named and left | publishing an unreadable file to a second location copies a defect into a second place |
 | It happens in `SettingsFile.Layer`, the READ | `--providers` can run before any normal start; adoption in the startup path would have it report defaults for a machine whose configuration exists, and a normal start afterwards would answer differently about that same machine |
 
+**What the adoption SAYS reaches a caller, and the compiler asks where.** `SettingsFile.Layer` takes
+a required `Action<string> said`. The first build adopted and dropped the returned sentences on the
+floor while the comment beside them claimed the startup path logged what came back — nothing anywhere
+called `AdoptRootSettings`, and six reviewers across three vendors found the same thing in one code
+round. A migration that moves a person's configuration, or REFUSES to because the root file will not
+parse, is exactly what they need told. The sink has no default so that a future caller has to decide,
+which a ratchet test could only ask after the fact: `ServeAsync` and `PanelServiceHost.Build` pass the
+log (`data directory: {Note}`, beside `StorageNotes`), and the two one-shot modes pass `Note` — STDERR,
+because their stdout carries the JSON a caller parses.
+
+**It takes no lock, and that is not an oversight** — four reviewers across two vendors asked. The lock
+is the EXTENSION's (`settings.lock`, taken in `extension.ts` around a write of this same file) and the
+server has never had a client for it. It does not need one: `File.Move(overwrite: false)` makes this
+create-if-absent and atomic, which is stronger than an advisory lock file that can be stale, broken or
+ignored. A window writing the same path at the same moment wins, and this side reads what it wrote. On
+a filesystem that will not take the write at all — read-only, a mount gone, no permission — nothing
+throws: every failure is caught and returned as a sentence, so a read stays a read.
+
 A genuinely new side adopts the root file too, deliberately: it is what that side would have read
 before, so adopting preserves behaviour where starting on defaults would be the surprise.
 

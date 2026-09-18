@@ -110,22 +110,46 @@ public sealed class TheSettingsFileKnowsItsSideTests
     public void TheTwoResolvers_AnswerTheSameThingForEveryShapeOfInput()
     {
         // The property, rather than a list of cases: whatever PanelSettings decides, this decides.
-        // A test enumerating inputs passes the day somebody adds a rule to one of them; this one
+        // A test enumerating ANSWERS passes the day somebody adds a rule to one of the two; this one
         // goes red.
+        //
+        // The shapes are chosen to cover every CLASS the rules distinguish, which is what the code
+        // round asked for and the first draft did not have: unset / empty / whitespace / absolute /
+        // trailing-separator / relative for the directory, and unset / empty / whitespace / plain /
+        // punctuated / UPPER-CASE (lowered) / dot / dot-dot / with a separator (refused) for the
+        // side. The last three are the interesting ones — they are the inputs on which the two could
+        // disagree by one THROWING and the other answering.
         var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
-        string?[] dirs = [null, "", "   ", root, root + Path.DirectorySeparatorChar];
-        string?[] sides = [null, "", "  ", "alpha", "a_b-1"];
+        string?[] dirs = [null, "", "   ", root, root + Path.DirectorySeparatorChar, "relative-dir"];
+        string?[] sides = [null, "", "  ", "alpha", "a_b-1", "  alpha  ", "WSL", ".", "..", "wsl/node1", "wsl\\node1"];
 
         foreach (var dir in dirs)
         {
             foreach (var side in sides)
             {
                 var env = Env(dir, side);
+                var why = $"the two resolvers must agree for COAI_DATA_DIR={dir ?? "<null>"} "
+                    + $"COAI_DATA_SIDE={side ?? "<null>"}";
 
-                SettingsFile.DataDirFrom(env).Should().Be(PanelSettings.DataDirectoryFor(env),
-                    $"the two resolvers must agree for COAI_DATA_DIR={dir ?? "<null>"} "
-                    + $"COAI_DATA_SIDE={side ?? "<null>"}");
+                // Agreement includes REFUSING alike. A resolver that answers where the other throws
+                // is the original defect wearing a different hat: one half of the product carrying
+                // on with a directory the other half refused to name.
+                Answer(() => PanelSettings.DataDirectoryFor(env))
+                    .Should().Be(Answer(() => SettingsFile.DataDirFrom(env)), why);
             }
+        }
+    }
+
+    /// <summary>What a resolver said, or how it refused — so a throw is compared rather than thrown.</summary>
+    private static string Answer(Func<string> resolve)
+    {
+        try
+        {
+            return resolve();
+        }
+        catch (InvalidOperationException e)
+        {
+            return "refused: " + e.Message;
         }
     }
 }

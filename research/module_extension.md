@@ -3301,7 +3301,7 @@ have refused this very installation.
 One caveat the entry states in full: on an installation partitioned with `coai.dataSide`, the server
 writes its logs to the ROOT and not to the side directory, because `SettingsFile.DataDirFrom` applies
 no side. A partitioned move therefore finds none there to take until
-[../todo/PLAN_the_settings_file_ignores_the_side.md](../todo/PLAN_the_settings_file_ignores_the_side.md)
+[PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md)
 ships.
 
 So the intention and the evidence are now two records, and **the panel renders the evidence**:
