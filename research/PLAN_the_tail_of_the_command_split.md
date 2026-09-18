@@ -1,8 +1,13 @@
 # PLAN — the eleven defects the split was not allowed to fix
 
-> Status: **IMPLEMENTED, 2026-09-18.** All thirteen stories shipped, and the six SonarCloud
-> findings with them. Deviations are in *What shipped differently*; the tail this work uncovered
-> is in *Still open*, both at the end.
+> Status: **IMPLEMENTED, 2026-09-18** — thirteen stories and seven SonarCloud findings, with
+> **three stories partial by decision**. Stories 4, 5 and 8 each shipped their defect fix and each
+> left a named half unbuilt, on a measurement recorded beside it: story 4’s picture RETENTION,
+> story 5’s resumable rename JOB, story 8’s budget on `await thread.writes`. All three are in
+> *Still open* with their reasons — and saying so here rather than only there is the point, because
+> this plan's own opening lesson is that a named gap in a shipped plan reads as done to everybody
+> who was not in the room. The first draft of this line said “all thirteen stories shipped” and two
+> reviewers refused it. Deviations are in *What shipped differently*; the tail is in *Still open*.
 >
 > **Scope — every module a story below MODIFIES, not only the ones it quotes.** Nine of them came
 > out of [PLAN_the_command_file_is_too_big.md](PLAN_the_command_file_is_too_big.md):
@@ -12,7 +17,9 @@
 > than in `chatPersist`), `chatPage.ts` and `chatModels.ts` (story 11 moves a type out from under
 > both). One is new: `chatContracts.ts`. The second round added two more that are EXTENDED rather
 > than fixed: `atomicFile.ts` (story 4 teaches `writeFileAtomically` to take bytes) and
-> `chatStoreSweep.ts` (story 4 widens the sweep's reach to `pictures/<id>`). **Story 13 reaches
+> `chatStoreSweep.ts` (story 4 was to widen the sweep's reach to `pictures/<id>` — **it did not,
+> and that half is in *Still open***; measured, that tree is persistent data rather than the
+> store's, so it needs a retention policy rather than a wider sweep). **Story 13 reaches
 > outside `src` altogether** — `src_vs_code/package.json` (a dev dependency and a test script),
 > `.github/workflows/ci.yml` (a job and an `xvfb-run`), a new suite, and
 > `research/module_tests.md`, whose twelve “not covered” rows are what it exists to start closing.
@@ -891,7 +898,7 @@ Eleven issues were reported and the interesting thing is which:
 |---|---|
 | [chatTurn.ts:219](../src_vs_code/src/chatTurn.ts#L219), `oneTurn` | cognitive complexity 17 against the 15 allowed. Unchanged from `main`. The seam that reduces it is the one the module header already names as the honest next move — take it, rather than splitting the function to satisfy a number. |
 | [chatHooks.ts](../src_vs_code/src/chatHooks.ts) | two places that read better as an optional chain. |
-| [chatHooks.ts:657](../src_vs_code/src/chatHooks.ts#L657) | `pictureDir(entry.id.toString())` — stringifies as `[object Object]` if anything ever puts it in a template. It does not today; the defect is that nothing stops it. |
+| [chatHooks.ts:657](../src_vs_code/src/chatHooks.ts#L657) | `pictureDir(entry.id.toString())` — stringifies as `[object Object]` if anything ever puts it in a template. ~~It does not today; the defect is that nothing stops it.~~ **It DID today** — `ChatEntry.id` is typed `object`, so `toString()` returned `"[object Object]"` for every conversation there has ever been, and every one of their pictures went into one directory where the same turn number overwrote the same file. The row above is kept as written because it is the record of what was believed; this was the only one of the six that was not cosmetic. |
 | [chatSessionJoin.ts:88-90](../src_vs_code/src/chatSessionJoin.ts#L88-L90), `resolveAndPin` | the FIRST nested ternary: `own ?? (pinnable(…) ? … : undefined)`. |
 | [chatSessionJoin.ts:268-269](../src_vs_code/src/chatSessionJoin.ts#L268-L269) | **the second one, which every earlier draft left unlocated** — `? sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : '')) : kind === 'claude' ? { kind: 'none' } : sourceOfFile(…)`. |
 
@@ -949,8 +956,16 @@ cost the last two findings.
 > issues in any state rather than only new ones:
 >
 > ```bash
-> curl -s "https://sonarcloud.io/api/issues/search?componentKeys=<projectKey>&resolved=false&ps=500"
+> # rules= filters SERVER-side, which is what keeps this honest: the project had 577 open issues
+> # and ps caps at 500, so an unfiltered first page can hide the target and read as "closed".
+> curl -s "https://sonarcloud.io/api/issues/search\
+>   ?componentKeys=<projectKey>&resolved=false&rules=typescript:S6582&ps=500"
 > ```
+>
+> **Check `total` against the number of issues returned before believing an empty result.** The
+> unfiltered form first used here returned 500 of 577 and found both targets by luck; the document
+> gate caught that before it became the next reader’s false negative. The `files=` and `components=`
+> parameters are ignored on this endpoint — filter by rule server-side, or paginate.
 >
 > One call, filtered to the rule, named both — `chatHooks.ts` lines 531 and 543, `typescript:S6582`,
 > `OPEN`. (Its `files=` / `components=` filters are ignored on this endpoint; fetch and filter
@@ -980,7 +995,10 @@ somebody imagined.)*
    turn abandoned by a reset must neither write into the replacement (8) nor repaint it (12), and both
    are the same identity check applied at two points. Then a scope that closes in a `finally`, then a
    single-entry latch. Everything after this posts into the surface these four settle.
-3. **Story 13** — the extension-host harness, with story 6's scenario as its first and only
+3. **Story 13** — the extension-host harness. *(Shipped differently: its first scenario is NOT
+   story 6's, because story 6's could not land here without checking in a failing test. It shipped
+   asserting that the extension activates and registers all twenty-two manifest commands. See the
+   callout in story 13.)* As written, with story 6's scenario as its first and only
    conversion, watched red before story 6's guard exists. Its own pull request: it touches CI and a
    dependency and nothing else here does.
 4. **Stories 2, 6, 7** — the three failures that are currently invisible, now written against a
@@ -1081,7 +1099,11 @@ rather than the word.
       `symlinkEscape.test.ts`.
 - [x] Story 1's residual race is **written into the code's own header**, beside `insideReally`.
 - [x] Stories 2–12 shipped in the five groups above, each with its own RED observation recorded, and
-      each of the four second tests present and observed failing against a naive fix.
+      **stories 4, 5 and 8 partial by decision** — see *Still open* for the half each left and the
+      measurement behind it. Every defect the story named was fixed; what was not built in each case
+      is a second piece of work the measurement said not to buy yet. And
+      each of the **five** second tests present and observed failing against a naive fix — stories
+      2, 4, 8, 10 and 12. The count said four until the document gate counted the table.
 - [x] Story 8's fence proved on the WRITE path, not only the turn path.
 - [x] Story 12's fix leaves the console warning in place.
 - [x] Nothing was re-implemented that the repository already has. Story 4 EXTENDED `atomicFile`,
@@ -1116,7 +1138,10 @@ rather than the word.
 - [x] The coai gate ran on each pull request — `review_plan` to `proceed` (or `good_enough` with every
       finding resolved), then `review_code`. The last round: 12 reviewers, 10 findings, 2 accepted,
       8 rejected with reasons, verdict `proceed`.
-- [x] **Every touched module's documentation updated, not just two files**, per the mapping below.
+- [x] **Every touched module's documentation updated, not just two files.** The mapping, per pull
+      request: stories 1, 2, 4, 12 → `module_extension.md`; stories 3, 5 → the store's own module
+      doc; story 13 → `module_tests.md`, whose gap row it rewrites; the Sonar group → both; every
+      story → its row in `module_tests.md`'s flow table, including the “NOT proved” column.
 - [x] `research/architecture.md` and its Mermaid diagrams regenerated where cross-module interaction
       changed.
 - [x] **The boundary table exists in BOTH directions** (below), and the other two plans gained their
@@ -1207,11 +1232,18 @@ not an estimate, it is a habit of assuming the defect is there because the plan 
 | story 8 is a story | two thirds of it was already done |
 | story 2 has four wrong sites | one of the four was already correct |
 | story 5's rename takes hours | 58 seconds, measured |
-| story 4 must fix an encoding bug | the claim was the plan's own, and false — the branch was removed and the test's reason corrected |
+| story 4 must fix an encoding bug (`'utf8'` mangles a Buffer write) | **there was no bug.** The claim was the plan's own, measured false: the branch written for it was removed and the test's stated reason corrected. Nothing in the code was wrong; the plan was. |
 | four comments describe the behaviour | they described behaviour the code does not have |
 | Sonar's `[object Object]` is latent, *"it does not today"* | it did today: **every** conversation's pictures were in one directory, because `ChatEntry.id` is typed `object` |
 | a PR's SonarCloud comment proves a finding closed | it speaks about NEW code — three PRs said *"0 New issues"* while two findings sat OPEN on `main` |
 | the six Sonar findings are *"worth one afternoon"* | they were, until the last two turned out to sit in front of a guard no test could reach |
+
+**Three stories are PARTIAL by decision** — 4, 5 and 8 — each having shipped its defect fix and
+left a named half unbuilt on a measurement. The table in *Still open* says which half and why. It
+is repeated in both places on purpose: the first version of this record said “all thirteen stories
+shipped” and put the unbuilt halves only in the open list, which is exactly the shape this plan
+opens by criticising in its own parent — *a named gap in a shipped plan reads as done to everybody
+who was not in the room*. Two reviewers refused it independently.
 
 Three deviations of shape rather than of fact:
 
@@ -1231,8 +1263,26 @@ Three deviations of shape rather than of fact:
 
 ## Still open
 
-Recorded here rather than left implied, and none of it is claimed by this plan:
+Recorded here rather than left implied, and none of it is claimed by this plan.
 
+**Three stories are partial by decision**, and the document gate was right that calling them
+“shipped” without saying so was the same defect this plan opens by describing. Each shipped its
+defect fix; each left a named half unbuilt, on a measurement:
+
+| story | what shipped | what did NOT, and why |
+|---|---|---|
+| **4** — a picture deleted before its replacement is written | the destructive order reversed, atomically | **Retention for the `pictures/<id>` tree.** Measured: it is `coaiDataDir()/pictures/<id>`, persistent data rather than temp, with nothing anywhere removing it — so the fix is not a wider store sweep but a new policy with a real decision in it (collectable when the conversation is deleted, or after an age? run by whom?). Not invented inside a story about a destructive replace. |
+| **5** — a folder rename refiles records one at a time | `abreast` at width 8, plus stories 6 and 7’s notice | **The persisted, resumable rename job** — schema, heartbeat, fencing token, recovery owner. Measured at 58 seconds for the whole job, ten with the pool, against the “hours” the plan assumed. A rename interrupted mid-way still leaves records split and nothing revisits them; the exposure is ten seconds rather than hours, which is why it is recorded rather than engineered around. **Re-measure BEFORE building the lease if the store grows an order of magnitude** — that is the whole lesson. |
+| **8** — a reset can wait for ever | the fence, on the turn path and the write path | **A budget on `await thread.writes`.** Deliberately not bolted on: abandoning that wait is how a save is lost, so it needs its own design rather than a number. An archive reset can still hang indefinitely on a slow or remote store. |
+
+And the rest:
+
+- **A second containment implementation, `dataCommands.ts:628`.** A private `isInside` with its own
+  case-folding and separator logic, injected as a parameter at `dataCommands.ts:450` — which is why a
+  grep for `isInside(` misses the call. Story 1 established that it is **not a hole** (the path comes
+  from a person choosing a data directory, not from a model’s answer), so it was correctly out of that
+  story’s scope — but two implementations of one containment rule is drift waiting to happen, and it
+  belongs in this list rather than only in story 1’s sweep table. *(gemini, the document round.)*
 - **The copy controls' WIRING.** That `onCopyAnswer` calls `theAnswerControlCopies` and `onCopyBlock`
   calls `theBlockControlCopies` is proven by no test. Swapping the two is a compile error now
   (`TS2554`, measured), so it cannot happen by accident — but a type is not a test, and only a real
@@ -1247,6 +1297,14 @@ Recorded here rather than left implied, and none of it is claimed by this plan:
 - **`ChatMessage` still lives in `chatPage.ts`.** Moving it breaks no cycle — measured, five
   importers, none imported back by the page — so it buys tidiness rather than a ratchet drop and was
   left as its own change.
+- **The extension-host job’s PROMOTION to required.** The rule is twenty consecutive green runs of
+  `main`; the job first ran 2026-09-17 and **nobody is counting yet**. It is pending rather than
+  abandoned — recorded here because a CI operator reading only the Definition of Done would see
+  “not required to merge” and have no way to tell which. No figure is given because none was
+  measured. *(codex, the document round.)*
+- **The eleven remaining rows of `research/module_tests.md`** that still end *"NOT covered … needs
+  an extension host"*. Story 13 converted exactly one, on purpose: a harness that grew twelve
+  scenarios before one of them caught anything has been built on guesses.
 - **The eight files over the 800-line ceiling**, below.
 
 ## Footnotes from the parent's tail, resolved rather than carried
