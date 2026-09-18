@@ -7,3 +7,10 @@
 # out with CRLF on Windows and the drift test goes red on a file nobody has touched - which it
 # did, on a rebase, hiding what that test is actually for.
 src_vs_code/notification-sites.json text eol=lf
+
+# C# source, because `dotnet format --verify-no-changes` reads `.editorconfig`, which says
+# `end_of_line = lf` — measured, since the files on disk carry LF and CI runs on ubuntu. Exactly one
+# `.cs` file had ever been committed with CRLF, and it turned the formatting gate red for everybody
+# who opened a pull request afterwards, over a file they had not touched. Without this line the
+# next one authored on Windows does the same.
+*.cs text eol=lf
