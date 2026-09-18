@@ -1221,9 +1221,28 @@ owns the block and signature only it has. Swapping them is a compile error at bo
 
 That also settles which `copy` each control gets: `answerToCopy` and `blockToCopy` are now chosen
 inside the units rather than passed in, so neither hook can hand the block control the whole answer.
-**What a type still cannot prove is that the hook bodies call them at all** — a press driven end to
-end through a real editor is the `test:host` harness's ground, and that remains open work rather than
-a claim.
+**What a type still cannot prove is that the hook bodies call them at all** — and that is covered
+now, 2026-09-18, by three scenarios in the extension-host harness. Inside a real editor `vscode` is
+real, so `conversationHooks` can simply be CALLED, and the clipboard it writes to is the system's
+rather than a fake: a press on the answer control must leave the whole answer on it, a press on block
+1 must leave `echo second` and not the whole answer, and a press on an answer the conversation has
+moved past must leave it untouched.
+
+**What makes those three worth their seconds is measured rather than argued.** Change `onCopyBlock`
+to serve block 0 whatever ordinal the page sent — a wiring error that compiles perfectly:
+
+| | notices |
+|---|---|
+| `answerCopy.test.ts` (23 cases) | **no** — 23 pass, 0 fail |
+| `tsc --noEmit` | **no** — exit 0 |
+| the host scenarios | **yes** — 3 of 4, naming *the block control copied something other than the block it was pressed on* |
+
+The refusal scenario runs **first**, and that ordering is part of the test rather than tidiness.
+`copyText.ts` re-asserts the newest text after a write it was overtaken during, so a copier from an
+earlier scenario can still write after a later one has laid down its sentinel — which it did, failing
+that scenario on a break that cannot reach it. A refused press writes nothing at all, so with nothing
+copied before it there is no corrective write in flight to race. Proving an absence also cannot be
+done by waiting for a change, so that one waits a fixed moment and reads once.
 
 SonarCloud had flagged both sites as **S6582** — `said === undefined || said.role !== 'model'` is
 exactly `said?.role !== 'model'`, which is what the extracted unit carries. The equivalence was
