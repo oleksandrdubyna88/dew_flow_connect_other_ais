@@ -7765,4 +7765,22 @@ also claimed *"this repository has no harness that provides one"*, which stopped
 before; corrected in place, along with a typed count that had drifted (thirty-eight → 39). That is the
 fifth comment in this family found describing behaviour the code does not have.
 
-**Result: 4 022 → 3 842.** Ten clusters remain, mapped with line numbers in the plan.
+**Result: 4 022 → 3 841** (`wc -l`, which is the figure every count here uses). Ten clusters
+remain, mapped with line numbers in the plan.
+
+### The rounds-log cache, second (2026-09-18)
+
+Two fields, four methods, **75 body lines and two lines of residue** — the class declaration and the
+constructor, and nothing else. The seam is one thing: `context.globalStorageUri`, which each of the
+four turns into a server path.
+
+**It differs from the first in a way the plan did not anticipate, and the difference is the lesson.**
+The Claude probe's methods were PRIVATE with one caller inside `render`, so they left the class
+entirely. These four are PUBLIC and are called from `extension.ts`, so the class keeps four one-line
+delegations and `extension.ts` is untouched. What actually left is the caching, the process spawning
+and the reasons for both — which is the whole value, and it is why the saving is 56 lines rather than
+the 80 the cluster measures. **A cluster's public surface, not only its size, decides what an
+extraction is worth**, and the plan's table does not record it.
+
+**Result: 3 841 → 3 785**, and the prover — with the class fix above — reports **2 runs against 2
+regions cut**: the two adjacent fields as one, the four methods as the other.
