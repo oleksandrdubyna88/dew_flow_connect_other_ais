@@ -45,14 +45,15 @@ import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from
 import { ExportableRow } from './roundsCsv';
 import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
-import { notify, notifyAndAsk, notifyThen } from './notify';
+import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRunAt } from './roundsDbRead';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
-import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
+import { lockIsStale } from './settingsLock';
+import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
@@ -357,13 +358,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     {
-      dispose: () => {
-        clearTimeout(deferred);
-        // And forget it. Clearing the timer without clearing the marker means a reactivation that
-        // finds the lock busy schedules nothing, and the configuration then waits for a change that
-        // may never come. Accepted finding, this story's code round.
-        deferred = undefined;
-      },
+      // The mirror's pending attempt. Dropped rather than left ticking against a host that is going
+      // away — and nothing is persisted, because the next activation runs `sync()` and re-derives
+      // every condition from the file itself.
+      //
+      // FORGOTTEN, not merely cancelled: a cancelled schedule left in the module variable is reused
+      // by the next activation, which then runs against the PREVIOUS activation's sync and carries
+      // its suppression, so a condition the new window has never reported is already silenced.
+      // (Three reviewers, the code round.)
+      dispose: forgetTheMirror,
     },
     // The heartbeat's timer. Its FILE is left on purpose — see `chatStoreHeartbeat.ts`.
     {
@@ -614,31 +617,126 @@ export async function deactivate(): Promise<void> {
 }
 
 /**
- * The pending retry, and there is at most one.
+ * The mirror's schedule, and there is at most one.
  *
- * <p>A window that finds another one in the file writes nothing — which is right, because nobody
- * waits for a settings mirror — and then nothing fires again on its own. A configuration change that
- * happened to land while another window was writing would sit unwritten until the person changed
- * something else, and there may not be a next time. So one deferred attempt, scheduled just past the
- * window in which any lock is either released or breakable as stale.</p>
+ * <p>A window that finds another one writing the file stands aside — which is right, because nobody
+ * waits for a settings mirror — and until 2026-09-18 nothing fired again on its own after one
+ * deferred attempt. A configuration change that happened to land while another window was writing
+ * sat unwritten until the person changed something else, and there may not be a next time.</p>
  *
- * <p>ONE, and not a ladder: by the time it runs there is no lock left that this window cannot take,
- * so a second failure is a different problem and the next configuration change will carry it.
- * Accepted finding, this story's plan round.</p>
+ * <p>It is a LADDER now, of three attempts over about eight seconds, and it says so when it runs
+ * out: the old comment here argued that one attempt suffices because by the time it runs no lock is
+ * left that this window cannot take, which is an argument about contention and says nothing at all
+ * about a directory that cannot be written. `mirrorSchedule.ts` holds the contract.</p>
  */
-let deferred: ReturnType<typeof setTimeout> | undefined;
+let schedule: MirrorSchedule | undefined;
 
-const RETRY_AFTER_MS = LOCK_STALE_AFTER_MS + 2_000;
+/** Which sync the schedule above is bound to, so a different one REBUILDS it rather than being ignored. */
+let mirroring: ServerSettingsSync | undefined;
 
-function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): void {
-  void settingsSync.sync().then((outcome) => {
-    if (outcome !== 'busy' || isTheRetry || deferred !== undefined) {
-      return;
-    }
-    deferred = setTimeout(() => {
-      deferred = undefined;
-      mirrorSettings(settingsSync, true);
-    }, RETRY_AFTER_MS);
+function mirrorSettings(settingsSync: ServerSettingsSync): void {
+  if (schedule === undefined || mirroring !== settingsSync) {
+    // `??=` alone bound the schedule to the FIRST sync it was ever handed, for the life of the
+    // module: a later activation, or a re-created sync, kept writing through the old one and no
+    // surface could show it. (gemini, the code round.)
+    schedule?.cancel();
+    mirroring = settingsSync;
+    schedule = new MirrorSchedule(
+      () => settingsSync.sync(),
+      { later: (work, ms) => setTimeout(work, ms), stop: (pending) => clearTimeout(pending as NodeJS.Timeout) },
+      reportNotMirrored,
+      reportMirroredAfterAll,
+    );
+  }
+  schedule.start();
+}
+
+/** Deactivation: drop the timer, disown anything in flight, and keep nothing for the next window. */
+function forgetTheMirror(): void {
+  schedule?.cancel();
+  schedule = undefined;
+  mirroring = undefined;
+}
+
+/**
+ * Says that the settings the server reads are not the settings this window has, and offers the one
+ * thing that can be done about it.
+ *
+ * <p>Through the funnel, so it is on the notifications page and in the panel's count whether or not
+ * anybody sees the toast — which is the whole reason this story exists, since the 2026-09-16
+ * incident was a warning shown once and missed.</p>
+ *
+ * <p><b>Try again re-arms the schedule from the first attempt.</b> Without it somebody who fixes the
+ * permission and then changes no setting leaves the server on stale settings until the next
+ * activation: the schedule has stopped and nothing else fires on its own. (codex, the plan
+ * round.)</p>
+ */
+function reportNotMirrored(outcome: Retryable): void {
+  const held = outcome === 'busy';
+  raising(notifyThen(
+    {
+      as: 'warning',
+      class: 'stand-down',
+      source: 'serverSettingsSync',
+      code: held ? 'settings-mirror-busy' : 'settings-not-mirrored',
+      subject: vscode.Uri.joinPath(dataDir(), 'settings.json').fsPath,
+      title: held
+        ? 'ConnectOtherAIs could not write the server settings: another window was writing them every '
+          + `time it tried, ${ATTEMPTS} times over.`
+        : 'ConnectOtherAIs could not write the server settings, so the server is running on older ones.',
+      detail: `Tried ${ATTEMPTS} times over about eight seconds.`,
+      cure: held
+        ? 'Close the other window, or change a setting again to make this one try once more.'
+        : 'Check that the data directory is writable. Changing a setting makes this window try again.',
+      action: 'Try again',
+    },
+    (choice) => {
+      if (choice === 'Try again' && schedule !== undefined) {
+        schedule.start();
+      }
+    },
+  ));
+}
+
+/**
+ * The write landed after all — said only to somebody who was told it had not.
+ *
+ * <p>Somebody who presses *Try again* and is told nothing cannot tell a retry that worked from one
+ * that never fired, and the same is true of the person who fixes a permission and changes a setting
+ * to make this window try. The schedule keeps this silent until a condition has actually been
+ * reported, so an ordinary write says nothing: announcing every one of them would be the churn the
+ * run budget exists to stop. (gemini, the code round; the plan's own reason for reporting only on
+ * exhaustion, applied to the other end of the same condition.)</p>
+ */
+function reportMirroredAfterAll(): void {
+  const subject = vscode.Uri.joinPath(dataDir(), 'settings.json').fsPath;
+
+  // Both, because the schedule does not say WHICH condition ended and either may have. Clearing a
+  // code that was never raised costs nothing; leaving one raised makes its return look like a
+  // repeat and silences it.
+  notifyResolved('settings-mirror-busy', subject);
+  notifyResolved('settings-not-mirrored', subject);
+  raising(notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'serverSettingsSync',
+    code: 'settings-mirrored-after-all',
+    subject,
+    title: 'ConnectOtherAIs wrote the server settings after all, so it is reading what this window has.',
+  }));
+}
+
+/**
+ * The funnel's promise, kept when the funnel itself cannot deliver.
+ *
+ * <p>These are started and not awaited on purpose — the mirror must not be held until somebody
+ * presses a button. But `void` on a promise is not "ignore the result", it is "nobody will ever
+ * hear about a rejection", and the console is the only surface left when the surface for saying
+ * things is the thing that failed.</p>
+ */
+function raising(raised: Promise<unknown>): void {
+  raised.catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: the settings mirror could not raise its own message', reason);
   });
 }
 

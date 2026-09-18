@@ -38,6 +38,16 @@ const LAUNCH_MS = 10 * 60 * 1000;
 /** A workspace of its own, per run, deleted after — never the folder somebody is working in. */
 const workspace = mkdtempSync(join(tmpdir(), 'coai-host-ws-'));
 
+/**
+ * A DATA directory of its own, for the same reason and one more.
+ *
+ * <p>The settings-mirror scenario asserts that the extension really writes `settings.json`, and the
+ * only way to assert that without reading somebody's own installation is to tell this host where its
+ * data lives. `COAI_DATA_DIR` is what both halves of the product read, so it is also what the
+ * scenario asks rather than guessing a path.</p>
+ */
+const dataHome = mkdtempSync(join(tmpdir(), 'coai-host-data-'));
+
 const bounded = (ms, what) => new Promise((_, no) => {
   setTimeout(() => { no(new Error(`${what} did not finish within ${Math.round(ms / 1000)}s`)); }, ms).unref();
 });
@@ -71,6 +81,8 @@ async function main() {
       // `--disable-extensions` so a developer's own installed extensions cannot change the answer,
       // and a throwaway user-data dir so neither can their settings.
       launchArgs: [workspace, '--disable-extensions'],
+      // The host process's environment, which is what the extension AND the scenarios read.
+      extensionTestsEnv: { COAI_DATA_DIR: dataHome, COAI_DATA_SIDE: '' },
     }),
     bounded(LAUNCH_MS, 'the extension host'),
   ]);
@@ -88,4 +100,5 @@ main()
   })
   .finally(() => {
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(dataHome, { recursive: true, force: true });
   });

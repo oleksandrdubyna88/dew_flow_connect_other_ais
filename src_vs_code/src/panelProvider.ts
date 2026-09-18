@@ -49,10 +49,8 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
-import { PROBE_FILE, parseProbe, writeProbe } from './claudeProbeFile';
-import { PROBE_CAP_MS, probeClaudeModels, probeSucceeded, probeToKeep } from './claudeProbe';
-import { ProbeResult, stillGood } from './claudeModels';
-import { writeFileAtomically } from './atomicFile';
+import { ClaudeProbeCache } from './claudeProbeCache';
+import { ConsultPromptFile } from './consultPromptFile';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
@@ -152,11 +150,9 @@ import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
-import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
-import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
 import {
   executableFor,
   VendorInstall,
@@ -212,6 +208,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private readonly held = new ViewHandle<vscode.WebviewView>();
 
+  /**
+   * What this machine knows about the Claude CLI's models, and how it finds out again.
+   *
+   * <p>Seven fields and five methods LEFT this class on 2026-09-18, the first extraction of the
+   * split `todo/PLAN_the_panel_provider_is_too_big.md` plans. Nothing outside the cluster touched
+   * its state, and its only reach into this class was the data directory, the repaint and "has the
+   * view gone" — which are the three it is handed below.</p>
+   */
+  private readonly claudeProbes: ClaudeProbeCache;
+
+  private readonly consultPrompt: ConsultPromptFile;
+
 
   private codexModels: ModelChoice[] = [];
   /**
@@ -224,39 +232,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private agyModels: ModelChoice[] = [];
   private agyCheckedAt = 0;
-  /**
-   * Which Claude families this machine can actually reach, as the CLI itself last answered.
-   *
-   * <p>Undefined is "nobody has asked", which is a different sentence from "none of them" — the
-   * dropdown draws the whole curated list either way and only the LABELS differ, because a
-   * discovery that could not run must never subtract from what a person could already choose.</p>
-   */
-  private claudeProbe: ProbeResult | undefined = undefined;
-  /** Whether the answer on disk has been read yet. Read once, then this process owns it. */
-  private claudeProbeRead = false;
-  /** One probe at a time. Four billed requests do not need a second copy racing them. */
-  private claudeProbeInFlight = false;
-  /** True from the moment a probe starts until it lands, so the sections can say so. */
-  private askingClaude = false;
-  /**
-   * Which Claude binary the last refresh was started FOR, or empty for none yet.
-   *
-   * <p>The trigger, and the reason it is the executable rather than a boolean: a render must not
-   * start a refresh that has already been started for the same CLI, and repointing that CLI
-   * must start one. A boolean would have answered the first and lost the second.</p>
-   */
-  private claudeAskedFor = '';
-  /** The version the last refresh read, so a cached answer from another binary is not shown. */
-  private claudeCliVersion = '';
-  /**
-   * When the last probe FAILED, or 0 when none has.
-   *
-   * <p>The trigger above is an edge, which is what stopped a render from spawning a process on
-   * every paint — but an edge alone has no way back: a probe that timed out or met a spent
-   * allowance left the panel saying "not asked yet" until the editor restarted. A failure is
-   * dated so the edge can be crossed again once the backoff has passed.</p>
-   */
-  private claudeProbeFailedAt = 0;
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
@@ -363,7 +338,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
      * watcher is one.</p>
      */
     private readonly consultations?: ConsultationWatcher,
-  ) {}
+  ) {
+    // BUILT HERE rather than beside its declaration: a field initialiser runs before the constructor
+    // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
+    // (TS2729). `dataDir` is a readonly parameter and never changes, so the snapshot is the value.
+    this.consultPrompt = new ConsultPromptFile(dataDir);
+    this.claudeProbes = new ClaudeProbeCache({
+      dataDir,
+      render: () => this.render(),
+      held: this.held,
+    });
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.held.hold(view);
@@ -823,169 +808,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * nobody has configured would be this extension spending a person's allowance on a dropdown they
    * are never going to open.</p>
    */
-  private claudeProbeAnswer(vendors: readonly Vendor[], consult: ConsultSettings): ProbeResult | undefined {
-    const wanted = claudeIsWanted(vendors, consult);
-    // EDGE-TRIGGERED. It used to start a refresh on every render, and the refresh repainted from a
-    // `finally` whatever it had found — so a fresh cache still caused a repaint, which started
-    // another refresh, which spawned another `--version`, for ever. A render now asks at most once
-    // per SETTLING: the flag is cleared only when a probe genuinely could not be judged fresh, and
-    // the executable is part of the key so repointing the CLI is still noticed. (Blocking, codex.)
-    const executable = claudeExecutableFor(vendors, consult);
-    if (wanted && mayAsk(this.claudeAskedFor, executable, Date.now(), this.claudeProbeFailedAt)) {
-      this.claudeAskedFor = executable;
-      this.claudeProbeFailedAt = 0;
-      this.refreshClaudeProbe(vendors, consult).then(undefined, (error: unknown) => {
-        // A catch-all at the detached edge, per the try/catch rule: this promise is deliberately
-        // not awaited, so without one a failure here is an unhandled rejection and nothing else.
-        console.error('ConnectOtherAIs: the Claude model probe failed', error);
-      });
-    }
-
-    return this.claudeProbeToShow();
-  }
-
-  /**
-   * The answer a dropdown may draw on — which is not always the one on disk.
-   *
-   * <p>An answer whose CLI version no longer matches the binary this machine runs is EVIDENCE ABOUT
-   * ANOTHER BINARY. Keeping it in memory is right (it is what a failed probe falls back to), but
-   * presenting it as confirmed would label a family verified from a record a different CLI wrote —
-   * and a person choosing that alias can then silently get the default. It is withheld until a probe
-   * confirms it against the version actually installed. (codex SecurityReliability, this round.)</p>
-   */
-  private claudeProbeToShow(): ProbeResult | undefined {
-    const probe = this.claudeProbe;
-    if (probe === undefined || probe.cliVersion !== this.claudeCliVersion) {
-      return undefined;
-    }
-
-    // And the BINARY, not only the version. A reviewer row and a consultant can point at two
-    // different installations of one version, signed into two different accounts — so a record that
-    // names another executable is evidence about another account's models. A record written before
-    // that field existed names none, and is trusted, because nothing else about it says otherwise.
-    return (probe.executable ?? '') === '' || probe.executable === this.claudeAskedFor ? probe : undefined;
-  }
-
-  /**
-   * One probe at a time, a repaint when it lands, and a *looking* state for as long as it runs.
-   *
-   * <p>The freshness question is asked against the CLI's OWN version, which is itself a process
-   * spawn — so it is asked here rather than in the render, and a machine with no Claude CLI answers
-   * an empty version and is never probed at all.</p>
-   */
-  private async refreshClaudeProbe(vendors: readonly Vendor[], consult: ConsultSettings): Promise<void> {
-    if (this.claudeProbeInFlight) {
-      return;
-    }
-    this.claudeProbeInFlight = true;
-    // Whether anything CHANGED, so a no-op run repaints nothing. A repaint that changed nothing was
-    // what closed the loop above into an endless one.
-    let moved = false;
-    // Both read in the `finally`, which is the only place that sees a THROW as well as a return.
-    // Dating the failure inside the try meant an exception left nothing dated, so the edge trigger
-    // never asked again for the rest of the session — the very hole the dating exists to close.
-    let cliVersion = '';
-    let succeeded = false;
-    try {
-      if (!this.claudeProbeRead) {
-        this.claudeProbeRead = true;
-        this.claudeProbe = await this.readClaudeProbe();
-        moved = this.claudeProbe !== undefined;
-      }
-      const executable = claudeExecutableFor(vendors, consult);
-      cliVersion = await askVersion(executable);
-      // A CLI that will not say its version is not a transient failure — it is not installed at
-      // this path — so it is NOT dated for a retry. Re-asking a binary that is not there every ten
-      // minutes would be a process spawn a person never asked for, for ever.
-      moved = moved || cliVersion !== this.claudeCliVersion;
-      this.claudeCliVersion = cliVersion;
-      if (cliVersion.length === 0 || stillGood(this.claudeProbe, cliVersion, Date.now())) {
-        // Nothing to do, which is not a failure: an absent CLI must not be re-asked every ten
-        // minutes for ever, and a fresh answer is the answer.
-        succeeded = true;
-
-        return;
-      }
-      moved = true;
-
-      // SAID before it is started. The alternative is tens of seconds of a dropdown that looks
-      // finished, which is exactly how a person chooses from a list that was about to change.
-      this.askingClaude = true;
-      await this.render();
-      const found = await probeClaudeModels(
-        {
-          run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => this.held.view === undefined),
-          cliVersion: async () => cliVersion,
-          executable,
-          now: () => Date.now(),
-        },
-        undefined,
-        // Asked before each candidate. Four of them is up to a hundred seconds of BILLED requests,
-        // and a window that has gone will not read the answer. (gemini, this round.)
-        () => this.held.view === undefined,
-      );
-      // A run that learned nothing keeps the previous answer: an account whose allowance is spent
-      // is a state this installation is really in, and it must not empty anybody's dropdown.
-      this.claudeProbe = probeToKeep(found, this.claudeProbe);
-      succeeded = probeSucceeded(found);
-      if (this.claudeProbe !== undefined) {
-        await this.keepClaudeProbe(this.claudeProbe);
-      }
-    } finally {
-      this.claudeProbeInFlight = false;
-      // A run that did not succeed is dated so it can be tried again shortly — including one that
-      // THREW, which is what a `finally` sees and the try did not. A CLI that could not even say its
-      // version is left alone: it is not installed at that path, and re-asking a binary that is not
-      // there every ten minutes is a process spawn nobody asked for.
-      if (!succeeded && cliVersion.length > 0) {
-        this.claudeProbeFailedAt = Date.now();
-      }
-      const wasLooking = this.askingClaude;
-      this.askingClaude = false;
-      // Whatever happened, the panel stops saying it is looking. Cleared here rather than at the
-      // end, because a throw would otherwise leave that sentence on screen for good — and repainted
-      // ONLY when something a person can see actually changed, because an unconditional repaint
-      // here is what made every render start another probe.
-      if (moved || wasLooking) {
-        await this.render();
-      }
-    }
-  }
-
-  /** The answer this machine kept, or nothing at all — an unreadable file is not an answer. */
-  private async readClaudeProbe(): Promise<ProbeResult | undefined> {
-    try {
-      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, PROBE_FILE));
-
-      return parseProbe(new TextDecoder().decode(bytes));
-    } catch {
-      return undefined; // never asked here, or the data directory has moved
-    }
-  }
-
-  /**
-   * Keep it for the week.
-   *
-   * <p>Atomically, like every other writer here: a window killed mid-write would otherwise leave a
-   * truncated file that the next launch reads as no answer, which costs four requests in silence.
-   * A disk that refuses is not worth a message — the answer is still live in this process, and the
-   * only cost is asking again next week.</p>
-   */
-  private async keepClaudeProbe(probe: ProbeResult): Promise<void> {
-    try {
-      await vscode.workspace.fs.createDirectory(this.dataDir);
-      await writeFileAtomically(vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath, writeProbe(probe));
-    } catch (error) {
-      // The list on screen is correct either way — this costs a re-probe next week, not an answer.
-      // But a persistence failure that says nothing is one nobody can act on, and this product's
-      // own store already names the path it could not write. (codex Conventions, this round.)
-      console.error(
-        `ConnectOtherAIs: the Claude model probe could not be kept at ${vscode.Uri.joinPath(this.dataDir, PROBE_FILE).fsPath}`,
-        error,
-      );
-    }
-  }
-
   /**
    * The engines behind the CONSULTANT rows, keyed by the endpoint each row stores.
    *
@@ -1117,8 +939,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
       // would be a panel that hangs for half a minute the first time it is opened on a new machine.
-      claudeProbe: this.claudeProbeAnswer(vendors, settings.consult),
-      askingClaude: this.askingClaude,
+      claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
+      askingClaude: this.claudeProbes.looking,
       server: this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published)),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
@@ -1133,7 +955,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
-      consultPrompt: await this.readConsultPrompt(),
+      consultPrompt: await this.consultPrompt.readConsultPrompt(),
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
@@ -1839,7 +1661,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The consultant's prompt is a FILE, not a setting — see `saveConsultPrompt`. Intercepted here
     // rather than inside the plain case, because everything below this line is about configuration.
     if (write.kind === 'plain' && write.key === 'consultPrompt') {
-      await this.saveConsultPrompt(write.value);
+      await this.consultPrompt.saveConsultPrompt(write.value);
       return;
     }
 
@@ -2070,7 +1892,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.latestCheckedAt = 0;
         break;
       case 'restoreConsultPrompt':
-        await this.saveConsultPrompt('');
+        await this.consultPrompt.saveConsultPrompt('');
         break;
       case 'usageWindow':
         // The cached Team-server totals are the OTHER window's — the same staleness the scope toggle
@@ -3788,102 +3610,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * it can be edited by hand or by another window, and a cache would show a person their own edit
    * from two minutes ago with nothing saying so.</p>
    */
-  /** The last reason a prompt write failed, so one unwritable disk is one message. */
-  private promptWriteFailed = '';
-
-  private async readConsultPrompt(): Promise<string> {
-    try {
-      return new TextDecoder().decode(
-        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH)),
-      );
-    } catch {
-      return ''; // no override, which is the ordinary state and means the shipped prompt
-    }
-  }
-
-  /**
-   * Writes what is in the box to the server's prompt override, or takes the override away.
-   *
-   * <p>Not `config.update`: the server reads its prompts from its own data directory, override-first,
-   * so the file IS the setting. Writing a `coai.*` key beside it would have given one prompt two
-   * homes, and the hand-edit the server has always supported would have been reverted by whichever
-   * window mirrored next.</p>
-   *
-   * <p><b>Written beside it and renamed over it</b>, the way the settings file and an answered
-   * escalation already are. `writeFile` truncates before it fills, so a host killed between the two
-   * leaves the SERVER reading a half-written prompt — and the server reads its prompts override-first
-   * without a second opinion, so a truncated one is simply what the consultant is asked. Raised by two
-   * reviewers on this story's plan round.</p>
-   *
-   * <p>A failure is swallowed the way the settings write's is, and for the same reason: this runs
-   * from a keystroke pause, and a disk that will not take a file is not something a panel can fix by
-   * interrupting somebody about it. Nothing claims the prompt was saved — the box is repainted from
-   * the FILE, so a write that did not land shows as the words coming back on the next paint.</p>
-   */
-  private async saveConsultPrompt(value: unknown): Promise<void> {
-    const write = consultPromptWrite(value);
-    const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
-    try {
-      if (write.kind === 'remove') {
-        // Removing an override that was never written is the ORDINARY case, not an error — and it is
-        // the ONLY one this swallows. It used to swallow every rejection, so a permission failure or
-        // a provider error left the old prompt in force while the panel cleared its warning and the
-        // restore looked as though it had worked. (CodeRabbit, on the pull request.)
-        try {
-          await vscode.workspace.fs.delete(target);
-        } catch (error) {
-          if (!(error instanceof vscode.FileSystemError) || error.code !== 'FileNotFound') {
-            throw error;
-          }
-        }
-        this.promptWriteFailed = '';
-        return;
-      }
-      const directory = vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!);
-      await vscode.workspace.fs.createDirectory(directory);
-      const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
-      await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
-      try {
-        await vscode.workspace.fs.rename(temp, target, { overwrite: true });
-      } catch (error) {
-        // The temp name carries the pid, so a rename that keeps failing leaves one more file beside
-        // the one the SERVER reads out of this directory. The settings writer already cleans up on
-        // its own failure path for the same reason. (CodeRabbit, on the pull request.)
-        await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
-        throw error;
-      }
-      // The situation is over. A failure after this is news rather than a repeat.
-      this.promptWriteFailed = '';
-    } catch (e) {
-      this.reportPromptFailure(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  /**
-   * Says, ONCE per distinct reason, that the consultant's prompt is not on disk.
-   *
-   * <p>The durable-status rule pointed at a text box: an action that failed must not look like one
-   * that succeeded, and this one used to be swallowed entirely — a read-only data directory left a
-   * person typing into a box whose words no consultation would ever read. Once per reason, and
-   * cleared by the next successful write, because this runs from a keystroke PAUSE: a message per
-   * pause over one unwritable disk is the other way to make it unusable. Raised twice on this
-   * story's code round, in two roles.</p>
-   */
-  private reportPromptFailure(why: string): void {
-    if (this.promptWriteFailed === why) {
-      return;
-    }
-    this.promptWriteFailed = why;
-    void notify({
-      as: 'warning',
-      class: 'failure',
-      source: 'consultant',
-      code: 'consultant-prompt-not-saved',
-      title: `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
-      detail: why,
-    });
-  }
-
   private async readUsage(): Promise<UsageEntry[]> {
     try {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, 'usage.jsonl'));

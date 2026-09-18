@@ -6060,6 +6060,89 @@ A source-shape test asserts the listener and the write are NOT in `panelProvider
 `extension.ts`. It is a blunt instrument, and it is the only one available: a behavioural test would
 have to drive VS Code's lazy view resolution, which is the exact thing that cannot be done here.
 
+### The mirror says when it did not write, and keeps trying (2026-09-18)
+
+`sync()` answers one of five outcomes, and until this date **four of them said nothing at all**:
+
+| Outcome | Then | Now |
+|---|---|---|
+| `written` | the file is updated | unchanged, and it CLEARS every condition below |
+| `unchanged` | nothing to do | unchanged |
+| `stood-down` | reported once per VERSION, with *Reload Window* | unchanged |
+| `failed` | **silent** - the write threw, or the lock did | retried, then `settings-not-mirrored` |
+| `busy` | **silent**, and retried exactly ONCE | retried, then `settings-mirror-busy` |
+
+That silence is the 2026-09-16 incident seen from the writing side. The incident itself is the
+stand-down being shown once as a toast nobody saw; this is the other four ways the same file fails
+to reach the server, with no surface anywhere saying so. A configuration somebody had just changed
+simply did not arrive.
+
+**The schedule is `mirrorSchedule.ts`, and it is exactly three attempts.**
+
+| Attempt | When |
+|---|---|
+| 1 | the change itself, immediately - it counts |
+| 2 | 2 s after attempt 1 ANSWERED |
+| 3 | 6 s after attempt 2 answered |
+| - | report, and stop, at about **8 s** |
+
+Delays are measured from the moment an attempt answers rather than from when it started, so a slow
+lock does not eat the next wait. The shortness is the point: reporting only on exhaustion keeps a
+share that hiccupped for 200 ms from raising anything, and a schedule any longer would leave
+somebody who has genuinely made their settings directory read-only waiting to be told.
+
+Six properties, each held by a test that RUNS the schedule against an injected clock - the sync,
+the timer, its cancel and the reporter are all parameters, because a schedule tested by sleeping is
+slow when it passes and flaky when it does not:
+
+- **It supersedes, never stacks.** A settings change arriving while a retry is pending cancels the
+  pending timer and starts again from attempt 1. Two schedules would race each other's attempt
+  counters and the loser would report a condition the winner had already recovered from. The half
+  that is safe by construction is worth stating too: every attempt calls `sync()`, which RE-READS
+  the configuration, so a retry cannot write a stale payload over a newer one.
+- **`busy` and `failed` are two conditions, not one counter.** A lock another window holds and a
+  directory this one cannot write have different cures, and one flag for both would let recovering
+  from either hide the other - the same rule the ledger applies to `(code, subject)` and
+  `reportRefusal` applies to the SETTING.
+- **A stand-down is NOT a write.** `written` and `unchanged` end the conditions above; `stood-down`
+  clears nothing and retries nothing, because a newer build owns the file and only a reload cures
+  that. Treating it as a write cleared a failure reported a moment earlier, whose return was then
+  silenced as a repeat — the one finding all three vendors raised.
+- **A lock that THREW is not a lock that was busy.** Contention answers `busy`; an I/O error
+  acquiring the lock is a `failed`, because from the mirror's side one means another window is
+  working and the other means this machine is not.
+- **There is a way back, and it answers.** The report offers *Try again*, which re-arms the schedule
+  from attempt 1 — without it somebody who fixes the permission and changes no setting leaves the
+  server on stale settings until the next activation. A write that LANDS after something was reported
+  says so, once; before anything has been reported it says nothing, because announcing every ordinary
+  write is the churn the run budget exists to stop.
+- **A superseded attempt is disowned, not merely un-timed.** `cancel()` can drop a pending timer and
+  can never drop an attempt already inside `await sync()`. Every continuation carries the run it
+  belongs to, so an attempt answering after a settings change — or after the window closed — does
+  nothing at all. Without it two ladders shared one counter.
+- **A `sync()` that throws is read as `failed`.** It is typed to answer an outcome, and the one module
+  whose subject is silence may not assume that: the rejection escaped and left the schedule stopped
+  with nothing armed.
+
+**Nothing is persisted, and that is an answer rather than a gap.** The parent plan asked for the
+pending mirror to be written beside the settings file; it is already re-derived on load - activation
+runs `sync()`, which reads the file and re-derives the stand-down from the stamp in it, and the
+pending CONTENT is the current configuration. A second file would be the write-gap regress in
+miniature: the condition worth persisting most is exactly the one under which persisting also fails.
+The in-memory suppression does not survive a reload, so a reloaded window reports the condition
+again - correct rather than lost, a new window being a new observer.
+
+**What a real editor DOES drive** (2026-09-18, the code round). `extension · a real editor` gained a
+second scenario: the launcher hands the host a data directory of its own, and the scenario changes
+`coai.dealPlanLenses` and waits for `COAI_DEAL_PLAN` to reach `settings.json` — then returns the
+setting and waits for it to LEAVE, because a mirror that only ever adds pins the old value. That is
+the configuration listener, the schedule, the lock and the rename, end to end.
+
+**The limit, stated.** The FAILURE path is not driven in a real host: making a write genuinely fail
+there means a read-only directory, whose behaviour differs on every platform this runs on, and the
+scenario would then have to sit through the eight-second ladder. Nothing here proves the SERVER
+re-reads the file it was handed either — that is `module_server.md`.
+
 ### What the gate found in this half (2026-09-03)
 
 Four of the nine defects from the 2026-09-02 campaign are on this side, one from each of four
@@ -7628,6 +7711,58 @@ bundle test in its own invocation, and a case inside that file reads the script 
 build-running test is ever put in a shared batch again — the failure it prevents is otherwise
 invisible until somebody's unrelated pull request goes red.
 
-Nothing in this repository EXERCISES the extension — the bundle is loaded, but `activate` is never
-called — so a runtime regression in a moved callback
-would still pass all of it. The plan says so in its own words rather than claiming otherwise.
+Nothing in this repository EXERCISED the extension when that was written — the bundle was loaded, but
+`activate` was never called — so a runtime regression in a moved callback would still have passed all
+of it. The plan said so in its own words rather than claiming otherwise. **Since 2026-09-17 that is no
+longer true**: `npm run test:host` launches a real editor and `activate` IS called. It runs named
+scenarios rather than the suite, so the sentence above still holds for everything they do not name.
+
+## `panelProvider.ts` begins to come apart (2026-09-18)
+
+4 022 lines against a ceiling of 800, and **growing**: the tail plan re-measured the eight files over
+the ceiling one day apart and found +470 lines above it in twenty-four hours, `panelProvider.ts` alone
+3 762 → 4 022. The series is planned in `todo/PLAN_the_panel_provider_is_too_big.md`; this is its first
+extraction.
+
+**Why it is not the command-file split again.** That file was top-level functions, and moving one was a
+cut and a paste. This is ONE class spanning lines 200–3 917 with roughly forty fields and ninety
+methods, and **a method carries `this`** — so every extraction decides what its state is and who owns
+it, which is a design decision, which is where behaviour changes hide. The rule the plan sets is that a
+cluster **takes its fields with it**, and one still reaching back into the class has not found its seam.
+
+**`ClaudeProbeCache` is the first**, chosen because it tests that rule at the lowest cost of being
+wrong: seven fields nothing else touched, five methods that called only each other, and a surface of
+exactly two lines in `render` — `claudeProbe:` and `askingClaude:`, in that order, which is preserved
+because the first may start a refresh that sets the second.
+
+**Its seam was measured before it moved.** Of every `this.` in those 162 lines, each was either one of
+the cluster's own fields or one of exactly three things outside it: `dataDir`, `render`, `held`. Those
+three are the constructor's argument — and they keep **their own names**, which is the finding worth
+carrying to the rest of the series:
+
+| the cache reaches its collaborators as | residue `prove-move.mjs` reports |
+|---|---|
+| `this.around.dataDir`, `this.around.repaint()`, `this.around.gone()` | **8 body lines** a reviewer must check by hand |
+| `this.dataDir`, `this.render()`, `this.held.view === undefined` | **0** — byte-identical to what the panel had |
+
+The first draft was the top row. Renaming a collaborator turns every line that uses it into residue,
+and residue is the reviewer's whole job on a move.
+
+**What the prover said**, at `origin/main` `d2246ec5`: *192 body lines, 26 not found in order*, and
+every one of the 26 is scaffolding — the interface, the class declaration, the three collaborator
+fields, the constructor, the getter and the new header. **Not one body line is residue.**
+
+**One thing the prover does not fit, and it is worth knowing before the next extraction.** Its run
+budget — `PROVE_MOVE_REGIONS`, the number of contiguous regions cut — is calibrated for a function
+move. A class extraction interleaves scaffolding between the moved blocks, so the walk reports more
+runs (15) than the regions actually cut (8) and says *"something was reordered"* when nothing was. The
+residue list is still exactly right, and it is the part that matters; the run count should be read as a
+shape check rather than a verdict until the tool learns about constructors.
+
+`sonarExclusions.test.ts` caught the new module immediately — it imports `vscode`, so it belongs in
+`sonar.coverage.exclusions`, and the ratchet failed until it was there. The comment beside that list
+also claimed *"this repository has no harness that provides one"*, which stopped being true the day
+before; corrected in place, along with a typed count that had drifted (thirty-eight → 39). That is the
+fifth comment in this family found describing behaviour the code does not have.
+
+**Result: 4 022 → 3 842.** Ten clusters remain, mapped with line numbers in the plan.

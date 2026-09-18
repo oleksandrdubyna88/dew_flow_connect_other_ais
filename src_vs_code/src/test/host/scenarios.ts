@@ -123,6 +123,24 @@ async function pressingCopiesNothing(act: () => void): Promise<string> {
   return vscode.env.clipboard.readText();
 }
 
+/**
+ * Wait for something to become true, or say what did not happen.
+ *
+ * <p>Bounded, and the sentence is the caller's: a scenario that hangs until the launcher's own
+ * ten-minute budget expires reports "the extension host did not finish", which names the harness
+ * rather than the defect.</p>
+ */
+async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (ready()) {
+      return;
+    }
+    await new Promise((wake) => setTimeout(wake, 100));
+  }
+  assert.fail(`${whatDidNotHappen} (waited ${Math.round(ms / 1000)}s)`);
+}
+
 /** Every scenario, named explicitly. A glob that matches nothing is a pass, which is the whole trap. */
 const SCENARIOS: readonly Scenario[] = [
   {
@@ -216,6 +234,46 @@ const SCENARIOS: readonly Scenario[] = [
       assert.notEqual(held, ANSWER,
         'the block control copied the WHOLE answer, which is what being wired to the other control '
         + 'looks like from the clipboard');
+    },
+  },
+  {
+    name: 'a changed setting reaches the file the server reads, written by the extension itself',
+    run: async (): Promise<void> => {
+      // THE FLOW THIS STORY OWNS, end to end in a real editor. Everything else about the mirror is
+      // tested as a value - the schedule against an injected clock, the payload against a pure
+      // builder - and the one thing no value can answer is whether a person changing a setting in
+      // THIS editor makes this extension write the file. That is the whole chain: the configuration
+      // listener, the schedule, the lock, the rename. The 2026-09-16 incident lived inside it.
+      const home = process.env['COAI_DATA_DIR'] ?? '';
+
+      assert.ok(home.length > 0, 'the launcher did not give this host a data directory of its own');
+      const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
+
+      assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+      await extension.activate();
+
+      const file = path.join(home, 'settings.json');
+      const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
+
+      // Activation mirrors once, so the file is the proof that the mirror ran at all.
+      await until(() => fs.existsSync(file), 'the extension never wrote a settings file at all');
+      const before = fs.readFileSync(file, 'utf8');
+
+      assert.ok(!before.includes('COAI_DEAL_PLAN'), 'the setting this scenario changes is already on');
+      try {
+        await config().update('dealPlanLenses', true, vscode.ConfigurationTarget.Global);
+        await until(
+          () => fs.readFileSync(file, 'utf8').includes('COAI_DEAL_PLAN'),
+          'the setting was changed and the file the server reads never followed, which is '
+          + 'the defect of this story, in the one place no unit test can look',
+        );
+      } finally {
+        await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
+      }
+      await until(
+        () => !fs.readFileSync(file, 'utf8').includes('COAI_DEAL_PLAN'),
+        'returning the setting to its default left the old value in the file',
+      );
     },
   },
 ];
