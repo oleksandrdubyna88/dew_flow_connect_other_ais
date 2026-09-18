@@ -8,6 +8,9 @@ import { keepQueued } from './chatPersist';
 import { NAMES_ARE_CASE_BLIND, asUri, filedFor, fsPathOf, reorigin } from './chatRoots';
 import { heldConversationIds } from './chatRegistry';
 import { Moved, followable, movedTo, prepareMoves } from './chatSource';
+import { abreast } from './abreast';
+import { followReport } from './followReport';
+import { notify } from './notify';
 
 /**
  * A conversation follows the file it was opened from.
@@ -67,39 +70,98 @@ export function followRenames(panels: ChatPanels, index: ConversationIndex, rena
     return;
   }
   void (async () => {
-    let touched = 0;
-    for (const meta of index.entries({ kind: 'everywhere' })) {
+    // COUNTED, so the person hears ONE sentence about a folder refactor rather than one per
+    // conversation. Every failure on this path used to reach the console and nowhere else.
+    let refreshFailed = false;
+    // WHICH CONVERSATIONS THIS RENAME REACHES, decided before any of them is touched. Asked NOW
+    // rather than from a set taken earlier: a conversation that closed while this ran is no longer
+    // followed by its thread, and a stale snapshot would have its rename followed by neither half.
+    // (local, the code round; it was my own open question.)
+    // WHICH RECORDS THIS RENAME EVEN TOUCHES, and where each one went — worked out once, because the
+    // narrowing that makes `meta.source.uri` readable lives in this branch and the walk over every
+    // rename is the expensive half. What is NOT decided here is whether a conversation is open: that
+    // is asked inside the job, at the moment its record is reached.
+    const mine = [...index.entries({ kind: 'everywhere' })].flatMap((meta) => {
+      if (!followable(meta.source)) {
+        return [];
+      }
+      const moved = movedTo(meta.source.uri, moves, asUri, fsPathOf);
+
+      return moved.length === 0 ? [] : [{ id: meta.id, was: meta.source, now: sourceOfFile(moved) }];
+    });
+    // A FEW AT A TIME rather than strictly one after another, through the pool this repository
+    // already has. MEASURED against a real store on 2026-09-17: one refile is 5.76 ms, so ten
+    // thousand of them sequentially is about 58 SECONDS — not the hours the plan estimated, which
+    // assumed every record hitting the five-try retry path. A minute of a stale picker is still a
+    // minute, and eight abreast is the cheap end of it. Different conversations take different
+    // locks, so the width costs nothing in contention.
+    const done = await abreast(mine.map((one) => async (): Promise<'followed' | 'couldNot' | 'live'> => {
       try {
-        // ASKED NOW, not from a set taken before any awaiting began. A conversation that closed while
-        // this loop was running is no longer followed by its thread, and a snapshot would have gone on
-        // saying it was — so its rename would have been followed by neither half. (local, the code
-        // round; it was my own open question.)
-        if (heldConversationIds(panels).includes(meta.id) || !followable(meta.source)) {
-          continue;
+        // ASKED NOW, not from a set taken before any awaiting began — and hoisting it out of here is
+        // exactly the regression `chatSourceWiring` refuses. A conversation that CLOSED while this
+        // ran is no longer followed by its thread, so a stale snapshot would have its rename
+        // followed by neither half. (local, the code round; caught again by that test on
+        // 2026-09-17 when this loop was made concurrent.)
+        if (heldConversationIds(panels).includes(one.id)) {
+          return 'live';
         }
-        const moved = movedTo(meta.source.uri, moves, asUri, fsPathOf);
-        if (moved.length === 0) {
-          continue;
-        }
-        if (await follow(onDisk, meta.id, meta.source, sourceOfFile(moved))) {
-          touched += 1;
-        }
+
+        return await follow(onDisk, one.id, one.was, one.now) ? 'followed' : 'couldNot';
       } catch (reason) {
         // PER UNIT, as `reliability.md` requires of a loop over independent things: one conversation
         // that cannot be followed must not stop every other conversation following the same rename.
-        console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${meta.id}`, reason);
+        console.error(`ConnectOtherAIs: a conversation threw while following a renamed file: ${one.id}`, reason);
+
+        return 'couldNot';
       }
-    }
+    }), AT_A_TIME);
+    // A conversation that is OPEN is not a failure and not a move: its thread followed the rename
+    // above, through the queue, and counting it either way would make the sentence wrong.
+    const touched = done.filter((one) => one === 'followed').length;
+    const couldNot = done.filter((one) => one === 'couldNot').length;
     if (touched > 0) {
       // The picker reads the INDEX, not the disk. Without this the rows go on naming the file they
       // left and sitting in the folder they left — and a second rename would compare against that
       // stale source and follow nothing. (gemini, the code round, three times.)
-      await index.refresh();
+      //
+      // ITS OWN GUARD since 2026-09-17. It was inside the outer catch, which only logs — and this is
+      // the one failure on this path where the DATA is right and the SCREEN is wrong: the records
+      // moved, the list that finds them did not, and every row on it is then a name that no longer
+      // exists. That is not a console matter.
+      try {
+        await index.refresh();
+      } catch (reason) {
+        refreshFailed = true;
+        console.error('ConnectOtherAIs: the conversation index could not be refreshed after a rename', reason);
+      }
+    }
+    // SAID, at last. Both of this path's failures were console-only: a conversation that could not
+    // be refiled, and a list that could not be re-read after some were. One sentence, chosen by
+    // `followReport`, so a folder refactor is not a wall of notifications.
+    const report = followReport({ moved: touched, couldNot, refreshFailed });
+    if (report !== undefined) {
+      void notify({
+        as: report.severity,
+        class: 'outcome',
+        source: 'chat',
+        code: 'rename-not-followed',
+        title: report.title,
+      });
     }
   })().catch((reason: unknown) => {
     console.error('ConnectOtherAIs: following a renamed file threw', reason);
   });
 }
+
+/**
+ * How many conversations follow a rename at once.
+ *
+ * <p>Small on purpose. The retries below exist for a store that is already contended, so a wide fan
+ * would be this window competing with itself for locks it is about to wait on. Eight is the cheap end
+ * of the measurement: one refile is 5.76 ms against a real store, so the sequential worst case for
+ * ten thousand conversations is about a minute rather than the hours the plan estimated.</p>
+ */
+const AT_A_TIME = 8;
 
 /** How many times a conversation held by somebody else is asked again before the rename is given up on. */
 const FOLLOW_TRIES = 5;

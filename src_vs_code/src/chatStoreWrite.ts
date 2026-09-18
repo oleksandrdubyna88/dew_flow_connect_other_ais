@@ -95,12 +95,16 @@ export type WriteNext =
  * turn — the downgrade the store refuses on purpose.</p>
  *
  * @param baseline the revision this window last had accepted, 0 before its first
- * @param ours every message this window holds, in order, as text
+ * @param ours every message this window holds, in order, as text — as a SUPPLIER, because exactly
+ *   one branch of one outcome reads it. Taking the array made a 10 000-message conversation
+ *   allocate a 10 000-element copy on every SUCCESSFUL save, for a comparison only a refusal runs.
+ *   The call site's own comment said “MAPPED ONLY WHEN IT IS ASKED FOR” and was describing a
+ *   laziness the signature did not have: `ours` was function-shaped there and invoked eagerly.
  */
 export function nextAfterSave(
   outcome: SaveOutcome,
   baseline: number,
-  ours: readonly string[] = [],
+  ours: () => readonly string[] = () => [],
 ): WriteNext {
   switch (outcome.kind) {
     case 'ok':
@@ -120,7 +124,7 @@ export function nextAfterSave(
     case 'refused':
       // Somebody has been in this conversation since we last wrote. Adoption is the one exception
       // and it is decided by the WORDS, never the revision — see the header.
-      return baseline === 0 && outcome.diskRev > 0 && isPrefixOf(outcome.said, ours)
+      return baseline === 0 && outcome.diskRev > 0 && isPrefixOf(outcome.said, ours())
         ? { kind: 'adopt', rev: outcome.diskRev, ...(outcome.began === undefined ? {} : { began: outcome.began }) }
         : { kind: 'fork', note: CONTINUED_ELSEWHERE };
     case 'incompatible':

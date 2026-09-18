@@ -877,6 +877,132 @@ is a surface; the host is the boundary.
 root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json` starts
 with it and belongs to a different project.
 
+**Every conversation's pictures shared ONE directory, and a SonarCloud nit is what found it.** The
+call was `pictureDir(entry.id.toString())`. `ChatEntry.id` is typed `object` — the opaque identity a
+`WeakMap` is keyed on — so `toString()` returned `"[object Object]"` for every conversation there has
+ever been, sanitising to `objectObject`. The file inside is named from the image type and the turn
+number, so two conversations attaching a picture on the same turn wrote the same path and one
+silently replaced the other's.
+
+Sonar reported it as a LATENT risk — *“stringifies as `[object Object]` if anything ever puts it in a
+template”* — and the plan carried it that way, as one of six cosmetic findings. Reading the type of
+`ChatEntry.id` is what turned it into a real one. `pictureStore.pictureDir` now takes the
+CONVERSATION rather than a string, so the call that caused it does not compile, and it refuses an id
+with nothing usable in it rather than putting every window's pictures in `pictures/` itself.
+
+Its old header also claimed that *“the tab closing removes it whole”*. Nothing removes it — the
+fourth comment in this series found describing behaviour the code does not have. Corrected in place;
+the retention itself is open work.
+**One import of one four-field interface was a whole import cycle.** `chatModels.ts:1` took
+`ChatModelChoice` from `chatPage.ts`, and the page takes `ChatProvider` back — so `chatModels ↔
+chatPage` sat in the frozen list `importCycles.test.mjs` keeps. That import was the ENTIRE return
+edge: nothing else in `chatModels` reaches the page. The interface moved to `chatContracts.ts` on
+2026-09-17 and the ratchet fell from nine entries to eight — the direction it may only move. A cycle
+bundles perfectly well and fails at runtime with *Cannot access 'X' before initialization*, which is
+why that check exists.
+
+The gate over the split had accepted this as *“couples config to the page — true and pre-existing”*
+and filed it as tidiness. It was a ratchet entry. **Seven importers, not the four the plan listed** —
+`chatConfig`, `chatModels`, `chatThread`, `chatPanel` and three test files — and no re-export was
+left behind, because a convenience re-export keeps the edge and would have let the ratchet be lowered
+by a commit that changed nothing.
+
+**`ChatMessage` did NOT move with it**, and the measurement is why: it has five importers
+(`chatFresh`, `chatMessageShape`, `chatStore`, `chatTabs`, `chatThread`) rather than the one the plan
+supposed, and moving it breaks no cycle because none of those is imported back by the page. It buys
+tidiness, not a ratchet drop, so it is its own change.
+**A rename follows a few conversations at a time, and the number behind that is measured.** The
+store pass was strictly sequential. Against a real store on 2026-09-17: **5.76 ms per refile**, so
+ten thousand conversations sequentially is about **58 seconds** — not the hours the plan estimated,
+which assumed every record hitting the five-try retry path. `abreast` at width 8 (the pool this
+repository already had) brings that to roughly ten. The width is small on purpose: the retries exist
+for a store that is already contended, so a wide fan would be one window competing with itself for
+locks it is about to wait on.
+
+**Whether a conversation is OPEN is still asked inside each job, never hoisted.** That is the
+difference between a rename being followed and being followed by neither half: a conversation that
+closes mid-run stops being followed by its thread, so a set taken before the awaiting begins is
+wrong by the time it is read. Making the loop concurrent reintroduced exactly that hoist, and
+`chatSourceWiring.test.ts` refused it.
+**Replacing an attached picture no longer destroys the one that was there.** `attachPicture` called
+`forgetPicture` FIRST — deleting the file and clearing the fields — and then wrote the replacement
+straight to its final name, so a full or unwritable disk left the conversation with no image and
+nothing to retry from: the failure destroyed the state it was meant to replace. The new picture is
+now written through `writeFileAtomically` (which learned to take bytes for this: beside the
+destination, then renamed over it), the reference moves only once it has landed, and the old file is
+removed only if it is a different one. A failed write says so AND says the existing picture is still
+attached.
+
+**And nothing has ever swept those files.** `forgetPicture` claimed they live in *“a temp directory
+the tab's own close sweeps”*. Measured 2026-09-17: `pictureDir` is `coaiDataDir()/pictures/<id>` —
+persistent data — with exactly one caller and no sweep anywhere that reaches that tree. One directory
+per conversation that ever held a picture, kept for ever. The comment is corrected; the retention is
+a policy decision of its own and is open work in the tail plan.
+**A comment promised laziness the call did not have, and that is a worse defect than a wrong type.**
+`keepOnDisk` builds `ours` as a function under a comment saying the array is built only for the one
+branch that needs it — and three lines below passed `ours()`, invoked eagerly, into a parameter typed
+`readonly string[]`. A 10 000-message conversation therefore copied its whole text on every
+SUCCESSFUL save, for a comparison only a refusal runs. A gate reviewer reported it as a type mismatch
+and that was rejected with a measurement: the types agreed perfectly. Fixed 2026-09-17 by making
+`nextAfterSave` take the supplier and call it in the one branch. A wrong type is caught by a
+compiler; a comment that lies is carried forward by every reader.
+**Closing a conversation lets go of BOTH its process and its directory, whatever the other did.**
+Three places did it as two bare statements — `thread.session.dispose(); thread.home.release();` — so a
+throw from the first meant the second never ran, and a vendor process AND its temporary directory
+outlived the tab, silently. At two of them it was worse than a leak: `chatLaunch` and `chatTurn`
+install a replacement session on the next lines, so a throw left the thread holding the old one
+while the new one was already running.
+
+**The correct version already existed here.** `ended()` had done it with two independent guards since
+its own code round, with the reason recorded beside it. Measured 2026-09-17: one of the four sites
+was guarded and three were not, so `retire` is that version lifted out — not a fourth opinion — and
+`ended` now calls it too, because leaving the original behind is how the fourth opinion appears next
+time. The order is load-bearing and not alphabetical: the release comes AFTER the disposal, since a
+CLI still writing on its way out into a directory that has already gone throws where nobody listens.
+
+**What it cannot do, said rather than implied.** If `dispose()` itself throws there is no stronger
+lever at this layer — `ChatSession.stop()` ends a TURN and leaves the session open, so it is weaker,
+not stronger. The process is then genuinely leaked until the host exits. What changed is that the
+leak is LOUD and the directory is still released. An earlier draft of the plan said a failed dispose
+should escalate through `stop()`; reading that method's own contract is what removed it.
+
+`chatPanels.ts` disposes a session in two more places with no paired release; a different shape, left
+alone and recorded here rather than swept in.
+**Following a rename now says something, and until 2026-09-17 it said nothing at all.** Every failure
+on that path went to the console: a conversation that could not be refiled, and an `index.refresh()`
+that threw AFTER records had been refiled. The second is the one that earns an interruption — the
+data is then right and the SCREEN is wrong, so the picker goes on offering names that have moved and
+nothing else says so. The refresh has its own guard now, and `followReport` chooses ONE sentence
+from the counts, because a folder refactor moves many conversations at once and a notification each
+would be a wall of them for one gesture. A stale list outranks a conversation that could not follow:
+the second is still findable under its old name, while a list nobody can trust makes every row
+suspect.
+
+**Two stories of the tail plan pointed here and measuring collapsed them into one.** The plan said a
+permission failure was retried five times and reported exactly as a lock is. It is not:
+`chatStoreLock` returns `false` only on `EEXIST` and throws for anything else, so a permission error
+arrives as `failed` and `follow` gives up at once without retrying. The classification that story
+wanted to add already existed, one layer down — what was missing was anybody being told.
+**A reset now keeps something on screen for the whole of itself.** The progress notification covered
+the ending and the archive and then CLOSED, after which `publish` awaited `thread.writes` with
+nothing showing — so on a slow store the indicator was gone and the new conversation had not
+appeared, which is the one state a reset must never leave somebody in. The write is inside the same
+notification now, and the title changes when the ending is over rather than going on claiming the
+wrong thing for the longer half of the wait. `withProgress` closes when its callback settles, throw
+included, so a write that fails cannot leave the scope open.
+
+**And the keyboard door opens once at a time.** `passageFor('keyboard')` probed the host —
+`windowsReach()`, about a second in a remote window — BEFORE it showed any progress, which is the
+slowest part of the gesture with nothing to look at, and precisely when a person presses again.
+Moving the probe inside the notification makes the wait legible; it does NOT make the path
+single-entry, and an earlier draft of this fix stopped there and would have shipped as decoration.
+Both presses arrive while the first is awaiting and both pass the entry point. `oneAtATime` refuses
+the second — refused rather than queued, because somebody pressing a shortcut twice wants one result
+— with the latch taken SYNCHRONOUSLY before the first await and released in a `finally`.
+
+**Three latches here are still written in place** — `chatGotoCommand`, `chatStoreCache` and
+`bugzReviewPanel`. `oneAtATime` is the first that is a value, so its rules are asserted rather than
+described; converting the other three is named in the tail plan rather than done in passing.
 **A stale answer and a stale WRITE are two questions, and only one of them was being asked.**
 `chatTurn` fenced its answers twice — a generation check before a turn begins and a slate check
 before it writes — while the write path had neither. `keepQueued` chained `keepOnDisk` onto
@@ -7020,6 +7146,58 @@ unrelated repainted the panel.
 **The server's output is validated at the boundary**, field by field, before a row is rendered: a
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
+
+## Sending — the last thing the Bugz section could not do
+
+The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
+--server …` with `COAI_BUGS_KEY` in the environment: a CLI invocation a person made by hand, having
+got the key from somewhere the extension could not tell them about. **And the setting that looked
+like it worked did not** — `state.server` was read in exactly one place, to render its own button's
+label, so *Set the ingest server…* stored a value nothing consumed.
+
+**Send runs the real one-shot**, through `uploadRun` — the one door in this extension that can put a
+credential into a child process, named so that the answer to "what can" is one grep with one result.
+The key goes in the ENVIRONMENT: never an argument, which is in `ps`, in `/proc` and in a shell
+history, and never a file, which is a credential on disk with a cleanup a crash skips. The address
+IS an argument, because an address is not a secret.
+
+**Everything is judged before the child exists.** `mayStart` reads the address, the key and the
+database's own send row, in that order, so the most actionable sentence is the one a person gets: an
+address nobody set, an address a credential must not cross, no key, nothing waiting, or a send
+already running. The CLI refuses the same things — belt and braces, deliberately — but only the
+preflight runs before the key moves.
+
+**The number on the button is the number a send would OFFER.** It was `funnel.collected`, which
+counts every pair this machine has ever kept and is therefore unchanged by a successful send — so the
+button went on offering to send what had already gone, and the preflight let a run start that would
+offer nothing. Seven code-round findings across three providers said the same sentence. `--bugs-json`
+carries a `sendable` count using the send's own predicate now, and the two must stay the same set: a
+count describing a different set from the one the run takes is a button that lies in whichever
+direction they differ.
+
+**The in-flight state is the server's, not the panel's.** A pair is marked sent only on the server's
+acknowledgement, which is what makes a killed upload safe to retry — and it is also why the funnel
+cannot answer "is a send happening": for the whole of a multi-minute run the counts say what they
+said before it started. So `coai-mcp` opens an `upload_runs` row before the first request, beats it
+per batch, and ends it in a `finally`; `--bugs-json` carries the row as `lastSend`, and the button,
+its label and its disabled state are read from THAT. A reload shows the send that is still going, and
+a second Send is refused rather than started beside the first. Three plan reviewers arrived at this
+independently.
+
+**And the section moves while it runs.** The row is beaten per batch, and the panel polls it exactly
+as it polls a collection — the writer is another PROCESS and the only channel between them is the
+database, so a watcher that awaited the whole run and repainted once would have made "Sending… 1 of
+4" true and invisible.
+
+**Every ending has a sentence**, including the two that are about this machine rather than about the
+pairs: exit 64 is an installed `coai-mcp` older than sending — *update it, nothing was lost* — and a
+run whose summary cannot be read claims nothing at all rather than reporting zero sent. A transport
+failure (69) says try again and says why that is safe: nothing was marked, and the server is
+idempotent on the derived pair id, so a pair it already holds is a no-op the second time.
+
+**The contributor key lives in `SecretStorage`**, beside the admin key and apart from it: one issues
+and revokes, the other uploads, and a person who holds both can remove either. Same storage for the
+same reason — settings sync.
 
 ## The Users tab — who holds a key
 

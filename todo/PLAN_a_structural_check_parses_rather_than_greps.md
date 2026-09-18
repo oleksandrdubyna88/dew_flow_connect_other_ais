@@ -8,7 +8,7 @@
 > do not strip at all and are the same debt undeclared) — and the rule that governs any future one.
 >
 > Related docs: [module_tests.md](../research/module_tests.md),
-> [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) (the story that produced both tests),
+> [PLAN_who_holds_a_key.md](../research/PLAN_who_holds_a_key.md) (the story that produced both tests),
 > [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) (the TypeScript
 > equivalent, which is a DIFFERENT problem — see *What this is not* below).
 

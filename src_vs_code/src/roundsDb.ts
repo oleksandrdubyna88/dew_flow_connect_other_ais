@@ -485,6 +485,33 @@ export interface CollectRun {
   readonly reasons: string;
 }
 
+/**
+ * One SEND, as `--bugs-json` reports it.
+ *
+ * <p>It exists because the funnel cannot answer "is a send happening". A pair is marked sent only on
+ * the server's acknowledgement — the rule that makes a killed upload safe to retry — so for the whole
+ * of a multi-minute run the counts say exactly what they said before it started. A panel reading them
+ * shows an idle button, a reload shows an idle button, and a second Send starts a second process
+ * against the same waiting pairs. (Plan round, all three reviewers.)</p>
+ *
+ * <p>An empty {@link id} means NO SEND HAS EVER HAPPENED here, and an older server emits no
+ * `lastSend` key at all — {@link parseBugs} maps that absence onto this same empty shape.</p>
+ */
+export interface SendRun {
+  readonly id: string;
+  readonly startedUtc: string;
+  readonly finishedUtc: string;
+  readonly state: string;
+  readonly server: string;
+  readonly offered: number;
+  readonly sent: number;
+  /** How many the server ALREADY HELD. A success, and not the same one as {@link sent}. */
+  readonly duplicate: number;
+  readonly refused: number;
+  /** The CLI's own sentence when a run could not finish. Empty when nothing went wrong. */
+  readonly trouble: string;
+}
+
 /** How far the filter narrows, step by step — the only readable form of a skip rate. */
 export interface BugFunnel {
   readonly all: number;
@@ -502,6 +529,20 @@ export interface BugFunnel {
 export interface BugCorpus {
   readonly funnel: BugFunnel;
   readonly lastRun: CollectRun;
+  /** The most recent send, or the empty shape when none has ever happened. */
+  readonly lastSend: SendRun;
+  /**
+   * How many kept pairs are UNSENT — the number a send would actually offer.
+   *
+   * <p>Not `funnel.collected`, which counts every pair ever kept and is therefore unchanged by a
+   * successful send: a button reading that offers to send what has already gone.</p>
+   *
+   * <p><b>UNDEFINED means the server did not say</b>, which is a different thing from zero and has
+   * to stay different. An older `coai-mcp` emits no `sendable` key, and collapsing that into 0
+   * disabled the Send button for ever — so the person never pressed it, never reached the exit-64
+   * answer, and never learned that the thing to do was update the server. (Code round 2, codex.)</p>
+   */
+  readonly sendable: number | undefined;
   /**
    * The vendors THIS server will accept for a ranking pass.
    *
@@ -529,13 +570,75 @@ const NO_RUN: CollectRun = {
   reasons: '',
 };
 
+const NO_SEND: SendRun = {
+  id: '',
+  startedUtc: '',
+  finishedUtc: '',
+  state: '',
+  server: '',
+  offered: 0,
+  sent: 0,
+  duplicate: 0,
+  refused: 0,
+  trouble: '',
+};
+
 const NO_FUNNEL: BugFunnel = {
   all: 0, onCode: 0, accepted: 0, gating: 0, runtime: 0, located: 0, unprocessed: 0, collected: 0,
 };
 
 /** Nothing known — which the section renders as "not asked yet", not as "no material". */
-export const EMPTY_CORPUS: BugCorpus =
-  { funnel: NO_FUNNEL, lastRun: NO_RUN, rankingVendors: [], read: false };
+export const EMPTY_CORPUS: BugCorpus = {
+  funnel: NO_FUNNEL,
+  lastRun: NO_RUN,
+  lastSend: NO_SEND,
+  // Nothing has been asked, so nothing is known — which is not the same as a queue of zero.
+  sendable: undefined,
+  rankingVendors: [],
+  read: false,
+};
+
+/**
+ * The states that mean a send is over, spelled the way the server writes them.
+ *
+ * <p>ENDINGS rather than beginnings, and everything is read against it: a state this build has never
+ * heard of is treated as STILL GOING, because the cost of a stale line is a stale line and the cost
+ * of declaring a live send finished is a second process sending the same pairs. `UploadRunState` in
+ * the server carries the same list for the same reason.</p>
+ */
+const SEND_IS_OVER: readonly string[] = ['done', 'failed', 'interrupted'];
+
+/** One send, with every field checked — an older server may send none of them. */
+function readSend(raw: unknown): SendRun {
+  if (typeof raw !== 'object' || raw === null) {
+    return NO_SEND;
+  }
+
+  const held = raw as Record<string, unknown>;
+
+  return {
+    id: text(held.id),
+    startedUtc: text(held.startedUtc),
+    finishedUtc: text(held.finishedUtc),
+    state: text(held.state),
+    server: text(held.server),
+    offered: whole(held.offered),
+    sent: whole(held.sent),
+    duplicate: whole(held.duplicate),
+    refused: whole(held.refused),
+    trouble: text(held.trouble),
+  };
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const whole = (value: unknown): number =>
+  (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+/** Whether a send is happening — what the Send button is disabled by, across a reload. */
+export function sending(send: SendRun): boolean {
+  return send.id.length > 0 && !SEND_IS_OVER.includes(send.state);
+}
 
 /** Whether a run is happening — what the Collect button is disabled by. */
 /**
@@ -574,6 +677,15 @@ export function parseBugs(text: string): BugCorpus {
       funnel: { ...NO_FUNNEL, ...raw.funnel },
       // An absent `lastRun` is an older server, and it means the same thing an empty id means.
       lastRun: { ...NO_RUN, ...(raw.lastRun ?? {}) },
+      // And an absent `lastSend` is a server from before sends were recorded at all: no send, which
+      // is what an empty id means too.
+      // READ rather than spread. `lastRun` above is older and shares the weakness; this one decides
+      // whether a BUTTON is disabled, so a number where its `state` belongs would throw inside
+      // `sending()` and take the whole section's repaint with it.
+      lastSend: readSend(raw.lastSend),
+      // Absent stays ABSENT. See the field's own note: an older server saying nothing must not read
+      // as "nothing to send".
+      sendable: typeof raw.sendable === 'number' ? raw.sendable : undefined,
       // Absent means a server too old to say, NOT a server that allows nothing — the difference
       // decides whether the picker falls back to its own list or offers nothing at all.
       rankingVendors: Array.isArray(raw.rankingVendors) ? raw.rankingVendors : [],

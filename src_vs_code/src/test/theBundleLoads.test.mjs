@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { batches as runnerBatches } from '../../scripts/run-tests.mjs';
 
 /**
  * The shipped bundle can be LOADED, and `activate` is there to be called.
@@ -173,20 +174,25 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
  *
  * <p>The rule is therefore not “retry” and not “exclude generated files from the walk” — both leave
  * a build mutating the tree other tests are reading. It is that a file which runs the build gets a
- * `node --test` invocation of its own. This asserts the npm script still says so, because the
+ * `node --test` invocation of its own. This asserts the RUNNER still arranges that, because the
  * failure it prevents is invisible until somebody's unrelated pull request goes red.</p>
+ *
+ * <p>It used to read the batches out of `package.json`, which named every `.mjs` test by hand. That
+ * list is gone — it was letting a seventh test run nowhere at all — and the batches now come from
+ * `run-tests.mjs`, which reads the directories: one parallel batch of compiled tests, then each
+ * source test alone. The invariant is the same one; only its home moved. The check got WIDER in the
+ * move: the compiled files were never examined here before, because the script never named
+ * them.</p>
  */
 test('a test that runs the build gets a node --test invocation to itself', () => {
-  const script = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).scripts.test;
+  // ASKED OF THE RUNNER, not rebuilt from `discover()`. The first version of this port did rebuild
+  // it — and stayed green while the runner was deliberately changed to put every source test in one
+  // parallel batch, because it was checking its own arithmetic. `batches()` is what will actually
+  // be invoked, so breaking the arrangement breaks this case.
+  const batches = runnerBatches(ROOT)
+    .map((batch) => batch.map((file) => relative(ROOT, file).replaceAll('\\', '/')));
 
-  // Each `node --test ...` between the `&&`s is one batch of parallel processes.
-  const batches = script
-    .split('&&')
-    .map((step) => step.trim())
-    .filter((step) => step.startsWith('node --test'))
-    .map((step) => step.slice('node --test'.length).trim().split(/\s+/u).filter(Boolean));
-
-  assert.ok(batches.length > 0, 'the test script no longer runs node --test at all');
+  assert.ok(batches.length > 0, 'the runner no longer discovers any test file at all');
 
   // THIS file has to be in the script, or everything below is vacuous: take it out and no batch has
   // a builder, every batch is skipped by the `continue`, and the case passes having asserted

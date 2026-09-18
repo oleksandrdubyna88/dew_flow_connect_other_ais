@@ -1,4 +1,4 @@
-import { ChatModelChoice } from './chatPage';
+import { ChatModelChoice } from './chatContracts';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
 import type { ProbeResult } from './claudeModels';
 import { LocalEngine } from './localEngines';

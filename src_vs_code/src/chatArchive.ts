@@ -8,6 +8,7 @@ import { asText, show } from './chatShow';
 import { ChatSession } from './chatSession';
 import { SaveOutcome } from './chatStoreFile';
 import { ARCHIVED, Freshened, UNSAVED, couldNotEnd, freshened } from './chatFresh';
+import { retire } from './retireSession';
 import { reloadedNote } from './chatTabs';
 import { carriedFrom } from './chatCarry';
 import { pushChatFresh } from './chatPanel';
@@ -125,24 +126,34 @@ export async function freshening(entry: ChatEntry, thread: Thread): Promise<void
   // 2. ENDED, THEN ARCHIVED, both inside the one notification: archiving a thousand-turn transcript
   // is a serialisation and a disk write, and a progress that stopped before it would leave the
   // longest part of the wait looking like nothing happening. (codex, the code round.)
-  const done = await vscode.window.withProgress(
+  // 2a. AND THE NEW SLATE'S OWN WRITE IS INSIDE THE SAME NOTIFICATION, which it was not. The progress
+  //     closed after the archive, and `publish` then awaited `thread.writes` with nothing on screen —
+  //     so on a slow store the indicator was gone AND the new conversation had not appeared, which is
+  //     the one state a reset must never leave somebody in. `withProgress` closes when its callback
+  //     settles, throw included, so the scope cannot be left open by a write that fails.
+  await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Ending the previous conversation…' },
-    async (): Promise<Archived> => {
+    async (progress): Promise<void> => {
       const failed = await ended(thread);
+      const done: Archived = failed.length > 0
+        ? { kind: 'refused', reason: failed }
+        : await archiveConversation(thread);
+      if (done.kind === 'refused') {
+        // 3. AND IF EITHER FAILED, NOTHING HAPPENS — including a failure to ARCHIVE, which the first
+        // draft let through: it said the conversation was archived, wiped the slate, and left the old
+        // record open on disk. Five findings from two vendors, all naming the same gap. All or
+        // nothing means all of it.
+        keepTheOldOne(entry, thread, done.reason);
 
-      return failed.length > 0 ? { kind: 'refused', reason: failed } : archiveConversation(thread);
+        return;
+      }
+      // The title said ENDING, and by here the ending is over. A notification that goes on claiming
+      // the wrong thing for the longer half of the wait is worse than none: it is a wait somebody
+      // reads as stuck.
+      progress.report({ message: 'Starting the new one…' });
+      await publish(entry, thread, done.note);
     },
   );
-  if (done.kind === 'refused') {
-    // 3. AND IF EITHER FAILED, NOTHING HAPPENS — including a failure to ARCHIVE, which the first
-    // draft let through: it said the conversation was archived, wiped the slate, and left the old
-    // record open on disk. Five findings from two vendors, all naming the same gap. All or nothing
-    // means all of it.
-    keepTheOldOne(entry, thread, done.reason);
-
-    return;
-  }
-  await publish(entry, thread, done.note);
 }
 
 /**
@@ -241,19 +252,12 @@ export async function ended(thread: Thread): Promise<string> {
   } catch (reason) {
     stopped = asText(reason);
   }
-  try {
-    // Safe to call twice, so a session already gone stays gone.
-    thread.session.dispose();
-  } catch (reason) {
-    console.warn('ConnectOtherAIs: a chat session would not be disposed on a reset', reason);
-  }
-  try {
-    // AFTER the disposal, never before it: a CLI writing on its way out into a directory that has
-    // already been removed throws where nobody is listening.
-    thread.home.release();
-  } catch (reason) {
-    console.warn('ConnectOtherAIs: a chat temp directory could not be released after a reset', reason);
-  }
+  // THE ONE IMPLEMENTATION, since 2026-09-17. These two guarded cleanups were written HERE, at this
+  // function's own code round, and the three other places that close a session had them as two bare
+  // statements — so a disposal that threw took the release down with it, silently. `retire` is this
+  // version lifted out; leaving a copy behind would have been the fourth opinion the extraction
+  // exists to stop. The order, and why it is not alphabetical, live there now.
+  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}, on a reset`, reason));
 
   return stopped;
 }

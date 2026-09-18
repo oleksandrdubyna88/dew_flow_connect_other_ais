@@ -7,6 +7,7 @@ import { threads } from './chatThread';
 import { asText, show } from './chatShow';
 import { ChatSession, DEFAULT_BUDGETS } from './chatSession';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
+import { retire } from './retireSession';
 import { isRemote, memoryOf, modelToRun } from './chatModels';
 import { presetInForce } from './chatPresets';
 import { savedModels, vendorFor } from './chatConfig';
@@ -281,8 +282,10 @@ export async function switchNow(entry: ChatEntry, providerId: string, modelId: s
     return false;
   }
 
-  thread.session.dispose();
-  thread.home.release();
+  // WORSE THAN A LEAK HERE, which is why it is guarded rather than merely tidied: a replacement
+  // session is installed on the next lines, so a disposal that threw would leave the thread holding
+  // the old one while the new one is already running.
+  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
   const replacement = started(vendor, cli.resolved, modelId, remote.session);
   thread.session = replacement.session;
   thread.home = replacement.home;

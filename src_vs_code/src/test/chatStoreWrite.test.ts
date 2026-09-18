@@ -33,7 +33,7 @@ test('a refusal forks: the conversation is kept, under a new id, and the tab is 
   // Another window is in this conversation. Overwriting it would lose their turns and refusing to
   // save would lose ours, so neither happens: this tab becomes a copy, keeps every message it holds,
   // and writes somewhere nobody else is.
-  const next = nextAfterSave({ kind: 'refused', diskRev: 9, said: ['somebody else'] }, 4, ['ours']);
+  const next = nextAfterSave({ kind: 'refused', diskRev: 9, said: ['somebody else'] }, 4, () => ['ours']);
 
   assert.equal(next.kind, 'fork');
   assert.equal(next.kind === 'fork' ? next.note : '', CONTINUED_ELSEWHERE);
@@ -50,7 +50,7 @@ test('a record this build cannot read forks as well, rather than being written o
 test('a disk that would not answer changes nothing about the conversation, and says so once', () => {
   // Not a fork: forking would mint an id per failed write and scatter one conversation across the
   // store. The transcript is in memory and the next turn tries again.
-  const next = nextAfterSave({ kind: 'failed', reason: 'the conversation could not be saved to disk (EACCES)' }, 4, []);
+  const next = nextAfterSave({ kind: 'failed', reason: 'the conversation could not be saved to disk (EACCES)' }, 4, () => []);
 
   assert.equal(next.kind, 'said');
   assert.ok(
@@ -83,7 +83,7 @@ test('a window that has never saved ADOPTS the record it can see is its own earl
   // This test asked for adoption on the REVISION alone when it was first written, which A3's plan
   // round refused: two windows can both be at baseline 0, and the second would then overwrite the
   // first. What it asserts now is the corrected rule — the disk's words must be contained in ours.
-  const next = nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 0, ['why', 'because']);
+  const next = nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 0, () => ['why', 'because']);
 
   assert.deepEqual(next, { kind: 'adopt', rev: 5 });
 });
@@ -92,15 +92,15 @@ test('adoption is offered ONCE, and a window that has saved forks instead', () =
   // After this window's own write has landed, a disk that has moved on is somebody else — there is
   // no innocent explanation left. The baseline is what tells the two apart, and it is the only thing
   // that does.
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 1, ['why', 'because']).kind, 'fork');
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 9, said: [] }, 8, ['why']).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 1, () => ['why', 'because']).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 9, said: [] }, 8, () => ['why']).kind, 'fork');
 });
 
 test('a record this build cannot read is never adopted, whatever the baseline', () => {
   // Adoption means "that is my own record, at a number I did not know". A torn one, or one a newer
   // build wrote, is not readable and so is not claimable: taking its revision would be volunteering
   // to overwrite it on the next turn, which is the downgrade the store refuses.
-  assert.equal(nextAfterSave({ kind: 'incompatible', reason: 'newer version' }, 0, ['why']).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'incompatible', reason: 'newer version' }, 0, () => ['why']).kind, 'fork');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -120,17 +120,17 @@ test('a window adopts only a record its own transcript CONTAINS — never one th
   const ours = ['why', 'because', 'and'];
 
   assert.deepEqual(
-    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because'] }, 0, ours),
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because'] }, 0, () => ours),
     { kind: 'adopt', rev: 5 },
     'a window would not reclaim the record it restored from, and forks on every reopen',
   );
   assert.equal(
-    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'a different answer'] }, 0, ours).kind,
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'a different answer'] }, 0, () => ours).kind,
     'fork',
     'a window overwrote turns it had never seen, which is the lost update the swap exists to stop',
   );
   assert.equal(
-    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because', 'and', 'more'] }, 0, ours).kind,
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because', 'and', 'more'] }, 0, () => ours).kind,
     'fork',
     'a disk AHEAD of this window was adopted, so the turns it holds beyond ours would be replaced',
   );
@@ -140,7 +140,7 @@ test('an identical transcript is adopted: it is our own record, unchanged', () =
   const ours = ['why', 'because'];
 
   assert.deepEqual(
-    nextAfterSave({ kind: 'refused', diskRev: 3, said: [...ours] }, 0, ours),
+    nextAfterSave({ kind: 'refused', diskRev: 3, said: [...ours] }, 0, () => ours),
     { kind: 'adopt', rev: 3 },
   );
 });
@@ -153,7 +153,7 @@ test('a store busy with THIS conversation changes nothing, and waits for the nex
   // It arrives as its own outcome rather than as a refusal carrying no transcript, which is the
   // round-after correction: a genuine conflict over an ABSENT record reports no transcript either,
   // so reading that as "busy" would wait for ever and never fork. (gemini.)
-  const next = nextAfterSave({ kind: 'busy' }, 0, ['why']);
+  const next = nextAfterSave({ kind: 'busy' }, 0, () => ['why']);
 
   assert.equal(next.kind, 'said', 'a conversation forked because its own store was busy for an instant');
   assert.equal(next.kind === 'said' ? next.note : '', BUSY_ELSEWHERE);
@@ -164,7 +164,7 @@ test('a conflict the store COULD not read is a fork, not a wait — the wedge th
   // above 0, is a real conflict reported without a transcript; treating absence of words as "the
   // store is busy" left it waiting for ever, never advancing and never forking, with every later
   // write of that conversation queued behind it.
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 0 }, 3, ['why']).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 0 }, 3, () => ['why']).kind, 'fork');
 });
 
 test('a refusal that reports NOTHING about the disk is never adopted, even at baseline 0', () => {
@@ -174,7 +174,7 @@ test('a refusal that reports NOTHING about the disk is never adopted, even at ba
   // the record under the claim could not be read, so nothing is known about whose it is. The header
   // says such a refusal is never adopted; adopting it would take another window's revision on faith
   // and overwrite that window's turns on the next save. (CodeRabbit, PR #223, on the gap.)
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']).kind, 'fork',
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, () => ['why']).kind, 'fork',
     'a record nobody could read was adopted at baseline 0 — its revision taken on faith');
 });
 
@@ -189,7 +189,7 @@ test('an outcome this module has no arm for is a defect it names, not a disk fai
 test('what a failed save says names the fault AND that the conversation is still there', () => {
   // A reason on its own reads as though the words had been lost, when they are on screen, in the
   // store of record, and about to be tried again. (codex and gemini.)
-  const next = nextAfterSave({ kind: 'failed', reason: 'the disk said no (EACCES)' }, 4, []);
+  const next = nextAfterSave({ kind: 'failed', reason: 'the disk said no (EACCES)' }, 4, () => []);
 
   assert.equal(next.kind, 'said');
   assert.ok(next.kind === 'said' && next.note.includes('EACCES'), 'the fault is not named');
@@ -202,7 +202,7 @@ test('an adopted record brings its own beginning with it', () => {
   const next = nextAfterSave(
     { kind: 'refused', diskRev: 5, said: ['why'], began: 1_700_000_000_000 },
     0,
-    ['why', 'because'],
+    () => ['why', 'because'],
   );
 
   assert.deepEqual(next, { kind: 'adopt', rev: 5, began: 1_700_000_000_000 });
@@ -238,4 +238,53 @@ test('an outcome for the conversation that asked for it still applies', () => {
 
   assert.deepEqual(ifStillOurs(outcome, 'one-and-the-same', 'one-and-the-same'), outcome,
     'a save resolving into the conversation that asked for it was dropped');
+});
+
+/**
+ * The words are MAPPED ONLY WHEN THEY ARE ASKED FOR — which the comment claimed and the code did not.
+ *
+ * <p>`keepOnDisk` builds `ours` as a function, with a comment above it saying the array is built only
+ * for the one branch that needs it. Three lines below, the call passed `ours()` — invoked eagerly —
+ * into a parameter typed `readonly string[]`. The function shape gave the APPEARANCE of laziness with
+ * none of the effect: a 10 000-message conversation allocated a 10 000-element copy of its text on
+ * every SUCCESSFUL save, for a comparison only a refusal ever runs.</p>
+ *
+ * <p><b>A gate reviewer reported this as a type mismatch and that was rejected with a measurement:</b>
+ * `ours()` returned exactly the array the parameter took, and the typecheck was clean. The defect is
+ * the COMMENT describing behaviour the call does not have, which is worse than a wrong type — a wrong
+ * type is caught by a compiler, and a comment that lies is carried forward by every reader.</p>
+ */
+
+test('the words are not built for a save that succeeded', () => {
+  let built = 0;
+  const ours = (): readonly string[] => {
+    built += 1;
+
+    return ['why', 'because'];
+  };
+
+  nextAfterSave({ kind: 'ok', rev: 7 }, 6, ours);
+  nextAfterSave({ kind: 'partial', rev: 7, reason: 'the index could not be written' }, 6, ours);
+  nextAfterSave({ kind: 'busy' }, 6, ours);
+  nextAfterSave({ kind: 'failed', reason: 'the disk would not answer' }, 6, ours);
+
+  assert.equal(built, 0,
+    'the whole transcript was copied for an outcome that never looks at it — on every turn of every'
+    + ' conversation, which is what the comment above the call site promised it did not do');
+});
+
+test('and they ARE built for the one outcome that reads them', () => {
+  // The companion the case above needs. A version that never called the supplier would pass it while
+  // adoption stopped working entirely — every reopened conversation forking a copy of itself.
+  let built = 0;
+  const ours = (): readonly string[] => {
+    built += 1;
+
+    return ['why', 'because'];
+  };
+
+  const next = nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 0, ours);
+
+  assert.equal(built, 1, 'the refusal decided about adoption without reading the words it decides by');
+  assert.equal(next.kind, 'adopt', 'our own earlier session was not adopted, so reopening it forks a copy');
 });

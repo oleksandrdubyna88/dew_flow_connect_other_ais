@@ -84,6 +84,31 @@ public sealed record BugCorpus(BugFunnel Funnel, IReadOnlyList<BugCandidate> Can
     /// </remarks>
     public CollectRunRow LastRun { get; init; } = new();
 
+    /// <summary>The most recent SEND, or an empty row when none has ever started.</summary>
+    /// <remarks>
+    /// <para>It rides here for the reason <see cref="LastRun"/> does — one spawn answers both — and
+    /// it has to exist for the reason the funnel cannot answer: a pair is marked sent only on the
+    /// server's acknowledgement, so while a send runs the counts say what they said before it began.
+    /// Without this the panel cannot tell "nothing to send" from "sending right now".</para>
+    /// <para>An older binary emits no <c>lastSend</c> key. A reader must treat that as "no send",
+    /// which is the same state an empty id means.</para>
+    /// </remarks>
+    public UploadRunRow LastSend { get; init; } = new();
+
+    /// <summary>
+    /// How many kept pairs are actually UNSENT — the number a send would offer.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>Funnel.Collected</c> counts every pair this machine has ever kept, which is the
+    /// right number for "is there a corpus" and the wrong one for "is there anything to send": after
+    /// a successful send it is unchanged, so a button reading it offers to send what has already
+    /// gone. Seven code-round findings across three providers, all of them the same sentence.</para>
+    /// <para>The predicate is <see cref="RoundsDb.Sendable"/>'s, and it has to stay that way — a
+    /// count that describes a different set from the one the run takes is a button that lies in
+    /// whichever direction the two differ.</para>
+    /// </remarks>
+    public int Sendable { get; init; }
+
     /// <summary>The vendors that may be shown a finding's own words.</summary>
     /// <remarks>
     /// <para><b>On the wire, so the picker reads the list that ENFORCES rather than a copy of it.</b>
@@ -249,6 +274,8 @@ public static class BugsQuery
             return new BugCorpus(Funnel(db), Candidates(db, Math.Clamp(limit, 1, MaxLimit), all))
             {
                 LastRun = LastRun(db),
+                LastSend = LastSend(db),
+                Sendable = Sendable(db),
             };
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteError && TooOld(e))
@@ -273,6 +300,17 @@ public static class BugsQuery
     /// different run states from one table. (Code round, codex, twice.)
     /// </remarks>
     private static CollectRunRow LastRun(SqliteConnection db) => CollectRuns.Last(db);
+
+    /// <summary>The most recent send, through the one place that query lives.</summary>
+    private static UploadRunRow LastSend(SqliteConnection db) => UploadRuns.Last(db);
+
+    /// <summary>How many pairs a send would offer right now.</summary>
+    /// <remarks>
+    /// Through <see cref="SendablePairs"/>, which is where the predicate lives. It was spelled out
+    /// here as well for one commit — the same three conditions, written twice — and that is how a
+    /// button comes to show a number the run does not use. (Code round 2, gemini and codex.)
+    /// </remarks>
+    private static int Sendable(SqliteConnection db) => SendablePairs.Count(db);
 
     private static BugFunnel Funnel(SqliteConnection db)
     {

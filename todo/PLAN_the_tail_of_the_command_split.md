@@ -268,6 +268,19 @@ calls `forgetPicture` (`chatHooks.ts:623`) before writing the replacement.
 **The symptom.** A full or unwritable disk leaves the conversation with **no image and nothing to
 retry from** — the failure destroys the state it was meant to replace.
 
+> **SHIPPED 2026-09-17 — the destructive order reversed — and the sweep half is NOT done, with a
+> finding behind that.** `forgetPicture`'s own comment said its files live in *“a temp directory the
+> tab's own close sweeps”*. Measured: `pictureDir` is `coaiDataDir()/pictures/<id>` — persistent data,
+> not temp — it has exactly ONE caller, and **nothing anywhere removes it**. One directory per
+> conversation that ever held a picture, kept for ever. The comment is corrected in place.
+>
+> The retention that would fix it is not a widening of the store sweep, because this is not the
+> store's tree: it is a new policy with a real decision in it — when is a conversation's pictures
+> directory collectable? When the conversation is deleted, or after an age? Who runs it? That is its
+> own work and is recorded here rather than invented in a story about a destructive replace. **Third
+> comment in this plan found describing behaviour the code does not have** (with story 3's laziness
+> and story 2's escalation), which is now a pattern rather than three accidents.
+
 **Almost all of this is already written, and the consultation is what found that.** The gate asked
 for a same-filesystem temp-and-rename, a deterministic temporary name, and an age-bounded sweep. All
 three exist:
@@ -321,6 +334,29 @@ at [chatFollow.ts:71](../src_vs_code/src/chatFollow.ts#L71).
 
 **The symptom.** Strictly sequential, each record with up to five 200 ms retries. Ten thousand
 records is **hours**, with nothing on screen and a stale picker until the final refresh.
+
+> **MEASURED 2026-09-17, and “hours” is wrong by two orders of magnitude.** Against a real store on
+> this disk: **5.76 ms per refile**, 200 records in 1 152 ms. Ten thousand SEQUENTIALLY is therefore
+> about **58 seconds**, not hours. The plan's figure assumed every record hitting the five-try,
+> 200 ms retry path — which happens only when another window holds every lock at once, not when a
+> folder is renamed.
+>
+> **So the lease apparatus is out of proportion and is NOT built.** A persisted job with a schema,
+> state transitions, a heartbeat shorter than a thirty-second expiry, a fencing token and a recovery
+> owner is the right answer for work that runs for hours. For a job of about a minute — ten seconds
+> with the pool — it is a storage surface, a migration and a class of bug bought to solve a problem
+> the measurement says is not there. What shipped is `abreast` at width 8 and the notice stories 6
+> and 7 added.
+>
+> **What is left open, honestly:** a rename interrupted mid-way still leaves records split, and
+> nothing revisits them. The exposure is now ten seconds rather than hours, which is why it is
+> recorded rather than engineered around. If the store ever grows an order of magnitude, re-measure
+> BEFORE building the lease — that is the whole lesson of this note.
+>
+> **And making the loop concurrent reintroduced a fixed defect, which a test caught.** Hoisting
+> `heldConversationIds` out of the per-record job is the snapshot an earlier code round removed: a
+> conversation that CLOSES mid-run is no longer followed by its thread, so a stale snapshot has its
+> rename followed by neither half. `chatSourceWiring` refused it within the minute.
 
 **The pool already exists — do not write a second one.** `abreast(jobs, width)` (`abreast.ts:14`)
 runs jobs a few at a time and returns results in the jobs' own order. Its own header records that it
@@ -440,6 +476,18 @@ is sequenced after story 13 for that reason.
 **The symptom.** A permission failure is retried five times and then reported exactly as a lock is.
 A lock clears; a permission does not, so the retries are a second of waiting that was never going to
 help, and the person is told nothing either way.
+
+> **MEASURED 2026-09-17, and this story's premise was wrong too.** “A permission failure is retried
+> five times” — it is not. `chatStoreLock.ts:179` returns `false` only on `EEXIST` and THROWS for
+> anything else, so a permission error becomes `failed`, and `follow`'s `failed` arm returns at once
+> without entering the retry. The classification this story was written to add **already exists, one
+> layer down**, and was designed there deliberately.
+>
+> What IS true is the second half: *“the person is told nothing either way”*. That is story 6's
+> mechanism, on the same file, so the two shipped as ONE change on 2026-09-17 — `followReport` and a
+> guard around `index.refresh()`. Three of this plan's premises have now been wrong on measurement
+> (stories 7, 8 twice), and all three were wrong the same way: they described a missing DISTINCTION
+> where what was missing was a missing VOICE.
 
 **Read it beside the rejection it survived.** The gate over the split claimed *"`follow`'s retry can
 hang the extension host"* and that was rejected with a measurement — five tries at 200 ms is one
@@ -604,6 +652,14 @@ Two presses arriving while `windowsReach` is awaiting both pass the entry point 
 capture. The indicator makes the wait legible; it does not make the path single-entry. *(local and
 codex, the plan round — the finding that keeps this story from shipping as decoration.)*
 
+> **SHIPPED 2026-09-17, and it grew one item.** The latch is `oneAtATime` in its own module rather
+> than a flag in `chatCapture`, because this repository already has THREE hand-rolled latches —
+> `chatGotoCommand`, `chatStoreCache`, `bugzReviewPanel` — and a fourth written in place would be a
+> fourth `finally` to get wrong. As a value its rules are asserted: refused not queued, taken
+> synchronously before the first await, released on a throw. **Converting those three to it is new
+> open work**, recorded here rather than done in passing (`reuse-first.md`: name it, propose it,
+> ask).
+
 **The fix.** An **in-progress latch set before the first `await`**, so a second press is refused or
 queued rather than racing; progress shown before the probe; and both the latch and the scope cleared
 in a `finally` on every outcome, including a throw.
@@ -725,6 +781,29 @@ is unproven.
    request, and the pressure is then to weaken it. It runs, it reports, and it is promoted to
    required only after it has been **green on twenty consecutive runs of `main`** — a number, so the
    promotion is a measurement rather than a mood.
+
+> **SHIPPED 2026-09-17, and its first scenario is NOT story 6's — which is a deviation, so here is
+> why.** This story says the first conversion is story 6's, watched red before story 6's guard
+> exists. Writing it that way means committing a RED test: the guard is in group 4 and this is group
+> 3, so the scenario would sit failing in `main` until it landed. This repository does not ship red
+> tests, and a scenario that is expected to fail teaches everyone to ignore the job.
+>
+> So the first scenario is the gap row's own subject instead — **the extension activates and every
+> command its manifest declares is really registered** — and the harness earns its keep the way this
+> repository proves everything else: by being broken. A phantom command added to the manifest fails
+> the run with *“declared in the manifest and never registered, so the menu item does nothing”* and a
+> non-zero exit. **Story 6's scenario lands WITH story 6**, where it can go red and green in one
+> change.
+>
+> **What the launch cost, because the plan asked for the entrypoint and this is what it actually
+> takes.** A run started from a terminal INSIDE VS Code inherits `ELECTRON_RUN_AS_NODE=1`; the child
+> `Code.exe` then behaves as plain Node, runs the first argument as a script, and rejects the rest
+> with Node's own `bad option:` wording — a message that names VS Code's binary and says nothing
+> about the variable. Two wrong diagnoses were made before the wording gave it away. The launcher
+> strips it and nine `VSCODE_*` siblings, and says so in its header.
+>
+> Also learned: the editor is **1 GB on disk** per version, so `.vscode-test/` is gitignored — it was
+> sitting untracked and would have been committed.
 
 ### The entrypoint, because “use test-electron” is not a specification
 

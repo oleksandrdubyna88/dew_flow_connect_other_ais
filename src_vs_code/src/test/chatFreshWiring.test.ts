@@ -58,8 +58,16 @@ test('NOTHING IS SWITCHED until the old conversation is provably finished AND FI
   // 3. ARCHIVING IS PART OF THE ALL-OR-NOTHING. The first draft said a sentence and carried on, which
   // left the old record open on disk while the page said it was archived and the new slate sat over
   // it. Five findings from two vendors named the same gap. (The code round.)
-  assert.match(reset, /failed\.length > 0 \? \{ kind: 'refused', reason: failed \} : archiveConversation\(thread\)/u,
+  // Matched across lines since 2026-09-17, when the whole branch moved INSIDE the progress callback:
+  // the shape being pinned is that both outcomes become ONE `Archived`, not how it is laid out.
+  assert.match(reset,
+    /const done: Archived = failed\.length > 0[\s\S]{0,120}?: await archiveConversation\(thread\)/u,
     'the ending and the archive are not one answer, so one of them can fail unnoticed');
+  // AND THE NEW SLATE'S WRITE IS INSIDE THE SAME NOTIFICATION. It used to close after the archive,
+  // leaving `publish`'s own `await thread.writes` with nothing on screen — on a slow store the
+  // indicator was gone and the new conversation had not appeared yet.
+  assert.ok(reset.indexOf('publish(entry, thread, done.note)') < reset.indexOf('  );'),
+    'the new slate is written after the progress notification has gone');
   const refused = reset.indexOf("done.kind === 'refused'");
   const publish = reset.indexOf('publish(entry, thread, done.note)');
   assert.ok(refused >= 0 && refused < publish, 'the reset publishes a new slate without asking whether the old one was filed');
@@ -103,16 +111,21 @@ test('the ending is stop, WAIT, drain, dispose, release — in that order', () =
   const stop = ending.indexOf('thread.session.stop()');
   const turns = ending.indexOf('await thread.turns');
   const writes = ending.indexOf('await thread.writes');
-  const dispose = ending.indexOf('thread.session.dispose()');
-  const release = ending.indexOf('thread.home.release()');
+  // The two cleanups were EXTRACTED on 2026-09-17: `retire` does the disposal and then the release,
+  // each in its own guard, because three other places closed a session as two bare statements and a
+  // throw from the first took the second down with it. This function's own version was the correct
+  // one and is what was lifted out — so the ORDER is asserted where it now lives, and what is
+  // asserted here is that the ending still reaches it after draining.
+  const retired = ending.indexOf('retire(thread,');
   assert.ok(stop >= 0 && turns > stop, 'the turn is stopped without waiting for it, so its answer can arrive after the archive');
   assert.ok(writes > turns, 'the disk queue is not drained, so the archive saves against a revision a queued push is about to move on');
-  assert.ok(dispose > writes, 'the session is disposed before the conversation has finished');
-  assert.ok(release > dispose, 'the directory is released before the session that writes into it is gone');
+  assert.ok(retired > writes, 'the session is let go of before the conversation has finished');
+  const letGo = source('retireSession.ts');
+  assert.ok(letGo.indexOf('home.release()') > letGo.indexOf('session.dispose()'),
+    'the directory is released before the session that writes into it is gone');
   // The release is best effort and SAID: a temp directory that would not go is one the sweep
   // collects later, never a reason to refuse a reset that has otherwise succeeded.
-  assert.match(ending.slice(release), /console\.warn\(/u, 'a directory that would not be released is swallowed');
-  assert.doesNotMatch(ending.slice(release), /return asText/u, 'a directory that would not be released refuses the whole reset');
+  assert.doesNotMatch(ending.slice(retired), /return asText/u, 'a cleanup that would not run refuses the whole reset');
 });
 
 test('a reset that FAILED leaves the conversation live AND usable, and archives nothing', () => {
@@ -143,10 +156,14 @@ test('the disposal and the release run whatever went wrong before them', () => {
   const caught = ending.indexOf('stopped = asText(reason);');
 
   assert.ok(caught >= 0, 'a stop that throws is not caught at all');
-  assert.ok(ending.indexOf('thread.session.dispose()') > caught, 'a session that would not stop is never disposed');
-  assert.ok(ending.indexOf('thread.home.release()') > caught, 'a session that would not stop leaves its directory behind');
-  // Both said out loud rather than swallowed, and neither able to refuse the reset on its own.
-  assert.equal((ending.match(/console\.warn\(/gu) ?? []).length, 2, 'a cleanup that failed says nothing');
+  assert.ok(ending.indexOf('retire(thread,') > caught,
+    'a session that would not stop is never let go of, so it and its directory outlive the reset');
+  // The INDEPENDENCE of the two cleanups moved into `retireSession.ts` with them, and is asserted
+  // there as a value — a dispose that throws, and the release still runs — rather than by reading
+  // two `catch` blocks here. What stays here is that the ending reaches them at all after a failure.
+  const letGo = source('retireSession.ts');
+  assert.equal((letGo.match(/catch \(reason\)/gu) ?? []).length, 2,
+    'the two cleanups share a guard, so one failing stops the other being tried');
   assert.equal((ending.match(/return stopped;/gu) ?? []).length, 1,
     'a cleanup failure can refuse the reset, where only the stop and the wait may');
 });

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { ChatPanels } from './chatPanels';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { windowsReach } from './hostSide';
+import { oneAtATime } from './oneAtATime';
 import { launch } from './processLauncher';
 import { COPY_SCRIPT, RunOutcome, argvFor, captureSelection, ran } from './selectionCapture';
 import { TabSnapshot, isOrdinaryEditorTab, sourceSession } from './sessionKey';
@@ -91,16 +92,31 @@ const hostClipboard = {
  * the round trip is ~1 s rather than the ~1.7 s this label was written for, so the label and the cap
  * both stand as they are.</p>
  */
+/**
+ * The keyboard door, and it opens once at a time.
+ *
+ * <p>Two presses arriving while the first is still probing the host both passed the entry point and
+ * both started a capture — which is how one question becomes two. Showing the progress earlier (below)
+ * makes the wait legible; it does NOT make the path single-entry, and an earlier draft of this fix
+ * stopped at the progress and would have shipped as decoration.</p>
+ */
+const oneCapture = oneAtATime<{ text: string; failure: string }>({
+  text: '',
+  failure: 'That selection is still being copied — the second press was ignored.',
+});
+
 export async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
   if (path === 'menu') {
     return hostClipboard.read().then((text) => ({ text, failure: '' }));
   }
-  const reach = await windowsReach();
 
-  return vscode.window.withProgress(
+  return oneCapture(() => vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Copying the selection…' },
-    () => captureSelection(pressCopy, hostClipboard, reach),
-  );
+    // THE PROBE IS INSIDE THE PROGRESS, which it was not. `windowsReach()` is about a second in a
+    // remote window, and it ran before this notification existed — so the slowest part of the whole
+    // gesture was the part with nothing on screen, which is precisely when a person presses again.
+    async () => captureSelection(pressCopy, hostClipboard, await windowsReach()),
+  ));
 }
 
 

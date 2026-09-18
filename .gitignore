@@ -97,3 +97,7 @@ src_vs_code/src/generated/consultantRule.ts.tmp
 
 # Coverage reports, written by c8 locally and by the sonarcloud workflow in CI.
 coverage/
+
+# The editor @vscode/test-electron downloads to run the extension-host scenarios: a gigabyte
+# per version, re-downloaded by CI on a cache miss and kept between local runs.
+src_vs_code/.vscode-test/

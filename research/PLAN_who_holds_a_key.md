@@ -1,19 +1,40 @@
 # PLAN — who holds a key, and what they have sent
 
-> Status: **in progress — story 1 (the schema, the audit, a limit that is a setting) shipped
-> 2026-09-17 as `bugs-v0.2.0`; story 2 (admin keys and the admin API) is code complete on
-> 2026-09-17 and not yet tagged; stories 3–5 not started.** Story 5 was added on 2026-09-17 and is
-> not in the original four. Scope: `src_bugs`
-> (schema, rate limit, admin API), `src_vs_code` (the Bugz section's Users tab), and the privacy
-> promise in `research/module_server.md` and `deploy/bugs/README.md`, which this change
-> **deliberately rewrites**. Each story's deviations from the text below are recorded at the end of
-> its own section.
+> Status: **IMPLEMENTED, 2026-09-17.** All five stories shipped: story 1 as `bugs-v0.2.0`, story 2
+> (admin keys and the admin API) in PR #353, story 3 (the Users tab) in #363, story 4 (the delivery
+> and the deploy's own proof) in #366, and story 5 (the extension can send) in the change that
+> promoted this document. Story 5 was added on 2026-09-17 and is not in the original four.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [PLAN_a_corpus_of_real_defects.md](../research/PLAN_a_corpus_of_real_defects.md),
-> [PLAN_the_bugs_release_line.md](../research/PLAN_the_bugs_release_line.md),
-> [module_extension.md](../research/module_extension.md),
-> [module_tests.md](../research/module_tests.md).
+> Scope: `src_bugs` (schema, rate limit, admin API), `src_mcp` (the send's durable run row),
+> `src_vs_code` (the Users tab and the Send action), the deployment, and the privacy promise in
+> `research/module_server.md` and `deploy/bugs/README.md`, which this change **deliberately
+> rewrites**. Each story's deviations from the text below are recorded at the end of its own
+> section; the four that changed the SHAPE of the work are listed here.
+>
+> **What shipped differently from this text.**
+>
+> 1. **The admin keys travel base64 with a marker line.** The plan said newline-separated; a systemd
+>    `EnvironmentFile` assignment cannot hold a newline, and the operator chose base64 over any
+>    custom separator on 2026-09-17. A code round then showed that base64 alone does not make the
+>    two shapes disjoint — `aCE0` sixteen times is a plausible raw key that decodes to printable
+>    text — so the encoded form carries `# coai-bugs-admin-keys v1`, which a raw list cannot have.
+> 2. **The post-deploy admin check runs on the HOST and needs no new root helper.** The plan
+>    proposed one, installed by hand; four findings said a manual step nobody performs makes a check
+>    that silently never runs.
+> 3. **A send records a run row.** The plan expected the button to read the funnel. It cannot: a
+>    pair is marked only on the server's acknowledgement, so during a send the counts say what they
+>    said before it. `upload_runs` is the answer, and it is the collector's own shape.
+> 4. **The issuance window is narrowed, not closed**, and that is the honest limit of story 3: the
+>    server commits a key before the extension hears anything. Closing it needs a server-side
+>    idempotency record in `coai-bugs`, which is
+>    [PLAN_the_issuance_window_closes.md](../todo/PLAN_the_issuance_window_closes.md).
+>
+> Related docs: [module_server.md](module_server.md),
+> [PLAN_a_corpus_of_real_defects.md](PLAN_a_corpus_of_real_defects.md),
+> [PLAN_the_bugs_release_line.md](PLAN_the_bugs_release_line.md),
+> [module_extension.md](module_extension.md),
+> [module_tests.md](module_tests.md),
+> [PLAN_the_issuance_window_closes.md](../todo/PLAN_the_issuance_window_closes.md) (its open tail).
 
 ## The goal
 
@@ -938,6 +959,107 @@ contributor key in `SecretStorage` (never `settings.json`, which syncs) with the
 story 3 defines for the admin key; the stored server address actually read; and the acknowledgement
 handled — `--upload-pairs` marks nothing as sent until the server answers, so the panel must not
 either. The page RUN by its test, per `.agents/PROJECT.md`.
+
+#### What story 5's plan round changed (round 1 of 1, verdict `good_enough`)
+
+All three reviewers answered, 15 findings: **13 accepted, 2 rejected**. They converged, from three
+directions, on the question the plan had asked them:
+
+**A SEND HAD NO DURABLE STATE, AND NOTHING STOPPED TWO.** The plan proposed deriving the button from
+the funnel. It cannot be derived from the funnel: a pair is marked sent only on the server's
+acknowledgement — the rule that makes a killed upload safe to retry — so for the whole of a
+multi-minute run the counts say exactly what they said before it began. A panel reading them shows an
+idle button, a reload shows an idle button, and a second Send starts a second process against the
+same waiting pairs. So `coai-mcp` now opens an `upload_runs` row before the first request, beats it
+per batch and ends it in a `finally`; `--bugs-json` carries it as `lastSend`, and the button reads
+THAT. It is the collector's own shape, down to the heartbeat rather than a pid — the data directory
+can be a NAS, where a pid belongs to another machine.
+
+The rest, all accepted: the preflight must run BEFORE the child is built (a stored key and an
+`http://` address would otherwise put a credential into a process pointed at an address it must not
+cross); `serverRun` is not widened with a generic extra-environment parameter but joined by a NAMED
+`uploadRun`, so "what can hand a credential to a child" is one grep with one result; the outcome
+matrix gained exit 64 (an installed server older than sending), a malformed summary, and a run that
+claims nothing rather than reporting zero; and the summary consumer needed a check against the real
+producer rather than against a fixture.
+
+**That last one paid for itself the first time it ran.** `bugzLiveContract.test.ts` spawns the REAL
+`--upload-pairs` and parses what it actually prints — and the reader failed, because the server writes
+its summary with indentation on: the real output is six lines and the last one is `}`. Every unit test
+here had passed, because every fixture was written on one line. Both halves agreed with each other and
+disagreed with the binary, which is the exact failure that style of test exists for.
+
+**Two rejections, both verified rather than argued.** Two reviewers said a partial send risks
+duplicating data. It cannot: `POST /ingest` is idempotent on the DERIVED id — `Corpus.cs` is
+`ON CONFLICT(entry_id) DO NOTHING`, `entry_id` is `PairId.Of(payload)`, a pure function the client
+computes identically, and `PLAN_a_corpus_of_real_defects.md` pins it twice. The resume mechanism they
+asked for exists too: nothing is written unless the whole answer lines up, and an unacknowledged pair
+is left waiting. A retry costs a redundant request, never a duplicate row. What was true is that the
+person could not SEE any of that, and the sentences now say it.
+
+#### What story 5's code round changed (round 1 of 2, verdict `revise`)
+
+All twelve reviewers answered, 49 findings: **32 accepted, 17 rejected**. The accepted ones fall into
+four groups, and three of them are the same lesson: a mechanism is not a mechanism until something
+calls it.
+
+- **The sweep was written and called from nowhere.** Eight findings across three providers. An
+  abandoned send would have fenced every later one for ever — the Send button disabled, and the only
+  thing that would clear it being the send the button refuses to start. It runs now where the panel's
+  own reader runs, which is the one that executes when somebody looks. Its cutoff also moved from ten
+  minutes to the collector's thirty, because a cutoff shorter than the work can legitimately take is
+  a fence around a live process.
+- **A run that THREW was recorded as `done, 0 sent`**, because the summary variable still held the
+  empty value the assignment never reached. A crashed send looked exactly like a successful one with
+  nothing to do.
+- **Nothing was atomic about "is a send already running".** The panel reads the row, then starts a
+  process; two presses inside that window both see an idle row. The CLI refuses now, where the check
+  and the write are one connection apart.
+- **The button's number counted pairs already sent.** Seven findings, three providers: it read
+  `funnel.collected`, which is every pair ever kept and is unchanged by a successful send, so the
+  button offered to send what had already gone. `--bugs-json` carries a real `sendable` count now,
+  using the send's own predicate.
+
+Two sentences were also simply untrue and are fixed: a transport failure said "nothing was marked as
+sent", which is false the moment a multi-batch run has landed one batch; and an interrupted send was
+rendered as an ordinary ending, so a closed window read as a server that had refused everything.
+
+**Seventeen rejections, and the largest were verified by counting.** Two reviewers reported
+`JSON.stringify` interpolated into a script element in `bugsSend.ts` — a file that contains that
+string zero times, has no template literal and no script. One asked for `noEmitOnError`, which story 3
+turned on and which every build here has run under. One asked for a companion to a structural scan,
+which was fair and is accepted; the rest of that provider's ten were "might" findings about a test
+configuration this diff does not touch. And one asked for a guard that would let a sweep's GUESS
+outrank the process that knows what it actually did.
+
+#### And what round 2 changed (round 2 of 2, verdict `good_enough`)
+
+All three reviewers answered, 7 findings, all gating: **5 accepted, 2 rejected**. Every accepted one
+was a narrowing I had described honestly and left as a narrowing.
+
+- **The single-flight was not atomic.** Two reviewers, independently. The CLI read the last run and
+  then inserted — two statements with a gap, and two processes inside it both read idle and both
+  offered the same pairs. The insert refuses itself now, which is one statement.
+- **The sendable predicate was written twice**, once in the SELECT that takes the pairs and once in
+  the COUNT the button shows. `SendablePairs` holds it, and the two callers share it.
+- **The sweep named only `state`**, not `finished_utc`; naming both costs nothing and depends on
+  neither `EndUploadRun` writing them together nor on nobody adding a state.
+- **An absent `sendable` read as zero**, so a server older than this story disabled the Send button
+  for ever: the send was never attempted, exit 64 never arrived, and nobody was told to update the
+  server. Absent is now its own value and falls back to what was kept — optimistically, on purpose,
+  because that is the path that can explain itself.
+
+**And the live contract test earned its place a second time.** The shared predicate compiled, every
+unit test passed, and the real binary answered `SQLite Error 1: near "WHEREp": syntax error` — a C#
+raw string literal keeps no trailing newline, so `WHERE` and the condition had been concatenated
+into one word. Nothing but running the real thing would have found it.
+
+**Two rejections.** One asked for a guard stopping a woken process from overwriting a swept
+`interrupted`: the process knows what it did and the sweep only guessed from silence, so that
+overwrite is the correct direction. The other said a transport failure crashes the CLI instead of
+printing its summary — `OnceAsync` catches `HttpRequestException` and `TaskCanceledException` and
+turns both into `Trouble`, so the `throw` reached by the outer catch is for genuinely unexpected
+faults, where "try again" would be advice to retry a thing that cannot work.
 
 ## Test plan
 

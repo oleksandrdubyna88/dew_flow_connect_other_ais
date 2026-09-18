@@ -1,4 +1,5 @@
-import { BugCorpus, CollectRun, EMPTY_CORPUS, hasRun, isRunning } from './roundsDb';
+import { BugCorpus, CollectRun, EMPTY_CORPUS, hasRun, isRunning, sending } from './roundsDb';
+import { sendLabel, waiting } from './bugsSend';
 import { ModelChoice } from './models';
 
 /**
@@ -103,12 +104,53 @@ const option = (choice: ModelChoice, selected: string): string =>
   `<option value="${escape(choice.id)}"${choice.id === selected ? ' selected' : ''}>`
   + `${escape(choice.label)}</option>`;
 
+/**
+ * What the last send came to, or what is waiting to go.
+ *
+ * <p>Four states, and the order is the one a person reads: a send happening now, a send that ended
+ * badly, a send that ended, and nothing sent from this machine yet. "Nothing yet" is deliberately
+ * not silence — a section that says nothing about sending is the section this story was written
+ * about.</p>
+ */
+export function lastSendLine(corpus: BugCorpus): string {
+  const send = corpus.lastSend;
+  if (sending(send)) {
+    return send.offered > 0
+      ? `Sending to ${send.server} — ${send.sent} of ${send.offered} so far.`
+      : `Sending to ${send.server}…`;
+  }
+
+  if (send.id.length === 0) {
+    return waiting(corpus) > 0
+      ? 'Nothing has been sent from this machine yet.'
+      : 'Nothing has been sent from this machine yet, and nothing is waiting.';
+  }
+
+  const went = `${send.sent} sent, ${send.duplicate} already held, ${send.refused} refused`;
+  if (send.state === 'interrupted') {
+    // NOT an ending. Nothing is known about what it would have done, and reading its counts as a
+    // result would say "0 sent" for a send whose window was simply closed. (Code round, codex.)
+    return `The last send stopped without finishing — ${went} before it did. Press Send to offer `
+      + 'what is left.';
+  }
+
+  return send.trouble.length > 0
+    ? `The last send could not finish: ${send.trouble}. ${went} before it stopped.`
+    : `Last send: ${went}.`;
+}
+
 /** The section's body. */
 export function bugzBody(state: BugzViewState = {
   corpus: EMPTY_CORPUS, models: [], model: '', server: '',
 }): string {
   const run = state.corpus.lastRun;
   const running = isRunning(run);
+  // THE SEND'S OWN STATE, read from the database rather than from a flag on this panel. A pair is
+  // marked sent only on the server's acknowledgement, so the funnel says the same thing during a
+  // send as before one — and a reloaded window that trusted it would show an idle button over a
+  // live upload and let a second start. (Plan round, all three reviewers.)
+  const send = state.corpus.lastSend;
+  const busy = sending(send);
   // THIS server's list when it said, the panel's own when it is too old to. An installed
   // extension and an installed server can be of different ages, and only the server can say what
   // it will actually accept this minute.
@@ -134,6 +176,12 @@ export function bugzBody(state: BugzViewState = {
   state.corpus.funnel.collected > 0 ? '' : ' disabled'}>Review bugs</button>
     <button type="button" class="run" data-command="bugsKeys">Who holds a key</button>
   </div>
+  <div class="row">
+    <button type="button" class="run" data-command="sendBugs"${
+  busy || waiting(state.corpus) === 0 ? ' disabled' : ''}>${escape(sendLabel(send, state.corpus))}</button>
+    <button type="button" class="run quiet" data-command="setBugsKey">Set the contributor key…</button>
+  </div>
+  <div class="hint" id="bugz-send">${escape(lastSendLine(state.corpus))}</div>
   <button type="button" class="run" data-command="setBugsServer">${
   state.server.length > 0 ? `Ingest server: ${escape(state.server)}` : 'Set the ingest server…'}</button>
   <div class="hint">Collect reads this machine's own gate findings and writes what it learned to the

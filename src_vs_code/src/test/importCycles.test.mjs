@@ -33,10 +33,20 @@ const SOURCE = join(import.meta.dirname, '..', '..', 'src');
  * the chat command or anything split out of it, which is the claim the test below makes separately
  * and the reason this list is frozen rather than fixed: untangling nine unrelated pairs is not part
  * of a refactor that promises no behaviour change.</p>
+ *
+ * <p><b>NINE → EIGHT on 2026-09-17, and this is the ratchet moving in the direction it was built
+ * for.</b> `chatModels ↔ chatPage` is gone: `chatModels.ts:1` took `ChatModelChoice` from the page
+ * and the page takes `ChatProvider` back, so that ONE import of a four-field interface was the
+ * entire return edge. The interface moved to `chatContracts.ts` and nothing else in `chatModels`
+ * reaches the page at all. The gate over the split had accepted it as "couples config to the page
+ * — true and pre-existing" and filed it as tidiness; it was a ratchet entry.</p>
+ *
+ * <p>Deleting this line is only legal in the commit that makes it untrue, which is what the test
+ * below enforces from both sides: it fails while the cycle survives, and it fails if the entry is
+ * removed while the cycle survives.</p>
  */
 const KNOWN = [
   'builtinRoles.generated ↔ prompts',
-  'chatModels ↔ chatPage',
   'claudeModels ↔ models',
   'helpContent ↔ helpDe',
   'helpContent ↔ helpEs',

@@ -5,7 +5,7 @@ import { panelHtml, staticKey, type PanelState } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun } from '../roundsDb';
+import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun, type SendRun } from '../roundsDb';
 import { RANKING_VENDORS, bugzBody, collectLabel, lastRunLine, mayRank } from '../bugzView';
 
 /**
@@ -38,13 +38,20 @@ const RUN: CollectRun = {
   reasons: '',
 };
 
-const corpus = (lastRun: CollectRun, collected = 0): BugCorpus => ({
+const corpus = (
+  lastRun: CollectRun,
+  collected = 0,
+  lastSend = EMPTY_CORPUS.lastSend,
+  sendable = collected,
+): BugCorpus => ({
   funnel: {
     all: 100, onCode: 80, accepted: 60, gating: 50, runtime: 40, located: 40, unprocessed: 20,
     collected,
   },
   rankingVendors: ['local'],
   lastRun,
+  lastSend,
+  sendable,
   read: true,
 });
 
@@ -382,4 +389,94 @@ test('the allowlists agree', async () => {
   assert.ok(vendors.length > 0, 'the shared list is empty — this guard has stopped guarding');
   assert.deepEqual([...RANKING_VENDORS], vendors,
     'the picker and shared/ranking-vendors.txt disagree about who may read a finding');
+});
+
+/**
+ * Sending, which this section could not do at all before story 5.
+ *
+ * <p>The control is asserted on the ASSEMBLED page rather than on a template, and the state it is
+ * driven by comes from the database's own send row — not from a flag on the panel, which is the
+ * distinction three plan reviewers converged on: a flag dies on reload and lets a second send start
+ * beside the first.</p>
+ */
+const SENDING: SendRun = {
+  id: 's1',
+  startedUtc: '2026-09-17T09:00:00Z',
+  finishedUtc: '',
+  state: 'running',
+  server: 'https://bugs.example',
+  offered: 4,
+  sent: 1,
+  duplicate: 0,
+  refused: 0,
+  trouble: '',
+};
+
+test('the Send button is on the page, and says how much is waiting', () => {
+  const { html } = run({}, { bugz: corpus(RUN, 4) });
+  const body = bugzBody({ corpus: corpus(RUN, 4), models: [], model: '', server: 'https://bugs.example' });
+
+  assert.match(body, /data-command="sendBugs"/u, 'the section could not send at all before this');
+  assert.match(body, /Send 4 pair\(s\)/u);
+  assert.ok(html.includes('data-command="sendBugs"'), 'and it is in the page the panel actually builds');
+});
+
+test('with nothing waiting, Send is there and disabled rather than absent', () => {
+  const body = bugzBody({ corpus: corpus(RUN, 0), models: [], model: '', server: 'https://bugs.example' });
+
+  assert.match(body, /data-command="sendBugs" disabled/u,
+    'a control that vanishes teaches nobody that it exists');
+});
+
+/** THE DURABLE ONE: the button reads the database, so a reload still shows the send. */
+test('while a send is running the button says so and cannot start a second', () => {
+  const during = corpus(RUN, 4, SENDING);
+  const body = bugzBody({ corpus: during, models: [], model: '', server: 'https://bugs.example' });
+
+  assert.match(body, /data-command="sendBugs" disabled/u);
+  assert.match(body, /Sending… 1 of 4/u, 'and it says how far it has got');
+  assert.match(body, /Sending to https:\/\/bugs\.example/u, 'the line under it names the server');
+});
+
+test('a send that ended says what it came to', () => {
+  const ended = corpus(RUN, 4, { ...SENDING, state: 'done', finishedUtc: 'u', sent: 3, duplicate: 1 });
+
+  assert.match(
+    bugzBody({ corpus: ended, models: [], model: '', server: 'https://bugs.example' }),
+    /Last send: 3 sent, 1 already held, 0 refused/u);
+});
+
+test('a send that could not finish says so, and what got through before it did', () => {
+  const broke = corpus(RUN, 4, { ...SENDING, state: 'failed', finishedUtc: 'u', trouble: 'connection refused' });
+
+  const body = bugzBody({ corpus: broke, models: [], model: '', server: 'https://bugs.example' });
+
+  assert.match(body, /could not finish: connection refused/u);
+  // NOT "nothing was marked": each batch is marked as the server acknowledges it, so a run that
+  // failed on its third batch has two batches' worth already sent. (Code round, codex.)
+  assert.match(body, /before it stopped/u);
+});
+
+test('a machine that has never sent says that, rather than saying nothing', () => {
+  const body = bugzBody({ corpus: corpus(RUN, 4), models: [], model: '', server: '' });
+
+  assert.match(body, /Nothing has been sent from this machine yet/u,
+    'silence about sending is the defect story 5 was written about');
+});
+
+test('the contributor key has its own control, beside Send', () => {
+  const body = bugzBody({ corpus: corpus(RUN, 4), models: [], model: '', server: 'https://bugs.example' });
+
+  assert.match(body, /data-command="setBugsKey"/u);
+  assert.match(body, /Set the contributor key/u);
+});
+
+/** Pressing it POSTS, which is the half a markup assertion cannot see. */
+test('pressing Send posts the command the provider dispatches on', () => {
+  const button = new Control({ command: 'sendBugs' });
+  const { posted } = run({ 'data-command': [button] }, { bugz: corpus(RUN, 4) });
+  button.fire('click');
+
+  assert.ok(posted.some((m) => m.type === 'command' && m.command === 'sendBugs'),
+    'the button is wired to nothing');
 });

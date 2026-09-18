@@ -2762,6 +2762,10 @@ export const PANEL_COMMANDS = [
   'reviewBugs',
   'bugsKeys',
   'setBugsServer',
+  // Sending is the last thing the Bugz section could not do: everything before it read a local
+  // database and a local git history, and uploading was a CLI invocation a person made by hand.
+  'sendBugs',
+  'setBugsKey',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];

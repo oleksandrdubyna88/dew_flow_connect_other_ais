@@ -4,6 +4,7 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { vendorPalette } from './vendorColour';
 import { ChatProvider, ChatProviderList } from './chatModels';
+import { ChatModelChoice } from './chatContracts';
 import { ModelPreset, PromptPreset } from './chatPresets';
 import { pastedImage } from './chatImage';
 
@@ -104,12 +105,6 @@ export function modelClass(id: string): string {
   return `model-${id.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 48)}`;
 }
 
-/** A model the picker may offer. `remote` models say what they cannot do. */
-export interface ChatModelChoice {
-  readonly id: string;
-  readonly label: string;
-  readonly caption: string;
-}
 
 export interface ChatPageState {
   /**
