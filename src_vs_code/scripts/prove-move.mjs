@@ -38,6 +38,18 @@ const asCompared = (line) => line.replace(/\s+$/u, '');
  * <p>Nothing else is forgiven. A renamed variable, a changed argument, a re-worded comment and a
  * dropped attribution all come back in the residue, which is the point — the caller reads them one
  * by one and says in the commit why each is there, or puts it back.</p>
+ *
+ * <p><b>`private` is NOT forgiven either, and that was decided rather than overlooked.</b> Extracting
+ * a class puts private methods behind a new boundary, so some of them must become public — and each
+ * such line arrives as one residue line and one extra run. It was measured on the consultant-prompt
+ * extraction: two methods, three runs against one contiguous region. Widening this to drop `private`
+ * as well would have made those lines match.
+ *
+ * <p>The operator ruled that it shows. A visibility change is a real change to a line, and the one
+ * question this tool answers is whether a line is what it was. Forgiving it would hide a genuine edit
+ * in order to make a count tidier — and the count is not the product; the residue list is. So expect
+ * a run per newly-public method, say so in the pull request, and read the runs against the regions
+ * cut PLUS the methods that changed visibility.</p>
  */
 const unexported = (line) => line.replace(/^(\s*)export /u, '$1');
 

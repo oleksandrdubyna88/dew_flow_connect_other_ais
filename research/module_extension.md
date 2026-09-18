@@ -7776,6 +7776,16 @@ match. With a multi-line comment in the original it goes red at `actual: 3, expe
 still scaffolding, which is the tool doing its job rather than a false positive, and the reason it
 still exits non-zero: the contract is that a human justifies each new line, not that there are none.
 
+**One thing it still shows, by decision rather than oversight: `private`.** Extracting a class puts
+private methods behind a new boundary, so some must become public, and `unexported()` forgives
+`export` and nothing else — so each newly-public method is one residue line and one extra run. The
+consultant-prompt extraction measured it: two methods, three runs against one contiguous region.
+Widening the forgiveness would have made those lines match, and the operator ruled that it shows. A
+visibility change is a real change to a line, and the one question this tool answers is whether a
+line is what it was; hiding a genuine edit to tidy a count trades the product for the summary. Read
+the runs against the regions cut PLUS the methods that changed visibility, and say so in the pull
+request.
+
 `sonarExclusions.test.ts` caught the new module immediately — it imports `vscode`, so it belongs in
 `sonar.coverage.exclusions`, and the ratchet failed until it was there. The comment beside that list
 also claimed *"this repository has no harness that provides one"*, which stopped being true the day
