@@ -177,8 +177,13 @@ export function pairDiff(before: string, after: string): PairDiff {
  * a confident diff it never computed. Reachable only past {@link MOST_CELLS}.</p>
  */
 function tooBig(before: readonly string[], after: readonly string[]): PairDiff {
+  // MASKED, like the path above it. The first version compared raw lines, and three reviewers found
+  // what that does: two 600-line skeletons differing only by placeholder renumbering came back with
+  // 600 of 600 lines marked — the exact wall of false differences this module exists to prevent,
+  // reappearing above the ceiling where nobody would think to look for it. Measured before the fix
+  // and after.
   const identical = before.length === after.length
-    && before.every((line, at) => line === after[at]);
+    && before.every((line, at) => masked(line) === masked(after[at] ?? ''));
   const mark = (lines: readonly string[], what: LineMark): LineMark[] =>
     lines.map(() => (identical ? 'same' : what));
 

@@ -377,8 +377,11 @@ test('every marked line carries its mark as text a screen reader can reach', () 
   for (const language of ['CSharp', 'Fortran']) {
     const html = highlight('a();\nb();\nc();', language, ['same', 'added', 'changed']);
 
-    assert.match(html, /<span class="srOnly">added line <\/span>/u, language);
-    assert.match(html, /<span class="srOnly">changed line <\/span>/u,
+    // The colon is load-bearing: a reviewer pointed out that a hidden span clipped to a pixel can
+    // be read straight into the code beside it, so the word needs its own punctuation rather than
+    // a trailing space a screen reader may collapse.
+    assert.match(html, /<span class="srOnly">added line: <\/span>/u, language);
+    assert.match(html, /<span class="srOnly">changed line: <\/span>/u,
       `${language}: "changed" has no counterpart in git, so it needs the word rather than a glyph`);
     // And an unmarked line says nothing, or every line would announce itself.
     assert.equal((html.match(/srOnly/gu) ?? []).length, 2, language);

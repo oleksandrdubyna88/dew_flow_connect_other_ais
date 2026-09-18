@@ -372,6 +372,16 @@ the data directory was empty — so the shape is representative and the exact ra
 measurement of live data. Worth re-running against a real database before the ratio is quoted
 anywhere as a property of the corpus.
 
+**The producer scan has a known blind spot, written down rather than left to be discovered.** The
+placeholder-kind test reads `Placeholders.cs` and extracts the words it RETURNS as a kind, then
+demands the set equal what `lineDiff.ts` masks — so a fourth kind arrives as a red test naming it.
+Two reviewers pointed out the way it can still go quiet: a refactor that returns a new kind through
+a named constant rather than a literal leaves the extraction finding the same three, and the
+assertion passes over a set that is no longer complete. A companion assertion now demands the scan
+still finds a KNOWN instance, which catches the extraction matching NOTHING; it cannot catch it
+matching too little. The real fix is a generated contract shared by both sides, which is work in
+its own right.
+
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
 pairs. And the ranking has no transport, so `Ranking.Order` is exercised and nothing produces a real
