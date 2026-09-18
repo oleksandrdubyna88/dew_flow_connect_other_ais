@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD, realView } from '../realMethodView';
+import { Tab } from '../tabStrip';
 import { readable } from './readableHtml';
 
 /**
@@ -46,6 +48,10 @@ interface Posted {
   readonly delta?: number;
   /** The zoom and tone controls are SHARED, and they post a field this page never fills. */
   readonly field?: string;
+  /** A `fetchReal` carries the generation the row asked with; the host echoes it back. */
+  readonly generation?: string;
+  /** A `realText` press says which way the view went. */
+  readonly on?: boolean;
 }
 
 /**
@@ -95,10 +101,82 @@ class Control {
   textContent = '';
   checked = false;
 
+  /** The attributes the page sets on a control — `aria-pressed` on the real-code toggle. */
+  readonly attributes: Record<string, string> = {};
+
   constructor(readonly id: string) {}
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value;
+  }
 
   closest(): null {
     return null;
+  }
+}
+
+/**
+ * One half of a row's code — the skeleton, or the real method — as the page rendered it.
+ *
+ * <p>Both halves are on the row and the toggle only flips `hidden`; a fetch fills the real one.
+ * So a test can see, without reading markup, WHICH text a row is showing and whether a response
+ * landed in it. Built from the rendered markup like every other element here, `hidden` and the
+ * initial contents included.</p>
+ */
+class Half {
+  hidden: boolean;
+  innerHTML: string;
+
+  constructor(readonly key: string, hidden: boolean, contents: string) {
+    this.hidden = hidden;
+    this.innerHTML = contents;
+  }
+}
+
+/**
+ * A filter strip, so the tabs in it have a real ancestor to be found through.
+ *
+ * <p>Same argument as {@link Row}: the handler reads which strip a press came from by walking UP
+ * from the button, so a shim whose tabs answer only about themselves would be green through a page
+ * that rendered both strips without saying which was which — and the host would then narrow by
+ * whichever axis it guessed. A tab is built from the rendered markup with the wrapper it was
+ * actually inside.</p>
+ */
+class Strip {
+  constructor(readonly which: string) {}
+
+  readonly id = '';
+
+  getAttribute(name: string): string | null {
+    return name === 'data-strip' ? this.which : null;
+  }
+
+  closest(selector: string): Strip | null {
+    return selector === '[data-strip]' ? this : null;
+  }
+}
+
+/** One tab. It has an `id`, like the real button, and a strip above it. */
+class TabButton {
+  /** Whether the page put the keyboard on this one. */
+  focused = false;
+
+  constructor(readonly id: string, readonly key: string, private readonly strip: Strip) {}
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  getAttribute(name: string): string | null {
+    return name === 'data-tab' ? this.key : null;
+  }
+
+  closest(selector: string): TabButton | Strip | null {
+    return selector === '[data-tab]' ? this : this.strip.closest(selector);
   }
 }
 
@@ -247,17 +325,31 @@ interface Page {
   readonly style: Style;
   readonly host: Host;
   readonly controls: Readonly<Record<string, Control>>;
-  click(what: Box | Control | Toggle | Line): void;
+  /** Every tab on the page, with the strip it came out of. */
+  readonly tabs: readonly TabButton[];
+  click(what: Box | Control | Toggle | Line | TabButton): void;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
   showing(findingId: number): boolean;
+  /** The skeleton half of one pair's code. */
+  skeleton(findingId: number): Half;
+  /** The real-method half of one pair's code. */
+  real(findingId: number): Half;
 }
 
 /** What the page is drawn with, beyond the pairs — every field optional, as the page has it. */
 interface Options {
+  readonly projects?: readonly Tab[];
+  readonly languages?: readonly Tab[];
+  readonly project?: string;
+  readonly language?: string;
+  readonly focus?: { readonly strip: string; readonly key: string };
   readonly trouble?: string;
   readonly expanded?: ReadonlySet<number>;
   readonly uiScale?: number;
   readonly textTone?: number;
+  readonly realText?: boolean;
+  readonly real?: ReadonlyMap<number, RealRead>;
+  readonly draw?: number;
 }
 
 /**
@@ -281,8 +373,28 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     return found;
   };
   const boxes = [...html.matchAll(/data-pick="(\d+)"/g)].map((m) => new Box(m[1]!, rowFor(m[1]!)));
+  // Each strip with its own buttons, from the markup: the wrapper is matched first and its buttons
+  // are taken from INSIDE it, so a tab can only be attributed to the strip it was really in.
+  const tabs = [...html.matchAll(/<div class="tabs"[^>]*data-strip="(\w+)">([\s\S]*?)<\/div>/g)]
+    .flatMap((strip) => {
+      const above = new Strip(strip[1]!);
+
+      return [...strip[2]!.matchAll(/id="([^"]+)"[^>]*data-tab="([^"]*)"/g)]
+        .map((one) => new TabButton(one[1]!, one[2]!, above));
+    });
   const regions = [...html.matchAll(/data-detail="(\d+)"( hidden)?>/g)]
     .map((m) => new Region(m[1]!, m[2] === undefined));
+  // The two halves of each row's code, with what each was rendered holding. The real half's
+  // contents run to the end of its element, which is the last thing in the cell.
+  const halves = [...html.matchAll(/<div class="(skel|real)" data-(?:skel|real)="(\d+)"( hidden)?>/g)]
+    .map((m) => {
+      const opens = m.index! + m[0].length;
+      const shuts = html.indexOf(m[1] === 'skel' ? '<div class="real"' : '</td>', opens);
+
+      return { which: m[1]!, half: new Half(m[2]!, m[3] !== undefined, html.slice(opens, shuts).trim()) };
+    });
+  const halfOf = (which: string, key: string): Half | undefined =>
+    halves.find((one) => one.which === which && one.half.key === key)?.half;
   const toggles = [...html.matchAll(/data-toggle="(\d+)"\s+aria-expanded="(true|false)"/g)]
     .map((m) => new Toggle(m[1]!, m[2] === 'true', rowFor(m[1]!)));
   // The severity/title line and the state word, with the element they are actually INSIDE. Whether
@@ -312,7 +424,12 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     collapseAll: new Control('collapseAll'),
     zoomOffset: new Control('zoomOffset'),
     toneOffset: new Control('toneOffset'),
+    realText: new Control('realText'),
   };
+  // The toggle's rendered state, read off the markup as every other initial state here is.
+  const pressed = /id="realText" aria-pressed="(true|false)"/.exec(html);
+  assert.ok(pressed !== null, 'the page rendered no real-code toggle, or one without a state');
+  controls['realText']!.setAttribute('aria-pressed', pressed[1]!);
   // Only the explanation the page ACTUALLY rendered exists, so a test can ask which one it got
   // without reading the markup for it.
   for (const id of ['nothing', 'trouble']) {
@@ -340,14 +457,21 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
       }
     },
     querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
-    querySelector: (selector: string): Region | Toggle | undefined => {
-      const one = /^\[data-(detail|toggle)="(\d+)"]$/.exec(selector);
+    querySelector: (selector: string): Region | Toggle | Half | undefined => {
+      const one = /^\[data-(detail|toggle|skel|real)="(\d+)"]$/.exec(selector);
       assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
+      if (one[1] === 'skel' || one[1] === 'real') {
+        return halfOf(one[1], one[2]!);
+      }
       const among = one[1] === 'detail' ? regions : toggles;
 
       return (among as readonly (Region | Toggle)[]).find((e) => e.key === one[2]);
     },
-    getElementById: (id: string): Control | undefined => controls[id],
+    // Tabs as well as controls, because the page looks one up BY ID to give the keyboard back
+    // what it was on, and a shim that knew only the controls would be green through that being
+    // wired to nothing.
+    getElementById: (id: string): Control | TabButton | undefined =>
+      controls[id] ?? tabs.find((one) => one.id === id),
     body: { style },
   };
 
@@ -362,6 +486,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
 
   return {
     posted,
+    tabs,
     boxes,
     toggles,
     lines,
@@ -377,6 +502,18 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
       assert.ok(region !== undefined, `no pair ${findingId} is on this page`);
 
       return !region.hidden;
+    },
+    skeleton: (findingId) => {
+      const half = halfOf('skel', String(findingId));
+      assert.ok(half !== undefined, `pair ${findingId} rendered no skeleton half`);
+
+      return half;
+    },
+    real: (findingId) => {
+      const half = halfOf('real', String(findingId));
+      assert.ok(half !== undefined, `pair ${findingId} rendered no real-method half`);
+
+      return half;
     },
   };
 }
@@ -956,4 +1093,471 @@ test('an empty corpus and a failed read are told apart', () => {
   assert.ok(failed.controls['trouble'] !== undefined,
     'a read that failed must not be rendered as a corpus that is empty');
   assert.ok(failed.controls['nothing'] === undefined);
+});
+
+
+/** The two strips as a page is handed them — what `reviewTabs` builds, in miniature. */
+const PROJECTS: readonly Tab[] = [
+  { key: '*all*', label: 'All projects · 2', slug: 'all' },
+  { key: 'd:/rsd/repo_a', label: 'repo_a · 1', slug: '0', title: 'd:/rsd/repo_a' },
+  { key: 'd:/rsd/repo_b', label: 'repo_b · 1', slug: '1', title: 'd:/rsd/repo_b' },
+];
+const LANGUAGES: readonly Tab[] = [
+  { key: '*all*', label: 'All languages · 2', slug: 'all' },
+  { key: 'TypeScript', label: 'TypeScript · 1', slug: '0' },
+  { key: 'C#', label: 'C# · 1', slug: '1' },
+];
+
+test('pressing a project tab tells the host which strip and which key, and paints nothing itself', () => {
+  const page = run([pair(1), pair(2)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+  const repoB = page.tabs.find((t) => t.key === 'd:/rsd/repo_b');
+  assert.ok(repoB !== undefined, 'the project strip was not rendered');
+
+  page.click(repoB);
+
+  // The page announces itself on load, so the tab messages are what is filtered for here.
+  assert.deepEqual(page.posted.filter((m) => m.type === 'tab'),
+    [{ type: 'tab', strip: 'project', key: 'd:/rsd/repo_b' }]);
+  // And the page did NOT filter itself: both rows are still there. The host holds the choice
+  // because the document is replaced wholesale on every decision, so a selection living here would
+  // die on the first one anybody made.
+  assert.equal(page.boxes.length, 2);
+});
+
+test('a language press is not mistaken for a project press', () => {
+  // The two strips post the same `data-tab`; only the ancestor says which axis was pressed. A
+  // handler that read the button alone would narrow by whichever it guessed.
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+  const csharp = page.tabs.find((t) => t.key === 'C#');
+  assert.ok(csharp !== undefined);
+
+  page.click(csharp);
+
+  assert.deepEqual(page.posted.filter((m) => m.type === 'tab'),
+    [{ type: 'tab', strip: 'language', key: 'C#' }]);
+});
+
+test('the two strips have ids of their own and both point at the table', () => {
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: 'd:/rsd/repo_a', language: '*all*' });
+
+  assert.deepEqual(page.tabs.map((t) => t.id),
+    ['project-tab-all', 'project-tab-0', 'project-tab-1', 'language-tab-all', 'language-tab-0', 'language-tab-1'],
+    'two strips on one page must not share an id, or the aria wiring points at the wrong thing');
+});
+
+test('a page with nothing to choose between renders no strip at all', () => {
+  // The live corpus today: nine pairs, one project. `reviewTabs` hands over empty strips and the
+  // page must then draw no tablist — an empty one announces a control a person cannot use.
+  const page = run([pair(1)]);
+
+  assert.deepEqual(page.tabs, []);
+  assert.equal(page.boxes.length, 1, 'and the pairs are still there');
+});
+
+
+test('the keyboard gets back the tab it just activated', () => {
+  // Every repaint replaces the document, so a person who tabbed to a project and pressed Enter was
+  // returned to the top of a new page and had to navigate the whole thing again to reach the
+  // language strip beside it — once per press. Found on the code round.
+  const page = run([pair(1)], {
+    projects: PROJECTS,
+    languages: LANGUAGES,
+    project: 'd:/rsd/repo_b',
+    language: '*all*',
+    focus: { strip: 'project', key: 'd:/rsd/repo_b' },
+  });
+
+  const focused = page.tabs.filter((one) => one.focused);
+
+  assert.deepEqual(focused.map((one) => one.id), ['project-tab-1'],
+    'exactly the activated tab, found by the key the host named rather than by position');
+});
+
+test('a draw nobody pressed does not move anybody\'s focus', () => {
+  // The companion, and it is not symmetry for its own sake: a poll comes back every few seconds,
+  // and a page that focused something on each one would take the keyboard away mid-sentence.
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+
+  assert.deepEqual(page.tabs.filter((one) => one.focused), []);
+});
+
+// --------------------------------------------------------------------------------------------
+// The un-anonymised view (story 2.3): a toggle over what the rows already hold, never a payload.
+// --------------------------------------------------------------------------------------------
+
+/** The real method behind `pair(1)`, both sides readable, as `--real-method` would answer it. */
+const REAL: RealMethod = {
+  findingId: 1,
+  language: 'CSharp',
+  name: 'GetOrAdd',
+  reason: '',
+  before: {
+    reason: '', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 15,
+    source: 'public int GetOrAdd(string key, int value)\n{\n    return _items[key];\n}',
+  },
+  after: {
+    reason: '', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 18,
+    source: 'public int GetOrAdd(string key, int value)\n{\n    lock (_items) { return _items[key]; }\n}',
+  },
+};
+
+const fetched = (method: RealMethod = REAL): RealRead => ({ ok: true, method });
+
+/** What the page asked the host for, in the order it asked. */
+const asked = (page: Page): readonly Posted[] => page.posted.filter((m) => m.type === 'fetchReal');
+
+/** The rows the page asked for, by id, in a fixed order. */
+const askedIds = (page: Page): readonly number[] => asked(page).map((m) => m.id ?? -1).sort((a, b) => a - b);
+
+/**
+ * The host's answer for one request, exactly as `BugzReviewPanel.answerReal` posts it.
+ *
+ * <p>`keep` says whether the read REACHED the server: the panel caches those and not a failed
+ * process, and the page holds its note on the same rule. Defaulted to true here because that is the
+ * ordinary answer; the retry tests pass false explicitly.</p>
+ */
+function answer(page: Page, request: Posted, view: { shown: boolean; html: string; keep?: boolean }): void {
+  page.host.push({
+    type: 'real',
+    id: request.id,
+    generation: request.generation,
+    shown: view.shown,
+    keep: view.keep ?? true,
+    html: view.html,
+  });
+}
+
+test('the real-code toggle asks for every open row once, and paints nothing itself', () => {
+  const page = run([pair(1), pair(2), pair(3)]);
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 3));
+
+  page.click(page.controls['realText']!);
+
+  assert.deepEqual(askedIds(page), [1, 3],
+    'exactly the open rows are asked for — the closed one would be a git read for nothing');
+  assert.ok(asked(page).every((m) => typeof m.generation === 'string' && m.generation.length > 0),
+    'every request carries the generation it can be told stale by');
+  assert.deepEqual(page.posted.filter((m) => m.type === 'realText').at(-1), { type: 'realText', on: true },
+    'the host is told, so the next paint draws the same view');
+  assert.equal(page.controls['realText']!.getAttribute('aria-pressed'), 'true');
+  // Nothing real has arrived, so the skeleton stays and the row says it is fetching.
+  assert.equal(page.skeleton(1).hidden, false, 'the skeleton must not vanish before anything replaces it');
+  assert.equal(page.real(1).hidden, false);
+  assert.match(page.real(1).innerHTML, /Fetching the real method/u);
+  assert.equal(page.real(2).hidden, true, 'a closed row shows nothing of the view');
+});
+
+test('a fetched method appears in the row that asked, and the skeleton steps aside', () => {
+  const page = run([pair(1), pair(2)]);
+  page.click(toggleFor(page, 1));
+  page.click(page.controls['realText']!);
+  const request = asked(page)[0]!;
+
+  answer(page, request, realView(pair(1), fetched()));
+
+  assert.equal(page.skeleton(1).hidden, true, 'the skeleton makes way for the real text');
+  assert.equal(page.real(1).hidden, false);
+  // Read as a person reads it: Shiki tokenises `_items` and `[key]` into separate spans, so a
+  // regex over the raw markup cannot see the text.
+  assert.match(readable(page.real(1).innerHTML), /_items\[key\]/u, 'the real names, not var_1');
+  assert.match(readable(page.real(1).innerHTML), /Totals\.GetOrAdd/u, 'and the class the method sits in');
+  assert.equal(page.skeleton(2).hidden, false, 'the other row is untouched');
+});
+
+test('turning the toggle off restores the skeleton in every open row, at once and without asking', () => {
+  const page = run([pair(1), pair(2)]);
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 2));
+  page.click(page.controls['realText']!);
+  for (const request of asked(page)) {
+    answer(page, request, realView(pair(request.id!), fetched({ ...REAL, findingId: request.id! })));
+  }
+  assert.deepEqual([page.skeleton(1).hidden, page.skeleton(2).hidden], [true, true], 'the fixture must have both rows showing real text');
+  const before = asked(page).length;
+
+  page.click(page.controls['realText']!);
+
+  assert.deepEqual([page.skeleton(1).hidden, page.skeleton(2).hidden], [false, false],
+    'every open row shows its skeleton again');
+  assert.deepEqual([page.real(1).hidden, page.real(2).hidden], [true, true]);
+  assert.equal(asked(page).length, before, 'turning the view off costs no process');
+  assert.equal(page.controls['realText']!.getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(page.posted.filter((m) => m.type === 'realText').at(-1), { type: 'realText', on: false });
+});
+
+test('a response to a request that is no longer wanted is discarded, not painted', () => {
+  const page = run([pair(1)]);
+  page.click(toggleFor(page, 1));
+  page.click(page.controls['realText']!);
+  const stale = asked(page)[0]!;
+  page.click(page.controls['realText']!);
+  page.click(page.controls['realText']!);
+  const wanted = asked(page)[1]!;
+  assert.notEqual(stale.generation, wanted.generation, 'the fixture must have asked twice with different generations');
+
+  answer(page, stale, realView(pair(1), fetched()));
+
+  assert.equal(page.skeleton(1).hidden, false, 'an answer to the OLD view must not land in the new one');
+  assert.doesNotMatch(readable(page.real(1).innerHTML), /_items/u);
+
+  answer(page, wanted, realView(pair(1), fetched()));
+
+  assert.equal(page.skeleton(1).hidden, true, 'the answer to the request that is still wanted is applied');
+});
+
+test('a row collapsed while its method is on the way forgets it asked', () => {
+  const page = run([pair(1)]);
+  page.click(toggleFor(page, 1));
+  page.click(page.controls['realText']!);
+  const request = asked(page)[0]!;
+
+  page.click(toggleFor(page, 1));
+  answer(page, request, realView(pair(1), fetched()));
+
+  assert.doesNotMatch(readable(page.real(1).innerHTML), /_items/u, 'a late answer is discarded, not stored for a row nobody is looking at');
+  assert.equal(page.skeleton(1).hidden, false);
+});
+
+test('a response from another draw is discarded, even for the same row', () => {
+  const earlier = run([pair(1)], { draw: 1 });
+  earlier.click(toggleFor(earlier, 1));
+  earlier.click(earlier.controls['realText']!);
+  const fromBefore = asked(earlier)[0]!;
+  const later = run([pair(1)], { draw: 2 });
+  later.click(toggleFor(later, 1));
+  later.click(later.controls['realText']!);
+  const fromNow = asked(later)[0]!;
+  assert.notEqual(fromBefore.generation, fromNow.generation, 'two draws must not compose the same generation');
+
+  answer(later, fromBefore, realView(pair(1), fetched()));
+
+  assert.equal(later.skeleton(1).hidden, false, 'the previous document’s answer must not be painted into this one');
+});
+
+test('a row opened while the view is on asks for its method', () => {
+  const page = run([pair(1), pair(2)]);
+  page.click(page.controls['realText']!);
+  assert.deepEqual(asked(page), [], 'nothing is open, so nothing is asked for');
+
+  page.click(toggleFor(page, 2));
+
+  assert.deepEqual(asked(page).map((m) => m.id), [2]);
+  assert.match(page.real(2).innerHTML, /Fetching/u);
+});
+
+test('expand all with the view on asks for every row, and collapse all forgets them all', () => {
+  const page = run([pair(1), pair(2), pair(3)]);
+  page.click(page.controls['realText']!);
+
+  page.click(page.controls['expandAll']!);
+  assert.deepEqual(askedIds(page), [1, 2, 3]);
+  const requests = asked(page);
+
+  page.click(page.controls['collapseAll']!);
+  for (const request of requests) {
+    answer(page, request, realView(pair(request.id!), fetched({ ...REAL, findingId: request.id! })));
+  }
+
+  assert.deepEqual([1, 2, 3].map((id) => page.skeleton(id).hidden), [false, false, false],
+    'answers to rows that were collapsed since are discarded');
+});
+
+/**
+ * The state survives a redraw: a page drawn with the view on and a cached method draws it.
+ *
+ * <p>This is the tab-switch case and the decision case in one — both replace the document, and the
+ * panel hands back what it holds. The row must come up showing the real text without asking for
+ * it again: 200 pairs redrawn after every decision must never cost 400 git reads.</p>
+ */
+test('a redraw with the view on and a cached method shows it without asking again', () => {
+  const page = run([pair(1), pair(2)], {
+    realText: true, expanded: new Set([1]), real: new Map([[1, fetched()]]),
+  });
+
+  assert.equal(page.skeleton(1).hidden, true, 'the cached real text is what the row shows');
+  assert.equal(page.real(1).hidden, false);
+  assert.match(readable(page.real(1).innerHTML), /_items\[key\]/u);
+  assert.deepEqual(asked(page), [], 'a row whose method is already held is not asked for again');
+  assert.equal(page.controls['realText']!.getAttribute('aria-pressed'), 'true');
+});
+
+test('a redraw with the view on and nothing cached asks for the open rows on load', () => {
+  const page = run([pair(1), pair(2), pair(3)], { realText: true, expanded: new Set([1, 3]) });
+
+  assert.deepEqual(askedIds(page), [1, 3]);
+  assert.equal(page.skeleton(1).hidden, false, 'the skeleton stays until the real text arrives');
+  assert.equal(page.real(2).hidden, true);
+});
+
+test('a redraw with the view off draws the skeleton whatever is cached', () => {
+  const page = run([pair(1)], { realText: false, expanded: new Set([1]), real: new Map([[1, fetched()]]) });
+
+  assert.equal(page.skeleton(1).hidden, false);
+  assert.equal(page.real(1).hidden, true);
+  assert.deepEqual(asked(page), []);
+});
+
+/**
+ * A side that cannot be shown says WHY, and the skeleton stays.
+ *
+ * <p>Each reason is a different fact — a pruned commit, an overload set, a renamed method — and a
+ * person acts on each differently; one word for all of them would send them to the wrong place.
+ * With one side real the panes are shown; with neither, the sentence sits above the skeleton.</p>
+ */
+test('a side that cannot be shown says why, and one real side still shows', () => {
+  const half = realView(pair(1), fetched({ ...REAL, after: { ...REAL.after, reason: 'symbol_ambiguous', source: '' } }));
+
+  assert.equal(half.shown, true, 'the before side is real, so the panes are shown');
+  assert.match(readable(half.html), /two functions are called GetOrAdd at bbbb222/u);
+  assert.match(readable(half.html), /_items\[key\]/u, 'and the side that IS real is shown');
+
+  const none = realView(pair(1), fetched({
+    ...REAL,
+    before: { ...REAL.before, reason: 'commit_unreachable', source: '' },
+    after: { ...REAL.after, reason: 'symbol_gone', source: '' },
+  }));
+
+  assert.equal(none.shown, false, 'nothing real, so the skeleton stays');
+  assert.match(readable(none.html), /commit aaaa111 is not in the repository any more/u);
+  assert.match(readable(none.html), /no function called GetOrAdd is in commit bbbb222 any more/u);
+
+  const page = run([pair(1)], { realText: true, expanded: new Set([1]), real: new Map([[1, fetched({ ...REAL, reason: 'pair_not_found' })]]) });
+  assert.equal(page.skeleton(1).hidden, false, 'a whole-pair reason leaves the skeleton on screen');
+  assert.equal(page.real(1).hidden, false, 'with the reason above it');
+  assert.match(page.real(1).innerHTML, /not in the database any more/u);
+});
+
+test('a server too old for the view says to update it, not that the method could not be read', () => {
+  const said = readable(realView(pair(1), { ok: false, tooOld: true, why: 'ignored' }).html);
+
+  assert.match(said, /older than the un-anonymised view/u);
+  assert.equal(said.includes(TOO_OLD_FOR_THE_REAL_METHOD), true, 'the reader’s sentence and the page’s are one');
+
+  const failed = readable(realView(pair(1), { ok: false, tooOld: false, why: 'the server exited 74' }).html);
+  assert.match(failed, /could not be read: the server exited 74/u);
+});
+
+test('the real text is escaped like the skeletons are', () => {
+  const nasty = fetched({
+    ...REAL,
+    before: { ...REAL.before, source: 'var a = "</script><style>.pair{display:none}</style>";' },
+    after: { ...REAL.after, source: 'var b = "<img src=x onerror=alert(1)>";', className: '<b>Totals</b>' },
+  });
+  const html = reviewPageHtml({ pairs: [pair(1)], nonce: 'test-nonce', expanded: new Set([1]), realText: true, real: new Map([[1, nasty]]) });
+  const rows = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+
+  assert.ok(!rows.includes('</script>'), 'a real method could end the page’s own script early');
+  assert.ok(!/<style[\s>]/iu.test(rows), 'a real method could hide the rows around it');
+  assert.ok(!/<img[\s>]/iu.test(rows), 'a real method could add an element to the page');
+  assert.ok(!/<b>Totals/u.test(rows), 'a class name is text, not markup');
+  assert.ok(readable(rows).includes('<img src=x onerror=alert(1)>'), 'and the text is still all there');
+});
+
+/**
+ * A decision made while the real text is showing carries ids and nothing else.
+ *
+ * <p>The extension's half of the byte-level guarantee: the page supplies decision IDs and the send
+ * projects the stored pair, so nothing the view shows can reach the wire. The server's own test
+ * holds the serialised upload byte-identical with the view on and off; this holds the message the
+ * page posts to exactly the three fields it has always had.</p>
+ */
+test('a decision made while the real text is showing carries ids and nothing else', () => {
+  const page = run([pair(1)], { realText: true, expanded: new Set([1]), real: new Map([[1, fetched()]]) });
+  assert.equal(page.skeleton(1).hidden, true, 'the fixture must have real text on screen');
+
+  page.click(page.boxes[0]!);
+  page.click(page.controls['keep']!);
+
+  const decided = page.posted.filter((m) => m.type === 'decide');
+  assert.equal(decided.length, 1);
+  assert.deepEqual(Object.keys(decided[0]!).sort(), ['ids', 'keep', 'type'],
+    'a decision names pairs; it never carries what the page happened to be showing');
+  assert.deepEqual(decided[0], { type: 'decide', keep: KEPT, ids: [1] });
+});
+
+test('a focus the tabs cannot account for is not chased', () => {
+  // A held press whose tab is gone — the corpus was recollected under it. Nothing is focused, and
+  // nothing throws.
+  const page = run([pair(1)], {
+    projects: PROJECTS,
+    languages: LANGUAGES,
+    project: '*all*',
+    language: '*all*',
+    focus: { strip: 'project', key: 'd:/rsd/deleted' },
+  });
+
+  assert.deepEqual(page.tabs.filter((one) => one.focused), []);
+});
+
+
+test('opening many rows at once does not start a process for every one of them', () => {
+  // Code round, codex. Expand all with the view ON called `wantReal` for every open row in one
+  // loop, so 200 pairs meant 200 `coai-mcp` processes dispatched together, each re-reading two
+  // commits out of git. The extension host and the machine both feel that.
+  const many = [pair(1), pair(2), pair(3), pair(4), pair(5), pair(6), pair(7), pair(8)];
+  const page = run(many);
+
+  page.click(page.controls['realText']!);
+  page.click(page.controls['expandAll']!);
+
+  const inFlight = asked(page);
+  assert.ok(inFlight.length > 0, 'it must still ask for something');
+  assert.ok(inFlight.length <= 4,
+    `eight open rows asked for ${inFlight.length} at once; a bounded queue is the point`);
+});
+
+test('and the queue drains: answering one starts the next', () => {
+  // The companion. A cap that never released its slots would pass the test above and leave six
+  // rows saying "Fetching the real method..." for ever.
+  const many = [pair(1), pair(2), pair(3), pair(4), pair(5), pair(6), pair(7), pair(8)];
+  const page = run(many);
+
+  page.click(page.controls['realText']!);
+  page.click(page.controls['expandAll']!);
+
+  const first = asked(page);
+  for (const one of first) {
+    answer(page, one, { shown: true, html: '<pre>real</pre>' });
+  }
+
+  const after = asked(page);
+  assert.ok(after.length > first.length,
+    'answering the first batch must release its slots, or the rest are never asked for');
+});
+
+test('a read that never reached the server can be asked for again', () => {
+  // Code round, codex. The panel deliberately does NOT cache a failed process — but the page
+  // recorded the note anyway, so `wantReal` saw something held and never asked again. A transport
+  // failure became permanent until an unrelated redraw.
+  const page = run([pair(1)]);
+  page.click(page.controls['realText']!);
+  page.click(toggleFor(page, 1));
+
+  const first = asked(page);
+  assert.equal(first.length, 1);
+  // `keep: false` is what the host says when the process itself failed.
+  page.host.push({ type: 'real', id: first[0]!.id, generation: first[0]!.generation, shown: false, keep: false, html: '<p>could not be read</p>' });
+
+  // The person closes the row and opens it again, which is the obvious way to retry.
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 1));
+
+  assert.equal(asked(page).length, 2, 'a failure that was never cached must be retryable');
+});
+
+test('a read that DID reach the server is not asked for twice', () => {
+  // The companion: retrying everything would spend a process per open on a pruned commit, whose
+  // answer will not change.
+  const page = run([pair(1)]);
+  page.click(page.controls['realText']!);
+  page.click(toggleFor(page, 1));
+
+  const first = asked(page);
+  page.host.push({ type: 'real', id: first[0]!.id, generation: first[0]!.generation, shown: false, keep: true, html: '<p>that commit is not in this checkout any more</p>' });
+
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 1));
+
+  assert.equal(asked(page).length, 1, 'a domain answer is held; only a failed process is retried');
 });

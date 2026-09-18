@@ -9,7 +9,10 @@ import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
-import { ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
+import { RealRead, realView } from './realMethodView';
+import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 
 /**
  * The window the review page lives in.
@@ -29,6 +32,15 @@ export interface ReviewHooks {
 
   /** Writes a batch of decisions, or says why it could not. */
   readonly decide: (ids: readonly number[], keep: number) => Promise<KeepWrite>;
+
+  /**
+   * One pair's method as it really was, at both commits — `--real-method`, one process per call.
+   *
+   * <p>Called per OPENED row with the view on, and cached here for the panel's lifetime, so a
+   * toggle flip with four rows open costs four calls at most, once. Never at paint: 200 pairs would
+   * be 400 git reads on a path that already costs 468 ms.</p>
+   */
+  readonly readReal: (findingId: number) => Promise<RealRead>;
 
   /**
    * Something was decided.
@@ -57,7 +69,26 @@ type ReviewMessage =
   | { readonly type: 'decide'; readonly ids: readonly number[]; readonly keep: number }
   | { readonly type: 'expand'; readonly ids: readonly number[]; readonly open: boolean }
   | { readonly type: 'expandAll'; readonly ids: readonly number[]; readonly open: boolean }
-  | { readonly type: 'zoom' | 'tone'; readonly delta: number };
+  | { readonly type: 'zoom' | 'tone'; readonly delta: number }
+  /** A filter strip was pressed: which strip, and the key of the tab in it. */
+  | { readonly type: 'tab'; readonly strip: string; readonly key: string }
+  /** The un-anonymised view was switched; held so the next paint draws the same view. */
+  | { readonly type: 'realText'; readonly on: boolean }
+  /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
+  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string };
+
+/**
+ * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
+ *
+ * <p>The finding id alone is not enough. A recollection under the page keeps the id and replaces the
+ * commits, so a read started for the old pair answers about commits nobody is looking at — and
+ * `settle` stores it under the shas it began with, which both readers then refuse. Nothing wrong was
+ * ever DISPLAYED; what was wasted was the fetch, and the new pair went unanswered for a cycle.
+ * (Code round, codex, twice.)</p>
+ */
+function inFlightKey(pair: ReviewPair): string {
+  return `${pair.findingId}@${pair.headSha}:${pair.fixSha}`;
+}
 
 /** Whole numbers only, junk dropped — an id is a row this database has or it is nothing. */
 const numbers = (raw: unknown): readonly number[] =>
@@ -87,6 +118,18 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       return { type: 'expand', ids: numbers([m['id']]), open };
     case 'expandAll':
       return { type: 'expandAll', ids: numbers(m['ids']), open };
+    case 'tab':
+      return { type: 'tab', strip: String(m['strip']), key: String(m['key']) };
+    case 'realText':
+      return { type: 'realText', on: m['on'] === true };
+    case 'fetchReal':
+      // A generation that is not a string could never match what the page holds, and an id that
+      // is not a WHOLE, non-negative number names no row: both are junk, and junk is dropped rather
+      // than answered. `Number.isFinite` alone let `1.5` and `-1` through to a server call that
+      // could only refuse them. (Code round, codex.)
+      return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['generation'] === 'string'
+        ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
+        : undefined;
     case 'zoom':
     case 'tone':
       return Number.isFinite(Number(m['delta']))
@@ -124,6 +167,89 @@ export class BugzReviewPanel {
    */
   private expanded: ReadonlySet<number> = new Set<number>();
 
+  /**
+   * The last read, kept so a filter press does not cost a server process.
+   *
+   * <p>{@link draw} asks the server; pressing a tab does not have to. The reasoning is
+   * {@link remember}'s, one step further along: a round trip per click would make narrowing a list
+   * cost a process, and unlike a decision a filter changes nothing the server knows about. So the
+   * strips repaint from what was already read, and only a real change — a decision, a poll, the
+   * panel being reopened — goes back to the database.</p>
+   *
+   * <p>Cleared with the window, like {@link expanded}: this object outlives the webview, and pairs
+   * read a day ago are not what the page should reopen with.</p>
+   */
+  private held: readonly ReviewPair[] = [];
+
+  /** Why the last read failed, if it did — which is NOT the same page as an empty corpus. */
+  private trouble = '';
+
+  /**
+   * Which project and which language the person chose.
+   *
+   * <p>Held here for {@link expanded}'s reason: `draw` replaces the document wholesale, so a
+   * selection living in the page would die on the first decision anybody made. It is not a setting
+   * — which project somebody was looking at is not worth a synced key, and it is meaningless
+   * against a corpus that has been collected again.</p>
+   *
+   * <p>It is what was HELD, never what is shown: `reviewTabs` decides the latter, and drops a
+   * choice whose pairs are gone rather than filtering the table to nothing.</p>
+   */
+  private chosen: HeldTabs = { project: ALL, language: ALL };
+
+  /**
+   * The filesystem, asked about each path once — for as long as the pairs it describes.
+   *
+   * <p><b>Its lifetime is the whole point, and two code reviewers found that out.</b> The cache
+   * used to be built inside the grouping, so it memoised within one repaint and was discarded: a
+   * language press then re-probed all 91 paths of the live corpus, synchronously, on the extension
+   * host. 41 % of them do not exist, and one recorded UNC path on a sleeping server blocks the host
+   * until the filesystem gives up — for a project that may not even be the one on screen. Held
+   * here, a filter press touches no disk at all.</p>
+   *
+   * <p>Replaced on every {@link draw}, not kept forever: a checkout can be created or deleted
+   * between reads, and the answer this cache holds is only as good as the moment the pairs came
+   * from.</p>
+   */
+  private marks: MarkReader = askedOnce(readGitMark);
+
+  /**
+   * The tab just activated, so the repaint can give the keyboard back what it was on.
+   *
+   * <p>A person who tabs to a project, presses Enter and finds the focus at the top of a new
+   * document has to navigate the whole page again to reach the language strip beside it — and again
+   * for the next press. Found on the code round. Empty on a draw that nobody pressed.</p>
+   */
+  private pressed: FilterPress | undefined = undefined;
+
+  /**
+   * Whether the methods are shown un-anonymised — a view, held here for {@link expanded}'s reason.
+   *
+   * <p>Panel-held and not a setting, an assumption stated in the plan rather than silently made:
+   * its two neighbours (`expanded`, `chosen`) are panel-held with a written reason, and if the
+   * operator wants it remembered across windows it becomes a setting later. Off when the window
+   * closes: a page reopened a day later shows what leaves the machine, and asks for the rest.</p>
+   */
+  private realText = false;
+
+  /**
+   * The real methods fetched so far, by `findingId` — for the panel's lifetime.
+   *
+   * <p>Each entry remembers the two commits it was fetched FOR, and is a miss when the pair now
+   * names others: a recollection under the page changes the fix commit, and a cache keyed on the
+   * id alone would show last week's method under this week's heading. Bounded by the pairs on the
+   * page (at most `MAX_LIMIT`) and emptied with the window, which is its retention rule. Only a
+   * read that REACHED the server is kept — a domain reason (no such pair, a pruned commit) is data
+   * and is cached; a failed process is not, so the next flip or open tries again.</p>
+   */
+  private real: ReadonlyMap<number, HeldReal> = new Map<number, HeldReal>();
+
+  /** The fetches in flight, so four rows asking twice in a row cost four processes and not eight. */
+  private fetching: ReadonlyMap<string, Promise<RealRead>> = new Map<string, Promise<RealRead>>();
+
+  /** Which paint this is — part of every generation the page asks with, so a redraw stales what came before. */
+  private draws = 0;
+
   constructor(private readonly hooks: ReviewHooks) {}
 
   get isOpen(): boolean {
@@ -156,6 +282,10 @@ export class BugzReviewPanel {
         toneHook.dispose();
         // A closed window starts collapsed when it comes back. This object outlives the webview.
         this.expanded = new Set<number>();
+        // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
+        this.realText = false;
+        this.real = new Map<number, HeldReal>();
+        this.fetching = new Map<string, Promise<RealRead>>();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -189,6 +319,18 @@ export class BugzReviewPanel {
       case 'expand':
       case 'expandAll':
         this.remember(m.ids, m.open);
+
+        return;
+      case 'tab':
+        this.narrow(m.strip, m.key);
+
+        return;
+      case 'realText':
+        this.realText = m.on;
+
+        return;
+      case 'fetchReal':
+        void this.answerReal(m.id, m.generation);
 
         return;
       default:
@@ -300,6 +442,90 @@ export class BugzReviewPanel {
     });
   }
 
+  /**
+   * Answers one row's request for its real method — through the cache, and only ever by POSTING.
+   *
+   * <p>Nothing here touches `webview.html`. The page decides whether the answer is still wanted —
+   * the generation it asked with goes back with it — and renders through the same path a toggle
+   * flip takes, so what is on screen is always a function of the current toggle and the state the
+   * row holds, never of when a process happened to finish. (Plan round, two reviewers, two angles.)</p>
+   *
+   * <p>A row this side no longer holds is not answered: the read that dropped it will repaint the
+   * page without it, and an answer for a row that is not there is a message about nothing.</p>
+   */
+  private async answerReal(id: number, generation: string): Promise<void> {
+    const pair = this.held.find((one) => one.findingId === id);
+    if (pair === undefined) {
+      return;
+    }
+
+    const read = await this.realOf(pair);
+    const view = realView(pair, read);
+    // `keep` is what this side already knows and the page could not: a read that REACHED the
+    // server is remembered here whatever it said, and a process that failed is not. Without it the
+    // page held the failure note anyway and never asked again, so a timeout became permanent while
+    // the cache it was supposed to mirror was empty. (Code round, codex.)
+    void this.panel?.webview.postMessage({
+      type: 'real', id, generation, shown: view.shown, keep: read.ok, html: view.html,
+    });
+  }
+
+  /**
+   * The real method for one pair: from the cache when the cache is about the same two commits,
+   * from the fetch already in flight when there is one, from the server otherwise.
+   *
+   * <p>A failed process is answered but not kept, so the next flip or open tries again; a read that
+   * reached the server is kept whatever it said, because a pruned commit is a fact and not a
+   * fault. A rejection is turned into a failed read rather than left to surface as an unhandled
+   * one — the same shape `queue` gives a failed decision.</p>
+   */
+  private realOf(pair: ReviewPair): Promise<RealRead> {
+    const held = this.real.get(pair.findingId);
+    if (held !== undefined && held.headSha === pair.headSha && held.fixSha === pair.fixSha) {
+      return Promise.resolve(held.read);
+    }
+    // Keyed by the id AND both commits, never by the id alone. A recollection under the page keeps
+    // the finding id and changes the two shas, and an in-flight read started for the old pair
+    // answers about the old commits: reusing it would spend the fetch and answer nothing usable,
+    // because `settle` stores it under the shas it began with and both readers then refuse it.
+    // (Code round, codex, twice.) The display was already safe; the wasted cycle was not.
+    const key = inFlightKey(pair);
+    const running = this.fetching.get(key);
+    if (running !== undefined) {
+      return running;
+    }
+
+    const started = this.hooks.readReal(pair.findingId).then(
+      (read) => this.settle(pair, read),
+      (error_: unknown) => this.settle(pair, { ok: false, tooOld: false, why: asText(error_) }),
+    );
+    this.fetching = new Map([...this.fetching, [key, started]]);
+
+    return started;
+  }
+
+  /** A fetch has ended: it is no longer in flight, and it is remembered if it reached the server. */
+  private settle(pair: ReviewPair, read: RealRead): RealRead {
+    const key = inFlightKey(pair);
+    this.fetching = new Map([...this.fetching].filter(([held]) => held !== key));
+    if (read.ok) {
+      this.real = new Map([...this.real, [pair.findingId, { headSha: pair.headSha, fixSha: pair.fixSha, read }]]);
+    }
+
+    return read;
+  }
+
+  /** The cached methods for the pairs being drawn — and only those whose two commits still match. */
+  private realFor(pairs: readonly ReviewPair[]): ReadonlyMap<number, RealRead> {
+    return new Map(pairs.flatMap((pair) => {
+      const held = this.real.get(pair.findingId);
+
+      return held !== undefined && held.headSha === pair.headSha && held.fixSha === pair.fixSha
+        ? [[pair.findingId, held.read] as const]
+        : [];
+    }));
+  }
+
   private async draw(): Promise<void> {
     const open = this.panel;
     if (open === undefined) {
@@ -315,13 +541,89 @@ export class BugzReviewPanel {
 
     // A read that FAILED is not an empty corpus. Rendering the empty page for it would tell a
     // person their two hundred pairs are gone because a process timed out. (Code round, codex.)
+    this.held = answer.ok ? answer.pairs : [];
+    this.trouble = answer.ok ? '' : answer.why;
+    // A new corpus, so a new cache: a checkout can have appeared or gone since the last read, and
+    // nothing this side holds about the filesystem outlives the pairs it was learned for.
+    this.marks = askedOnce(readGitMark);
+    this.pressed = undefined;
+    this.paint();
+  }
+
+  /**
+   * Which project or language to show, and a repaint — without asking the server.
+   *
+   * <p><b>An unrecognised strip name is ignored, and that is the deliberate exception this
+   * repository has already written down.</b> `coding-style.md` says an unknown name must fail
+   * naming the legal values rather than fall back silently, and `chatMessages.ts` reconciles that
+   * rule with this boundary at length — at a code reviewer's request on an earlier round: a
+   * retained webview can be older OR newer than the extension talking to it, so a host that
+   * refused a word it did not know would break the half that had done nothing wrong. A code
+   * reviewer raised it again here; the answer is the same one, and `asReviewMessage` twenty lines
+   * above already drops an unknown message TYPE the same way. What is silent is the ignoring, not
+   * the vocabulary: both legal values are named in the condition below and both are tested,
+   * including the unknown case.</p>
+   */
+  private narrow(strip: string, key: string): void {
+    if (strip !== 'project' && strip !== 'language') {
+      return;
+    }
+
+    // A project change abandons the language, rather than carrying a choice that belonged to
+    // another project. `reviewTabs` would drop an impossible one anyway; this keeps a language that
+    // happens to exist in BOTH projects from silently following the person across, which is a
+    // filter they did not ask for.
+    this.chosen = strip === 'project'
+      ? { project: key, language: ALL }
+      : { ...this.chosen, language: key };
+    this.pressed = { strip, key };
+
+    this.paint();
+  }
+
+  /**
+   * The page, from what was last read — no server, no await.
+   *
+   * <p>`expanded` is pruned against everything that was read rather than against what is SHOWN: a
+   * row hidden by a filter has not been closed, and re-opening the project it is in should find it
+   * as it was left.</p>
+   */
+  private paint(): void {
+    const open = this.panel;
+    if (open === undefined) {
+      return;
+    }
+
     const view = { nonce: nonce(), uiScale: currentUiScale(), textTone: currentTextTone() };
-    open.webview.html = answer.ok
-      ? reviewPageHtml({ ...view, pairs: answer.pairs, expanded: this.keptOpen(answer.pairs) })
-      : reviewPageHtml({ ...view, pairs: [], trouble: answer.why });
+    const found = reviewTabs(this.held, this.chosen, this.marks);
+    this.draws += 1;
+
+    open.webview.html = reviewPageHtml({
+      ...view,
+      pairs: found.shown,
+      trouble: this.trouble,
+      expanded: this.keptOpen(this.held),
+      realText: this.realText,
+      real: this.realFor(found.shown),
+      draw: this.draws,
+      projects: found.projects,
+      languages: found.languages,
+      project: found.project,
+      language: found.language,
+      // `exactOptionalPropertyTypes` is on, and on a draw nobody pressed the field is genuinely
+      // ABSENT rather than present-and-undefined. `bugsKeysPanel` spreads the same way.
+      ...(this.pressed === undefined ? {} : { focus: this.pressed }),
+    });
   }
 }
 
+
+/** One cached real method, with the two commits it was fetched for. */
+interface HeldReal {
+  readonly headSha: string;
+  readonly fixSha: string;
+  readonly read: RealRead;
+}
 
 /**
  * One nonce per paint: the CSP admits our one script and nothing else.

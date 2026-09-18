@@ -194,9 +194,64 @@ public sealed class StageRulesTests : IDisposable
             + "research/RESULTS_rules_selection_budget.md, (2) update the claim in RuleOrder.ForBranch "
             + "and research/module_runners.md, (3) raise this bound. Why a bound and not an equality: "
             + "the base and the eight tier rules spend nearly the whole 80 000-byte budget and every "
-            + "rule outside the tier is larger than what is left — 0 of 24 fit under CRLF, 1 of 24 "
-            + "under LF");
+            + "rule outside the tier is larger than what is left — 1 of 24 fits. That number is the "
+            + "same on every platform since the collector stopped spending the budget on carriage "
+            + "returns; it read 0 under CRLF and 1 under LF until then, which is how a Windows "
+            + "machine came to be handed one rule fewer for the same commit.");
     }
+
+    /// <summary>
+    /// The same corpus reaches the same reviewers, whichever line endings the checkout has.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It did not, and the cost was a rule nobody received.</b> The budget was spent on
+    /// <c>text.Length</c> over what the file holds on disk, and a CRLF checkout carries one extra
+    /// character per line — about 1 KB across the tier alone, against a margin of a few hundred
+    /// bytes. So a Windows machine's reviewers were handed SEVEN tier rules where a Linux
+    /// machine's were handed eight, for the same commit.</para>
+    /// <para><b>Why it went unseen.</b> Every job in <c>ci.yml</c> is <c>ubuntu-latest</c>; the only
+    /// Windows legs are the release matrix, so the one check that could see this ran on a tag and
+    /// nowhere else. The commit that last moved this cliff said as much — <i>"this worktree is CRLF
+    /// … so a local run cannot answer the question"</i> — and measured the LF delta alone. It was a
+    /// fair reading of what CI showed and the question was being asked in the one place nothing
+    /// reported.</para>
+    /// <para>Asserted as an EQUALITY between two corpora rather than a count, because a count would
+    /// pass the day both sides lose the same rule.</para>
+    /// </remarks>
+    [Fact]
+    public void ACrlfCheckout_ReachesTheSameRulesAsAnLfOne()
+    {
+        // Sized to STRADDLE the cliff, because that is the only place the difference shows:
+        // 400 lines of 19 characters is 8 000 bytes under LF and 8 400 under CRLF, so a budget
+        // of 16 400 fits two rules one way and one the other. A fixture whose sizes do not
+        // straddle it passes against the defect - the first version of this one did.
+        var tier = RuleOrder.TierRules;
+        WriteMount();
+        foreach (var entry in tier)
+        {
+            Write($".agents/conventions/{entry}", Lines(400, "\n"));
+        }
+        var underLf = MountRulesOf(RuleFiles.Collect(_repo, 16_400, RuleOrder.Walk));
+
+        foreach (var entry in tier)
+        {
+            Write($".agents/conventions/{entry}", Lines(400, "\r\n"));
+        }
+        var underCrlf = MountRulesOf(RuleFiles.Collect(_repo, 16_400, RuleOrder.Walk));
+
+        underLf.Should().HaveCount(2,
+            "the fixture is only meaningful while it straddles the cliff, and this is the half "
+            + "that says so: if the LF side stops fitting two rules the sizes above need re-deriving");
+
+        underCrlf.Should().BeEquivalentTo(underLf,
+            "the same rules must reach a reviewer whichever line endings the checkout has — a budget "
+            + "spent on carriage returns hands a Windows machine fewer rules than a Linux one for the "
+            + "same commit, and the only check that can see it runs on a release");
+    }
+
+    /// <summary>Lines of a fixed width, with the endings a caller asks for.</summary>
+    private static string Lines(int count, string ending) =>
+        string.Concat(Enumerable.Repeat(new string('x', 19) + ending, count));
 
     /// <summary>
     /// Given room, the collector DOES reach past the tier — so the canary above measures a budget,

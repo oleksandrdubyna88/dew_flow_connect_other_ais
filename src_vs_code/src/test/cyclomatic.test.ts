@@ -161,8 +161,24 @@ test('a normalised method counts the same as the method it came from', () => {
     '    return var_3[var_1];',
     '}',
   ].join('\n');
+  // The method that skeleton came from — `AstNormalizerTests`' fixture, un-anonymised. The
+  // un-anonymised view (story 2.3) shows this text beside a complexity computed from the skeleton,
+  // and the claim that the two agree is worth one line rather than an assumption: the anonymiser
+  // renames identifiers and leaves control flow alone, so the count must not move.
+  const original = [
+    'public int GetOrAdd(string key, int value)',
+    '{',
+    '    if (!_items.ContainsKey(key))',
+    '    {',
+    '        _items.Add(key, value);',
+    '    }',
+    '',
+    '    return _items[key];',
+    '}',
+  ].join('\n');
 
   assert.equal(count(skeleton), 2);
+  assert.equal(count(original), count(skeleton), 'anonymisation must not change the number a person reads');
 });
 
 // --------------------------------------------------------------------------------------------

@@ -63,7 +63,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, readBugs, readPairs, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, readBugs, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -2678,6 +2678,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       read: () => readPairs(server.fsPath),
       decide: (ids, keep) => writeKeep(
         server.fsPath, ids, keep, keysFileIn(this.context.globalStorageUri.fsPath)),
+      // The un-anonymised view: one process per opened row, cached by the panel. A VIEW — nothing
+      // it reads reaches a decision or a send.
+      readReal: (findingId) => readRealMethod(server.fsPath, findingId),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
       // unrelated repainted the panel. (Code round, gemini.)

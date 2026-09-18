@@ -218,6 +218,37 @@ and two spellings of one repository — with the expected mapping written down f
 > bbbb222`. The class name is story 2.3's (it is not stored, and the un-anonymised locate is where it
 > comes from). Records: `research/module_server.md`, `module_extension.md`, `module_tests.md`.
 
+> **Story 2.2 built the two tabs on 2026-09-18, and this plan's identity rule did not survive the
+> measurement.** The rule written above — the git remote, else the normalised root with worktree
+> suffixes stripped, else `unknown` — was checked against `sessions.repo_path` in the live store
+> (106 distinct values) before anything was built, and both halves were wrong:
+>
+> 1. **Stripping a worktree-looking suffix merges unrelated repositories.** Not hypothetically:
+>    removing the last segment puts **22** directories under `d:/rsd/_wt` into one bucket —
+>    `coai-*`, `creds-*` and `conv-gate`, three different products — and **20** under `d:/rsd`,
+>    which is every project on the machine in a single tab. Two plan reviewers said so
+>    independently (findings 0 and 3) and the table proved them right. **No suffix is stripped.**
+> 2. **The git spawn is unnecessary.** A linked worktree's `.git` is a FILE naming its parent, so
+>    one `readFileSync` does what a process was going to: 54 live paths → **10** identities, and
+>    the two `_wt` siblings above land in their two correct products. The extension still runs no
+>    git at all.
+> 3. **A trap neither this plan nor any reviewer named.** A submodule INSIDE a worktree writes
+>    `gitdir: .../repo/.git/worktrees/wt-rp/modules/...`, so cutting at `/.git/worktrees/` files
+>    **dew_flow_conventions under connect_other_ais**. The parent is recovered only when exactly
+>    one segment follows `/worktrees/`.
+> 4. **41 % of the corpus is gone**, and 33 sessions record `repo_path` as `.`. Both are explicit
+>    buckets rather than errors — an unreachable project's tab says *not on disk any more*.
+>
+> What shipped: `projectIdentity.ts` (the rule), `tabStrip.ts` (**the one strip**, extracted from
+> `rolesPage`, which was converted to it in the same change so the extraction did not merely add a
+> fourth copy — finding 4; byte-identical output proved over all five tab values), `reviewTabs.ts`
+> (project then language, each strip drawn only when it offers a choice, language tabs rebuilt from
+> the chosen project so the blank table findings 1 and 2 describe cannot occur), and the panel
+> holding both selections with `draw` split so a filter press repaints without a server process.
+> `roundsLog`'s tab strip is still missing `role="tablist"`/`aria-selected`/`aria-controls`: named
+> as a defect, left as a question for the operator rather than repaired as a side effect.
+> Records: `research/module_extension.md`, `module_tests.md`.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -304,6 +335,44 @@ serialised `UploadedPair` a send transmits must be **byte-identical** — whites
 against absent, all of it. A test that compared the rendered page, or the `ReviewPair` object, would
 pass over a serialisation difference, which is the only kind of difference that could actually leak.
 
+> **Story 2.3 built this on 2026-09-18 — as a toggle over the view, with the class name — and four
+> things in its brief turned out different when the code and real git were read:**
+>
+> 1. **The rename recovery the reader was going to have is unreachable, and the collector is why.**
+>    The brief said the fetch "runs the same rule over the same commits" and the collector reads the
+>    path AT the fix commit through `touched.Path`. Measured on real git: `git log --reverse
+>    --name-only --follow head..fix -- <old name>` lists the rename commit under the OLD name and
+>    nothing after it, so `Collector.WalkAsync` reads `fix:<old name>`, fails, continues and records
+>    `symbol_gone` — **a pair whose fix renamed the file is never stored.** The reader therefore
+>    follows no rename; its fixture for that shape now asserts the honest `file_not_in_commit`.
+>    `GitHistory.CommitsTouchingAsync`'s docblock claims the opposite for the walk, and that is the
+>    collector's to correct, not this story's.
+> 2. **The two sides are independent, which the brief did not say.** The after side is located by
+>    the NAME the pair already stores (`symbol_name`), not by the name the before side read — so a
+>    head commit pruned since (55.7 % are orphaned) still leaves the after side readable, and
+>    `commit_unreachable` is a fact about EITHER commit rather than the collector's head-only word.
+> 3. **The class is a new normaliser method, `IAstNormalizer.EnclosingType`, not a field.** As the
+>    brief asked — but it is asked at the FUNCTION'S first line so the innermost type answers, which
+>    is what makes a method in a nested class name the inner class; the brief's four cases are the
+>    suite's four tests, plus a TypeScript/JavaScript class pair.
+> 4. **The plan's byte-level test is one test with three assertions, not two tests.** The database
+>    file, the serialised `UploadRequest` (through the run's own `Wire`, by reflection as
+>    `OnlyThreeFieldsLeaveTests` reaches it) and the wire's contents are asserted after a read that
+>    provably put `_items` on the screen — and the mutation that makes the mode write one row turns
+>    it red at byte 101998. The extension's half is the page posting a decision with exactly `type`,
+>    `keep`, `ids` while real text shows.
+>
+> What shipped: `--real-method --id <findingId>` (stdout; 65 for a bad id, 74 for a database that
+> will not read, every domain outcome a reason on the document at exit 0), `RealMethod`/`MethodSide`
+> in the core with `RealMethodReason` reusing the collector's words, `RealMethodReader` in the
+> runners, `RoundsDb.Pair(id)`; on the page a **Real code** toggle, both texts on every row with one
+> render reading the current toggle, a generation (`draw/seq`) on every fetch with stale answers
+> discarded, and the panel's cache keyed by id and validated by both shas, emptied with the window.
+> `StoredPair`, `Sendable()`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer`
+> byte-identical. **Panel-held, not a setting** — the assumption stated above, made. Records:
+> `research/module_server.md`, `module_extension.md`, `module_tests.md`; `.agents/PROJECT.md` names
+> the mode.
+
 ## Story 6 — a comment, which DOES go to the server *(a contract change)*
 
 A place to type a comment per pair, sent with it.
@@ -387,10 +456,10 @@ above rather than accepting them, and three of its findings changed the plan:
 
 | Epic | Stories | Model | State |
 |---|---|---|---|
-| **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **1.1 shipped** |
-| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round); 2.2, 2.3 not started |
+| **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **all three shipped** — `codeHighlight.ts` and `lineDiff.ts` are on `main`. The row said *1.1 shipped* until 2026-09-18, which is a status line that stopped matching the repository rather than work that stopped. |
+| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted) · **2.3 built 2026-09-18** (`--real-method`, a toggle over what the rows already hold; the rename recovery removed after real git showed the collector cannot store the row it would serve) |
 | **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
-| **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | blocked on two decisions |
+| **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere
 

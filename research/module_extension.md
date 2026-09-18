@@ -7623,6 +7623,272 @@ And the decide path still has no visible in-flight state — the observation car
 1.1's code round; it is a durable-status change to `bugzReviewPanel.ts` and `--pairs-keep`, not a
 projection change, and it is still owed.
 
+### Tabs by project and by language — and the identity rule the corpus rewrote
+
+Two hundred pairs from several products in one table is a list nobody reads to the end. Story 2.2
+adds the two cuts the operator asked for — a project, then a language within it — and the work
+turned out to be neither of them: it was deciding **which sessions are the same project**.
+
+**The plan's rule was wrong, and the live table is what showed it.** The plan said: the git remote
+when the checkout is reachable, else the normalised root with worktree suffixes stripped, else
+`unknown`. Both halves were measured against `sessions.repo_path` in
+`%LOCALAPPDATA%/coai-mcp/coai.db` on 2026-09-18 — 106 distinct values:
+
+| | |
+|---|---|
+| distinct values | **106**, and **91** after case/separator normalisation — 15 were one path spelled twice |
+| one repository, three spellings | `D:\rsd\dew_flow_connect_other_ais` (42 sessions), `d:\rsd\...` (20), `D:/rsd/...` (18) |
+| `repo_path` = `.` | **33 sessions**, the second largest bucket, identifying nothing |
+| still on disk | 54 — 10 main checkouts, 44 linked worktrees |
+| **gone** | **37 (41 %)** |
+
+**Stripping a worktree-looking suffix merges unrelated products**, which is what two plan reviewers
+said and the table confirms at the worst possible scale: the last segment removed puts **22**
+directories under `d:/rsd/_wt` in one bucket — `coai-*`, `creds-*` and `conv-gate`, three different
+repositories — and **20** under `d:/rsd`, which is every project on the machine in a single tab.
+`d:/rsd/_wt/coai-audit` and `d:/rsd/_wt/creds-form-chrome` are siblings in one directory and belong
+to two products, so no rule reading only the path's SHAPE can separate them. **No suffix is
+stripped.**
+
+**And spawning `git remote get-url` is not needed to beat it.** A linked worktree's `.git` is a
+FILE naming its parent, so one `readFileSync` answers what a process was going to: the corpus's 54
+live paths collapse to **10** identities, with those two `_wt` siblings landing in their two
+different products. That matters beyond tidiness — the extension runs no git at all today (every
+git operation is server-side, in `GitHistory` and `WorktreeManager`), and step (a) would have been
+its first spawn, one process per distinct path per draw, on the path that already costs 468 ms.
+
+**The trap the measurement found and nobody had named.** A submodule *inside* a worktree writes
+`gitdir: .../repo/.git/worktrees/wt-rp/modules/.claude/rules/shared`. Cutting at `/.git/worktrees/`
+would file **dew_flow_conventions under dew_flow_connect_other_ais** — and conventions has its own
+sessions in that table. So `projectIdentity.ts` recovers the parent **only** when exactly one
+segment follows `/worktrees/`; anything longer, and every `/.git/modules/...` gitdir (which git
+writes relative), is its own project. `projectIdentity.test.ts` asserts it with the gitdir string
+read out of this checkout, and the mutation that removes the constraint fails naming both products.
+
+**Absence is an answer.** 41 % of the corpus is gone, so an identity that can only be learned from
+a filesystem is unavailable two times in five. An unreachable path becomes its own single-project
+bucket whose tab tooltip says *not on disk any more* — never merged with a neighbour, never hidden,
+because a tab that looked ordinary would promise a fix that cannot open. `.` and empty get one
+explicit `unknown`.
+
+**`tabStrip.ts` is the one strip, and `rolesPage` was converted to it in the same change.** Tabs
+existed three times and had already drifted the way the reuse rule predicts: `rolesPage` had
+`role="tablist"`, `aria-selected` and `aria-controls`; `notificationsRows` only the first;
+`roundsLog` **none of them**, so a screen reader cannot navigate its tabs as tabs. Extracting the
+module and leaving `rolesPage`'s copy in place would merely have made a FOURTH copy, which a
+reviewer said on the plan round — so `rolesPage` is the module's first caller. **The wrapper is
+part of the unit**, not the call site, because the call site is exactly where `roundsLog` forgot it.
+The proof the extraction changed nothing is not an assertion about markup: the whole page was
+rendered for all five tab values before and after and compared byte for byte (197 934 bytes,
+identical), and `rolesPage`'s own 18 tab tests — which pin `class="tab on" data-tab="documents"` as
+one string — stayed green. `tabCss(margin)` takes the margin as a parameter because that is the
+only thing the copies disagreed about; unifying on one value would have moved a strip on a page this
+story does not touch.
+
+`notificationsRows` and `roundsLog` are deliberately **not** converted. `panelView`'s and
+`notificationsPageStyle`'s strips are a different design (a segmented control, and a wrapping one),
+not drifted copies. **`roundsLog`'s missing `role="tablist"`/`aria-selected`/`aria-controls` is
+named here as a defect and left as a question for the operator** — repairing accessibility on a
+page this story does not otherwise touch is not a side effect of a refactor.
+
+**The blank table two reviewers predicted cannot happen**, and by construction rather than by a
+guard. C# selected in project A, switch to project B which is only TypeScript, and a filter that
+still says C# matches nothing. In `reviewTabs.ts` the language tabs are built from the pairs of the
+**selected** project, so a language absent from it is not a tab, and `openedFrom` drops a held
+choice that is not among the tabs. Every tab has at least one pair behind it. `ALL` is the sentinel
+`*all*` and not the empty string, because a pair's language CAN be empty (`pairOf` fills an absent
+field with `''` for an older server) and an empty bucket sharing a key with "everything" would blank
+the table the moment somebody pressed it.
+
+**A strip is drawn only when it offers a choice.** With one project, `All projects · 9` beside
+`dew_flow_connect_other_ais · 9` is two tabs doing one thing — and one project with two languages
+is the live corpus today (9 pairs collected). Tabs are ordered by how many pairs they hold, biggest
+first.
+
+**Pressing a tab does not cost a server process.** `draw` split into a read and a `paint`: the read
+still asks the server, the paint draws from `held` — the last answer — and a filter press calls
+only the paint. That is `remember`'s reasoning one step along (a round trip per click would make
+narrowing a list cost a process), and unlike a decision a filter changes nothing the database knows.
+The selections live in the panel for `expanded`'s reason: `draw` replaces the document wholesale, so
+a choice living in the page would die on the first decision anybody made. `expanded` is pruned
+against everything read rather than against what is SHOWN — a row hidden by a filter has not been
+closed.
+
+Both strips carry `onePanel: true` and point `aria-controls` at `#pairs`, because they narrow the
+same table rather than revealing a region each; pointing at a `pairs-0` that does not exist would be
+worse than not wiring it, since a screen reader follows it. `data-strip` on the wrapper is how one
+click handler tells a project press from a language press — the mutation that assumes the axis
+instead of reading the ancestor reports a C# press as a project press, and the suite goes red naming
+exactly that.
+
+**Four things the code round found, and three of them were real defects in this story's own code.**
+
+1. **A RELATIVE gitdir merged unrelated products** — the very failure the module exists to prevent,
+   arriving through the door built to prevent it. Git writes the gitdir relative when
+   `worktree.useRelativePaths` is set (2.48+) or `--relative-paths` was passed, so two worktrees in
+   two different products can carry the identical line `gitdir: ../repo/.git/worktrees/wt`; read as
+   text both answered `../repo`. It is now resolved against the worktree that holds the file — pure
+   string work, with no `node:path` and no current directory, because `path.resolve` would fold in
+   the process's cwd and answer with backslashes.
+2. **Every filter press re-probed the whole corpus.** `askedOnce` was created INSIDE the grouping, so
+   it memoised within one repaint and was discarded: pressing a language tab probed all 91 paths
+   again, synchronously, on the extension host — 41 % of which do not exist, and one recorded UNC
+   path on a sleeping server blocks the host until the filesystem gives up, for a project that may
+   not even be on screen. The reader is now the panel's, replaced on every `draw` (a checkout can
+   appear or vanish between reads) and reused across repaints. Two providers found this
+   independently, and it defeated half of what splitting `draw` was for.
+3. **The repaint threw away the keyboard.** A person who tabbed to a project and pressed Enter was
+   returned to the top of a new document and had to navigate the whole page again to reach the
+   language strip beside it, once per press. The panel now remembers which strip and which key were
+   pressed and the page focuses that button on load — by an id the page composes from its own slug,
+   never by a key from the database reaching `querySelector`. A draw nobody pressed focuses nothing,
+   because a poll that took the keyboard away mid-sentence would be the same rudeness reversed.
+4. **The composed ids are escaped once, over the whole value.** The prefixes are constants at every
+   call site, and a builder that is safe only because of what its callers happen to pass is a site
+   that is not safe whatever it is handed.
+
+`identitiesOf` is gone rather than patched. It keyed its map by the RESOLVED project key, so a caller
+holding a path could not look an identity up in it — which a reviewer pointed out is exactly why the
+grouping had to iterate for itself. A memoised reader is the honest shape of the same saving, because
+it answers the question the caller actually asks.
+
+**And one finding was rejected, on a ruling this repository had already made.** `narrow` ignores a
+strip name it does not know, against `coding-style.md`'s "an unknown name fails naming the legal
+values, never a silent fallback". `chatMessages.ts` reconciles that rule with this boundary at
+length, at a code reviewer's request on an earlier round: a retained webview can be older OR newer
+than the extension talking to it, so a host that refused a word it did not know would break the half
+that had done nothing wrong. `asReviewMessage`, twenty lines above `narrow` in the same file, already
+drops an unknown message TYPE the same way — so accepting would have made one function refuse what
+its neighbour ignores. The cross-reference is now in `narrow`'s own docblock so the next reader does
+not have to re-derive it.
+
+**What this story CANNOT do, and it is now a plan rather than a silence.** The key is a checkout
+LOCATION resolved against today's filesystem, not a recorded project identity. Two clones of one
+project are two tabs; and a directory later reused by another project makes the page file the first
+project's history under the second — wrong rather than untidy, and unfixable by any read-time rule,
+because the evidence of which checkout produced the session is gone. Both were raised on the code
+round and both are accepted. Reading `.git/config`'s origin url was measured as the cheap answer and
+**would merge nothing on the live corpus** (10 identities by origin against the same 10 by root, 9 of
+10 having an origin at all), so the fix is to record the identity where git already runs:
+`todo/PLAN_a_session_records_which_project_it_was.md`, a `project_id` on `sessions` written at
+`open`, with this rule kept as the fallback for legacy rows — 100 % of the sessions that exist
+today.
+
+**And then CI found the one defect neither gate round nor any local run could see.** The rule folds
+case in the key on purpose — 15 of the live table's 106 values were one path spelled differently —
+and the first version folded it **before asking the filesystem**. On Windows that is invisible,
+because the filesystem does not care. The Ubuntu runner drew a temporary directory named
+`coai-identity-YrJmu3`, `existsSync` was asked about `coai-identity-yrjmu3`, and the answer was that
+the checkout is not there: **on Linux every project with a capital letter in its path reported as
+*not on disk*, and grouped by its path instead of its repository.** The module's own docblock had
+already named case folding as *"the one normalisation that would be wrong on a case-sensitive
+filesystem"* and then walked into it two functions later.
+
+So `normalisePath` (folded, the KEY) and `shaped` (separators and a trailing slash only, case kept,
+the FILESYSTEM) are now two functions, the fold happens once on the way out of `parentOf`, and
+`ABSOLUTE` matches a drive letter in either case. **It costs one extra `existsSync` per duplicated
+spelling per draw**, because `askedOnce` now memoises by the unfolded path and `D:/rsd/repo` and
+`d:/rsd/repo` are one Windows directory under two names — measured on the live corpus as 3 lookups
+where there were 2, and the tests assert the new number with the reason rather than being adjusted
+to it.
+
+Two of the three tests for it bite on every platform (the reader is asserted to be *asked* about the
+unfolded path, and a relative gitdir resolved against it); the third, which drives the real
+filesystem, can only fail where case matters — so it names its own directories with capitals
+instead of trusting `mkdtempSync` to draw one, which is what made the original failure intermittent
+in principle and invisible in practice.
+
+### The real method, un-anonymised, and its class (2026-09-18, story 2.3)
+
+A **Real code** toggle in the bar, beside zoom and tone. Pressed, every OPEN row asks the server for
+its method as it really was — `coai-mcp --real-method --id <findingId>`
+(`research/module_server.md`, *The real method, un-anonymised, and its class*) — and shows the real
+text where the skeleton was, with the class it sits in, its kind and its line span at each commit:
+`Totals.GetOrAdd — method_declaration, lines 7–15 at aaaa111 → Totals.GetOrAdd — method_declaration,
+lines 7–18 at bbbb222`. Un-pressed, every open row shows its skeleton again, at once, with no
+process spawned. **A view, never a payload**: the page supplies decision IDs and the send projects
+the stored pair, and the server's own test holds the serialised upload byte-identical with the view
+on and off. This page's half of that promise is `bugzReviewPage.test.ts`'s *a decision made while
+the real text is showing carries ids and nothing else*.
+
+**Both texts live on the row, and the toggle only decides which is visible.** Each detail row
+carries two containers — `data-skel` with the skeleton panes, `data-real` with the real ones — and
+one render, `renderReal(id)`, reads the CURRENT toggle and what the row already holds and flips
+`hidden` on the two. A completed fetch never paints: it fills the real container and calls that same
+render. Flipping the toggle re-renders every open row synchronously from state already held — no
+fetch, no await — which is the finding two plan reviewers raised from two angles, and the one thing
+in this story that could otherwise put real source on a screen that says it is anonymised.
+
+**Every request carries a generation, and a stale answer is discarded, not applied.** The page
+composes `draw/seq` — the panel's paint counter and a per-document counter — and remembers it as
+`pending[id]`; the panel echoes it back on the answer, and the page applies an answer only if that
+exact generation is still wanted. The toggle flipping (`pending = {}`), the row collapsing (`delete
+pending[id]`) and the page being redrawn (a new `draw`) each stale everything before them, and the
+suite is red for each of the three mutations that would let a late answer through — plus a fourth,
+collapse-all mid-flight.
+
+**The fetch is per opened row, cached by the panel for its lifetime — 200 pairs never cost 400 git
+reads.** `BugzReviewPanel` holds `real: Map<findingId, {headSha, fixSha, read}>`: a hit is a hit only
+when the pair still names the same two commits, because a recollection under the page changes the
+fix commit and a cache keyed on the id alone would show last week's method under this week's
+heading. Two requests for one row in flight share one process (`fetching`). A read that REACHED the
+server is kept whatever it said — a pruned commit is a fact — and a failed process is not, so the
+next flip or open tries again. The cache is bounded by the pairs on the page (`MAX_LIMIT`) and is
+emptied with the window, which is its retention rule; the toggle is forgotten with it, so a page
+reopened a day later shows what leaves the machine and asks for the rest. **Panel-held, not a
+setting** — an assumption stated in the plan: its two neighbours `expanded` and the tab selections
+are panel-held with a written reason, and if the operator wants the view remembered across windows
+it becomes a setting later.
+
+**Nothing is fetched at paint.** A redraw hands back what the panel holds (`real`, filtered to the
+pairs being drawn) and the view (`realText`), and the page's script asks on load only for the open
+rows that hold nothing — so a decision, a tab press or a poll with four rows open and the view on
+costs nothing, and the same four rows re-drawn show the same real text.
+
+**What a row says when the real text cannot be shown — one sentence per fact.** A side the server
+could not resolve keeps the skeleton on screen and says why above it or in its pane: *the commit
+aaaa111 is not in the repository any more* · *the file was not in commit bbbb222* · *the line is
+inside no named function at aaaa111* · *two functions are called GetOrAdd at bbbb222, so neither can
+be shown as this one* · *no function called GetOrAdd is in commit bbbb222 any more* · *git did not
+answer for commit aaaa111*. A whole pair: *this pair is not in the database any more* ·
+*D:/repo is not a git repository any more* · *CSharp is not a language the normaliser reads*. A server
+that exits **64** gets its own sentence — *this machine's coai-mcp is older than the un-anonymised
+view; update it from the panel* — spelled once (`TOO_OLD_FOR_THE_REAL_METHOD`) and used by the reader
+and the page both, because 64 means that and only that; the mode answers a bad `--id` with 65 for
+exactly this reason. One side real and the other not shows the real pane beside the sentence.
+
+**The real text goes through the same highlighter and the same diff as the skeletons.**
+`highlight(source, language, marks)` takes arbitrary code, its cache key is `grammar::marks::code`
+so real and skeleton text cannot collide, and `pairDiff` runs over the two real texts unchanged —
+on real text there is nothing to mask, and the masking is also what makes the too-big comparison
+honest, so nothing was simplified away. The escaping property is asserted for the real text as it is
+for the skeletons and the reviewers' prose: a method containing `</script>` or `<img onerror>`
+renders as text, a class name is text, and the text is still all there. `cyclomatic.test.ts` now
+also asserts the count over the ORIGINAL method equals the count over its skeleton — the number a
+person reads beside the real text is the skeleton's, and the anonymiser does not move it.
+
+**`realView(pair, read)` (`realMethodView.ts`) is the one renderer of the real half**, called at paint
+for a cached row and by the panel for a fetch that has just completed, so the two cannot disagree;
+the panel posts `{type: 'real', id, generation, shown, html}` and nothing else. It is a module of its
+own because `bugzReviewPage.ts` had reached the 800-line ceiling the coding-style rule sets and
+`max-lines` enforces (949 lines with the view inside it; 759 without), and because it is a unit
+with a boundary of its own — everything in it is about text a person asked to see un-anonymised.
+The three text helpers both modules need (`text`, `none`, `commit`) moved to `reviewText.ts` rather
+than being copied. `ReviewPair` stays in the page, where `bugzLiveContract.test.ts` reads it — and
+the view does NOT import it: the first draft did, as `import type`, and `importCycles.test.mjs`
+went red naming `bugzReviewPage ↔ realMethodView` as a ninth cycle. The view names the four fields
+it reads as `RealMethodRow`, which a `ReviewPair` satisfies structurally, so the edge runs one way. `readRealMethod` in `roundsDbRead.ts`
+validates the document field by field (`realOf`, both sides REQUIRED — every server that has the
+mode sends both, so a document without one is malformed rather than old) and turns 64 into
+`tooOld`. `bugzLiveContract.test.ts` runs the real binary: an empty corpus answers
+`pair_not_found` as data through the real reader, and a missing `--id` is 65 and is NOT read as an
+old server.
+
+**What the collector cannot give this page, found while building it.** A fix commit that renamed the
+file is never stored — `git log --follow head..fix -- <old name>` lists the rename under the old name
+and nothing after it, so the collector's walk records `symbol_gone` — and therefore no row on this
+page can need a rename followed. The reader does not follow one, and says why in its docblock.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
@@ -7950,3 +8216,73 @@ extraction is worth**, and the plan's table does not record it.
 
 **Result: 3 841 → 3 785**, and the prover — with the class fix above — reports **2 runs against 2
 regions cut**: the two adjacent fields as one, the four methods as the other.
+
+
+### What story 2.3's code round changed, and what it got wrong
+
+Twelve reviewers answered; **27 findings, 13 accepted, 14 rejected with reasons**. The rejections are
+unusually many and the reason is worth recording rather than smoothing over: **both Blocking findings
+were false**, and both came from the same provider.
+
+- *"Unescaped real method HTML interpolated into a script element risks XSS breakout."* The real
+  method's markup never enters the script block. The only two interpolations inside `<script>` are
+  `jsonForScript(heldRealState(pairs, real))` and `jsonForScript(String(view.draw ?? 0))`, and
+  `heldRealState` returns the WORDS `text` or `note` per finding id. `realView(...)` is called twice:
+  once in the row's markup, once where only its `.shown` boolean is read. Another Conventions
+  reviewer on the same round checked the same question and recorded the opposite conclusion.
+- *"Toggle state race condition causes duplicate fetches on page load."* `var realOn` is assigned at
+  line 588 and the first call that could read it is at 742. The finding's own text says "called at
+  line 740 before realOn is assigned at 585".
+
+Three more were rejected on the same kind of check: a claimed duplication of `text`/`none`/`commit`
+that does not exist (they are imported, and defined nowhere in that file), a "stale closure" in a
+function that builds a string synchronously, and an in-flight race that JavaScript's single thread
+cannot produce between a `Map.get` and the `Map.set` three statements later with no `await` between.
+
+**And one ACCEPTED finding turned out to be false when it was built.** *"Negative finding IDs are
+accepted"* — `FindingId` already parses with `NumberStyles.None`, which refuses a sign and a decimal
+point. Run against the shipped binary: `--id -1` answers **65**, `--id 1.5` answers **65**, `--id 7`
+answers 0. Accepting a finding commits you to the PROBLEM, not to a fix, and this one did not exist.
+
+**What was real, and is now fixed:**
+
+1. **A document for another finding was accepted.** `realOf` read `findingId` out of the answer and
+   never compared it to the id it asked about. On this page that means one method's un-anonymised
+   source drawn beside a different finding's decision buttons. It is compared now.
+2. **Expand all started a process per open row, at once.** With the view on, 200 pairs meant 200
+   `coai-mcp` processes dispatched in one loop, each re-reading two commits out of git. The page now
+   holds a queue with **four** reads out at a time and starts the next as each answers; a discarded
+   stale answer releases its slot too.
+3. **A transport failure became permanent.** The panel deliberately does not cache a failed process,
+   but the page recorded its note anyway, so the row never asked again. The answer now carries
+   `keep` — the half only the panel knows — and the page holds the note only for a read that reached
+   the server. Fixing that exposed a defect of the fix: re-rendering after a failure asked again
+   immediately, spinning one row against the server, which is why `renderReal` takes an `ask` flag.
+4. **The in-flight map was keyed by the finding id alone.** A recollection keeps the id and changes
+   the two commits, so a read started for the old pair was reused for the new one, stored under the
+   old shas and then refused by both readers. Nothing wrong was ever displayed — that was guarded —
+   but the fetch was spent and the new pair went unanswered. Keyed by `id@head:fix` now.
+5. **The webview boundary accepted a fractional or negative id**, which could only reach a server
+   call that refuses it. `Number.isInteger` and `>= 0` now.
+6. **The type-kind table fell through to TypeScript for anything not C#**, so a fifth language would
+   have been searched for `class_declaration` and shown every method with an empty class, with
+   nothing failing. Every language is named and the default answers nothing.
+7. **The live contract only asked an empty corpus**, so every populated field could have been
+   renamed with the check still green. There is now a populated one: a real git repository with the
+   method MOVED between its two commits, the real binary, the real reader, and every field compared
+   to what the file contains — the real name `GetOrAdd` rather than `method_1`, the class `Totals`,
+   and the after side found by name at a commit where the line number no longer fits.
+
+**Two debts named rather than paid**, both recorded here because a gap nobody wrote down reads as
+done:
+
+- **The reader re-derives the collector's symbol-resolution policy.** `RealMethodReader` applies the
+  same three guards — nameless refused, `CountNamed > 1` refused, no match answered — by repeating
+  them rather than by calling a shared operation. A future change to `Collector`'s rules would leave
+  this copy behind, and a pair could then be collected under one identity and displayed as another.
+  Extracting the shared resolution out of `Collector` is a refactor of shipped collection code,
+  which this story was told not to take on.
+- **A disposed panel does not cancel its in-flight reads.** They run to `CAP_MS` (8 s). The queue
+  above bounds that to four processes rather than one per open row, which is most of the exposure;
+  cancelling properly needs an `AbortSignal` threaded through the shared `Run` seam that eight
+  readers use, and that is a change to make deliberately rather than inside this story.

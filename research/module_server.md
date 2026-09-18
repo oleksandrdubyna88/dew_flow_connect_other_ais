@@ -1380,6 +1380,78 @@ emits a typed accessor for every type reachable from a registered root, so
 ordinal, which is the reader that answers the wrong field the day the SELECT is reordered, silently.
 `Sendable()` keeps its ordinals: nine columns it has always had, and this story does not touch it.
 
+#### The real method, un-anonymised, and its class (`--real-method`, 2026-09-18, story 2.3)
+
+`coai-mcp --real-method --id <findingId>` answers ONE pair's method as it really was, at both of its
+commits, on stdout — `--pairs-json`'s convention, not `--normalize`'s files, because the extension's
+reader takes an answer off stdout and a temporary-file dance exists nowhere else in it. **It is a
+VIEW, and it writes nothing**: the review page asks for it per opened row when a person turns the
+anonymisation off, and `TheRealMethodTests.AReadWritesNothing_AndTheSendStillTransmitsTheSkeleton`
+holds the database file byte-identical before and after a read, and the serialised `UploadRequest` a
+send would transmit byte-identical too — the plan's own test, in its own words.
+
+**The collector's locate, over the collector's commits, and nothing stored.** The real text has
+always existed as `EnclosingSymbol.Source`; `Collector.LocateThenWalkAsync` and `NormalizeMode` both
+compute it and throw it away, and nothing should keep it. So `RealMethodReader`
+(`src_mcp/runners/Collecting/RealMethodReader.cs`) reads the file at `head_sha` and locates by
+LINE, reads the file at `fix_sha` and locates by NAME — the name the pair already stores — through
+the three guards the collector applies in the same order: a nameless function (`symbol.Name.Length
+== 0`, a lambda) is refused before anything is compared, an ambiguous name (`CountNamed > 1`, an
+overload set or one name in two classes) is refused before the first match is taken, and no match
+(`LocateNamed` null, renamed or deleted) is an answer. A pair on the page is one the collector
+already resolved through those guards, so the reader answers as the collector did; what it must
+also handle is the repository having CHANGED since.
+
+**Every way it can have changed is a reason on the document, never an exit code.** `RealMethod`
+(`src_mcp/core/Collecting/RealMethod.cs`) carries a row-level `reason` for what stops both sides —
+`pair_not_found`, `repo_path_missing`, `language_unsupported`, `git_failed` — and a `MethodSide` per
+commit with its own: `commit_unreachable`, `file_not_in_commit`, `symbol_not_resolved`,
+`symbol_ambiguous`, `symbol_gone`, `git_failed`. Where the collector has a word for the same fact the
+constant IS that word (`RealMethodReason.X = SkipReason.X`), so the page meets one spelling; the two
+new ones are new because the collector never meets them. `GitHistory`'s distinction between "the
+object is absent" and "git did not run" survives to the page as two different reasons — the plan
+round asked for exactly that, and it is what `git cat-file -e sha^{commit}` before `git show` buys.
+
+**The two sides are independent, and that is what makes orphaned heads readable.** The after side is
+found by the STORED name, not the one the before side read, so a head commit pruned since — 55.7 % of
+recorded heads are orphaned, 99.6 % of those still read — leaves the after side answering, and the
+other way round. Asserted by `AHeadCommitTheRepositoryNeverHad_SaysSo_AndTheAfterSideStillAnswers`.
+
+**The class name comes from a NEW normaliser method, not from `EnclosingSymbol`.**
+`IAstNormalizer.EnclosingType(language, source, line)` walks the same parent chain `Locate` walks,
+one kind-table over (`class_declaration`, `struct_declaration`, `record_declaration`,
+`interface_declaration` for C#; `class_declaration`, `abstract_class_declaration`, `class` for the
+two JavaScripts), asked at the function's own first line so the INNERMOST type answers — a method in
+a nested class names the inner class. It is a separate method deliberately: a field on
+`EnclosingSymbol` is a field the collector holds and could store one day without anyone deciding to.
+Empty is an answer (a top-level function; a language whose grammar has no type node), never a guess.
+
+**The exit-code contract, as `PROJECT.md` states it.** A missing or malformed `--id` is **65**, never
+64 — this binary KNOWS the mode, and 64 is how the extension detects a server too old for the view
+and says "update it". A database that will not open or read is 74, as every database mode. A pair
+the database does not have is `pair_not_found` with exit **0**: recollected out from under the page,
+or never there, and the page says which of the two a person should think about.
+
+**`RoundsDb.Pair(findingId)`** is the page's projection for ONE row — the same sixteen columns as
+`Pairs()`, through one shared SELECT constant (`ThePagesRow`), by finding id — because a pair past
+the page's limit would otherwise be unreadable, and two hundred rows for one is the wrong shape.
+`Sendable()`, `StoredPair`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer` are
+byte-identical to what they were: real source never reaches the type whose `Leaks` contract is the
+proof that no real source survived, which is why the answer is a fourth record rather than a wider
+third.
+
+**A rename across the fix is NOT followed — and cannot need to be.** Measured on real git while this
+was built: `git log --reverse --name-only --follow head..fix -- <old name>` lists the RENAME commit
+under the OLD name and nothing after it (following works backwards from the newest name, and the
+walk is handed the oldest). So `Collector.WalkAsync` reads `fix:<old name>`, fails, continues, and
+records `symbol_gone`: **a pair whose fix commit renamed the file is never stored**, and a recovery
+in the reader would be code no stored row reaches. The first draft had one; the fixture that was to
+prove it is what showed it unreachable, and it now asserts the honest answer for such a row
+(`file_not_in_commit`). Worth knowing beyond this story: `GitHistory.CommitsTouchingAsync`'s
+docblock says `--name-only` rides along "so a renamed file can still be read", and for a forward
+rename it does not — the collector cannot see a fix that landed after a rename. Named here rather
+than fixed, because it is the collector's behaviour and this story does not touch the collector.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the

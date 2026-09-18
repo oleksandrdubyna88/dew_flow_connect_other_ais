@@ -289,13 +289,20 @@ of every wire field this product has shipped out of step.
 | `ThePairsThemselvesTests` | real SQLite | an upsert that forgets a decision; a pair written for a claim that lost; a pair dropped from the page because its session row went; a page-only field (`why`, `repoPath`, …) creeping onto the record the send reads |
 | `WhatIsStoredIsAnonymousTests` | the real normaliser, then the COLUMN | a skeleton computed correctly and stored wrong |
 | `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success; a pairs document that does not say where each pair was, read by property NAME as the extension reads it |
+| `TheRealMethodTests` (story 2.3) | `--real-method` end to end: **real git** (a temp repository through `TempGitRepo`, the four helpers `CollectorTests` had), real SQLite, the real normaliser, the mode's own stdout | **the privacy regression**: the database file or the serialised `UploadRequest` differing by one byte after a read, or the wire carrying a real name; the un-anonymised text or the class not read at either commit; the three guards not reached (a lambda shown as a method, an overload set guessed between, a renamed method matched to its nearest); "commit absent" collapsed into "file absent"; an orphaned head refused although its object survives; the after side taken down with the before side; a checkout gone, a language not read or a pair not in the database answered as an exit code; a bad `--id` answered 64; a fix that renamed the file answered as anything but `file_not_in_commit` (the row the collector cannot store); the real text reachable from `StoredPair`, `UploadedPair` or `UploadRun.Wire` |
+| `AstNormalizerTests` (the class walk, story 2.3) | `EnclosingType` over the real grammars | a method's class not named; a NESTED class answering the outer type; a class invented for a top-level function or for a language the normaliser does not read; a TypeScript or JavaScript class method not naming its class |
 | `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
-| `bugzReviewPage.test.ts` | the page RUN against a DOM shim; the `about` block of a rendered row, sliced per pair | a tick-box that renders and selects nothing; reviewer prose becoming markup; a cause invented for a finding that has none; a full sha where an abbreviation belongs; the after-side complexity labelled with the before-side commit; a count rendered as 0 for a language the page does not read |
-| `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
+| `bugzReviewPage.test.ts` | the page RUN against a DOM shim; the `about` block of a rendered row, sliced per pair; **the two halves of each row's code (`data-skel`, `data-real`) and the host's `real` message, pushed through the shim's `window`** (story 2.3) | a tick-box that renders and selects nothing; reviewer prose becoming markup; a cause invented for a finding that has none; a full sha where an abbreviation belongs; the after-side complexity labelled with the before-side commit; a count rendered as 0 for a language the page does not read; **the real-code toggle asking for a closed row, or asking twice; a fetched method not appearing in the row that asked, or the skeleton not stepping aside; turning the view OFF not restoring every open row's skeleton, or costing a process; a stale answer applied — after a flip, after a collapse, after collapse-all, or from another draw; a redraw with the view on and a cached method asking again, or with nothing cached not asking for the open rows; a side that cannot be shown not saying which fact stopped it; the too-old sentence and the reader's disagreeing; real text or a class name becoming markup; a decision posted while real text shows carrying anything but ids and keep** |
+| `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see; **(story 2.3) the toggle not recorded; a fetch answered by painting rather than posting, or posted without its generation; the cache consulted after the server, keyed on the id alone, or keeping a failed process; the view and the cache not handed to every paint; a closed window keeping the view or the cache; the provider not wiring `readReal` to the real reader** |
+| `roundsDbRead.test.ts` (the real method) | `readRealMethod` against a stubbed `Run` | a document read as a promise rather than checked; **64 not told apart from every other failure** (the one code that means "update the server"); a domain reason read as a failed read; a document with one side read as an older server; a line span that is not a whole number reaching the page |
+| `bugzLiveContract.test.ts` (the real method) | the **real binary**, through the **real** `readRealMethod` | an empty corpus's `pair_not_found` refused by the reader, or answered as an exit code; a missing `--id` answered 64 and read as "update the server" |
 | `codeHighlight.test.ts` | the real Shiki, all three grammars | a skeleton becoming MARKUP; a language rendered by guesswork; colours baked in past the theme |
 | `lineDiff.test.ts` | the pure diff, nine cases | anonymisation's renumbering read as real change; a rewrite shown as an unrelated removal and addition |
-| `cyclomatic.test.ts` | the pure count, over skeletons including one the normaliser's own fixture produces | a keyword inside a string, a comment, a verbatim or a raw string counted as a decision; a `//` inside a string swallowing the code after it; a nullable `?`, a `?.` or a TypeScript `?:` counted as a branch; a count for a language the page does not read |
+| `cyclomatic.test.ts` | the pure count, over skeletons including one the normaliser's own fixture produces — **and, since story 2.3, over the ORIGINAL method that skeleton came from** | a keyword inside a string, a comment, a verbatim or a raw string counted as a decision; a `//` inside a string swallowing the code after it; a nullable `?`, a `?.` or a TypeScript `?:` counted as a branch; a count for a language the page does not read; **the count moving between a method and its skeleton, which is the number shown beside the un-anonymised text** |
 | `corpusLanguage.test.ts` | the one language table, against `SourceLanguage` through `sourceLanguages.ts` | a fourth collector language nobody told the page about; a name inherited from `Object.prototype` answered as a language |
+| `projectIdentity.test.ts` | the pure rule, every case taken from the LIVE table (106 distinct `repo_path` values, 2026-09-18) | one repository split by its spelling; a worktree filed as a project of its own; **two products merged because their worktrees share a parent directory** (22 of them under `d:/rsd/_wt`); **a submodule inside a worktree filed under the worktree's repository** (dew_flow_conventions under connect_other_ais); a vanished path merged with a neighbour; a filesystem call per row instead of per distinct path |
+| `tabStrip.test.ts` | the one strip, as markup | a tab that controls nothing (`roundsLog`'s own defect); a repository name out of SQLite closing an attribute; two strips on one page sharing an id or indistinguishable to the click handler; a held choice kept when it selects nothing |
+| `reviewTabs.test.ts` | project then language, over the pairs | **a language held from another project blanking the table** (findings 1 and 2, reported independently); a person's still-valid choice thrown away on a redraw; a strip drawn with one tab in it; an empty language key colliding with the everything tab |
 | `roundsDbRead.test.ts` (the pairs) | `readPairs` against a stubbed `Run`, in both ages | a nine-field document from an older server read as malformed, or a field invented for it; a `line` that is not a whole non-negative number reaching the page |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
@@ -430,6 +437,54 @@ seven page fields exist on `ReviewPair` and on nothing `Sendable()` returns.
 CurrentlyFitsAtMostOneRule`, whose own remark says the leftover straddles the smallest tail rule
 between CRLF and LF; it reads the conventions mount, which this story does not touch, and it fails
 on a Windows checkout before and after the change.
+
+**Counts on 2026-09-18, story 2.3, on this branch.** Extension, on a clean `out/`: `tsc` exit 0,
+then 3 933 tests — 3 932 passed, 1 skipped, 0 failed, nine batches, `npm test` exit 0; `eslint src`
+exit 0 once the view moved into `realMethodView.ts` (the page had reached 949 lines against the
+800 `max-lines` allows). Server: 2 244 total, 2 242 passed, 2 skipped, 0 failed; solution build 0
+warnings, 0 errors. `plan-lifecycle`, `pin-check` and `adapter-check` clean. The one red run on the
+way was `importCycles.test.mjs` naming `bugzReviewPage ↔ realMethodView` as a ninth cycle — a
+type-only import back into the page — fixed by giving the view its own four-field `RealMethodRow`.
+
+**The un-anonymised view, verified by mutation on both sides** (2026-09-18, story 2.3). Every
+assertion was asked what it would SEE if the behaviour were deleted, and the answer was measured.
+
+Server, two rounds against `TheRealMethodTests` and `AstNormalizerTests`: the `CountNamed > 1`
+guard removed → *TwoFunctionsOfOneNameAtTheFix* red with `Expected real.After.Reason to be
+"symbol_ambiguous" … but "" has a length of 0`; the class walk made to answer the OUTERMOST type →
+*AMethodInANestedClass* red with `Expected … to be "Inner", but "Outer" differs`; a bad `--id`
+answered 64 → all five *ABadIdIs65_Never64* rows red `Expected code to be 65 … but found 64`; the
+`symbol.Name.Length == 0` guard removed → *ALineInsideANamelessFunction* red with
+`Expected … "symbol_not_resolved" … but "" has a length of 0`; "commit absent" collapsed into
+`file_not_in_commit` → *AHeadCommitTheRepositoryNeverHad* red; **and the mode made to write one
+decision → *AReadWritesNothing_AndTheSendStillTransmitsTheSkeleton* red with the database file
+`differs at index 101998`** — the privacy test bites on a write of one row. 90 of 90 green with
+every mutation reverted.
+
+Extension, two rounds against the page and the reader: `pending = {}` removed from the toggle →
+*a response to a request that is no longer wanted is discarded* red; `delete pending[id]` removed
+from a collapse → *a row collapsed while its method is on the way* red; the `draw/` prefix removed
+from the generation → *a response from another draw is discarded* red; the toggle ignored in
+`renderReal` → *turning the toggle off restores the skeleton*, *a redraw with the view off* and
+*asks for every open row once* red (the last because the rows were then asked for twice); the
+generation check removed from the message handler → four tests red (stale, collapsed, collapse-all,
+another draw); 64 answered as an ordinary failure in `readRealMethod` → *a server too old for the
+view is told apart* red. **One mutation stayed green and it is acceptable:** rendering the skeleton
+half `hidden` in the MARKUP whenever the view is on (`skeletonHidden = showReal`) changes nothing a
+test can see, because `renderOpenRows()` runs on load and re-derives every open row's visibility
+from the state the row holds — the wrong initial attribute is corrected before anyone sees it, and a
+closed row's skeleton is invisible until `renderReal` runs on open. That is the design working, not
+a gap: the attribute is a hint the script overrides, and the script is what the suite runs.
+
+**What the story deliberately does not test, said in place.** No test drives `BugzReviewPanel`
+itself — it imports `vscode`, the constraint `bugzReviewWiring.test.ts` documents — so the cache's
+sha check, the in-flight dedupe and the generation echo are pinned on the SOURCE with the whole
+condition each time, and the behaviour end to end (a row re-drawn after a decision showing the same
+real text without a spawn) needs an extension host this suite still does not have. And the
+populated `--real-method` round trip through the real binary AND the real reader is not exercised:
+the server's suite can make a git repository and the extension's cannot, so the server checks the
+populated answer by property NAME (`TheAnswerNamesItsFieldsAsTheExtensionReadsThem`) and the
+extension checks the envelope on an empty corpus; the field names are the seam between them.
 
 **The review page's import graph is now GUARDED, and it was not before** (2026-09-18, story 2.1's
 plan round). Three docblocks in epic 1 said a review-page module importing `node:` or `vscode`

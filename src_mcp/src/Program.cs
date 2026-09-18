@@ -66,6 +66,16 @@ internal static class Program
         /// <summary>A batch of keep/drop decisions, file-in as `--findings-many` takes its keys.</summary>
         PairsKeep,
 
+        /// <summary>One pair's method as it really was, at both commits — a VIEW for the page, never a payload.</summary>
+        /// <remarks>
+        /// The collector computes the real text and throws it away; nothing stores it, and nothing
+        /// should. So the page asks for it per opened row, and this mode re-runs the collector's own
+        /// locate over the same two commits and answers on stdout, writing nothing. Every way the
+        /// repository can have changed since — a commit pruned, a file gone, a checkout deleted — is
+        /// an ANSWER naming which, never an exit code. (Story 2.3 of the review-page plan.)
+        /// </remarks>
+        RealMethod,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -183,6 +193,7 @@ internal static class Program
                 "--collect-bugs" => Startup.Collect,
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
+                "--real-method" => Startup.RealMethod,
                 "--upload-pairs" => Startup.UploadPairs,
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
@@ -238,6 +249,9 @@ internal static class Program
 
             case Startup.PairsKeep:
                 return PairsKeep(args);
+
+            case Startup.RealMethod:
+                return await RealMethodAsync(args);
 
             case Startup.UploadPairs:
                 return await UploadPairsAsync(args);
@@ -701,6 +715,87 @@ internal static class Program
 
         return asked;
     }
+
+    /// <summary>One pair's method as it really was, at both of its commits, on stdout.</summary>
+    /// <remarks>
+    /// <para><b>Stdout, like `--pairs-json`, not files like `--normalize`.</b> The extension's reader
+    /// takes the answer off stdout, and a temporary-file dance exists nowhere else in it.</para>
+    /// <para><b>65 and never 64 for a bad `--id`.</b> 64 is how a caller detects a binary too old
+    /// for a mode and falls back; a request fault wearing it would send the page down the fallback
+    /// and hide behind "your server is too old". This binary KNOWS the mode.</para>
+    /// <para><b>Domain outcomes are data.</b> A pair the database does not have, a checkout that is
+    /// gone, a commit that was pruned, a name that is ambiguous — each is a reason on the document,
+    /// exit 0, because each sends a person somewhere different and an exit code cannot say where.
+    /// Only the database refusing to open or to be read is 74, as every database mode here.</para>
+    /// <para>Nothing is written on this path — not a row, not a column. A test asserts the file is
+    /// byte-identical before and after.</para>
+    /// </remarks>
+    internal static async Task<int> RealMethodAsync(string[] args)
+    {
+        if (!FindingId(Flags(args), out var findingId))
+        {
+            Note("--real-method needs --id <findingId>, a whole number");
+            return 65; // EX_DATAERR
+        }
+
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        using var db = Store.RoundsDb.Open(settings.DataDir, Serilog.Core.Logger.None);
+        if (db is null)
+        {
+            Note("the rounds database could not be opened; no pair can be read from it");
+            return 74; // EX_IOERR
+        }
+
+        Store.ReviewPair? pair;
+        try
+        {
+            pair = db.Pair(findingId);
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+            return 74; // EX_IOERR
+        }
+
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(
+            await RealMethodOfAsync(findingId, pair), Server.ServerJsonContext.Default.RealMethod));
+
+        return 0;
+    }
+
+    /// <summary>The `--id` a caller named, as a finding id — or not, when it named none or not a number.</summary>
+    private static bool FindingId(IReadOnlyDictionary<string, string> flags, out long findingId)
+    {
+        findingId = 0;
+
+        return flags.TryGetValue("--id", out var asked)
+            && long.TryParse(
+                asked, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out findingId);
+    }
+
+    /// <summary>The pair's method read back out of git — or the answer that there is no such pair.</summary>
+    private static async Task<Core.Collecting.RealMethod> RealMethodOfAsync(long findingId, Store.ReviewPair? pair)
+    {
+        if (pair is null)
+        {
+            return new Core.Collecting.RealMethod(findingId, Reason: Core.Collecting.RealMethodReason.PairNotFound)
+            {
+                Before = Core.Collecting.MethodSide.Unavailable(Core.Collecting.RealMethodReason.PairNotFound),
+                After = Core.Collecting.MethodSide.Unavailable(Core.Collecting.RealMethodReason.PairNotFound),
+            };
+        }
+
+        var reader = new Runners.Collecting.RealMethodReader(
+            new Runners.Collecting.GitHistory(new ProcessLauncher()),
+            new Normalizer.TreeSitterNormalizer());
+
+        return await reader.ReadAsync(
+            findingId,
+            new Runners.Collecting.MethodPlace(
+                pair.RepoPath, pair.HeadSha, pair.FixSha, pair.File, pair.Line, pair.SymbolName));
+    }
+
     /// <summary>Sends the kept pairs to an ingest server.</summary>
     /// <remarks>
     /// <para><b>The key is NEVER an argument.</b> An argument is in process listings and in shell

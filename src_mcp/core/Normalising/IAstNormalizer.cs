@@ -91,6 +91,22 @@ public interface IAstNormalizer
     int CountNamed(SourceLanguage language, string source, string name);
 
     /// <summary>
+    /// The name of the innermost TYPE around <paramref name="line"/> — a class, a struct, a record,
+    /// an interface — or empty when there is none.
+    /// </summary>
+    /// <param name="line">1-based; a function's <see cref="EnclosingSymbol.StartLine"/> is the line to ask about.</param>
+    /// <remarks>
+    /// <para>The class is one more step along the parent chain <see cref="Locate"/> already walks,
+    /// asked for SEPARATELY rather than carried on <see cref="EnclosingSymbol"/>: that record is what
+    /// the collector holds, and a field on it is a field the collector could store one day without
+    /// anyone deciding to. The review page's un-anonymised view is the only caller, and it puts the
+    /// answer on its own record (story 2.3 of the review-page plan).</para>
+    /// <para>Empty is an answer — a top-level function has no class — and it is never a guess: a
+    /// language whose grammar has no type node around the function answers empty too.</para>
+    /// </remarks>
+    string EnclosingType(SourceLanguage language, string source, int line);
+
+    /// <summary>
     /// Rewrites a method so that nothing of this project is left in it.
     /// </summary>
     /// <remarks>

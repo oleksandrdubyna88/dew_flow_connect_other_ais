@@ -4,9 +4,10 @@
 > the persisted credential, dependabot, PR template, semantic titles) is shipped, and so are Epic 5
 > steps 0–2 — step 0's table is in this document as of 2026-09-18, which is what that step asks for
 > and what the previous status line claimed before there was one. Epic 2 is shipped, its one blocked
-> line resolved 2026-09-18. Epic 1 is AUDITED but NOT APPLIED: the gaps are tabled in its own section
-> and writing branch protection needs the operator. Epic 4 is NOT started, and Epic 5 step 3 — the
-> step that actually closes the write-token hole — waits on it.
+> line resolved 2026-09-18. Epic 1's protection is AUDITED and APPLIED, 2026-09-18, to the six
+> repositories that can have it. Epic 4 is STARTED and stopped at a decision, not at work: the tag
+> release-please cuts with the default token starts no workflow, so it needs a credential that is
+> not `GITHUB_TOKEN`. Epic 5 step 3 waits on Epic 4.
 > Scope: every `dew_flow_*` repository's `.github/` (workflows, dependabot, PR template),
 > `.editorconfig` where missing, and `dew_flow_conventions` for the rule that binds them.
 >
@@ -205,9 +206,24 @@ that provably does nothing.
    normalisation on its first run; the comparison against the real branch needs repository admin and
    stays a command somebody runs, which is also what item 3 below asks for.
 
-   **STILL NOT APPLIED.** Writing branch protection is a privileged action on the operator's
-   repositories and needs their say-so; the file is the whole of the decision, so applying it is
-   `--apply` once per repository once that is given.
+   **APPLIED 2026-09-18**, with the operator's say-so, by `--apply` — the reviewed tool rather than
+   a one-off call. Six of the seven now require every check the audit above SELECTED — not every
+   check that runs, which is a different sentence and the one this line used to make: `ask
+   CodeRabbit`, `SonarCloud Code Analysis`, `extension · a real editor` and `submit-nuget` are
+   deliberately left unrequired, each for a reason recorded a few paragraphs up. (CodeRabbit, on
+   this pull request, and it was right to catch it: a plan that overstates its own coverage is how
+   somebody later believes a gate exists that does not.) Each repository was verified straight
+   after: the tool answers `matches branch-protection.json`, exit 0. `rag_qln` is the seventh and
+   cannot be, for the reason recorded above.
+
+   | repository | required before | after |
+   |---|---|---|
+   | `creds_for_devs` | **3 of 11** | 11 |
+   | `sidecar_rust` | 4 | 7 |
+   | `connect_other_ais` | 3 | 6 |
+   | `mcp` / `benchmark` | 3 / 3 | 6 each |
+   | `conventions` | 4 | 5 |
+   | `rag_qln` | none | **none — impossible** |
 3. **BLOCKED — see requirement 8.** `tools/repo-settings-check.mjs`, with its selftest; run by hand
    for now (it needs a token), documented in the README. Its HOME is the open decision: conventions
    (as written) or one repository. Do not build it until requirement 8 records the answer — the

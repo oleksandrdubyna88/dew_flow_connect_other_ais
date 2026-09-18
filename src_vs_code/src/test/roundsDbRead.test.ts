@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_LIMIT, readFindings, readLog, readPairs, Run } from '../roundsDbRead';
+import { TOO_OLD_FOR_THE_REAL_METHOD } from '../realMethodView';
+import { DEFAULT_LIMIT, readFindings, readLog, readPairs, readRealMethod, Run } from '../roundsDbRead';
 
 /**
  * Reading the rounds database — and the four version pairings of doing so.
@@ -236,6 +237,67 @@ test('a line that is not a whole non-negative number is no line at all', async (
   }
 });
 
+// --------------------------------------------------------------------------------------------
+// The real method (story 2.3) — one pair, both commits, and the one exit code that means "update".
+// --------------------------------------------------------------------------------------------
+
+const SIDE = { reason: '', source: 'int GetOrAdd() { return _items[key]; }', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 15 };
+const METHOD = { findingId: 7, language: 'CSharp', name: 'GetOrAdd', reason: '', before: SIDE, after: { ...SIDE, endLine: 18 } };
+
+test('the real method is read field by field, and the id travels', async () => {
+  const { run, seen } = calls({ code: 0, output: JSON.stringify(METHOD) });
+
+  const read = await readRealMethod('coai-mcp.exe', 7, run);
+
+  assert.deepEqual(seen, [['--real-method', '--id', '7']]);
+  assert.ok(read.ok);
+  assert.deepEqual(read.method, METHOD);
+});
+
+test('a server too old for the view is told apart from one that could not read it', async () => {
+  const { run } = calls({ code: 64, output: 'unknown argument' });
+
+  const read = await readRealMethod('coai-mcp.exe', 7, run);
+
+  assert.equal(read.ok, false);
+  assert.equal(read.ok ? '' : read.tooOld, true, '64 is the one code that means "this server does not have the mode"');
+  assert.equal(read.ok ? '' : read.why, TOO_OLD_FOR_THE_REAL_METHOD);
+
+  const failed = await readRealMethod('coai-mcp.exe', 7, calls({ code: 74, output: 'the rounds database could not be read' }).run);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.ok ? '' : failed.tooOld, false, 'any other code is a failure of THIS request, never "update the server"');
+  assert.equal(failed.ok ? '' : failed.why, 'the rounds database could not be read');
+});
+
+test('a domain reason is a successful read with the reason on the method', async () => {
+  const notFound = { ...METHOD, reason: 'pair_not_found', before: { ...SIDE, reason: 'pair_not_found', source: '' }, after: { ...SIDE, reason: 'pair_not_found', source: '' } };
+  const { run } = calls({ code: 0, output: JSON.stringify(notFound) });
+
+  const read = await readRealMethod('coai-mcp.exe', 7, run);
+
+  assert.ok(read.ok, 'the request was fine; what the reason says is the page’s to render');
+  assert.equal(read.method.reason, 'pair_not_found');
+});
+
+test('an answer that is not JSON, or has no sides, is a failed read and not a method', async () => {
+  const junk = await readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: '{ not json' }).run);
+  assert.equal(junk.ok, false);
+  assert.match(junk.ok ? '' : junk.why, /not JSON/u);
+
+  const halfless = await readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify({ findingId: 7, before: SIDE }) }).run);
+  assert.equal(halfless.ok, false, 'a document without an after side is malformed, not an older server');
+  assert.match(halfless.ok ? '' : halfless.why, /does not understand/u);
+});
+
+test('a line span that is not a whole non-negative number is no span at all', async () => {
+  const { run } = calls({ code: 0, output: JSON.stringify({ ...METHOD, before: { ...SIDE, startLine: '7', endLine: -1 } }) });
+
+  const read = await readRealMethod('coai-mcp.exe', 7, run);
+
+  assert.ok(read.ok);
+  assert.deepEqual([read.method.before.startLine, read.method.before.endLine], [0, 0]);
+});
+
 test('a pair with no id is malformed whatever else it carries, and the read says how many', async () => {
   const noId = Object.fromEntries(Object.entries({ ...NINE, ...SEVEN }).filter(([key]) => key !== 'findingId'));
   const { run } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN }, noId) });
@@ -244,4 +306,42 @@ test('a pair with no id is malformed whatever else it carries, and the read says
 
   assert.equal(read.ok, false);
   assert.match(read.ok ? '' : read.why, /1 of 2 pairs were malformed/u);
+});
+
+
+test('a real-method document for ANOTHER finding is refused, not rendered', () => {
+  // Code round, codex. The reader asked for finding 7 and trusted whatever `findingId` came back.
+  // A mismatched or stale answer would then be drawn under the wrong row — which on THIS page means
+  // one method's un-anonymised source shown beside another finding's decision buttons.
+  const answered = {
+    findingId: 8,
+    language: 'CSharp',
+    name: 'GetOrAdd',
+    reason: '',
+    before: { reason: '', source: 'int GetOrAdd() { }', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 9 },
+    after: { reason: '', source: 'int GetOrAdd(int n) { }', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 9 },
+  };
+
+  return readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify(answered) }).run)
+    .then((read) => {
+      assert.equal(read.ok, false, 'a document about finding 8 is not an answer about finding 7');
+      assert.equal(read.tooOld, false);
+    });
+});
+
+test('the finding it WAS asked about still reads', () => {
+  // The companion: refusing everything would pass the test above.
+  const answered = {
+    findingId: 7,
+    language: 'CSharp',
+    name: 'GetOrAdd',
+    reason: '',
+    before: { reason: '', source: 'a', className: 'Totals', kind: 'method_declaration', startLine: 1, endLine: 2 },
+    after: { reason: '', source: 'b', className: 'Totals', kind: 'method_declaration', startLine: 1, endLine: 2 },
+  };
+
+  return readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify(answered) }).run)
+    .then((read) => {
+      assert.equal(read.ok, true);
+    });
 });

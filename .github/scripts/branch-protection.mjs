@@ -25,13 +25,20 @@
  * permission, no network. THREE IS NOT ONE: "the protection is wrong" and "I could not look" are
  * different answers, and a check that conflates them teaches people to ignore it.</p>
  *
+ * <p><b>One branch or several.</b> A file with no `branches` key IS the body, and it speaks for
+ * `main` — which is every repository here but one. A file that names `branches` maps each branch to
+ * its OWN body, every one of them is checked, and the exit code is the worst of them, because
+ * answering 0 on the strength of the branch that happened to be fine is the lie these codes exist to
+ * prevent. `dew_flow_conventions` is why: its `release` ref is moved by a workflow pushing directly,
+ * so it cannot carry `main`'s pull-request requirement and needs a body of its own.</p>
+ *
  * <p>The JSON is exactly the PUT body the API takes, so `--apply` sends the file and nothing
  * translates it on the way. What DOES need translating is the answer: a GET comes back with URLs,
  * `{enabled: true}` wrappers and a `checks` array beside `contexts`. That normalisation is the only
  * real logic here, and `--selftest` is what holds it.</p>
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -136,6 +143,35 @@ export function wanted(file) {
   return out;
 }
 
+/**
+ * The branches this file speaks about, each with the body that applies to it.
+ *
+ * <p>A repository with one protected branch says nothing and gets `main` — which is every file in
+ * this family but one, so the common shape stays a plain PUT body with no wrapper. A repository
+ * with more says so under `branches`, a map from branch name to its own body.</p>
+ *
+ * <p><b>A map rather than a list of names sharing one body</b>, and measuring `dew_flow_conventions`
+ * is what settled that. Its `release` ref cannot carry `main`'s protection: `main` requires a pull
+ * request, and `release` is moved by `promote-release.yml` pushing `&lt;sha&gt;:refs/heads/release`
+ * directly — a pull-request requirement there would break the only supported way to move it. The two
+ * branches need DIFFERENT protection for a reason, so a shape that could only express "the same"
+ * would have been wrong the first time it was used.</p>
+ *
+ * <p>A `branches` that is empty, or an array, is refused rather than quietly read as "just main":
+ * both are plausible ways to write this by mistake, and the failure would be a branch nobody
+ * noticed was unprotected — the exact thing this tool exists to make impossible.</p>
+ */
+export function branchesOf(file) {
+  if (!file || !Object.hasOwn(file, 'branches')) {
+    return [{ branch: 'main', body: file }];
+  }
+  const named = file.branches;
+  if (!named || typeof named !== 'object' || Array.isArray(named) || Object.keys(named).length === 0) {
+    throw new Error('`branches` must be an object mapping branch names to protection bodies, naming at least one');
+  }
+  return Object.entries(named).map(([branch, body]) => ({ branch, body }));
+}
+
 /** Every field where the two disagree, named, with both values. Empty means they agree. */
 export function differences(want, have) {
   const said = (value) => JSON.stringify(value);
@@ -164,15 +200,45 @@ export function differences(want, have) {
  * problem one level down.</p>
  */
 function resolved(name) {
-  const suffixes = process.platform === 'win32'
-    ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT').split(';').map((one) => one.toLowerCase())
-    : [''];
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)) {
-    for (const suffix of ['', ...suffixes]) {
+  // ONLY what `execFileSync` can start directly, which is narrower than PATHEXT. Node refuses
+  // `.cmd` and `.bat` without `shell: true` — the 2024 argument-injection fix — and `.ps1`/`.vbs`
+  // are not executables at all. The first version walked PATHEXT and would have returned such a
+  // file happily, SHADOWING a working `gh.exe` further along PATH and failing at the spawn with a
+  // message about neither. Refusing here says the true thing. (CodeRabbit, creds_for_devs #116.)
+  const suffixes = process.platform === 'win32' ? ['.exe', '.com'] : [''];
+
+  // `filter(Boolean)` DROPS EMPTY ENTRIES, and on POSIX an empty entry — `PATH=:/usr/bin`, a
+  // trailing colon, `::` — means the CURRENT DIRECTORY. That is a deliberate divergence from
+  // `execvp`, not an oversight, and it is kept for the reason the legacy is deprecated: the current
+  // directory here is a REPOSITORY CHECKOUT, and this tool spawns `gh` holding a token that can
+  // rewrite branch protection. Honouring an empty entry would let a file named `git` committed to a
+  // pull request be the `git` that runs. The cost is a machine where the program exists ONLY in the
+  // working directory and nowhere on PATH, which refuses with a message naming the program instead
+  // of running something from the tree. That trade is not close. (CodeRabbit, creds_for_devs #117 —
+  // correct about POSIX, and the selftest below pins the refusal so this is not re-litigated.)
+  for (const entry of (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)) {
+    // A RELATIVE PATH entry is legal and common enough (`tools`, `.`), and joining onto it yields a
+    // relative answer — which the caller then spawns relative to ITS working directory rather than
+    // the one PATH meant. It also made the selftest's `isAbsolute` assertion fail in an environment
+    // that was perfectly correct.
+    const dir = path.resolve(entry);
+
+    for (const suffix of suffixes) {
       const candidate = path.join(dir, name + suffix);
-      if (existsSync(candidate) && statSync(candidate).isFile()) {
-        return candidate;
+      if (!existsSync(candidate) || !statSync(candidate).isFile()) {
+        continue;
       }
+      // On POSIX a readable file without the execute bit is not a program, and returning it only
+      // moves the failure to the spawn. Windows has no equivalent bit; the extension list above is
+      // what stands in for it there.
+      if (process.platform !== 'win32') {
+        try {
+          accessSync(candidate, constants.X_OK);
+        } catch {
+          continue;
+        }
+      }
+      return candidate;
     }
   }
   throw new Error(`${name} is not on PATH, and this tool cannot ask GitHub anything without it`);
@@ -312,16 +378,89 @@ const CASES = [
 function lookupCases() {
   const out = [];
 
+  // RUNNABLE, not merely present. `existsSync` on the answer was the first version of this, and it
+  // proves the weaker half of what the caller needs: every use of `resolved()` in this file hands
+  // its answer straight to `execFileSync`, so a path that exists and cannot be started is a pass
+  // here and a crash there. The assertion is therefore what the program PRINTS.
   try {
     const found = resolved('git');
+    const shown = execFileSync(found, ['--version'], { encoding: 'utf8' }).trim();
     out.push({
-      name: 'a program that is installed resolves to a path that exists',
-      ok: path.isAbsolute(found) && existsSync(found),
-      detail: found,
+      name: 'a program that is installed resolves to a path that RUNS',
+      ok: path.isAbsolute(found) && shown.startsWith('git version'),
+      detail: `${found} -> ${shown}`,
     });
   } catch (error) {
-    out.push({ name: 'git resolves', ok: false, detail: error.message });
+    out.push({ name: 'git resolves and runs', ok: false, detail: error.message });
   }
+
+  // A relative PATH entry must still resolve to an absolute answer, because the caller spawns it
+  // from ITS working directory and not from wherever PATH was written.
+  //
+  // The fixture is the RUNNING INTERPRETER, and two rejected versions are why.
+  //
+  // The first borrowed the real `git`, made a relative path to it with `path.relative(cwd, dir)` and
+  // set PATH to that — and on Windows, where cwd and git sit on different DRIVES, `path.relative`
+  // cannot express a relative path at all and hands back an absolute one. The case then tested the
+  // thing it was written to catch not happening: it stayed green with the fix deliberately removed.
+  //
+  // The second BUILT a fixture — an empty `probe-4f2b9c[.exe]`, chmod 0755 — which fixed the drive
+  // problem and introduced a quieter one: an empty file passes `existsSync` and passes `X_OK`, and
+  // is not a program on any platform. It could only ever prove the path, never the spawn.
+  //
+  // `process.execPath` is both: a real executable, on every platform, whose own directory can be
+  // reached by a RELATIVE entry from its parent without `path.relative` and without a copy. What it
+  // prints is checkable against `process.version` — so this case proves the resolved path is not
+  // merely absolute and present, but IS the runnable program that was looked up.
+  const realPath = process.env.PATH;
+  const realCwd = process.cwd();
+  try {
+    const dir = path.dirname(process.execPath);
+    const parent = path.dirname(dir);
+    const entry = path.basename(dir);
+    const programme = path.basename(process.execPath, path.extname(process.execPath));
+
+    process.chdir(parent);
+    process.env.PATH = entry;
+    const found = resolved(programme);
+    const shown = execFileSync(found, ['--version'], { encoding: 'utf8' }).trim();
+    out.push({
+      name: 'a RELATIVE entry on PATH resolves to an absolute path that RUNS',
+      ok: path.isAbsolute(found) && shown === process.version,
+      detail: `PATH=${entry} -> ${found} -> ${shown}`,
+    });
+  } catch (error) {
+    out.push({
+      name: 'a RELATIVE entry on PATH resolves to an absolute path that RUNS',
+      ok: false,
+      detail: error.message,
+    });
+  } finally {
+    process.chdir(realCwd);
+    process.env.PATH = realPath;
+  }
+
+  // The EMPTY entry, refused on purpose — see the note in `resolved()`. The fixture makes the
+  // difference visible rather than arguable: the working directory IS the interpreter's own
+  // directory, so the program being looked for is unquestionably there, and an implementation that
+  // honoured the empty entry the way `execvp` does would find it. This case asserts it does not.
+  let refusedCwd = '';
+  try {
+    process.chdir(path.dirname(process.execPath));
+    process.env.PATH = '';
+    resolved(path.basename(process.execPath, path.extname(process.execPath)));
+    refusedCwd = 'it searched the current directory, which an empty PATH entry must not mean here';
+  } catch (error) {
+    refusedCwd = error.message;
+  } finally {
+    process.chdir(realCwd);
+    process.env.PATH = realPath;
+  }
+  out.push({
+    name: 'an EMPTY entry on PATH does not mean the current directory, even when the program is in it',
+    ok: refusedCwd.includes('not on PATH'),
+    detail: refusedCwd,
+  });
 
   let refused = '';
   try {
@@ -339,6 +478,43 @@ function lookupCases() {
   return out;
 }
 
+/** Which branches a file speaks for — including the two shapes that must be REFUSED. */
+function branchCases() {
+  const refused = (file) => {
+    try {
+      branchesOf(file);
+      return '';
+    } catch (error) {
+      return error.message;
+    }
+  };
+  const shape = (file) => JSON.stringify(branchesOf(file).map((one) => [one.branch, one.body]));
+
+  return [
+    {
+      name: 'a file with no `branches` key is the body for main, exactly as before',
+      ok: shape({ enforce_admins: true }) === JSON.stringify([['main', { enforce_admins: true }]]),
+      detail: shape({ enforce_admins: true }),
+    },
+    {
+      name: 'each named branch gets its OWN body, not a shared one',
+      ok: shape({ branches: { main: { lock_branch: false }, release: { lock_branch: true } } })
+        === JSON.stringify([['main', { lock_branch: false }], ['release', { lock_branch: true }]]),
+      detail: shape({ branches: { main: { lock_branch: false }, release: { lock_branch: true } } }),
+    },
+    {
+      name: 'an EMPTY `branches` is refused, not read as "just main"',
+      ok: refused({ branches: {} }).includes('naming at least one'),
+      detail: refused({ branches: {} }) || 'it returned instead of throwing',
+    },
+    {
+      name: 'a `branches` written as an ARRAY is refused, not read as "just main"',
+      ok: refused({ branches: ['main', 'release'] }).includes('mapping branch names'),
+      detail: refused({ branches: ['main', 'release'] }) || 'it returned instead of throwing',
+    },
+  ];
+}
+
 function selftest() {
   let failed = 0;
   for (const one of CASES) {
@@ -350,15 +526,15 @@ function selftest() {
     }
   }
 
-  const lookups = lookupCases();
-  for (const one of lookups) {
+  const others = [...branchCases(), ...lookupCases()];
+  for (const one of others) {
     if (!one.ok) {
       failed += 1;
       console.error(`  FAIL  ${one.name}\n        ${one.detail}`);
     }
   }
 
-  const total = CASES.length + lookups.length;
+  const total = CASES.length + others.length;
   console.log(`branch-protection selftest: ${total - failed}/${total} passed`);
   return failed === 0 ? 0 : 1;
 }
@@ -456,20 +632,26 @@ function main(argv) {
     return selftest();
   }
 
-  const branch = 'main';
-  let file;
+  let targets;
   let repo;
   try {
-    file = JSON.parse(readFileSync(DEFAULT_FILE, 'utf8'));
+    targets = branchesOf(JSON.parse(readFileSync(DEFAULT_FILE, 'utf8')));
     repo = repository();
   } catch (error) {
     console.error(`branch-protection: ${error.message}`);
     return 2;
   }
 
-  return argv.includes('--apply')
-    ? applyTo(file, repo, branch)
-    : checkAgainst(file, repo, branch);
+  const apply = argv.includes('--apply');
+  let worst = 0;
+  for (const { branch, body } of targets) {
+    // The codes are ordered by how little is known, which is why the worst is the largest: 0 both
+    // branches match, 1 one of them drifts, 3 one of them could not be looked at. Reporting 0
+    // because the OTHER branch was fine would be the lie this tool's exit codes exist to prevent,
+    // and stopping at the first bad one would hide the second.
+    worst = Math.max(worst, apply ? applyTo(body, repo, branch) : checkAgainst(body, repo, branch));
+  }
+  return worst;
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replaceAll('\\', '/'))) {

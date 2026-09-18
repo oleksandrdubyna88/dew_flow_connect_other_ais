@@ -141,6 +141,78 @@ public sealed class AstNormalizerTests
         _normalizer.Locate(SourceLanguage.Unsupported, CSharp, line: 10).Should().BeNull();
     }
 
+    // --------------------------------------------------------------------------------------------
+    // The class around a function — one more step along the chain Locate already walks (story 2.3).
+    // --------------------------------------------------------------------------------------------
+
+    /// <summary>A method's class is the type around it, asked at the method's own first line.</summary>
+    [Fact]
+    public void TheClassAroundAMethod_IsNamed()
+    {
+        var method = _normalizer.Locate(SourceLanguage.CSharp, CSharp, line: 10)!;
+
+        _normalizer.EnclosingType(SourceLanguage.CSharp, CSharp, method.StartLine).Should().Be("Cache");
+    }
+
+    /// <summary>
+    /// A method in a NESTED class names the inner class, not the outer — the innermost type wins.
+    /// </summary>
+    /// <remarks>
+    /// The walk goes UP from the line and stops at the first type it meets, which is what makes the
+    /// answer the class the method is actually declared in rather than the file's top-level type.
+    /// </remarks>
+    [Fact]
+    public void AMethodInANestedClass_NamesTheInnerClass()
+    {
+        const string nested = """
+            public sealed class Outer
+            {
+                public int Field;
+
+                public sealed class Inner
+                {
+                    public int Twice(int x)
+                    {
+                        return x * 2;
+                    }
+                }
+            }
+            """;
+
+        var method = _normalizer.Locate(SourceLanguage.CSharp, nested, line: 9)!;
+        method.Name.Should().Be("Twice", "the fixture must land inside the inner class's method");
+
+        _normalizer.EnclosingType(SourceLanguage.CSharp, nested, method.StartLine).Should().Be("Inner");
+    }
+
+    /// <summary>A top-level function has no class, and none is guessed.</summary>
+    [Fact]
+    public void ATopLevelFunction_HasNoClass_AndNoneIsInvented()
+    {
+        var function = _normalizer.Locate(SourceLanguage.TypeScript, TypeScript, line: 6)!;
+        function.Name.Should().Be("fetchAll");
+
+        _normalizer.EnclosingType(SourceLanguage.TypeScript, TypeScript, function.StartLine)
+            .Should().BeEmpty("a function outside every class has no class, and empty is the honest answer");
+    }
+
+    /// <summary>The same walk reads a TypeScript and a JavaScript class — the grammars share the node.</summary>
+    [Theory]
+    [InlineData(SourceLanguage.TypeScript, "class Totals {\n  private items: number[] = [];\n\n  add(x: number): void {\n    this.items.push(x);\n  }\n}\n")]
+    [InlineData(SourceLanguage.JavaScript, "class Totals {\n  constructor() { this.items = []; }\n\n  add(x) {\n    this.items.push(x);\n  }\n}\n")]
+    public void AClassMethodInTypeScriptOrJavaScript_NamesItsClass(SourceLanguage language, string source)
+    {
+        var method = _normalizer.Locate(language, source, line: 5)!;
+        method.Name.Should().Be("add");
+
+        _normalizer.EnclosingType(language, source, method.StartLine).Should().Be("Totals");
+    }
+
+    /// <summary>A language we do not read has no class node to walk to, and answers empty rather than a guess.</summary>
+    [Fact]
+    public void ALanguageWeDoNotRead_HasNoClass() =>
+        _normalizer.EnclosingType(SourceLanguage.Unsupported, CSharp, line: 7).Should().BeEmpty();
+
     /// <summary>A line past the end of the file answers nothing instead of throwing.</summary>
     /// <remarks>
     /// One of the 462 candidates names a line past its file's end (`chatPresetsPanel.ts:285` of 251),

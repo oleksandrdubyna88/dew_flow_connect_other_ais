@@ -22,8 +22,11 @@ namespace CoaiMcp.Tests;
 public sealed class CollectorTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _launcher = new();
-    private string _repo = string.Empty;
+    private TempGitRepo _git = null!;
     private Collector _collector = null!;
+
+    /// <summary>The working tree, which is what a candidate records as its repository path.</summary>
+    private string _repo = string.Empty;
 
     /// <summary>The defective method, and the same method fixed — one lock apart.</summary>
     private const string Racy = """
@@ -89,23 +92,14 @@ public sealed class CollectorTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _repo = Directory.CreateTempSubdirectory("coai-collect-").FullName;
+        _git = await TempGitRepo.InitAsync(_launcher, "coai-collect-");
+        _repo = _git.Path;
         _collector = new Collector(new GitHistory(_launcher), new TreeSitterNormalizer());
-        await Git("init", "-b", "main");
         await Write("Totals.cs", Racy);
         await Commit("the defect");
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await Task.CompletedTask;
-        try
-        {
-            Directory.Delete(_repo, recursive: true);
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public ValueTask DisposeAsync() => _git.DisposeAsync();
 
     [Fact]
     public async Task TheCommitThatChangedTheMethod_IsTheFix()
@@ -436,28 +430,16 @@ public sealed class CollectorTests : IAsyncLifetime
         outcome.FixSha.Should().BeEmpty("a failure attributes no commit");
     }
 
-    private async Task<string> Head()
-    {
-        var result = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo));
-        result.ExitCode.Should().Be(0, result.StdErr);
+    // The four git helpers this class had are `TempGitRepo`'s now — the un-anonymised view's suite
+    // needed the same four, and a second copy is the thing the reuse rule names. These keep the
+    // call sites above reading as they did.
+    private Task<string> Head() => _git.HeadAsync();
 
-        return result.StdOut.Trim();
-    }
+    private Task Write(string name, string text) => _git.WriteAsync(name, text);
 
-    private async Task Write(string name, string text) =>
-        await File.WriteAllTextAsync(Path.Combine(_repo, name), text);
+    private Task Commit(string message) => _git.CommitAsync(message);
 
-    private async Task Commit(string message)
-    {
-        await Git("add", ".");
-        await Git("-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-m", message);
-    }
-
-    private async Task Git(params string[] args)
-    {
-        var result = await _launcher.RunAsync(new ProcessRequest("git", args, _repo));
-        result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
-    }
+    private Task Git(params string[] args) => _git.GitAsync(args);
 }
 
 /// <summary>Real git, except for one subcommand that never comes back.</summary>
