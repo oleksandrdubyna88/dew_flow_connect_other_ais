@@ -63,7 +63,8 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, readBugs, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -2420,6 +2421,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The review window, held so a second press returns to it rather than opening another. */
   private review: BugzReviewPanel | undefined;
 
+  /** The provider behind files opened at their revision — registered on the first press, see `revisionDocuments()`. */
+  private revisions: RevisionDocuments | undefined;
+
   /**
    * What the corpus and the last run look like now.
    *
@@ -2681,6 +2685,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // The un-anonymised view: one process per opened row, cached by the panel. A VIEW — nothing
       // it reads reaches a decision or a send.
       readReal: (findingId) => readRealMethod(server.fsPath, findingId),
+      // Reaching the code (story 3.1): the file at its revision comes through the server and lands
+      // in a read-only document of this product's own scheme; the CURRENT file is opened from the
+      // live filesystem only after the panel's guard has judged it against these folders.
+      readFileAt: (findingId) => readFileAt(server.fsPath, findingId),
+      showRevision: (document) => this.revisionDocuments().show(document),
+      showCurrent: (file, line) => showCurrentFile(file, line),
+      folders: () => workspaceFolderPaths(),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
       // unrelated repainted the panel. (Code round, gemini.)
@@ -2694,6 +2705,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The Bugz section shows how many are waiting, and a decision changes that.
     this.bugzAt = 0;
     await this.render();
+  }
+
+  /**
+   * The documents a file opened at its revision lives in — registered on first use, once, and
+   * disposed with the extension through its subscriptions.
+   *
+   * <p>Lazily, because the scheme is only ever needed after somebody has pressed *Open at* on the
+   * review page; a window that never opens it never registers a provider.</p>
+   */
+  private revisionDocuments(): RevisionDocuments {
+    this.revisions ??= RevisionDocuments.register(this.context);
+
+    return this.revisions;
   }
 
   /**

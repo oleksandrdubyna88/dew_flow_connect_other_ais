@@ -181,6 +181,85 @@ test('the provider wires the real-method hook to the real reader', () => {
     'a page test can prove the page asks; only this proves anybody answers');
 });
 
+// --------------------------------------------------------------------------------------------
+// Reaching the code (story 3.1): the seams between the page and the panel that no page test can
+// see — the two presses routed, the answer posted and fanned out per repository, the current file
+// opened only from inside the workspace, and all of it forgotten with the window.
+// --------------------------------------------------------------------------------------------
+
+test('the panel routes both openers to the methods that answer them', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /case 'openAt':\s*void this\.openAt\(m\.id\);/u,
+    'a press on Open at <sha> must reach the method that asks the server, or the button does nothing');
+  assert.match(text, /case 'openCurrent':\s*void this\.openCurrent\(m\.id\);/u,
+    'a press on Open CURRENT must reach the method that guards and opens, or the button does nothing');
+});
+
+test('a revision answer is remembered, posted to the page and fanned out per repository — never painted', () => {
+  const text = code('bugzReviewPanel.ts');
+  const opening = bodyOf(text, 'private async openAt(id: number): Promise<void> {');
+
+  assert.match(opening, /this\.revision = remember\(this\.revision, pair, read\);/u,
+    'what the server said must be remembered for the panel\'s lifetime, or every press is a process');
+  assert.match(opening, /this\.tellRevisions\(affectedBy\(this\.revision, pair, this\.held\)\);/u,
+    'a checkout that is gone must reach every row of that repository, not only the one pressed');
+  assert.doesNotMatch(opening, /webview\.html\s*=/u, 'an answer fills containers by posting; it never redraws');
+  assert.match(bodyOf(text, 'private tellRevisions(ids: readonly number[]): void {'),
+    /type: 'revisions', items/u, 'the page is told which rows changed and what they now say');
+});
+
+test('what was held is opened again without a process, and the server is asked only otherwise', () => {
+  const text = code('bugzReviewPanel.ts');
+  const opening = bodyOf(text, 'private async openAt(id: number): Promise<void> {');
+
+  // The whole condition: held first, the server only when nothing is held — one expression, so a
+  // refactor cannot ask the server first and consult the memory afterwards.
+  assert.match(opening, /const read = heldRevision\(this\.revision, pair\) \?\? await this\.fileAtOf\(pair\);/u,
+    'a row already answered must open again from what was held, not from a second process');
+  assert.match(bodyOf(text, 'private fileAtOf(pair: ReviewPair): Promise<FileAtRead> {'),
+    /this\.hooks\.readFileAt\(pair\.findingId\)/u, 'and the fetch really reaches the hook the provider wires');
+});
+
+test('the current file is opened from a repository inside this workspace, and only from inside that repository', () => {
+  const opening = bodyOf(code('bugzReviewPanel.ts'), 'private async openCurrent(id: number): Promise<void> {');
+
+  // The WHOLE condition, in one expression: the guard's verdict is what gates the open. A pin on the
+  // call alone would survive `currentFileIn(...).then(() => ({ ok: true }))` — the guard running and
+  // its answer ignored — which is the shape a source assertion is most likely to miss.
+  assert.match(opening,
+    /const target = await currentFileIn\(this\.hooks\.folders\(\), pair\.repoPath, pair\.file\);\s*let why = target\.ok \? '' : target\.why;\s*if \(target\.ok\) \{\s*try \{\s*await this\.hooks\.showCurrent\(target\.path, pair\.line\);/u,
+    'the workspace folders, the recorded checkout and the recorded path must all go through the one guard, and only its yes opens anything');
+  assert.doesNotMatch(opening, /hooks\.readFileAt/u, 'the current file costs no server process');
+});
+
+test('a closed window forgets what it learned about revisions', () => {
+  const disposed = /onDidDispose\(\(\) => \{([\s\S]*?)\}\);/u.exec(code('bugzReviewPanel.ts'));
+  assert.ok(disposed !== null);
+
+  assert.match(disposed[1] ?? '', /this\.revision = emptyMemory\(\);/u,
+    'a page reopened later must probe again — a checkout can have come back');
+});
+
+test('the panel hands what it remembers about revisions to every paint', () => {
+  const paint = bodyOf(code('bugzReviewPanel.ts'), 'private paint(): void {');
+
+  assert.match(paint, /revisions: this\.revisionsFor\(found\.shown\),/u,
+    'a redraw after a decision must say again which rows cannot be opened, or every reason is lost');
+});
+
+test('the provider wires the file-at hook to the real reader and both opens to the real editor', () => {
+  const text = code('panelProvider.ts');
+
+  assert.match(text, /readFileAt: \(findingId\) => readFileAt\(server\.fsPath, findingId\),/u,
+    'a page test can prove the page asks; only this proves anybody answers');
+  assert.match(text, /showRevision: \(document\) => this\.revisionDocuments\(\)\.show\(document\),/u,
+    'the text must reach a read-only document of this product\'s own scheme');
+  assert.match(text, /showCurrent: \(file, line\) => showCurrentFile\(file, line\),/u);
+  assert.match(text, /folders: \(\) => workspaceFolderPaths\(\),/u,
+    'the guard must be handed the real workspace folders');
+});
+
 test('the two view controls are wired to the host that clamps and writes', () => {
   const text = code('bugzReviewPanel.ts');
 

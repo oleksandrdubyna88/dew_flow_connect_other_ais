@@ -1,8 +1,8 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
-import { cyclomatic } from './cyclomatic';
 import { pairDiff } from './lineDiff';
 import { RealRead, realView } from './realMethodView';
-import { commit, none, text } from './reviewText';
+import { about } from './reviewAbout';
+import { RevisionState, UNPROBED } from './revisionActions';
 import { slugOf, Tab, tabCss, tabStrip } from './tabStrip';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml, jsonForScript } from './webviewHtml';
@@ -44,6 +44,13 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  * render a toggle flip runs. What a send transmits is unchanged by any of it, by construction: the
  * page supplies decision IDs and the send projects the stored pair, and the server's own test holds
  * the serialised upload byte-identical with the view on and off.</p>
+ *
+ * <p><b>A row offers two ways to its code, honestly about which revision</b> (story 3.1): the file at
+ * the commit the reviewers read, read through the server out of git's object database, and the file
+ * as it is NOW, labelled CURRENT because it is the one that can mislead. The page paints neither
+ * answer: a press posts the row's id, the host opens an editor or learns why it cannot, and posts
+ * back what the row should now say — `reviewAbout.ts` renders it, `revisionActions.ts` decides how,
+ * and the panel decides what from what it remembers per repository.</p>
  *
  * <p>Pure, and free of `node:` and `vscode` imports, like `zoomControl.ts` and `textTone.ts` beside
  * it: a page module that reaches for either fails the bundle test, and a decision inside one is a
@@ -148,6 +155,16 @@ export interface ReviewView {
   readonly real?: ReadonlyMap<number, RealRead>;
 
   /**
+   * What the panel remembers about reaching each row's code, by `findingId` — a row absent here has
+   * not been asked about and says it will check first.
+   *
+   * <p>Handed over at paint for the same reason {@link real} is: a redraw after a decision must say
+   * again which rows cannot be opened, or every reason a person was shown is lost with the document.
+   * Nothing is probed at paint.</p>
+   */
+  readonly revisions?: ReadonlyMap<number, RevisionState>;
+
+  /**
    * Which paint this is.
    *
    * <p>Every fetch the page asks for carries a generation composed of this and a counter, and the
@@ -202,64 +219,6 @@ const ariaBoolean = (yes: boolean): string => (yes ? 'true' : 'false');
 const key = (findingId: number): string => escapeHtml(String(findingId));
 
 /**
- * Reviewer prose, escaped on the way into the page.
- *
- * <p>`why` and `fix` are what a model wrote about somebody's code — external data, arriving through
- * a JSON document the server printed — and this page is where a person decides what leaves the
- * machine. An `<img onerror>` in a finding's "fix" renders as the text it is.</p>
- */
-const prose = (value: string): string => {
-  const said = text(value);
-
-  return said.length > 0 ? escapeHtml(said) : none('none recorded');
-};
-
-/** Where the finding was: its path and line at the commit the reviewers read, and in which checkout. */
-function where(pair: ReviewPair): string {
-  const file = text(pair.file);
-  const line = Number.isInteger(pair.line) && pair.line > 0 ? `:${pair.line}` : '';
-  const place = file.length > 0
-    ? `<code class="path">${escapeHtml(file)}${line}</code>`
-    : none('no file recorded');
-  const repo = text(pair.repoPath);
-  const checkout = repo.length > 0 ? ` in <span class="repo">${escapeHtml(repo)}</span>` : '';
-
-  return `${place} at ${commit(pair.headSha)}${checkout}`;
-}
-
-/**
- * The two counts, each labelled with the revision its skeleton came from.
- *
- * <p>"Of the method at `aaaa111`", never "of the method": the before side is the method as the
- * reviewers read it, the after side is the method at the commit the fix was found in — two
- * different commits — and both may have changed since. A number without its revision is confidently
- * wrong about today's file. A language the count does not read gets the count's own sentence, not a
- * zero.</p>
- */
-function complexity(pair: ReviewPair): string {
-  const before = cyclomatic(pair.skeletonBefore, pair.language);
-  const after = cyclomatic(pair.skeletonAfter, pair.language);
-  if (!before.known) {
-    return none(before.why);
-  }
-  if (!after.known) {
-    return none(after.why);
-  }
-
-  return `${before.value} at ${commit(pair.headSha)} → ${after.value} at ${commit(pair.fixSha)}`;
-}
-
-/** What a row says about itself, above its code. */
-function about(pair: ReviewPair): string {
-  return `<dl class="about">
-      <dt>Where</dt><dd>${where(pair)}</dd>
-      <dt>Why</dt><dd>${prose(pair.why)}</dd>
-      <dt>Fix</dt><dd>${prose(pair.fix)}</dd>
-      <dt title="cyclomatic complexity of the method as it was at that commit, counted from the skeleton — not of the file today">Complexity</dt><dd>${complexity(pair)}</dd>
-    </dl>`;
-}
-
-/**
  * One pair: the line you always see, and the code you asked for.
  *
  * <p><b>Two `<tr>`s, not one row with hidden cells.</b> A collapsed pair must take the height of a
@@ -298,7 +257,9 @@ function halves(pair: ReviewPair, id: string, showReal: boolean, read: RealRead 
     <div class="real" data-real="${id}"${showReal && fetched !== undefined ? '' : ' hidden'}>${fetched?.html ?? ''}</div>`;
 }
 
-function row(pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead | undefined): string {
+function row(
+  pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead | undefined, revision: RevisionState,
+): string {
   const id = key(pair.findingId);
   const said = `${escapeHtml(pair.severity)} · ${escapeHtml(pair.category)} — ${escapeHtml(pair.title)}`;
 
@@ -325,7 +286,7 @@ function row(pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead 
 <tr class="detail" id="detail-${id}" data-detail="${id}"${open ? '' : ' hidden'}>
   <td class="pick"></td>
   <td>
-    ${about(pair)}
+    ${about(pair, revision)}
     ${halves(pair, id, showReal, read)}
   </td>
 </tr>`;
@@ -428,8 +389,11 @@ export function reviewPageHtml(view: ReviewView): string {
   const expanded = view.expanded ?? new Set<number>();
   const showReal = view.realText === true;
   const real = view.real ?? new Map<number, RealRead>();
+  const revisions = view.revisions ?? new Map<number, RevisionState>();
   const rows = pairs
-    .map((pair) => row(pair, expanded.has(pair.findingId), showReal, real.get(pair.findingId)))
+    .map((pair) => row(
+      pair, expanded.has(pair.findingId), showReal, real.get(pair.findingId),
+      revisions.get(pair.findingId) ?? UNPROBED))
     .join('\n');
   const waiting = undecided(pairs);
 
@@ -517,6 +481,11 @@ ${tabCss('4px 0 10px')}
   .about code { font-family: var(--vscode-editor-font-family); font-size: .95em; }
   .none { opacity: .55; font-style: italic; }
   .repo { opacity: .7; }
+  /* The two ways to the code sit on one line: two quiet buttons, a dot between, and beside each the
+     sentence that says why it is not offered or what the last press learned. */
+  .open button.quiet { padding: 0; }
+  .open .why { opacity: .7; font-style: italic; margin-left: 6px; }
+  .open .sep { opacity: .5; margin: 0 8px; }
   .empty { opacity: .7; padding: 24px 0; }
   /* The two halves of a row's code. Explicit, as tr[hidden] is, so a later display rule cannot
      outrank the attribute the script flips. */
@@ -653,8 +622,19 @@ ${body(pairs, rows, trouble)}
     }
   }
 
+  // What the host learned about reaching a row's code, painted into the row's own container - the
+  // page never decides it. One message may carry every row of a repository whose checkout is gone,
+  // which is what makes one process per repository true for the case that matters.
+  function tellRows(items) {
+    for (var i = 0; i < (items || []).length; i++) {
+      var box = document.querySelector('[data-revision="' + String(items[i].id) + '"]');
+      if (box) { box.innerHTML = items[i].html; }
+    }
+  }
+
   window.addEventListener('message', function (event) {
     var m = event.data;
+    if (m && m.type === 'revisions') { tellRows(m.items); return; }
     if (!m || m.type !== 'real') { return; }
     var id = String(m.id);
     // Applied only to the request that is still WANTED. The toggle flipped, the row collapsed or
@@ -723,6 +703,18 @@ ${body(pairs, rows, trouble)}
       var opening = twisting.getAttribute('aria-expanded') !== 'true';
       showRow(rowId, opening);
       vscode.postMessage({ type: 'expand', id: Number(rowId), open: opening });
+      return;
+    }
+    // The two ways out of a row to its code. The page paints neither answer: the host opens an
+    // editor and posts what the row should now say. Each RETURNS, for the reason the tick-box does.
+    var openingAt = target.closest ? target.closest('[data-open-at]') : null;
+    if (openingAt) {
+      vscode.postMessage({ type: 'openAt', id: Number(openingAt.getAttribute('data-open-at')) });
+      return;
+    }
+    var openingNow = target.closest ? target.closest('[data-open-current]') : null;
+    if (openingNow) {
+      vscode.postMessage({ type: 'openCurrent', id: Number(openingNow.getAttribute('data-open-current')) });
       return;
     }
     // A filter press, and this page does NOT paint it: the host holds the choice, because the
