@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
-import { readPairs, readRealMethod } from '../roundsDbRead';
+import { readFileAt, readPairs, readRealMethod } from '../roundsDbRead';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -454,6 +454,144 @@ test('a seeded pair reads its real method back out of a real repository',
       assert.match(method.after.source, /return checked\(n \+ 1\);/u, 'the after side is the fix commit');
       assert.ok(method.after.startLine > method.before.startLine,
         'the method moved down the file, which is exactly why the after side is found by name');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+/** The real spawn, against one data directory — what every live check of one mode does. */
+function runIn(data: string): (args: readonly string[]) => Promise<{ code: number; output: string }> {
+  return async (args) => {
+    const ran = spawnSync(server(), args, {
+      encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+    });
+
+    return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+  };
+}
+
+/**
+ * The REAL `--file-at` output, parsed by the REAL `readFileAt` — story 3.1's contract, both halves.
+ *
+ * <p>The same argument as the real-method checks above: `FileAtRevision` is written twice, and every
+ * other test of it feeds one side a fixture the other never produced. An empty corpus proves the
+ * envelope for "no such pair" is a domain answer the reader accepts; the populated case below reads
+ * a real repository through the real binary and the real reader and compares the TEXT to the file.</p>
+ */
+test('the real --file-at answer for a pair nobody has is a reason, not a failure',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-'));
+    try {
+      const read = await readFileAt(server(), 1, runIn(data));
+
+      assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
+      assert.equal(read.file.findingId, 1);
+      assert.equal(read.file.reason, 'pair_not_found', 'an empty corpus has no pair 1, and the binary must say so as data');
+      assert.equal(read.file.text, '');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+test('a missing --id on --file-at is 65 from the real binary, and is not read as an old server',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-65-'));
+    try {
+      const ran = spawnSync(server(), ['--file-at'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(ran.status, 65, `a missing --id must be 65, never 64: ${ran.stderr}`);
+
+      const read = await readFileAt(server(), Number.NaN, async () => ({ code: ran.status ?? 1, output: ran.stderr ?? '' }));
+      assert.equal(read.ok, false);
+      assert.equal(read.ok ? true : read.tooOld, false, 'a request fault must not send somebody to update a server that is fine');
+      assert.match(read.ok ? '' : read.why, /--file-at needs --id/u);
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+/**
+ * A seeded pair reads its FILE back out of a real repository, at the commit the reviewers read —
+ * and every failure reason the page renders comes off the real binary through the real reader.
+ *
+ * <p>Three pairs, one repository: one whose commit and path are real, one whose commit the
+ * repository never had, one whose path was not at that commit. The text is compared to the file
+ * the fixture wrote, so a mode that read the working tree instead of the object — the working tree
+ * has been changed since — would be red here.</p>
+ */
+test('a seeded pair reads its file at its revision out of a real repository, and the reasons come off the real binary',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-data-'));
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-repo-'));
+    const git = (...args: readonly string[]): string => {
+      const ran = spawnSync('git', [...args], { cwd: repo, encoding: 'utf8', timeout: 60_000 });
+      assert.equal(ran.status, 0, `git ${args.join(' ')}: ${ran.stderr}`);
+
+      return (ran.stdout ?? '').trim();
+    };
+
+    try {
+      git('init', '-q');
+      git('config', 'user.email', 'test@example.invalid');
+      git('config', 'user.name', 'The Test');
+      const asReviewed = 'namespace Shop;\n\npublic class Totals\n{\n    public int GetOrAdd(int n) => n + 1;\n}\n';
+      fs.writeFileSync(path.join(repo, 'Totals.cs'), asReviewed, 'utf8');
+      git('add', 'Totals.cs');
+      git('commit', '-q', '-m', 'the file as the reviewers read it');
+      const headSha = git('rev-parse', 'HEAD');
+      // The working tree moves on, so a read of the checkout instead of the object would differ.
+      fs.writeFileSync(path.join(repo, 'Totals.cs'), '// changed since\n', 'utf8');
+
+      const made = spawnSync(server(), ['--bugs-json'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
+
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(path.join(data, 'coai.db'));
+      try {
+        const put = (sql: string, ...values: readonly (string | number)[]): void => {
+          db.prepare(sql).run(...values);
+        };
+        put(`INSERT INTO sessions (id, repo_path, branch, opened_utc) VALUES ('s1', ?, 'main', '2026-09-18T00:00:00Z')`,
+          repo.split('\\').join('/'));
+        put(`INSERT INTO rounds (id, session_id, stage, number, status, verdict, started_utc, completed_utc, head_sha)
+             VALUES (1, 's1', 'CodeReview', 1, 'done', 'proceed', '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', ?)`, headSha);
+        put(`INSERT INTO rounds (id, session_id, stage, number, status, verdict, started_utc, completed_utc, head_sha)
+             VALUES (2, 's1', 'CodeReview', 2, 'done', 'proceed', '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', ?)`,
+          '0123456789abcdef0123456789abcdef01234567');
+        put(`INSERT INTO findings (id, round_id, ordinal, severity, category, file, line, title, why, fix, fix_sha)
+             VALUES (7, 1, 0, 'Major', 'Reliability', 'Totals.cs', 5, 'a race', 'two writers', 'take the lock', ?)`, headSha);
+        put(`INSERT INTO findings (id, round_id, ordinal, severity, category, file, line, title, why, fix, fix_sha)
+             VALUES (8, 2, 0, 'Major', 'Reliability', 'Totals.cs', 5, 'a race', 'two writers', 'take the lock', ?)`, headSha);
+        put(`INSERT INTO findings (id, round_id, ordinal, severity, category, file, line, title, why, fix, fix_sha)
+             VALUES (9, 1, 1, 'Major', 'Reliability', 'Elsewhere.cs', 5, 'a race', 'two writers', 'take the lock', ?)`, headSha);
+        for (const id of [7, 8, 9]) {
+          put(`INSERT INTO collect_pairs (finding_id, symbol_name, language, skeleton_before, skeleton_after, written_utc, keep)
+               VALUES (?, 'GetOrAdd', 'CSharp', 'int method_1(int var_1) { }', 'int method_1(int var_1) { checked }', '2026-09-18T00:02:00Z', -1)`, id);
+        }
+      } finally {
+        db.close();
+      }
+
+      const real = await readFileAt(server(), 7, runIn(data));
+      assert.equal(real.ok, true, real.ok ? '' : real.why);
+      if (!real.ok) {
+        return;
+      }
+      assert.equal(real.file.reason, '', 'the commit and the path are real, so the file reads');
+      assert.equal(real.file.sha, headSha, 'the document names the commit it is of');
+      assert.equal(real.file.path, 'Totals.cs');
+      assert.equal(real.file.text.split('\r\n').join('\n'), asReviewed, 'the file AS IT WAS, not the working tree that has moved on');
+
+      const gone = await readFileAt(server(), 8, runIn(data));
+      assert.equal(gone.ok ? gone.file.reason : gone.why, 'commit_unreachable', 'a commit the repository never had');
+
+      const moved = await readFileAt(server(), 9, runIn(data));
+      assert.equal(moved.ok ? moved.file.reason : moved.why, 'file_not_in_commit', 'a path that was not there at that commit');
+      assert.equal(moved.ok ? moved.file.path : '', 'Elsewhere.cs', 'and the page can say which path');
     } finally {
       fs.rmSync(data, { recursive: true, force: true });
       fs.rmSync(repo, { recursive: true, force: true });

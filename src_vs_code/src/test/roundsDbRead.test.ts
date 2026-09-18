@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { TOO_OLD_FOR_THE_REAL_METHOD } from '../realMethodView';
-import { DEFAULT_LIMIT, readFindings, readLog, readPairs, readRealMethod, Run } from '../roundsDbRead';
+import { DEFAULT_LIMIT, readFileAt, readFindings, readLog, readPairs, readRealMethod, Run } from '../roundsDbRead';
+import { TOO_OLD_FOR_THE_REVISION } from '../openAtRevision';
 
 /**
  * Reading the rounds database — and the four version pairings of doing so.
@@ -344,4 +345,68 @@ test('the finding it WAS asked about still reads', () => {
     .then((read) => {
       assert.equal(read.ok, true);
     });
+});
+
+// ---------- the file at its revision (story 3.1), and the same three things "no" can mean ----------
+
+const FILE_AT = {
+  findingId: 7,
+  sha: 'aaaa111bbbb2222cccc3333dddd4444eeee5555f',
+  path: 'src/Totals.cs',
+  reason: '',
+  text: 'public class Totals { }\n',
+};
+
+test('the file at its revision is read field by field, by the mode and the id the row names', async () => {
+  const { run, seen } = calls({ code: 0, output: JSON.stringify(FILE_AT) });
+
+  const read = await readFileAt('coai-mcp.exe', 7, run);
+
+  assert.deepEqual(seen, [['--file-at', '--id', '7']], 'one mode, one id — the row supplies the rest server-side');
+  assert.equal(read.ok, true);
+  assert.deepEqual(read.ok ? read.file : undefined, FILE_AT);
+});
+
+test('a server too old to open a file at its revision is told apart from one that could not read it', async () => {
+  const old = await readFileAt('coai-mcp.exe', 7, calls({ code: 64, output: 'unknown argument' }).run);
+  assert.equal(old.ok, false);
+  assert.equal(old.ok ? false : old.tooOld, true, '64 is the one code that means "update the server"');
+  assert.equal(old.ok ? '' : old.why, TOO_OLD_FOR_THE_REVISION);
+
+  const failed = await readFileAt('coai-mcp.exe', 7, calls({ code: 74, output: 'the rounds database could not be read' }).run);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.ok ? true : failed.tooOld, false, 'a database that will not read is not an old server');
+  assert.match(failed.ok ? '' : failed.why, /could not be read/u);
+
+  const faulted = await readFileAt('coai-mcp.exe', 7, calls({ code: 65, output: '--file-at needs --id' }).run);
+  assert.equal(faulted.ok ? true : faulted.tooOld, false, 'a request fault must not send somebody to update a server that is fine');
+});
+
+test('a domain reason is a successful read with the reason on the file', async () => {
+  const read = await readFileAt('coai-mcp.exe', 7, calls({
+    code: 0, output: JSON.stringify({ ...FILE_AT, reason: 'commit_unreachable', text: '' }),
+  }).run);
+
+  assert.equal(read.ok, true, 'the request was fine; the answer is what the row says');
+  assert.equal(read.ok ? read.file.reason : '', 'commit_unreachable');
+  assert.equal(read.ok ? read.file.text : 'x', '');
+});
+
+test('a document about another finding, or without the names it will be shown by, is refused', async () => {
+  const other = await readFileAt('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify({ ...FILE_AT, findingId: 8 }) }).run);
+  assert.equal(other.ok, false, 'a file about finding 8 is not an answer about finding 7');
+
+  const nameless = await readFileAt('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify({ findingId: 7, text: 'x' }) }).run);
+  assert.equal(nameless.ok, false, 'without a sha and a path the document cannot be named');
+
+  const junk = await readFileAt('coai-mcp.exe', 7, calls({ code: 0, output: '{ not json' }).run);
+  assert.equal(junk.ok, false);
+  assert.match(junk.ok ? '' : junk.why, /not JSON/u);
+});
+
+test('an empty file is a file, not a failure', async () => {
+  const read = await readFileAt('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify({ ...FILE_AT, text: '' }) }).run);
+
+  assert.equal(read.ok, true);
+  assert.equal(read.ok ? read.file.text : 'x', '');
 });

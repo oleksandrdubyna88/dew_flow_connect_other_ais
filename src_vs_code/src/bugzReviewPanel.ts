@@ -10,8 +10,21 @@ import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost'
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import {
+  affectedBy,
+  currentFileIn,
+  emptyMemory,
+  FileAtRead,
+  heldRevision,
+  remember,
+  rememberCurrent,
+  RevisionDocument,
+  RevisionMemory,
+  stateOf,
+} from './openAtRevision';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
 import { RealRead, realView } from './realMethodView';
+import { revisionActions, RevisionState } from './revisionActions';
 import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 
 /**
@@ -41,6 +54,23 @@ export interface ReviewHooks {
    * be 400 git reads on a path that already costs 468 ms.</p>
    */
   readonly readReal: (findingId: number) => Promise<RealRead>;
+
+  /**
+   * One pair's file as it was at the commit the reviewers read — `--file-at`, one process per call.
+   *
+   * <p>Called on a PRESS, never at paint, and what it answers is remembered for the panel's lifetime
+   * per repository: a checkout that is gone answers once and every row of it stops offering.</p>
+   */
+  readonly readFileAt: (findingId: number) => Promise<FileAtRead>;
+
+  /** Shows the text in a read-only document of this product's own scheme, named for its revision. */
+  readonly showRevision: (document: RevisionDocument) => Promise<void>;
+
+  /** Shows a file from the live filesystem — only ever a path `currentFileIn` has already judged. */
+  readonly showCurrent: (file: string, line: number) => Promise<void>;
+
+  /** The open workspace folders, as OS paths — what the current-file guard is judged against. */
+  readonly folders: () => readonly string[];
 
   /**
    * Something was decided.
@@ -75,7 +105,9 @@ type ReviewMessage =
   /** The un-anonymised view was switched; held so the next paint draws the same view. */
   | { readonly type: 'realText'; readonly on: boolean }
   /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
-  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string };
+  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string }
+  /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
+  | { readonly type: 'openAt' | 'openCurrent'; readonly id: number };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -129,6 +161,12 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       // could only refuse them. (Code round, codex.)
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['generation'] === 'string'
         ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
+        : undefined;
+    case 'openAt':
+    case 'openCurrent':
+      // The same rule as `fetchReal`: an id that is not a whole, non-negative number names no row.
+      return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0
+        ? { type: m['type'], id: Number(m['id']) }
         : undefined;
     case 'zoom':
     case 'tone':
@@ -247,6 +285,20 @@ export class BugzReviewPanel {
   /** The fetches in flight, so four rows asking twice in a row cost four processes and not eight. */
   private fetching: ReadonlyMap<string, Promise<RealRead>> = new Map<string, Promise<RealRead>>();
 
+  /**
+   * What this panel has learned about reaching each row's code — per repository, for its lifetime.
+   *
+   * <p>The middle path the plan round settled on: no probe per row at paint, no offer derived from
+   * nothing. The first press in a repository is the probe; a checkout that is gone is remembered
+   * for every row of it (41 % of recorded checkouts no longer exist), a commit that is gone for its
+   * row, and text for its row so a second press costs no process. Bounded by the pairs on the page
+   * and emptied with the window: a checkout can come back, and a page reopened later probes again.</p>
+   */
+  private revision: RevisionMemory = emptyMemory();
+
+  /** The file reads in flight, so two quick presses on one row cost one process. */
+  private opening: ReadonlyMap<string, Promise<FileAtRead>> = new Map<string, Promise<FileAtRead>>();
+
   /** Which paint this is — part of every generation the page asks with, so a redraw stales what came before. */
   private draws = 0;
 
@@ -286,6 +338,9 @@ export class BugzReviewPanel {
         this.realText = false;
         this.real = new Map<number, HeldReal>();
         this.fetching = new Map<string, Promise<RealRead>>();
+        // And nothing remembered about reaching the code: a checkout can have come back.
+        this.revision = emptyMemory();
+        this.opening = new Map<string, Promise<FileAtRead>>();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -331,6 +386,14 @@ export class BugzReviewPanel {
         return;
       case 'fetchReal':
         void this.answerReal(m.id, m.generation);
+
+        return;
+      case 'openAt':
+        void this.openAt(m.id);
+
+        return;
+      case 'openCurrent':
+        void this.openCurrent(m.id);
 
         return;
       default:
@@ -515,6 +578,96 @@ export class BugzReviewPanel {
     return read;
   }
 
+  /**
+   * Opens one row's file at the commit the reviewers read — from what is held when it is held,
+   * from the server otherwise — and tells every row the answer changed.
+   *
+   * <p>Nothing here touches `webview.html`. The editor is opened by the hook; what the row now SAYS
+   * is posted into its own container, and a repository-level answer is posted to every row of that
+   * repository — which is what makes "one process per repository" true for a checkout that is gone.
+   * A press on a row that is no longer offered (the memory says why) is dropped rather than
+   * re-asked: the sentence on the row is the answer.</p>
+   */
+  private async openAt(id: number): Promise<void> {
+    const pair = this.held.find((one) => one.findingId === id);
+    if (pair === undefined || !stateOf(this.revision, pair).offered) {
+      return;
+    }
+
+    const read = heldRevision(this.revision, pair) ?? await this.fileAtOf(pair);
+    this.revision = remember(this.revision, pair, read);
+    if (read.ok && read.file.reason.length === 0) {
+      await this.hooks.showRevision({ sha: read.file.sha, file: read.file.path, text: read.file.text, line: pair.line });
+    }
+    this.tellRevisions(affectedBy(this.revision, pair, this.held));
+  }
+
+  /**
+   * The file for one pair, from the server — one process per row in flight, however many presses.
+   *
+   * <p>A rejection is turned into a failed read rather than left to surface as an unhandled one —
+   * the same shape `realOf` gives a failed method fetch. Keyed by the row AND its coordinates, so a
+   * recollection under the page cannot be answered by a read about the old commit.</p>
+   */
+  private fileAtOf(pair: ReviewPair): Promise<FileAtRead> {
+    const key = `${pair.findingId}@${pair.headSha}:${pair.file}`;
+    const running = this.opening.get(key);
+    if (running !== undefined) {
+      return running;
+    }
+
+    const started = this.hooks.readFileAt(pair.findingId)
+      .catch((error_: unknown): FileAtRead => ({ ok: false, tooOld: false, why: asText(error_) }))
+      .finally(() => {
+        this.opening = new Map([...this.opening].filter(([held]) => held !== key));
+      });
+    this.opening = new Map([...this.opening, [key, started]]);
+
+    return started;
+  }
+
+  /**
+   * Opens one row's file as it is NOW — the live filesystem, so it is guarded twice before anything
+   * is opened: the recorded checkout inside an open workspace folder, and the file inside the
+   * checkout, both as written and as they really lead. No server, no git.
+   *
+   * <p>A refusal is SAID, on the row, rather than swallowed: a button that quietly does nothing is a
+   * button a person presses twice. And it is remembered, so a redraw says it again.</p>
+   */
+  private async openCurrent(id: number): Promise<void> {
+    const pair = this.held.find((one) => one.findingId === id);
+    if (pair === undefined) {
+      return;
+    }
+
+    const target = await currentFileIn(this.hooks.folders(), pair.repoPath, pair.file);
+    let why = target.ok ? '' : target.why;
+    if (target.ok) {
+      try {
+        await this.hooks.showCurrent(target.path, pair.line);
+      } catch (error_: unknown) {
+        why = `the editor could not open ${target.path}: ${asText(error_)}`;
+      }
+    }
+    this.revision = rememberCurrent(this.revision, pair, why);
+    this.tellRevisions([pair.findingId]);
+  }
+
+  /** Posts what these rows now say about reaching their code — into their own containers, never a redraw. */
+  private tellRevisions(ids: readonly number[]): void {
+    const items = ids.flatMap((id) => {
+      const pair = this.held.find((one) => one.findingId === id);
+
+      return pair === undefined ? [] : [{ id, html: revisionActions(pair, stateOf(this.revision, pair)) }];
+    });
+    void this.panel?.webview.postMessage({ type: 'revisions', items });
+  }
+
+  /** What each drawn row says about reaching its code, from what this panel remembers. */
+  private revisionsFor(pairs: readonly ReviewPair[]): ReadonlyMap<number, RevisionState> {
+    return new Map(pairs.map((pair) => [pair.findingId, stateOf(this.revision, pair)] as const));
+  }
+
   /** The cached methods for the pairs being drawn — and only those whose two commits still match. */
   private realFor(pairs: readonly ReviewPair[]): ReadonlyMap<number, RealRead> {
     return new Map(pairs.flatMap((pair) => {
@@ -605,6 +758,7 @@ export class BugzReviewPanel {
       expanded: this.keptOpen(this.held),
       realText: this.realText,
       real: this.realFor(found.shown),
+      revisions: this.revisionsFor(found.shown),
       draw: this.draws,
       projects: found.projects,
       languages: found.languages,
