@@ -152,7 +152,9 @@ test('a path that is gone is a project of its own, and its tab says so', () => {
   const vanished = found.projects.find((t) => t.label.startsWith('vanished'));
   assert.ok(vanished !== undefined, 'a project whose checkout is gone still has its pairs to review');
   assert.match(vanished.title ?? '', /not on disk/u);
-  assert.match(found.projects[1].title ?? '', /^d:\/rsd\//u, 'a reachable project shows its path');
+  // The path AS RECORDED, not folded: the tooltip is the one field somebody copies into a
+  // terminal, so only the grouping key is lower-cased.
+  assert.equal(found.projects.find((t) => t.label.startsWith('repo_a'))?.title, 'D:/rsd/repo_a');
 });
 
 test('sessions that recorded no path are ONE unknown, not one per pair', () => {

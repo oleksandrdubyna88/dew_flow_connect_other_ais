@@ -72,6 +72,8 @@ test('a linked worktree belongs to the repository its .git names', () => {
 
   assert.equal(one.key, 'd:/rsd/dew_flow_connect_other_ais');
   assert.equal(one.label, 'dew_flow_connect_other_ais', 'the tab is named after the repository, not the scratch directory');
+  assert.equal(one.full, 'D:/rsd/dew_flow_connect_other_ais',
+    'and the tooltip keeps the case the gitdir recorded, because it is a path somebody copies');
   assert.ok(one.reachable);
 });
 
@@ -294,8 +296,10 @@ test('the filesystem is asked about the path AS GIVEN, never case-folded', () =>
   const one = identityOf('D:\\RSD\\Dew_Flow_X', read);
 
   assert.deepEqual(asked, ['D:/RSD/Dew_Flow_X'], 'separators normalised and a trailing slash dropped, case KEPT');
-  assert.equal(one.key, 'd:/rsd/dew_flow_x', 'and the key is still folded, which is what groups the spellings');
-  assert.equal(one.label, 'dew_flow_x', 'the label comes off the key, so it is folded too');
+  assert.equal(one.key, 'd:/rsd/dew_flow_x', 'the key is folded, which is what groups the spellings');
+  // And nothing a person reads is: the tooltip is the one field they copy into a terminal.
+  assert.equal(one.full, 'D:/RSD/Dew_Flow_X', 'the tooltip shows the path as it was recorded');
+  assert.equal(one.label, 'Dew_Flow_X', 'and the tab carries the directory name in its own case');
 });
 
 test('a relative gitdir is resolved against the unfolded path as well', () => {
