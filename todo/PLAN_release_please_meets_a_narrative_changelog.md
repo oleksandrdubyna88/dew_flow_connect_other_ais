@@ -3,7 +3,7 @@
 > Status: **partially implemented, 2026-09-18 — the decision is taken and what remains is not
 > scriptable.** The operator chose a GitHub App over a PAT; `release-please.yml` mints an
 > installation token and refuses in words until the secrets exist. Creating and installing a GitHub
-> App have no REST endpoint, so the next move is two browser steps, written out below. Scope: Epic 4 of
+> App cannot be done without a browser, so the next move is two browser steps, written out below. Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -139,13 +139,34 @@ The operator chose the app. `dew_flow_sidecar_rust`'s `release-please.yml` is wi
 `actions/create-github-app-token@bcd2ba4 # v3.2.0` mints a token per run, an hour long and scoped to
 the installation, and `release-please-action` is handed that instead of `GITHUB_TOKEN`.
 
-**What cannot be done from here, and it is a boundary rather than a task left undone.** GitHub has
-**no REST endpoint that creates a GitHub App.** The only two routes are the form at
-`/settings/apps/new` and the app-manifest flow, which still posts a form and comes back through a
-browser redirect carrying a one-hour `code`. **Installing** an app is browser-only as well. So the
-two secrets below cannot be produced by any amount of scripting, and a workflow that pretended
-otherwise would be the same class of thing this plan exists to stop: a mechanism that looks like it
-works and quietly does not.
+**What cannot be done from here, and it is a boundary rather than a task left undone.** Creating a
+GitHub App **cannot be done without a browser**, and **installing** one cannot either. So the two
+secrets below cannot be produced by scripting alone, and a workflow that pretended otherwise would
+be the same class of thing this plan exists to stop: a mechanism that looks like it works and
+quietly does not.
+
+> **An earlier version of this paragraph said GitHub has "no REST endpoint that creates a GitHub
+> App", and that is wrong** — corrected 2026-09-18 after review. `POST /app-manifests/{code}/conversions`
+> creates one, and it is what the manifest flow calls. What it needs is the `code`, which GitHub
+> hands out only by redirecting a browser that has just submitted the manifest form and had a human
+> confirm it; the code expires in an hour. **The conclusion is unchanged — the flow is not
+> browser-free — but the reason is the `code`, not the absence of an endpoint.** Measured: a bogus
+> code on that route answers 404 with `documentation_url` = `…/rest/apps/apps#create-a-github-app-from-a-manifest`,
+> while a route that genuinely does not exist answers with the generic `…/rest`. The endpoint
+> recognised itself and rejected the code.
+
+**Which makes a faster route available, and it is worth knowing before picking the form.** The
+manifest can be posted from a one-file local page — `<form method="post"
+action="https://github.com/settings/apps/new">` with the manifest below in a hidden input — so the
+human's whole part is *click, confirm*. Set `redirect_url` to something that will not load, e.g.
+`http://localhost:1/callback`: the browser shows a connection error and the address bar carries
+`?code=…`, which is the one thing that has to come back. That code then goes to the conversion
+endpoint, which returns the App ID and the private key in one answer.
+
+**Weigh that against the form, honestly.** The conversion response contains the PEM, so on this
+route the private key passes through whatever runs the call. Typing the two values from the
+`/settings/apps/new` page into `gh secret set` keeps the key between the browser and the vault. The
+faster route is not the safer one.
 
 What the workflow does instead is **refuse in words**. Its first step reads whether the two secrets
 exist — never the private key itself, only `!= ''` — and when they do not it exits 1 saying so and
