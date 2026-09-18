@@ -125,9 +125,20 @@ matters: a stale `out/` runs both names after a rename and inflates the count.
 
 ## What this does NOT prove
 
-No test here drives the real extension. `research/module_tests.md` records the absence of an
-extension-host harness as its largest single gap — thirty-five modules import `vscode` and no test
-in this repository can load one — so a webview page is tested by RUNNING its script against a shim
-built from its own markup, and that shim throws on a selector it does not model. A reviewer asked
-for scenario-harness flows through the installed extension; there is no harness to add them to, and
-building one is a plan of its own.
+No test here drives the real extension. A webview page is tested by RUNNING its script against a
+shim built from its own markup, and that shim throws on a selector it does not model — which is what
+these four tests do, and it is not the same as pressing a tab in an editor.
+
+**And the reason given for that at the time has since expired, which is worth recording rather than
+quietly leaving in place.** A reviewer asked for scenario flows through the installed extension and
+was told there was no harness to add them to: `research/module_tests.md` had called the absence of an
+extension-host harness its largest single gap. That was true when this plan was written and stopped
+being true hours later — `a real editor runs the extension, for the first time` landed on `main` the
+same day, and CI now runs `extension · a real editor` over the shipped extension in
+`@vscode/test-electron`. Its first scenario asserts that every command the manifest declares is
+really registered.
+
+So the honest statement now is about COST rather than possibility: driving the rounds log's tabs
+through a real editor is buildable, it is not built here, and the harness's own rule is that a
+scenario earns its seconds only where a value cannot reach. Whether a tab press belongs there is a
+question for whoever adds the second scenario.
