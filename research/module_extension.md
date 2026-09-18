@@ -1101,6 +1101,48 @@ plan for this feature specified an end-to-end test that could not have been run,
 was found. The hook is now two delegations; `blockToCopy` and `answerToCopy` are pure and are what
 `answerCopy.test.ts` drives from the rendered markup all the way to a fake clipboard.
 
+**The guard in front of them moved there too, 2026-09-18 — it was the last part of this pair no test
+could reach.** *Is the message at this index still the answer the control was pressed on?* stood
+inline in both hooks, guard and refusal sentence duplicated, and the argument against that shape is
+the one the file's own warning funnel already makes: a second copy of a sentence a person reads is
+the same defect as a second copy of a sentence a person hears. It is `stillAnswering(said, copy)` in
+`answerCopy.ts` now — the caller passes what to do with the text, because the two controls differ
+only there. **What is deliberately NOT unified is WHEN each looks the message up**: the answer
+control resolves at press time, since it carries no signature and a press queued behind a slow write
+would otherwise copy whatever had replaced that index; the block control resolves inside the queued
+job, because its signature is checked against what it finds. Four cases in `answerCopy.test.ts`,
+three of them red when the guard is removed.
+
+**And each control has its OWN entry point — `theAnswerControlCopies` and `theBlockControlCopies` —
+because a moment carried by the shape of an expression is a moment nothing can assert.** The plan
+round put the consequence better than the comment it replaced: a block handler that captured
+`messages[index]` before its queued job ran would leave every `stillAnswering` case green while the
+real control copied the wrong text. The difference had been exactly that — one hook computed its
+decision and handed the copier `() => decision`, the other handed the copier a thunk that computes —
+and it is now two functions a test can build, move the message list under, and then invoke. Five more
+cases; watched red by making the block control capture eagerly, which fails naming *the queued press
+resolved against a message it had already captured*.
+
+**They are per-CONTROL rather than two interchangeable moments, and that is the code round's
+correction.** The first version was `decidedNow(said, copy)` and `decidedWhenItRuns(look, copy)` —
+same shape, same return type, either one accepted at either site. Swapping them would have compiled,
+every test would have stayed green, and the whole-answer control would have begun resolving after the
+queue started while the block control validated against text nobody was looking at. So the two now
+take **different arguments**: a message by value against a thunk, and the block control additionally
+owns the block and signature only it has. Swapping them is a compile error at both sites, measured —
+`TS2554: Expected 3 arguments, but got 1` and `Expected 1 arguments, but got 3`.
+
+That also settles which `copy` each control gets: `answerToCopy` and `blockToCopy` are now chosen
+inside the units rather than passed in, so neither hook can hand the block control the whole answer.
+**What a type still cannot prove is that the hook bodies call them at all** — a press driven end to
+end through a real editor is the `test:host` harness's ground, and that remains open work rather than
+a claim.
+
+SonarCloud had flagged both sites as **S6582** — `said === undefined || said.role !== 'model'` is
+exactly `said?.role !== 'model'`, which is what the extracted unit carries. The equivalence was
+measured rather than assumed: removing the narrowing makes `tsc` report `TS18048: 'said' is possibly
+'undefined'` at the `said.text` beneath it, and restoring it is what makes the compile green.
+
 **The signature covers the whole stored markdown of the message** — every byte of
 `messages[index].text`, never the selected block and never a count. A signature over the block alone
 would accept a control after a paragraph elsewhere in the answer changed, and the promise is that a

@@ -80,6 +80,114 @@ export function answerToCopy(markdown: string): CopyDecision {
   };
 }
 
+/**
+ * A message as this guard needs to see it: what turn it was, and what was said.
+ *
+ * <p><b>The roles are spelled out rather than left as `string`, and that is the point.</b> A
+ * structural `role: string` would keep compiling the day `ChatMessage` gains a third kind of turn,
+ * and this guard would quietly refuse it as *"not on this page any more"* — a message the person can
+ * see, refusing to be copied, for a reason that is not true. Naming the two makes that day a compile
+ * error at this line instead, which is where the decision belongs. (codex, the code round.)</p>
+ */
+export interface Answered {
+  readonly role: 'you' | 'model';
+  readonly text: string;
+}
+
+/**
+ * The answer a press named, if it is still that answer — and the refusal that says it is not.
+ *
+ * <p><b>Why this is a named unit and not the two lines it replaces.</b> It stood twice in
+ * `chatHooks.ts`, once per copy control, guard and refusal sentence both. The file's own funnel
+ * comment makes the argument against that shape better than this one can: <i>"a second inline
+ * `showWarningMessage` beside the first is how one of them ends up without the other's wording"</i>.
+ * Two copies of a sentence a person reads is the same defect as two copies of a sentence a person
+ * hears.</p>
+ *
+ * <p><b>And it is what makes the guard testable at all.</b> `chatHooks.ts` imports `vscode` on line
+ * 3, so nothing in it runs under `node --test`; the guard a code round added — refuse a press whose
+ * answer moved out from under it while the write queue was busy — therefore had no test, in a file
+ * with none. `testing.md` says to prefer making such logic testable over recording it as skipped,
+ * and one exported function in a module that already had a test file is the whole cost of that.</p>
+ *
+ * <p><b>The optional chain is the expression, not a tidy-up of it.</b> SonarCloud reported both sites
+ * as S6582 and `said === undefined || said.role !== 'model'` is exactly `said?.role !== 'model'` —
+ * measured, not assumed: removing the narrowing makes `tsc` say `TS18048: 'said' is possibly
+ * 'undefined'` at the `said.text` below, and restoring it is what makes the compile green. The chain
+ * also answers a `null` the longer form would have thrown on, which no caller can produce today.</p>
+ *
+ * <p>The caller passes what to do with the text rather than the text itself, because the two controls
+ * differ only there — the whole answer for one, one block of it for the other — and WHEN each looks
+ * the message up is deliberately different: the answer control resolves at press time because it
+ * carries no signature, the block control inside the queued job because it does.</p>
+ */
+export function stillAnswering(
+  said: Answered | undefined,
+  copy: (markdown: string) => CopyDecision,
+): CopyDecision {
+  return said?.role !== 'model'
+    ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+    : copy(said.text);
+}
+
+/**
+ * The two controls resolve the message at DIFFERENT moments, and these are those two moments.
+ *
+ * <p><b>Why they are named functions and not two shapes of call-site code.</b> The difference was
+ * carried by structure alone — one hook computed its decision before handing the copier a thunk, the
+ * other handed the copier a thunk that computes — and a guarantee carried by structure is a guarantee
+ * nothing can assert. The code round put it plainly: a block handler that captured `messages[index]`
+ * before its queued job ran would leave every test of `stillAnswering` green while the real control
+ * copied the wrong text. Lifting the two moments into two named units is what lets a test hold the
+ * message list and CHANGE it in between.</p>
+ *
+ * <p>It is the same asymmetry both call sites already documented, now in one place: a control that
+ * carries a signature can afford to look late, because what it finds is checked against what it was
+ * drawn from. A control that carries none cannot.</p>
+ */
+
+/**
+ * <p><b>One entry point per CONTROL, rather than two interchangeable moments.</b> The first version
+ * of this pair was `decidedNow(said, copy)` and `decidedWhenItRuns(look, copy)` — two functions of
+ * the same shape, returning the same type, either of which either hook could be handed. The code
+ * round said what that leaves open: swapping them at the call sites compiles, every test here stays
+ * green, and the whole-answer control begins resolving after the queue starts while the block control
+ * validates against text nobody is looking at. A guarantee a type can hold should not be left to a
+ * comment, so the two take DIFFERENT arguments — a message against a thunk, and the block control
+ * additionally owns the coordinates only it has. Neither call now fits the other's site.</p>
+ */
+
+/**
+ * What the whole-answer control copies, resolved NOW, at the press.
+ *
+ * <p>It sends nothing that could be checked against the message it finds, so a press queued behind a
+ * slow write must not look again when its turn comes: by then the index may hold a later answer, and
+ * the person would be handed something they never pressed on. Taking the message by VALUE is what
+ * makes looking late impossible here rather than merely discouraged.</p>
+ */
+export function theAnswerControlCopies(said: Answered | undefined): () => CopyDecision {
+  const decision = stillAnswering(said, answerToCopy);
+
+  return () => decision;
+}
+
+/**
+ * What the block control copies, resolved WHEN THE QUEUE REACHES IT.
+ *
+ * <p>It echoes the signature of the markdown it was drawn from, so looking late is both safe and
+ * necessary: `blockToCopy` refuses outright when the answer has been rewritten under the control, and
+ * it can only see that against the message as it stands at the moment of the write. Taking a THUNK is
+ * what makes looking early impossible here — and taking the block and the signature as well is what
+ * stops this control ever being handed the whole answer instead.</p>
+ */
+export function theBlockControlCopies(
+  look: () => Answered | undefined,
+  block: number,
+  signature: string,
+): () => CopyDecision {
+  return () => stillAnswering(look(), (markdown) => blockToCopy(markdown, block, signature));
+}
+
 /** Where a copy control sits: which message, which block of it, and what it was drawn against. */
 export interface CopiedControl {
   readonly index: number;
