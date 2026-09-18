@@ -128,8 +128,12 @@ test('the panel records the view the page switched to, and answers a fetch throu
 test('a fetch is answered by posting, with the generation echoed, and never by painting', () => {
   const answering = bodyOf(code('bugzReviewPanel.ts'), 'private async answerReal(id: number, generation: string): Promise<void> {');
 
-  assert.match(answering, /postMessage\(\{ type: 'real', id, generation, shown: view\.shown, html: view\.html \}\)/u,
+  assert.match(answering, /type: 'real', id, generation, shown: view\.shown, keep: read\.ok, html: view\.html,/u,
     'the page decides whether an answer is still wanted, and it can only do that with the generation it asked with');
+  // `keep` is the half the page cannot know: this side caches a read that REACHED the server and
+  // not a process that failed, and without the word the page held the failure note anyway and
+  // never asked again. (Code round, codex.)
+  assert.match(answering, /keep: read\.ok/u, 'a failed process must stay retryable, and only this side knows it failed');
   assert.doesNotMatch(answering, /webview\.html\s*=/u, 'a completed fetch populates the cache and posts; it never redraws');
   assert.match(answering, /realView\(pair, read\)/u, 'the same renderer the paint uses, so the two cannot disagree');
 });
@@ -143,7 +147,14 @@ test('the cache is consulted before the server, and a failed process is not kept
     'four rows open and a flip must cost four processes once, not four per flip');
   assert.match(reading, /held\.headSha === pair\.headSha && held\.fixSha === pair\.fixSha/u,
     'a cache keyed on the id alone shows last week’s method under this week’s fix commit');
-  assert.match(reading, /this\.fetching\.get\(pair\.findingId\)/u, 'two requests for one row in flight must share one process');
+  // Keyed by the row AND its two commits. The id alone shares a process between two pairs that
+  // are the same row at different commits: the answer is then stored under the shas it began with
+  // and refused by both readers, so the fetch is spent and the new pair goes unanswered.
+  // (Code round, codex, twice.)
+  assert.match(reading, /const key = inFlightKey\(pair\);/u, 'two requests for one row in flight must share one process');
+  assert.match(code('bugzReviewPanel.ts'),
+    /function inFlightKey\(pair: ReviewPair\): string \{\s*return `\$\{pair\.findingId\}@\$\{pair\.headSha\}:\$\{pair\.fixSha\}`;/u,
+    'the in-flight key must carry both commits, or it is the id alone wearing a longer name');
   assert.match(settling, /if \(read\.ok\) \{[\s\S]*?this\.real = new Map\(/u, 'only a read that reached the server is remembered');
 });
 
