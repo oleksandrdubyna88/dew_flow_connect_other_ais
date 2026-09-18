@@ -110,6 +110,66 @@ test('a closed window forgets which rows were open', () => {
   assert.match(disposed[1] ?? '', /toneHook\.dispose\(\);/u);
 });
 
+// --------------------------------------------------------------------------------------------
+// The un-anonymised view (story 2.3): the seams between the page and the panel that no page test
+// can see — the toggle recorded, the fetch answered by POSTING with its generation, the cache
+// handed back on paint, and all of it forgotten with the window.
+// --------------------------------------------------------------------------------------------
+
+test('the panel records the view the page switched to, and answers a fetch through one method', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /case 'realText':\s*this\.realText = m\.on;/u,
+    'the toggle must reach the panel, or the next decision redraws the page anonymised');
+  assert.match(text, /case 'fetchReal':\s*void this\.answerReal\(m\.id, m\.generation\);/u,
+    'a row’s request must reach the one method that answers it, generation and all');
+});
+
+test('a fetch is answered by posting, with the generation echoed, and never by painting', () => {
+  const answering = bodyOf(code('bugzReviewPanel.ts'), 'private async answerReal(id: number, generation: string): Promise<void> {');
+
+  assert.match(answering, /postMessage\(\{ type: 'real', id, generation, shown: view\.shown, html: view\.html \}\)/u,
+    'the page decides whether an answer is still wanted, and it can only do that with the generation it asked with');
+  assert.doesNotMatch(answering, /webview\.html\s*=/u, 'a completed fetch populates the cache and posts; it never redraws');
+  assert.match(answering, /realView\(pair, read\)/u, 'the same renderer the paint uses, so the two cannot disagree');
+});
+
+test('the cache is consulted before the server, and a failed process is not kept', () => {
+  const text = code('bugzReviewPanel.ts');
+  const reading = bodyOf(text, 'private realOf(pair: ReviewPair): Promise<RealRead> {');
+  const settling = bodyOf(text, 'private settle(pair: ReviewPair, read: RealRead): RealRead {');
+
+  assert.ok(reading.indexOf('this.real.get(pair.findingId)') < reading.indexOf('this.hooks.readReal(pair.findingId)'),
+    'four rows open and a flip must cost four processes once, not four per flip');
+  assert.match(reading, /held\.headSha === pair\.headSha && held\.fixSha === pair\.fixSha/u,
+    'a cache keyed on the id alone shows last week’s method under this week’s fix commit');
+  assert.match(reading, /this\.fetching\.get\(pair\.findingId\)/u, 'two requests for one row in flight must share one process');
+  assert.match(settling, /if \(read\.ok\) \{[\s\S]*?this\.real = new Map\(/u, 'only a read that reached the server is remembered');
+});
+
+test('the panel hands the view and the cache to every paint', () => {
+  const paint = bodyOf(code('bugzReviewPanel.ts'), 'private paint(): void {');
+
+  assert.match(paint, /realText: this\.realText,/u, 'a redraw after a decision must draw the view the person chose');
+  assert.match(paint, /real: this\.realFor\(found\.shown\),/u, 'and hand back what is cached, or every decision costs a git read per open row');
+  assert.match(paint, /draw: this\.draws,/u, 'and say which paint this is, so a stale answer can be told from a wanted one');
+});
+
+test('a closed window forgets the view and everything it fetched', () => {
+  const disposed = /onDidDispose\(\(\) => \{([\s\S]*?)\}\);/u.exec(code('bugzReviewPanel.ts'));
+  assert.ok(disposed !== null);
+
+  assert.match(disposed[1] ?? '', /this\.realText = false;/u, 'a page reopened later shows what leaves the machine');
+  assert.match(disposed[1] ?? '', /this\.real = new Map<number, HeldReal>\(\);/u, 'the cache’s lifetime is the window’s');
+});
+
+test('the provider wires the real-method hook to the real reader', () => {
+  const text = code('panelProvider.ts');
+
+  assert.match(text, /readReal: \(findingId\) => readRealMethod\(server\.fsPath, findingId\),/u,
+    'a page test can prove the page asks; only this proves anybody answers');
+});
+
 test('the two view controls are wired to the host that clamps and writes', () => {
   const text = code('bugzReviewPanel.ts');
 
