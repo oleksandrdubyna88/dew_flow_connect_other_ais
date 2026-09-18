@@ -43,6 +43,38 @@ const NAMED: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The text between the tags — SCANNED, not stripped with a regex.
+ *
+ * <p>The first version was `.replace(/<[^>]*>/g, '')` and CodeQL was right to refuse it: one pass
+ * of a strip turns `&lt;scr&lt;script&gt;ipt&gt;` into `&lt;script&gt;`, which is the classic incomplete
+ * sanitisation. In a TEST that matters more than it looks, not less — a helper that cleans
+ * imperfectly can let an assertion pass for the wrong reason, and these are the assertions that say
+ * a hostile skeleton cannot become markup.</p>
+ *
+ * <p>It also has to be right about a `&gt;` that is NOT part of a tag. Shiki escapes `&lt;` and leaves
+ * `&gt;` alone, so `Task&lt;List&lt;string&gt;&gt;` reaches here with real `&gt;` characters in the text, and a
+ * scanner that simply dropped every `&gt;` would quietly eat the generic this suite exists to prove
+ * survives. So: copy up to a `&lt;`, skip to its `&gt;`, repeat — anything else is text.</p>
+ */
+function textOutsideTags(html: string): string {
+  let text = '';
+  let at = 0;
+  for (;;) {
+    const opens = html.indexOf('<', at);
+    if (opens < 0) {
+      return text + html.slice(at);
+    }
+    text += html.slice(at, opens);
+    const shuts = html.indexOf('>', opens);
+    if (shuts < 0) {
+      // An unterminated tag: everything after it is markup, not text.
+      return text;
+    }
+    at = shuts + 1;
+  }
+}
+
+/**
  * The text a reader sees, with every tag stripped and the entities put back.
  *
  * <p>ONE pass over every entity form, rather than a chain of replaces — and that is not tidiness.
@@ -52,8 +84,7 @@ const NAMED: Readonly<Record<string, string>> = {
  * about doubling would itself be doing the doubling.</p>
  */
 function readable(html: string): string {
-  return inside(html)
-    .replace(/<[^>]*>/gu, '')
+  return textOutsideTags(inside(html))
     .replace(/&(?:#x([0-9a-f]+)|#(\d+)|(\w+));/giu, (whole, hex: string, dec: string) => {
       if (hex !== undefined) {
         return String.fromCodePoint(Number.parseInt(hex, 16));
