@@ -3,8 +3,10 @@
 > Status: **S1–S5 SHIPPED 2026-09-17; S6–S8 open.** The record, the two ledgers, the funnel in
 > front of all 111 call sites, the bounds on what one run may write, the panel section, the page and
 > the durable write-gap record are built, tested and through four code rounds of the gate. S6 is the
-> rounds log, S7 the three extension-side defects (which is why one direct call site remains, in
-> `helpPanel.ts`), S8 the server half. Deviations from the plan as written are recorded inline, each
+> rounds log, S7 the three extension-side defects, S8 the server half. **Defect 3 shipped 2026-09-18**
+> and took the ratchet to ZERO — the one direct call site this plan deliberately left standing, in
+> `helpPanel.ts`, is gone and the funnel is the only door out of this extension. It shipped through a
+> route this plan did not anticipate: see the defect itself, below. Deviations from the plan as written are recorded inline, each
 > beside the thing it changed; the largest are in *E* (the run budget is charged per CODE, not per
 > `(code, subject)`), *S4a* (three decisions the code round changed) and *S5b* (what the two S5 code
 > rounds changed, including one fix that was wrong and had to be replaced).
@@ -846,7 +848,20 @@ prompt that has no text, complaining once per round for ever
 - RED test: a delete whose setting write is refused leaves the prompt file on disk; a delete that lands
   prunes all four records; an interrupted delete resumes.
 
-### 3. `helpPanel.ts:29` bypasses the settings-refusal machinery
+### 3. `helpPanel.ts:29` bypasses the settings-refusal machinery — SHIPPED 2026-09-18
+
+> **Resolved**, and NOT the way this plan or its own story expected. What is below is the defect as
+> found, kept because the four are read as one list and a gap in it reads as a defect nobody looked
+> at.
+>
+> The story written for it routed the Help tab through `reportRefusal`, which asks the running
+> build's manifest whether the key exists. What actually shipped came from a different direction: the
+> review panel adopted the same two controls and grew a SECOND copy of the Help tab's private
+> `said()`, a code round named the duplication, and the extracted half — `settingWrite.ts`,
+> `settingWritten(writing, source)` — goes through `notify` instead of `showWarningMessage`. So the
+> duplication was the lever and the ratchet reaching **0** was the consequence. The sentence is
+> plainer than the diagnosis that story proposed, and the manifest question is not asked here; if
+> that turns out to matter it is new work, named rather than assumed.
 
 [helpPanel.ts:29](../src_vs_code/src/helpPanel.ts) shows `'That setting could not be saved: ' +
 String(reason)`. Every other settings-write caller routes through `reportRefusal`

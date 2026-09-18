@@ -141,3 +141,50 @@ test('the repaint is in a then BEFORE the catch, never a finally', () => {
   assert.match(queue, /\.then\(\(again\) => \(again \? options\.render\(\) : undefined\)\)/u);
   assert.doesNotMatch(queue, /\.finally\(/u, 'a finally would repaint on the failure path too');
 });
+
+test('the three doors nobody waits for keep their promise, and the one that IS waited on does not', () => {
+  // Over a hundred call sites write `void notify(...)`, and the funnel exists so that none of them
+  // has to remember anything. But `void` on a promise is not "ignore the result", it is "nobody
+  // will ever hear about a rejection": `coaiDataDir()` throws on a COAI_DATA_SIDE that is set and
+  // invalid, and that throw happens INSIDE these async functions, so the message was neither
+  // written down nor shown and the rejection went wherever the host sends unhandled ones. The same
+  // was true one layer in, of the toast itself: `show*Message` returns a Thenable, and a window
+  // closing under one is the ordinary way it rejects. (CodeRabbit, twice on one pull request.)
+  //
+  // The net is in the funnel rather than at the call sites, which is the only place that covers
+  // all of them. `notifyAndAsk` is deliberately NOT netted: its caller reads the answer and acts on
+  // it, so a caller that is waiting must see a failure - and that half is asserted too, because a
+  // guard that swallowed everything would pass a one-directional test.
+  const funnel = source('notify.ts');
+
+  assert.equal(
+    funnel.split('await kept(async () => {').length - 1,
+    3,
+    'the three doors that return nothing - notify, notifyOnce and notifyThen - must ALL be netted',
+  );
+  assert.doesNotMatch(
+    funnel,
+    /void show\(/u,
+    'a toast is still detached with void, so a display that rejects reaches nobody',
+  );
+  // The net is a CATCH, not merely a function with a reassuring name.
+  assert.match(
+    funnel,
+    /async function kept\(saying: \(\) => Promise<void>\): Promise<void> \{\s*try \{/u,
+    'kept does not actually try anything',
+  );
+  assert.match(
+    funnel,
+    /function detached\(shown: Thenable<unknown>\): void \{\s*void Promise\.resolve\(shown\)\.catch\(/u,
+    'detached does not actually catch anything',
+  );
+
+  // And the door that a caller WAITS on is left alone, on purpose.
+  const asking = funnel.slice(funnel.indexOf('export async function notifyAndAsk'));
+
+  assert.ok(
+    !asking.includes('kept('),
+    'notifyAndAsk was netted too, so a caller awaiting an answer now reads a swallowed failure as a '
+    + 'question the person dismissed',
+  );
+});
