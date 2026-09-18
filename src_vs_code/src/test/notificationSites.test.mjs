@@ -180,7 +180,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // reach the server, and no surface anywhere said so, which is the 2026-09-16 incident seen from
 // the writing side. ONE new place, not two: `busy` and `not-mirrored` are two CODES from one
 // call, because they are one sentence with two readings and the code is what the page groups on.
-const PLACES_THIS_SPEAKS = 124;
+// 124 → 125 on 2026-09-18, same story, the code round: the mirror also says when the write
+// LANDED after it had reported that it had not. Somebody who presses Try again and is told
+// nothing cannot tell a retry that worked from one that never fired. It is silent until a
+// condition has actually been reported, so an ordinary write adds no traffic at all.
+const PLACES_THIS_SPEAKS = 125;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

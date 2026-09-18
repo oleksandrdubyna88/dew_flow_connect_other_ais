@@ -134,6 +134,47 @@ fresh `run` per host.
 So this plan built the reporting and the retry, and records that the persistence bullet was
 answered by measurement rather than by code.
 
+**What the code round changed, and it is most of the shape.** Twelve reviewers, 35 findings, 17
+accepted:
+
+- **A generation, because `cancel()` can only drop a TIMER.** An attempt already inside
+  `await sync()` could not be stopped, so it came back afterwards, armed a timer against the new
+  schedule's counter and reported a condition that schedule had already recovered from — two ladders
+  sharing one counter, which is the exact failure "supersede rather than stack" was written to
+  prevent. Every continuation now carries the run it belongs to and does nothing at all if that run
+  is no longer the live one. Five reviewers, four roles, and the only thing the injected clock could
+  not already show: `answering` resolves within one turn, so no attempt was ever in flight. The
+  tests have a `heldSync` now.
+- **A stand-down is not a write.** `outcome !== 'busy' && outcome !== 'failed'` treated `stood-down`
+  exactly like `written`, so a newer build owning the file cleared a failure reported a moment
+  earlier — and the failure's return was then silenced as a repeat with no write having landed. All
+  three vendors raised it; it is the only finding they agreed on. `written` and `unchanged` clear;
+  `stood-down` clears nothing and retries nothing, because only a reload cures it.
+- **A `sync()` that THROWS is the failure it is.** It is typed to answer an outcome, and a module
+  whose whole subject is silence may not assume that: the rejection escaped `void this.once()` and
+  left the schedule stopped with nothing armed.
+- **The schedule is forgotten on deactivation, and rebuilt when the sync changes.** `??=` bound it
+  to the first sync it was ever handed and `dispose` only cancelled it, so a later activation ran
+  against the previous one and carried its suppression.
+- **The write that lands after a report SAYS so.** Somebody who presses *Try again* and is told
+  nothing cannot tell a retry that worked from one that never fired. Silent until something has
+  actually been reported, so an ordinary write adds no traffic.
+- **A scenario in a real editor**, which this plan named as buildable and did not build. The flow is
+  in [module_tests.md](module_tests.md) now, and `npm run test:host` drives a changed setting through
+  to the file the server reads — then returns it and waits for the value to LEAVE, because a mirror
+  that only ever adds pins the old one. **Watched failing**: with the one `mirrorSettings` call
+  removed from the configuration listener, 1/2 scenarios passed and the run exited 1 with *the
+  setting was changed and the file the server reads never followed (waited 15s)*. What it still does
+  NOT drive is the FAILURE path, because making a write genuinely fail inside a real editor means a
+  read-only directory, whose behaviour differs on every platform this runs on.
+
+Three rejections worth recording. A durable *retrying* status for the eight-second window was
+refused because the window is eight seconds FOR that reason — a record per settings keystroke is the
+churn the run budget exists to stop — and the half of it that was real, a person told nothing after
+pressing the button, is the recovery message above. Caching the settings path was refused because
+the data directory can MOVE at runtime, so a cached path would name the old directory in the message
+about the write that failed. And eight findings reported that a rule was MET.
+
 ## Test plan
 
 ```bash
