@@ -7628,6 +7628,58 @@ bundle test in its own invocation, and a case inside that file reads the script 
 build-running test is ever put in a shared batch again — the failure it prevents is otherwise
 invisible until somebody's unrelated pull request goes red.
 
-Nothing in this repository EXERCISES the extension — the bundle is loaded, but `activate` is never
-called — so a runtime regression in a moved callback
-would still pass all of it. The plan says so in its own words rather than claiming otherwise.
+Nothing in this repository EXERCISED the extension when that was written — the bundle was loaded, but
+`activate` was never called — so a runtime regression in a moved callback would still have passed all
+of it. The plan said so in its own words rather than claiming otherwise. **Since 2026-09-17 that is no
+longer true**: `npm run test:host` launches a real editor and `activate` IS called. It runs named
+scenarios rather than the suite, so the sentence above still holds for everything they do not name.
+
+## `panelProvider.ts` begins to come apart (2026-09-18)
+
+4 022 lines against a ceiling of 800, and **growing**: the tail plan re-measured the eight files over
+the ceiling one day apart and found +470 lines above it in twenty-four hours, `panelProvider.ts` alone
+3 762 → 4 022. The series is planned in `todo/PLAN_the_panel_provider_is_too_big.md`; this is its first
+extraction.
+
+**Why it is not the command-file split again.** That file was top-level functions, and moving one was a
+cut and a paste. This is ONE class spanning lines 200–3 917 with roughly forty fields and ninety
+methods, and **a method carries `this`** — so every extraction decides what its state is and who owns
+it, which is a design decision, which is where behaviour changes hide. The rule the plan sets is that a
+cluster **takes its fields with it**, and one still reaching back into the class has not found its seam.
+
+**`ClaudeProbeCache` is the first**, chosen because it tests that rule at the lowest cost of being
+wrong: seven fields nothing else touched, five methods that called only each other, and a surface of
+exactly two lines in `render` — `claudeProbe:` and `askingClaude:`, in that order, which is preserved
+because the first may start a refresh that sets the second.
+
+**Its seam was measured before it moved.** Of every `this.` in those 162 lines, each was either one of
+the cluster's own fields or one of exactly three things outside it: `dataDir`, `render`, `held`. Those
+three are the constructor's argument — and they keep **their own names**, which is the finding worth
+carrying to the rest of the series:
+
+| the cache reaches its collaborators as | residue `prove-move.mjs` reports |
+|---|---|
+| `this.around.dataDir`, `this.around.repaint()`, `this.around.gone()` | **8 body lines** a reviewer must check by hand |
+| `this.dataDir`, `this.render()`, `this.held.view === undefined` | **0** — byte-identical to what the panel had |
+
+The first draft was the top row. Renaming a collaborator turns every line that uses it into residue,
+and residue is the reviewer's whole job on a move.
+
+**What the prover said**, at `origin/main` `d2246ec5`: *192 body lines, 26 not found in order*, and
+every one of the 26 is scaffolding — the interface, the class declaration, the three collaborator
+fields, the constructor, the getter and the new header. **Not one body line is residue.**
+
+**One thing the prover does not fit, and it is worth knowing before the next extraction.** Its run
+budget — `PROVE_MOVE_REGIONS`, the number of contiguous regions cut — is calibrated for a function
+move. A class extraction interleaves scaffolding between the moved blocks, so the walk reports more
+runs (15) than the regions actually cut (8) and says *"something was reordered"* when nothing was. The
+residue list is still exactly right, and it is the part that matters; the run count should be read as a
+shape check rather than a verdict until the tool learns about constructors.
+
+`sonarExclusions.test.ts` caught the new module immediately — it imports `vscode`, so it belongs in
+`sonar.coverage.exclusions`, and the ratchet failed until it was there. The comment beside that list
+also claimed *"this repository has no harness that provides one"*, which stopped being true the day
+before; corrected in place, along with a typed count that had drifted (thirty-eight → 39). That is the
+fifth comment in this family found describing behaviour the code does not have.
+
+**Result: 4 022 → 3 842.** Ten clusters remain, mapped with line numbers in the plan.
