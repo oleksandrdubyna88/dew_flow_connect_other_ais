@@ -236,6 +236,11 @@ export function highlight(
           const mark = marks[line - 1];
           if (mark !== undefined && mark !== 'same') {
             this.addClassToHast(node, `dl-${mark}`);
+            // The +, − and ~ in the gutter are CSS `content`, which most engines keep OUT of the
+            // accessibility tree — three reviewers said so independently. Somebody on a screen
+            // reader would hear both panes as identical code and never learn which lines differ,
+            // which is the whole feature. So the word goes in as real text, hidden visually.
+            node.children.unshift(said(mark));
           }
         },
       }],
@@ -250,6 +255,31 @@ export function highlight(
 
     return plain(code, 'failed', marks);
   }
+}
+
+/** The mark as a word, for a reader who cannot see the colour. */
+const spokenFor = (mark: LineMark): string =>
+  (mark === 'changed' ? 'changed line' : `${mark} line`);
+
+/**
+ * The mark as text a screen reader can read, carried inside the line it belongs to.
+ *
+ * <p>`changed` is spelled out rather than left as a tilde for the reason a reviewer gave: git has no
+ * third state, so a person meeting one needs the word, not a glyph to infer. The trailing space
+ * keeps it from running into the code when it is read aloud.</p>
+ */
+function said(mark: LineMark): {
+  type: 'element';
+  tagName: string;
+  properties: Record<string, string>;
+  children: { type: 'text'; value: string }[];
+} {
+  return {
+    type: 'element',
+    tagName: 'span',
+    properties: { class: 'srOnly' },
+    children: [{ type: 'text', value: `${spokenFor(mark)} ` }],
+  };
 }
 
 /**
@@ -290,7 +320,11 @@ function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[]
     const mark = marks[at];
     const dl = mark !== undefined && mark !== 'same' ? ` dl-${mark}` : '';
 
-    return `<span class="line${dl}">${escapeHtml(line)}</span>`;
+    const heard = mark !== undefined && mark !== 'same'
+      ? `<span class="srOnly">${spokenFor(mark)} </span>`
+      : '';
+
+    return `<span class="line${dl}">${heard}${escapeHtml(line)}</span>`;
   }).join('\n');
 
   return `<pre class="shiki" data-highlight="${why}">${said}<code>${lines}</code></pre>`;
@@ -365,6 +399,12 @@ export const HIGHLIGHT_CSS = `
      difference begins and the eye would follow the indentation instead of the change. */
   pre.shiki .line:not([class*="dl-"])::before {
     content: " "; display: inline-block; width: 1.1em;
+  }
+  /* Read aloud, never seen. clip-path rather than display:none, which would take it out of the
+     accessibility tree along with the view — the one thing it is here for. */
+  .srOnly {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
   }
   /* Said quietly: it explains an absence, and it must not shout over the code it is about. */
   .hlFailed {

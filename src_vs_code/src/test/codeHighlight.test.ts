@@ -344,6 +344,52 @@ test('no token asks for a colour the page never defines', () => {
     'a token asks for a variable this page does not define, so it renders uncoloured');
 });
 
+/**
+ * The same code, diffed against a different counterpart, is different markup.
+ *
+ * <p>A reviewer asked for exactly this sequence and it is the one the cache could quietly get wrong:
+ * render skeleton X as part of pair A, then the same X as part of pair B. If the marks were not in
+ * the key, B would be served A's colouring — a row confidently wrong about which of its own lines
+ * changed, on the page where somebody decides what leaves their machine.</p>
+ */
+test('the same skeleton diffed against a different pair is not served the old colouring', () => {
+  const code = `void method_1() {\n  a_${Math.random().toString(36).slice(2)}();\n  b();\n}`;
+
+  const asAdded = highlight(code, 'CSharp', ['same', 'added', 'same', 'same']);
+  const asRemoved = highlight(code, 'CSharp', ['same', 'removed', 'same', 'same']);
+  const asNothing = highlight(code, 'CSharp');
+
+  assert.match(asAdded, /dl-added/u);
+  assert.match(asRemoved, /dl-removed/u);
+  assert.doesNotMatch(asRemoved, /dl-added/u, 'the second pair was served the first pair\'s marks');
+  assert.doesNotMatch(asNothing, /dl-/u, 'a pair with no diff was served somebody else\'s');
+});
+
+/**
+ * A line that differs says so in words, not only in colour.
+ *
+ * <p>The gutter's `+`, `−` and `~` are CSS `content`, which most engines keep out of the
+ * accessibility tree — three reviewers said so independently. Without this, somebody on a screen
+ * reader hears both panes as identical code and never learns which lines differ, which is the whole
+ * feature. Asserted on BOTH paths, because the fallback builds its lines by hand.</p>
+ */
+test('every marked line carries its mark as text a screen reader can reach', () => {
+  for (const language of ['CSharp', 'Fortran']) {
+    const html = highlight('a();\nb();\nc();', language, ['same', 'added', 'changed']);
+
+    assert.match(html, /<span class="srOnly">added line <\/span>/u, language);
+    assert.match(html, /<span class="srOnly">changed line <\/span>/u,
+      `${language}: "changed" has no counterpart in git, so it needs the word rather than a glyph`);
+    // And an unmarked line says nothing, or every line would announce itself.
+    assert.equal((html.match(/srOnly/gu) ?? []).length, 2, language);
+  }
+});
+
+test('a block with no diff announces nothing at all', () => {
+  assert.doesNotMatch(highlight('a();', 'CSharp'), /srOnly/u);
+  assert.doesNotMatch(highlight('a();', 'CSharp', ['same']), /srOnly/u);
+});
+
 test('the palette follows the theme and the tone, rather than baking colours in', () => {
   // The measurement's whole reason for choosing the CSS-variables theme: a stock Shiki theme would
   // have written #1E1E1E into every block and left the tone control doing nothing to the code.

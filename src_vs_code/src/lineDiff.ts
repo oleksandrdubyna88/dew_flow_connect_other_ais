@@ -38,15 +38,36 @@ export interface PairDiff {
 }
 
 /**
- * A line with its placeholder indices removed.
+ * The placeholder kinds the normaliser emits — and the ONLY words this masks.
  *
- * <p>Deliberately wider than the three kinds the normaliser emits today: `([A-Za-z]+)_\d+` catches a
- * fourth kind the day somebody adds one, where a list of three would silently stop masking it and
- * bring the wall of false changes back. The cost is that a real identifier of that shape surviving
- * inside a comment or a string literal is masked too, which changes nothing about correctness — it
- * only makes one more line compare equal.</p>
+ * <p>The first version matched any `([A-Za-z]+)_\d+`, reasoning that a fourth kind would then keep
+ * working. Two reviewers on two providers refused it, and they were right: the corpus keeps string
+ * literals and comments verbatim, so a real `utf8_2`, `base64_128` or `token_1` would be masked
+ * too — and a line where one of those genuinely changed would be reported as UNCHANGED. That is the
+ * opposite of what this module is for, and it fails silently.</p>
+ *
+ * <p>So the list is narrow, and `lineDiff.test.ts` reads `Placeholders.cs` in `src_mcp` and fails if
+ * the normaliser ever returns a kind that is not here. A fourth kind then arrives as a red test
+ * naming it, rather than as a wall of false differences nobody can explain.</p>
  */
-const masked = (line: string): string => line.replace(/\b([A-Za-z]+)_\d+\b/gu, '$1_#');
+export const PLACEHOLDER_KINDS = ['var', 'method', 'type'] as const;
+
+const INDEXED = new RegExp(`\\b(${PLACEHOLDER_KINDS.join('|')})_\\d+\\b`, 'gu');
+
+/** A line with its placeholder indices removed, so renumbering is not read as change. */
+const masked = (line: string): string => line.replace(INDEXED, '$1_#');
+
+/**
+ * How much comparing two skeletons may cost before it is not worth doing properly.
+ *
+ * <p>The table is `before.length × after.length` cells and `row()` builds one per pair — including
+ * for collapsed rows — so a pathological skeleton would freeze the page before anybody expanded
+ * anything. Four reviewers asked for a ceiling and none of them named a number, so: 250,000 cells
+ * is a 500-line method against a 500-line method, already far outside what the collector extracts,
+ * which is ONE member. Past it the two sides are compared as wholes, which is honest and cheap and
+ * visibly different from silence.</p>
+ */
+const MOST_CELLS = 250_000;
 
 /**
  * The longest common subsequence of two line arrays, as the indices that survive on each side.
@@ -117,6 +138,9 @@ function pairUp(marks: LineMark[], from: number, to: number, howMany: number): v
 export function pairDiff(before: string, after: string): PairDiff {
   const leftLines = before.split('\n');
   const rightLines = after.split('\n');
+  if (leftLines.length * rightLines.length > MOST_CELLS) {
+    return tooBig(leftLines, rightLines);
+  }
   const [keptBefore, keptAfter] = common(leftLines.map(masked), rightLines.map(masked));
 
   const left: LineMark[] = keptBefore!.map((kept) => (kept ? 'same' : 'removed'));
@@ -143,4 +167,20 @@ export function pairDiff(before: string, after: string): PairDiff {
   }
 
   return { before: left, after: right };
+}
+
+/**
+ * Two skeletons too large to compare line by line.
+ *
+ * <p>They are compared as WHOLES: identical is `same` throughout, and anything else marks every
+ * line — which says "these differ and this page will not pretend to know where" rather than showing
+ * a confident diff it never computed. Reachable only past {@link MOST_CELLS}.</p>
+ */
+function tooBig(before: readonly string[], after: readonly string[]): PairDiff {
+  const identical = before.length === after.length
+    && before.every((line, at) => line === after[at]);
+  const mark = (lines: readonly string[], what: LineMark): LineMark[] =>
+    lines.map(() => (identical ? 'same' : what));
+
+  return { before: mark(before, 'removed'), after: mark(after, 'added') };
 }

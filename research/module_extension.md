@@ -7328,9 +7328,16 @@ renumbers everything below it. On a representative pair:
 | a plain line diff | **7** |
 | a diff over masked names | **1** |
 
-Seven of seven lines, for one added statement. So the COMPARISON runs over masked text
-(`([A-Za-z]+)_\d+` → `$1_#`, deliberately wider than today's three kinds) and the DISPLAY keeps the
-real text.
+Seven of seven lines, for one added statement. So the COMPARISON runs over masked text and the
+DISPLAY keeps the real text.
+
+**The mask is NARROW, and that was a code-round correction.** The first version matched any
+`([A-Za-z]+)_\d+` so a fourth placeholder kind would keep working — and two reviewers on two
+providers refused it for a reason the plan had missed: the corpus keeps string literals and comments
+verbatim, so `utf8_2`, `base64_128` and `token_1` are things a skeleton really contains, and masking
+them would report a line where one of them genuinely changed as UNCHANGED. It now masks exactly
+`var`, `method` and `type`, and `lineDiff.test.ts` reads `Placeholders.cs` and fails if the
+normaliser ever returns a kind that is not on that list.
 
 **The honest cost, stated rather than hidden:** a line whose only difference is a placeholder index
 reads as unchanged, and that cannot be told apart from an author genuinely switching variable —
@@ -7341,6 +7348,17 @@ but a person reading two panes sees a rewrite; only the OVERLAP is paired, so th
 arrived is one change and two removals. Colours come from `--vscode-diffEditor-insertedLineBackground`
 and its removed twin — the one family of variables a webview is given for this — with the gutter
 marker as a `::before` so it costs the code no indentation and cannot be selected into a copy.
+
+**A pair too large to diff is compared as a whole.** The table is `before x after` cells and `row()`
+builds one per pair including collapsed ones, so four reviewers asked for a ceiling. Past 250,000
+cells — a 500-line method against a 500-line method, far outside what the collector extracts, which
+is ONE member — the two sides are compared whole: identical stays unmarked, anything else marks
+every line, which says "these differ and this page will not pretend to know where".
+
+**Every marked line carries its mark as text, not only as colour.** The gutter's `+`, `−` and `~`
+are CSS `content`, which most engines keep out of the accessibility tree — three reviewers said so
+independently. A visually hidden span inside each marked line carries the word, and `changed` is
+spelled out rather than left as a glyph because git has no third state for a person to recognise.
 
 **The marks are part of the cache key.** The same skeleton diffed against a different counterpart is
 different markup, and a key that ignored them would serve one pair's colouring to another — a row
