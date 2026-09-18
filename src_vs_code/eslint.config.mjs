@@ -72,6 +72,10 @@ export default tseslint.config(
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_',
+        // `const { run, ...rest } = record` binds `run` for the sole purpose of leaving it OUT of
+        // `rest`. That is the idiom, not an oversight — and it is the one thing spelling these
+        // options out turned off, because the base rule's default for it is `false`.
+        ignoreRestSiblings: true,
       }],
 
       // Free where it counts: the extension does not build code at runtime and never should, and

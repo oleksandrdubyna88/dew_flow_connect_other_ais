@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- 1189 lines, over the 800 this package sets for NEW code.
+/* eslint-disable max-lines -- 1191 lines, over the 800 this package sets for NEW code.
    The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import * as fs from 'node:fs/promises';
