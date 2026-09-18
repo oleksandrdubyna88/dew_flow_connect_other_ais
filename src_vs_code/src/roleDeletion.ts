@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 /**
  * Deleting a role, in an order that survives the mirror not writing.
  *
@@ -253,7 +255,7 @@ export class RoleDeletions {
     // `put`, stranding the id for ever against a role nobody is deleting any more. (antigravity,
     // the code round.)
     const current = await this.world.store.read(tombstone.roleId);
-    if (current === undefined || current.nonce !== tombstone.nonce) {
+    if (current?.nonce !== tombstone.nonce) {
       return;
     }
     const noted = { ...tombstone, reason, failedAt: this.world.now().toISOString() };
@@ -271,6 +273,15 @@ export function reserved(tombstones: readonly Tombstone[]): ReadonlySet<string> 
   return new Set(tombstones.map((one) => one.roleId.toLowerCase()));
 }
 
+/**
+ * A fresh token for one deletion.
+ *
+ * <p>`randomBytes`, not `Math.random()`. What this has to be is unguessable ENOUGH that two windows
+ * minting one in the same millisecond cannot collide — it is a concurrency token and not a secret —
+ * but `notify.ts` already mints its run id this way, and a second answer to "where do random bytes
+ * come from" is one a reader has to compare. SonarCloud calls the other one a vulnerability, and
+ * arguing with it costs more than the import.</p>
+ */
 function nonce(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  return randomBytes(8).toString('hex');
 }

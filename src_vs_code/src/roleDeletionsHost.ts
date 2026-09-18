@@ -92,13 +92,8 @@ async function pruneRole(context: vscode.ExtensionContext, roleId: string): Prom
   const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
   const read = readerFor(context, config());
   const current: readonly RoleRow[] = rolesFrom(read(ROLES_KEY));
-  const rest = (held: Record<string, unknown>): Record<string, unknown> => {
-    const { [roleId]: dropped, ...without } = held;
-
-    void dropped;
-
-    return without;
-  };
+  const rest = (held: Record<string, unknown>): Record<string, unknown> =>
+    Object.fromEntries(Object.entries(held).filter(([key]) => key !== roleId));
 
   try {
     if (current.some((row) => row.id === roleId)) {
