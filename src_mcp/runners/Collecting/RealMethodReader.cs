@@ -78,7 +78,7 @@ public sealed class RealMethodReader(GitHistory git, IAstNormalizer normalizer)
     /// <summary>The BEFORE side: the function around the finding's line at the commit the reviewers read.</summary>
     private async Task<MethodSide> BeforeAsync(MethodPlace place, SourceLanguage language, CancellationToken ct)
     {
-        var read = await FileAsync(place.RepoPath, place.HeadSha, place.File, ct);
+        var read = await CommittedFile.ReadAsync(git, place.RepoPath, place.HeadSha, place.File, ct);
         if (read.Reason.Length > 0)
         {
             return MethodSide.Unavailable(read.Reason);
@@ -106,7 +106,7 @@ public sealed class RealMethodReader(GitHistory git, IAstNormalizer normalizer)
     /// </remarks>
     private async Task<MethodSide> AfterAsync(MethodPlace place, SourceLanguage language, CancellationToken ct)
     {
-        var read = await FileAsync(place.RepoPath, place.FixSha, place.File, ct);
+        var read = await CommittedFile.ReadAsync(git, place.RepoPath, place.FixSha, place.File, ct);
 
         return read.Reason.Length > 0
             ? MethodSide.Unavailable(read.Reason)
@@ -138,38 +138,4 @@ public sealed class RealMethodReader(GitHistory git, IAstNormalizer normalizer)
             StartLine: symbol.StartLine,
             EndLine: symbol.EndLine);
 
-    /// <summary>One file at one commit — or the reason it cannot be had, with git's failure kept apart.</summary>
-    /// <remarks>
-    /// The commit is checked before the file so that "the commit is gone" and "the file was not in
-    /// it" are two answers: <c>git show sha:path</c> alone exits 128 for both.
-    /// </remarks>
-    private async Task<Reading> FileAsync(string repoPath, string sha, string path, CancellationToken ct)
-    {
-        var present = await git.HasCommitAsync(repoPath, sha, ct);
-        if (!present.Ran)
-        {
-            return Reading.Not(RealMethodReason.GitFailed);
-        }
-
-        if (!present.Ok)
-        {
-            return Reading.Not(RealMethodReason.CommitUnreachable);
-        }
-
-        return Read(await git.FileAtAsync(repoPath, sha, path, ct));
-    }
-
-    /// <summary>What `git show` said about a file, as a reading: text, absent, or git did not run.</summary>
-    private static Reading Read(GitAnswer file) =>
-        file.Ran
-            ? file.Ok ? Reading.Of(file.Out) : Reading.Not(RealMethodReason.FileNotInCommit)
-            : Reading.Not(RealMethodReason.GitFailed);
-
-    /// <summary>A file's text at a commit, or the reason there is none — one shape for both sides.</summary>
-    private readonly record struct Reading(string Text, string Reason)
-    {
-        internal static Reading Of(string text) => new(text, string.Empty);
-
-        internal static Reading Not(string reason) => new(string.Empty, reason);
-    }
 }

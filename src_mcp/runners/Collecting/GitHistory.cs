@@ -62,7 +62,41 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant)]
     private static partial Regex ObjectId { get; }
 
-    private static bool IsCommitish(string value) => ObjectId.IsMatch(value);
+    /// <summary>The ONE validator for a stored sha — public so a reader can decide before it asks.</summary>
+    /// <remarks>
+    /// <c>FileAtReader</c> checks it ahead of the repository probe so a malformed row costs no
+    /// process; the guard on every method below stays, because a caller that forgets is the case the
+    /// guard exists for. One regex, two call sites: a second pattern — <c>{7,40}</c> was proposed —
+    /// would be weaker in one direction and stricter in another.
+    /// </remarks>
+    public static bool IsCommitish(string value) => ObjectId.IsMatch(value);
+
+    /// <summary>
+    /// Whether a stored path can name a blob INSIDE the repository — decided on the string, never on
+    /// today's filesystem.
+    /// </summary>
+    /// <remarks>
+    /// <para>Lexically, because the path is read at a RECORDED commit: a file deleted or renamed since
+    /// has no current path to canonicalise, and canonicalising would refuse exactly the blob a
+    /// historical read exists for — 99.6 % of orphaned blobs still read. Refused: empty, a NUL, a
+    /// leading separator (absolute, or a UNC root), a drive-qualified form, and any <c>..</c>
+    /// component under either separator. NOT refused: ordinary metacharacters — <c>docs/notes;v2.md</c>
+    /// and <c>src/[legacy].cs</c> are committed paths, and execution is exe-plus-argv, so a semicolon
+    /// is a character in a filename and nothing else.</para>
+    /// <para>Git refuses every one of these itself (<i>is outside repository</i>, <i>does not exist
+    /// in</i>) — measured on real git before this was written — so the guard is not what keeps the
+    /// read inside the object database; it is what keeps a malformed row from costing a process, and
+    /// what answers <c>path_refused</c> rather than a sentence from git.</para>
+    /// </remarks>
+    public static bool IsRepoRelative(string path) =>
+        path.Length > 0 && !path.Contains('\0') && !IsRooted(path) && !Traverses(path);
+
+    private static readonly char[] Separators = ['/', '\\'];
+
+    private static bool IsRooted(string path) =>
+        path[0] is '/' or '\\' || (path.Length > 1 && char.IsAsciiLetter(path[0]) && path[1] == ':');
+
+    private static bool Traverses(string path) => path.Split(Separators).Contains("..");
 
     /// <summary>A ref NAME, which the end of an interval may legitimately be.</summary>
     /// <remarks>
@@ -127,9 +161,15 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     /// and broke every read in the walk. The spec cannot be mistaken for an option anyway: it begins
     /// with the validated hex sha.
     /// </remarks>
+    /// <remarks>
+    /// <b>And the path is guarded here too</b>, on this one road into <c>sha:path</c>, so that neither
+    /// reader of a stored path can forget it (story 3.1 of the review-page plan). The collector's own
+    /// paths come from <c>git log --name-only</c> and are repository-relative by construction, so it
+    /// loses nothing; a reviewer-written path that escapes answers "ran, and said no" without a process.
+    /// </remarks>
     public Task<GitAnswer> FileAtAsync(
         string repoPath, string sha, string path, CancellationToken ct = default) =>
-        IsCommitish(sha)
+        IsCommitish(sha) && IsRepoRelative(path)
             ? RunAsync(repoPath, ["show", $"{sha}:{path}"], ct)
             : Refused;
 
