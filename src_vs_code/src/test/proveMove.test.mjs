@@ -126,6 +126,106 @@ test('moving whole functions is a move, and the run count says how many regions 
   assert.equal(runs, 2, 'the run count does not say how many regions were cut');
 });
 
+test('a line the original never had does not, by itself, break a run', () => {
+  // THE FALSE POSITIVE THIS EXISTS FOR, met on the first extraction out of `panelProvider.ts`.
+  // Extracting a CLASS is not extracting functions: the new module needs scaffolding a file of
+  // functions does not — a class declaration, a constructor, a getter — and that scaffolding sits
+  // BETWEEN the moved regions. Every one of those lines is residue, correctly, and residue used to
+  // reset the walk, so each insertion split one run into two. Thirteen scaffolding lines turned
+  // eight cut regions into fifteen reported runs and the tool said *"something was reordered"*
+  // about a move where nothing had been.
+  //
+  // An inserted line reorders NOTHING. The moved lines around it keep their order in the original,
+  // which is what a run is supposed to measure, so the walk holds its place across residue.
+  const one = movedVerbatim(ORIGINAL, [{
+    name: 'whole.ts',
+    text: moved(
+      'export function alpha(one: string): string {',
+      '  return one.trim();',
+      '}',
+    ),
+  }]);
+  const interrupted = movedVerbatim(ORIGINAL, [{
+    name: 'whole.ts',
+    text: moved(
+      'export function alpha(one: string): string {',
+      '  const nothingLikeThisWasEverInTheOriginal = true;',
+      '  return one.trim();',
+      '}',
+    ),
+  }]);
+
+  assert.equal(one.runs, 1, 'one function moved whole was not one run');
+  assert.equal(interrupted.residue.length, 1, 'the inserted line was not reported as residue');
+  assert.equal(interrupted.runs, 1,
+    'an inserted line split one run in two, so a class extraction cries wolf about its own constructor');
+});
+
+test('a bare brace or comment marker cannot START a region, however often it occurs', () => {
+  // THE SECOND HALF OF THE SAME FALSE POSITIVE, and the larger half. A new module opens with a doc
+  // comment the original never had — `/**`, ` *`, ` */` — and closes its class with `}`. None of
+  // those lines carries any information, and every one of them occurs all over a four-thousand-line
+  // file, so each "matched" somewhere unrelated and STARTED A RUN there. Measured on the first
+  // extraction out of `panelProvider.ts`: of fifteen reported runs, SEVEN began on a bare `}` or a
+  // comment marker matched at lines 3 989–4 022 — nowhere near the code that moved — while the eight
+  // real regions were exactly the eight declared.
+  //
+  // A run start is a claim that a region came from THERE. A line with no letter or digit in it
+  // cannot support that claim. It may still CONTINUE a run, which is what keeps a moved function's
+  // closing brace part of its own region.
+  // The original must CONTAIN those markers for the defect to appear at all — a `/**` the original
+  // never had is residue and harmless. In a real file they are everywhere; here a second function
+  // with a multi-line doc comment is enough to put them in reach.
+  const withComments = [
+    'function alpha(one: string): string {',
+    '  return one.trim();',
+    '}',
+    '',
+    '/**',
+    ' * Something else entirely, far from the code that moves.',
+    ' */',
+    'function faraway(): void {',
+    '  void other();',
+    '}',
+  ].join('\n');
+
+  const punctuation = movedVerbatim(withComments, [{
+    name: 'noise.ts',
+    text: moved(
+      '/**',
+      ' * A header the original never had.',
+      ' */',
+      'export function alpha(one: string): string {',
+      '  return one.trim();',
+      '}',
+    ),
+  }]);
+
+  assert.equal(punctuation.runs, 1,
+    'a bare brace or comment marker started a region of its own, so scaffolding inflates the count');
+});
+
+test('but a line that JUMPS in the original still breaks the run, residue or no residue', () => {
+  // The other half, and the reason the fix above is safe rather than a hole. Holding the walk across
+  // residue must not hold it across a REORDERING: a line that exists in the original but at the
+  // wrong place is not residue, it is found somewhere else, and finding it somewhere else is exactly
+  // what starts a new run. Without this case the fix could have been "never break a run" and nothing
+  // would have noticed.
+  const shuffled = movedVerbatim(ORIGINAL, [{
+    name: 'whole.ts',
+    text: moved(
+      'export function alpha(one: string): string {',
+      '  const nothingLikeThisWasEverInTheOriginal = true;',
+      '  void notify({ as: 1 });',
+      '  return one.trim();',
+      '}',
+    ),
+  }]);
+
+  assert.ok(shuffled.runs > 1,
+    'a line borrowed from another function was walked as though it followed the one before it');
+});
+
 test('reordering two statements INSIDE a function shatters the run count', () => {
   // The case three reviewers named at the plan round. Every line is still present, so residue alone
   // cannot see it — what gives it away is FRAGMENTATION: a four-line function that moved whole is

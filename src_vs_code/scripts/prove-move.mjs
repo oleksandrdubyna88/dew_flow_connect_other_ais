@@ -38,8 +38,36 @@ const asCompared = (line) => line.replace(/\s+$/u, '');
  * <p>Nothing else is forgiven. A renamed variable, a changed argument, a re-worded comment and a
  * dropped attribution all come back in the residue, which is the point — the caller reads them one
  * by one and says in the commit why each is there, or puts it back.</p>
+ *
+ * <p><b>`private` is NOT forgiven either, and that was decided rather than overlooked.</b> Extracting
+ * a class puts private methods behind a new boundary, so some of them must become public — and each
+ * such line arrives as one residue line and one extra run. It was measured on the consultant-prompt
+ * extraction: two methods, three runs against one contiguous region. Widening this to drop `private`
+ * as well would have made those lines match.
+ *
+ * <p>The operator ruled that it shows. A visibility change is a real change to a line, and the one
+ * question this tool answers is whether a line is what it was. Forgiving it would hide a genuine edit
+ * in order to make a count tidier — and the count is not the product; the residue list is. So expect
+ * a run per newly-public method, say so in the pull request, and read the runs against the regions
+ * cut PLUS the methods that changed visibility.</p>
  */
 const unexported = (line) => line.replace(/^(\s*)export /u, '$1');
+
+/**
+ * A line carrying nothing but punctuation — `}`, `});`, `{`, `/**`, `*∕`, a bare `*`.
+ *
+ * <p>Such a line may CONTINUE a run, which is how a moved function keeps its own closing brace, but
+ * it may not START one. A run start is a claim that a region came from THERE, and a line with no
+ * letter and no digit in it cannot support that claim: it occurs everywhere, so the walk restarts at
+ * whichever occurrence happens to match furthest — usually somewhere entirely unrelated.</p>
+ *
+ * <p><b>Measured on the first extraction out of `panelProvider.ts`.</b> Fifteen runs were reported
+ * where eight regions had been cut, and the split was exact: the eight real regions were the seven
+ * moved fields and the one block of methods, and the other SEVEN all began on a bare `}` or a comment
+ * marker matched at lines 3 989–4 022 of a file whose moved code ends at 987. The tool said
+ * <i>"something was reordered"</i> about a move where nothing had been.</p>
+ */
+const nothingButPunctuation = (line) => !/[A-Za-z0-9]/u.test(line);
 
 /**
  * The moved modules, checked against the original IN ORDER.
@@ -97,10 +125,29 @@ export function movedVerbatim(original, modules) {
       // greedily that inflates the count into noise — measured at 52 runs for 27 real regions — and
       // a budget over a noisy number is not a check. So the occurrence that matches FURTHEST is
       // taken, which is the one the region actually came from.
+      // A closing brace or a comment marker continues a run — that is the branch above — but it can
+      // never begin one. Skipped rather than counted and rather than reported: it IS in the original,
+      // so calling it residue would be a lie, and starting a region on it is the noise this guard
+      // measured seven times out of fifteen on its first class extraction.
+      if (nothingButPunctuation(line)) {
+        continue;
+      }
       const starts = whereverItIs(line);
       if (starts.length === 0) {
+        // RESIDUE, and the walk HOLDS ITS PLACE across it. A line the original never had reorders
+        // nothing: the moved lines on either side keep the order they had, which is the only thing a
+        // run is supposed to measure. Resetting here used to split one run in two at every inserted
+        // line — fine for a file of functions, which are cut whole, and wrong for a CLASS, whose new
+        // module needs a declaration, a constructor and a getter BETWEEN the moved regions. Measured
+        // on the first extraction out of `panelProvider.ts`: thirteen scaffolding lines turned eight
+        // cut regions into fifteen reported runs, and the tool said "something was reordered" about a
+        // move where nothing had been. A verification tool may not cry wolf over basic syntax.
+        //
+        // It does NOT weaken the check. A reordering cannot hide here, because a reordered line
+        // still EXISTS in the original — it is found somewhere else, and being found somewhere else
+        // is what starts a new run. Only genuinely new lines reach this branch, and each is already
+        // reported by name for a reviewer to justify.
         residue.push({ name, line: raw.trim() });
-        next = -1;
         continue;
       }
       runs += 1;

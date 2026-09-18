@@ -7752,12 +7752,39 @@ and residue is the reviewer's whole job on a move.
 every one of the 26 is scaffolding — the interface, the class declaration, the three collaborator
 fields, the constructor, the getter and the new header. **Not one body line is residue.**
 
-**One thing the prover does not fit, and it is worth knowing before the next extraction.** Its run
-budget — `PROVE_MOVE_REGIONS`, the number of contiguous regions cut — is calibrated for a function
-move. A class extraction interleaves scaffolding between the moved blocks, so the walk reports more
-runs (15) than the regions actually cut (8) and says *"something was reordered"* when nothing was. The
-residue list is still exactly right, and it is the part that matters; the run count should be read as a
-shape check rather than a verdict until the tool learns about constructors.
+**The prover did not fit a class, and was fixed rather than worked around** — operator's ruling:
+*a verification tool may not produce a false positive on basic syntax.* It reported **15** runs where
+**8** regions had been cut and said *"something was reordered"* about a move where nothing had been.
+Two defects, both measured, both now covered by their own red-first case in `proveMove.test.mjs`:
+
+1. **Residue reset the walk.** A line the original never had set `next = -1`, so every inserted line
+   split one run into two. Harmless for a file of functions, which are cut whole; wrong for a class,
+   whose module needs a declaration, a constructor and a getter BETWEEN the moved regions. The walk
+   holds its place across residue now. It cannot hide a reordering: a reordered line still EXISTS in
+   the original, so it is found elsewhere, and being found elsewhere is what starts a new run.
+2. **A bare `}` could start a region** — and this was the larger half. `}`, `/**`, ` *`, ` */` carry
+   no information and occur everywhere, so each "matched" somewhere unrelated and began a run there.
+   Of the fifteen, **seven began at lines 3 989–4 022** of a file whose moved code ends at 987. A run
+   start is a claim that a region came from THERE, and a line with no letter or digit cannot support
+   it; such a line may still CONTINUE a run, which is how a moved function keeps its closing brace.
+
+Both halves needed a fixture that could actually fail: the first attempt at the second case passed
+immediately, because a `/**` the tiny fixture's original never had is residue rather than a spurious
+match. With a multi-line comment in the original it goes red at `actual: 3, expected: 1`.
+
+**The same extraction now reports 8 runs against 8 declared.** Residue is unchanged at 26 — every one
+still scaffolding, which is the tool doing its job rather than a false positive, and the reason it
+still exits non-zero: the contract is that a human justifies each new line, not that there are none.
+
+**One thing it still shows, by decision rather than oversight: `private`.** Extracting a class puts
+private methods behind a new boundary, so some must become public, and `unexported()` forgives
+`export` and nothing else — so each newly-public method is one residue line and one extra run. The
+consultant-prompt extraction measured it: two methods, three runs against one contiguous region.
+Widening the forgiveness would have made those lines match, and the operator ruled that it shows. A
+visibility change is a real change to a line, and the one question this tool answers is whether a
+line is what it was; hiding a genuine edit to tidy a count trades the product for the summary. Read
+the runs against the regions cut PLUS the methods that changed visibility, and say so in the pull
+request.
 
 `sonarExclusions.test.ts` caught the new module immediately — it imports `vscode`, so it belongs in
 `sonar.coverage.exclusions`, and the ratchet failed until it was there. The comment beside that list
