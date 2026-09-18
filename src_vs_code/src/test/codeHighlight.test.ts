@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { HIGHLIGHT_CSS, canHighlight, highlight, plainBlock, timesTokenised } from '../codeHighlight';
+import { textOutsideTags, unescaped } from './readableHtml';
+import { collectorLanguages } from './sourceLanguages';
 
 /**
  * The highlighter, with the security property first and the colours second.
@@ -38,63 +38,16 @@ function inside(html: string): string {
   return html.slice(opens + '<code>'.length, shuts);
 }
 
-const NAMED: Readonly<Record<string, string>> = {
-  '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&',
-};
-
 /**
- * The text between the tags — SCANNED, not stripped with a regex.
+ * The text a reader sees inside the code element, with Shiki's wrapper taken off.
  *
- * <p>The first version was `.replace(/<[^>]*>/g, '')` and CodeQL was right to refuse it: one pass
- * of a strip turns `&lt;scr&lt;script&gt;ipt&gt;` into `&lt;script&gt;`, which is the classic incomplete
- * sanitisation. In a TEST that matters more than it looks, not less — a helper that cleans
- * imperfectly can let an assertion pass for the wrong reason, and these are the assertions that say
- * a hostile skeleton cannot become markup.</p>
- *
- * <p>It also has to be right about a `&gt;` that is NOT part of a tag. Shiki escapes `&lt;` and leaves
- * `&gt;` alone, so `Task&lt;List&lt;string&gt;&gt;` reaches here with real `&gt;` characters in the text, and a
- * scanner that simply dropped every `&gt;` would quietly eat the generic this suite exists to prove
- * survives. So: copy up to a `&lt;`, skip to its `&gt;`, repeat — anything else is text.</p>
- */
-function textOutsideTags(html: string): string {
-  let text = '';
-  let at = 0;
-  for (;;) {
-    const opens = html.indexOf('<', at);
-    if (opens < 0) {
-      return text + html.slice(at);
-    }
-    text += html.slice(at, opens);
-    const shuts = html.indexOf('>', opens);
-    if (shuts < 0) {
-      // An unterminated tag: everything after it is markup, not text.
-      return text;
-    }
-    at = shuts + 1;
-  }
-}
-
-/**
- * The text a reader sees, with every tag stripped and the entities put back.
- *
- * <p>ONE pass over every entity form, rather than a chain of replaces — and that is not tidiness.
- * The two paths escape differently: Shiki writes `&#x26;` for an ampersand and leaves the
- * apostrophe alone, `escapeHtml` writes `&amp;` and `&#39;`. A chain that decoded `&amp;` before
- * the numeric forms would turn `&amp;#39;` into an apostrophe that was never there, so a test
- * about doubling would itself be doing the doubling.</p>
+ * <p>The tag scanner and the entity decoder are `readableHtml.ts`'s — they lived here until the
+ * review page began rendering reviewer prose (story 2.1) and its test needed the same reading of
+ * the same escaping property. What they let this file assert is a PROPERTY of the output rather
+ * than the presence of a particular escape; the header says why that distinction matters.</p>
  */
 function readable(html: string): string {
-  return textOutsideTags(inside(html))
-    .replace(/&(?:#x([0-9a-f]+)|#(\d+)|(\w+));/giu, (whole, hex: string, dec: string) => {
-      if (hex !== undefined) {
-        return String.fromCodePoint(Number.parseInt(hex, 16));
-      }
-      if (dec !== undefined) {
-        return String.fromCodePoint(Number(dec));
-      }
-
-      return NAMED[whole.toLowerCase()] ?? whole;
-    });
+  return unescaped(textOutsideTags(inside(html)));
 }
 
 for (const language of ['CSharp', 'TypeScript', 'JavaScript', 'Unsupported', '']) {
@@ -284,34 +237,18 @@ test('which languages this page claims to colour is a decision, not a lowercase'
 });
 
 /**
- * The table is checked against the PRODUCER, not against itself.
+ * The decision is checked against the PRODUCER, not against itself.
  *
  * <p>Three reviewers made the same point from different directions: a table that only agrees with
  * its own unit tests drifts silently the day the server learns a fourth language, and the page then
  * renders it plain while every test here stays green. `SourceLanguage` is where that decision is
- * actually made, so this reads it — the enum is two projects away and a source read is the only
- * thing that can cross that gap in a suite with no server running.</p>
- *
- * <p>It is a positive pin on a declaration rather than a match on prose, per `testing.md`: it
- * enumerates the enum's members and asserts a verdict for each, so adding `FSharp` to the enum
- * turns this red with the name in the message rather than passing quietly.</p>
+ * actually made, so this reads it through `sourceLanguages.ts` — the same reader the language
+ * table's own test uses, since story 2.1 moved the table out of this module. The loop DERIVES the
+ * expectation: a fourth member arrives with `canHighlight` false where the loop demands true, and
+ * the assertion names it.</p>
  */
 test('every language the collector can record has a verdict on this page', () => {
-  const enumFile = join(__dirname, '..', '..', '..', 'src_mcp', 'core', 'Normalising', 'IAstNormalizer.cs');
-  const declared = /public enum SourceLanguage\s*\{([^}]*)\}/u.exec(readFileSync(enumFile, 'utf8'));
-  assert.ok(declared !== null, 'SourceLanguage has moved — this test is reading nothing');
-
-  const members = (declared[1] ?? '')
-    .split(',').map((m) => m.trim()).filter((m) => m.length > 0 && !m.startsWith('//'));
-  // No hand-typed copy of the list. A reviewer was right that repeating it here would be the very
-  // duplication this test exists to remove — and it is not needed, because the loop DERIVES the
-  // expectation: a fourth member added to the enum arrives with `canHighlight` false where the loop
-  // demands true, and the assertion names it. What IS asserted directly is only that the read found
-  // something, since a regex matching nothing would otherwise pass an empty loop in silence.
-  assert.ok(members.length >= 2, 'the enum was read but no members came out of it');
-  assert.ok(members.includes('Unsupported'), 'the honest "we do not read this one" value is gone');
-
-  for (const member of members) {
+  for (const member of collectorLanguages()) {
     assert.equal(canHighlight(member), member !== 'Unsupported', member);
   }
 });

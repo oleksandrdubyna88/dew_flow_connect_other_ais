@@ -195,6 +195,29 @@ and two spellings of one repository — with the expected mapping written down f
 - **Cyclomatic complexity** of the method.
 - **The commit hash**, and four ways to reach the code.
 
+> **Story 2.1 built the cheap half of this on 2026-09-18**, and three things in its brief turned out
+> wrong when the code was read, each of which changed the design:
+>
+> 1. **The AFTER skeleton is not the method at `head_sha`.** `Collector.LocateThenWalkAsync`
+>    normalises the before side from `head_sha` and the after side from `touched.Sha` — the commit
+>    the walk found the fix in, stored as `fix_sha`. A complexity "of the method at `head_sha`" would
+>    have been confidently wrong about the after side, so `ReviewPair` carries `fixSha` as a seventh
+>    field beyond the brief's six, and the page labels each side with its own commit.
+> 2. **The AOT context needed no new `[JsonSerializable]` line.** The source generator emits an
+>    accessor for every type reachable from a registered root; `Default.StoredPair` already existed
+>    that way, and a compile probe proved it before `ReviewPair` was written.
+> 3. **`--pairs-json`'s inner join to `findings` was fine; the new joins to `rounds` and `sessions`
+>    are LEFT.** A pair whose session row is gone must stay on the page. The product cannot orphan
+>    one — Microsoft.Data.Sqlite turns foreign keys on — but the `sqlite3` shell leaves them off, and
+>    that is the hand that prunes old sessions.
+>
+> What shipped: `RoundsDb.Pairs()` → `ReviewPair` (`Sendable()`, `StoredPair` and `UploadRun.Wire`
+> byte-identical, `OnlyThreeFieldsLeaveTests` unmodified); `why`/`fix` with "none recorded"; the
+> short hash as TEXT beside `file:line` (links are epic 3); cyclomatic complexity computed from the
+> skeleton in `cyclomatic.ts`, comments and literals blanked first, labelled `2 at aaaa111 → 4 at
+> bbbb222`. The class name is story 2.3's (it is not stored, and the un-anonymised locate is where it
+> comes from). Records: `research/module_server.md`, `module_extension.md`, `module_tests.md`.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -365,7 +388,7 @@ above rather than accepting them, and three of its findings changed the plan:
 | Epic | Stories | Model | State |
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **1.1 shipped** |
-| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | not started |
+| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (in review); 2.2, 2.3 not started |
 | **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | blocked on two decisions |
 

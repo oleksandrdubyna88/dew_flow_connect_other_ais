@@ -7550,6 +7550,79 @@ of four shapes or into nothing, and `received` switches over it. A plain lookup 
 and a `NaN` delta reached `clampScale`, which answers 0 for anything non-finite — so a junk press
 would have silently reset somebody's zoom rather than doing nothing.
 
+### What a row says about itself (2026-09-18, story 2.1)
+
+Above the two panes, each open pair now carries a four-line block: **where** it was, **why** the
+reviewers raised it, the **fix** they proposed, and its **complexity**. Nothing new is fetched —
+`--pairs-json` widened once (`research/module_server.md`, *The page's row is wider than the
+send's*), and `ReviewPair` gained `repoPath`, `headSha`, `fixSha`, `file`, `line`, `why` and `fix`.
+`roundsDbRead.pairOf` fills every one of them from a server too old to send it — empty text, a line
+of 0 — so the read side needs no version negotiation, and the interface makes them REQUIRED so the
+page cannot forget to decide what an empty one looks like.
+
+**"None recorded", never an invented cause.** A finding with no `why` or no `fix` says so, in
+those words, once per absence. A page that produced a plausible sentence for a blank column would
+be the confident-and-wrong answer this whole page exists to avoid.
+
+**The reviewers' prose is external data and renders as text.** `why` and `fix` are what a model
+wrote about somebody's code, arriving through a JSON document. They go through `escapeHtml` on the
+way in, and `bugzReviewPage.test.ts` asserts the same property `codeHighlight.test.ts` asserts for
+the skeletons — the dangerous sequence cannot appear as markup AND the text is still all there,
+because an escaper that dropped the payload passes every "cannot appear" line on its own.
+
+**The hash is text, abbreviated the way git abbreviates it, and a missing one is said.** Not a
+link: a link promises "open the file at this revision", and whether that promise can be kept is
+epic 3's revision rule (`head_sha` orphaned 55.7 % of the time, measured, while 99.6 % of orphaned
+blobs still read). The block is asserted to contain no anchor at all, so the day one appears it is a
+decision that story makes rather than something this one drifted into. `file:line` is the finding's
+position at `headSha`; a line of 0 is "none recorded" and is not rendered as line zero.
+
+**Cyclomatic complexity is computed from the SKELETON, on this side, in `cyclomatic.ts`** — no
+column, no server call. That works because `Normalise` renames identifiers and leaves every other
+token verbatim, so `if`, `for`, `case`, `catch`, `&&`, `||`, `??` and a ternary's `?` survive
+anonymisation unchanged; `cyclomatic.test.ts` asserts the count over a skeleton the normaliser's own
+fixture produces. It is McCabe's number the way the family's analysers count it: one, plus one per
+`if`, loop, `case` label, `catch`, C# `when` guard, boolean operator, null-coalescer and conditional.
+Comments and string literals are blanked FIRST, in all the shapes the three languages spell them
+(line and block comments, escaped strings, template literals, C#'s verbatim `@"…"` with its doubled
+quote, and raw `"""…"""`), because the corpus keeps both verbatim and `// if this races` is a
+thing a skeleton really contains. The conditional is told from a nullable type, a null-conditional
+access and a TypeScript optional by being the `?` with whitespace on both sides.
+
+**What it does not count, said in the module rather than hidden:** the arms of a C# switch
+expression and the `and`/`or` pattern combinators (both read as one expression — the C# doctrine
+treats a switch expression as the way to bring a number down, so this errs on its side), a regex
+literal's contents, and a ternary inside a template literal's `${…}` hole. None is common in one
+method of the corpus.
+
+**Each side is labelled with the revision its skeleton came from — and the two are different
+commits.** The before skeleton is the method at `headSha`, the commit the reviewers read; the after
+skeleton is the method at `fixSha`, the commit the collector found the fix in
+(`Collector.LocateThenWalkAsync` normalises the after side from `touched.Sha`). The plan's brief
+had one sha for both. So the block reads `2 at aaaa111 → 4 at bbbb222`, with the `dt`'s title saying
+"of the method as it was at that commit, counted from the skeleton — not of the file today". A
+language the count does not read gets the count's own sentence (`not computed: Fortran is not a
+language this page reads`), never a zero — the coding-style rule's "absent is not zero", and the
+highlighter's `plain` fallback, applied here.
+
+**`corpusLanguage.ts` is the one table that says which of three languages a row is in.** It was
+`GRAMMARS` inside `codeHighlight.ts`; the complexity count needed the same decision, and two tables
+would have agreed until one learned a fourth spelling, so the shared half moved out (the reuse rule's
+second move) and both read it. It is a `Map` rather than an object literal, because an object
+answers `['constructor']` with `Object.prototype.constructor` — truthy, a function, typed as a
+string by the index signature — and the highlighter would have handed Shiki a function as a grammar
+id; the old table had that hole and `corpusLanguage.test.ts` now pins the five inherited names.
+Both modules' tests pin the table against `SourceLanguage` in `src_mcp` through one shared reader
+(`src/test/sourceLanguages.ts`), so a fourth collector language arrives as a red test naming it in
+both places.
+
+**What this story deliberately did not do.** The block sits in the DETAIL row, so a collapsed list
+is as tall as it was; if the path turns out to be what a person scans for, moving `file` into the
+summary line is a presentation change epic 2.2 can make when the project and language tabs arrive.
+And the decide path still has no visible in-flight state — the observation carried out of story
+1.1's code round; it is a durable-status change to `bugzReviewPanel.ts` and `--pairs-keep`, not a
+projection change, and it is still owed.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

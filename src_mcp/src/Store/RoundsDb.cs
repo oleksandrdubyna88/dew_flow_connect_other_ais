@@ -378,30 +378,71 @@ public sealed class RoundsDb : IDisposable
         write.ExecuteNonQuery();
     }
 
-    /// <summary>The collected pairs, newest first, with whatever a person has decided about them.</summary>
-    public IReadOnlyList<StoredPair> Pairs(int limit)
+    /// <summary>
+    /// The collected pairs, newest first, with whatever a person has decided about them — and where
+    /// each one was, and what the reviewers said about it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A wider row than <see cref="Sendable"/>'s, into a record of its own.</b> The send
+    /// projects <see cref="StoredPair"/> and nothing else, and <c>OnlyThreeFieldsLeaveTests</c>
+    /// constructs that record by name to say so; widening it would have routed the repository path
+    /// and the reviewers' prose through the type the upload reads. The page reads
+    /// <see cref="ReviewPair"/>, and the two share their first nine columns and nothing else.</para>
+    /// <para><b>The round and the session are LEFT JOINed.</b> A pair belongs to a finding, and the
+    /// finding's round and session are what say where the code was — but a pair whose round or
+    /// session row has gone is still a pair somebody has to decide about. An inner join would drop
+    /// it from the page in silence; an empty repository path says something true instead. The
+    /// finding itself stays an inner join: a pair keyed on a finding that is not there is a pair of
+    /// nothing, and it was never offered before either.</para>
+    /// <para>Read by column NAME, through <see cref="Columns"/>, rather than by ordinal as
+    /// <see cref="Sendable"/> still does: at sixteen columns an ordinal reader answers the wrong
+    /// field the day the SELECT is reordered, and does it silently.</para>
+    /// </remarks>
+    public IReadOnlyList<ReviewPair> Pairs(int limit)
     {
         using var read = _db.CreateCommand();
         read.CommandText = """
             SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
-                   p.keep, f.severity, f.category, f.title
-              FROM collect_pairs p JOIN findings f ON f.id = p.finding_id
+                   p.keep, f.severity, f.category, f.title,
+                   COALESCE(s.repo_path, '') AS repo_path, COALESCE(r.head_sha, '') AS head_sha,
+                   f.fix_sha, f.file, f.line, f.why, f.fix
+              FROM collect_pairs p
+              JOIN findings f ON f.id = p.finding_id
+              LEFT JOIN rounds r ON r.id = f.round_id
+              LEFT JOIN sessions s ON s.id = r.session_id
              ORDER BY p.written_utc DESC, p.finding_id
              LIMIT $limit
             """;
         Bind(read, "$limit", limit);
         using var rows = read.ExecuteReader();
-        var pairs = new List<StoredPair>();
+        var pairs = new List<ReviewPair>();
         while (rows.Read())
         {
-            pairs.Add(new StoredPair(
-                rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
-                rows.GetString(4), rows.GetInt32(5), rows.GetString(6), rows.GetString(7),
-                rows.GetString(8)));
+            pairs.Add(ReviewPairFrom(rows));
         }
 
         return pairs;
     }
+
+    /// <summary>One row of <see cref="Pairs"/>, by column name.</summary>
+    private static ReviewPair ReviewPairFrom(SqliteDataReader rows) =>
+        new(
+            FindingId: Columns.Id(rows, "finding_id"),
+            SymbolName: Columns.Text(rows, "symbol_name"),
+            Language: Columns.Text(rows, "language"),
+            SkeletonBefore: Columns.Text(rows, "skeleton_before"),
+            SkeletonAfter: Columns.Text(rows, "skeleton_after"),
+            Keep: Columns.Number(rows, "keep"),
+            Severity: Columns.Text(rows, "severity"),
+            Category: Columns.Text(rows, "category"),
+            Title: Columns.Text(rows, "title"),
+            RepoPath: Columns.Text(rows, "repo_path"),
+            HeadSha: Columns.Text(rows, "head_sha"),
+            FixSha: Columns.Text(rows, "fix_sha"),
+            File: Columns.Text(rows, "file"),
+            Line: Columns.Number(rows, "line"),
+            Why: Columns.Text(rows, "why"),
+            Fix: Columns.Text(rows, "fix"));
 
     /// <summary>The kept pairs nobody has sent yet, and nobody has been refused for.</summary>
     /// <remarks>

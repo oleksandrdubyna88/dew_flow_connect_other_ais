@@ -1099,3 +1099,35 @@ test('the shipped page does not offer a retry when the host says there is nothin
   assert.match(markup, /the page hit an error/, 'a failure with no retry stopped being readable');
   assert.doesNotMatch(markup, /data-retry/, 'the shipped page offered a button the host did not offer');
 });
+
+/* ------------------------------------------------------------------------------------------------
+ * The THIRD page, and the reason it is here is a correction rather than a feature.
+ *
+ * Epic 1 of PLAN_the_review_page_can_be_read wrote, in three docblocks, that a review-page module
+ * reaching for `node:` or `vscode` "fails the bundle test". It would not have: this file bundled the
+ * rounds log and the chat page, and `theBundleLoads.test.mjs` loads the whole extension bundle, where
+ * `node:` is available and a page module importing it proves nothing. The review page's purity was
+ * held by discipline and by comments CLAIMING a guard that did not exist — which is worse than no
+ * comment, because the next person reads it and stops checking.
+ *
+ * Found by the agent that built story 2.1, reading the code rather than the docblocks.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('the review page bundles without dragging the host into it', () => {
+  const bundle = bundleOf('bugzReviewPage.ts', 'reviewPageHtml');
+
+  // `node:` in a bundle of a PAGE module means a host import survived tree-shaking — the page runs
+  // in a webview, where none of it exists. Shiki and its three grammars come along; none is a host.
+  assert.doesNotMatch(bundle, /require\("node:/u,
+    'a review-page module imports something only the extension host has');
+  assert.doesNotMatch(bundle, /require\("vscode"\)/u,
+    'a review-page module imports the vscode API, which a webview does not have');
+
+  // And the companion, without which the two assertions above pass on an empty bundle: the page is
+  // really in there, and it really runs.
+  const shim = { exports: {} as Record<string, unknown> };
+  new Function('module', 'exports', bundle)(shim, shim.exports);
+  const render = (shim.exports as { reviewPageHtml?: (view: unknown) => string }).reviewPageHtml;
+  assert.equal(typeof render, 'function', 'the bundle exports no page to render');
+  assert.match(render!({ pairs: [], nonce: 'n' }), /Review bugs/u);
+});

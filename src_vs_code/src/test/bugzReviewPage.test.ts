@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { readable } from './readableHtml';
 
 /**
  * The review page, RUN — because a multi-select that renders is not a multi-select that selects.
@@ -10,6 +11,11 @@ import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecid
  * wired to nothing, and four gate reviewers found what no markup assertion could. `.agents/PROJECT.md`
  * refuses a new behavioural assertion over page source text for exactly that reason, so the script
  * here is executed and what it POSTS is what gets asserted.</p>
+ *
+ * <p>The section on what a row SAYS about itself (story 2.1) is the one place this file reads
+ * markup, and it stays inside the ruling's own carve-out: rendered values have no program to run,
+ * and "a value appearing escaped" is named as legitimate. Each of those assertions was proven to
+ * have teeth by deleting the thing it checks and watching it go red.</p>
  */
 
 const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
@@ -22,6 +28,13 @@ const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
   severity: 'Major',
   category: 'Reliability',
   title: 'a race',
+  repoPath: 'D:/repo',
+  headSha: 'aaaa111',
+  fixSha: 'bbbb222',
+  file: 'src/Totals.cs',
+  line: 5,
+  why: 'it races',
+  fix: 'hold the lock',
 });
 
 interface Posted {
@@ -690,6 +703,134 @@ test('a skeleton full of markup cannot close the page\'s script or restyle it', 
   assert.ok(!rows.includes('</script>'), 'a pair could end the page\'s own script early');
   assert.ok(!/<style[\s>]/iu.test(rows), 'a pair could hide the rows around it');
   assert.ok(!/<img[\s>]/iu.test(rows), 'a pair could add an element to the page');
+});
+
+// --------------------------------------------------------------------------------------------
+// What a row says about itself (story 2.1): where it was, why, the fix, and how complex.
+// --------------------------------------------------------------------------------------------
+
+/**
+ * The `about` block of one pair's detail row — what the row says about itself, as markup.
+ *
+ * <p>Sliced from the detail row the page rendered for THAT id, so a block rendered for the wrong
+ * pair, or outside any pair, is a failure here rather than a match elsewhere on the page.</p>
+ */
+function aboutOf(html: string, findingId: number): string {
+  const detail = html.indexOf(`data-detail="${findingId}"`);
+  assert.ok(detail >= 0, `no pair ${findingId} is on this page`);
+  const opens = html.indexOf('<dl class="about">', detail);
+  const shuts = html.indexOf('</dl>', opens);
+  assert.ok(opens > detail && shuts > opens, `pair ${findingId} says nothing about itself`);
+
+  return html.slice(opens, shuts);
+}
+
+const page = (one: ReviewPair): string =>
+  reviewPageHtml({ pairs: [one], nonce: 'test-nonce', expanded: new Set([one.findingId]) });
+
+test('the reviewers\' cause and fix are shown with the code', () => {
+  const said = readable(aboutOf(page({ ...pair(1), why: 'it races on the cache', fix: 'hold the lock' }), 1));
+
+  assert.match(said, /it races on the cache/u, 'the cause the reviewers recorded is not shown');
+  assert.match(said, /hold the lock/u, 'the fix the reviewers proposed is not shown');
+});
+
+/**
+ * A finding with nothing recorded says so — it never invents a cause.
+ *
+ * <p>Counted, not merely matched: "none recorded" has to appear exactly as many times as there are
+ * empty fields, or a page that said it for the cause while showing an empty fix would pass.</p>
+ */
+test('a finding with no cause or fix recorded says so, once per absence', () => {
+  const nothing = readable(aboutOf(page({ ...pair(1), why: '', fix: '   ' }), 1));
+  assert.equal((nothing.match(/none recorded/gu) ?? []).length, 2);
+
+  const half = readable(aboutOf(page({ ...pair(1), why: 'it races', fix: '' }), 1));
+  assert.equal((half.match(/none recorded/gu) ?? []).length, 1);
+  assert.match(half, /it races/u);
+
+  const whole = readable(aboutOf(page(pair(1)), 1));
+  assert.doesNotMatch(whole, /none recorded/u, 'a finding with both must not claim to lack either');
+});
+
+/**
+ * Reviewer prose is external data, and it renders as text — the same property the skeletons hold.
+ *
+ * <p>`why` and `fix` are what a model wrote about somebody's code, and they reach this page through
+ * a JSON document. The assertion is the sequence-cannot-appear-AND-the-text-is-still-there pair
+ * `codeHighlight.test.ts` uses, for the reason it gives: an escaper that dropped the payload would
+ * pass every "cannot appear" line on its own.</p>
+ */
+test('reviewer prose full of markup renders as text, never as markup', () => {
+  const hostile = {
+    ...pair(1),
+    why: 'because </script><img src=x onerror=alert(1)> races',
+    fix: 'wrap it: <style>.pair{display:none}</style> <!-- and hide -->',
+  };
+  const about = aboutOf(page(hostile), 1);
+
+  assert.ok(!about.includes('</script>'), 'a finding\'s cause could end the page\'s own script');
+  assert.ok(!/<img[\s>]/iu.test(about), 'a finding\'s cause could add an element');
+  assert.ok(!/<style[\s>]/iu.test(about), 'a finding\'s fix could restyle the page');
+  assert.ok(!/<!--/u.test(about), 'a finding\'s fix could comment out the rest of the row');
+  // And the words are all still there.
+  assert.ok(readable(about).includes('<img src=x onerror=alert(1)> races'), 'the cause itself must survive');
+  assert.ok(readable(about).includes('<style>.pair{display:none}</style>'), 'the fix itself must survive');
+});
+
+/**
+ * The path and the commit are shown as TEXT, the commit abbreviated as git would, and a missing
+ * commit is said rather than guessed.
+ *
+ * <p>Not a link: a link promises "open at this revision", and whether that can be kept is epic 3's
+ * revision rule. So the block is asserted to contain no anchor at all — the day one appears, it is
+ * a decision that story makes, not something this one drifted into.</p>
+ */
+test('the path and the short commit are shown as text, and a missing commit says so', () => {
+  const placed = page({ ...pair(1), file: 'src/Totals.cs', line: 5, headSha: 'aaaa111bbbb2222', repoPath: 'D:/repo' });
+  const about = aboutOf(placed, 1);
+  const said = readable(about);
+
+  assert.match(said, /src\/Totals\.cs:5/u, 'the finding\'s path and line are not shown');
+  assert.match(said, /at aaaa111\b/u, 'the commit the reviewers read is not shown, short');
+  assert.doesNotMatch(said, /aaaa111bbbb2222/u, 'a full sha is a wall, not a label');
+  assert.match(said, /D:\/repo/u, 'which checkout it was is not shown');
+  assert.ok(!/<a[\s>]/iu.test(about), 'a link here promises what only epic 3 can keep');
+
+  const nowhere = readable(aboutOf(page({ ...pair(1), file: '', line: 0, headSha: '', repoPath: '' }), 1));
+  assert.match(nowhere, /no file recorded/u);
+  assert.match(nowhere, /an unrecorded commit/u);
+  assert.doesNotMatch(nowhere, /:0\b/u, 'a line of 0 is "none recorded", not line zero');
+});
+
+/**
+ * The complexity is the skeleton's, and each side is labelled with the revision it came from.
+ *
+ * <p>The before skeleton is the method at the commit the reviewers read; the after skeleton is the
+ * method at the commit the fix was found in — two different commits. A page labelling both with one
+ * sha is confidently wrong about one of them, so the two labels are asserted separately. Verified
+ * by mutation: labelling the after side with `headSha` turns this red.</p>
+ */
+test('the complexity of each side is labelled with the revision its skeleton came from', () => {
+  const counted = page({
+    ...pair(1),
+    skeletonBefore: 'void method_1() { if (var_1) { } }',
+    skeletonAfter: 'void method_1() { if (var_1 && var_2) { } else if (var_3) { } }',
+    headSha: 'aaaa111',
+    fixSha: 'bbbb222',
+  });
+  const said = readable(aboutOf(counted, 1));
+
+  assert.match(said, /2 at aaaa111/u, 'the before count is not the skeleton\'s, or is not labelled');
+  assert.match(said, /4 at bbbb222/u, 'the after count is not the skeleton\'s, or is labelled with the wrong commit');
+});
+
+test('a language the count does not read gets the count\'s own sentence, not a zero', () => {
+  const said = readable(aboutOf(page({ ...pair(1), language: 'Fortran' }), 1));
+
+  assert.match(said, /not computed/u);
+  assert.match(said, /Fortran/u, 'the sentence must name the language');
+  assert.doesNotMatch(said, /\b0 at\b/u, 'a count that could not be taken must not render as zero');
 });
 
 // --------------------------------------------------------------------------------------------
