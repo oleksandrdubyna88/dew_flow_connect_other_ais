@@ -60,7 +60,16 @@ export const TOO_OLD_FOR_THE_REVISION =
   'this machine’s coai-mcp is older than opening a file at its revision; update it from the panel';
 
 /** One row's last answer, with the coordinates it was about — a miss when the pair now names others. */
+/**
+ * One row's answer, with the three coordinates that make it THAT row's.
+ *
+ * <p><b>The checkout is one of them.</b> A finding id, a commit and a path are the same three in two
+ * checkouts of one repository — which story 2.2 measured as the ordinary case here, 44 of 54 live
+ * paths being linked worktrees — so an identity without `repoPath` hands the second row the first
+ * one's code. (Code round, codex.)</p>
+ */
 interface HeldRevision {
+  readonly repoPath: string;
   readonly headSha: string;
   readonly file: string;
   readonly read: FileAtRead;
@@ -110,7 +119,10 @@ const ABOUT_THE_REPOSITORY: ReadonlySet<string> = new Set(['', 'repo_path_missin
  * row at once.</p>
  */
 export function remember(memory: RevisionMemory, row: RevisionRow, read: FileAtRead): RevisionMemory {
-  const rows = new Map([...memory.rows, [row.findingId, { headSha: row.headSha, file: row.file, read }]]);
+  const rows = new Map([
+    ...memory.rows,
+    [row.findingId, { repoPath: row.repoPath, headSha: row.headSha, file: row.file, read }],
+  ]);
   if (!read.ok) {
     return { ...memory, rows, tooOld: memory.tooOld || read.tooOld };
   }
@@ -133,7 +145,12 @@ export function rememberCurrent(memory: RevisionMemory, row: RevisionRow, why: s
 function heldOf(memory: RevisionMemory, row: RevisionRow): FileAtRead | undefined {
   const held = memory.rows.get(row.findingId);
 
-  return held !== undefined && held.headSha === row.headSha && held.file === row.file ? held.read : undefined;
+  return held !== undefined
+    && held.repoPath === row.repoPath
+    && held.headSha === row.headSha
+    && held.file === row.file
+      ? held.read
+      : undefined;
 }
 
 /**
@@ -157,6 +174,13 @@ export function heldRevision(memory: RevisionMemory, row: RevisionRow): FileAtRe
  * "not checked yet" into an offer after the first successful read in that repository.</p>
  */
 export function affectedBy(memory: RevisionMemory, row: RevisionRow, held: readonly RevisionRow[]): readonly number[] {
+  // A server too old for the mode is a fact about the SERVER, not about one repository: every drawn
+  // row is affected at once. Told to the pressed row alone, the other 199 kept offering the action
+  // and each launched another doomed request. (Code round, codex.)
+  if (memory.tooOld) {
+    return held.map((one) => one.findingId);
+  }
+
   if (!memory.probed.has(row.repoPath)) {
     return [row.findingId];
   }

@@ -58,6 +58,25 @@ public sealed class TheFileAtRevisionTests : IAsyncLifetime
     private static readonly CollectedPair Skeletons = new(
         "GetOrAdd", "CSharp", "public int method_1(string var_1, int var_2) { }", "public int method_1(string var_1, int var_2) { lock (var_3) { } }");
 
+
+    /// <summary>
+    /// A launcher that answers as git would when one subcommand fails for a reason that is NOT the
+    /// path being absent — a permission error, a broken object, a transient fault.
+    /// </summary>
+    private sealed class FailsOnly(string subcommand) : IProcessLauncher
+    {
+        public List<ProcessRequest> Launched { get; } = [];
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Launched.Add(request);
+            var first = request.Arguments.Count > 0 ? request.Arguments[0] : string.Empty;
+
+            return Task.FromResult(first == subcommand
+                ? new ProcessResult(128, string.Empty, "error: unable to read object", false)
+                : new ProcessResult(0, "text", string.Empty, false));
+        }
+    }
     /// <summary>A launcher that records every request and answers as if git had said yes.</summary>
     private sealed class Recording : IProcessLauncher
     {
@@ -411,5 +430,48 @@ public sealed class TheFileAtRevisionTests : IAsyncLifetime
         typeof(FileAtRevision).GetProperties().Select(one => one.Name).Should().Contain(["Text", "Sha", "Path", "Reason"]);
         typeof(StoredPair).GetProperties().Select(one => one.Name).Should().NotContain("Text");
         typeof(UploadedPair).GetProperties().Select(one => one.Name).Should().NotContain("Text");
+    }
+
+
+    /// <summary>
+    /// A `git show` that fails for a reason other than the path being absent is NOT 'the file was
+    /// not there'.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every non-zero exit after a successful commit check used to become
+    /// <c>file_not_in_commit</c>. A permission error, a broken object or a transient fault therefore
+    /// told a person the file had never been at that path — which is a lie rather than a gap, and
+    /// the page then suppresses the action for good instead of letting them press again.</para>
+    /// <para>The discriminator asks git rather than reading its prose: <c>cat-file -e sha:path</c>
+    /// exits 0 when the path IS in that commit, so a failure with the path present is something
+    /// else. One extra process, only on the failure path. (Code round, codex.)</para>
+    /// </remarks>
+    [Fact]
+    public async Task AGitShowThatFailsWhileThePathIsThere_IsRetryable_NotAbsent()
+    {
+        var launcher = new FailsOnly("show");
+        var git = new GitHistory(launcher);
+
+        var head = await _git.HeadAsync();
+        var read = await CommittedFile.ReadAsync(git, _git.Path, head, "Totals.cs");
+
+        read.Reason.Should().Be(
+            RealMethodReason.GitFailed,
+            "the path is in the commit, so a failed read is git failing — saying the file was absent would be a lie a person cannot retry past");
+        launcher.Launched.Should().Contain(
+            one => one.Arguments.Count > 1 && one.Arguments[0] == "cat-file" && one.Arguments[1] == "-e",
+            "the discriminator must ask git rather than parse its prose");
+    }
+
+    /// <summary>The companion: a path that really is absent still answers that it is absent.</summary>
+    [Fact]
+    public async Task AFileThatIsGenuinelyNotAtThatPath_StillSaysSo()
+    {
+        var git = new GitHistory(_launcher);
+
+        var head = await _git.HeadAsync();
+        var read = await CommittedFile.ReadAsync(git, _git.Path, head, "NeverExisted.cs");
+
+        read.Reason.Should().Be(RealMethodReason.FileNotInCommit);
     }
 }

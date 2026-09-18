@@ -153,6 +153,20 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
             ? RunAsync(repoPath, ["merge-base", "--is-ancestor", sha, of], ct)
             : Refused;
 
+    /// <summary>Whether this PATH is in that commit — the object, not the working tree.</summary>
+    /// <remarks>
+    /// The discriminator a failed read needs. <c>git show sha:path</c> exits non-zero both when the
+    /// path was never there and when git could not read it — a permission error, a broken object, a
+    /// transient fault — and telling a person the file was absent when it is right there is a lie
+    /// they cannot retry past. <c>cat-file -e sha:path</c> answers the narrow question on its own,
+    /// so nobody has to match git's prose, which changes between versions. (Code round, codex.)
+    /// </remarks>
+    public Task<GitAnswer> HasPathAsync(
+        string repoPath, string sha, string path, CancellationToken ct = default) =>
+        IsCommitish(sha) && IsRepoRelative(path)
+            ? RunAsync(repoPath, ["cat-file", "-e", $"{sha}:{path}"], ct)
+            : Refused;
+
     /// <summary>One file as it was at one commit.</summary>
     /// <remarks>
     /// <b>No <c>--</c> here.</b> That separator divides revisions from PATHS, and <c>sha:path</c> is

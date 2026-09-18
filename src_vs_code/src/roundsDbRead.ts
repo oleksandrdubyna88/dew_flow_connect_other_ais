@@ -587,19 +587,39 @@ export async function readRealMethod(
  * `sha` and `path` are what the document will be named by, so they are required to be text; `text`
  * may legitimately be empty (an empty file, or a reason).</p>
  */
-function fileAtOf(raw: unknown, asked: number): FileAtRevision | undefined {
+/**
+ * The row a revision was asked about — all three coordinates, because the answer is checked against
+ * every one of them.
+ */
+export interface AskedRevision {
+  readonly findingId: number;
+  readonly headSha: string;
+  readonly file: string;
+}
+
+function fileAtOf(raw: unknown, asked: AskedRevision): FileAtRevision | undefined {
   if (raw === null || typeof raw !== 'object') {
     return undefined;
   }
   const one = raw as Record<string, unknown>;
-  if (one['findingId'] !== asked || typeof one['sha'] !== 'string' || typeof one['path'] !== 'string') {
+  if (one['findingId'] !== asked.findingId) {
+    return undefined;
+  }
+
+  // The sha and the path are compared whenever the answer CARRIES CONTENT. A pair recollected while
+  // the request was in flight answers the same id at another commit, and an answer taken on trust
+  // would be cached and OPENED while the row still names the revision it asked about. (Code round,
+  // codex.) A reason-only answer is exempt on purpose: `pair_not_found` means there is no pair, so
+  // there are no coordinates for it to echo, and refusing it would turn a true answer into silence.
+  const carries = textOf(one, 'reason').length === 0;
+  if (carries && (one['sha'] !== asked.headSha || one['path'] !== asked.file)) {
     return undefined;
   }
 
   return {
-    findingId: asked,
-    sha: one['sha'],
-    path: one['path'],
+    findingId: asked.findingId,
+    sha: textOf(one, 'sha'),
+    path: textOf(one, 'path'),
     reason: textOf(one, 'reason'),
     text: textOf(one, 'text'),
   };
@@ -616,10 +636,10 @@ function fileAtOf(raw: unknown, asked: number): FileAtRevision | undefined {
  */
 export async function readFileAt(
   executable: string,
-  findingId: number,
+  asked: AskedRevision,
   run: Run = serverRun(executable),
 ): Promise<FileAtRead> {
-  const { code, output } = await run(['--file-at', '--id', String(findingId)], CAP_MS);
+  const { code, output } = await run(['--file-at', '--id', String(asked.findingId)], CAP_MS);
   if (code === EX_USAGE) {
     return { ok: false, tooOld: true, why: TOO_OLD_FOR_THE_REVISION };
   }
@@ -628,7 +648,7 @@ export async function readFileAt(
   }
 
   try {
-    const file = fileAtOf(JSON.parse(output), findingId);
+    const file = fileAtOf(JSON.parse(output), asked);
 
     return file === undefined
       ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }

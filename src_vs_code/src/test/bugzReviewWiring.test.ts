@@ -218,7 +218,8 @@ test('what was held is opened again without a process, and the server is asked o
   assert.match(opening, /const read = heldRevision\(this\.revision, pair\) \?\? await this\.fileAtOf\(pair\);/u,
     'a row already answered must open again from what was held, not from a second process');
   assert.match(bodyOf(text, 'private fileAtOf(pair: ReviewPair): Promise<FileAtRead> {'),
-    /this\.hooks\.readFileAt\(pair\.findingId\)/u, 'and the fetch really reaches the hook the provider wires');
+    /readFileAt\(\{ findingId: pair\.findingId, headSha: pair\.headSha, file: pair\.file \}\)/u,
+    'and the fetch really reaches the hook the provider wires, carrying the three coordinates the answer is checked against');
 });
 
 test('the current file is opened from a repository inside this workspace, and only from inside that repository', () => {
@@ -251,7 +252,7 @@ test('the panel hands what it remembers about revisions to every paint', () => {
 test('the provider wires the file-at hook to the real reader and both opens to the real editor', () => {
   const text = code('panelProvider.ts');
 
-  assert.match(text, /readFileAt: \(findingId\) => readFileAt\(server\.fsPath, findingId\),/u,
+  assert.match(text, /readFileAt: \(asked\) => readFileAt\(server\.fsPath, asked\),/u,
     'a page test can prove the page asks; only this proves anybody answers');
   assert.match(text, /showRevision: \(document\) => this\.revisionDocuments\(\)\.show\(document\),/u,
     'the text must reach a read-only document of this product\'s own scheme');
