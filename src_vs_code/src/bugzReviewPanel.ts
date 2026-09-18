@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 import { asText } from './asText';
 import { notify } from './notify';
-import { KeepWrite, PairsRead } from './roundsDbRead';
+import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
 import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -61,7 +61,7 @@ export interface ReviewHooks {
    * <p>Called on a PRESS, never at paint, and what it answers is remembered for the panel's lifetime
    * per repository: a checkout that is gone answers once and every row of it stops offering.</p>
    */
-  readonly readFileAt: (findingId: number) => Promise<FileAtRead>;
+  readonly readFileAt: (asked: AskedRevision) => Promise<FileAtRead>;
 
   /** Shows the text in a read-only document of this product's own scheme, named for its revision. */
   readonly showRevision: (document: RevisionDocument) => Promise<void>;
@@ -616,7 +616,8 @@ export class BugzReviewPanel {
       return running;
     }
 
-    const started = this.hooks.readFileAt(pair.findingId)
+    const started = this.hooks
+      .readFileAt({ findingId: pair.findingId, headSha: pair.headSha, file: pair.file })
       .catch((error_: unknown): FileAtRead => ({ ok: false, tooOld: false, why: asText(error_) }))
       .finally(() => {
         this.opening = new Map([...this.opening].filter(([held]) => held !== key));

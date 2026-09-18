@@ -2688,7 +2688,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // Reaching the code (story 3.1): the file at its revision comes through the server and lands
       // in a read-only document of this product's own scheme; the CURRENT file is opened from the
       // live filesystem only after the panel's guard has judged it against these folders.
-      readFileAt: (findingId) => readFileAt(server.fsPath, findingId),
+      readFileAt: (asked) => readFileAt(server.fsPath, asked),
       showRevision: (document) => this.revisionDocuments().show(document),
       showCurrent: (file, line) => showCurrentFile(file, line),
       folders: () => workspaceFolderPaths(),

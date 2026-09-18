@@ -292,3 +292,35 @@ test('no checkout and no file are each said, and no folder at all refuses everyt
     done();
   }
 });
+
+
+test('a held revision belongs to its CHECKOUT as well as its row and commit', () => {
+  // Code round, codex. The identity was findingId + headSha + file. Two checkouts of one repository
+  // — which story 2.2 measured as ordinary here, 44 of 54 live paths were linked worktrees — give
+  // the same three for different code, so the second row would have been handed the first's text.
+  const inA = { findingId: 7, repoPath: 'd:/rsd/a', headSha: 'aaaa111', file: 'src/Totals.cs' };
+  const inB = { ...inA, repoPath: 'd:/rsd/b' };
+  const text = { ok: true as const, tooOld: false, file: { findingId: 7, sha: 'aaaa111', path: 'src/Totals.cs', reason: '', text: 'A' } };
+
+  const memory = remember(emptyMemory(), inA, text);
+
+  assert.equal(heldRevision(memory, inA)?.ok, true, 'the checkout it was read from still answers');
+  assert.equal(heldRevision(memory, inB), undefined, 'another checkout must not be handed this text');
+});
+
+test('a server too old is told to every row on the page, not only the one that pressed', () => {
+  // Code round, codex. `remember` sets `tooOld` globally but does not mark the repository probed, so
+  // `affectedBy` answered with the pressed row alone: 199 of 200 rows kept offering the action and
+  // each launched another doomed request.
+  const rows = [
+    { findingId: 1, repoPath: 'd:/rsd/a', headSha: 'aaa', file: 'x.cs' },
+    { findingId: 2, repoPath: 'd:/rsd/a', headSha: 'bbb', file: 'y.cs' },
+    { findingId: 3, repoPath: 'd:/rsd/b', headSha: 'ccc', file: 'z.cs' },
+  ];
+  const old = { ok: false as const, tooOld: true, why: 'this server does not have the mode' };
+
+  const memory = remember(emptyMemory(), rows[0]!, old);
+
+  assert.deepEqual([...affectedBy(memory, rows[0]!, rows)].sort(), [1, 2, 3],
+    'an old binary is a fact about the SERVER, so every drawn row learns it at once');
+});

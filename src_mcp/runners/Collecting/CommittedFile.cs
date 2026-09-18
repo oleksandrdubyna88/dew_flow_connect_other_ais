@@ -42,12 +42,34 @@ public static class CommittedFile
             return Reading.Not(RealMethodReason.CommitUnreachable);
         }
 
-        return Read(await git.FileAtAsync(repoPath, sha, path, ct));
+        var file = await git.FileAtAsync(repoPath, sha, path, ct);
+        if (!file.Ran)
+        {
+            return Reading.Not(RealMethodReason.GitFailed);
+        }
+
+        return file.Ok ? Reading.Of(file.Out) : await WhyNotAsync(git, repoPath, sha, path, ct);
     }
 
-    /// <summary>What `git show` said about a file, as a reading: text, absent, or git did not run.</summary>
-    private static Reading Read(GitAnswer file) =>
-        file.Ran
-            ? file.Ok ? Reading.Of(file.Out) : Reading.Not(RealMethodReason.FileNotInCommit)
-            : Reading.Not(RealMethodReason.GitFailed);
+    /// <summary>
+    /// Why a read failed: the path was not there, or git could not read one that was.
+    /// </summary>
+    /// <remarks>
+    /// <para>Asked only on the failure path, so the ordinary read still costs one process. Every
+    /// non-zero exit used to become <c>file_not_in_commit</c>, which told a person the file had
+    /// never been at that path when the truth might be a permission error or a broken object — a
+    /// lie rather than a gap, and the page then suppresses the action for good rather than letting
+    /// them press again. (Code round, codex.)</para>
+    /// <para>It asks git rather than reading its prose: <c>cat-file -e sha:path</c> answers the
+    /// narrow question, and git's wording changes between versions while its exit codes do not.</para>
+    /// </remarks>
+    private static async Task<Reading> WhyNotAsync(
+        GitHistory git, string repoPath, string sha, string path, CancellationToken ct)
+    {
+        var there = await git.HasPathAsync(repoPath, sha, path, ct);
+
+        return there.Ran && there.Ok
+            ? Reading.Not(RealMethodReason.GitFailed)
+            : Reading.Not(RealMethodReason.FileNotInCommit);
+    }
 }

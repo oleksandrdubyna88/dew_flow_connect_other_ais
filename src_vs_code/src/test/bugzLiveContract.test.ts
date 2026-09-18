@@ -483,7 +483,7 @@ test('the real --file-at answer for a pair nobody has is a reason, not a failure
   { skip: built ? false : 'the server is not built' }, async () => {
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-fileat-'));
     try {
-      const read = await readFileAt(server(), 1, runIn(data));
+      const read = await readFileAt(server(), { findingId: 1, headSha: '', file: '' }, runIn(data));
 
       assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
       assert.equal(read.file.findingId, 1);
@@ -503,7 +503,7 @@ test('a missing --id on --file-at is 65 from the real binary, and is not read as
       });
       assert.equal(ran.status, 65, `a missing --id must be 65, never 64: ${ran.stderr}`);
 
-      const read = await readFileAt(server(), Number.NaN, async () => ({ code: ran.status ?? 1, output: ran.stderr ?? '' }));
+      const read = await readFileAt(server(), { findingId: Number.NaN, headSha: '', file: '' }, async () => ({ code: ran.status ?? 1, output: ran.stderr ?? '' }));
       assert.equal(read.ok, false);
       assert.equal(read.ok ? true : read.tooOld, false, 'a request fault must not send somebody to update a server that is fine');
       assert.match(read.ok ? '' : read.why, /--file-at needs --id/u);
@@ -576,7 +576,7 @@ test('a seeded pair reads its file at its revision out of a real repository, and
         db.close();
       }
 
-      const real = await readFileAt(server(), 7, runIn(data));
+      const real = await readFileAt(server(), { findingId: 7, headSha, file: 'Totals.cs' }, runIn(data));
       assert.equal(real.ok, true, real.ok ? '' : real.why);
       if (!real.ok) {
         return;
@@ -586,10 +586,10 @@ test('a seeded pair reads its file at its revision out of a real repository, and
       assert.equal(real.file.path, 'Totals.cs');
       assert.equal(real.file.text.split('\r\n').join('\n'), asReviewed, 'the file AS IT WAS, not the working tree that has moved on');
 
-      const gone = await readFileAt(server(), 8, runIn(data));
+      const gone = await readFileAt(server(), { findingId: 8, headSha: 'ffffffffffffffffffffffffffffffffffffffff', file: 'Totals.cs' }, runIn(data));
       assert.equal(gone.ok ? gone.file.reason : gone.why, 'commit_unreachable', 'a commit the repository never had');
 
-      const moved = await readFileAt(server(), 9, runIn(data));
+      const moved = await readFileAt(server(), { findingId: 9, headSha, file: 'Elsewhere.cs' }, runIn(data));
       assert.equal(moved.ok ? moved.file.reason : moved.why, 'file_not_in_commit', 'a path that was not there at that commit');
       assert.equal(moved.ok ? moved.file.path : '', 'Elsewhere.cs', 'and the page can say which path');
     } finally {
