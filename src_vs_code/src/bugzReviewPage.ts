@@ -1,6 +1,7 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
 import { cyclomatic } from './cyclomatic';
 import { pairDiff } from './lineDiff';
+import { Tab, tabCss, tabStrip } from './tabStrip';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml } from './webviewHtml';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
@@ -89,6 +90,21 @@ export interface ReviewView {
   readonly expanded?: ReadonlySet<number>;
   readonly uiScale?: number;
   readonly textTone?: number;
+
+  /**
+   * The project strip, and the language strip within the chosen project.
+   *
+   * <p>Built by `reviewTabs`, which also decides {@link ReviewView.pairs} — the page is handed the
+   * pairs to DRAW, so the waiting count and the tick-boxes are about what is on screen and nothing
+   * here has to know it was filtered. A strip is empty when there was only one value to offer, and
+   * an empty strip renders as nothing at all.</p>
+   */
+  readonly projects?: readonly Tab[];
+  readonly languages?: readonly Tab[];
+
+  /** Which tab is open in each strip, as `reviewTabs` resolved it — never as it was merely held. */
+  readonly project?: string;
+  readonly language?: string;
 }
 
 export const UNDECIDED = -1;
@@ -267,6 +283,24 @@ function row(pair: ReviewPair, open: boolean): string {
 
 
 /**
+ * The two filter strips, or nothing when neither offers a choice.
+ *
+ * <p>`onePanel` because both narrow the SAME table: a project tab and a language tab do not each
+ * reveal a region of their own, so every one of them points at `#pairs`. `data-strip` is how the
+ * one click handler tells a project press from a language press.</p>
+ */
+function filterStrips(view: ReviewView): string {
+  const projects = tabStrip(view.projects ?? [], view.project ?? '', {
+    tab: 'project-tab-', panel: 'pairs', onePanel: true, label: 'Which project', strip: 'project',
+  });
+  const languages = tabStrip(view.languages ?? [], view.language ?? '', {
+    tab: 'language-tab-', panel: 'pairs', onePanel: true, label: 'Which language', strip: 'language',
+  });
+
+  return `${projects}${languages}`;
+}
+
+/**
  * The three things this page can be showing, as one decision rather than a nested ternary.
  *
  * <p>They are genuinely three: a read that FAILED, a corpus that is empty, and rows. The first two
@@ -283,7 +317,7 @@ function body(pairs: readonly ReviewPair[], rows: string, trouble: string): stri
       + ' Press Collect in the Bugz section of the panel.</p>';
   }
 
-  return `<table>
+  return `<table id="pairs">
 <thead><tr>
   <th class="pick"><input type="checkbox" id="pickall" title="Select every pair"></th>
   <th>Method</th>
@@ -304,6 +338,7 @@ ${rows}
  */
 export function reviewPageHtml(view: ReviewView): string {
   const { pairs, nonce, trouble = '', uiScale = 0, textTone = 0 } = view;
+  const strips = filterStrips(view);
   const expanded = view.expanded ?? new Set<number>();
   const rows = pairs.map((pair) => row(pair, expanded.has(pair.findingId))).join('\n');
   const waiting = undecided(pairs);
@@ -328,6 +363,7 @@ export function reviewPageHtml(view: ReviewView): string {
 ${ZOOM_CSS}
 ${TONE_CSS}
 ${HIGHLIGHT_CSS}
+${tabCss('4px 0 10px')}
   h1 { font-size: 1.15em; margin: 0 0 4px; }
   .hint { opacity: .7; font-size: .92em; margin: 0 0 12px; }
   .bar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
@@ -396,6 +432,7 @@ ${HIGHLIGHT_CSS}
 </head>
 <body>
 <h1>Review bugs</h1>
+${strips}
 <p class="hint" id="waiting">${waiting} of ${pairs.length} still waiting on you.</p>
 <div class="bar">
   <button type="button" id="keep" disabled>Keep selected</button>
@@ -493,6 +530,20 @@ ${body(pairs, rows, trouble)}
       var opening = twisting.getAttribute('aria-expanded') !== 'true';
       showRow(rowId, opening);
       vscode.postMessage({ type: 'expand', id: Number(rowId), open: opening });
+      return;
+    }
+    // A filter press, and this page does NOT paint it: the host holds the choice, because the
+    // document is replaced wholesale on every decision and a selection living here would die on the
+    // first one. The data-strip attribute on the wrapper says which of the two strips it came
+    // one attribute instead of two selectors that would drift apart.
+    var tabbed = target.closest ? target.closest('[data-tab]') : null;
+    if (tabbed) {
+      var whichStrip = tabbed.closest ? tabbed.closest('[data-strip]') : null;
+      vscode.postMessage({
+        type: 'tab',
+        strip: whichStrip ? whichStrip.getAttribute('data-strip') : '',
+        key: tabbed.getAttribute('data-tab')
+      });
       return;
     }
     if (target.id === 'pickall') {

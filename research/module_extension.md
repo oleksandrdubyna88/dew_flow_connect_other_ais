@@ -7623,6 +7623,104 @@ And the decide path still has no visible in-flight state — the observation car
 1.1's code round; it is a durable-status change to `bugzReviewPanel.ts` and `--pairs-keep`, not a
 projection change, and it is still owed.
 
+### Tabs by project and by language — and the identity rule the corpus rewrote
+
+Two hundred pairs from several products in one table is a list nobody reads to the end. Story 2.2
+adds the two cuts the operator asked for — a project, then a language within it — and the work
+turned out to be neither of them: it was deciding **which sessions are the same project**.
+
+**The plan's rule was wrong, and the live table is what showed it.** The plan said: the git remote
+when the checkout is reachable, else the normalised root with worktree suffixes stripped, else
+`unknown`. Both halves were measured against `sessions.repo_path` in
+`%LOCALAPPDATA%/coai-mcp/coai.db` on 2026-09-18 — 106 distinct values:
+
+| | |
+|---|---|
+| distinct values | **106**, and **91** after case/separator normalisation — 15 were one path spelled twice |
+| one repository, three spellings | `D:\rsd\dew_flow_connect_other_ais` (42 sessions), `d:\rsd\...` (20), `D:/rsd/...` (18) |
+| `repo_path` = `.` | **33 sessions**, the second largest bucket, identifying nothing |
+| still on disk | 54 — 10 main checkouts, 44 linked worktrees |
+| **gone** | **37 (41 %)** |
+
+**Stripping a worktree-looking suffix merges unrelated products**, which is what two plan reviewers
+said and the table confirms at the worst possible scale: the last segment removed puts **22**
+directories under `d:/rsd/_wt` in one bucket — `coai-*`, `creds-*` and `conv-gate`, three different
+repositories — and **20** under `d:/rsd`, which is every project on the machine in a single tab.
+`d:/rsd/_wt/coai-audit` and `d:/rsd/_wt/creds-form-chrome` are siblings in one directory and belong
+to two products, so no rule reading only the path's SHAPE can separate them. **No suffix is
+stripped.**
+
+**And spawning `git remote get-url` is not needed to beat it.** A linked worktree's `.git` is a
+FILE naming its parent, so one `readFileSync` answers what a process was going to: the corpus's 54
+live paths collapse to **10** identities, with those two `_wt` siblings landing in their two
+different products. That matters beyond tidiness — the extension runs no git at all today (every
+git operation is server-side, in `GitHistory` and `WorktreeManager`), and step (a) would have been
+its first spawn, one process per distinct path per draw, on the path that already costs 468 ms.
+
+**The trap the measurement found and nobody had named.** A submodule *inside* a worktree writes
+`gitdir: .../repo/.git/worktrees/wt-rp/modules/.claude/rules/shared`. Cutting at `/.git/worktrees/`
+would file **dew_flow_conventions under dew_flow_connect_other_ais** — and conventions has its own
+sessions in that table. So `projectIdentity.ts` recovers the parent **only** when exactly one
+segment follows `/worktrees/`; anything longer, and every `/.git/modules/...` gitdir (which git
+writes relative), is its own project. `projectIdentity.test.ts` asserts it with the gitdir string
+read out of this checkout, and the mutation that removes the constraint fails naming both products.
+
+**Absence is an answer.** 41 % of the corpus is gone, so an identity that can only be learned from
+a filesystem is unavailable two times in five. An unreachable path becomes its own single-project
+bucket whose tab tooltip says *not on disk any more* — never merged with a neighbour, never hidden,
+because a tab that looked ordinary would promise a fix that cannot open. `.` and empty get one
+explicit `unknown`.
+
+**`tabStrip.ts` is the one strip, and `rolesPage` was converted to it in the same change.** Tabs
+existed three times and had already drifted the way the reuse rule predicts: `rolesPage` had
+`role="tablist"`, `aria-selected` and `aria-controls`; `notificationsRows` only the first;
+`roundsLog` **none of them**, so a screen reader cannot navigate its tabs as tabs. Extracting the
+module and leaving `rolesPage`'s copy in place would merely have made a FOURTH copy, which a
+reviewer said on the plan round — so `rolesPage` is the module's first caller. **The wrapper is
+part of the unit**, not the call site, because the call site is exactly where `roundsLog` forgot it.
+The proof the extraction changed nothing is not an assertion about markup: the whole page was
+rendered for all five tab values before and after and compared byte for byte (197 934 bytes,
+identical), and `rolesPage`'s own 18 tab tests — which pin `class="tab on" data-tab="documents"` as
+one string — stayed green. `tabCss(margin)` takes the margin as a parameter because that is the
+only thing the copies disagreed about; unifying on one value would have moved a strip on a page this
+story does not touch.
+
+`notificationsRows` and `roundsLog` are deliberately **not** converted. `panelView`'s and
+`notificationsPageStyle`'s strips are a different design (a segmented control, and a wrapping one),
+not drifted copies. **`roundsLog`'s missing `role="tablist"`/`aria-selected`/`aria-controls` is
+named here as a defect and left as a question for the operator** — repairing accessibility on a
+page this story does not otherwise touch is not a side effect of a refactor.
+
+**The blank table two reviewers predicted cannot happen**, and by construction rather than by a
+guard. C# selected in project A, switch to project B which is only TypeScript, and a filter that
+still says C# matches nothing. In `reviewTabs.ts` the language tabs are built from the pairs of the
+**selected** project, so a language absent from it is not a tab, and `openedFrom` drops a held
+choice that is not among the tabs. Every tab has at least one pair behind it. `ALL` is the sentinel
+`*all*` and not the empty string, because a pair's language CAN be empty (`pairOf` fills an absent
+field with `''` for an older server) and an empty bucket sharing a key with "everything" would blank
+the table the moment somebody pressed it.
+
+**A strip is drawn only when it offers a choice.** With one project, `All projects · 9` beside
+`dew_flow_connect_other_ais · 9` is two tabs doing one thing — and one project with two languages
+is the live corpus today (9 pairs collected). Tabs are ordered by how many pairs they hold, biggest
+first.
+
+**Pressing a tab does not cost a server process.** `draw` split into a read and a `paint`: the read
+still asks the server, the paint draws from `held` — the last answer — and a filter press calls
+only the paint. That is `remember`'s reasoning one step along (a round trip per click would make
+narrowing a list cost a process), and unlike a decision a filter changes nothing the database knows.
+The selections live in the panel for `expanded`'s reason: `draw` replaces the document wholesale, so
+a choice living in the page would die on the first decision anybody made. `expanded` is pruned
+against everything read rather than against what is SHOWN — a row hidden by a filter has not been
+closed.
+
+Both strips carry `onePanel: true` and point `aria-controls` at `#pairs`, because they narrow the
+same table rather than revealing a region each; pointing at a `pairs-0` that does not exist would be
+worse than not wiring it, since a screen reader follows it. `data-strip` on the wrapper is how one
+click handler tells a project press from a language press — the mutation that assumes the axis
+instead of reading the ancestor reports a C# press as a project press, and the suite goes red naming
+exactly that.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

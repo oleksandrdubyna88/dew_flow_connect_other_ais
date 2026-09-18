@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { Tab } from '../tabStrip';
 import { readable } from './readableHtml';
 
 /**
@@ -99,6 +100,42 @@ class Control {
 
   closest(): null {
     return null;
+  }
+}
+
+/**
+ * A filter strip, so the tabs in it have a real ancestor to be found through.
+ *
+ * <p>Same argument as {@link Row}: the handler reads which strip a press came from by walking UP
+ * from the button, so a shim whose tabs answer only about themselves would be green through a page
+ * that rendered both strips without saying which was which — and the host would then narrow by
+ * whichever axis it guessed. A tab is built from the rendered markup with the wrapper it was
+ * actually inside.</p>
+ */
+class Strip {
+  constructor(readonly which: string) {}
+
+  readonly id = '';
+
+  getAttribute(name: string): string | null {
+    return name === 'data-strip' ? this.which : null;
+  }
+
+  closest(selector: string): Strip | null {
+    return selector === '[data-strip]' ? this : null;
+  }
+}
+
+/** One tab. It has an `id`, like the real button, and a strip above it. */
+class TabButton {
+  constructor(readonly id: string, readonly key: string, private readonly strip: Strip) {}
+
+  getAttribute(name: string): string | null {
+    return name === 'data-tab' ? this.key : null;
+  }
+
+  closest(selector: string): TabButton | Strip | null {
+    return selector === '[data-tab]' ? this : this.strip.closest(selector);
   }
 }
 
@@ -247,13 +284,19 @@ interface Page {
   readonly style: Style;
   readonly host: Host;
   readonly controls: Readonly<Record<string, Control>>;
-  click(what: Box | Control | Toggle | Line): void;
+  /** Every tab on the page, with the strip it came out of. */
+  readonly tabs: readonly TabButton[];
+  click(what: Box | Control | Toggle | Line | TabButton): void;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
   showing(findingId: number): boolean;
 }
 
 /** What the page is drawn with, beyond the pairs — every field optional, as the page has it. */
 interface Options {
+  readonly projects?: readonly Tab[];
+  readonly languages?: readonly Tab[];
+  readonly project?: string;
+  readonly language?: string;
   readonly trouble?: string;
   readonly expanded?: ReadonlySet<number>;
   readonly uiScale?: number;
@@ -281,6 +324,15 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     return found;
   };
   const boxes = [...html.matchAll(/data-pick="(\d+)"/g)].map((m) => new Box(m[1]!, rowFor(m[1]!)));
+  // Each strip with its own buttons, from the markup: the wrapper is matched first and its buttons
+  // are taken from INSIDE it, so a tab can only be attributed to the strip it was really in.
+  const tabs = [...html.matchAll(/<div class="tabs"[^>]*data-strip="(\w+)">([\s\S]*?)<\/div>/g)]
+    .flatMap((strip) => {
+      const above = new Strip(strip[1]!);
+
+      return [...strip[2]!.matchAll(/id="([^"]+)"[^>]*data-tab="([^"]*)"/g)]
+        .map((one) => new TabButton(one[1]!, one[2]!, above));
+    });
   const regions = [...html.matchAll(/data-detail="(\d+)"( hidden)?>/g)]
     .map((m) => new Region(m[1]!, m[2] === undefined));
   const toggles = [...html.matchAll(/data-toggle="(\d+)"\s+aria-expanded="(true|false)"/g)]
@@ -362,6 +414,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
 
   return {
     posted,
+    tabs,
     boxes,
     toggles,
     lines,
@@ -956,4 +1009,63 @@ test('an empty corpus and a failed read are told apart', () => {
   assert.ok(failed.controls['trouble'] !== undefined,
     'a read that failed must not be rendered as a corpus that is empty');
   assert.ok(failed.controls['nothing'] === undefined);
+});
+
+
+/** The two strips as a page is handed them — what `reviewTabs` builds, in miniature. */
+const PROJECTS: readonly Tab[] = [
+  { key: '*all*', label: 'All projects · 2', slug: 'all' },
+  { key: 'd:/rsd/repo_a', label: 'repo_a · 1', slug: '0', title: 'd:/rsd/repo_a' },
+  { key: 'd:/rsd/repo_b', label: 'repo_b · 1', slug: '1', title: 'd:/rsd/repo_b' },
+];
+const LANGUAGES: readonly Tab[] = [
+  { key: '*all*', label: 'All languages · 2', slug: 'all' },
+  { key: 'TypeScript', label: 'TypeScript · 1', slug: '0' },
+  { key: 'C#', label: 'C# · 1', slug: '1' },
+];
+
+test('pressing a project tab tells the host which strip and which key, and paints nothing itself', () => {
+  const page = run([pair(1), pair(2)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+  const repoB = page.tabs.find((t) => t.key === 'd:/rsd/repo_b');
+  assert.ok(repoB !== undefined, 'the project strip was not rendered');
+
+  page.click(repoB);
+
+  // The page announces itself on load, so the tab messages are what is filtered for here.
+  assert.deepEqual(page.posted.filter((m) => m.type === 'tab'),
+    [{ type: 'tab', strip: 'project', key: 'd:/rsd/repo_b' }]);
+  // And the page did NOT filter itself: both rows are still there. The host holds the choice
+  // because the document is replaced wholesale on every decision, so a selection living here would
+  // die on the first one anybody made.
+  assert.equal(page.boxes.length, 2);
+});
+
+test('a language press is not mistaken for a project press', () => {
+  // The two strips post the same `data-tab`; only the ancestor says which axis was pressed. A
+  // handler that read the button alone would narrow by whichever it guessed.
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: '*all*', language: '*all*' });
+  const csharp = page.tabs.find((t) => t.key === 'C#');
+  assert.ok(csharp !== undefined);
+
+  page.click(csharp);
+
+  assert.deepEqual(page.posted.filter((m) => m.type === 'tab'),
+    [{ type: 'tab', strip: 'language', key: 'C#' }]);
+});
+
+test('the two strips have ids of their own and both point at the table', () => {
+  const page = run([pair(1)], { projects: PROJECTS, languages: LANGUAGES, project: 'd:/rsd/repo_a', language: '*all*' });
+
+  assert.deepEqual(page.tabs.map((t) => t.id),
+    ['project-tab-all', 'project-tab-0', 'project-tab-1', 'language-tab-all', 'language-tab-0', 'language-tab-1'],
+    'two strips on one page must not share an id, or the aria wiring points at the wrong thing');
+});
+
+test('a page with nothing to choose between renders no strip at all', () => {
+  // The live corpus today: nine pairs, one project. `reviewTabs` hands over empty strips and the
+  // page must then draw no tablist — an empty one announces a control a person cannot use.
+  const page = run([pair(1)]);
+
+  assert.deepEqual(page.tabs, []);
+  assert.equal(page.boxes.length, 1, 'and the pairs are still there');
 });

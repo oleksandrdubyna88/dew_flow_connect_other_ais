@@ -10,6 +10,8 @@ import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost'
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { readGitMark } from './projectIdentity';
+import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 
 /**
  * The window the review page lives in.
@@ -57,7 +59,9 @@ type ReviewMessage =
   | { readonly type: 'decide'; readonly ids: readonly number[]; readonly keep: number }
   | { readonly type: 'expand'; readonly ids: readonly number[]; readonly open: boolean }
   | { readonly type: 'expandAll'; readonly ids: readonly number[]; readonly open: boolean }
-  | { readonly type: 'zoom' | 'tone'; readonly delta: number };
+  | { readonly type: 'zoom' | 'tone'; readonly delta: number }
+  /** A filter strip was pressed: which strip, and the key of the tab in it. */
+  | { readonly type: 'tab'; readonly strip: string; readonly key: string };
 
 /** Whole numbers only, junk dropped — an id is a row this database has or it is nothing. */
 const numbers = (raw: unknown): readonly number[] =>
@@ -87,6 +91,8 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       return { type: 'expand', ids: numbers([m['id']]), open };
     case 'expandAll':
       return { type: 'expandAll', ids: numbers(m['ids']), open };
+    case 'tab':
+      return { type: 'tab', strip: String(m['strip']), key: String(m['key']) };
     case 'zoom':
     case 'tone':
       return Number.isFinite(Number(m['delta']))
@@ -123,6 +129,36 @@ export class BugzReviewPanel {
    * (A code reviewer found that; the first version kept it for the lifetime of the extension.)</p>
    */
   private expanded: ReadonlySet<number> = new Set<number>();
+
+  /**
+   * The last read, kept so a filter press does not cost a server process.
+   *
+   * <p>{@link draw} asks the server; pressing a tab does not have to. The reasoning is
+   * {@link remember}'s, one step further along: a round trip per click would make narrowing a list
+   * cost a process, and unlike a decision a filter changes nothing the server knows about. So the
+   * strips repaint from what was already read, and only a real change — a decision, a poll, the
+   * panel being reopened — goes back to the database.</p>
+   *
+   * <p>Cleared with the window, like {@link expanded}: this object outlives the webview, and pairs
+   * read a day ago are not what the page should reopen with.</p>
+   */
+  private held: readonly ReviewPair[] = [];
+
+  /** Why the last read failed, if it did — which is NOT the same page as an empty corpus. */
+  private trouble = '';
+
+  /**
+   * Which project and which language the person chose.
+   *
+   * <p>Held here for {@link expanded}'s reason: `draw` replaces the document wholesale, so a
+   * selection living in the page would die on the first decision anybody made. It is not a setting
+   * — which project somebody was looking at is not worth a synced key, and it is meaningless
+   * against a corpus that has been collected again.</p>
+   *
+   * <p>It is what was HELD, never what is shown: `reviewTabs` decides the latter, and drops a
+   * choice whose pairs are gone rather than filtering the table to nothing.</p>
+   */
+  private chosen: HeldTabs = { project: ALL, language: ALL };
 
   constructor(private readonly hooks: ReviewHooks) {}
 
@@ -189,6 +225,10 @@ export class BugzReviewPanel {
       case 'expand':
       case 'expandAll':
         this.remember(m.ids, m.open);
+
+        return;
+      case 'tab':
+        this.narrow(m.strip, m.key);
 
         return;
       default:
@@ -315,10 +355,60 @@ export class BugzReviewPanel {
 
     // A read that FAILED is not an empty corpus. Rendering the empty page for it would tell a
     // person their two hundred pairs are gone because a process timed out. (Code round, codex.)
+    this.held = answer.ok ? answer.pairs : [];
+    this.trouble = answer.ok ? '' : answer.why;
+    this.paint();
+  }
+
+  /**
+   * Which project or language to show, and a repaint — without asking the server.
+   *
+   * <p>An unrecognised strip name is ignored rather than guessed at. The page sends one of two
+   * words; anything else is a page this side does not know, and narrowing by the wrong axis would
+   * be worse than doing nothing.</p>
+   */
+  private narrow(strip: string, key: string): void {
+    if (strip !== 'project' && strip !== 'language') {
+      return;
+    }
+
+    // A project change abandons the language, rather than carrying a choice that belonged to
+    // another project. `reviewTabs` would drop an impossible one anyway; this keeps a language that
+    // happens to exist in BOTH projects from silently following the person across, which is a
+    // filter they did not ask for.
+    this.chosen = strip === 'project'
+      ? { project: key, language: ALL }
+      : { ...this.chosen, language: key };
+
+    this.paint();
+  }
+
+  /**
+   * The page, from what was last read — no server, no await.
+   *
+   * <p>`expanded` is pruned against everything that was read rather than against what is SHOWN: a
+   * row hidden by a filter has not been closed, and re-opening the project it is in should find it
+   * as it was left.</p>
+   */
+  private paint(): void {
+    const open = this.panel;
+    if (open === undefined) {
+      return;
+    }
+
     const view = { nonce: nonce(), uiScale: currentUiScale(), textTone: currentTextTone() };
-    open.webview.html = answer.ok
-      ? reviewPageHtml({ ...view, pairs: answer.pairs, expanded: this.keptOpen(answer.pairs) })
-      : reviewPageHtml({ ...view, pairs: [], trouble: answer.why });
+    const found = reviewTabs(this.held, this.chosen, readGitMark);
+
+    open.webview.html = reviewPageHtml({
+      ...view,
+      pairs: found.shown,
+      trouble: this.trouble,
+      expanded: this.keptOpen(this.held),
+      projects: found.projects,
+      languages: found.languages,
+      project: found.project,
+      language: found.language,
+    });
   }
 }
 

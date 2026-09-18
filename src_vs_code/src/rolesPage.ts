@@ -3,6 +3,7 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
+import { tabCss, tabStrip } from './tabStrip';
 
 /**
  * The tab where a person writes a review role.
@@ -426,11 +427,22 @@ const TAB_NAMES: Readonly<Record<string, string>> = {
   documents: 'Document review',
 };
 
-/** The three tabs, with the open one marked. */
-function tabStrip(openTab: string): string {
-  return ROLE_TABS
-    .map((id) => `<button type="button" role="tab" id="tab-${id}" aria-controls="section-${id}" aria-selected="${id === openTab ? 'true' : 'false'}" class="tab${id === openTab ? ' on' : ''}" data-tab="${id}">${TAB_NAMES[id]}</button>`)
-    .join('');
+/**
+ * The three tabs, through the shared strip.
+ *
+ * <p>This page's private copy was the best of the three in the extension — the only one with
+ * `role="tablist"`, `aria-selected` AND `aria-controls` — so {@link tabStrip} was extracted from it
+ * and this is its first caller. A reviewer pointed out on the plan round that extracting it and
+ * leaving this copy in place would merely make a FOURTH copy, which is right.</p>
+ *
+ * <p>The markup is unchanged, and that is checked rather than claimed: this page's eighteen tab
+ * tests pin `class="tab on" data-tab="documents"` as one string, and the whole page was rendered
+ * for all five tab values before and after the conversion and compared byte for byte.</p>
+ */
+function rolesTabs(openTab: string): string {
+  const tabs = ROLE_TABS.map((id) => ({ key: id, label: TAB_NAMES[id] }));
+
+  return tabStrip(tabs, openTab, { tab: 'tab-', panel: 'section-', label: 'Which roles to edit' });
 }
 
 /**
@@ -498,7 +510,7 @@ ${styles(state.uiScale)}
 ${strandedHtml(state.stranded ?? [])}
 ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
 
-<div class="tabs" role="tablist" aria-label="Which roles to edit">${tabStrip(openTab)}</div>
+${rolesTabs(openTab)}
 
 <section id="section-plan" role="tabpanel" aria-labelledby="tab-plan" data-section="plan"${openTab === 'plan' ? '' : ' hidden'}>
 <p class="note">Roles that read the plan, before any code exists.</p>
@@ -536,10 +548,7 @@ h1 { font-size: 1.4em; }
 h2 { font-size: 1.1em; margin: 20px 0 2px; }
 /* The rounds log's strip, the same class names and the same metrics: two pages of this product
    with tabs that look different would be two products. */
-.tabs { display: flex; gap: 6px; margin: 10px 0; border-bottom: 1px solid var(--vscode-panel-border); }
-.tabs .tab { background: transparent; color: var(--vscode-foreground); border: none;
-  border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
-.tabs .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
+${tabCss('10px 0')}
 .lead, .note { opacity: 0.8; margin: 2px 0 10px; }
 .note { font-size: 0.9em; }
 /* The edge colour arrives from the .role-* rules above, which are the palette the sidebar spends

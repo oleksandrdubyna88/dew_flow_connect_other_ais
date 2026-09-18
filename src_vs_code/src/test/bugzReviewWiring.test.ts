@@ -48,14 +48,53 @@ test('the panel hands its open rows to the page on every draw', () => {
   const text = code('bugzReviewPanel.ts');
 
   // The whole condition: the call, the argument, and that the argument is the PANEL's set rather
-  // than something computed from the answer alone.
-  assert.match(text, /expanded: this\.keptOpen\(answer\.pairs\)/u,
-    'draw() must pass the panel\'s open rows into the page, or a decision collapses them all');
+  // than something computed from one read alone.
+  //
+  // It used to read `keptOpen(answer.pairs)`, inside `draw`. Story 2.2 moved the painting out of
+  // `draw` so that pressing a filter tab repaints without asking the server, and the argument
+  // became the panel's own `held` — which is the same guarantee spelled more plainly, since `held`
+  // IS this side's state. Pruning against everything read rather than against what is SHOWN is the
+  // point: a row hidden by a filter has not been closed.
+  assert.match(text, /expanded: this\.keptOpen\(this\.held\)/u,
+    'the page must be handed the panel\'s open rows, or a decision collapses them all');
   assert.match(text, /private keptOpen\([^)]*\): ReadonlySet<number>/u);
   // And it must not throw the set away while doing it — the pruning that was there deleted ids
   // from the panel's own state, which cannot be undone when the corpus comes back.
   assert.doesNotMatch(text, /this\.expanded\.delete\(/u,
     'keptOpen intersects per render; deleting from the panel\'s set is irreversible');
+});
+
+/** One method's body, so an assertion about it cannot be satisfied by a different method. */
+function bodyOf(text: string, signature: string): string {
+  const at = text.indexOf(signature);
+  assert.notEqual(at, -1, `${signature} is not in the file`);
+  const after = text.slice(at + signature.length);
+  const ends = after.search(/\n {2}(private|public|get|async) /u);
+
+  return ends < 0 ? after : after.slice(0, ends);
+}
+
+test('pressing a filter tab does not send anybody to the server', () => {
+  // `remember`'s reasoning, one step along: a round trip per click would make narrowing a list cost
+  // a process, and a filter changes nothing the database knows about. Asserted on the METHOD's own
+  // body rather than the file, because `draw` two methods below does read — a file-wide assertion
+  // would be satisfied by the wrong one and would go red for the right code.
+  const text = code('bugzReviewPanel.ts');
+  const narrow = bodyOf(text, 'private narrow(strip: string, key: string): void {');
+  const paint = bodyOf(text, 'private paint(): void {');
+
+  assert.doesNotMatch(narrow, /hooks\.read|await/u, 'a filter press must repaint, not re-read');
+  assert.match(narrow, /this\.paint\(\)/u);
+  assert.doesNotMatch(paint, /hooks\.read|await/u, 'and the paint it calls must not either');
+  assert.match(bodyOf(text, 'private async draw(): Promise<void> {'), /await this\.hooks\.read\(\)/u,
+    'the read still happens — in draw, which is the method that is allowed to');
+});
+
+test('a strip name the page did not send is ignored rather than guessed at', () => {
+  const narrow = bodyOf(code('bugzReviewPanel.ts'), 'private narrow(strip: string, key: string): void {');
+
+  assert.match(narrow, /strip !== 'project' && strip !== 'language'/u,
+    'narrowing by an axis nobody asked for is worse than doing nothing');
 });
 
 test('a closed window forgets which rows were open', () => {
