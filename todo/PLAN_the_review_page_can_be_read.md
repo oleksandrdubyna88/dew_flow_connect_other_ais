@@ -218,6 +218,37 @@ and two spellings of one repository — with the expected mapping written down f
 > bbbb222`. The class name is story 2.3's (it is not stored, and the un-anonymised locate is where it
 > comes from). Records: `research/module_server.md`, `module_extension.md`, `module_tests.md`.
 
+> **Story 2.2 built the two tabs on 2026-09-18, and this plan's identity rule did not survive the
+> measurement.** The rule written above — the git remote, else the normalised root with worktree
+> suffixes stripped, else `unknown` — was checked against `sessions.repo_path` in the live store
+> (106 distinct values) before anything was built, and both halves were wrong:
+>
+> 1. **Stripping a worktree-looking suffix merges unrelated repositories.** Not hypothetically:
+>    removing the last segment puts **22** directories under `d:/rsd/_wt` into one bucket —
+>    `coai-*`, `creds-*` and `conv-gate`, three different products — and **20** under `d:/rsd`,
+>    which is every project on the machine in a single tab. Two plan reviewers said so
+>    independently (findings 0 and 3) and the table proved them right. **No suffix is stripped.**
+> 2. **The git spawn is unnecessary.** A linked worktree's `.git` is a FILE naming its parent, so
+>    one `readFileSync` does what a process was going to: 54 live paths → **10** identities, and
+>    the two `_wt` siblings above land in their two correct products. The extension still runs no
+>    git at all.
+> 3. **A trap neither this plan nor any reviewer named.** A submodule INSIDE a worktree writes
+>    `gitdir: .../repo/.git/worktrees/wt-rp/modules/...`, so cutting at `/.git/worktrees/` files
+>    **dew_flow_conventions under connect_other_ais**. The parent is recovered only when exactly
+>    one segment follows `/worktrees/`.
+> 4. **41 % of the corpus is gone**, and 33 sessions record `repo_path` as `.`. Both are explicit
+>    buckets rather than errors — an unreachable project's tab says *not on disk any more*.
+>
+> What shipped: `projectIdentity.ts` (the rule), `tabStrip.ts` (**the one strip**, extracted from
+> `rolesPage`, which was converted to it in the same change so the extraction did not merely add a
+> fourth copy — finding 4; byte-identical output proved over all five tab values), `reviewTabs.ts`
+> (project then language, each strip drawn only when it offers a choice, language tabs rebuilt from
+> the chosen project so the blank table findings 1 and 2 describe cannot occur), and the panel
+> holding both selections with `draw` split so a filter press repaints without a server process.
+> `roundsLog`'s tab strip is still missing `role="tablist"`/`aria-selected`/`aria-controls`: named
+> as a defect, left as a question for the operator rather than repaired as a side effect.
+> Records: `research/module_extension.md`, `module_tests.md`.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -388,7 +419,7 @@ above rather than accepting them, and three of its findings changed the plan:
 | Epic | Stories | Model | State |
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **1.1 shipped** |
-| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round); 2.2, 2.3 not started |
+| **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted); 2.3 not started |
 | **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | blocked on two decisions |
 
