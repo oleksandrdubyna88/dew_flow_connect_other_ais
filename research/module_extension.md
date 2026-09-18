@@ -1194,7 +1194,19 @@ inline in both hooks, guard and refusal sentence duplicated, and the argument ag
 the one the file's own warning funnel already makes: a second copy of a sentence a person reads is
 the same defect as a second copy of a sentence a person hears. It is `stillAnswering(said, copy)` in
 `answerCopy.ts` now — the caller passes what to do with the text, because the two controls differ
-only there. **What is deliberately NOT unified is WHEN each looks the message up**: the answer
+only there.
+
+**And being single-sourced is what made the wording changeable.** It read *"That answer is not on
+this page any more."* until 2026-09-18; a reviewer read that as telling the person to reload, which
+is the one thing it must not do — the page is live, nothing needs reloading, and what happened is
+that the conversation moved on while the press was queued. It is `MOVED_ON` now, *"That answer is no
+longer the one you pressed Copy on."*, which names the PRESS, because the press is what the person
+remembers doing and the only thing that dates the answer they meant. It sits beside `GONE` (*"That
+block is no longer part of this answer."*) and is deliberately not merged with it: one is about a
+block inside an answer that is still there, the other about the answer itself, both can fire on the
+same press in that order, and a person told the wrong one would look for the wrong thing. The test
+pins the **whole** sentence rather than a fragment, so the text a person reads cannot change without
+somebody looking at the test that says what it is. **What is deliberately NOT unified is WHEN each looks the message up**: the answer
 control resolves at press time, since it carries no signature and a press queued behind a slow write
 would otherwise copy whatever had replaced that index; the block control resolves inside the queued
 job, because its signature is checked against what it finds. Four cases in `answerCopy.test.ts`,
