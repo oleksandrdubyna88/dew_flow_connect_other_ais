@@ -1,6 +1,6 @@
 # PLAN — release-please, and the narrative changelog it would write over
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope: Epic 4 of
+> Status: **partially implemented, 2026-09-18 — and stopped at a decision rather than at work.** Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -103,13 +103,47 @@ the prefix exists in the other two because four products share a tag namespace. 
 sidecar's trigger instead would mean a release workflow edit, a tag-shape change and a protected-tag
 pattern change, for consistency nobody reads.
 
+## The blocker, measured 2026-09-18 — and it is not a tag-shape question at all
+
+Everything below assumes the tag release-please cuts starts the release workflow already in the
+repository. **With the default token it does not.** From the action's own README:
+
+> By default, Release Please uses the built-in `GITHUB_TOKEN` secret. However, all resources created
+> by `release-please` (release tag or release pull request) **will not trigger future GitHub actions
+> workflows**, and workflows normally triggered by `release.created` events will also not run.
+
+GitHub's own documentation gives the reason — events from `GITHUB_TOKEN` create no workflow run, to
+prevent recursion. So the acceptance test below would fail for a reason that has nothing to do with
+the tag's shape: the release would produce **nothing, silently**, which is the failure this plan was
+written to avoid.
+
+**What it needs is a decision, not work.** Checked 2026-09-18: no repository in this family holds a
+token that would do.
+
+| | costs | buys |
+|---|---|---|
+| a **PAT** with `contents: write` + `pull-requests: write` | one long-lived credential to mint, rotate and guard | the shortest path; the token sits in a secret |
+| a **GitHub App** installation token, minted per run | an app to create and install | short-lived and scoped — a far smaller blast radius, and the shape Epic 5 argues for everywhere else |
+
+This is the operator's call for the same reason the CodeRabbit PAT question is, and the two should
+probably be answered together. **Until it is answered, `release-please.yml` ships on
+`workflow_dispatch` only** — a no-op that looks like a release is worse than no automation. Turning
+it on is two lines, both written out and commented in the workflow.
+
 ## Build order
 
 1. **`sidecar_rust` first** — one product, no changelog, `include-component-in-tag: false`. The whole
-   mechanism in its simplest form.
+   mechanism in its simplest form. **DONE 2026-09-18**, on `workflow_dispatch` pending the token
+   above. It found something on the way in: `Cargo.toml` says 0.1.0 while the tags say v0.1.0,
+   v0.1.1, v0.1.2 — the source version has not moved in two releases, and nothing noticed because
+   nothing reads it (`CARGO_PKG_VERSION` appears nowhere, so the binary reports no version at all).
+   The manifest records 0.1.2, what was actually released, and the first release-please pull request
+   will bring `Cargo.toml` into line with reality for the first time.
 2. **Cut one real release through it** and compare the artefacts against the previous release, by
    name and by size. This is Epic 4's acceptance test and it is not optional: a tag that does not
-   trigger the existing workflow produces nothing, silently.
+   trigger the existing workflow produces nothing, silently. **BLOCKED on the token above** — and
+   steps 3 and 4 wait behind it deliberately, because this plan's own recommendation is to measure
+   on one release before the others adopt anything.
 3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, a generated changelog
    where none exists.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
