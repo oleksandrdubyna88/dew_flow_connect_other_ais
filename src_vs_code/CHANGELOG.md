@@ -1,5 +1,43 @@
 # Changelog
 
+## Server 0.30.0 — 2026-09-18
+
+**`COAI_DATA_SIDE` now partitions the settings file and the logs, which it should have been doing
+all along.** It partitioned `coai.db`, `sessions/` and the tokens under `<root>/<side>/` and left
+`settings.json` and `logs/` in `<root>/` — so two installations sharing one NAS, which is the
+whole reason a side exists, shared one settings file and **overwrote each other in silence**, and
+the extension’s `settings.lock` was contended between two machines.
+
+The cause was a second resolver: `SettingsFile.DataDirFrom` was a bare `COAI_DATA_DIR` read with no
+side and no trim, while `PanelSettings.ResolveDataDir` applied both and refused an unusable side
+name loudly. A whitespace `COAI_DATA_DIR` was a configured directory to one and an unset one to the
+other. There is one rule now, and it is a CALL rather than a copy — copying the logic would have
+committed the same defect a second time. **The logs move as a consequence**, because `Program.cs`
+composes the log root from that same function; leaving them shared would have meant adding an
+exception. Historical logs stay in `<root>/logs/`: the side of an old run cannot be recovered from
+its name.
+
+**Nothing is lost on upgrade.** An installation already partitioned has its configuration in
+`<root>/settings.json`, and a side with no file of its own adopts it: the root file is never
+removed, so the second side to start still finds it; the copy is published by a rename that does
+NOT overwrite, so two sides racing on a NAS end with the winner’s file rather than
+last-writer-wins; and a root file that does not parse is named and left alone. The adoption happens
+on the READ, because `--providers` can be the first thing that ever runs — in the startup path it
+would report defaults for a machine whose configuration exists. Whatever it did, or refused to do,
+is now said out loud: to the log on a normal start, and to stderr in the one-shot modes, whose
+stdout carries the answer a caller parses.
+
+**`--real-method` reads one pair’s method back out of git, un-anonymised, with its class.** The
+collector computes the real text at both commits and throws it away — nothing stores it and
+nothing should — so the review page’s *Real code* toggle gets a one-shot mode that re-runs the
+same locate over the same two commits and answers on stdout, writing nothing. A view, never a
+payload: real source never reaches the record whose contract is the proof that no real source
+leaves this machine. The two sides are independent, so a head commit pruned since still leaves the
+after side readable. Every way the repository can have changed is a REASON on the document rather
+than an exit code — `commit_unreachable`, `file_not_in_commit`, `symbol_not_resolved`,
+`symbol_ambiguous`, `symbol_gone` — and a bad `--id` is 65, never 64, because 64 is how the panel
+detects a server too old for a mode.
+
 ## Server 0.29.0 — 2026-09-18
 
 **A consultation can END now, and say how it went.** Nine tools and not one of them closed a
