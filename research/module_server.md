@@ -587,6 +587,67 @@ tokens. **Not a merge**, and that was the operator's decision: `rounds.id` and `
 `AUTOINCREMENT`, so two written-to databases collide on ids and merging would mean remapping every
 one of them along with the foreign keys that point at them.
 
+**It did not partition the settings file or the logs until 2026-09-18, and that was a defect rather
+than a decision.** `SettingsFile.DataDirFrom` was a second resolver — a bare `COAI_DATA_DIR` read
+with no side and no trim — while `PanelSettings.ResolveDataDir` applied both. So `coai.db`,
+`sessions/` and the tokens moved under `<root>/<side>/` while `settings.json` and `logs/` stayed in
+`<root>/`: two installations meant to be independent shared one settings file and **overwrote each
+other in silence**, and the extension's `settings.lock` was contended between two machines. A
+whitespace `COAI_DATA_DIR` was a configured directory to one resolver and an unset one to the other.
+
+There is **one rule** now: `DataDirFrom` calls `PanelSettings.DataDirectoryFor`, which is the
+resolver widened rather than copied — a second implementation is how the two came to disagree, and
+copying it would have committed that a second time. Seven callers read it, so one correction reaches
+the two one-shot modes, the `--providers` layer, the settings layer the server runs on, the file its
+change watcher stats, and the LOG ROOT.
+
+**The logs partition as a consequence, not by a rule of their own.** `Program.cs` composes the log
+root as `CoaiLogPath.RootFor(SettingsFile.DataDirFrom(…))`, so correcting the resolver moved them;
+leaving them shared would have meant ADDING an exception. The argument for sharing them was that the
+file name carries the app and the pid — and it carries no MACHINE. `CoaiLogPath.For` is deterministic
+on `(root, app, UTC second, pid)` and `CoaiLogging` opens the file with `shared: false`, so two
+machines on one NAS with the same pid in the same second target one file neither will share. Side
+attribution then rests on nothing. **Historical logs stay in `<root>/logs/`** and are not moved: the
+side of an old run cannot be recovered from its name, so moving them would be a guess written to
+disk.
+
+**The migration, for an installation that was already partitioned.** Its configuration is in
+`<root>/settings.json`, where both sides have been reading it. A side that has no file of its own
+adopts that one, and the protocol is the whole of it because each step answers a way of getting it
+wrong:
+
+| Step | Why it is that way |
+|---|---|
+| The root file is **never removed** | moving it leaves the second side to start finding nothing and reverting to defaults |
+| Written to `<dest>.<pid>.tmp`, published by `File.Move` | a kill mid-write otherwise leaves a partial file that blocks adoption for ever |
+| `overwrite: false` | two sides racing on a NAS otherwise end last-writer-wins, both believing they were first |
+| A root file that does not **parse** is named and left | publishing an unreadable file to a second location copies a defect into a second place |
+| It happens in `SettingsFile.Layer`, the READ | `--providers` can run before any normal start; adoption in the startup path would have it report defaults for a machine whose configuration exists, and a normal start afterwards would answer differently about that same machine |
+
+**What the adoption SAYS reaches a caller, and the compiler asks where.** `SettingsFile.Layer` takes
+a required `Action<string> said`. The first build adopted and dropped the returned sentences on the
+floor while the comment beside them claimed the startup path logged what came back — nothing anywhere
+called `AdoptRootSettings`, and six reviewers across three vendors found the same thing in one code
+round. A migration that moves a person's configuration, or REFUSES to because the root file will not
+parse, is exactly what they need told. The sink has no default so that a future caller has to decide,
+which a ratchet test could only ask after the fact: `ServeAsync` and `PanelServiceHost.Build` pass the
+log (`data directory: {Note}`, beside `StorageNotes`), and the two one-shot modes pass `Note` — STDERR,
+because their stdout carries the JSON a caller parses.
+
+**It takes no lock, and that is not an oversight** — four reviewers across two vendors asked. The lock
+is the EXTENSION's (`settings.lock`, taken in `extension.ts` around a write of this same file) and the
+server has never had a client for it. It does not need one: `File.Move(overwrite: false)` makes this
+create-if-absent and atomic, which is stronger than an advisory lock file that can be stale, broken or
+ignored. A window writing the same path at the same moment wins, and this side reads what it wrote. On
+a filesystem that will not take the write at all — read-only, a mount gone, no permission — nothing
+throws: every failure is caught and returned as a sentence, so a read stays a read.
+
+A genuinely new side adopts the root file too, deliberately: it is what that side would have read
+before, so adopting preserves behaviour where starting on defaults would be the surprise.
+
+`shared/data-side-vectors.json` carries a `settingsPath` and a `logsPath` per case, asserted by both
+suites — the directory alone could not see this defect, because the directory was already right.
+
 Four properties of it are load-bearing, and each was earned:
 
 - **Opt-in.** No `COAI_DATA_SIDE`, no subdirectory — the directory somebody already configured keeps

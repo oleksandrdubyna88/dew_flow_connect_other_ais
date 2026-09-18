@@ -58,6 +58,10 @@ if (binary === '') {
 const { serverSettingsJson } = await import('../out/serverSettingsFile.js');
 const { vendorsFrom } = await import('../out/vendors.js');
 const { DEFAULTS } = await import('../out/settingsShape.js');
+// The extension's OWN resolver, which is half of what the fifth leg compares. Importing it
+// rather than re-deriving the path is the whole point: a second spelling here would be a third
+// implementation of the thing two implementations already disagreed about.
+const { coaiDataDir } = await import('../out/dataDir.js');
 const { DEFAULT_CONSULT, consultSettingsFrom } = await import('../out/consultSettings.js');
 const { tokenFileName } = await import('../out/teamServers.js');
 
@@ -222,6 +226,123 @@ if (reported.note.includes('npm install')) {
 server.close();
 
 // ----------------------------------------------------------------------------------------------
+// The FIFTH leg, and the first thing to write down about it is what a fixture cannot do. Both halves
+// resolve `COAI_DATA_DIR` + `COAI_DATA_SIDE` independently, and `shared/data-side-vectors.json`
+// holds them to the same ANSWERS — but two implementations can agree with a JSON file and still
+// disagree with each other about a physical path: separators, normalisation and how each runtime
+// reads an environment variable are exactly the differences a static vector cannot see.
+//
+// So this proves agreement by CONSEQUENCE rather than by comparing two strings. The extension's own
+// `coaiDataDir()` decides where the settings file goes; the real binary is started with the same two
+// variables and asked what it made of it. If the two resolvers disagree by so much as a directory,
+// the server reads nothing and reports the shipped defaults - which is precisely the silent failure
+// this whole plan is about, reproduced live.
+async function sideSeam() {
+  const root = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
+  const side = 'wsl';
+  // Set and restored by hand: this is a script rather than a test file, and reaching for the suite's
+  // `withEnv` would drag a test helper into the one check that has to run against the real binary.
+  //
+  // RESTORED BY DELETING, not by assigning back. `process.env.X = undefined` writes the STRING
+  // 'undefined', so the first version of this poisoned every later leg: the consultant leg then
+  // resolved a data directory literally named `undefined`, found no consultant settings, and the
+  // server reached a real vendor instead of the stand-in CLI. Caught by this suite, which is the
+  // suite for catching exactly that.
+  const before = { ...process.env };
+  const restore = () => {
+    for (const name of ['COAI_DATA_DIR', 'COAI_DATA_SIDE']) {
+      if (before[name] === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = before[name];
+      }
+    }
+  };
+
+  process.env['COAI_DATA_DIR'] = root;
+  process.env['COAI_DATA_SIDE'] = side;
+  let written;
+  try {
+    written = join(coaiDataDir(), 'settings.json');
+  } finally {
+    restore();
+  }
+
+  if (!written.startsWith(join(root, side))) {
+    fail(`the extension resolved ${written}, which is not under the side it was given. `
+      + 'Nothing below would mean anything: the two halves cannot be compared through a path one of '
+      + 'them never chose.');
+  }
+  mkdirSync(join(root, side), { recursive: true });
+
+  // A row the shipped defaults do NOT contain, so finding it can only mean the file was read.
+  const row = { id: 'remsoftdev-seam-side', runtime: 'claude', label: 'the side seam', accounts: 1 };
+  writeFileSync(written, serverSettingsJson(DEFAULTS, vendorsFrom([row]), '9.9.9'), 'utf8');
+
+  const answer = await providersIn({ COAI_DATA_DIR: root, COAI_DATA_SIDE: side });
+  const seen = (answer.providers ?? []).map((p) => p.provider);
+  if (!seen.includes(row.id)) {
+    fail(`the extension wrote ${written} and the server did not read it. It saw: ${seen.join(', ') || '(nothing)'}.
+This is the two halves disagreeing about where a side's settings live - the defect
+PLAN_the_settings_file_ignores_the_side.md exists for, caught live rather than by a fixture.`);
+  }
+
+  // And the other direction, which is what makes the first half mean something: the ROOT file must
+  // NOT be what the server read. A server still reading `<root>/settings.json` would pass the check
+  // above on an installation that happened to have the row in both places.
+  const other = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
+  const decoy = { id: 'remsoftdev-seam-root', runtime: 'claude', label: 'the root decoy', accounts: 1 };
+  writeFileSync(join(other, 'settings.json'), serverSettingsJson(DEFAULTS, vendorsFrom([decoy]), '9.9.9'), 'utf8');
+  mkdirSync(join(other, side), { recursive: true });
+
+  const adopted = await providersIn({ COAI_DATA_DIR: other, COAI_DATA_SIDE: side });
+  const afterwards = (adopted.providers ?? []).map((p) => p.provider);
+  if (!afterwards.includes(decoy.id)) {
+    fail(`a side with no settings of its own did not adopt <root>/settings.json. It saw: ${afterwards.join(', ') || '(nothing)'}.
+An installation that was partitioned before the settings file knew about sides would
+start on defaults here, with a person's vendors and keys silently gone.`);
+  }
+  if (!existsSync(join(other, 'settings.json'))) {
+    fail('the adoption REMOVED <root>/settings.json, so the second side to start finds nothing.');
+  }
+  if (!existsSync(join(other, side, 'settings.json'))) {
+    fail('the adoption reported success and published nothing.');
+  }
+
+  rmSync(root, { recursive: true, force: true });
+  rmSync(other, { recursive: true, force: true });
+}
+
+async function providersIn(extra) {
+  return await new Promise((done, broke) => {
+    const child = spawn('dotnet', [binary, '--providers'], {
+      env: { ...process.env, ...extra },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    let err = '';
+    const deadline = setTimeout(() => {
+      child.kill('SIGKILL');
+      broke(new Error(`--providers did not answer within ${TIMEOUT_MS} ms`));
+    }, TIMEOUT_MS);
+
+    child.stdout.on('data', (b) => { out += String(b); });
+    child.stderr.on('data', (b) => { err += String(b); });
+    child.on('error', (e) => { clearTimeout(deadline); broke(e); });
+    child.on('close', (code) => {
+      clearTimeout(deadline);
+      if (code !== 0) {
+        broke(new Error(`--providers exited ${code}\n${err}`));
+        return;
+      }
+      done(JSON.parse(out));
+    });
+  });
+}
+
+await sideSeam();
+console.log('  ok  a side\'s settings are written and read at the same path, and the root is adopted');
+
 // The SECOND leg: the consultant settings, which cross the same seam and have the same failure.
 //
 // Five keys travel here and the panel writes each one only when it DIFFERS from its own default, so

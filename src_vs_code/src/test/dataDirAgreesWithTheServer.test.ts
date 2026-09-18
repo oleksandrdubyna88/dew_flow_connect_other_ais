@@ -124,6 +124,8 @@ interface Vector {
   readonly dataDir: string;
   readonly dataSide: string;
   readonly dir: string;
+  readonly settingsPath: string;
+  readonly logsPath: string;
   readonly refused: boolean;
   readonly rootHasDatabase: boolean;
   readonly dirExists: boolean;
@@ -156,6 +158,52 @@ function coaiDataDirWithNothingSet(): string {
 
   return answer;
 }
+
+/**
+ * `<root>/windows/settings.json` against the directory this side resolved, built the same way.
+ *
+ * <p>Through `join` for exactly the reason `expected` gives: on Windows ROOT is `C:\\srv\\coai`
+ * and appending `/windows/settings.json` is a mixed-separator string neither production resolver
+ * ever writes.</p>
+ */
+function expectedUnder(vector: Vector, leaf: string): string {
+  return join(expected(vector), leaf);
+}
+
+test('every shared vector puts the settings file and the logs where the server puts them', () => {
+  // Added 2026-09-18. Until then `SettingsFile.DataDirFrom` on the server was a SECOND resolver with
+  // no side and no trim, so these two were the only things in the data directory that did not move
+  // with the side: two installations sharing one NAS - the whole reason a side exists - shared one
+  // settings file and overwrote each other in silence.
+  //
+  // Asserting the DIRECTORY could not see it, because the directory was already right. The server's
+  // own suite asserts these same two fields, which is the only way two implementations are held to
+  // each other rather than each to itself.
+  // `<root>` in a vector path is the ROOT, not the resolved directory - the resolved one already
+  // carries the side, so expanding it here put the side in twice. The first version did exactly
+  // that and said so: `C:/srv/coai/windows/windows/settings.json`.
+  const asPath = (spelled: string, vector: Vector): string =>
+    expectedUnder(vector, spelled.replace(vector.dir, '').split('/')
+      .filter((part) => part.length > 0).join('/'));
+
+  for (const vector of VECTORS.filter((one) => !one.refused)) {
+    assert.equal(asPath(vector.settingsPath, vector), expectedUnder(vector, 'settings.json'), vector.why);
+    assert.equal(asPath(vector.logsPath, vector), expectedUnder(vector, 'logs'), vector.why);
+    assert.ok(vector.settingsPath.startsWith(vector.dir + '/'),
+      `${vector.settingsPath} does not sit under the directory this case resolved`);
+    assert.ok(vector.logsPath.startsWith(vector.dir + '/'),
+      `${vector.logsPath} does not sit under the directory this case resolved`);
+  }
+});
+
+test('a refused side names no settings file and no log root', () => {
+  // The other direction, and it is not decoration: a fixture that carried a path for a refused side
+  // would be describing where data goes for a configuration the product will not start on.
+  for (const vector of VECTORS.filter((one) => one.refused)) {
+    assert.equal(vector.settingsPath, '', vector.why);
+    assert.equal(vector.logsPath, '', vector.why);
+  }
+});
 
 test('every shared vector resolves to the directory the server resolves', () => {
   for (const vector of VECTORS) {

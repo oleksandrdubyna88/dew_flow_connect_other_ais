@@ -175,7 +175,7 @@ export function sourceRefusal(activity: SourceActivity): string {
  * <p><b>Said rather than compensated for.</b> Copying the root's logs into the side directory would
  * put them where the server will never write again — trading a gap somebody can see for a divergence
  * nobody can. Where the server writes them is the other half's defect
- * (`todo/PLAN_the_settings_file_ignores_the_side.md`) and needs a release.</p>
+ * (`research/PLAN_the_settings_file_ignores_the_side.md`) and needs a release.</p>
  *
  * @param side The side in effect, or empty. No side means the logs are inside the folder being moved.
  * @param rootLogs Where they actually are — empty when there are none to mention.
