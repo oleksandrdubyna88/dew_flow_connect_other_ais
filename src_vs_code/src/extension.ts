@@ -51,9 +51,11 @@ import { readLog, serverRunAt } from './roundsDbRead';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
-import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
+import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
 import { lockIsStale } from './settingsLock';
 import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
+import { STOOD_DOWN } from './roleDeletion';
+import { roleDeletions } from './rolesPanel';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
@@ -248,6 +250,12 @@ export function activate(context: vscode.ExtensionContext): void {
     underSettingsLock,
   );
   mirrorSettings(settingsSync);
+  // Every deletion a crashed or reloaded window left half-done: step 2 again, idempotent, and then
+  // it waits for the mirror like every other one. Nothing FINISHES here, because nothing has been
+  // carried yet — `tellTheDeletions` is where that happens.
+  void roleDeletions().sweep().catch((raised: unknown) => {
+    console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', raised);
+  });
 
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   const chatPanels = new ChatPanels();
@@ -646,10 +654,37 @@ function mirrorSettings(settingsSync: ServerSettingsSync): void {
       { later: (work, ms) => setTimeout(work, ms), stop: (pending) => clearTimeout(pending as NodeJS.Timeout) },
       reportNotMirrored,
       reportMirroredAfterAll,
+      tellTheDeletions,
     );
   }
   schedule.start();
 }
+
+/**
+ * A role deletion waits for exactly this, and for nothing it could ask itself.
+ *
+ * <p>Writing `coai.roles` fires the configuration listener, which starts the schedule above — so a
+ * deletion that called `sync()` itself would be answered `busy`, the listener's sync would then
+ * succeed, and nothing would resume the cleanup. It is told here instead, on whatever the schedule
+ * reaches. (codex, the deletion plan's round.)</p>
+ */
+function tellTheDeletions(outcome: SyncOutcome): void {
+  const carried = outcome === 'written' || outcome === 'unchanged';
+  // `?? ''` because `noUncheckedIndexedAccess` is on, and an outcome this map has no row for is a
+  // reason nobody wrote rather than a crash.
+  const reason = carried ? '' : REASONS[outcome] ?? '';
+
+  void roleDeletions().settled(carried, reason).catch((raised: unknown) => {
+    console.error('ConnectOtherAIs: a role deletion could not be carried on with', raised);
+  });
+}
+
+/** What a person is told, per outcome. `STOOD_DOWN` is shared, because a page decides on it. */
+const REASONS: Readonly<Record<string, string>> = {
+  'stood-down': STOOD_DOWN,
+  busy: 'another window kept the settings file busy',
+  failed: 'the settings file could not be written',
+};
 
 /** Deactivation: drop the timer, disown anything in flight, and keep nothing for the next window. */
 function forgetTheMirror(): void {

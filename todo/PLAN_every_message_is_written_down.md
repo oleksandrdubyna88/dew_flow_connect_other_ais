@@ -830,7 +830,7 @@ then dropped.
 
 ### 2. Deleting a role deletes its text before the deletion has landed — BUILT 2026-09-18
 
-> Owned by [PLAN_a_deleted_role_stays_deleted.md](PLAN_a_deleted_role_stays_deleted.md), which
+> Owned by [PLAN_a_deleted_role_stays_deleted.md](../research/PLAN_a_deleted_role_stays_deleted.md), which
 > carries the boundary: this defect and its four holes are that plan’s, and nothing else of S7
 > is. What is below is the defect AS FOUND, kept because the four are read as one list. Two of
 > its bullets were changed by that plan’s own gate round: the four role-keyed settings are pruned

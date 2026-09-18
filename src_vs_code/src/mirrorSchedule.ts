@@ -42,6 +42,17 @@ export interface Clock {
 export type ReportExhausted = (outcome: Retryable) => void;
 
 /**
+ * Told every time the schedule REACHES a terminal outcome, whichever it is.
+ *
+ * <p>It carries the outcome and nothing else. A schedule that knew what a role deletion is would be
+ * a schedule with an opinion about roles; what the deletion needs is the one fact only this knows —
+ * that the mirror has stopped, and how. `written` and `unchanged` mean the server has what the
+ * settings say; `stood-down` means a newer build owns the file; `busy` and `failed` arrive only on
+ * exhaustion, never per attempt.</p>
+ */
+export type ReportSettled = (outcome: SyncOutcome) => void;
+
+/**
  * Told when a write LANDS after something was reported, and only then.
  *
  * <p>A person who presses *Try again* and is told nothing cannot tell a retry that worked from one
@@ -83,6 +94,7 @@ export class MirrorSchedule {
     private readonly clock: Clock,
     private readonly report: ReportExhausted,
     private readonly recovered: ReportRecovered,
+    private readonly settled: ReportSettled = () => undefined,
   ) {}
 
   /**
@@ -141,6 +153,7 @@ export class MirrorSchedule {
       // The configuration IS what the server reads, either because this attempt wrote it or because
       // it was already there. The conditions below are over, and the next one is news.
       this.landed();
+      this.settled(outcome);
 
       return;
     }
@@ -149,6 +162,8 @@ export class MirrorSchedule {
       // `serverSettingsSync` offers exactly that, once per version. It is emphatically NOT a write,
       // so nothing is cleared: a failure reported a moment ago is still true. (Three reviewers, the
       // code round, and the only finding all three vendors raised.)
+      this.settled(outcome);
+
       return;
     }
     this.next(run, attempt, outcome);
@@ -158,6 +173,9 @@ export class MirrorSchedule {
     const wait = WAITS_MS[attempt - 1];
     if (wait === undefined) {
       this.exhausted(outcome);
+      // On exhaustion, never per attempt: a deletion told about every `busy` would write a reason
+      // it is about to replace two seconds later.
+      this.settled(outcome);
 
       return;
     }
