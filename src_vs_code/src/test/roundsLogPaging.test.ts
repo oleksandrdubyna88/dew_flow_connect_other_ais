@@ -182,7 +182,7 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra = ''): P
     },
   };
 
-  // eslint-disable-next-line no-new-func
+   
   new Function('document', 'window', 'acquireVsCodeApi', body)(
     document_, window_, () => ({ postMessage: (m: unknown) => posted.push(m) }));
 

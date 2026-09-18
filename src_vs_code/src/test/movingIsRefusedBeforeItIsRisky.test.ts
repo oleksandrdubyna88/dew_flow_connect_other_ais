@@ -282,7 +282,7 @@ test('a destination that could not be read is not a verified destination', () =>
 
 test('and a source that cannot be read is never deleted', () => {
   const blind = sourceChangedSince(
-    { from: 'C:\old', to: 'Z:\coai', verified: true, held: BEFORE },
+    { from: 'C:\\old', to: 'Z:\\coai', verified: true, held: BEFORE },
     { rounds: 0, sessions: 0, usageLines: 0, read: false });
 
   assert.match(blind, /could not be read/u);

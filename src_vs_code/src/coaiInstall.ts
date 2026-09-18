@@ -368,7 +368,7 @@ export function overlayKey(side: Side): string {
  * matters the next time somebody has to work out which side a record belongs to.</p>
  */
 function escapeComponent(value: string): string {
-  return value.replace(/[^A-Za-z0-9._~/\:+-]/g, (c) =>
+  return value.replace(/[^A-Za-z0-9._~/:+-]/g, (c) =>
     [...c].map((ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join(''),
   );
 }

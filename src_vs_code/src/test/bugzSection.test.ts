@@ -163,7 +163,7 @@ function run(controls: Readonly<Record<string, readonly Control[]>>, over: Parti
     documentElement: { style: { setProperty: () => undefined } },
   };
 
-  // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test.
+   
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout',
     pageScript(html));
   body(

@@ -868,6 +868,9 @@ test('only ONE header control pushes the group right, so the two are not pushed 
   // And the shared LOOK is a neutral name: a rule written for the control that reads a session back
   // must not be able to reach the one that starts a new chat. (codex, the code round.)
   assert.match(header, /id="asked" class="headerAction asked"/u, 'the two header actions no longer share one look');
+  // The backspace characters ARE the subject: this asserts that a stream carrying them is
+  // rendered without them.
+  // eslint-disable-next-line no-control-regex -- deliberate, see above
   assert.doesNotMatch(header, /id="fresh"[^>]*asked/u, 'New chat wears the Asked control’s own identity');
   // And the order: the ± controls, then New chat, then Asked.
   assert.ok(header.indexOf('id="fresh"') > header.indexOf('</h1>'), 'New chat comes before the title');

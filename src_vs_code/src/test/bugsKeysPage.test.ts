@@ -101,7 +101,7 @@ function run(users: Users): Page {
     getElementById: (id: string): Control | undefined => controls.get(id),
   };
 
-  // eslint-disable-next-line no-new-func -- the shipped script IS the thing under test.
+   
   const body = new Function('acquireVsCodeApi', 'document', pageScript(html));
   body(() => ({ postMessage: (m: Posted) => posted.push(m) }), document);
 

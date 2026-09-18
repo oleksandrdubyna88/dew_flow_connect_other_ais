@@ -120,7 +120,7 @@ test('the control the page rendered for a block copies that block and no other',
 
   for (let at = 0; at < drawn.length; at += 1) {
     const kit = ports();
-    // eslint-disable-next-line no-await-in-loop
+     
     await press(answer, drawn[at]!, kit.ports);
     assert.deepEqual(kit.wrote, [expected[at]], `the control for block ${at} copied the wrong text`);
   }
@@ -140,7 +140,7 @@ test('an answer the renderer stopped drawing into still resolves every control i
   assert.ok(drawn.length > 1, 'the fixture drew too little to prove anything');
   for (const control of drawn) {
     const kit = ports();
-    // eslint-disable-next-line no-await-in-loop
+     
     await press(answer, control, kit.ports);
     assert.equal(kit.wrote.length, 1, `the control for block ${control.block} resolved to nothing`);
   }

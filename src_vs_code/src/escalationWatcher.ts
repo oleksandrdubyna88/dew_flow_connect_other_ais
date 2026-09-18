@@ -200,7 +200,7 @@ export class EscalationWatcher {
       return; // dismissing is not answering; the question stays open
     }
 
-    let decision = picked.choice.decision;
+    const decision = picked.choice.decision;
     let text = picked.choice.label;
     if (decision === '') {
       const typed = await vscode.window.showInputBox({

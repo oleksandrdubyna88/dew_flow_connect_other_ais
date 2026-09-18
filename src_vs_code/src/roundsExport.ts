@@ -337,7 +337,7 @@ export async function inBatches<T, R>(
     // awaiting them. `Promise.all` does exactly that, and this is a generic helper whose next
     // caller will not know. Each job answers for itself and `onFailure` turns a rejection into a
     // result, so every item gets one. (Code round, gemini, twice.)
-    // eslint-disable-next-line no-await-in-loop
+     
     const settled = await Promise.all(batch.map(async (item) => {
       try {
         return await each(item);

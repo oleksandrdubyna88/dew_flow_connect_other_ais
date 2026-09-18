@@ -703,7 +703,9 @@ async function attachPicture(entry: ChatEntry, thread: Thread, dataUrl: string):
   // conversation now, so the call that caused it does not compile.
   const dir = pictureDir(coaiDataDir(), thread);
   const was = thread.attachedPath;
-  let file = '';
+  // Not initialised: the `catch` below returns, so the only way past this block is through the
+  // assignment, and an empty-string placeholder would just be a value nothing can observe.
+  let file: string;
   try {
     file = path.join(dir, imageFileName(picture.type, thread.turn + 1));
     // Written BESIDE its destination and renamed over it, by the same helper the store uses — which

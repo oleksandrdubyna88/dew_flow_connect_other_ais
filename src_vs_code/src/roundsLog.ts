@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- 2062 lines, over the 800 this package sets for NEW code.
+   The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
+   review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { asText } from './asText';
 import { Escalation } from './escalations';
@@ -723,10 +726,10 @@ export function costTitle(row: Costed, figure: Money): string {
   if (typeof row.costTotalUsd !== 'number') {
     return 'No price is listed for these models, so this round has no cost figure.';
   }
-  var how = row.costIsEstimate
+  const how = row.costIsEstimate
     ? 'Worked out from a public price list, not billed.'
     : 'Reported by the vendor.';
-  var part = row.costPartial
+  const part = row.costPartial
     ? ' Some of it could not be priced, so the total is a floor.'
     : '';
 

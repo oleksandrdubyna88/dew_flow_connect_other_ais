@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- 3933 lines, over the 800 this package sets for NEW code.
+   The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
+   review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
 import { glanceAtLedgers } from './notificationsGlance';
 import { withinTheClock } from './withinTheClock';
@@ -807,7 +810,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       const fresh = Date.now() - (this.consultEngineAt[endpoint] ?? 0) < A_MINUTE && (cached?.reachable ?? false);
       if (!fresh) {
         this.consultEngineAt[endpoint] = Date.now();
-        // eslint-disable-next-line no-await-in-loop -- one engine at a time, like the reviewer pass.
+         
         this.consultEngines[endpoint] = endpoint.length > 0
           ? await probeEngine(openAiBaseOf(endpoint))
           : await discoverEngine(undefined, undefined, windowsSideHere);
@@ -859,7 +862,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // and a render that waits for silence is a render that never happens.
     for (let round = 0; round < 5; round += 1) {
       const seen = this.queued;
-      // eslint-disable-next-line no-await-in-loop -- the point is to wait for each one in turn.
+       
       await seen;
       if (seen === this.queued) {
         break;

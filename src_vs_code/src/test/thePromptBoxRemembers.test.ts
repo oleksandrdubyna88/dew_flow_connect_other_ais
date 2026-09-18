@@ -182,7 +182,7 @@ function run(elements: readonly FakeElement[], over: Partial<PanelState> = {}): 
   };
 
   const script = pageScript(panelHtml(state(over), 'test-nonce'));
-  // eslint-disable-next-line no-new-func -- the shipped script is the thing under test; a scan of
+   
   // its text is what the code round refused.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(

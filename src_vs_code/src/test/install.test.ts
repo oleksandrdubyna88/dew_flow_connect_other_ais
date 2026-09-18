@@ -1114,6 +1114,9 @@ test('every shell script this repository runs is executable in git', () => {
   // denied" on every release — and `deploy/systemd-release.sh` was the same, which is what the
   // deploy workflow's own preflight tests with `test -x`. Nothing else here would have noticed
   // until a release did.
+  // A synchronous require is what lets this run inside a non-async test, and the `as typeof
+  // import(...)` keeps it type-checked.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate, see above
   const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
   const root = path.join(__dirname, '..', '..', '..');
 
