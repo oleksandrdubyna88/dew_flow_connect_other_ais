@@ -455,6 +455,44 @@ that both halves agree on the envelope, and the field names are checked against 
 database by the server's own `ThePairsThemselvesTests`, which can write rows this side cannot.
 Verified by mutation — renaming what the reader expects turns it red.
 
+**The interpolation fix was a REGRESS before it was a fix, and the code round caught it four
+times** (2026-09-18, story 2.1). Keeping whatever sat inside braces so that `${x ? 1 : 0}` would
+count applied that rule to every literal AND to comments: `// { if }` counted a branch,
+`"{ if for while }"` counted three, a block comment counted two. Measured at 2, 4 and 3 where 1
+belonged. It was the worse trade — an understatement in a rare case swapped for an OVERSTATEMENT
+in common ones, on text that survives `Normalise` verbatim — and a complexity that moves when only
+a comment moves invents a change the control flow does not have.
+
+Only three literal forms interpolate (a template literal, C#'s `$"…"` and its verbatim pairings);
+everything else, comments included, is blanked end to end. The property is now asserted as
+itself — *changing only the prose does not change the number* — which fails for a comment form
+nobody thought to enumerate, rather than for the three that were.
+
+**And the fix obscured a pre-existing hole in the scanner.** `$"…"` without the `@` was never
+recognised as one literal: `$@"…"` and `@$"…"` were both handled and the plain form fell through,
+so the `$` passed as code and the quote opened a bare string that ended at the first quote INSIDE
+the interpolation. It answered correctly while every literal was blanked wholesale and stopped the
+moment holes began to be scanned.
+
+**`Columns` lost a guard on the way out of `BugsQuery`, and `TheColumnReaderTests` is the answer.**
+The private helper it was extracted from read `IsDBNull(at) ? 0 : Convert.ToInt32(GetValue(at), …)`;
+the extracted copy called `GetInt32` straight, which throws *"The data is NULL at ordinal 0"*. Two
+reviewers were right about the principle and wrong about the consequence: every column the review
+page's projection reads is `NOT NULL DEFAULT`, so no caller today can reach it — but a shared
+reader with a hole in it is still that. Tested against a table with genuinely nullable columns,
+which is the only way to reach the branch, with a companion proving a present value still reads as
+itself and a 64-bit id is not truncated.
+
+**The `--pairs-json` field names are compared at their SOURCES.** `ReviewPair` is written twice, so
+`fixSha` against `fix_sha` would leave every suite green while the page rendered honest-looking
+absences — indistinguishable from an older server and so unnoticeable by looking. The live check
+runs the real binary through the real reader but against an EMPTY corpus: nothing here can seed a
+pair from outside the collector, and adding a CLI mode to make a test possible would be changing
+the product to suit its tests. So a third structural read across projects (after `SourceLanguage`
+and `Placeholders.cs`) camelCases the record's properties and compares them to the interface's
+fields. Verified by renaming one field on the server side. **What it does not prove is that a
+populated row survives the round trip** — only a seeded corpus could.
+
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
 pairs — the two-age compatibility of `--pairs-json` is proven with a stubbed `Run` on the read side

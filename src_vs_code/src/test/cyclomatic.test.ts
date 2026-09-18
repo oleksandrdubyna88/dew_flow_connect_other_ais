@@ -214,3 +214,55 @@ test('a question mark in the literal TEXT of an interpolated string still does n
 
   assert.equal(asked.known && asked.value, 1, 'punctuation in a string was read as a branch');
 });
+
+/**
+ * A comment is never code, however many braces it contains.
+ *
+ * <p><b>This is a regress I introduced and the code round caught, in four findings across two
+ * providers.</b> Fixing the interpolation case by keeping whatever sat inside braces applied that
+ * rule to EVERYTHING — comments and ordinary strings included — so `// { if }` counted a branch and
+ * `"{ if for while }"` counted three. Measured before this fix: 2, 4 and 3 where 1 belonged.</p>
+ *
+ * <p>It was the worse trade, too. I had swapped an understatement in a rare case (a ternary inside
+ * an interpolation) for an OVERSTATEMENT in common ones — braces in a comment or a string literal,
+ * both of which survive `Normalise` verbatim and are therefore in the corpus. And a complexity that
+ * moves when only a comment changes is worse than one that is slightly low: it invents a change
+ * where the control flow has none.</p>
+ */
+test('braces in a comment or an ordinary string are not control flow', () => {
+  assert.equal(count('void method_1() { // { if }\n }'), 1, 'a line comment');
+  assert.equal(count('void m() { /* { if while } */ }'), 1, 'a block comment');
+  assert.equal(count('string method_1() { return "{ if for while }"; }'), 1, 'a plain string');
+  assert.equal(count('function f() { return \'{ if }\'; }', 'JavaScript'), 1, 'a single-quoted string');
+
+  // And the one that motivated the whole thing still works, on both languages that have it.
+  assert.equal(count('function f(x) { return `${x ? 1 : 0}`; }', 'TypeScript'), 2, 'a template hole');
+  assert.equal(count('void m(int x) { var s = $"{(x > 1 ? "a" : "b")}"; }'), 2, 'a C# hole');
+});
+
+/**
+ * A complexity that moves when only a comment moves is the defect, stated as a property.
+ *
+ * <p>Four of the code round's findings were really this one sentence: the number must describe the
+ * control flow and nothing else. Asserting it directly is stronger than asserting any particular
+ * spelling, because it fails for a comment form nobody thought to enumerate.</p>
+ */
+test('changing only the prose does not change the number', () => {
+  const bare = 'void method_1(int var_1) { if (var_1 > 0) { return; } }';
+  const commented = 'void method_1(int var_1) { // { while for } and a note\n  if (var_1 > 0) { return; } }';
+  const stringy = 'void method_1(int var_1) { var s = "{ while for }"; if (var_1 > 0) { return; } }';
+
+  assert.equal(count(commented), count(bare), 'a comment changed the complexity');
+  assert.equal(count(stringy), count(bare), 'a string literal changed the complexity');
+});
+
+test('a doubled brace in a template literal does not swallow the rest of it', () => {
+  // `${{ … }}` is an object literal in a hole; the C# escape rule must not apply to it. Before the
+  // fix this counted 1 — the doubled brace was read as an escape and the hole never opened.
+  const object = cyclomatic('function f(x) { return `${{ a: x ? 1 : 0 }}`; }', 'TypeScript');
+  assert.equal(object.known && object.value, 2, 'an object literal in a hole hid its decision');
+
+  // And a hole that ENDS with two braces must still close, or every word after it counts.
+  const arrow = cyclomatic('function f() { return `${(() => { return 1; })()} if for while`; }', 'TypeScript');
+  assert.equal(arrow.known && arrow.value, 1, 'the hole never closed, so the prose after it counted');
+});
