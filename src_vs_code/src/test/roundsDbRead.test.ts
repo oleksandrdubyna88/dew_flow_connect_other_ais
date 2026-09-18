@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_LIMIT, readFindings, readLog, Run } from '../roundsDbRead';
+import { DEFAULT_LIMIT, readFindings, readLog, readPairs, Run } from '../roundsDbRead';
 
 /**
  * Reading the rounds database — and the four version pairings of doing so.
@@ -175,4 +175,73 @@ test('no server installed is a failed read, not an empty round', async () => {
 
   assert.deepEqual(seen, []);
   assert.equal(found.state, 'failed');
+});
+
+// --------------------------------------------------------------------------------------------
+// The pairs — and the two shapes a server of either age answers with (story 2.1).
+// --------------------------------------------------------------------------------------------
+
+/** The nine fields every server has ever sent. */
+const NINE = {
+  findingId: 7, symbolName: 'GetOrAdd', language: 'CSharp',
+  skeletonBefore: 'method_1() { }', skeletonAfter: 'method_1() { lock { } }',
+  keep: -1, severity: 'Major', category: 'Reliability', title: 'a race',
+};
+
+/** The seven a server from story 2.1 onwards adds. */
+const SEVEN = {
+  repoPath: 'D:/repo', headSha: 'aaaa111', fixSha: 'bbbb222', file: 'src/Totals.cs', line: 5,
+  why: 'it races', fix: 'hold the lock',
+};
+
+const pairsOf = (...items: readonly Record<string, unknown>[]): string => JSON.stringify({ items });
+
+test('a server that says where a pair was is read field by field, and the limit travels', async () => {
+  const { run, seen } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN }) });
+
+  const read = await readPairs('coai-mcp.exe', 200, run);
+
+  assert.deepEqual(seen, [['--pairs-json', '--limit', '200']]);
+  assert.ok(read.ok);
+  assert.deepEqual(read.pairs, [{ ...NINE, ...SEVEN }]);
+});
+
+/**
+ * An older server is a normal Tuesday, not a failure.
+ *
+ * <p>The two halves ship out of step, and a server too old for the seven fields sends the nine it
+ * always did. Nothing is invented for the missing ones: empty text and a line of 0, which the page
+ * renders as "none recorded" — and NOT as a malformed page, which is what a reader that required
+ * them would have made of every installation with a lagging server.</p>
+ */
+test('a server too old to say where a pair was still answers a page, with nothing invented', async () => {
+  const { run } = calls({ code: 0, output: pairsOf(NINE) });
+
+  const read = await readPairs('coai-mcp.exe', 200, run);
+
+  assert.ok(read.ok, 'an older server is not a failed read');
+  assert.deepEqual(read.pairs, [{
+    ...NINE, repoPath: '', headSha: '', fixSha: '', file: '', line: 0, why: '', fix: '',
+  }]);
+});
+
+test('a line that is not a whole non-negative number is no line at all', async () => {
+  for (const bad of ['5', -3, 2.5, null, true]) {
+    const { run } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN, line: bad }) });
+
+    const read = await readPairs('coai-mcp.exe', 200, run);
+
+    assert.ok(read.ok, String(bad));
+    assert.equal(read.pairs[0]?.line, 0, `${String(bad)} was read as a line`);
+  }
+});
+
+test('a pair with no id is malformed whatever else it carries, and the read says how many', async () => {
+  const noId = Object.fromEntries(Object.entries({ ...NINE, ...SEVEN }).filter(([key]) => key !== 'findingId'));
+  const { run } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN }, noId) });
+
+  const read = await readPairs('coai-mcp.exe', 200, run);
+
+  assert.equal(read.ok, false);
+  assert.match(read.ok ? '' : read.why, /1 of 2 pairs were malformed/u);
 });

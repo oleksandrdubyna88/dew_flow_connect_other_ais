@@ -286,14 +286,17 @@ of every wire field this product has shipped out of step.
 
 | Suite | Drives | Catches |
 |---|---|---|
-| `ThePairsThemselvesTests` | real SQLite | an upsert that forgets a decision; a pair written for a claim that lost |
+| `ThePairsThemselvesTests` | real SQLite | an upsert that forgets a decision; a pair written for a claim that lost; a pair dropped from the page because its session row went; a page-only field (`why`, `repoPath`, …) creeping onto the record the send reads |
 | `WhatIsStoredIsAnonymousTests` | the real normaliser, then the COLUMN | a skeleton computed correctly and stored wrong |
-| `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success |
+| `ThePairModesTests` | both one-shot modes | a request fault answered 64 instead of 65; a malformed document reported as success; a pairs document that does not say where each pair was, read by property NAME as the extension reads it |
 | `ARankingIsNotTrustedTests` | the pure ordering | a model that invents, omits, duplicates or contradicts |
-| `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
+| `bugzReviewPage.test.ts` | the page RUN against a DOM shim; the `about` block of a rendered row, sliced per pair | a tick-box that renders and selects nothing; reviewer prose becoming markup; a cause invented for a finding that has none; a full sha where an abbreviation belongs; the after-side complexity labelled with the before-side commit; a count rendered as 0 for a language the page does not read |
 | `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
 | `codeHighlight.test.ts` | the real Shiki, all three grammars | a skeleton becoming MARKUP; a language rendered by guesswork; colours baked in past the theme |
 | `lineDiff.test.ts` | the pure diff, nine cases | anonymisation's renumbering read as real change; a rewrite shown as an unrelated removal and addition |
+| `cyclomatic.test.ts` | the pure count, over skeletons including one the normaliser's own fixture produces | a keyword inside a string, a comment, a verbatim or a raw string counted as a decision; a `//` inside a string swallowing the code after it; a nullable `?`, a `?.` or a TypeScript `?:` counted as a branch; a count for a language the page does not read |
+| `corpusLanguage.test.ts` | the one language table, against `SourceLanguage` through `sourceLanguages.ts` | a fourth collector language nobody told the page about; a name inherited from `Object.prototype` answered as a language |
+| `roundsDbRead.test.ts` (the pairs) | `readPairs` against a stubbed `Run`, in both ages | a nine-field document from an older server read as malformed, or a field invented for it; a `line` that is not a whole non-negative number reaching the page |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
 source text, and story 4 earned that ruling: a model picker matched every regex written about it
@@ -384,10 +387,81 @@ still finds a KNOWN instance, which catches the extraction matching NOTHING; it 
 matching too little. The real fix is a generated contract shared by both sides, which is work in
 its own right.
 
+**What a row says about itself is asserted on rendered VALUES, inside the ruling's own carve-out**
+(2026-09-18, story 2.1). The `about` block — where, why, fix, complexity — is static markup with no
+program to run, and `PROJECT.md` names "a value appearing escaped" as the legitimate source
+assertion. `aboutOf()` slices the block out of the detail row rendered for THAT `findingId`, so a
+block rendered for the wrong pair is a failure rather than a match elsewhere; `readableHtml.ts` is
+the tag scanner and entity decoder `codeHighlight.test.ts` had privately, moved out so both files
+assert the same property the same way: the dangerous sequence cannot appear AND the text is still
+all there.
+
+**Verified by mutation, seven at once, each aimed at a different test — and the first compile of
+that batch was not evidence.** Mutation (h) left a helper unused, `tsc` exited 1 under
+`noUnusedLocals`, `noEmitOnError` kept the previous `out/`, and 71 of 71 passed against the OLD
+build — the TypeScript doctrine's fourth trap, met while checking the tests for teeth. With the
+compile read first: prose un-escaped and the "none recorded" branch removed → *no cause or fix
+recorded says so* and *reviewer prose full of markup renders as text* red; the full sha rendered →
+*the path and the short commit* red; the after side labelled with `headSha` → *labelled with the
+revision its skeleton came from* red; the language table made an object literal → *a name
+inherited from Object.prototype* red; literals not blanked → three `cyclomatic` cases red; `line`
+read unchecked → *a server too old…* and *a line that is not a whole number* red. Ten red of
+seventy-one, all attributable, nothing else moved. A second batch on its own, because the first
+would have masked it: `//` comments blanked by a whole-text regex before the scanner's walk turns
+*a comment marker inside a string does not hide the code after it* red — the obvious first draft
+of that scanner, and why the test's docblock names the mutation rather than "the order of the
+checks", which cannot break it.
+
+**The server side, the same way.** `PairsJsonSaysWhereEachPairWas_AndWhatTheReviewersSaid` was
+written against the nine-field answer and failed first for the real symptom — `KeyNotFoundException`
+on `repoPath`, not a compile error — because it reads the JSON by property NAME, as the extension
+does. After the record existed: the session's `LEFT JOIN` made a plain `JOIN` turned
+`APairWhoseSessionIsGone…` red with *the collection is empty*; `FixSha` read from `head_sha` turned
+both the typed and the JSON test red with `"aaaa111"` where `"bbbb222"` belonged. That fixture also
+corrected a belief: Microsoft.Data.Sqlite turns foreign keys ON for every connection it opens, so
+the product cannot orphan a round — the `sqlite3` shell can, with foreign keys OFF by default, and
+the test deletes the session the way that shell would. `OnlyThreeFieldsLeaveTests` is unmodified
+and green; `TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends` pins on the types that the
+seven page fields exist on `ReviewPair` and on nothing `Sendable()` returns.
+
+**Counts on 2026-09-18, on this branch.** Extension: `tsc` exit 0, then 3 791 tests — 3 790 passed,
+1 skipped, 0 failed (the compiled batch 3 746, the seven source-test batches 45), `npm test` exit
+0. Server: 2 214 total, 2 211 passed, 2 skipped, 1 failed — `StageRulesTests.TheRotatedTail_
+CurrentlyFitsAtMostOneRule`, whose own remark says the leftover straddles the smallest tail rule
+between CRLF and LF; it reads the conventions mount, which this story does not touch, and it fails
+on a Windows checkout before and after the change.
+
+**The review page's import graph is now GUARDED, and it was not before** (2026-09-18, story 2.1's
+plan round). Three docblocks in epic 1 said a review-page module importing `node:` or `vscode`
+"fails the bundle test". It would not have: `bundledPage.test.ts` bundled the rounds log and the
+chat page only, and `theBundleLoads.test.mjs` loads the whole extension bundle, where `node:` is
+available and a page module importing it proves nothing. Purity was held by comments CLAIMING a
+guard that did not exist — worse than no comment, because the next reader stops checking. The file
+now bundles `bugzReviewPage.ts` as a third entry point and asserts no `require("node:` and no
+`require("vscode")` survive, with a companion that the bundle really renders a page.
+
+**And the first mutation for it was too weak to prove anything.** Adding an unused `node:crypto`
+import left the test green: esbuild tree-shakes an import nothing uses, so the bundle was clean
+and correctly so. The mutation that counts USES `randomBytes`, and that one is red. Worth knowing
+before trusting this guard: it catches a real host DEPENDENCY, not a stray import line.
+
+**The `--pairs-json` contract is exercised end to end** (story 2.1's plan round, two providers
+independently). `ReviewPair` is written twice — a C# record and a TypeScript interface — and every
+other test of it feeds one side a fixture the other never produced, so `headSha` against
+`head_sha` would leave both suites green while the page rendered four honest-looking absences,
+indistinguishable from an older server. `bugzLiveContract.test.ts` now runs the real binary and
+parses with the real `readPairs`. It uses an EMPTY corpus deliberately: what only it can see is
+that both halves agree on the envelope, and the field names are checked against a populated
+database by the server's own `ThePairsThemselvesTests`, which can write rows this side cannot.
+Verified by mutation — renaming what the reader expects turns it red.
+
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the
-pairs. And the ranking has no transport, so `Ranking.Order` is exercised and nothing produces a real
-reply for it to order.
+pairs — the two-age compatibility of `--pairs-json` is proven with a stubbed `Run` on the read side
+and with the mode's own JSON on the write side, never with an old binary against a new extension or
+the reverse. The complexity count is checked against hand-counted skeletons and one the normaliser's
+fixture produces, not against an analyser's number over the live corpus. And the ranking has no
+transport, so `Ranking.Order` is exercised and nothing produces a real reply for it to order.
 
 ## The ingest server's suites (2026-09-16)
 

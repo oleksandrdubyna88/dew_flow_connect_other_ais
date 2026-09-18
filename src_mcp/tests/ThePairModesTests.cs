@@ -100,6 +100,39 @@ public sealed class ThePairModesTests : IDisposable
         pair.Title.Should().Be("a race", "a person reviewing needs what the reviewers said it was");
     }
 
+    /// <summary>
+    /// The mode says where each pair WAS and what the reviewers SAID, beside the two skeletons.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read through <c>JsonDocument</c> rather than the typed answer, deliberately: this is the
+    /// contract the extension's <c>pairOf</c> reads by property NAME, so the names are what is
+    /// pinned here — a test through the typed accessor would compile against whatever the record
+    /// happened to be called. It is also what let this test go red for the real symptom before the
+    /// record existed: a property the answer did not carry, not a compile error.</para>
+    /// <para><b>Two shas, named apart.</b> The BEFORE skeleton is the method at the commit the
+    /// reviewers read (<c>headSha</c>); the AFTER skeleton is the method at the commit the collector
+    /// found the fix in (<c>fixSha</c>, `Collector.LocateThenWalkAsync`). A page that labelled both
+    /// with one sha would be confidently wrong about one of them.</para>
+    /// </remarks>
+    [Fact]
+    public void PairsJsonSaysWhereEachPairWas_AndWhatTheReviewersSaid()
+    {
+        Seed();
+
+        var json = Spoken(() => Program.PairsJson(["--pairs-json"]), out var code);
+
+        code.Should().Be(0);
+        using var answer = JsonDocument.Parse(json);
+        var item = answer.RootElement.GetProperty("items")[0];
+        item.GetProperty("repoPath").GetString().Should().Be("D:/repo");
+        item.GetProperty("headSha").GetString().Should().Be("aaaa111", "the before skeleton is the method at this commit");
+        item.GetProperty("fixSha").GetString().Should().Be("bbbb222", "and the after skeleton is the method at this one");
+        item.GetProperty("file").GetString().Should().Be("src/Totals.cs");
+        item.GetProperty("line").GetInt32().Should().Be(5);
+        item.GetProperty("why").GetString().Should().Be("it races");
+        item.GetProperty("fix").GetString().Should().Be("hold the lock");
+    }
+
     [Fact]
     public void PairsKeepWritesABatch()
     {

@@ -4,6 +4,7 @@ import typescript from '@shikijs/langs/typescript';
 import { createCssVariablesTheme, createHighlighterCoreSync, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
+import { corpusLanguage } from './corpusLanguage';
 import { type LineMark } from './lineDiff';
 import { escapeHtml } from './webviewHtml';
 
@@ -41,40 +42,13 @@ import { escapeHtml } from './webviewHtml';
  */
 const THEME = 'coai-vars';
 
-/**
- * What the corpus calls a language, and what Shiki does.
- *
- * <p>Not a `toLowerCase()`: `codeToHtml` THROWS on an id it has not loaded, and `CSharp` is exactly
- * such an id — verified, not assumed. An explicit table is also the thing that decides, once, which
- * languages this page claims to highlight at all.</p>
- *
- * <p><b>The VALUES are Shiki's ids; the KEYS are every spelling that might reach us.</b> The
- * collector writes `SourceLanguage` names (`CSharp`), the extensions it reads suggest others (`cs`,
- * `ts`), and a person reading the column would write `c#` — so the keys are aliases and the value
- * side is canonical. Keys are matched trimmed and lowercased; see {@link keyFor}.</p>
+/*
+ * Which language a row is in is decided by `corpusLanguage.ts`, not here. The alias table and the
+ * null-safe key lived in this file as `GRAMMARS` and `keyFor` until story 2.1 of the review-page
+ * plan, when the complexity count needed the same decision; the canonical ids it answers are Shiki's
+ * own grammar ids, so `codeToHtml` — which THROWS on an id it has not loaded, `CSharp` included —
+ * is handed exactly what it loaded.
  */
-const GRAMMARS: Readonly<Record<string, string>> = {
-  csharp: 'csharp',
-  cs: 'csharp',
-  'c#': 'csharp',
-  typescript: 'typescript',
-  ts: 'typescript',
-  javascript: 'javascript',
-  js: 'javascript',
-};
-
-/**
- * The one place a stored `language` becomes a key.
- *
- * <p>Trimmed and lowercased, because a column is not a promise — and typed as `unknown` for the
- * same reason. A code reviewer found that `language.trim()` threw on `null`, and the throw happened
- * BEFORE the fallback that exists to catch exactly this, so one malformed row would have taken the
- * whole page down rather than rendering itself as plain text. `ReviewPair.language` says `string`
- * and `roundsDbRead` does coerce it, but a page module's safety cannot rest on what its caller
- * currently happens to do.</p>
- */
-const keyFor = (language: unknown): string =>
-  (typeof language === 'string' ? language : '').trim().toLowerCase();
 
 /**
  * Built once, on first use — never at import.
@@ -98,11 +72,11 @@ function highlighter(): HighlighterCore {
 /**
  * Whether this page will colour a pair written in this language.
  *
- * <p>Accepts whatever the column holds: untrimmed, any casing, and any of the aliases in
- * {@link GRAMMARS}. Anything else — including a value that is not a string at all — is `false`.</p>
+ * <p>Accepts whatever the column holds: untrimmed, any casing, and any of the aliases
+ * `corpusLanguage` knows. Anything else — including a value that is not a string at all — is `false`.</p>
  */
 export function canHighlight(language: string): boolean {
-  return GRAMMARS[keyFor(language)] !== undefined;
+  return corpusLanguage(language) !== undefined;
 }
 
 /**
@@ -204,7 +178,7 @@ function touch(key: string, html: string): string {
 export function highlight(
   code: string, language: string, marks: readonly LineMark[] = [],
 ): string {
-  const grammar = GRAMMARS[keyFor(language)];
+  const grammar = corpusLanguage(language);
   if (grammar === undefined) {
     // No cache entry: this path is a string concatenation, and caching it would spend the bound on
     // the blocks that cost nothing to make.

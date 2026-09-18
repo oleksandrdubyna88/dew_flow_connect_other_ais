@@ -72,6 +72,100 @@ public sealed class ThePairsThemselvesTests : IDisposable
         stored.Title.Should().Be("a race", "the page shows what the reviewers said it WAS");
     }
 
+    /// <summary>
+    /// The page's row says where the pair WAS and what the reviewers said — from three tables, not one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Story 2.1 of the review-page plan: the page showed a method and two skeletons in code
+    /// whose identifiers were already <c>var_1</c>, with no way to tell which file, which commit, or
+    /// why the finding was raised. The three tables were always there; <c>Pairs()</c> read one.</para>
+    /// <para><b>Two shas, named apart.</b> The BEFORE skeleton is the method at the commit the
+    /// reviewers read; the AFTER skeleton is the method at the commit the collector found the fix in.
+    /// The plan's brief labelled both "at head_sha", and the collector says otherwise
+    /// (<c>Collector.LocateThenWalkAsync</c> normalises the after side from <c>touched.Sha</c>).</para>
+    /// </remarks>
+    [Fact]
+    public void APairSaysWhereItWas_AndWhatTheReviewersSaid()
+    {
+        var id = Seed();
+        using var db = Db();
+        db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+
+        var shown = db.Pairs(50).Should().ContainSingle().Subject;
+
+        shown.RepoPath.Should().Be("D:/repo");
+        shown.HeadSha.Should().Be("aaaa111", "the before skeleton is the method at the commit the reviewers read");
+        shown.FixSha.Should().Be("bbbb222", "the after skeleton is the method at the commit the fix was found in");
+        shown.File.Should().Be("src/Totals.cs");
+        shown.Line.Should().Be(5);
+        shown.Why.Should().Be("it races");
+        shown.Fix.Should().Be("hold the lock");
+    }
+
+    /// <summary>
+    /// A pair whose session row is gone is still offered, and says it does not know where it was.
+    /// </summary>
+    /// <remarks>
+    /// <para>An inner join would drop it in silence — a pair somebody has to decide about, missing
+    /// from the page because a row two tables away went. Verified by mutation: with the session's
+    /// <c>LEFT JOIN</c> made a plain <c>JOIN</c>, this goes red on <c>ContainSingle</c>.</para>
+    /// <para><b>How a session row goes missing, since this code cannot do it.</b>
+    /// Microsoft.Data.Sqlite turns foreign keys ON for every connection it opens, so the first
+    /// version of this fixture died on <c>FOREIGN KEY constraint failed</c> — a real answer, and
+    /// the reason the delete below runs with the pragma off: the <c>sqlite3</c> command-line shell
+    /// leaves foreign keys OFF by default, and an operator pruning old sessions from it is exactly
+    /// the hand that orphans a round. The page must not lose a pair to that.</para>
+    /// </remarks>
+    [Fact]
+    public void APairWhoseSessionIsGone_IsStillOffered_AndSaysItsPlaceIsUnknown()
+    {
+        var id = Seed();
+        using var db = Db();
+        db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+        Execute("PRAGMA foreign_keys = OFF; DELETE FROM sessions;");
+
+        var shown = db.Pairs(50).Should()
+            .ContainSingle("a pair is not less of a pair for losing its session row").Subject;
+
+        shown.RepoPath.Should().BeEmpty("the database does not know, and must not invent");
+        shown.HeadSha.Should().Be("aaaa111", "the round is still there");
+        shown.Why.Should().Be("it races", "and so is the finding");
+    }
+
+    /// <summary>
+    /// What the page gained, the send did not — pinned on the TYPES, so a later widening is a red build.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>OnlyThreeFieldsLeaveTests</c> guards the wire and constructs <see cref="StoredPair"/>
+    /// by name; this is the same promise seen from the page's side. The obvious maintenance move —
+    /// one record for both readers — would put a repository path, a file and the reviewers' prose
+    /// one edit away from <c>UploadRun.Wire</c>. Named rather than counted, for the reason that file
+    /// gives: a count passes when somebody swaps one property for another.</para>
+    /// </remarks>
+    [Fact]
+    public void TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends()
+    {
+        string[] local = ["RepoPath", "HeadSha", "FixSha", "File", "Line", "Why", "Fix"];
+        var page = typeof(ReviewPair).GetProperties().Select(one => one.Name);
+        var sent = typeof(StoredPair).GetProperties().Select(one => one.Name);
+
+        page.Should().Contain(local);
+        sent.Should().NotContain(local, "the send projects StoredPair, and none of this may become reachable from it");
+        typeof(RoundsDb).GetMethod(nameof(RoundsDb.Sendable))!.ReturnType
+            .Should().Be(typeof(IReadOnlyList<StoredPair>), "the send still reads the narrow record");
+    }
+
+    /// <summary>Statements against the file, on a connection of its own — the shell's, not the product's.</summary>
+    private void Execute(string sql)
+    {
+        using var db = new SqliteConnection(
+            $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
+        db.Open();
+        using var write = db.CreateCommand();
+        write.CommandText = sql;
+        write.ExecuteNonQuery();
+    }
+
     /// <summary>A skip has no after, so it has no pair.</summary>
     [Fact]
     public void ASkippedCandidateStoresNothing()

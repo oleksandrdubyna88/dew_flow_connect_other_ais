@@ -1,4 +1,5 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
+import { cyclomatic } from './cyclomatic';
 import { pairDiff } from './lineDiff';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml } from './webviewHtml';
@@ -24,12 +25,26 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  * by the panel and handed back in {@link ReviewView.expanded}, because a redraw replaces the whole
  * document — `rolesPanel.ts` holds its tab for the same reason and says so at length.</p>
  *
+ * <p><b>A row says where it was and what the reviewers said</b> (story 2.1): the finding's path
+ * and line, the short hash of the commit the reviewers read, the cause and the proposed fix as
+ * recorded — "none recorded" when a finding has none, never an invented one — and the cyclomatic
+ * complexity of each skeleton, labelled with the revision it came from. All of it is local metadata
+ * read back out of a person's own database; none of it reaches the send, which projects
+ * `StoredPair` and never sees this type. The hash is TEXT: a link promises "open at revision", and
+ * whether that promise can be kept is epic 3's revision rule, not this story's.</p>
+ *
  * <p>Pure, and free of `node:` and `vscode` imports, like `zoomControl.ts` and `textTone.ts` beside
  * it: a page module that reaches for either fails the bundle test, and a decision inside one is a
  * decision no unit test can run.</p>
  */
 
-/** One pair as the server hands it over. */
+/**
+ * One pair as the server hands it over.
+ *
+ * <p>The seven fields after `title` arrived with story 2.1. They are OPTIONAL on the wire —
+ * `roundsDbRead.pairOf` fills each from a server too old to send it, with empty text and a line of
+ * 0 — and REQUIRED here, so that the page cannot forget to decide what an empty one looks like.</p>
+ */
 export interface ReviewPair {
   readonly findingId: number;
   readonly symbolName: string;
@@ -41,6 +56,20 @@ export interface ReviewPair {
   readonly severity: string;
   readonly category: string;
   readonly title: string;
+  /** The checkout the round reviewed, as the session recorded it. Empty when the server did not say. */
+  readonly repoPath: string;
+  /** The commit the reviewers read — the BEFORE skeleton is the method at this commit. */
+  readonly headSha: string;
+  /** The commit the fix was found in — the AFTER skeleton is the method at this one. */
+  readonly fixSha: string;
+  /** The finding's path at `headSha`, relative to `repoPath`. */
+  readonly file: string;
+  /** The finding's line at `headSha`; 0 when none was recorded. */
+  readonly line: number;
+  /** The reviewers' cause, verbatim — a model's prose about somebody's code, escaped on the way in. */
+  readonly why: string;
+  /** The reviewers' proposed fix, verbatim. */
+  readonly fix: string;
 }
 
 /**
@@ -99,6 +128,86 @@ const ariaBoolean = (yes: boolean): string => (yes ? 'true' : 'false');
  */
 const key = (findingId: number): string => escapeHtml(String(findingId));
 
+/** A column that should be text, trimmed — and empty rather than a throw when it is not text at all. */
+const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/** Nothing recorded, said as such: never an invented cause, never a guessed commit. */
+const none = (what: string): string => `<span class="none">${escapeHtml(what)}</span>`;
+
+/**
+ * Reviewer prose, escaped on the way into the page.
+ *
+ * <p>`why` and `fix` are what a model wrote about somebody's code — external data, arriving through
+ * a JSON document the server printed — and this page is where a person decides what leaves the
+ * machine. An `<img onerror>` in a finding's "fix" renders as the text it is.</p>
+ */
+const prose = (value: string): string => {
+  const said = text(value);
+
+  return said.length > 0 ? escapeHtml(said) : none('none recorded');
+};
+
+/**
+ * A commit, abbreviated the way git abbreviates one — as TEXT.
+ *
+ * <p>Not a link. A link promises "open the file at this revision", and whether that promise can be
+ * kept is epic 3's revision rule (`head_sha` is orphaned 55.7 % of the time, measured, while 99.6 %
+ * of orphaned blobs still read); a hash shown as text promises only what it is. Empty is said,
+ * never guessed.</p>
+ */
+const commit = (sha: string): string => {
+  const said = text(sha);
+
+  return said.length > 0
+    ? `<code class="sha">${escapeHtml(said.slice(0, 7))}</code>`
+    : none('an unrecorded commit');
+};
+
+/** Where the finding was: its path and line at the commit the reviewers read, and in which checkout. */
+function where(pair: ReviewPair): string {
+  const file = text(pair.file);
+  const line = Number.isInteger(pair.line) && pair.line > 0 ? `:${pair.line}` : '';
+  const place = file.length > 0
+    ? `<code class="path">${escapeHtml(file)}${line}</code>`
+    : none('no file recorded');
+  const repo = text(pair.repoPath);
+  const checkout = repo.length > 0 ? ` in <span class="repo">${escapeHtml(repo)}</span>` : '';
+
+  return `${place} at ${commit(pair.headSha)}${checkout}`;
+}
+
+/**
+ * The two counts, each labelled with the revision its skeleton came from.
+ *
+ * <p>"Of the method at `aaaa111`", never "of the method": the before side is the method as the
+ * reviewers read it, the after side is the method at the commit the fix was found in — two
+ * different commits — and both may have changed since. A number without its revision is confidently
+ * wrong about today's file. A language the count does not read gets the count's own sentence, not a
+ * zero.</p>
+ */
+function complexity(pair: ReviewPair): string {
+  const before = cyclomatic(pair.skeletonBefore, pair.language);
+  const after = cyclomatic(pair.skeletonAfter, pair.language);
+  if (!before.known) {
+    return none(before.why);
+  }
+  if (!after.known) {
+    return none(after.why);
+  }
+
+  return `${before.value} at ${commit(pair.headSha)} → ${after.value} at ${commit(pair.fixSha)}`;
+}
+
+/** What a row says about itself, above its code. */
+function about(pair: ReviewPair): string {
+  return `<dl class="about">
+      <dt>Where</dt><dd>${where(pair)}</dd>
+      <dt>Why</dt><dd>${prose(pair.why)}</dd>
+      <dt>Fix</dt><dd>${prose(pair.fix)}</dd>
+      <dt title="cyclomatic complexity of the method as it was at that commit, counted from the skeleton — not of the file today">Complexity</dt><dd>${complexity(pair)}</dd>
+    </dl>`;
+}
+
 /**
  * One pair: the line you always see, and the code you asked for.
  *
@@ -143,6 +252,7 @@ function row(pair: ReviewPair, open: boolean): string {
 <tr class="detail" id="detail-${id}" data-detail="${id}"${open ? '' : ' hidden'}>
   <td class="pick"></td>
   <td>
+    ${about(pair)}
     <div class="sides">
       <div class="side">
         <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language, differs.before)}
@@ -270,6 +380,17 @@ ${HIGHLIGHT_CSS}
   .side { flex: 1 1 0; min-width: 0; }
   .sideName { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; opacity: .55;
               margin-bottom: 3px; }
+  /* What a row says about itself, above its code: a two-column list with the labels quiet. */
+  .about { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px;
+           margin: 0 0 10px; font-size: .92em; }
+  .about dt { opacity: .6; font-size: .8em; text-transform: uppercase; letter-spacing: .06em;
+              line-height: 1.7; }
+  /* pre-wrap keeps the reviewers' own line breaks; anywhere keeps a long path from widening
+     the table, which is the same reason .side has min-width: 0. */
+  .about dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .about code { font-family: var(--vscode-editor-font-family); font-size: .95em; }
+  .none { opacity: .55; font-style: italic; }
+  .repo { opacity: .7; }
   .empty { opacity: .7; padding: 24px 0; }
 </style>
 </head>

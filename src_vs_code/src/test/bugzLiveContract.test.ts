@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
+import { readPairs } from '../roundsDbRead';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -124,3 +125,42 @@ test('an unknown mode really does exit 64', { skip: built ? false : 'the server 
     'the extension maps 64 onto "this machine\u2019s coai-mcp is older than sending"');
   assert.equal(outcomeOf(answer.status ?? 0, answer.stdout).kind, 'too-old');
 });
+
+/**
+ * The REAL `--pairs-json` output, parsed by the REAL `readPairs` — story 2.1's own contract.
+ *
+ * <p>Two plan reviewers, on two providers, named the same risk and it is the one this file exists
+ * for: `ReviewPair` is written twice, once as a C# record and once as a TypeScript interface, and
+ * every other test of story 2.1 feeds one side a fixture the other side never produced. A field
+ * spelled `headSha` on one side and `head_sha` on the other leaves both suites green while the page
+ * renders four honest-looking absences — which is indistinguishable from an older server, and so
+ * cannot even be noticed by looking.</p>
+ *
+ * <p>An EMPTY corpus is the right fixture here. What is being checked is the SHAPE of the envelope
+ * and the reader's willingness to accept it; the field names are checked against a populated
+ * database by the server's own `ThePairsThemselvesTests`, which can write rows this side cannot.
+ * What only this test can see is that the two halves agree the answer is an object with `items`,
+ * and that `readPairs` reports success rather than "the pairs could not be read".</p>
+ */
+test('the real --pairs-json envelope is the one readPairs accepts',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-pairs-'));
+    try {
+      const answer = await readPairs(server(), 5, async (args) => {
+        const ran = spawnSync(server(), args, {
+          encoding: 'utf8',
+          env: { ...process.env, COAI_DATA_DIR: data },
+          timeout: 60_000,
+        });
+
+        return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+      });
+
+      assert.equal(answer.ok, true,
+        `the reader refused the real binary's own output: ${answer.ok ? '' : answer.why}`);
+      assert.deepEqual(answer.ok ? answer.pairs : undefined, [],
+        'an empty corpus must read as no pairs, not as a failure and not as a phantom row');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });

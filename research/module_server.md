@@ -1329,6 +1329,57 @@ caller down a fallback, so a fault wearing it hides behind a successful-looking 
 with no `items` list is a fault; `{"items": []}` is somebody deciding about nothing, which is fine.
 The difference is the one a stale or misspelled file falls through.
 
+#### The page's row is wider than the send's, and it is a record of its own (2026-09-18, story 2.1)
+
+`--pairs-json` used to answer `StoredPair` — the nine columns of `collect_pairs` joined to the
+finding's severity, category and title — and the review page showed a method and two skeletons
+with no way to tell which file, which commit, or why the finding was raised. Every column it needed
+was already in the database: `findings.why`, `findings.fix`, `findings.file`, `findings.line`,
+`findings.fix_sha`, `rounds.head_sha`, `sessions.repo_path`. `RoundsDb.Pairs()` now reads all of
+them through the same three-table join `BugsQuery` already uses, into **`ReviewPair`**
+(`src_mcp/src/Store/ReviewPair.cs`): the nine the page always had, plus `repoPath`, `headSha`,
+`fixSha`, `file`, `line`, `why`, `fix`.
+
+**Why a second record and not a wider `StoredPair`.** `UploadRun.Wire` is a function OF
+`StoredPair`, and `OnlyThreeFieldsLeaveTests` constructs that record by name to prove what the
+mapping leaves behind. Widening it would have routed a repository path, a file and the reviewers'
+prose through the very type the send reads — an edit that reads like a simplification and is the
+one that test exists to refuse. So `Sendable()` still answers the narrow record, `Wire` still takes
+it, and `TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends` pins on the types that the
+seven new properties exist on `ReviewPair` and on nothing the send touches.
+
+**Two shas, named apart — the plan's brief had one.** The story was written as "the commit hash"
+and "complexity of the method at `head_sha`". The collector says otherwise: the BEFORE skeleton is
+normalised from the method at `head_sha` (the commit the reviewers read), the AFTER skeleton from
+the method at `touched.Sha` — the commit the walk found the fix in, stored as `fix_sha`
+(`Collector.LocateThenWalkAsync`). A page labelling both sides with `head_sha` would have been
+confidently wrong about the after side, so `fixSha` is the seventh field rather than the brief's
+six.
+
+**The round and the session are LEFT JOINed.** A pair whose round or session row has gone is still
+a pair somebody has to decide about; an inner join would drop it from the page in silence. The
+finding stays an inner join — a pair keyed on a finding that is not there is a pair of nothing. And
+the fixture for the LEFT JOIN taught something about the product: Microsoft.Data.Sqlite turns
+foreign keys ON for every connection it opens, so the product cannot orphan a round itself — the
+`sqlite3` shell can, because it leaves them OFF, and an operator pruning old sessions from it is
+exactly the hand the join protects against.
+
+**Compatibility, both ways, with no negotiation.** The first nine JSON property names are
+unchanged, so an older extension reads the new document exactly as before; the extension's
+`pairOf` defaults every new field to empty text and `line` to 0, so a newer extension reads an
+older server's nine-field document without complaint and the page says "none recorded".
+
+**The AOT context needed no new line, and the plan's brief said it would.** The source generator
+emits a typed accessor for every type reachable from a registered root, so
+`ServerJsonContext.Default.ReviewPair` exists through `PairsAnswer` exactly as `StoredPair`'s did
+— confirmed by a compile probe against `Default.StoredPair`, which had no line of its own either.
+`[JsonSerializable(typeof(Collecting.PairsAnswer))]` is untouched.
+
+**`Columns`** (`src_mcp/src/Store/Columns.cs`) is the by-name reader `BugsQuery` kept privately —
+`Text`, `Number`, `Id` — moved out so `Pairs()` could read sixteen columns by name instead of by
+ordinal, which is the reader that answers the wrong field the day the SELECT is reordered, silently.
+`Sendable()` keeps its ordinals: nine columns it has always had, and this story does not touch it.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the

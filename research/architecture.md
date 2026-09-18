@@ -607,6 +607,13 @@ page reads pairs and writes one person's decision. Nothing in stories 0–5 open
 finding id is a pointer into somebody's database, the symbol is a name, and the severity, category
 and title are the reviewers' own prose about somebody's code.
 
+**The page's row is wider than the send's, and they are two types** (2026-09-18). The review page
+now reads the repository path, both commits, the file and line, and the reviewers' `why` and `fix`
+— all of it local, none of it anonymous — through `ReviewPair`, a record `--pairs-json` answers and
+`UploadRun.Wire` never sees. The send still projects `StoredPair`, and
+`TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends` pins that the two do not share those
+fields: a wider page never widens the line.
+
 **Both sides validate, differently.** The client asserts a blacklist because it holds the original;
 the server asserts a whitelist because it never will. Neither is redundant — a client defect is
 exactly the case where the first check is the one that failed.

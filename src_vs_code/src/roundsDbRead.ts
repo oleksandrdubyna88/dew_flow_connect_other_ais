@@ -402,6 +402,13 @@ export type KeepWrite =
  * <p>`JSON.parse(...) as T` is a promise, not a check. The server's output is external data by the
  * coding-style rule, and a malformed element would otherwise reach the page as `undefined` in a
  * table cell and as an invalid id in the decision it posts back.</p>
+ *
+ * <p><b>The seven fields that arrived with story 2.1 are optional by construction.</b> Only
+ * `findingId` and `keep` can refuse a row; every text field defaults to empty and `line` to 0 —
+ * which is what a server too old to send them yields, and what the page renders honestly as "none
+ * recorded" rather than as an error. No version negotiation is needed on the read side: the two
+ * halves of this product ship out of step, and this reader meets one shape from a server of any
+ * age. (Verified against the older shape in `roundsDbRead.test.ts`.)</p>
  */
 function pairOf(raw: unknown): ReviewPair | undefined {
   if (raw === null || typeof raw !== 'object') {
@@ -410,6 +417,14 @@ function pairOf(raw: unknown): ReviewPair | undefined {
 
   const one = raw as Record<string, unknown>;
   const text = (key: string): string => (typeof one[key] === 'string' ? one[key] as string : '');
+  // A count from outside: a whole number at least 0, or 0 — the database's own "none recorded",
+  // and what a server older than the field sends by sending nothing. Clamped at the boundary, per
+  // the reliability rule; a `line` of `"5"`, `-3` or `2.5` is not a line.
+  const count = (key: string): number => {
+    const value = one[key];
+
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
+  };
   if (typeof one['findingId'] !== 'number' || typeof one['keep'] !== 'number') {
     return undefined;
   }
@@ -424,6 +439,13 @@ function pairOf(raw: unknown): ReviewPair | undefined {
     severity: text('severity'),
     category: text('category'),
     title: text('title'),
+    repoPath: text('repoPath'),
+    headSha: text('headSha'),
+    fixSha: text('fixSha'),
+    file: text('file'),
+    line: count('line'),
+    why: text('why'),
+    fix: text('fix'),
   };
 }
 

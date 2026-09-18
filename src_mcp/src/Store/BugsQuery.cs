@@ -1,5 +1,6 @@
 using CoaiMcp.Core.Collecting;
 using Microsoft.Data.Sqlite;
+using static CoaiMcp.Store.Columns;
 
 namespace CoaiMcp.Store;
 
@@ -348,7 +349,7 @@ public static class BugsQuery
 
     private static BugCandidate CandidateFrom(SqliteDataReader rows) =>
         new(
-            Id: rows.GetInt64(rows.GetOrdinal("id")),
+            Id: Id(rows, "id"),
             RepoPath: Text(rows, "repo_path"),
             Branch: Text(rows, "branch"),
             SessionId: Text(rows, "session_id"),
@@ -374,8 +375,4 @@ public static class BugsQuery
         var at = rows.GetOrdinal(column);
         return rows.IsDBNull(at) ? 0 : Convert.ToInt32(rows.GetValue(at), System.Globalization.CultureInfo.InvariantCulture);
     }
-
-    private static string Text(SqliteDataReader rows, string column) => rows.GetString(rows.GetOrdinal(column));
-
-    private static int Number(SqliteDataReader rows, string column) => rows.GetInt32(rows.GetOrdinal(column));
 }
