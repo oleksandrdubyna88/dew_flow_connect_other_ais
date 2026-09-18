@@ -338,7 +338,10 @@ function row(pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead 
  * Only the pairs being drawn: the cache may hold rows a filter has hidden, and the page has no
  * container for those.</p>
  */
-function realKinds(pairs: readonly ReviewPair[], real: ReadonlyMap<number, RealRead>): Record<string, string> {
+function heldRealState(
+  pairs: readonly ReviewPair[],
+  real: ReadonlyMap<number, RealRead>,
+): Record<string, string> {
   return Object.fromEntries(pairs.flatMap((pair) => {
     const read = real.get(pair.findingId);
 
@@ -587,7 +590,11 @@ ${body(pairs, rows, trouble)}
   // directly, and nothing awaits anything.
   var realOn = ${showReal ? 'true' : 'false'};
   // Which cached rows carry text and which carry a note, from the paint that drew them.
-  var have = ${jsonForScript(realKinds(pairs, real))};
+  // What each drawn row ALREADY holds, as a word per finding id: 'text' when the real method is in
+  // the markup, 'note' when the answer was a reason instead. The script reads it to decide whether a
+  // row still has to ask, so it is the state of the cache rather than a kind of method -- which is
+  // what the name says now. An id absent from it has nothing held and will ask on its first open.
+  var have = ${jsonForScript(heldRealState(pairs, real))};
   // What has been asked for and not yet answered: id -> the generation it was asked with.
   var pending = {};
   var seq = 0;
@@ -595,17 +602,40 @@ ${body(pairs, rows, trouble)}
 
   function half(id, which) { return document.querySelector('[data-' + which + '="' + id + '"]'); }
 
+  // At most this many reads are out at once. Each one is a server process that reads two commits
+  // out of git, and Expand all with the view on used to dispatch one per open row in a single loop
+  // -- two hundred pairs, two hundred processes, on the extension host. Four keeps a person's first
+  // rows quick without asking the machine for the whole page at once. (Code round, codex.)
+  var MOST_AT_ONCE = 4;
+  var queued = [];
+  var outNow = 0;
+
+  function send(id) {
+    outNow += 1;
+    vscode.postMessage({ type: 'fetchReal', id: Number(id), generation: pending[id] });
+  }
+
+  /** A slot came free: start the next row that is still wanted. */
+  function next() {
+    outNow -= 1;
+    while (queued.length > 0) {
+      var id = queued.shift();
+      if (pending[id] !== undefined) { send(id); return; }
+    }
+  }
+
   function wantReal(id, real) {
     if (pending[id] !== undefined) { return; }
     seq += 1;
-    var generation = draw + '/' + seq;
-    pending[id] = generation;
+    pending[id] = draw + '/' + seq;
     real.innerHTML = '<p class="realNote">Fetching the real method…</p>';
-    vscode.postMessage({ type: 'fetchReal', id: Number(id), generation: generation });
+    if (outNow < MOST_AT_ONCE) { send(id); } else { queued.push(id); }
   }
 
   // The one render of a row's code: reads the CURRENT toggle and what the row already holds.
-  function renderReal(id) {
+  // The ask flag is false for the render that FOLLOWS a failed read: the note is already there, and
+  // asking again from inside the answer would spin one row against the server for ever.
+  function renderReal(id, ask) {
     var skel = half(id, 'skel');
     var real = half(id, 'real');
     if (!skel || !real) { return; }
@@ -613,7 +643,7 @@ ${body(pairs, rows, trouble)}
     var kind = have[id];
     skel.hidden = kind === 'text';
     real.hidden = false;
-    if (kind === undefined) { wantReal(id, real); }
+    if (kind === undefined && ask !== false) { wantReal(id, real); }
   }
 
   function renderOpenRows() {
@@ -630,13 +660,16 @@ ${body(pairs, rows, trouble)}
     // Applied only to the request that is still WANTED. The toggle flipped, the row collapsed or
     // the page was redrawn since this was asked for, and a late answer is discarded rather than
     // painted over whatever the person is looking at now.
-    if (pending[id] !== m.generation) { return; }
+    if (pending[id] !== m.generation) { next(); return; }
     delete pending[id];
+    next();
     var real = half(id, 'real');
     if (!real) { return; }
     real.innerHTML = m.html;
-    have[id] = m.shown ? 'text' : 'note';
-    renderReal(id);
+    // Held only when the read REACHED the server. A process that failed is not cached on the other
+    // side either, so recording its note here would block the retry the panel is ready to serve.
+    if (m.keep) { have[id] = m.shown ? 'text' : 'note'; }
+    renderReal(id, m.keep === true);
   });
 
   function showRow(id, open) {

@@ -307,3 +307,41 @@ test('a pair with no id is malformed whatever else it carries, and the read says
   assert.equal(read.ok, false);
   assert.match(read.ok ? '' : read.why, /1 of 2 pairs were malformed/u);
 });
+
+
+test('a real-method document for ANOTHER finding is refused, not rendered', () => {
+  // Code round, codex. The reader asked for finding 7 and trusted whatever `findingId` came back.
+  // A mismatched or stale answer would then be drawn under the wrong row — which on THIS page means
+  // one method's un-anonymised source shown beside another finding's decision buttons.
+  const answered = {
+    findingId: 8,
+    language: 'CSharp',
+    name: 'GetOrAdd',
+    reason: '',
+    before: { reason: '', source: 'int GetOrAdd() { }', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 9 },
+    after: { reason: '', source: 'int GetOrAdd(int n) { }', className: 'Totals', kind: 'method_declaration', startLine: 7, endLine: 9 },
+  };
+
+  return readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify(answered) }).run)
+    .then((read) => {
+      assert.equal(read.ok, false, 'a document about finding 8 is not an answer about finding 7');
+      assert.equal(read.tooOld, false);
+    });
+});
+
+test('the finding it WAS asked about still reads', () => {
+  // The companion: refusing everything would pass the test above.
+  const answered = {
+    findingId: 7,
+    language: 'CSharp',
+    name: 'GetOrAdd',
+    reason: '',
+    before: { reason: '', source: 'a', className: 'Totals', kind: 'method_declaration', startLine: 1, endLine: 2 },
+    after: { reason: '', source: 'b', className: 'Totals', kind: 'method_declaration', startLine: 1, endLine: 2 },
+  };
+
+  return readRealMethod('coai-mcp.exe', 7, calls({ code: 0, output: JSON.stringify(answered) }).run)
+    .then((read) => {
+      assert.equal(read.ok, true);
+    });
+});

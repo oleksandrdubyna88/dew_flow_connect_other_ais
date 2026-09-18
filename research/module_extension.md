@@ -8216,3 +8216,73 @@ extraction is worth**, and the plan's table does not record it.
 
 **Result: 3 841 → 3 785**, and the prover — with the class fix above — reports **2 runs against 2
 regions cut**: the two adjacent fields as one, the four methods as the other.
+
+
+### What story 2.3's code round changed, and what it got wrong
+
+Twelve reviewers answered; **27 findings, 13 accepted, 14 rejected with reasons**. The rejections are
+unusually many and the reason is worth recording rather than smoothing over: **both Blocking findings
+were false**, and both came from the same provider.
+
+- *"Unescaped real method HTML interpolated into a script element risks XSS breakout."* The real
+  method's markup never enters the script block. The only two interpolations inside `<script>` are
+  `jsonForScript(heldRealState(pairs, real))` and `jsonForScript(String(view.draw ?? 0))`, and
+  `heldRealState` returns the WORDS `text` or `note` per finding id. `realView(...)` is called twice:
+  once in the row's markup, once where only its `.shown` boolean is read. Another Conventions
+  reviewer on the same round checked the same question and recorded the opposite conclusion.
+- *"Toggle state race condition causes duplicate fetches on page load."* `var realOn` is assigned at
+  line 588 and the first call that could read it is at 742. The finding's own text says "called at
+  line 740 before realOn is assigned at 585".
+
+Three more were rejected on the same kind of check: a claimed duplication of `text`/`none`/`commit`
+that does not exist (they are imported, and defined nowhere in that file), a "stale closure" in a
+function that builds a string synchronously, and an in-flight race that JavaScript's single thread
+cannot produce between a `Map.get` and the `Map.set` three statements later with no `await` between.
+
+**And one ACCEPTED finding turned out to be false when it was built.** *"Negative finding IDs are
+accepted"* — `FindingId` already parses with `NumberStyles.None`, which refuses a sign and a decimal
+point. Run against the shipped binary: `--id -1` answers **65**, `--id 1.5` answers **65**, `--id 7`
+answers 0. Accepting a finding commits you to the PROBLEM, not to a fix, and this one did not exist.
+
+**What was real, and is now fixed:**
+
+1. **A document for another finding was accepted.** `realOf` read `findingId` out of the answer and
+   never compared it to the id it asked about. On this page that means one method's un-anonymised
+   source drawn beside a different finding's decision buttons. It is compared now.
+2. **Expand all started a process per open row, at once.** With the view on, 200 pairs meant 200
+   `coai-mcp` processes dispatched in one loop, each re-reading two commits out of git. The page now
+   holds a queue with **four** reads out at a time and starts the next as each answers; a discarded
+   stale answer releases its slot too.
+3. **A transport failure became permanent.** The panel deliberately does not cache a failed process,
+   but the page recorded its note anyway, so the row never asked again. The answer now carries
+   `keep` — the half only the panel knows — and the page holds the note only for a read that reached
+   the server. Fixing that exposed a defect of the fix: re-rendering after a failure asked again
+   immediately, spinning one row against the server, which is why `renderReal` takes an `ask` flag.
+4. **The in-flight map was keyed by the finding id alone.** A recollection keeps the id and changes
+   the two commits, so a read started for the old pair was reused for the new one, stored under the
+   old shas and then refused by both readers. Nothing wrong was ever displayed — that was guarded —
+   but the fetch was spent and the new pair went unanswered. Keyed by `id@head:fix` now.
+5. **The webview boundary accepted a fractional or negative id**, which could only reach a server
+   call that refuses it. `Number.isInteger` and `>= 0` now.
+6. **The type-kind table fell through to TypeScript for anything not C#**, so a fifth language would
+   have been searched for `class_declaration` and shown every method with an empty class, with
+   nothing failing. Every language is named and the default answers nothing.
+7. **The live contract only asked an empty corpus**, so every populated field could have been
+   renamed with the check still green. There is now a populated one: a real git repository with the
+   method MOVED between its two commits, the real binary, the real reader, and every field compared
+   to what the file contains — the real name `GetOrAdd` rather than `method_1`, the class `Totals`,
+   and the after side found by name at a commit where the line number no longer fits.
+
+**Two debts named rather than paid**, both recorded here because a gap nobody wrote down reads as
+done:
+
+- **The reader re-derives the collector's symbol-resolution policy.** `RealMethodReader` applies the
+  same three guards — nameless refused, `CountNamed > 1` refused, no match answered — by repeating
+  them rather than by calling a shared operation. A future change to `Collector`'s rules would leave
+  this copy behind, and a pair could then be collected under one identity and displayed as another.
+  Extracting the shared resolution out of `Collector` is a refactor of shipped collection code,
+  which this story was told not to take on.
+- **A disposed panel does not cancel its in-flight reads.** They run to `CAP_MS` (8 s). The queue
+  above bounds that to four processes rather than one per open row, which is most of the exposure;
+  cancelling properly needs an `AbortSignal` threaded through the shared `Run` seam that eight
+  readers use, and that is a change to make deliberately rather than inside this story.

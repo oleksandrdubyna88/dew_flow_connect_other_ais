@@ -166,13 +166,24 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     /// because a default interface method is a method in an interface; the TypeScript one holds
     /// signatures, which are not functions, so it is not.
     /// </remarks>
+    /// <summary>The nodes that count as a TYPE, per language.</summary>
+    /// <remarks>
+    /// <para><b>Every language is named, and the default answers NOTHING rather than guessing.</b>
+    /// The first version fell through to the TypeScript kinds for anything that was not C#, so a
+    /// fifth language added to <see cref="SourceLanguage"/> would have been searched for
+    /// <c>class_declaration</c> with no compiler error and no test failing — it would simply have
+    /// shown every method with an empty class. An empty answer for a language nobody has mapped is
+    /// the honest one, and the next person to add a grammar has to come here. (Code round, codex.)</para>
+    /// </remarks>
     private static string[] TypeKinds(SourceLanguage language) => language switch
     {
         SourceLanguage.CSharp =>
         [
             "class_declaration", "struct_declaration", "record_declaration", "interface_declaration",
         ],
-        _ => ["class_declaration", "abstract_class_declaration", "class"],
+        SourceLanguage.TypeScript or SourceLanguage.JavaScript =>
+            ["class_declaration", "abstract_class_declaration", "class"],
+        _ => [],
     };
 
     public string EnclosingType(SourceLanguage language, string source, int line)

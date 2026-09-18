@@ -352,3 +352,110 @@ test('a seeded pair survives the real binary and the real reader, field by field
       fs.rmSync(data, { recursive: true, force: true });
     }
   });
+
+
+/**
+ * The POPULATED real-method contract: a real git repository, the real binary, the real reader.
+ *
+ * <p>The other real-method live test asks an empty corpus and gets a reason back, which proves the
+ * envelope and nothing else — `source`, `className`, `kind` and the line spans could all be renamed
+ * or dropped and it would stay green. A code reviewer said so, and this is the answer: two commits
+ * of one C# file, a pair seeded to point at them, and every field compared to what the file
+ * actually contains.</p>
+ *
+ * <p>The two commits differ on purpose, and the method MOVED between them — a using line is added
+ * above it — so the after side can only be found by NAME. That is the collector's own rule and the
+ * reason this mode does not look the method up by line twice.</p>
+ */
+test('a seeded pair reads its real method back out of a real repository',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-real-data-'));
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-real-repo-'));
+    const git = (...args: readonly string[]): string => {
+      const ran = spawnSync('git', [...args], { cwd: repo, encoding: 'utf8', timeout: 60_000 });
+      assert.equal(ran.status, 0, `git ${args.join(' ')}: ${ran.stderr}`);
+
+      return (ran.stdout ?? '').trim();
+    };
+
+    try {
+      git('init', '-q');
+      git('config', 'user.email', 'test@example.invalid');
+      git('config', 'user.name', 'The Test');
+
+      const before = 'namespace Shop;\n\npublic class Totals\n{\n    public int GetOrAdd(int n)\n    {\n        return n + 1;\n    }\n}\n';
+      fs.writeFileSync(path.join(repo, 'Totals.cs'), before, 'utf8');
+      git('add', 'Totals.cs');
+      git('commit', '-q', '-m', 'the method as the reviewers read it');
+      const headSha = git('rev-parse', 'HEAD');
+
+      // The fix MOVES the method down the file, so locating it by the head line would find the
+      // wrong thing and only the name can carry the correspondence.
+      const after = 'using System;\nusing System.Text;\n\nnamespace Shop;\n\npublic class Totals\n{\n    public int GetOrAdd(int n)\n    {\n        return checked(n + 1);\n    }\n}\n';
+      fs.writeFileSync(path.join(repo, 'Totals.cs'), after, 'utf8');
+      git('commit', '-q', '-a', '-m', 'the fix, with the method moved down');
+      const fixSha = git('rev-parse', 'HEAD');
+
+      const made = spawnSync(server(), ['--bugs-json'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
+
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(path.join(data, 'coai.db'));
+      try {
+        const put = (sql: string, ...values: readonly (string | number)[]): void => {
+          const statement = db.prepare(sql);
+          statement.run(...values);
+        };
+        put(`INSERT INTO sessions (id, repo_path, branch, opened_utc) VALUES ('s1', ?, 'main', '2026-09-18T00:00:00Z')`,
+          repo.split('\\').join('/'));
+        put(`INSERT INTO rounds (id, session_id, stage, number, status, verdict, started_utc, completed_utc, head_sha)
+             VALUES (1, 's1', 'CodeReview', 1, 'done', 'proceed', '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', ?)`,
+          headSha);
+        put(`INSERT INTO findings (id, round_id, ordinal, severity, category, file, line, title, why, fix, fix_sha)
+             VALUES (7, 1, 0, 'Major', 'Reliability', 'Totals.cs', 7, 'a race', 'two writers', 'take the lock', ?)`,
+          fixSha);
+        put(`INSERT INTO collect_pairs (finding_id, symbol_name, language, skeleton_before, skeleton_after, written_utc, keep)
+             VALUES (7, 'GetOrAdd', 'CSharp', 'int method_1(int var_1) { }', 'int method_1(int var_1) { checked }', '2026-09-18T00:02:00Z', -1)`);
+      } finally {
+        db.close();
+      }
+
+      const read = await readRealMethod(server(), 7, async (args) => {
+        const ran = spawnSync(server(), args, {
+          encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+        });
+
+        return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+      });
+
+      assert.equal(read.ok, true, read.ok ? '' : read.why);
+      if (!read.ok) {
+        return;
+      }
+
+      const method = read.method;
+      assert.equal(method.findingId, 7);
+      assert.equal(method.name, 'GetOrAdd');
+      assert.equal(method.reason, '', 'a pair whose repository is right there has no whole-pair reason');
+
+      // The BEFORE side: the method as it was, un-anonymised, with its class.
+      assert.equal(method.before.reason, '');
+      assert.equal(method.before.className, 'Totals', 'the class is the story, and it is not stored anywhere');
+      assert.equal(method.before.kind, 'method_declaration');
+      assert.match(method.before.source, /public int GetOrAdd\(int n\)/u, 'the REAL name, not method_1');
+      assert.match(method.before.source, /return n \+ 1;/u);
+      assert.ok(!method.before.source.includes('checked'), 'the before side is the head commit, not the fix');
+
+      // The AFTER side: found by NAME at a commit that moved it, and it is the FIXED text.
+      assert.equal(method.after.reason, '');
+      assert.equal(method.after.className, 'Totals');
+      assert.match(method.after.source, /return checked\(n \+ 1\);/u, 'the after side is the fix commit');
+      assert.ok(method.after.startLine > method.before.startLine,
+        'the method moved down the file, which is exactly why the after side is found by name');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });

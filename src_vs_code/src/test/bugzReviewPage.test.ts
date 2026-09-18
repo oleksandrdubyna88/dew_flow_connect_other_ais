@@ -1209,9 +1209,22 @@ const asked = (page: Page): readonly Posted[] => page.posted.filter((m) => m.typ
 /** The rows the page asked for, by id, in a fixed order. */
 const askedIds = (page: Page): readonly number[] => asked(page).map((m) => m.id ?? -1).sort((a, b) => a - b);
 
-/** The host's answer for one request, exactly as `BugzReviewPanel.answerReal` posts it. */
-function answer(page: Page, request: Posted, view: { shown: boolean; html: string }): void {
-  page.host.push({ type: 'real', id: request.id, generation: request.generation, shown: view.shown, html: view.html });
+/**
+ * The host's answer for one request, exactly as `BugzReviewPanel.answerReal` posts it.
+ *
+ * <p>`keep` says whether the read REACHED the server: the panel caches those and not a failed
+ * process, and the page holds its note on the same rule. Defaulted to true here because that is the
+ * ordinary answer; the retry tests pass false explicitly.</p>
+ */
+function answer(page: Page, request: Posted, view: { shown: boolean; html: string; keep?: boolean }): void {
+  page.host.push({
+    type: 'real',
+    id: request.id,
+    generation: request.generation,
+    shown: view.shown,
+    keep: view.keep ?? true,
+    html: view.html,
+  });
 }
 
 test('the real-code toggle asks for every open row once, and paints nothing itself', () => {
@@ -1475,4 +1488,76 @@ test('a focus the tabs cannot account for is not chased', () => {
   });
 
   assert.deepEqual(page.tabs.filter((one) => one.focused), []);
+});
+
+
+test('opening many rows at once does not start a process for every one of them', () => {
+  // Code round, codex. Expand all with the view ON called `wantReal` for every open row in one
+  // loop, so 200 pairs meant 200 `coai-mcp` processes dispatched together, each re-reading two
+  // commits out of git. The extension host and the machine both feel that.
+  const many = [pair(1), pair(2), pair(3), pair(4), pair(5), pair(6), pair(7), pair(8)];
+  const page = run(many);
+
+  page.click(page.controls['realText']!);
+  page.click(page.controls['expandAll']!);
+
+  const inFlight = asked(page);
+  assert.ok(inFlight.length > 0, 'it must still ask for something');
+  assert.ok(inFlight.length <= 4,
+    `eight open rows asked for ${inFlight.length} at once; a bounded queue is the point`);
+});
+
+test('and the queue drains: answering one starts the next', () => {
+  // The companion. A cap that never released its slots would pass the test above and leave six
+  // rows saying "Fetching the real method..." for ever.
+  const many = [pair(1), pair(2), pair(3), pair(4), pair(5), pair(6), pair(7), pair(8)];
+  const page = run(many);
+
+  page.click(page.controls['realText']!);
+  page.click(page.controls['expandAll']!);
+
+  const first = asked(page);
+  for (const one of first) {
+    answer(page, one, { shown: true, html: '<pre>real</pre>' });
+  }
+
+  const after = asked(page);
+  assert.ok(after.length > first.length,
+    'answering the first batch must release its slots, or the rest are never asked for');
+});
+
+test('a read that never reached the server can be asked for again', () => {
+  // Code round, codex. The panel deliberately does NOT cache a failed process — but the page
+  // recorded the note anyway, so `wantReal` saw something held and never asked again. A transport
+  // failure became permanent until an unrelated redraw.
+  const page = run([pair(1)]);
+  page.click(page.controls['realText']!);
+  page.click(toggleFor(page, 1));
+
+  const first = asked(page);
+  assert.equal(first.length, 1);
+  // `keep: false` is what the host says when the process itself failed.
+  page.host.push({ type: 'real', id: first[0]!.id, generation: first[0]!.generation, shown: false, keep: false, html: '<p>could not be read</p>' });
+
+  // The person closes the row and opens it again, which is the obvious way to retry.
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 1));
+
+  assert.equal(asked(page).length, 2, 'a failure that was never cached must be retryable');
+});
+
+test('a read that DID reach the server is not asked for twice', () => {
+  // The companion: retrying everything would spend a process per open on a pruned commit, whose
+  // answer will not change.
+  const page = run([pair(1)]);
+  page.click(page.controls['realText']!);
+  page.click(toggleFor(page, 1));
+
+  const first = asked(page);
+  page.host.push({ type: 'real', id: first[0]!.id, generation: first[0]!.generation, shown: false, keep: true, html: '<p>that commit is not in this checkout any more</p>' });
+
+  page.click(toggleFor(page, 1));
+  page.click(toggleFor(page, 1));
+
+  assert.equal(asked(page).length, 1, 'a domain answer is held; only a failed process is retried');
 });

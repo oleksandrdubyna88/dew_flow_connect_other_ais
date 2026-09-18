@@ -519,14 +519,17 @@ function sideOf(raw: unknown): MethodSide | undefined {
  * looking absence for a broken answer, which is the failure `pairOf`'s optional fields were
  * designed around and this shape has no reason to share.</p>
  */
-function realOf(raw: unknown): RealMethod | undefined {
+function realOf(raw: unknown, asked: number): RealMethod | undefined {
   if (raw === null || typeof raw !== 'object') {
     return undefined;
   }
   const one = raw as Record<string, unknown>;
   const before = sideOf(one['before']);
   const after = sideOf(one['after']);
-  if (typeof one['findingId'] !== 'number' || before === undefined || after === undefined) {
+  // The id is compared, not merely read. A document about another finding is not an answer to this
+   // request, and on this page drawing one would put a method's un-anonymised source beside a
+   // different finding's decision buttons. (Code round, codex.)
+  if (one['findingId'] !== asked || before === undefined || after === undefined) {
     return undefined;
   }
 
@@ -565,7 +568,7 @@ export async function readRealMethod(
   }
 
   try {
-    const method = realOf(JSON.parse(output));
+    const method = realOf(JSON.parse(output), findingId);
 
     return method === undefined
       ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }

@@ -77,6 +77,19 @@ type ReviewMessage =
   /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
   | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string };
 
+/**
+ * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
+ *
+ * <p>The finding id alone is not enough. A recollection under the page keeps the id and replaces the
+ * commits, so a read started for the old pair answers about commits nobody is looking at — and
+ * `settle` stores it under the shas it began with, which both readers then refuse. Nothing wrong was
+ * ever DISPLAYED; what was wasted was the fetch, and the new pair went unanswered for a cycle.
+ * (Code round, codex, twice.)</p>
+ */
+function inFlightKey(pair: ReviewPair): string {
+  return `${pair.findingId}@${pair.headSha}:${pair.fixSha}`;
+}
+
 /** Whole numbers only, junk dropped — an id is a row this database has or it is nothing. */
 const numbers = (raw: unknown): readonly number[] =>
   (Array.isArray(raw) ? raw : []).map(Number).filter(Number.isFinite);
@@ -111,8 +124,10 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       return { type: 'realText', on: m['on'] === true };
     case 'fetchReal':
       // A generation that is not a string could never match what the page holds, and an id that
-      // is not a number names no row: both are junk, and junk is dropped rather than answered.
-      return Number.isFinite(Number(m['id'])) && typeof m['generation'] === 'string'
+      // is not a WHOLE, non-negative number names no row: both are junk, and junk is dropped rather
+      // than answered. `Number.isFinite` alone let `1.5` and `-1` through to a server call that
+      // could only refuse them. (Code round, codex.)
+      return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['generation'] === 'string'
         ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
         : undefined;
     case 'zoom':
@@ -230,7 +245,7 @@ export class BugzReviewPanel {
   private real: ReadonlyMap<number, HeldReal> = new Map<number, HeldReal>();
 
   /** The fetches in flight, so four rows asking twice in a row cost four processes and not eight. */
-  private fetching: ReadonlyMap<number, Promise<RealRead>> = new Map<number, Promise<RealRead>>();
+  private fetching: ReadonlyMap<string, Promise<RealRead>> = new Map<string, Promise<RealRead>>();
 
   /** Which paint this is — part of every generation the page asks with, so a redraw stales what came before. */
   private draws = 0;
@@ -270,7 +285,7 @@ export class BugzReviewPanel {
         // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
         this.realText = false;
         this.real = new Map<number, HeldReal>();
-        this.fetching = new Map<number, Promise<RealRead>>();
+        this.fetching = new Map<string, Promise<RealRead>>();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -446,7 +461,13 @@ export class BugzReviewPanel {
 
     const read = await this.realOf(pair);
     const view = realView(pair, read);
-    void this.panel?.webview.postMessage({ type: 'real', id, generation, shown: view.shown, html: view.html });
+    // `keep` is what this side already knows and the page could not: a read that REACHED the
+    // server is remembered here whatever it said, and a process that failed is not. Without it the
+    // page held the failure note anyway and never asked again, so a timeout became permanent while
+    // the cache it was supposed to mirror was empty. (Code round, codex.)
+    void this.panel?.webview.postMessage({
+      type: 'real', id, generation, shown: view.shown, keep: read.ok, html: view.html,
+    });
   }
 
   /**
@@ -463,7 +484,13 @@ export class BugzReviewPanel {
     if (held !== undefined && held.headSha === pair.headSha && held.fixSha === pair.fixSha) {
       return Promise.resolve(held.read);
     }
-    const running = this.fetching.get(pair.findingId);
+    // Keyed by the id AND both commits, never by the id alone. A recollection under the page keeps
+    // the finding id and changes the two shas, and an in-flight read started for the old pair
+    // answers about the old commits: reusing it would spend the fetch and answer nothing usable,
+    // because `settle` stores it under the shas it began with and both readers then refuse it.
+    // (Code round, codex, twice.) The display was already safe; the wasted cycle was not.
+    const key = inFlightKey(pair);
+    const running = this.fetching.get(key);
     if (running !== undefined) {
       return running;
     }
@@ -472,14 +499,15 @@ export class BugzReviewPanel {
       (read) => this.settle(pair, read),
       (error_: unknown) => this.settle(pair, { ok: false, tooOld: false, why: asText(error_) }),
     );
-    this.fetching = new Map([...this.fetching, [pair.findingId, started]]);
+    this.fetching = new Map([...this.fetching, [key, started]]);
 
     return started;
   }
 
   /** A fetch has ended: it is no longer in flight, and it is remembered if it reached the server. */
   private settle(pair: ReviewPair, read: RealRead): RealRead {
-    this.fetching = new Map([...this.fetching].filter(([id]) => id !== pair.findingId));
+    const key = inFlightKey(pair);
+    this.fetching = new Map([...this.fetching].filter(([held]) => held !== key));
     if (read.ok) {
       this.real = new Map([...this.real, [pair.findingId, { headSha: pair.headSha, fixSha: pair.fixSha, read }]]);
     }
