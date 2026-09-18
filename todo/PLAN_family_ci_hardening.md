@@ -271,6 +271,14 @@ Three files per repository from one template each; the semantic-title workflow m
 
 ### Epic 4 — release-please
 
+> **Planned separately, 2026-09-18:**
+> [PLAN_release_please_meets_a_narrative_changelog.md](PLAN_release_please_meets_a_narrative_changelog.md).
+> Configuring this epic as written below would have written over the thing it was meant to protect —
+> `connect_other_ais`'s changelog is 122 entries of hand-written PROSE, and a guard shipped this week
+> reads it to refuse a release whose version is not named in it. That plan measures the collision,
+> gives four options with their costs, and answers the sidecar tag-shape question this section opens.
+> **Read it before configuring anything here.**
+
 `release-please-config.json` + `.release-please-manifest.json` per repository that releases, the
 `release-please.yml` workflow, `changelog-path: RELEASES.md`, `include-component-in-tag: true`,
 `tag-separator: "-"` so the tags are `mcp-v0.17.4`. Measured on one release before the others adopt
