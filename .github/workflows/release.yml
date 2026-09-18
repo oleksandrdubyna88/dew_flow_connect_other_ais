@@ -270,7 +270,9 @@ jobs:
 
       - name: Publish
         shell: bash
-        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+        env:
+          RID: ${{ matrix.rid }}
+        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r "$RID" -p:Version="$VERSION" -o out
 
       # The release smoke the epic demands: the PUBLISHED binary answers a real initialize /
       # tools/list exchange — the contract tests, pointed at it. AOT failures often surface only
@@ -352,26 +354,23 @@ jobs:
       # failure was therefore silent. Found on 0.18.1, in the installed build, by running it.
       - name: Package
         shell: bash
+        env:
+          RID: ${{ matrix.rid }}
         run: |
-          NAME="coai-mcp-$VERSION-${{ matrix.rid }}"
+          NAME="coai-mcp-$VERSION-$RID"
           mkdir "$NAME"
-          NATIVE=$(ls out/*e_sqlite3* 2>/dev/null | head -1)
-          if [ -z "$NATIVE" ]; then
-            echo "the SQLite native library is not in the publish output — the server would ship unable to open its own database"
-            ls -la out
-            exit 1
-          fi
-          cp "$NATIVE" "$NAME/"
-          # The tree-sitter grammars, which `--normalize` reaches by P/Invoke exactly as the database
-          # reaches e_sqlite3 — and with exactly the same failure when they are absent. The publish
-          # has already dropped the twenty-seven languages nothing here parses; these are what is left.
-          if [ "$(ls out/*tree-sitter* 2>/dev/null | wc -l)" -eq 0 ]; then
-            echo "no tree-sitter grammars in the publish output — --normalize would throw DllNotFoundException"
-            ls -la out
-            exit 1
-          fi
-          cp out/*tree-sitter* "$NAME/"
-          if [[ "${{ matrix.rid }}" == win-* ]]; then
+
+          # The SQLite library the server opens its own database through, and the tree-sitter
+          # grammars `--normalize` reaches by P/Invoke in exactly the same way, with exactly the same
+          # failure when they are absent. Both asked of a SCRIPT the ordinary suite executes on every
+          # push, because release-only shell runs once, in the dark, on the day it matters — the same
+          # move `archive-carries.sh` made after #328. The four lines this replaces used
+          # `ls … | head -1`, which cannot tell "matched nothing" from "could not read the
+          # directory" and truncates a name containing a newline.
+          .github/scripts/publish-output-carries.sh out '*e_sqlite3*' '*tree-sitter*'
+
+          cp out/*e_sqlite3* out/*tree-sitter* "$NAME/"
+          if [[ "$RID" == win-* ]]; then
             cp out/coai-mcp.exe "$NAME/"
             7z a "$NAME.zip" "$NAME" > /dev/null
             echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
@@ -535,7 +534,10 @@ jobs:
       - run: npm run bundle
 
       - name: Package
-        run: npx @vscode/vsce package --no-dependencies
+        # The binary `npm ci` just installed, called directly: no package spec means no version
+        # to pin in a second place, no registry lookup and no lifecycle scripts. The lockfile is
+        # the only thing that decides which vsce runs.
+        run: ./node_modules/.bin/vsce package --no-dependencies
 
       # Drafted and published in one step, because this line is ONE job producing ONE asset — there
       # are no siblings to wait for and nothing a separate job could see that this one cannot. The
@@ -562,7 +564,7 @@ jobs:
               --notes "The VS Code extension."
           fi
 
-          gh release upload "$GITHUB_REF_NAME" *.vsix --clobber
+          gh release upload "$GITHUB_REF_NAME" ./*.vsix --clobber
 
           # Asked of the RELEASE, not assumed from an exit code. `set -e` catches an upload that
           # fails; it does not catch one that uploaded something other than a .vsix, and this line
@@ -587,7 +589,7 @@ jobs:
             echo "::warning::VSCE_PAT is not set — the .vsix is on the GitHub release; upload it to the Marketplace by hand or add the secret."
             exit 0
           fi
-          npx @vscode/vsce publish --no-dependencies --packagePath *.vsix -p "$VSCE_PAT"
+          ./node_modules/.bin/vsce publish --no-dependencies --packagePath ./*.vsix -p "$VSCE_PAT"
 
   # ---------------------------------------------------------------------------
   # The Team server, as six Native AOT binaries.
@@ -686,7 +688,9 @@ jobs:
 
       - name: Publish
         shell: bash
-        run: dotnet publish src_server/src/CoaiServer.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+        env:
+          RID: ${{ matrix.rid }}
+        run: dotnet publish src_server/src/CoaiServer.csproj -c Release -r "$RID" -p:Version="$VERSION" -o out
 
       # The smoke, and the one step of this job that is NOT the mcp job's.
       #
@@ -777,9 +781,11 @@ jobs:
       # project ever grows them, are exactly the ones a deployment needs.
       - name: Package
         shell: bash
+        env:
+          RID: ${{ matrix.rid }}
         run: |
           set -euo pipefail
-          NAME="coai-server-$VERSION-${{ matrix.rid }}"
+          NAME="coai-server-$VERSION-$RID"
           mkdir "$NAME"
           BIN=coai-server${{ runner.os == 'Windows' && '.exe' || '' }}
           cp "out/$BIN" "$NAME/"
@@ -791,7 +797,7 @@ jobs:
           fi
           cp out/appsettings*.json "$NAME/"
 
-          if [[ "${{ matrix.rid }}" == win-* ]]; then
+          if [[ "$RID" == win-* ]]; then
             7z a "$NAME.zip" "$NAME" > /dev/null
             echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
             LISTING=$(7z l "$NAME.zip")
@@ -1084,7 +1090,9 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME#bugs-v}" >> "$GITHUB_ENV"
 
       - name: Publish
-        run: dotnet publish src_bugs/src/CoaiBugs.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+        env:
+          RID: ${{ matrix.rid }}
+        run: dotnet publish src_bugs/src/CoaiBugs.csproj -c Release -r "$RID" -p:Version="$VERSION" -o out
 
       # THE SMOKE THIS LINE EXISTS FOR. A cross-built arm64 binary cannot run on an x64 runner, so
       # that one leg checks what it can — the file exists and is an ELF — and says so out loud
@@ -1117,7 +1125,10 @@ jobs:
           fi
 
           export COAI_BUGS_SECRET=a-smoke-secret-not-a-real-one
-          export COAI_BUGS_DATA="$(mktemp -d)"
+          # Assigned first, exported second: `export X="$(cmd)"` makes the EXPORT the command whose
+          # status `set -e` sees, so a failing mktemp would leave the variable empty and carry on.
+          COAI_BUGS_DATA="$(mktemp -d)"
+          export COAI_BUGS_DATA
 
           # An unknown mode must answer 64 — the signal a caller uses to detect an old binary, and
           # a branch this server did not have at all until a scenario test found it starting
@@ -1144,7 +1155,7 @@ jobs:
           # release is most likely to meet. A child left holding port 8119 is the next matrix leg's
           # problem and reads as an unrelated flake. (Plan round, codex.)
           trap 'kill -- "-$SERVER" 2>/dev/null || kill "$SERVER" 2>/dev/null || true' EXIT INT TERM
-          for attempt in $(seq 1 40); do
+          for _ in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:8119/health | grep -q ok; then
               echo "the published binary listens and carries its own keyword list"
               exit 0
@@ -1171,13 +1182,13 @@ jobs:
           set -euo pipefail
           NAME="coai-bugs-$VERSION-${{ matrix.rid }}"
           mkdir "$NAME"
-          NATIVE=$(ls out/*e_sqlite3* 2>/dev/null | head -1)
-          if [ -z "$NATIVE" ]; then
-            echo "the SQLite native library is not in the publish output — this server would ship unable to read its own key table"
-            ls -la out
-            exit 1
-          fi
-          cp "$NATIVE" "$NAME/"
+
+          # THIS server is all database — every request reads the key table — so an output without
+          # the library is a server that answers 401 to everybody and logs nothing about why. Asked
+          # of the same tested script the mcp job uses.
+          .github/scripts/publish-output-carries.sh out '*e_sqlite3*'
+
+          cp out/*e_sqlite3* "$NAME/"
           cp out/coai-bugs "$NAME/"
           # The deploy notes travel WITH the binary. They are not documentation about this
           # artefact, they are half of what makes it safe to run: the no-client-address promise is
