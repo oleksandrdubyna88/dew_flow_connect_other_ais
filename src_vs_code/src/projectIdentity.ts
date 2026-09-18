@@ -79,10 +79,16 @@ export interface ProjectIdentity {
   /** The bucket every session of this project shares. */
   readonly key: string;
 
-  /** What the tab is called — the repository's own directory name. */
+  /** What the tab is called — the repository's own directory name, in its own case. */
   readonly label: string;
 
-  /** The whole path, for the tab's tooltip; empty for {@link UNKNOWN_PROJECT}. */
+  /**
+   * The whole path as it was RECORDED, for the tab's tooltip; empty for {@link UNKNOWN_PROJECT}.
+   *
+   * <p>Not folded: this is the one field a person copies out of the page, and a path pasted into a
+   * terminal should be the path that was written down. {@link ProjectIdentity.key} is the folded
+   * one, and it is the only thing that needs to be.</p>
+   */
   readonly full: string;
 
   /** Whether the identity was learned from disk, or merely assumed from the path. */
@@ -196,7 +202,7 @@ function parentOf(path: string, mark: GitMark): string {
   const where = ABSOLUTE.test(said) ? said : resolvedAgainst(path, said);
   const found = LINKED.exec(where);
 
-  return found === null ? '' : found[1].toLowerCase();
+  return found === null ? '' : found[1];
 }
 
 function lastSegment(key: string): string {
@@ -208,11 +214,28 @@ function unknownProject(): ProjectIdentity {
   return { key: UNKNOWN_PROJECT, label: 'Unknown project', full: '', reachable: false };
 }
 
+/**
+ * One project, with the fold applied to the KEY and to nothing a person reads.
+ *
+ * <p>`full` is the tab's tooltip and it is there to be COPIED — a path somebody pastes into a
+ * terminal should be the path that was recorded, not a lower-cased version of it. `label` is the
+ * directory's own name for the same reason. Only the key is folded, because only the key has to
+ * make two spellings one bucket.</p>
+ *
+ * <p>Two recorded spellings of one project therefore share a key and the tooltip shows whichever
+ * was drawn last. That is one of the real spellings rather than a manufactured one, which is the
+ * right answer when the question has two truthful ones.</p>
+ */
 function identified(path: string, mark: GitMark): ProjectIdentity {
   const parent = parentOf(path, mark);
-  const key = parent === '' ? path.toLowerCase() : parent;
+  const where = parent === '' ? path : parent;
 
-  return { key, label: lastSegment(key), full: key, reachable: mark.kind !== 'gone' };
+  return {
+    key: where.toLowerCase(),
+    label: lastSegment(where),
+    full: where,
+    reachable: mark.kind !== 'gone',
+  };
 }
 
 /** Which project one `sessions.repo_path` belonged to. */
