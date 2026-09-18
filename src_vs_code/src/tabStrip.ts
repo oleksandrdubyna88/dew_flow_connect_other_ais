@@ -120,12 +120,27 @@ function attribute(name: string, value: string | undefined): string {
  * `class="tab on" data-tab="documents"` as one string, so a reordering here would fail them for a
  * reason that has nothing to do with the tabs. They are the proof this extraction changed nothing.</p>
  */
-function button(tab: Tab, open: string, names: StripNames): string {
-  const slug = escapeHtml(tab.slug ?? tab.key);
-  const on = tab.key === open;
-  const controls = names.onePanel === true ? names.panel : `${names.panel}${slug}`;
+/**
+ * The id fragment a tab wires itself with — its slug, or its key when it can serve as one.
+ *
+ * <p>Exported because the page has to compose the same id to return FOCUS to a tab after a repaint,
+ * and a second copy of `slug ?? key` is a second copy of a decision.</p>
+ */
+export function slugOf(tab: Tab): string {
+  return tab.slug ?? tab.key;
+}
 
-  return `<button type="button" role="tab" id="${names.tab}${slug}" aria-controls="${controls}"`
+function button(tab: Tab, open: string, names: StripNames): string {
+  const slug = slugOf(tab);
+  const on = tab.key === open;
+  // Composed first and escaped ONCE, over the whole value. A code reviewer asked for this against
+  // the security rule's construction requirement: the prefixes are constants at every call site
+  // today, and a builder that is only safe because of what its callers happen to pass is a site
+  // that is not safe whatever it is handed.
+  const id = escapeHtml(`${names.tab}${slug}`);
+  const controls = escapeHtml(names.onePanel === true ? names.panel : `${names.panel}${slug}`);
+
+  return `<button type="button" role="tab" id="${id}" aria-controls="${controls}"`
     + ` aria-selected="${on ? 'true' : 'false'}" class="tab${on ? ' on' : ''}"`
     + ` data-tab="${escapeHtml(tab.key)}"${attribute('title', tab.title)}>${escapeHtml(tab.label)}</button>`;
 }

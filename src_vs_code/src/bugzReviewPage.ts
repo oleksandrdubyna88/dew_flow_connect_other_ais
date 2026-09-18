@@ -1,7 +1,7 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
 import { cyclomatic } from './cyclomatic';
 import { pairDiff } from './lineDiff';
-import { Tab, tabCss, tabStrip } from './tabStrip';
+import { slugOf, Tab, tabCss, tabStrip } from './tabStrip';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { escapeHtml } from './webviewHtml';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
@@ -105,6 +105,23 @@ export interface ReviewView {
   /** Which tab is open in each strip, as `reviewTabs` resolved it — never as it was merely held. */
   readonly project?: string;
   readonly language?: string;
+
+  /**
+   * The tab just activated, so the keyboard gets back what it was on.
+   *
+   * <p>Every repaint replaces the document, so a person who tabbed to a project and pressed Enter
+   * lost the focus to the top of a new page — and had to navigate the whole thing again to reach
+   * the language strip beside it. Found on the code round. Absent on a draw nobody pressed, which
+   * is every draw the server drives: moving somebody's focus because a poll came back would be the
+   * same rudeness in the other direction.</p>
+   */
+  readonly focus?: FilterPress;
+}
+
+/** Which strip was pressed, and which tab in it. */
+export interface FilterPress {
+  readonly strip: string;
+  readonly key: string;
 }
 
 export const UNDECIDED = -1;
@@ -289,6 +306,24 @@ function row(pair: ReviewPair, open: boolean): string {
  * reveal a region of their own, so every one of them points at `#pairs`. `data-strip` is how the
  * one click handler tells a project press from a language press.</p>
  */
+/**
+ * The id of the button to focus, or empty.
+ *
+ * <p>Composed here rather than handed over by the panel, because the SLUG is the page's own
+ * arithmetic — and because a key composed into a selector on the page would be a path from the
+ * database reaching `querySelector`. This looks the key up among the tabs instead, and what crosses
+ * into the script is an id this module built.</p>
+ */
+function focusId(view: ReviewView): string {
+  const want = view.focus;
+  if (want === undefined) return '';
+
+  const tabs = want.strip === 'language' ? view.languages ?? [] : view.projects ?? [];
+  const one = tabs.find((tab) => tab.key === want.key);
+
+  return one === undefined ? '' : `${want.strip}-tab-${slugOf(one)}`;
+}
+
 function filterStrips(view: ReviewView): string {
   const projects = tabStrip(view.projects ?? [], view.project ?? '', {
     tab: 'project-tab-', panel: 'pairs', onePanel: true, label: 'Which project', strip: 'project',
@@ -568,6 +603,15 @@ ${zoomScript()}
 ${toneScript()}
 
   paint();
+
+  // The keyboard gets back the tab it activated. An id this module composed, never a key from the
+  // database: the host says WHICH press, the page works out which element that is.
+  var giveFocusBack = ${JSON.stringify(focusId(view))};
+  if (giveFocusBack) {
+    var wanted = document.getElementById(giveFocusBack);
+    if (wanted && wanted.focus) { wanted.focus(); }
+  }
+
   vscode.postMessage({ type: 'ready' });
 }());
 </script>

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { ReviewPair } from '../bugzReviewPage';
-import { GitMark } from '../projectIdentity';
+import { askedOnce, GitMark } from '../projectIdentity';
 import { ALL, reviewTabs } from '../reviewTabs';
 
 /**
@@ -236,10 +236,10 @@ test('a pair whose language the server did not say is its own named bucket', () 
 
 test('the filesystem is asked about each distinct path once, not once per pair', () => {
   let asked = 0;
-  const read = (path: string): GitMark => {
+  const once = askedOnce((path) => {
     asked += 1;
     return READ(path);
-  };
+  });
 
   reviewTabs(
     [
@@ -249,8 +249,34 @@ test('the filesystem is asked about each distinct path once, not once per pair',
       pair({ findingId: 4, repoPath: 'D:/rsd/repo_b' }),
     ],
     HELD,
-    read,
+    once,
   );
 
   assert.equal(asked, 2, 'four pairs, one spelling variant three times, two distinct paths');
+});
+
+test('a second call with the SAME reader touches no disk — which is what a filter press is', () => {
+  // Two code reviewers caught this: memoising INSIDE the grouping meant every language press
+  // re-probed all 91 paths of the live corpus, synchronously, on the extension host — and 41 % of
+  // them do not exist, while a recorded UNC path on a sleeping server blocks until it answers. So
+  // the reader is the caller's to hold, and this is the saving it exists for.
+  let asked = 0;
+  const once = askedOnce((path) => {
+    asked += 1;
+    return READ(path);
+  });
+  const pairs = [
+    pair({ findingId: 1, repoPath: 'D:/rsd/repo_a', language: 'C#' }),
+    pair({ findingId: 2, repoPath: 'D:/rsd/repo_b', language: 'TypeScript' }),
+  ];
+
+  reviewTabs(pairs, HELD, once);
+  const afterTheDraw = asked;
+
+  // The person presses a project tab, then a language tab. Both repaint.
+  reviewTabs(pairs, { project: 'd:/rsd/repo_b', language: ALL }, once);
+  reviewTabs(pairs, { project: 'd:/rsd/repo_b', language: 'TypeScript' }, once);
+
+  assert.equal(afterTheDraw, 2, 'the first draw learns both paths');
+  assert.equal(asked, 2, 'and two filter presses learn nothing new, because nothing changed on disk');
 });
