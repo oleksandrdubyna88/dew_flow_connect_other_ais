@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { HIGHLIGHT_CSS, canHighlight, highlight } from '../codeHighlight';
+import { HIGHLIGHT_CSS, canHighlight, highlight, plainBlock, timesTokenised } from '../codeHighlight';
 
 /**
  * The highlighter, with the security property first and the colours second.
@@ -130,6 +132,65 @@ test('a language the corpus has not seen is rendered plainly rather than refused
   assert.ok(!html.includes('--coai-hl-token-'), 'nothing is coloured by guesswork');
   // The same wrapper as a highlighted block, so one stylesheet dresses both.
   assert.ok(html.startsWith('<pre class="shiki"'), 'a fallback must not be a differently-shaped row');
+  assert.match(html, /data-highlight="plain"/u);
+});
+
+/**
+ * "We do not read this language" and "this language broke" look identical on screen.
+ *
+ * <p>Both render uncoloured, so without something in the markup a person cannot tell a deliberate
+ * fallback from broken highlighting, and nobody chasing a corpus-extraction defect can tell which
+ * rows failed. Two reviewers asked for the distinction independently.</p>
+ *
+ * <p>Asserted on {@link plainBlock} rather than by forcing a grammar to throw, because there is no
+ * input that makes a loaded Shiki grammar throw on demand — see that function's own note. What this
+ * covers is that the two reasons are distinguishable and that BOTH escape; what it does not cover
+ * is `highlight` routing a real failure to the second one.</p>
+ */
+test('an unreadable language and a broken grammar are told apart in the markup', () => {
+  const nothing = plainBlock('<script>x</script>', 'plain');
+  const broken = plainBlock('<script>x</script>', 'failed');
+
+  assert.notEqual(nothing, broken, 'the two silences must not look the same');
+  assert.match(nothing, /data-highlight="plain"/u);
+  assert.match(broken, /data-highlight="failed"/u);
+  for (const html of [nothing, broken]) {
+    assert.ok(!html.includes('</script>'), 'both paths escape, not just the one in the happy case');
+    assert.equal(readable(html), '<script>x</script>');
+  }
+});
+
+/**
+ * The same skeleton is rendered once, however many times the page is drawn.
+ *
+ * <p>Three reviewers raised the cost and they were right to ask for a number: 200 pairs is 400
+ * `codeToHtml` calls, 316–485 ms expanded and 209–222 ms collapsed, and a draw happens after every
+ * decision. The corpus does not change between collections, so a redraw was re-rendering text it had
+ * already rendered.</p>
+ *
+ * <p><b>Counted, not compared — and the first version of this test was wrong.</b> It asserted
+ * `Object.is(first, second)`, the same string back, and stayed green with the cache deleted: strings
+ * in JavaScript are primitives, so `Object.is` compares their value and there is no reference
+ * identity to see. The map's SIZE does not tell them apart either, because re-setting an existing
+ * key leaves it unchanged. How often Shiki was ASKED is the only externally visible difference
+ * between a cache that works and one that does not, which is why `timesTokenised` exists.</p>
+ */
+test('a skeleton already rendered is not tokenised a second time', () => {
+  const code = `public void method_1() { var var_1 = ${Math.random()}; }`;
+
+  const before = timesTokenised();
+  const first = highlight(code, 'CSharp');
+  const once = timesTokenised();
+  highlight(code, 'CSharp');
+
+  assert.equal(once, before + 1, 'the first call must actually tokenise');
+  assert.equal(timesTokenised(), once, 'the page re-tokenised a skeleton that had not changed');
+
+  // And the key is the TEXT, so a skeleton that differs by one character is not served the old one…
+  assert.notEqual(highlight(`${code} `, 'CSharp'), first);
+  // …nor is the same text in a different language.
+  assert.notEqual(highlight(code, 'JavaScript'), first);
+  assert.equal(timesTokenised(), once + 2, 'both of those are genuinely new work');
 });
 
 test('which languages this page claims to colour is a decision, not a lowercase', () => {
@@ -141,6 +202,62 @@ test('which languages this page claims to colour is a decision, not a lowercase'
   // `codeToHtml` THROWS on an id it has not loaded, and a blank one is such an id in disguise —
   // the table is what keeps that off the page rather than in a catch.
   assert.equal(canHighlight('python'), false);
+});
+
+/**
+ * The table is checked against the PRODUCER, not against itself.
+ *
+ * <p>Three reviewers made the same point from different directions: a table that only agrees with
+ * its own unit tests drifts silently the day the server learns a fourth language, and the page then
+ * renders it plain while every test here stays green. `SourceLanguage` is where that decision is
+ * actually made, so this reads it — the enum is two projects away and a source read is the only
+ * thing that can cross that gap in a suite with no server running.</p>
+ *
+ * <p>It is a positive pin on a declaration rather than a match on prose, per `testing.md`: it
+ * enumerates the enum's members and asserts a verdict for each, so adding `FSharp` to the enum
+ * turns this red with the name in the message rather than passing quietly.</p>
+ */
+test('every language the collector can record has a verdict on this page', () => {
+  const enumFile = join(__dirname, '..', '..', '..', 'src_mcp', 'core', 'Normalising', 'IAstNormalizer.cs');
+  const declared = /public enum SourceLanguage\s*\{([^}]*)\}/u.exec(readFileSync(enumFile, 'utf8'));
+  assert.ok(declared !== null, 'SourceLanguage has moved — this test is reading nothing');
+
+  const members = (declared[1] ?? '')
+    .split(',').map((m) => m.trim()).filter((m) => m.length > 0 && !m.startsWith('//'));
+  assert.deepEqual(members, ['Unsupported', 'CSharp', 'TypeScript', 'JavaScript'],
+    'the collector\'s languages changed; decide what this page does with the new one');
+
+  for (const member of members) {
+    assert.equal(canHighlight(member), member !== 'Unsupported', member);
+  }
+});
+
+/**
+ * Every colour Shiki asks for is a colour this page defines.
+ *
+ * <p>The failure this catches is invisible: a variable Shiki emits that `HIGHLIGHT_CSS` does not
+ * define resolves to nothing, so that token renders in the inherited colour and the block looks
+ * *almost* right — one token kind quietly uncoloured, which no screenshot and no existing assertion
+ * would notice. One typo in either list does it. A reviewer asked for the tone promise to be checked
+ * as behaviour rather than as the presence of a variable; this is the checkable half of that.</p>
+ */
+test('no token asks for a colour the page never defines', () => {
+  const samples: Readonly<Record<string, string>> = {
+    CSharp: 'public async Task<List<string>> m(int a = 1) { /* c */ var s = "x"; return null; } // n',
+    TypeScript: 'export const a: number = 1; // c\nfunction f<T>(x: T): T { return x; }',
+    JavaScript: 'const a = 1; /* c */ class K { m() { return `t${a}`; } }',
+  };
+  const asked = new Set<string>();
+  for (const [language, code] of Object.entries(samples)) {
+    for (const found of highlight(code, language).matchAll(/var\(--coai-hl-([a-z0-9-]+)\)/gu)) {
+      asked.add(found[1] ?? '');
+    }
+  }
+  const defined = new Set([...HIGHLIGHT_CSS.matchAll(/--coai-hl-([a-z0-9-]+):/gu)].map((m) => m[1]));
+
+  assert.ok(asked.size > 3, 'the samples coloured almost nothing — they are no longer representative');
+  assert.deepEqual([...asked].filter((name) => !defined.has(name)), [],
+    'a token asks for a variable this page does not define, so it renders uncoloured');
 });
 
 test('the palette follows the theme and the tone, rather than baking colours in', () => {
