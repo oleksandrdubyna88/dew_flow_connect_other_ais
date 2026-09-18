@@ -1354,6 +1354,13 @@ was 3 095 when that plan opened and is 3 762 now, `roundsLog.ts` 1 989 against 2
 are quoted here only to show the direction: **the ceiling is being crossed faster than it is being
 walked back**, and one 4 183-line file returning to 543 did not change that.
 
+**Re-measured one day later, 2026-09-18**, because a claim about a direction can be checked and a
+day is the shortest honest interval: `panelProvider.ts` **3 762 → 4 022** (+260), `chatPage.ts`
+2 243 → 2 350, `panelView.ts` 2 797 → 2 855, `extension.ts` 1 332 → 1 370, `claudeSessions.ts`
+1 152 → 1 188. One fell — `roundsLog.ts` 2 061 → 2 032 — and two were untouched. Net **+470 lines
+above the ceiling in twenty-four hours**, against the 3 640 that one deliberate split removed over
+a week. The direction held.
+
 Each is its own split, on the parent plan's model, one file at a time — and the parent is the record
 of what one costs: thirteen commits, two whole-series failures, and six checks built to prove that
 nothing moved.
