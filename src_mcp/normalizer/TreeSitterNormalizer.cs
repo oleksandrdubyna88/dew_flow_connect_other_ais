@@ -158,6 +158,59 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     private static string NameOf(Node node) =>
         node.GetChildForField("name") is { } named ? named.Text : string.Empty;
 
+    /// <summary>Which node kinds count as "a type" — the per-language table, as data.</summary>
+    /// <remarks>
+    /// C# spells each declaration kind out; TypeScript and JavaScript share <c>class_declaration</c>
+    /// and add the abstract form and the bare class EXPRESSION (<c>const X = class { }</c>), which
+    /// has a <c>name</c> field only when the author gave it one. An interface is listed for C#
+    /// because a default interface method is a method in an interface; the TypeScript one holds
+    /// signatures, which are not functions, so it is not.
+    /// </remarks>
+    private static string[] TypeKinds(SourceLanguage language) => language switch
+    {
+        SourceLanguage.CSharp =>
+        [
+            "class_declaration", "struct_declaration", "record_declaration", "interface_declaration",
+        ],
+        _ => ["class_declaration", "abstract_class_declaration", "class"],
+    };
+
+    public string EnclosingType(SourceLanguage language, string source, int line)
+    {
+        if (Grammar(language) is not { } grammar || line < 1)
+        {
+            return string.Empty;
+        }
+
+        using var parsed = new Language(grammar.Library, grammar.Function);
+        using var parser = new Parser(parsed);
+        using var tree = parser.Parse(source);
+
+        return tree is null
+            ? string.Empty
+            : TypeAround(tree.RootNode.GetDescendantForPosition(new Point(line - 1, 0)), TypeKinds(language));
+    }
+
+    /// <summary>The nearest type at or above <paramref name="at"/>, by name — or empty.</summary>
+    /// <remarks>
+    /// The same walk as <see cref="Enclosing"/>, one kind-table over. Asked at column 0 of the
+    /// function's first line, the smallest node there is the type's own body (the indentation
+    /// belongs to it), so the first type met on the way up is the innermost one — which is what
+    /// makes a method in a nested class answer the INNER class rather than the outer.
+    /// </remarks>
+    private static string TypeAround(Node? at, string[] kinds)
+    {
+        for (var node = at; node is not null; node = node.Parent)
+        {
+            if (kinds.Contains(node.Type))
+            {
+                return NameOf(node);
+            }
+        }
+
+        return string.Empty;
+    }
+
     public EnclosingSymbol? LocateNamed(SourceLanguage language, string source, string name)
     {
         if (Grammar(language) is not { } grammar || name.Length == 0)

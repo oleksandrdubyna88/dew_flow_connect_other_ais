@@ -401,15 +401,8 @@ public sealed class RoundsDb : IDisposable
     public IReadOnlyList<ReviewPair> Pairs(int limit)
     {
         using var read = _db.CreateCommand();
-        read.CommandText = """
-            SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
-                   p.keep, f.severity, f.category, f.title,
-                   COALESCE(s.repo_path, '') AS repo_path, COALESCE(r.head_sha, '') AS head_sha,
-                   f.fix_sha, f.file, f.line, f.why, f.fix
-              FROM collect_pairs p
-              JOIN findings f ON f.id = p.finding_id
-              LEFT JOIN rounds r ON r.id = f.round_id
-              LEFT JOIN sessions s ON s.id = r.session_id
+        read.CommandText = ThePagesRow + """
+
              ORDER BY p.written_utc DESC, p.finding_id
              LIMIT $limit
             """;
@@ -423,6 +416,40 @@ public sealed class RoundsDb : IDisposable
 
         return pairs;
     }
+
+    /// <summary>ONE pair's row, by finding — the same projection as <see cref="Pairs"/>, or nothing.</summary>
+    /// <remarks>
+    /// <para>For <c>--real-method</c>, which needs the checkout, the two commits, the path, the line
+    /// and the stored name of one pair and must not read the whole page to get them: a pair past the
+    /// page's limit would then be unreadable, and two hundred rows for one is the wrong shape.</para>
+    /// <para>Null is the legitimate "not found" the C# doctrine allows — a pair recollected out from
+    /// under the page, or an id nobody ever had — and the mode turns it into an ANSWER naming that,
+    /// not an exit code.</para>
+    /// </remarks>
+    public ReviewPair? Pair(long findingId)
+    {
+        using var read = _db.CreateCommand();
+        read.CommandText = ThePagesRow + """
+
+             WHERE p.finding_id = $id
+            """;
+        Bind(read, "$id", findingId);
+        using var rows = read.ExecuteReader();
+
+        return rows.Read() ? ReviewPairFrom(rows) : null;
+    }
+
+    /// <summary>The page's projection, without its ORDER or its WHERE — written once for the two readers of it.</summary>
+    private const string ThePagesRow = """
+        SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
+               p.keep, f.severity, f.category, f.title,
+               COALESCE(s.repo_path, '') AS repo_path, COALESCE(r.head_sha, '') AS head_sha,
+               f.fix_sha, f.file, f.line, f.why, f.fix
+          FROM collect_pairs p
+          JOIN findings f ON f.id = p.finding_id
+          LEFT JOIN rounds r ON r.id = f.round_id
+          LEFT JOIN sessions s ON s.id = r.session_id
+        """;
 
     /// <summary>One row of <see cref="Pairs"/>, by column name.</summary>
     private static ReviewPair ReviewPairFrom(SqliteDataReader rows) =>
