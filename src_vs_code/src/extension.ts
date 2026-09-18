@@ -54,8 +54,7 @@ import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
 import { lockIsStale } from './settingsLock';
 import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
-import { STOOD_DOWN } from './roleDeletion';
-import { RoleDeletions } from './roleDeletion';
+import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
@@ -255,8 +254,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // it waits for the mirror like every other one. Nothing FINISHES here, because nothing has been
   // carried yet — `tellTheDeletions` is where that happens.
   theDeletions = roleDeletions(context);
-  void theDeletions.sweep().catch((raised: unknown) => {
-    console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', raised);
+  void theDeletions.sweep().catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', reason);
   });
 
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
@@ -686,8 +685,8 @@ function tellTheDeletions(outcome: SyncOutcome): void {
   // reason nobody wrote rather than a crash.
   const reason = carried ? '' : REASONS[outcome] ?? '';
 
-  void theDeletions.settled(carried, payload, reason).catch((raised: unknown) => {
-    console.error('ConnectOtherAIs: a role deletion could not be carried on with', raised);
+  void theDeletions.settled(carried, payload, reason).catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: a role deletion could not be carried on with', reason);
   });
 }
 

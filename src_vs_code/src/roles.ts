@@ -85,7 +85,7 @@ const PROMPT_ID = /^[a-z0-9][a-z0-9-]*$/;
  * the pattern would drift, and the drift would be silent in the worst direction: a prompt file
  * accepted whose tombstone is refused. (antigravity, the deletion code round.)</p>
  */
-export const ROLE_ID = /^[A-Za-z][A-Za-z0-9_]*$/;
+export const ROLE_ID = /^[A-Za-z]\w*$/;
 
 /**
  * Names Windows will not give a file, whatever the extension.

@@ -103,7 +103,7 @@ export function tombstonesIn(dataDir: () => string): TombstoneStore {
       // Checked INSIDE the claim: an id that has come back to life under a new tombstone must be
       // refused, not renamed away from the role that now holds it.
       const held = await parsed(file);
-      if (held === undefined || held.nonce !== nonce) {
+      if (held?.nonce !== nonce) {
         return false;
       }
       try {
