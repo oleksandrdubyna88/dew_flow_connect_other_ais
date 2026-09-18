@@ -325,11 +325,20 @@ And `PLAN_the_corpus_tail.md` §1 — *"The ranking pass has no transport"* — 
 `Ranking.Order` decides the order of a reply nothing produces. **The picker today chooses a model that
 is never called.**
 
-So this story is two questions for the operator before it is any code at all:
+### ANSWERED 2026-09-18 — and it leaves this plan
 
-1. May un-anonymised finding text be sent to a remote vendor for ranking? If no, the picker stays
-   local-only and the work is to make that legible rather than to widen it.
-2. If yes: which vendors, and does the person get told, per run, where the text went?
+The operator decided: **allowed.** *"Whoever does not want it will choose a local LLM."* Both routes —
+the Team server on to a provider's LLM, and a vendor CLI on to that vendor's cloud — are permitted.
+
+So this is no longer a question and no longer a story here. It is its own plan, because the work it
+unlocks is a transport that does not exist plus a boundary that has to be rewritten rather than
+deleted. The five pieces are listed under **Build order** above, and the one addition beyond the
+operator's words is there too: the picker has to MARK what leaves the machine at the point of
+choosing, because "whoever does not want it will choose a local LLM" is only a choice if the person
+can see which is which.
+
+**Nothing in epics 1–3 depends on it**, and the review page's own promise is untouched: the page
+supplies decision ids, the send projects the stored pair, and `OnlyThreeFieldsLeave` stays green.
 
 Widening the dropdown without answering those offers choices the collector refuses — which is the
 failure this page already has too much of.
@@ -370,13 +379,42 @@ spinner: CLAUDE.md §8 says a status-changing action must reflect its real state
 a decision that is written by a child process is exactly that shape. It belongs with **epic 2.1**,
 which is already opening `Pairs()`, or in a story of its own. It is not a story 1.1 omission.
 
-**Epic 4's preconditions are decisions, not code**: the five comment questions (size, charset, PII
-— *scan* or *local only*, server-first, version negotiation, retention) and the ranking-picker
-disclosure answer. Story 7 is therefore neither an epic nor a story: it is the same question asked of
-another pass. If the answer is **no**, the picker stays `["local"]` and "make that legible" is a
-one-line hint change folded into 4.2; if **yes**, it is a NEW plan, because the ranking pass has no
-transport and `RankingModels.IsAllowed` refuses anything named and non-local — widening the dropdown
-alone offers a choice the collector refuses.
+### Both of epic 4's preconditions were answered on 2026-09-18
+
+**Comments are PUBLIC.** Asked whether a person's comment is scanned for PII before it is sent or
+stays local, the operator decided: *a comment a person wrote is public; it goes everywhere, including
+to the server, for storage and later processing.*
+
+So **epic 4 needs no scanner and no local-only fallback**, and the story that would have written one
+does not exist. Four ordinary decisions remain for 4.1: size, character set, version negotiation,
+retention. One thing follows that is NOT a scanner: the page must SAY, beside the box, that a
+comment leaves the machine. Not a confirmation and not a gate — the policy is decided — but somebody
+choosing what to put in a public field can only choose it knowingly if the page tells them, and every
+other surface in this product says where things go.
+
+**The ranking pass MAY use a remote model.** Asked whether un-anonymised finding text may reach a
+remote vendor — through the Team server to a provider's LLM, or through a vendor CLI to that vendor's
+cloud — the operator decided: *allowed; whoever does not want it will choose a local LLM.*
+
+That settles the policy and does **not** shrink the work, so story 7 becomes a plan of its own rather
+than a widened dropdown:
+
+1. `RankingModels.Local` / `IsAllowed` (`RankingModels.cs:41,49`) stop being a boundary and become a
+   default — rewritten as an explicit *allowed* list rather than a deleted check, so what is
+   permitted stays written down in one place.
+2. `ThePinThatMustNotDriftTests` reads that file and moves with it, deliberately, in one commit — the
+   way `OnlyThreeFieldsLeave` is treated.
+3. The transport, which does not exist: `Ranking.Order` orders a reply nothing produces
+   ([PLAN_the_corpus_tail.md](PLAN_the_corpus_tail.md) §1).
+4. The picker: provider first, then model, every provider — the operator's item 11.
+5. **The picker marks what leaves the machine, at the point of choosing.** "Whoever does not want it
+   will choose a local LLM" only works if the person can see which choice is which.
+
+**And what leaves is not what the upload sends.** The ranking pass runs BEFORE the pairs are
+collected, so before `Normalise` exists: it sees the reviewers' text, the real path and the real
+method name, not `var_1`/`method_2`. The upload's promise is three anonymised fields guarded by
+`OnlyThreeFieldsLeave`; nothing equivalent can guard this one, because ranking placeholders would
+have nothing to rank. Wherever this is documented, it is documented in those words.
 
 ## Test plan
 
