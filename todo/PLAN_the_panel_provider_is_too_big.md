@@ -67,6 +67,51 @@ earlier extractions land; each story re-reads them rather than trusting this tab
 `render`, `enqueue`, `write`, `run`), the settings readers and the editing state as what
 `PanelProvider` is actually for.
 
+## The control measurement, after three (2026-09-18)
+
+Cut iteratively on the operator's ruling — two or three clusters, then a control slice, then
+recalibrate — rather than straight down the list. This is that slice.
+
+| cluster | planned | actual | gap | its public surface | what the class kept |
+|---|---|---|---|---|---|
+| **1** Claude probe | 180 | **181** | +1 | private, one caller in `render` | nothing |
+| **10** rounds log | 80 | **56** | **−24** | PUBLIC, four methods called from `extension.ts` | four delegations |
+| **11** consult prompt | 95 | **93** | −2 | private, three callers | nothing |
+
+**The estimates are good, and they are wrong in exactly one way.** Where a cluster is private its
+size predicts the saving to within two lines. Where it is PUBLIC the class must keep a delegation per
+method, and the saving falls by about thirty per cent. The table above this section records SIZE and
+says nothing about SURFACE, which is the half that decides what an extraction is worth.
+
+**So the remaining eight are re-read by surface**, counted from the class's public methods today:
+
+| cluster | public methods it would take | delegation cost |
+|---|---|---|
+| **6** usage and the ledgers | **eight** — `usageLines`, `doorLines`, `chatLines`, `setUsageWindow`, `consultationsTab`, `usageTab`, `forgetUsage`, `forgetChatUsage` | ~28 lines |
+| **9** prices | one — `modelPrice` | ~4 lines |
+| **2** bugs | one — `closeConsultation` | ~4 lines |
+| **7** vendor add/remove | one — `vendorIds` | ~4 lines |
+| **3, 4, 5, 8** | none | none |
+
+Cluster **6** is the one this changes. It is the largest remaining at ~430 lines and it carries eight
+of the class's seventeen public methods, so its real saving is nearer 400 — and, more to the point,
+it is the cluster where "does the panel still own this?" is a design question rather than a move.
+**It moves to last**, behind the four with no surface at all.
+
+**Three more things the three extractions taught, which the plan did not know:**
+
+- **`prove-move.mjs` did not fit a class**, and was fixed rather than worked around — a verification
+  tool may not produce a false positive on basic syntax. Two defects: residue reset the walk, and a
+  bare `}` or `/**` could start a region. It reported 15 runs for 8 regions; it reports 8 now.
+- **A private method that must become public costs one residue line and one run**, each, because
+  `unexported()` forgives `export` and nothing else. Expect it and say so in the pull request rather
+  than reading it as fragmentation.
+- **`sonarExclusions.test.ts` catches every new module**, three times out of three. Add the module to
+  `sonar.coverage.exclusions` in the same commit; the ratchet is red until you do, which is the guard
+  working.
+
+**Where the file stands: 4 022 → 3 748 with all three in**, and 3 692 once #403 lands beside them.
+
 ## Build order, and why it is this order
 
 **One extraction per pull request, each through the gate.** Never two: the point of the parent's
@@ -80,8 +125,10 @@ a move.
 2. **Cluster 10, the rounds-log cache**, then **9, prices**, then **11, the consult prompt.** Small,
    state-owning, independently readable. Three more confirmations before anything large.
 3. **Clusters 4 and 8** — vendor CLIs and WSL networking. Larger, still self-contained.
-4. **Clusters 5, 6** — local engines and usage. These have the most callers; do them once the shape
-   is established.
+4. **Cluster 5** — local engines. No public surface; do it once the shape is established.
+   **Cluster 6, usage and the ledgers, MOVED TO LAST** by the control measurement above: eight of the
+   class's seventeen public methods are its, so it is the one place where "does the panel still own
+   this?" is a design question rather than a move.
 5. **Clusters 2, 3, 7** — bugs, team servers, vendor add/remove. The biggest and the most entangled
    with the webview's messages; last, deliberately.
 
