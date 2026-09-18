@@ -67,6 +67,23 @@ earlier extractions land; each story re-reads them rather than trusting this tab
 `render`, `enqueue`, `write`, `run`), the settings readers and the editing state as what
 `PanelProvider` is actually for.
 
+## Defects read on the way, recorded and left
+
+The series may not change behaviour, so anything found while moving code is written here instead of
+fixed in the move. This is the same discipline that produced the parent split's tail plan.
+
+- **`RoundsLogCache.roundsLog` stamps its cache window BEFORE the read, not after.** Found by
+  CodeRabbit on the second extraction. If a read takes longer than `AGE_MS` (10 s) the next ordinary
+  call treats the result as already stale and starts another server process.
+  **The obvious fix is wrong**: stamping after the `await` would let EVERY tick arriving during a slow
+  read spawn its own read, which is the stampede the cache exists to prevent — the log page refreshes
+  every tick while a round runs. Stamping before suppresses them for the first ten seconds; stamping
+  after suppresses none.
+  **The right fix is an in-flight guard**, which the sibling class extracted from this same file the
+  day before already has: `ClaudeProbeCache.claudeProbeInFlight`, added against the same shape of bug.
+  That gives both — no second read while one runs, and a window that starts when the data is fresh.
+  Its own change, not a move.
+
 ## The control measurement, after three (2026-09-18)
 
 Cut iteratively on the operator's ruling — two or three clusters, then a control slice, then
