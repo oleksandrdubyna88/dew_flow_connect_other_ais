@@ -1113,6 +1113,23 @@ would otherwise copy whatever had replaced that index; the block control resolve
 job, because its signature is checked against what it finds. Four cases in `answerCopy.test.ts`,
 three of them red when the guard is removed.
 
+**And the two MOMENTS are named units of their own — `decidedNow` and `decidedWhenItRuns` — because
+a moment carried by the shape of an expression is a moment nothing can assert.** The plan round put
+the consequence better than the comment it replaced: a block handler that captured `messages[index]`
+before its queued job ran would leave every `stillAnswering` case green while the real control copied
+the wrong text. The difference had been exactly that — one hook computed its decision and handed the
+copier `() => decision`, the other handed the copier a thunk that computes — and it is now two
+functions a test can build, move the message list under, and then invoke. Four more cases; watched
+red by making `decidedWhenItRuns` capture eagerly, which fails naming *the queued press resolved
+against a message it had already captured*.
+
+The signatures carry the intent too: `decidedNow` takes the message as a **value** (so it cannot look
+late even by accident) and `decidedWhenItRuns` takes a **thunk** (so looking late is the only thing it
+can do). **What is still not proven by a test is the WIRING** — that `onCopyAnswer` uses the first and
+`onCopyBlock` the second. Swapping them compiles, and nothing in this suite would see it; catching it
+needs a real press in a real editor, which is the `test:host` harness's territory and is recorded as
+open work rather than claimed.
+
 SonarCloud had flagged both sites as **S6582** — `said === undefined || said.role !== 'model'` is
 exactly `said?.role !== 'model'`, which is what the extracted unit carries. The equivalence was
 measured rather than assumed: removing the narrowing makes `tsc` report `TS18048: 'said' is possibly

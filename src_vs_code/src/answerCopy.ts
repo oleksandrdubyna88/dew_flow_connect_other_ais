@@ -122,6 +122,52 @@ export function stillAnswering(
     : copy(said.text);
 }
 
+/**
+ * The two controls resolve the message at DIFFERENT moments, and these are those two moments.
+ *
+ * <p><b>Why they are named functions and not two shapes of call-site code.</b> The difference was
+ * carried by structure alone — one hook computed its decision before handing the copier a thunk, the
+ * other handed the copier a thunk that computes — and a guarantee carried by structure is a guarantee
+ * nothing can assert. The code round put it plainly: a block handler that captured `messages[index]`
+ * before its queued job ran would leave every test of `stillAnswering` green while the real control
+ * copied the wrong text. Lifting the two moments into two named units is what lets a test hold the
+ * message list and CHANGE it in between.</p>
+ *
+ * <p>It is the same asymmetry both call sites already documented, now in one place: a control that
+ * carries a signature can afford to look late, because what it finds is checked against what it was
+ * drawn from. A control that carries none cannot.</p>
+ */
+
+/**
+ * Resolve NOW, at the press — for the control that carries no signature.
+ *
+ * <p>The whole-answer control sends nothing that could be checked against the message it finds, so a
+ * press queued behind a slow write must not look again when its turn comes: by then the index may
+ * hold a later answer, and the person would be handed something they never pressed on.</p>
+ */
+export function decidedNow(
+  said: Answered | undefined,
+  copy: (markdown: string) => CopyDecision,
+): () => CopyDecision {
+  const decision = stillAnswering(said, copy);
+
+  return () => decision;
+}
+
+/**
+ * Resolve WHEN THE QUEUE REACHES IT — for the control whose signature is checked against what it finds.
+ *
+ * <p>The block control echoes the signature of the markdown it was drawn from, so looking late is
+ * safe and is what keeps it honest: `blockToCopy` refuses outright when the answer has been rewritten
+ * under it, which it can only do against the message as it is at the moment of the write.</p>
+ */
+export function decidedWhenItRuns(
+  look: () => Answered | undefined,
+  copy: (markdown: string) => CopyDecision,
+): () => CopyDecision {
+  return () => stillAnswering(look(), copy);
+}
+
 /** Where a copy control sits: which message, which block of it, and what it was drawn against. */
 export interface CopiedControl {
   readonly index: number;

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { answerToCopy, blockToCopy, stillAnswering, type Answered } from '../answerCopy';
+import {
+  answerToCopy, blockToCopy, decidedNow, decidedWhenItRuns, stillAnswering, type Answered,
+} from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
 import { chatMessagesHtml } from '../chatPage';
 import { textCopier, type CopyPorts, type Said } from '../copyText';
@@ -523,4 +525,81 @@ test('nothing is asked of the text of a message that is refused', () => {
 
   assert.equal(decision.kind, 'refused');
   assert.equal(asked, 0, 'the refused press still went and read the message it had just refused');
+});
+
+/**
+ * WHEN each control looks, which is the half no test could see.
+ *
+ * <p>The two copy controls resolve the message at deliberately different moments — the whole-answer
+ * one at the press, the block one inside the queued job — and until 2026-09-18 that difference was
+ * carried by the SHAPE of two expressions in `chatHooks.ts` and by nothing else. A plan reviewer put
+ * the consequence exactly: a block handler that captured `messages[index]` before its queued job ran
+ * would leave every `stillAnswering` case above green while the real control copied the wrong text.
+ * `decidedNow` and `decidedWhenItRuns` exist so that a test can hold the list and CHANGE it in
+ * between, which is the only way to observe a moment.</p>
+ */
+
+/** A message list a test can move under a decision that has already been built. */
+function moving(first: Answered): { at: () => Answered | undefined; becomes: (next: Answered) => void } {
+  let here = first;
+
+  return { at: () => here, becomes: (next) => { here = next; } };
+}
+
+const LATER: Answered = { role: 'model', text: 'a later answer that arrived in between' };
+
+test('the whole-answer control copies what was there when it was PRESSED', () => {
+  // It sends no signature, so it has nothing to check a late lookup against: whatever it finds when
+  // the queue reaches it, it would copy. Resolving at the press is the only thing standing between a
+  // person and an answer they never pressed on.
+  const list = moving(ANSWER);
+
+  const decide = decidedNow(list.at(), answerToCopy);
+  list.becomes(LATER);
+  const decision = decide();
+
+  assert.equal(decision.kind, 'copy');
+  assert.equal(decision.kind === 'copy' ? decision.text : '', ANSWER.text,
+    'the press copied an answer that arrived after it — the lookup was hoisted out of the press');
+});
+
+test('the block control copies what is there when the QUEUE reaches it', () => {
+  // The mirror image, and it is not laxity: the block control echoes the signature of the markdown it
+  // was drawn from, and `blockToCopy` refuses outright when that no longer matches. It can only make
+  // that check against the message as it stands at the moment of the write, so it must look late.
+  const list = moving(ANSWER);
+
+  const decide = decidedWhenItRuns(list.at, answerToCopy);
+  list.becomes(LATER);
+  const decision = decide();
+
+  assert.equal(decision.kind === 'copy' ? decision.text : '', LATER.text,
+    'the queued press resolved against a message it had already captured, so the signature check '
+    + 'would run against text nobody is looking at');
+});
+
+test('an answer that went away before the queue reached it is refused, not copied', () => {
+  // The late lookup has to find the guard too, or looking late would be strictly worse than not.
+  let here: Answered | undefined = ANSWER;
+
+  const decide = decidedWhenItRuns(() => here, answerToCopy);
+  here = undefined;
+
+  assert.equal(decide().kind, 'refused', 'the queued press copied an answer that had gone');
+});
+
+test('both controls refuse in the same words', () => {
+  // The Definition of Done says the refusal sentence exists in one place. Asserting the two paths
+  // produce the SAME sentence says it behaviourally, where counting occurrences of a string literal
+  // in the source would pass just as happily on two copies that happen to agree today.
+  const now = decidedNow(undefined, answerToCopy)();
+  const late = decidedWhenItRuns(() => undefined, answerToCopy)();
+
+  assert.equal(now.kind, 'refused');
+  assert.equal(late.kind, 'refused');
+  assert.equal(
+    now.kind === 'refused' ? now.said : 'one',
+    late.kind === 'refused' ? late.said : 'other',
+    'the two controls tell a person the same thing in different words',
+  );
 });
