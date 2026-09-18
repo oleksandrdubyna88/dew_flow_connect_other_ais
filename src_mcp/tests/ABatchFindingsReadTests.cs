@@ -229,21 +229,11 @@ public sealed class ABatchFindingsReadTests : IDisposable
             var asked = Path.Combine(_dir, "asked.json");
             File.WriteAllText(asked, "[{\"sessionId\":\"s1\",\"stage\":\"CodeReview\",\"number\":1},{\"sessionId\":\"s9\",\"stage\":\"PlanReview\",\"number\":3}]");
 
-            var written = new StringWriter();
-            var was = Console.Out;
-            Console.SetOut(written);
-            int code;
-            try
-            {
-                code = Program.FindingsManyJson(["--findings-many", "--keys-file", asked]);
-            }
-            finally
-            {
-                Console.SetOut(was);
-            }
+            var (written, code) = Stdout.Of(
+                () => Program.FindingsManyJson(["--findings-many", "--keys-file", asked]));
 
             code.Should().Be(0);
-            using var answer = System.Text.Json.JsonDocument.Parse(written.ToString());
+            using var answer = System.Text.Json.JsonDocument.Parse(written);
             var rounds = answer.RootElement.GetProperty("rounds");
             rounds.GetArrayLength().Should().Be(2, "one entry per round asked, in the order asked");
             rounds[0].GetProperty("sessionId").GetString().Should().Be("s1");

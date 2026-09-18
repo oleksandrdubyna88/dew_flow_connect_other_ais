@@ -55,6 +55,21 @@ export const UNPROBED: RevisionState = {
   currentNote: '',
 };
 
+/**
+ * The row while its press is out: the action is not offered again and the row says why.
+ *
+ * <p>The first press can wait through a server launch and several git reads, and the row used to sit
+ * on 'not checked yet' beside an enabled button the whole time — so a person could not tell whether
+ * it had registered, and pressing again was the reasonable thing to do. CLAUDE.md §8 asks a
+ * status-changing action to show its real state while it runs; this is that state, and every ending
+ * replaces it. (Code round, codex.)</p>
+ */
+export const WORKING: RevisionState = {
+  offered: false,
+  note: 'reading it out of git\u2026',
+  currentNote: '',
+};
+
 /** A sentence beside an action, quiet, so the buttons stay the thing a person reads first. */
 const why = (said: string): string => (said.length > 0 ? `<span class="why">${escapeHtml(said)}</span>` : '');
 
