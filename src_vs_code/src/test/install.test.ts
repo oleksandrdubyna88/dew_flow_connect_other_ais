@@ -591,8 +591,10 @@ test('the release carries the native library the binary opens its database throu
   assert.match(workflow, /e_sqlite3/, 'the archive carries the native library');
   assert.match(
     workflow,
-    /is not in the publish output/,
-    'and the job FAILS when it is missing, rather than shipping a server that cannot open its own database');
+    /publish-output-carries\.sh out '\*e_sqlite3\*' '\*tree-sitter\*'/,
+    'and the job FAILS when it is missing, rather than shipping a server that cannot open its own '
+    + 'database — asked of a SCRIPT the ordinary suite executes on every push, because four lines '
+    + 'inside a workflow run once, in the dark, on the day they matter');
   assert.match(
     workflow,
     /COAI_DATA_DIR="\$DB" "\$EXE" --log/,
@@ -1280,8 +1282,9 @@ test('the bugs release ships the native library, the deploy notes, and a smoke t
   assert.match(workflow, /- 'bugs-v\*'/, 'the tag shape is a TRIGGER, not only a job condition');
   assert.match(
     build,
-    /unable to read its own key table/,
-    'the package step FAILS when the native library is missing, rather than shipping a server that cannot authenticate anybody');
+    /publish-output-carries\.sh out '\*e_sqlite3\*'/,
+    'the package step FAILS when the native library is missing, rather than shipping a server that '
+    + 'cannot authenticate anybody — the same tested script the mcp job uses');
   assert.match(build, /cp deploy\/bugs\/README\.md/, 'the deploy notes travel with the binary');
   assert.match(build, /cp deploy\/nginx\/coai-bugs/, 'and so does the vhost that keeps the promise');
   assert.match(
