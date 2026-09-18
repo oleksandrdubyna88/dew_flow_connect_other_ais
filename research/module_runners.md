@@ -79,10 +79,22 @@ sequenceDiagram
   given `ForBranch(branch)` — the tier FIXED, the rest of the mount ordered by a SHA-256 of *(branch,
   rule name)*. Two rounds of one fix therefore show identical rules, which is the defect the plan was
   opened for, while different branches order the rest of the corpus differently. **That second half
-  currently reaches almost nothing in this repository** — the base and the tier spend 78 855 of the
-  80 000-byte budget on a CRLF checkout (77 562 under LF), and the smallest rule outside the tier is
-  2 247 there (2 213 under LF), so the tail takes ONE rule on Linux and NONE on Windows and the rest
-  are skipped as oversized. It is correct and all but inert; rule
+  currently reaches almost nothing in this repository** — the base and the tier spend **77 562** of
+  the 80 000-byte budget, and the smallest rule outside the tier is 2 213, so the tail takes ONE rule
+  and the rest are skipped as oversized.
+
+  **That number is the same on every platform only since 2026-09-18.** Until then `RuleFiles.Read`
+  handed the collector whatever the disk held, so a CRLF checkout measured **78 855** — one character
+  per line, about a kilobyte across the tier — and nothing fitted in the 1 145 bytes left. A Windows
+  machine’s reviewers therefore received SEVEN tier rules where a Linux machine’s received eight, for
+  the same commit. The one check that can see it is `TheRotatedTail`, and every job in `ci.yml` runs
+  on `ubuntu-latest`: the Windows legs live only in the release matrix, so it ran on a tag and nowhere
+  else, and the release of `mcp-v0.29.0` is where it surfaced. `Read` normalises to `\n` now — for the
+  measurement AND for what is sent, since the text goes into a prompt where a carriage return is noise
+  somebody pays for. `ACrlfCheckout_ReachesTheSameRulesAsAnLfOne` is the guard, and it runs everywhere
+  because it writes both corpora itself rather than depending on the checkout it finds.
+
+  The rotation is correct and all but inert; rule
   modularization or the resolver is what would give it room, and
   `StageRulesTests.TheRotatedTail_CurrentlyFitsAtMostOneRule` fails the day that changes.
   `string.GetHashCode` is unusable here: .NET randomises it per process,

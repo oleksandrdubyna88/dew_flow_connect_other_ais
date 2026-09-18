@@ -385,11 +385,28 @@ public static class RuleFiles
         relative.Split('/').Any(segment => NotOurs.Contains(segment, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>A rule file that cannot be read is not a round that fails.</summary>
+    /// <summary>
+    /// A rule file, with its line endings NORMALISED to <c>\n</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because the budget is spent on what this returns, and a carriage return is not
+    /// content.</b> A CRLF checkout carries one extra character per line — about a kilobyte across
+    /// the tier alone, against a margin of a few hundred bytes — so the same commit handed a Windows
+    /// machine's reviewers SEVEN tier rules where a Linux machine's got eight. The rules a review
+    /// runs under are a property of the commit, not of the disk it was cloned onto.</para>
+    /// <para><b>It also normalises what is SENT.</b> The text goes into a prompt, where a carriage
+    /// return is noise a model pays for; returning one thing and measuring another would be the
+    /// worse half of this fix, because the budget would then be honest about bytes nobody wanted.</para>
+    /// <para><b>Why it went unseen for a day.</b> Every job in <c>ci.yml</c> is
+    /// <c>ubuntu-latest</c>; the only Windows legs are the release matrix. So
+    /// <c>TheRotatedTail_CurrentlyFitsAtMostOneRule</c> — the one check that can see this — ran on a
+    /// tag and nowhere else, and the release of <c>mcp-v0.29.0</c> is where it surfaced.</para>
+    /// </remarks>
     private static string? Read(string path)
     {
         try
         {
-            return File.Exists(path) ? File.ReadAllText(path) : null;
+            return File.Exists(path) ? File.ReadAllText(path).Replace("\r\n", "\n") : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

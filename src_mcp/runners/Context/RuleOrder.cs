@@ -61,10 +61,12 @@ public sealed record RuleOrder
     /// round found — so rotating the tail by it removes the instability without giving up the draw's
     /// coverage in principle.</para>
     /// <para><b>In principle, and measured: in THIS repository the rotation currently reaches almost
-    /// nothing.</b> The base and the tier spend 78 855 of the 80 000-byte budget on this CRLF checkout
-    /// and 77 562 under LF, leaving 1 145 or 2 438 bytes against a smallest non-tier rule of 2 247 or
-    /// 2 213 — so the tail takes ONE rule on Linux and none on Windows, and the rest are skipped as
-    /// oversized every round. That one is <c>common/durable-status.md</c> on EVERY branch, being the
+    /// nothing.</b> The base and the tier spend 77 562 of the 80 000-byte budget, leaving 2 438 bytes
+    /// against a smallest non-tier rule of 2 213 — so the tail takes ONE rule and the rest are skipped
+    /// as oversized every round. That is the same number on every platform since 2026-09-18, when
+    /// <c>RuleFiles.Read</c> stopped spending the budget on carriage returns: it read 78 855 on a CRLF
+    /// checkout until then, which left 1 145 bytes, nothing fitting, and a Windows machine handed one
+    /// rule fewer than a Linux one for the same commit. That one is <c>common/durable-status.md</c> on EVERY branch, being the
     /// only rule small enough to be eligible, so nothing actually rotates even there: the order is
     /// correct and costs nothing, it simply has no room to act yet. What would give it room is
     /// rule modularization or the resolver, both recorded as follow-ups.
