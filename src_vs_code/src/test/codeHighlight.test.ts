@@ -154,6 +154,11 @@ test('an unreadable language and a broken grammar are told apart in the markup',
   assert.notEqual(nothing, broken, 'the two silences must not look the same');
   assert.match(nothing, /data-highlight="plain"/u);
   assert.match(broken, /data-highlight="failed"/u);
+  // And the difference is one a PERSON can see, not only a parser: uncoloured is uncoloured, so an
+  // attribute alone leaves somebody assuming "we do not read this language" when a grammar broke.
+  assert.match(broken, /syntax highlighting failed/u);
+  assert.doesNotMatch(nothing, /syntax highlighting failed/u,
+    'an unsupported language is not a failure and must not claim to be one');
   for (const html of [nothing, broken]) {
     assert.ok(!html.includes('</script>'), 'both paths escape, not just the one in the happy case');
     assert.equal(readable(html), '<script>x</script>');
@@ -193,6 +198,49 @@ test('a skeleton already rendered is not tokenised a second time', () => {
   assert.equal(timesTokenised(), once + 2, 'both of those are genuinely new work');
 });
 
+/**
+ * A malformed `language` renders that pair plainly — it does not take the page down.
+ *
+ * <p>`keyFor` called `.trim()` unconditionally, and the throw happened BEFORE the catch that exists
+ * for exactly this, so one row with a null language would have failed `reviewPageHtml()` entirely
+ * and shown a person nothing at all. The type says `string`; a page module's safety cannot rest on
+ * what its caller currently happens to do. (Code round, codex.)</p>
+ */
+test('a language that is not a string renders that pair plainly rather than crashing', () => {
+  for (const bad of [null, undefined, 42, {}, []]) {
+    const html = highlight('var a = 1;', bad as unknown as string);
+
+    assert.match(html, /data-highlight="plain"/u, String(bad));
+    assert.equal(readable(html), 'var a = 1;', String(bad));
+  }
+});
+
+/**
+ * Reading a block keeps it, rather than leaving it first in line to be evicted.
+ *
+ * <p>`Map` iterates in insertion order and `set` on an existing key does not move it, so a cache
+ * that only ever inserted would evict the blocks at the TOP of a long review however often they are
+ * read — backwards, and three reviewers arrived at it independently. A hit now re-inserts.</p>
+ *
+ * <p>What this covers is that a block survives other blocks being rendered after it. What it does
+ * NOT cover is the eviction order once the byte ceiling is actually reached, which would take four
+ * megabytes of markup to reach and is recorded in `research/module_tests.md` rather than asserted.</p>
+ */
+test('a block stays cached while other blocks are rendered around it', () => {
+  const salt = Math.random();
+  const first = `void method_1() { var var_1 = ${salt}; }`;
+
+  highlight(first, 'CSharp');
+  const after = timesTokenised();
+  for (let n = 0; n < 5; n += 1) {
+    highlight(`void method_2() { var var_2 = ${salt}_${n}; }`, 'CSharp');
+  }
+  assert.equal(timesTokenised(), after + 5, 'the five new blocks are new work');
+
+  highlight(first, 'CSharp');
+  assert.equal(timesTokenised(), after + 5, 'the first block was evicted or forgotten');
+});
+
 test('which languages this page claims to colour is a decision, not a lowercase', () => {
   assert.equal(canHighlight('CSharp'), true);
   assert.equal(canHighlight('TypeScript'), true);
@@ -224,8 +272,13 @@ test('every language the collector can record has a verdict on this page', () =>
 
   const members = (declared[1] ?? '')
     .split(',').map((m) => m.trim()).filter((m) => m.length > 0 && !m.startsWith('//'));
-  assert.deepEqual(members, ['Unsupported', 'CSharp', 'TypeScript', 'JavaScript'],
-    'the collector\'s languages changed; decide what this page does with the new one');
+  // No hand-typed copy of the list. A reviewer was right that repeating it here would be the very
+  // duplication this test exists to remove — and it is not needed, because the loop DERIVES the
+  // expectation: a fourth member added to the enum arrives with `canHighlight` false where the loop
+  // demands true, and the assertion names it. What IS asserted directly is only that the read found
+  // something, since a regex matching nothing would otherwise pass an empty loop in silence.
+  assert.ok(members.length >= 2, 'the enum was read but no members came out of it');
+  assert.ok(members.includes('Unsupported'), 'the honest "we do not read this one" value is gone');
 
   for (const member of members) {
     assert.equal(canHighlight(member), member !== 'Unsupported', member);
