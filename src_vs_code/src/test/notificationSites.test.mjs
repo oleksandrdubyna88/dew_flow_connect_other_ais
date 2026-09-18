@@ -175,7 +175,12 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // Extracting it into settingWrite.ts made the two sites one, and took that last direct call through
 // the funnel: the population is unchanged and the DIRECT count fell from 1 to 0, which is the only
 // direction the ratchet below allows.
-const PLACES_THIS_SPEAKS = 123;
+// 123 → 124 on 2026-09-18, S7 defect 1: the settings mirror says when it could not write. Four
+// of its five outcomes were silent — a configuration somebody had just changed simply did not
+// reach the server, and no surface anywhere said so, which is the 2026-09-16 incident seen from
+// the writing side. ONE new place, not two: `busy` and `not-mirrored` are two CODES from one
+// call, because they are one sentence with two readings and the code is what the page groups on.
+const PLACES_THIS_SPEAKS = 124;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
