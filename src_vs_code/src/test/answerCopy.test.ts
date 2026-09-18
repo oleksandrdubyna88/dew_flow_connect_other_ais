@@ -499,7 +499,13 @@ test('an answer that is gone is refused rather than guessed at', () => {
   const decision = stillAnswering(undefined, answerToCopy);
 
   assert.equal(decision.kind, 'refused');
-  assert.match(decision.kind === 'refused' ? decision.said : '', /not on this page any more/u);
+  // The WHOLE sentence, not a fragment of it. This is text a person reads, and a fragment match
+  // survives a rewrite that changes what the sentence means - which is how the previous wording
+  // ("not on this page any more", read by a reviewer as telling the person to reload) could have
+  // been replaced by anything containing those five words without a test noticing.
+  assert.equal(decision.kind === 'refused' ? decision.said : '',
+    'That answer is no longer the one you pressed Copy on.',
+    'the sentence a person reads when their press missed was changed without this test being looked at');
 });
 
 test('a press whose answer became the person\'s turn is refused', () => {
