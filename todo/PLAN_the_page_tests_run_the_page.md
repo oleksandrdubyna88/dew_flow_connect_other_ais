@@ -10,7 +10,7 @@
 > [research/PLAN_a_round_leaves_as_a_file.md](../research/PLAN_a_round_leaves_as_a_file.md)
 > (where it was raised, and which converted the two controls it added).
 >
-> **The boundary with [PLAN_the_tail_of_the_command_split.md](PLAN_the_tail_of_the_command_split.md),
+> **The boundary with [PLAN_the_tail_of_the_command_split.md](../research/PLAN_the_tail_of_the_command_split.md),
 > written here because a boundary legible from one direction only is how the same work gets built
 > twice** (`planning-docs.md`). That plan fixes what the HOST does and owns the **extension-host**
 > harness (its story 13). This one owns the **webview page** and the 224 source-text assertions over

@@ -1,16 +1,25 @@
 # PLAN — the eleven defects the split was not allowed to fix
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.**
+> Status: **IMPLEMENTED, 2026-09-18** — thirteen stories and seven SonarCloud findings, with
+> **three stories partial by decision**. Stories 4, 5 and 8 each shipped their defect fix and each
+> left a named half unbuilt, on a measurement recorded beside it: story 4’s picture RETENTION,
+> story 5’s resumable rename JOB, story 8’s budget on `await thread.writes`. All three are in
+> *Still open* with their reasons — and saying so here rather than only there is the point, because
+> this plan's own opening lesson is that a named gap in a shipped plan reads as done to everybody
+> who was not in the room. The first draft of this line said “all thirteen stories shipped” and two
+> reviewers refused it. Deviations are in *What shipped differently*; the tail is in *Still open*.
 >
 > **Scope — every module a story below MODIFIES, not only the ones it quotes.** Nine of them came
-> out of [PLAN_the_command_file_is_too_big.md](../research/PLAN_the_command_file_is_too_big.md):
+> out of [PLAN_the_command_file_is_too_big.md](PLAN_the_command_file_is_too_big.md):
 > `chatHooks.ts`, `chatFollow.ts`, `chatArchive.ts`, `chatLaunch.ts`, `chatTurn.ts`,
 > `chatPersist.ts`, `chatCapture.ts`, `chatSessionJoin.ts`, `chatThread.ts`. Three predate it and
 > are reached anyway: `chatStoreWrite.ts` (story 3 changes `nextAfterSave`, which lives there rather
 > than in `chatPersist`), `chatPage.ts` and `chatModels.ts` (story 11 moves a type out from under
 > both). One is new: `chatContracts.ts`. The second round added two more that are EXTENDED rather
 > than fixed: `atomicFile.ts` (story 4 teaches `writeFileAtomically` to take bytes) and
-> `chatStoreSweep.ts` (story 4 widens the sweep's reach to `pictures/<id>`). **Story 13 reaches
+> `chatStoreSweep.ts` (story 4 was to widen the sweep's reach to `pictures/<id>` — **it did not,
+> and that half is in *Still open***; measured, that tree is persistent data rather than the
+> store's, so it needs a retention policy rather than a wider sweep). **Story 13 reaches
 > outside `src` altogether** — `src_vs_code/package.json` (a dev dependency and a test script),
 > `.github/workflows/ci.yml` (a job and an `xvfb-run`), a new suite, and
 > `research/module_tests.md`, whose twelve “not covered” rows are what it exists to start closing.
@@ -33,7 +42,7 @@
 > 3 388 lines and fixes eleven things is a diff nobody can review. So the constraint created this
 > backlog deliberately; it is not an oversight.
 >
-> Related: [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) — the other
+> Related: [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) — the other
 > standing tech-debt plan over the same files. It governs how the WEBVIEW PAGE is tested; this one
 > governs what the host DOES, and story 13 builds the harness for the host.
 >
@@ -441,7 +450,7 @@ different.** A unit test over the callback passes while nobody is actually told,
 the stale picker the story claims to fix.
 
 The second round said: use the running-page harness of
-[PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md). Then the consultation
+[PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md). Then the consultation
 found that a harness already exists here — `src/test/bundledPage.test.ts`, 24 tests that bundle the
 page with esbuild, **minify** it and execute it against a stub DOM, including a case that presses Send
 and asserts exactly one turn goes out. So the dependency looked dissolved.
@@ -710,13 +719,20 @@ importing the page for one type instead of two.
 **What "done" means here, because "move a type" is where a refactor gets left half-finished**
 *(local, the plan round):*
 
-- [ ] `ChatModelChoice` and `ChatMessage` live in `chatContracts.ts` and nowhere else.
-- [ ] All four importers updated: `chatPage.ts`, `chatConfig.ts`, `chatModels.ts`, `chatThread.ts`.
-- [ ] `src/test/chatPage.test.ts:8` — which imports `ChatModelChoice` from `../chatPage` — updated
+- [x] `ChatModelChoice` lives in `chatContracts.ts` and nowhere else. **`ChatMessage` deliberately
+      did NOT move**, and the deviation is recorded in `chatContracts.ts`'s own header: it has FIVE
+      importers rather than the one this table assumed, and moving it breaks no cycle, because none of
+      the five is imported back by the page. It buys tidiness rather than a ratchet drop, so it is its
+      own change. It is listed in *Still open*.
+- [x] Every importer updated — **eight**, not the four listed here: `chatPage.ts`, `chatConfig.ts`,
+      `chatModels.ts`, `chatThread.ts`, `chatPanel.ts`, and three test files. All take it from
+      `./chatContracts`; none takes it from `./chatPage`.
+- [x] `src/test/chatPage.test.ts` — which imports `ChatModelChoice` from `../chatPage` — updated
       too; the tests are importers like any other.
-- [ ] No re-export left behind in `chatPage.ts`. A convenience re-export keeps the edge and the
+- [x] No re-export left behind in `chatPage.ts`. A convenience re-export keeps the edge and the
       cycle, and the ratchet would then be lowered by a commit that changed nothing.
-- [ ] A search for both names returns no import from `./chatPage` anywhere.
+- [x] A search returns no import of `ChatModelChoice` from `./chatPage` anywhere — verified
+      2026-09-18. `ChatMessage` is still declared in `chatPage.ts:75`, per the deviation above.
 
 **The test.** `importCycles.test.mjs` is already the check, and it is a ratchet that may only fall:
 `KNOWN` goes from nine entries to eight, and `chatModels ↔ chatPage` is deleted from the list in the
@@ -882,7 +898,7 @@ Eleven issues were reported and the interesting thing is which:
 |---|---|
 | [chatTurn.ts:219](../src_vs_code/src/chatTurn.ts#L219), `oneTurn` | cognitive complexity 17 against the 15 allowed. Unchanged from `main`. The seam that reduces it is the one the module header already names as the honest next move — take it, rather than splitting the function to satisfy a number. |
 | [chatHooks.ts](../src_vs_code/src/chatHooks.ts) | two places that read better as an optional chain. |
-| [chatHooks.ts:657](../src_vs_code/src/chatHooks.ts#L657) | `pictureDir(entry.id.toString())` — stringifies as `[object Object]` if anything ever puts it in a template. It does not today; the defect is that nothing stops it. |
+| [chatHooks.ts:657](../src_vs_code/src/chatHooks.ts#L657) | `pictureDir(entry.id.toString())` — stringifies as `[object Object]` if anything ever puts it in a template. ~~It does not today; the defect is that nothing stops it.~~ **It DID today** — `ChatEntry.id` is typed `object`, so `toString()` returned `"[object Object]"` for every conversation there has ever been, and every one of their pictures went into one directory where the same turn number overwrote the same file. The row above is kept as written because it is the record of what was believed; this was the only one of the six that was not cosmetic. |
 | [chatSessionJoin.ts:88-90](../src_vs_code/src/chatSessionJoin.ts#L88-L90), `resolveAndPin` | the FIRST nested ternary: `own ?? (pinnable(…) ? … : undefined)`. |
 | [chatSessionJoin.ts:268-269](../src_vs_code/src/chatSessionJoin.ts#L268-L269) | **the second one, which every earlier draft left unlocated** — `? sessionSourceOf(sessionIdOf(one?.kind === 'one' ? one.file : '')) : kind === 'claude' ? { kind: 'none' } : sourceOfFile(…)`. |
 
@@ -896,9 +912,78 @@ read off the SonarCloud report for the pull request at the time the work is done
 rewrite that file before this group runs, so a line typed today names a different expression by then,
 and guessing one is how the wrong thing gets changed.
 
-**What proves the six are gone is not this table** — it is the SonarCloud quality gate on that pull
-request reporting nothing on the touched lines. The table says which six to expect; the gate says
-whether they went.
+> **How it went, 2026-09-18.** The instinct was right — the lines HAD moved — but the report it
+> pointed at was the wrong one (see the correction below). Both turned out to be the same
+> expression, once per copy control: `said === undefined || said.role !== 'model'`, which is
+> exactly `said?.role !== 'model'`. Equivalence measured rather than argued: removing the narrowing
+> makes `tsc` report `TS18048: 'said' is possibly 'undefined'` at the `said.text` beneath it, and
+> restoring it gives exit 0.
+>
+> **Who closed which.** PR #386 closed four — the `[object Object]` picture directory, which was not
+> cosmetic at all, and the nested ternaries in `chatSessionJoin.ts`. PR #387 closed these two, plus
+> a **seventh** this table never had: `typescript:S3863`, `'./chatPanel'` imported twice in the same
+> file — a leftover of the command split itself. The other ~575 open Sonar issues in this project,
+> several of them `S6582` in `claudeCli.ts`, `panelProvider.ts` and `chatPage.ts`, were never in
+> this plan's scope and are not claimed by it.
+>
+> **And the cleanup grew a test, which is the part worth keeping.** The expression stood twice,
+> refusal sentence and all, inside `conversationHooks` — which imports `vscode` and therefore runs
+> under no test here. The guard it is part of (*is the message at this index still the answer this
+> control was pressed on?*) had been added by an earlier code round for a real race and was
+> asserted by **nothing**. It is `stillAnswering` in the vscode-free `answerCopy.ts` now, with
+> `theAnswerControlCopies` and `theBlockControlCopies` carrying the two controls’ deliberately
+> different resolution moments — a shape the gate corrected twice: first for testing the helper
+> while leaving the moments unasserted, then for making the two moments interchangeable, where
+> swapping them at the call sites would have compiled silently. Swapping them is now `TS2554` at
+> both sites, measured by performing the swap. Nine cases behind it; the wiring itself — that each
+> hook calls its own — is still only provable in a real editor, and is listed in *Still open*.
+>
+> A Sonar cleanup billed as *"worth one afternoon"* was the ninth time in this plan that checking a
+> premise changed the work.
+
+**What proves the six are gone is not this table** — and it is **not** the SonarCloud comment on
+the pull request either, which is what this paragraph used to say. That was wrong, and it nearly
+cost the last two findings.
+
+> **Corrected 2026-09-18, by measurement.** A PR's Sonar comment speaks about NEW code. Both
+> `chatHooks.ts` sites were pre-existing lines on `main`, so #382, #383 and #385 each reported
+> *"0 New issues / 0 Accepted issues"* while both findings sat OPEN the whole time — and two greps
+> for the rule's usual shapes found nothing, because neither guessed the form the expression
+> actually had. The conclusion nearly drawn was that four rewrites of the file had taken the
+> findings with them.
+>
+> What answers the question is the **project issues API**, which names rule, file and line for
+> issues in any state rather than only new ones:
+>
+> ```bash
+> # rules= filters SERVER-side, which is what keeps this honest: the project had 577 open issues
+> # and ps caps at 500, so an unfiltered first page can hide the target and read as "closed".
+> curl -s "https://sonarcloud.io/api/issues/search\
+>   ?componentKeys=<projectKey>&resolved=false&rules=typescript:S6582&ps=500"
+> ```
+>
+> **Check `total` against the number of issues returned before believing an empty result.** The
+> unfiltered form first used here returned 500 of 577 and found both targets by luck; the document
+> gate caught that before it became the next reader’s false negative. The `files=` and `components=`
+> parameters are ignored on this endpoint — filter by rule server-side, or paginate.
+>
+> **The closure, measured 2026-09-18 against `main` after #387 merged**, with that command:
+>
+> | rule | `total` | returned | in `chatHooks.ts` |
+> |---|---|---|---|
+> | `typescript:S6582` | 17 | 17 | **none** |
+> | `typescript:S3863` | 15 | 15 | **none** |
+>
+> `total` equals `returned` in both, so nothing is hiding on a second page — which is the check
+> this paragraph exists to demand of itself. The same query before the fix listed `chatHooks.ts`
+> lines 531 and 543 for `S6582` and 24 and 28 for `S3863`. The seventeen and fifteen that remain
+> are in other files and were never in this plan’s six.
+>
+> One call, filtered to the rule, named both — `chatHooks.ts` lines 531 and 543, `typescript:S6582`,
+> `OPEN`. (Its `files=` / `components=` filters are ignored on this endpoint; fetch and filter
+> client-side.)
+
+The table says which six to expect; the **API** says whether they went.
 
 None is a behaviour change and none was introduced by the split. **They are worth one afternoon
 together**, as one commit, last — not earlier, because `oneTurn` and `attachPicture` are rewritten by
@@ -922,7 +1007,10 @@ somebody imagined.)*
    turn abandoned by a reset must neither write into the replacement (8) nor repaint it (12), and both
    are the same identity check applied at two points. Then a scope that closes in a `finally`, then a
    single-entry latch. Everything after this posts into the surface these four settle.
-3. **Story 13** — the extension-host harness, with story 6's scenario as its first and only
+3. **Story 13** — the extension-host harness. *(Shipped differently: its first scenario is NOT
+   story 6's, because story 6's could not land here without checking in a failing test. It shipped
+   asserting that the extension activates and registers all twenty-two manifest commands. See the
+   callout in story 13.)* As written, with story 6's scenario as its first and only
    conversion, watched red before story 6's guard exists. Its own pull request: it touches CI and a
    dependency and nothing else here does.
 4. **Stories 2, 6, 7** — the three failures that are currently invisible, now written against a
@@ -965,7 +1053,7 @@ Two constraints from the parent carry over:
   **extract a named unit** (`coding-style.md:23-24`), never widen the file. If it crosses 800, the
   extraction is the work.
 - **No new source-text assertions.** `.coderabbit.yaml` and `.agents/PROJECT.md` already forbid them,
-  and [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) is the backlog for
+  and [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) is the backlog for
   the 224 that exist. A test here that reads a file's text instead of running it is a twelfth.
 
 The whole suite runs before each pull request — `npm test` (**3 377** on 2026-09-17, and rising
@@ -1015,47 +1103,63 @@ rather than leaving the map to say nothing about work that has shipped.
 
 ## Definition of Done
 
-- [ ] Story 1 shipped **first and alone**, with the escape reproduced red and refused green, and the
-      sibling-directory case (`/ws-secret` beside `/ws`) asserted rather than assumed.
-- [ ] Story 1's residual race is **written into the code's own header**, not only into this plan — the
-      next reader must find the reason, as `realOf` does one module over.
-- [ ] Stories 2–12 shipped in the five groups above, each with its own RED observation recorded, and
-      each of the four second tests present and observed failing against a naive fix.
-- [ ] Story 8's fence proved on the WRITE path, not only the turn path: an old save resolved after a
-      replacement leaves the replacement's `rev` untouched.
-- [ ] Story 12's fix leaves the console warning in place — the existing correct behaviour survives.
-- [ ] Nothing was re-implemented that the repository already has. Story 4 EXTENDS `atomicFile`, story 5
-      USES `abreast` and `refile`, story 8 CALLS `ChatSession.stop` — and any deviation from that says
-      in its commit why reuse failed.
-- [ ] Story 13's harness was proved twice: story 6's scenario watched RED against the unfixed code,
-      and the harness reverted so the scenario FAILS TO RUN rather than silently skipping.
-- [ ] Story 13 converted exactly ONE row of `research/module_tests.md`, and the other eleven still say
-      what they do not cover. A harness that grew twelve scenarios before one of them caught anything
-      has been built on guesses.
-- [ ] `@vscode/test-cli` was NOT added; the repository still has one test runner.
-- [ ] The extension-host job is not required to merge, and the promotion rule — twenty consecutive
-      green runs of `main` — is written where the job is defined, not only here.
-- [ ] The stale counts in `research/module_tests.md` (“seventeen of the hundred and thirty-five”) are
-      corrected to what a command measures, or replaced by tooling that measures them.
-- [ ] The six Sonar findings on moved lines closed, and `chatHost.ts`'s three `export let` reports
-      left standing with their reason.
-- [ ] `importCycles.test.mjs`'s `KNOWN` ratchet is **eight entries, not nine** — `chatModels ↔
-      chatPage` deleted in the commit that makes it untrue, with no re-export left behind (story 11).
-- [ ] No module crossed 800 lines; any that approached it was extracted rather than widened.
-- [ ] No new source-text assertion was added.
-- [ ] The coai gate ran on each pull request — `review_plan` to `proceed`, then `review_code`.
-- [ ] **Every touched module's documentation updated, not just two files.** *(codex, round 3: the
-      DoD named `module_extension.md` and `module_tests.md` while stories 1–12 change hooks,
-      persistence, storage, session, capture, archive and model modules — so after story 1 the module
-      doc could still describe lexical-only containment.)* The mapping, per pull request:
-      stories 1, 2, 4, 12 → `module_extension.md`; stories 3, 5 → the store's own module doc;
-      story 13 → `module_tests.md`, whose gap row it rewrites; every story → its row in
-      `module_tests.md`'s flow table, including the “NOT proved” column above.
-- [ ] `research/architecture.md` and its Mermaid diagrams regenerated when cross-module interaction
-      changed — story 5 adds a persisted job and story 13 adds a test surface, and both are that.
-- [ ] **The boundary table exists in BOTH directions** (below), and the other two plans gained their
-      half in the same change rather than being left to describe work they no longer own.
-- [ ] This plan promoted to `research/` when the last group lands, with its deviations recorded.
+Every box below is ticked against something that was run, and where a number exists it is the number
+rather than the word.
+
+- [x] Story 1 shipped **first and alone**, with the escape reproduced red and refused green, and the
+      sibling-directory case (`/ws-secret` beside `/ws`) asserted rather than assumed — five cases in
+      `symlinkEscape.test.ts`.
+- [x] Story 1's residual race is **written into the code's own header**, beside `insideReally`.
+- [x] Stories 2–12 shipped in the five groups above, each with its own RED observation recorded, and
+      **stories 4, 5 and 8 partial by decision** — see *Still open* for the half each left and the
+      measurement behind it. Every defect the story named was fixed; what was not built in each case
+      is a second piece of work the measurement said not to buy yet. And
+      each of the **five** second tests present and observed failing against a naive fix — stories
+      2, 4, 8, 10 and 12. The count said four until the document gate counted the table.
+- [x] Story 8's fence proved on the WRITE path, not only the turn path.
+- [x] Story 12's fix leaves the console warning in place.
+- [x] Nothing was re-implemented that the repository already has. Story 4 EXTENDED `atomicFile`,
+      story 5 USED `abreast` and `refile`, story 8 CALLED `ChatSession.stop`. Where the Sonar group
+      added `stillAnswering`, `theAnswerControlCopies` and `theBlockControlCopies`, it widened
+      `answerCopy.ts` — the vscode-free module that already held `answerToCopy` and `blockToCopy` and
+      already had a test file — rather than starting anything new.
+- [x] Story 13's harness was proved twice.
+- [x] Story 13 converted exactly ONE row of `research/module_tests.md`; the other eleven still say
+      what they do not cover.
+- [x] `@vscode/test-cli` was NOT added — zero occurrences in `src_vs_code/package.json`; the
+      repository still has one test runner.
+- [x] The extension-host job is not required to merge (`continue-on-error: true`), and the promotion
+      rule — **twenty consecutive green runs of `main`** — is written in the workflow beside the job,
+      not only here. It passed in 39 s on the last pull request of the series.
+- [x] The stale counts in `research/module_tests.md` are gone — zero occurrences of “seventeen of the
+      hundred and thirty-five”; tooling measures it now.
+- [x] The six Sonar findings on moved lines closed — four in #386, two in #387, plus a **seventh**
+      (`S3863`) found beside them. `chatHost.ts`'s three `export let` reports left standing with their
+      reason. **And the method of checking was itself corrected**: a PR's Sonar comment reports on NEW
+      code and said “0 New issues” three times while two findings were open; the project issues API
+      is what answers the question.
+- [x] `importCycles.test.mjs`'s `KNOWN` ratchet is **eight entries** — counted — and
+      `chatModels ↔ chatPage` is not among them, with no re-export left behind (story 11).
+- [x] No module this plan touched crossed 800 lines: `chatHooks.ts` **732** (it shrank),
+      `answerCopy.ts` **215**, and every module extracted in the series is well under. The eight files
+      that were already over the ceiling are listed in *Still open* and were out of scope by this
+      plan's own statement.
+- [x] No new source-text assertion was added — the nine cases behind the copy guard assert behaviour,
+      including “both controls refuse in the same words”, which was written that way deliberately
+      instead of counting a string literal in the source.
+- [x] The coai gate ran on each pull request — `review_plan` to `proceed` (or `good_enough` with every
+      finding resolved), then `review_code`. The last round: 12 reviewers, 10 findings, 2 accepted,
+      8 rejected with reasons, verdict `proceed`.
+- [x] **Every touched module's documentation updated, not just two files.** The mapping, per pull
+      request: stories 1, 2, 4, 12 → `module_extension.md`; stories 3, 5 → the store's own module
+      doc; story 13 → `module_tests.md`, whose gap row it rewrites; the Sonar group → both; every
+      story → its row in `module_tests.md`'s flow table, including the “NOT proved” column.
+- [x] `research/architecture.md` and its Mermaid diagrams regenerated where cross-module interaction
+      changed.
+- [x] **The boundary table exists in BOTH directions** (below), and the other two plans gained their
+      half in the same change.
+- [x] This plan promoted to `research/` with its deviations recorded — *What shipped differently* and
+      *Still open*, both below.
 
 ## The boundary with the two plans beside this one
 
@@ -1127,6 +1231,94 @@ to a problem nobody can point at.
   removes, restated as a risk of removing it. The genuinely uncovered case, a write that **rejects**
   after the scope was extended, was accepted and is in the story.
 
+## What shipped differently
+
+The plan was written before any of it was built, and nine of its premises turned out to be false when
+the code was read. Eight of those made the work **smaller**, which is worth recording as plainly as
+the one that made it bigger — an estimate that is wrong in one direction eight times out of nine is
+not an estimate, it is a habit of assuming the defect is there because the plan says so.
+
+| the plan said | the code said |
+|---|---|
+| story 7 needs a classification written | it already had one |
+| story 8 is a story | two thirds of it was already done |
+| story 2 has four wrong sites | one of the four was already correct |
+| story 5's rename takes hours | 58 seconds, measured |
+| story 4 must fix an encoding bug (`'utf8'` mangles a Buffer write) | **there was no bug.** The claim was the plan's own, measured false: the branch written for it was removed and the test's stated reason corrected. Nothing in the code was wrong; the plan was. |
+| four comments describe the behaviour | they described behaviour the code does not have |
+| Sonar's `[object Object]` is latent, *"it does not today"* | it did today: **every** conversation's pictures were in one directory, because `ChatEntry.id` is typed `object` |
+| a PR's SonarCloud comment proves a finding closed | it speaks about NEW code — three PRs said *"0 New issues"* while two findings sat OPEN on `main` |
+| the six Sonar findings are *"worth one afternoon"* | they were, until the last two turned out to sit in front of a guard no test could reach |
+
+**Three stories are PARTIAL by decision** — 4, 5 and 8 — each having shipped its defect fix and
+left a named half unbuilt on a measurement. The table in *Still open* says which half and why. It
+is repeated in both places on purpose: the first version of this record said “all thirteen stories
+shipped” and put the unbuilt halves only in the open list, which is exactly the shape this plan
+opens by criticising in its own parent — *a named gap in a shipped plan reads as done to everybody
+who was not in the room*. Two reviewers refused it independently.
+
+Three deviations of shape rather than of fact:
+
+- **Story 13's harness shipped with a scenario that is not story 6's**, which the story's own record
+  explains: the first scenario had to be one that could be watched failing for a reason belonging to
+  the harness rather than to the feature, so it asserts that the extension activates and registers all
+  twenty-two manifest commands.
+- **The Sonar group grew a thirteenth story's worth of test.** It was planned as one commit of
+  cosmetic edits. Two of the six sat inside `conversationHooks`, which imports `vscode` and therefore
+  runs under nothing here, in front of a race guard an earlier code round had added and that was
+  asserted by no test at all. Extracting it was the only way to satisfy `testing.md` §2, and the gate
+  then corrected the extraction twice — once for leaving the two controls' resolution moments
+  unasserted, once for making those moments interchangeable, where swapping them at the call sites
+  would have compiled in silence.
+- **A seventh Sonar finding was closed that the table never had** — `typescript:S3863`,
+  `'./chatPanel'` imported twice in `chatHooks.ts`, a leftover of the command split itself.
+
+## Still open
+
+Recorded here rather than left implied, and none of it is claimed by this plan.
+
+**Three stories are partial by decision**, and the document gate was right that calling them
+“shipped” without saying so was the same defect this plan opens by describing. Each shipped its
+defect fix; each left a named half unbuilt, on a measurement:
+
+| story | what shipped | what did NOT, and why |
+|---|---|---|
+| **4** — a picture deleted before its replacement is written | the destructive order reversed, atomically | **Retention for the `pictures/<id>` tree.** Measured: it is `coaiDataDir()/pictures/<id>`, persistent data rather than temp, with nothing anywhere removing it — so the fix is not a wider store sweep but a new policy with a real decision in it (collectable when the conversation is deleted, or after an age? run by whom?). Not invented inside a story about a destructive replace. |
+| **5** — a folder rename refiles records one at a time | `abreast` at width 8, plus stories 6 and 7’s notice | **The persisted, resumable rename job** — schema, heartbeat, fencing token, recovery owner. Measured at 58 seconds for the whole job, ten with the pool, against the “hours” the plan assumed. A rename interrupted mid-way still leaves records split and nothing revisits them; the exposure is ten seconds rather than hours, which is why it is recorded rather than engineered around. **Re-measure BEFORE building the lease if the store grows an order of magnitude** — that is the whole lesson. |
+| **8** — a reset can wait for ever | the fence, on the turn path and the write path | **A budget on `await thread.writes`.** Deliberately not bolted on: abandoning that wait is how a save is lost, so it needs its own design rather than a number. An archive reset can still hang indefinitely on a slow or remote store. |
+
+And the rest:
+
+- **A second containment implementation, `dataCommands.ts:628`.** A private `isInside` with its own
+  case-folding and separator logic, injected as a parameter at `dataCommands.ts:450` — which is why a
+  grep for `isInside(` misses the call. Story 1 established that it is **not a hole** (the path comes
+  from a person choosing a data directory, not from a model’s answer), so it was correctly out of that
+  story’s scope — but two implementations of one containment rule is drift waiting to happen, and it
+  belongs in this list rather than only in story 1’s sweep table. *(gemini, the document round.)*
+- **The copy controls' WIRING.** That `onCopyAnswer` calls `theAnswerControlCopies` and `onCopyBlock`
+  calls `theBlockControlCopies` is proven by no test. Swapping the two is a compile error now
+  (`TS2554`, measured), so it cannot happen by accident — but a type is not a test, and only a real
+  press in a real editor closes it. That is story 13's harness's ground.
+- **A retention policy for the pictures tree.** One directory per conversation makes a sweep possible;
+  nothing sweeps. The old header claimed the tab's closing removed it, which was the fourth false
+  comment found here.
+- **A budget for `await thread.writes`.** Deliberately not bolted on, for the reason recorded at the
+  story: abandoning that wait is how a save is lost.
+- **`chatGotoCommand`, `chatStoreCache` and `bugzReviewPanel` still hold their own latches** where
+  `oneAtATime` would do.
+- **`ChatMessage` still lives in `chatPage.ts`.** Moving it breaks no cycle — measured, five
+  importers, none imported back by the page — so it buys tidiness rather than a ratchet drop and was
+  left as its own change.
+- **The extension-host job’s PROMOTION to required.** The rule is twenty consecutive green runs of
+  `main`; the job first ran 2026-09-17 and **nobody is counting yet**. It is pending rather than
+  abandoned — recorded here because a CI operator reading only the Definition of Done would see
+  “not required to merge” and have no way to tell which. No figure is given because none was
+  measured. *(codex, the document round.)*
+- **The eleven remaining rows of `research/module_tests.md`** that still end *"NOT covered … needs
+  an extension host"*. Story 13 converted exactly one, on purpose: a harness that grew twelve
+  scenarios before one of them caught anything has been built on guesses.
+- **The eight files over the 800-line ceiling**, below.
+
 ## Footnotes from the parent's tail, resolved rather than carried
 
 Three items in the parent's tail were re-measured while writing this and are **not open work**:
@@ -1161,6 +1353,13 @@ was 3 095 when that plan opened and is 3 762 now, `roundsLog.ts` 1 989 against 2
 `dataCommands.ts`, the latter by eight lines). The parent's figures were measured when it opened and
 are quoted here only to show the direction: **the ceiling is being crossed faster than it is being
 walked back**, and one 4 183-line file returning to 543 did not change that.
+
+**Re-measured one day later, 2026-09-18**, because a claim about a direction can be checked and a
+day is the shortest honest interval: `panelProvider.ts` **3 762 → 4 022** (+260), `chatPage.ts`
+2 243 → 2 350, `panelView.ts` 2 797 → 2 855, `extension.ts` 1 332 → 1 370, `claudeSessions.ts`
+1 152 → 1 188. One fell — `roundsLog.ts` 2 061 → 2 032 — and two were untouched. Net **+470 lines
+above the ceiling in twenty-four hours**, against the 3 640 that one deliberate split removed over
+a week. The direction held.
 
 Each is its own split, on the parent plan's model, one file at a time — and the parent is the record
 of what one costs: thirteen commits, two whole-series failures, and six checks built to prove that
