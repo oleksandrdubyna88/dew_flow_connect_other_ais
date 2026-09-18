@@ -7774,6 +7774,30 @@ round and both are accepted. Reading `.git/config`'s origin url was measured as 
 `open`, with this rule kept as the fallback for legacy rows — 100 % of the sessions that exist
 today.
 
+**And then CI found the one defect neither gate round nor any local run could see.** The rule folds
+case in the key on purpose — 15 of the live table's 106 values were one path spelled differently —
+and the first version folded it **before asking the filesystem**. On Windows that is invisible,
+because the filesystem does not care. The Ubuntu runner drew a temporary directory named
+`coai-identity-YrJmu3`, `existsSync` was asked about `coai-identity-yrjmu3`, and the answer was that
+the checkout is not there: **on Linux every project with a capital letter in its path reported as
+*not on disk*, and grouped by its path instead of its repository.** The module's own docblock had
+already named case folding as *"the one normalisation that would be wrong on a case-sensitive
+filesystem"* and then walked into it two functions later.
+
+So `normalisePath` (folded, the KEY) and `shaped` (separators and a trailing slash only, case kept,
+the FILESYSTEM) are now two functions, the fold happens once on the way out of `parentOf`, and
+`ABSOLUTE` matches a drive letter in either case. **It costs one extra `existsSync` per duplicated
+spelling per draw**, because `askedOnce` now memoises by the unfolded path and `D:/rsd/repo` and
+`d:/rsd/repo` are one Windows directory under two names — measured on the live corpus as 3 lookups
+where there were 2, and the tests assert the new number with the reason rather than being adjusted
+to it.
+
+Two of the three tests for it bite on every platform (the reader is asserted to be *asked* about the
+unfolded path, and a relative gitdir resolved against it); the third, which drives the real
+filesystem, can only fail where case matters — so it names its own directories with capitals
+instead of trusting `mkdtempSync` to draw one, which is what made the original failure intermittent
+in principle and invisible in practice.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

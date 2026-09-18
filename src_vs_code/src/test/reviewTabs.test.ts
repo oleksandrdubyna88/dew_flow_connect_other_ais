@@ -47,12 +47,18 @@ function pair(over: Partial<ReviewPair>): ReviewPair {
   };
 }
 
-/** Two real repositories and a worktree of the first — the corpus's own shape. */
+/**
+ * Two real repositories and a worktree of the first — the corpus's own shape.
+ *
+ * <p>Keyed by the path the reader is ASKED about: separators normalised, case KEPT. `identityOf`
+ * folds case for the KEY only, because folding it before the filesystem lookup asks about a
+ * directory that exists nowhere case matters — green on Windows, red on the Ubuntu runner.</p>
+ */
 const READ = (path: string): GitMark => {
   const known: Readonly<Record<string, GitMark>> = {
-    'd:/rsd/repo_a': { kind: 'checkout' },
-    'd:/rsd/repo_b': { kind: 'checkout' },
-    'd:/rsd/_wt/wt-a': { kind: 'linked', gitdir: 'D:/rsd/repo_a/.git/worktrees/wt-a' },
+    'D:/rsd/repo_a': { kind: 'checkout' },
+    'D:/rsd/repo_b': { kind: 'checkout' },
+    'D:/rsd/_wt/wt-a': { kind: 'linked', gitdir: 'D:/rsd/repo_a/.git/worktrees/wt-a' },
   };
 
   return known[path] ?? { kind: 'gone' };
@@ -252,7 +258,10 @@ test('the filesystem is asked about each distinct path once, not once per pair',
     once,
   );
 
-  assert.equal(asked, 2, 'four pairs, one spelling variant three times, two distinct paths');
+  // THREE: `D:/rsd/repo_a` and `d:\\rsd\\repo_a` are one directory on Windows and two strings, and
+  // the case fold is deliberately not applied before the filesystem lookup. One extra `existsSync`
+  // per duplicated spelling per draw, against an identity rule that answered wrongly on Linux.
+  assert.equal(asked, 3, 'four pairs, two spellings of one path, and one other');
 });
 
 test('a second call with the SAME reader touches no disk — which is what a filter press is', () => {
