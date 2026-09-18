@@ -52,7 +52,8 @@ import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
-import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
+import { lockIsStale } from './settingsLock';
+import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
@@ -357,13 +358,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     {
-      dispose: () => {
-        clearTimeout(deferred);
-        // And forget it. Clearing the timer without clearing the marker means a reactivation that
-        // finds the lock busy schedules nothing, and the configuration then waits for a change that
-        // may never come. Accepted finding, this story's code round.
-        deferred = undefined;
-      },
+      // The mirror's pending attempt. Dropped rather than left ticking against a host that is going
+      // away — and nothing is persisted, because the next activation runs `sync()` and re-derives
+      // every condition from the file itself.
+      dispose: () => schedule?.cancel(),
     },
     // The heartbeat's timer. Its FILE is left on purpose — see `chatStoreHeartbeat.ts`.
     {
@@ -626,20 +624,55 @@ export async function deactivate(): Promise<void> {
  * so a second failure is a different problem and the next configuration change will carry it.
  * Accepted finding, this story's plan round.</p>
  */
-let deferred: ReturnType<typeof setTimeout> | undefined;
+let schedule: MirrorSchedule | undefined;
 
-const RETRY_AFTER_MS = LOCK_STALE_AFTER_MS + 2_000;
+function mirrorSettings(settingsSync: ServerSettingsSync): void {
+  schedule ??= new MirrorSchedule(
+    () => settingsSync.sync(),
+    { later: (work, ms) => setTimeout(work, ms), stop: (pending) => clearTimeout(pending as NodeJS.Timeout) },
+    reportNotMirrored,
+  );
+  schedule.start();
+}
 
-function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): void {
-  void settingsSync.sync().then((outcome) => {
-    if (outcome !== 'busy' || isTheRetry || deferred !== undefined) {
-      return;
-    }
-    deferred = setTimeout(() => {
-      deferred = undefined;
-      mirrorSettings(settingsSync, true);
-    }, RETRY_AFTER_MS);
-  });
+/**
+ * Says that the settings the server reads are not the settings this window has, and offers the one
+ * thing that can be done about it.
+ *
+ * <p>Through the funnel, so it is on the notifications page and in the panel's count whether or not
+ * anybody sees the toast — which is the whole reason this story exists, since the 2026-09-16
+ * incident was a warning shown once and missed.</p>
+ *
+ * <p><b>Try again re-arms the schedule from the first attempt.</b> Without it somebody who fixes the
+ * permission and then changes no setting leaves the server on stale settings until the next
+ * activation: the schedule has stopped and nothing else fires on its own. (codex, the plan
+ * round.)</p>
+ */
+function reportNotMirrored(outcome: Retryable): void {
+  const held = outcome === 'busy';
+  void notifyThen(
+    {
+      as: 'warning',
+      class: 'stand-down',
+      source: 'serverSettingsSync',
+      code: held ? 'settings-mirror-busy' : 'settings-not-mirrored',
+      subject: vscode.Uri.joinPath(dataDir(), 'settings.json').fsPath,
+      title: held
+        ? 'ConnectOtherAIs could not write the server settings: another window was writing them every '
+          + `time it tried, ${ATTEMPTS} times over.`
+        : 'ConnectOtherAIs could not write the server settings, so the server is running on older ones.',
+      detail: `Tried ${ATTEMPTS} times over about eight seconds.`,
+      cure: held
+        ? 'Close the other window, or change a setting again to make this one try once more.'
+        : 'Check that the data directory is writable. Changing a setting makes this window try again.',
+      action: 'Try again',
+    },
+    (choice) => {
+      if (choice === 'Try again' && schedule !== undefined) {
+        schedule.start();
+      }
+    },
+  );
 }
 
 /**

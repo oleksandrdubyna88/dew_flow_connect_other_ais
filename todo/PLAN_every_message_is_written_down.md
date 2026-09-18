@@ -3,10 +3,14 @@
 > Status: **S1–S5 SHIPPED 2026-09-17; S6–S8 open.** The record, the two ledgers, the funnel in
 > front of all 111 call sites, the bounds on what one run may write, the panel section, the page and
 > the durable write-gap record are built, tested and through four code rounds of the gate. S6 is the
-> rounds log, S7 the three extension-side defects, S8 the server half. **Defect 3 shipped 2026-09-18**
-> and took the ratchet to ZERO — the one direct call site this plan deliberately left standing, in
-> `helpPanel.ts`, is gone and the funnel is the only door out of this extension. It shipped through a
-> route this plan did not anticipate: see the defect itself, below. Deviations from the plan as written are recorded inline, each
+> rounds log, S7 the three extension-side defects, S8 the server half. **Defects 1 and 3 of S7
+> both shipped 2026-09-18.** Defect 3 took the ratchet to ZERO — the one direct call site this plan
+> deliberately left standing, in `helpPanel.ts`, is gone and the funnel is the only door out of this
+> extension — and it shipped through a route this plan did not anticipate: see the defect itself,
+> below. Defect 1 is
+> [PLAN_the_mirror_says_when_it_stood_down.md](../research/PLAN_the_mirror_says_when_it_stood_down.md),
+> which gave the settings mirror a bounded back-off and a voice for the four `sync()` outcomes that
+> had none. Defect 2 remains, a story of its own. Deviations from the plan as written are recorded inline
 > beside the thing it changed; the largest are in *E* (the run budget is charged per CODE, not per
 > `(code, subject)`), *S4a* (three decisions the code round changed) and *S5b* (what the two S5 code
 > rounds changed, including one fix that was wrong and had to be replaced).
@@ -801,7 +805,14 @@ tail-from-offset read, which append-only makes exact.
 Each starts with a failing test that reproduces the symptom, per `testing.md` — the order is fixed,
 never fix-then-test.
 
-### 1. The stand-down is silent and does not heal itself
+### 1. The stand-down is silent and does not heal itself — SHIPPED 2026-09-18
+
+> **Resolved**, in
+> [PLAN_the_mirror_says_when_it_stood_down.md](../research/PLAN_the_mirror_says_when_it_stood_down.md).
+> What is below is the defect AS FOUND, kept because the four are read as one list and a gap in it
+> reads as a defect nobody looked at. One deviation: the schedule belongs to the DRIVER rather than
+> to `serverSettingsSync`, so that file is untouched and the retry lives in a new `mirrorSchedule.ts`
+> which imports no `vscode` and is therefore RUN by its tests rather than read.
 
 The Role2 incident. Five stand-down paths, one of which speaks; a `'busy'` outcome retried once and
 then dropped.

@@ -6060,6 +6060,70 @@ A source-shape test asserts the listener and the write are NOT in `panelProvider
 `extension.ts`. It is a blunt instrument, and it is the only one available: a behavioural test would
 have to drive VS Code's lazy view resolution, which is the exact thing that cannot be done here.
 
+### The mirror says when it did not write, and keeps trying (2026-09-18)
+
+`sync()` answers one of five outcomes, and until this date **four of them said nothing at all**:
+
+| Outcome | Then | Now |
+|---|---|---|
+| `written` | the file is updated | unchanged, and it CLEARS every condition below |
+| `unchanged` | nothing to do | unchanged |
+| `stood-down` | reported once per VERSION, with *Reload Window* | unchanged |
+| `failed` | **silent** - the write threw, or the lock did | retried, then `settings-not-mirrored` |
+| `busy` | **silent**, and retried exactly ONCE | retried, then `settings-mirror-busy` |
+
+That silence is the 2026-09-16 incident seen from the writing side. The incident itself is the
+stand-down being shown once as a toast nobody saw; this is the other four ways the same file fails
+to reach the server, with no surface anywhere saying so. A configuration somebody had just changed
+simply did not arrive.
+
+**The schedule is `mirrorSchedule.ts`, and it is exactly three attempts.**
+
+| Attempt | When |
+|---|---|
+| 1 | the change itself, immediately - it counts |
+| 2 | 2 s after attempt 1 ANSWERED |
+| 3 | 6 s after attempt 2 answered |
+| - | report, and stop, at about **8 s** |
+
+Delays are measured from the moment an attempt answers rather than from when it started, so a slow
+lock does not eat the next wait. The shortness is the point: reporting only on exhaustion keeps a
+share that hiccupped for 200 ms from raising anything, and a schedule any longer would leave
+somebody who has genuinely made their settings directory read-only waiting to be told.
+
+Four properties, each held by a test that RUNS the schedule against an injected clock - the sync,
+the timer, its cancel and the reporter are all parameters, because a schedule tested by sleeping is
+slow when it passes and flaky when it does not:
+
+- **It supersedes, never stacks.** A settings change arriving while a retry is pending cancels the
+  pending timer and starts again from attempt 1. Two schedules would race each other's attempt
+  counters and the loser would report a condition the winner had already recovered from. The half
+  that is safe by construction is worth stating too: every attempt calls `sync()`, which RE-READS
+  the configuration, so a retry cannot write a stale payload over a newer one.
+- **`busy` and `failed` are two conditions, not one counter.** A lock another window holds and a
+  directory this one cannot write have different cures, and one flag for both would let recovering
+  from either hide the other - the same rule the ledger applies to `(code, subject)` and
+  `reportRefusal` applies to the SETTING.
+- **A lock that THREW is not a lock that was busy.** Contention answers `busy`; an I/O error
+  acquiring the lock is a `failed`, because from the mirror's side one means another window is
+  working and the other means this machine is not.
+- **There is a way back.** The report offers *Try again*, which re-arms the schedule from attempt 1.
+  Without it somebody who fixes the permission and changes no setting leaves the server on stale
+  settings until the next activation - the schedule has stopped and nothing else fires on its own.
+
+**Nothing is persisted, and that is an answer rather than a gap.** The parent plan asked for the
+pending mirror to be written beside the settings file; it is already re-derived on load - activation
+runs `sync()`, which reads the file and re-derives the stand-down from the stamp in it, and the
+pending CONTENT is the current configuration. A second file would be the write-gap regress in
+miniature: the condition worth persisting most is exactly the one under which persisting also fails.
+The in-memory suppression does not survive a reload, so a reloaded window reports the condition
+again - correct rather than lost, a new window being a new observer.
+
+**The limit, stated.** Nothing here drives the SERVER re-reading the file, or a real editor showing
+the warning. `extension . a real editor` exists now and its first scenario asserts every declared
+command is registered; a scenario that makes a settings write fail inside a real host is buildable
+and is not built.
+
 ### What the gate found in this half (2026-09-03)
 
 Four of the nine defects from the 2026-09-02 campaign are on this side, one from each of four
