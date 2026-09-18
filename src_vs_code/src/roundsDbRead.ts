@@ -1,5 +1,6 @@
 import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
 import { ReviewPair } from './bugzReviewPage';
+import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
@@ -410,21 +411,29 @@ export type KeepWrite =
  * halves of this product ship out of step, and this reader meets one shape from a server of any
  * age. (Verified against the older shape in `roundsDbRead.test.ts`.)</p>
  */
+/** A text field of a document from outside, or empty when it is not text at all. */
+const textOf = (one: Record<string, unknown>, key: string): string =>
+  (typeof one[key] === 'string' ? one[key] as string : '');
+
+/**
+ * A count from outside: a whole number at least 0, or 0 — the database's own "none recorded", and
+ * what a server older than the field sends by sending nothing. Clamped at the boundary, per the
+ * reliability rule; a `line` of `"5"`, `-3` or `2.5` is not a line.
+ */
+const countOf = (one: Record<string, unknown>, key: string): number => {
+  const value = one[key];
+
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
+};
+
 function pairOf(raw: unknown): ReviewPair | undefined {
   if (raw === null || typeof raw !== 'object') {
     return undefined;
   }
 
   const one = raw as Record<string, unknown>;
-  const text = (key: string): string => (typeof one[key] === 'string' ? one[key] as string : '');
-  // A count from outside: a whole number at least 0, or 0 — the database's own "none recorded",
-  // and what a server older than the field sends by sending nothing. Clamped at the boundary, per
-  // the reliability rule; a `line` of `"5"`, `-3` or `2.5` is not a line.
-  const count = (key: string): number => {
-    const value = one[key];
-
-    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
-  };
+  const text = (key: string): string => textOf(one, key);
+  const count = (key: string): number => countOf(one, key);
   if (typeof one['findingId'] !== 'number' || typeof one['keep'] !== 'number') {
     return undefined;
   }
@@ -482,6 +491,87 @@ export async function readPairs(
     return { ok: true, pairs };
   } catch {
     return { ok: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+/** One side of the real method, checked field by field; a side that is not an object is no side. */
+function sideOf(raw: unknown): MethodSide | undefined {
+  if (raw === null || typeof raw !== 'object') {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+
+  return {
+    reason: textOf(one, 'reason'),
+    source: textOf(one, 'source'),
+    className: textOf(one, 'className'),
+    kind: textOf(one, 'kind'),
+    startLine: countOf(one, 'startLine'),
+    endLine: countOf(one, 'endLine'),
+  };
+}
+
+/**
+ * The real method, checked before it is rendered — `JSON.parse(...) as T` is a promise, not a check.
+ *
+ * <p>Both sides are REQUIRED. Every server that has the mode sends both, so a document without one
+ * is malformed rather than old; defaulting a missing side to "not shown" would render an honest-
+ * looking absence for a broken answer, which is the failure `pairOf`'s optional fields were
+ * designed around and this shape has no reason to share.</p>
+ */
+function realOf(raw: unknown): RealMethod | undefined {
+  if (raw === null || typeof raw !== 'object') {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+  const before = sideOf(one['before']);
+  const after = sideOf(one['after']);
+  if (typeof one['findingId'] !== 'number' || before === undefined || after === undefined) {
+    return undefined;
+  }
+
+  return {
+    findingId: one['findingId'] as number,
+    language: textOf(one, 'language'),
+    name: textOf(one, 'name'),
+    reason: textOf(one, 'reason'),
+    before,
+    after,
+  };
+}
+
+/**
+ * One pair's method as it really was, at both of its commits — `--real-method`, on stdout.
+ *
+ * <p><b>64 is "the server is too old", and only that.</b> `.agents/PROJECT.md` reserves it for a mode
+ * the binary has never heard of, and the mode itself answers a bad `--id` with 65 for exactly this
+ * reason — so the branch below can say "update the server" without ever saying it for a request
+ * fault. Every other non-zero code is the server's own sentence, or the code when it said nothing.</p>
+ *
+ * <p>A domain outcome — no such pair, a pruned commit, an ambiguous name — is `ok: true` with the
+ * reason ON the method: the request was fine, and the page renders what the reason says.</p>
+ */
+export async function readRealMethod(
+  executable: string,
+  findingId: number,
+  run: Run = serverRun(executable),
+): Promise<RealRead> {
+  const { code, output } = await run(['--real-method', '--id', String(findingId)], CAP_MS);
+  if (code === 64) {
+    return { ok: false, tooOld: true, why: TOO_OLD_FOR_THE_REAL_METHOD };
+  }
+  if (code !== 0) {
+    return { ok: false, tooOld: false, why: output.trim() || `the server exited ${code}` };
+  }
+
+  try {
+    const method = realOf(JSON.parse(output));
+
+    return method === undefined
+      ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
+      : { ok: true, method };
+  } catch {
+    return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
   }
 }
 

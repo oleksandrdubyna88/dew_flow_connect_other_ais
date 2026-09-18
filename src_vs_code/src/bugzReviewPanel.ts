@@ -11,6 +11,7 @@ import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
+import { RealRead, realView } from './realMethodView';
 import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 
 /**
@@ -31,6 +32,15 @@ export interface ReviewHooks {
 
   /** Writes a batch of decisions, or says why it could not. */
   readonly decide: (ids: readonly number[], keep: number) => Promise<KeepWrite>;
+
+  /**
+   * One pair's method as it really was, at both commits — `--real-method`, one process per call.
+   *
+   * <p>Called per OPENED row with the view on, and cached here for the panel's lifetime, so a
+   * toggle flip with four rows open costs four calls at most, once. Never at paint: 200 pairs would
+   * be 400 git reads on a path that already costs 468 ms.</p>
+   */
+  readonly readReal: (findingId: number) => Promise<RealRead>;
 
   /**
    * Something was decided.
@@ -61,7 +71,11 @@ type ReviewMessage =
   | { readonly type: 'expandAll'; readonly ids: readonly number[]; readonly open: boolean }
   | { readonly type: 'zoom' | 'tone'; readonly delta: number }
   /** A filter strip was pressed: which strip, and the key of the tab in it. */
-  | { readonly type: 'tab'; readonly strip: string; readonly key: string };
+  | { readonly type: 'tab'; readonly strip: string; readonly key: string }
+  /** The un-anonymised view was switched; held so the next paint draws the same view. */
+  | { readonly type: 'realText'; readonly on: boolean }
+  /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
+  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string };
 
 /** Whole numbers only, junk dropped — an id is a row this database has or it is nothing. */
 const numbers = (raw: unknown): readonly number[] =>
@@ -93,6 +107,14 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       return { type: 'expandAll', ids: numbers(m['ids']), open };
     case 'tab':
       return { type: 'tab', strip: String(m['strip']), key: String(m['key']) };
+    case 'realText':
+      return { type: 'realText', on: m['on'] === true };
+    case 'fetchReal':
+      // A generation that is not a string could never match what the page holds, and an id that
+      // is not a number names no row: both are junk, and junk is dropped rather than answered.
+      return Number.isFinite(Number(m['id'])) && typeof m['generation'] === 'string'
+        ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
+        : undefined;
     case 'zoom':
     case 'tone':
       return Number.isFinite(Number(m['delta']))
@@ -185,6 +207,34 @@ export class BugzReviewPanel {
    */
   private pressed: FilterPress | undefined = undefined;
 
+  /**
+   * Whether the methods are shown un-anonymised — a view, held here for {@link expanded}'s reason.
+   *
+   * <p>Panel-held and not a setting, an assumption stated in the plan rather than silently made:
+   * its two neighbours (`expanded`, `chosen`) are panel-held with a written reason, and if the
+   * operator wants it remembered across windows it becomes a setting later. Off when the window
+   * closes: a page reopened a day later shows what leaves the machine, and asks for the rest.</p>
+   */
+  private realText = false;
+
+  /**
+   * The real methods fetched so far, by `findingId` — for the panel's lifetime.
+   *
+   * <p>Each entry remembers the two commits it was fetched FOR, and is a miss when the pair now
+   * names others: a recollection under the page changes the fix commit, and a cache keyed on the
+   * id alone would show last week's method under this week's heading. Bounded by the pairs on the
+   * page (at most `MAX_LIMIT`) and emptied with the window, which is its retention rule. Only a
+   * read that REACHED the server is kept — a domain reason (no such pair, a pruned commit) is data
+   * and is cached; a failed process is not, so the next flip or open tries again.</p>
+   */
+  private real: ReadonlyMap<number, HeldReal> = new Map<number, HeldReal>();
+
+  /** The fetches in flight, so four rows asking twice in a row cost four processes and not eight. */
+  private fetching: ReadonlyMap<number, Promise<RealRead>> = new Map<number, Promise<RealRead>>();
+
+  /** Which paint this is — part of every generation the page asks with, so a redraw stales what came before. */
+  private draws = 0;
+
   constructor(private readonly hooks: ReviewHooks) {}
 
   get isOpen(): boolean {
@@ -217,6 +267,10 @@ export class BugzReviewPanel {
         toneHook.dispose();
         // A closed window starts collapsed when it comes back. This object outlives the webview.
         this.expanded = new Set<number>();
+        // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
+        this.realText = false;
+        this.real = new Map<number, HeldReal>();
+        this.fetching = new Map<number, Promise<RealRead>>();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -254,6 +308,14 @@ export class BugzReviewPanel {
         return;
       case 'tab':
         this.narrow(m.strip, m.key);
+
+        return;
+      case 'realText':
+        this.realText = m.on;
+
+        return;
+      case 'fetchReal':
+        void this.answerReal(m.id, m.generation);
 
         return;
       default:
@@ -365,6 +427,77 @@ export class BugzReviewPanel {
     });
   }
 
+  /**
+   * Answers one row's request for its real method — through the cache, and only ever by POSTING.
+   *
+   * <p>Nothing here touches `webview.html`. The page decides whether the answer is still wanted —
+   * the generation it asked with goes back with it — and renders through the same path a toggle
+   * flip takes, so what is on screen is always a function of the current toggle and the state the
+   * row holds, never of when a process happened to finish. (Plan round, two reviewers, two angles.)</p>
+   *
+   * <p>A row this side no longer holds is not answered: the read that dropped it will repaint the
+   * page without it, and an answer for a row that is not there is a message about nothing.</p>
+   */
+  private async answerReal(id: number, generation: string): Promise<void> {
+    const pair = this.held.find((one) => one.findingId === id);
+    if (pair === undefined) {
+      return;
+    }
+
+    const read = await this.realOf(pair);
+    const view = realView(pair, read);
+    void this.panel?.webview.postMessage({ type: 'real', id, generation, shown: view.shown, html: view.html });
+  }
+
+  /**
+   * The real method for one pair: from the cache when the cache is about the same two commits,
+   * from the fetch already in flight when there is one, from the server otherwise.
+   *
+   * <p>A failed process is answered but not kept, so the next flip or open tries again; a read that
+   * reached the server is kept whatever it said, because a pruned commit is a fact and not a
+   * fault. A rejection is turned into a failed read rather than left to surface as an unhandled
+   * one — the same shape `queue` gives a failed decision.</p>
+   */
+  private realOf(pair: ReviewPair): Promise<RealRead> {
+    const held = this.real.get(pair.findingId);
+    if (held !== undefined && held.headSha === pair.headSha && held.fixSha === pair.fixSha) {
+      return Promise.resolve(held.read);
+    }
+    const running = this.fetching.get(pair.findingId);
+    if (running !== undefined) {
+      return running;
+    }
+
+    const started = this.hooks.readReal(pair.findingId).then(
+      (read) => this.settle(pair, read),
+      (error_: unknown) => this.settle(pair, { ok: false, tooOld: false, why: asText(error_) }),
+    );
+    this.fetching = new Map([...this.fetching, [pair.findingId, started]]);
+
+    return started;
+  }
+
+  /** A fetch has ended: it is no longer in flight, and it is remembered if it reached the server. */
+  private settle(pair: ReviewPair, read: RealRead): RealRead {
+    this.fetching = new Map([...this.fetching].filter(([id]) => id !== pair.findingId));
+    if (read.ok) {
+      this.real = new Map([...this.real, [pair.findingId, { headSha: pair.headSha, fixSha: pair.fixSha, read }]]);
+    }
+
+    return read;
+  }
+
+  /** The cached methods for the pairs being drawn — and only those whose two commits still match. */
+  private realFor(pairs: readonly ReviewPair[]): ReadonlyMap<number, RealRead> {
+    return new Map(pairs.flatMap((pair) => {
+      const held = this.real.get(pair.findingId);
+
+      return held !== undefined && held.headSha === pair.headSha && held.fixSha === pair.fixSha
+        ? [[pair.findingId, held.read] as const]
+        : [];
+    }));
+  }
+
   private async draw(): Promise<void> {
     const open = this.panel;
     if (open === undefined) {
@@ -435,12 +568,16 @@ export class BugzReviewPanel {
 
     const view = { nonce: nonce(), uiScale: currentUiScale(), textTone: currentTextTone() };
     const found = reviewTabs(this.held, this.chosen, this.marks);
+    this.draws += 1;
 
     open.webview.html = reviewPageHtml({
       ...view,
       pairs: found.shown,
       trouble: this.trouble,
       expanded: this.keptOpen(this.held),
+      realText: this.realText,
+      real: this.realFor(found.shown),
+      draw: this.draws,
       projects: found.projects,
       languages: found.languages,
       project: found.project,
@@ -452,6 +589,13 @@ export class BugzReviewPanel {
   }
 }
 
+
+/** One cached real method, with the two commits it was fetched for. */
+interface HeldReal {
+  readonly headSha: string;
+  readonly fixSha: string;
+  readonly read: RealRead;
+}
 
 /**
  * One nonce per paint: the CSP admits our one script and nothing else.

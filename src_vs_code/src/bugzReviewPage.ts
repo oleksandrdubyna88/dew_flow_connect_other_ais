@@ -1,9 +1,11 @@
 import { HIGHLIGHT_CSS, highlight } from './codeHighlight';
 import { cyclomatic } from './cyclomatic';
 import { pairDiff } from './lineDiff';
+import { RealRead, realView } from './realMethodView';
+import { commit, none, text } from './reviewText';
 import { slugOf, Tab, tabCss, tabStrip } from './tabStrip';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
-import { escapeHtml } from './webviewHtml';
+import { escapeHtml, jsonForScript } from './webviewHtml';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 
 /**
@@ -33,6 +35,15 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  * read back out of a person's own database; none of it reaches the send, which projects
  * `StoredPair` and never sees this type. The hash is TEXT: a link promises "open at revision", and
  * whether that promise can be kept is epic 3's revision rule, not this story's.</p>
+ *
+ * <p><b>The methods can be shown un-anonymised, and that is a VIEW and never a payload</b> (story
+ * 2.3). A toggle in the bar asks the server for the real text of each OPEN row — `--real-method`,
+ * one process per row, cached by the panel for its lifetime — and both texts then live on the row:
+ * the skeleton in one container, the real method in the other, and the toggle only decides which is
+ * visible. A fetch never writes to what is on screen; it fills the hidden half and asks the same
+ * render a toggle flip runs. What a send transmits is unchanged by any of it, by construction: the
+ * page supplies decision IDs and the send projects the stored pair, and the server's own test holds
+ * the serialised upload byte-identical with the view on and off.</p>
  *
  * <p>Pure, and free of `node:` and `vscode` imports, like `zoomControl.ts` and `textTone.ts` beside
  * it: a page module that reaches for either fails the bundle test, and a decision inside one is a
@@ -116,6 +127,35 @@ export interface ReviewView {
    * same rudeness in the other direction.</p>
    */
   readonly focus?: FilterPress;
+
+  /**
+   * Whether the methods are shown un-anonymised.
+   *
+   * <p>A VIEW, and only ever a view: nothing about it reaches a decision or a send. Held by the
+   * panel for the same reason {@link expanded} is — every paint replaces the document — and, like
+   * it, forgotten when the window closes. Off by default: the page a person opens shows what leaves
+   * the machine, and asks for the rest.</p>
+   */
+  readonly realText?: boolean;
+
+  /**
+   * The real methods already fetched, by `findingId` — what the panel has cached for its lifetime.
+   *
+   * <p>A row whose method is here is drawn with BOTH texts and the toggle picks; a row whose method
+   * is not, and is open with the view on, asks for it when the page loads. Nothing is fetched at
+   * paint: 200 pairs would be 400 git reads on a path that already costs 468 ms.</p>
+   */
+  readonly real?: ReadonlyMap<number, RealRead>;
+
+  /**
+   * Which paint this is.
+   *
+   * <p>Every fetch the page asks for carries a generation composed of this and a counter, and the
+   * answer is applied only if that exact generation is still wanted — so an answer to a request the
+   * PREVIOUS document made cannot be painted into this one. Two reviewers of the plan round named
+   * the race from two angles; this is the half of the answer that survives a redraw.</p>
+   */
+  readonly draw?: number;
 }
 
 /** Which strip was pressed, and which tab in it. */
@@ -161,12 +201,6 @@ const ariaBoolean = (yes: boolean): string => (yes ? 'true' : 'false');
  */
 const key = (findingId: number): string => escapeHtml(String(findingId));
 
-/** A column that should be text, trimmed — and empty rather than a throw when it is not text at all. */
-const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-/** Nothing recorded, said as such: never an invented cause, never a guessed commit. */
-const none = (what: string): string => `<span class="none">${escapeHtml(what)}</span>`;
-
 /**
  * Reviewer prose, escaped on the way into the page.
  *
@@ -178,22 +212,6 @@ const prose = (value: string): string => {
   const said = text(value);
 
   return said.length > 0 ? escapeHtml(said) : none('none recorded');
-};
-
-/**
- * A commit, abbreviated the way git abbreviates one — as TEXT.
- *
- * <p>Not a link. A link promises "open the file at this revision", and whether that promise can be
- * kept is epic 3's revision rule (`head_sha` is orphaned 55.7 % of the time, measured, while 99.6 %
- * of orphaned blobs still read); a hash shown as text promises only what it is. Empty is said,
- * never guessed.</p>
- */
-const commit = (sha: string): string => {
-  const said = text(sha);
-
-  return said.length > 0
-    ? `<code class="sha">${escapeHtml(said.slice(0, 7))}</code>`
-    : none('an unrecorded commit');
 };
 
 /** Where the finding was: its path and line at the commit the reviewers read, and in which checkout. */
@@ -254,7 +272,33 @@ function about(pair: ReviewPair): string {
  * the open row the moment a redraw reorders or removes anything, which is what the three tests named
  * in the plan exist to catch.</p>
  */
-function row(pair: ReviewPair, open: boolean): string {
+/**
+ * The two halves of a row's code: the skeleton, and the real method — both on the row, one visible.
+ *
+ * <p>The toggle only ever flips `hidden` on these two; a fetch only ever fills the second. That is
+ * what makes "what is on screen" a function of state the row already holds, and a response that
+ * arrives late a thing that fills a container rather than a thing that paints. The skeleton steps
+ * aside only when the real half carries TEXT (`shown`); a reason, or "fetching", sits above it.</p>
+ */
+function halves(pair: ReviewPair, id: string, showReal: boolean, read: RealRead | undefined): string {
+  const differs = pairDiff(pair.skeletonBefore, pair.skeletonAfter);
+  const fetched = read === undefined ? undefined : realView(pair, read);
+  const skeletonHidden = showReal && fetched?.shown === true;
+
+  return `<div class="skel" data-skel="${id}"${skeletonHidden ? ' hidden' : ''}>
+    <div class="sides">
+      <div class="side">
+        <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language, differs.before)}
+      </div>
+      <div class="side">
+        <div class="sideName">After</div>${highlight(pair.skeletonAfter, pair.language, differs.after)}
+      </div>
+    </div>
+    </div>
+    <div class="real" data-real="${id}"${showReal && fetched !== undefined ? '' : ' hidden'}>${fetched?.html ?? ''}</div>`;
+}
+
+function row(pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead | undefined): string {
   const id = key(pair.findingId);
   const said = `${escapeHtml(pair.severity)} · ${escapeHtml(pair.category)} — ${escapeHtml(pair.title)}`;
 
@@ -264,10 +308,6 @@ function row(pair: ReviewPair, open: boolean): string {
   // the whole line was the button. A code reviewer (codex, UX) found it. They are spans rather
   // than divs because a `button` takes phrasing content: a `div` in there is invalid markup that
   // browsers merely tolerate.
-  // What differs, computed once per pair and handed to BOTH sides — the two panes must agree about
-  // which lines are opposite which, and two independent diffs would not have to.
-  const differs = pairDiff(pair.skeletonBefore, pair.skeletonAfter);
-
   return `<tr class="pair" data-row="${id}">
   <td class="pick"><input type="checkbox" data-pick="${id}"></td>
   <td class="what">
@@ -286,16 +326,24 @@ function row(pair: ReviewPair, open: boolean): string {
   <td class="pick"></td>
   <td>
     ${about(pair)}
-    <div class="sides">
-      <div class="side">
-        <div class="sideName">Before</div>${highlight(pair.skeletonBefore, pair.language, differs.before)}
-      </div>
-      <div class="side">
-        <div class="sideName">After</div>${highlight(pair.skeletonAfter, pair.language, differs.after)}
-      </div>
-    </div>
+    ${halves(pair, id, showReal, read)}
   </td>
 </tr>`;
+}
+
+/**
+ * Which cached rows carry TEXT and which carry a NOTE, for the page's script to start from.
+ *
+ * <p>Keyed by id as a string, because that is how the script reads ids back off the attributes.
+ * Only the pairs being drawn: the cache may hold rows a filter has hidden, and the page has no
+ * container for those.</p>
+ */
+function realKinds(pairs: readonly ReviewPair[], real: ReadonlyMap<number, RealRead>): Record<string, string> {
+  return Object.fromEntries(pairs.flatMap((pair) => {
+    const read = real.get(pair.findingId);
+
+    return read === undefined ? [] : [[String(pair.findingId), realView(pair, read).shown ? 'text' : 'note']];
+  }));
 }
 
 
@@ -375,7 +423,11 @@ export function reviewPageHtml(view: ReviewView): string {
   const { pairs, nonce, trouble = '', uiScale = 0, textTone = 0 } = view;
   const strips = filterStrips(view);
   const expanded = view.expanded ?? new Set<number>();
-  const rows = pairs.map((pair) => row(pair, expanded.has(pair.findingId))).join('\n');
+  const showReal = view.realText === true;
+  const real = view.real ?? new Map<number, RealRead>();
+  const rows = pairs
+    .map((pair) => row(pair, expanded.has(pair.findingId), showReal, real.get(pair.findingId)))
+    .join('\n');
   const waiting = undecided(pairs);
 
   return `<!DOCTYPE html>
@@ -463,6 +515,15 @@ ${tabCss('4px 0 10px')}
   .none { opacity: .55; font-style: italic; }
   .repo { opacity: .7; }
   .empty { opacity: .7; padding: 24px 0; }
+  /* The two halves of a row's code. Explicit, as tr[hidden] is, so a later display rule cannot
+     outrank the attribute the script flips. */
+  .skel[hidden], .real[hidden] { display: none; }
+  .realNote { opacity: .7; font-style: italic; margin: 0 0 8px; }
+  .who { margin: 0 0 8px; font-size: .92em; }
+  .who .cls { font-weight: 600; }
+  /* The toggle reads as pressed when the view is on — a person glancing at the bar must be able to
+     tell which text the page is showing without reading a line of code. */
+  button.quiet[aria-pressed="true"] { text-decoration: none; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -477,6 +538,8 @@ ${strips}
   <span class="spacer"></span>
   <button type="button" class="quiet" id="expandAll">Expand all</button>
   <button type="button" class="quiet" id="collapseAll">Collapse all</button>
+  <button type="button" class="quiet" id="realText" aria-pressed="${ariaBoolean(showReal)}"
+          title="Show the methods as they really are, un-anonymised. A view only: what a send transmits is the skeleton, whatever this shows.">Real code</button>
   ${zoomControlHtml(uiScale)}${toneControlHtml(textTone)}
 </div>
 ${body(pairs, rows, trouble)}
@@ -518,6 +581,64 @@ ${body(pairs, rows, trouble)}
   // Opening a row is painted HERE and the panel is merely told. A redraw runs the server — one
   // process per click is what a round trip would cost — so the page owns the gesture and the panel
   // owns what survives the next redraw. Nothing about the corpus changes either way.
+  // The un-anonymised view. Both texts live on the row - the skeleton in one container, the real
+  // method in the other - and this only decides which is visible. A fetch fills the second
+  // container and then asks the same render a toggle flip runs; nothing here paints a response
+  // directly, and nothing awaits anything.
+  var realOn = ${showReal ? 'true' : 'false'};
+  // Which cached rows carry text and which carry a note, from the paint that drew them.
+  var have = ${jsonForScript(realKinds(pairs, real))};
+  // What has been asked for and not yet answered: id -> the generation it was asked with.
+  var pending = {};
+  var seq = 0;
+  var draw = ${jsonForScript(String(view.draw ?? 0))};
+
+  function half(id, which) { return document.querySelector('[data-' + which + '="' + id + '"]'); }
+
+  function wantReal(id, real) {
+    if (pending[id] !== undefined) { return; }
+    seq += 1;
+    var generation = draw + '/' + seq;
+    pending[id] = generation;
+    real.innerHTML = '<p class="realNote">Fetching the real method…</p>';
+    vscode.postMessage({ type: 'fetchReal', id: Number(id), generation: generation });
+  }
+
+  // The one render of a row's code: reads the CURRENT toggle and what the row already holds.
+  function renderReal(id) {
+    var skel = half(id, 'skel');
+    var real = half(id, 'real');
+    if (!skel || !real) { return; }
+    if (!realOn) { skel.hidden = false; real.hidden = true; return; }
+    var kind = have[id];
+    skel.hidden = kind === 'text';
+    real.hidden = false;
+    if (kind === undefined) { wantReal(id, real); }
+  }
+
+  function renderOpenRows() {
+    var details = document.querySelectorAll('[data-detail]');
+    for (var i = 0; i < details.length; i++) {
+      if (!details[i].hidden) { renderReal(details[i].getAttribute('data-detail')); }
+    }
+  }
+
+  window.addEventListener('message', function (event) {
+    var m = event.data;
+    if (!m || m.type !== 'real') { return; }
+    var id = String(m.id);
+    // Applied only to the request that is still WANTED. The toggle flipped, the row collapsed or
+    // the page was redrawn since this was asked for, and a late answer is discarded rather than
+    // painted over whatever the person is looking at now.
+    if (pending[id] !== m.generation) { return; }
+    delete pending[id];
+    var real = half(id, 'real');
+    if (!real) { return; }
+    real.innerHTML = m.html;
+    have[id] = m.shown ? 'text' : 'note';
+    renderReal(id);
+  });
+
   function showRow(id, open) {
     // By the data attribute rather than by the element id, so opening one row and opening all of
     // them look the same thing up the same way. The element id exists for aria-controls, which
@@ -526,6 +647,8 @@ ${body(pairs, rows, trouble)}
     if (detail) { detail.hidden = !open; }
     var twist = document.querySelector('[data-toggle="' + id + '"]');
     if (twist) { twist.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+    // A row that opens with the view on asks for its method; a row that closes forgets it asked.
+    if (open) { renderReal(id); } else { delete pending[id]; }
   }
 
   function showAll(open) {
@@ -533,7 +656,9 @@ ${body(pairs, rows, trouble)}
     var ids = [];
     for (var i = 0; i < details.length; i++) {
       details[i].hidden = !open;
-      ids.push(Number(details[i].getAttribute('data-detail')));
+      var rowKey = details[i].getAttribute('data-detail');
+      ids.push(Number(rowKey));
+      if (open) { renderReal(rowKey); } else { delete pending[rowKey]; }
     }
     var twists = document.querySelectorAll('[data-toggle]');
     for (var j = 0; j < twists.length; j++) {
@@ -595,6 +720,18 @@ ${body(pairs, rows, trouble)}
       showAll(target.id === 'expandAll');
       return;
     }
+    if (target.id === 'realText') {
+      // Synchronous, from what the rows already hold: every open row is re-rendered from the new
+      // toggle before this handler returns. Everything asked for so far is forgotten - an answer
+      // to the old view must not land in the new one - and the rows that now need a fetch ask
+      // again through the same render. The host is told so the next paint draws the same view.
+      realOn = !realOn;
+      target.setAttribute('aria-pressed', realOn ? 'true' : 'false');
+      pending = {};
+      renderOpenRows();
+      vscode.postMessage({ type: 'realText', on: realOn });
+      return;
+    }
     if (target.id === 'keep') { decide(1); return; }
     if (target.id === 'drop') { decide(0); return; }
     if (target.id === 'clear') { selected = {}; paint(); return; }
@@ -603,6 +740,8 @@ ${zoomScript()}
 ${toneScript()}
 
   paint();
+  // A page drawn with the view on and rows open asks for whatever those rows do not yet hold.
+  renderOpenRows();
 
   // The keyboard gets back the tab it activated. An id this module composed, never a key from the
   // database: the host says WHICH press, the page works out which element that is.

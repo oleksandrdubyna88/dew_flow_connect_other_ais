@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
-import { readPairs } from '../roundsDbRead';
+import { readPairs, readRealMethod } from '../roundsDbRead';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -160,6 +160,63 @@ test('the real --pairs-json envelope is the one readPairs accepts',
         `the reader refused the real binary's own output: ${answer.ok ? '' : answer.why}`);
       assert.deepEqual(answer.ok ? answer.pairs : undefined, [],
         'an empty corpus must read as no pairs, not as a failure and not as a phantom row');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+/**
+ * The REAL `--real-method` output, parsed by the REAL `readRealMethod` — story 2.3's contract.
+ *
+ * <p>The same argument as the pairs check above: `RealMethod` is written twice, and every other test
+ * of it feeds one side a fixture the other never produced. An EMPTY corpus is the right fixture:
+ * what only this can see is that the real binary's envelope for "no such pair" is one the reader
+ * accepts as a domain answer — `ok: true` with the reason on the method — rather than as a failed
+ * read. The populated case is the server's own `TheRealMethodTests`, which can make a git repository
+ * this side cannot.</p>
+ */
+test('the real --real-method answer for a pair nobody has is a reason, not a failure',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-realmethod-'));
+    try {
+      const read = await readRealMethod(server(), 1, async (args) => {
+        const ran = spawnSync(server(), args, {
+          encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+        });
+
+        return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+      });
+
+      assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
+      assert.equal(read.method.findingId, 1);
+      assert.equal(read.method.reason, 'pair_not_found', 'an empty corpus has no pair 1, and the binary must say so as data');
+      assert.equal(read.method.before.reason, 'pair_not_found');
+      assert.equal(read.method.after.reason, 'pair_not_found');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+/**
+ * A bad `--id` is 65 from the real binary, and the reader does NOT read it as "update the server".
+ *
+ * <p>The rule in both directions, observed on the shipped artefact: a mode the binary has must never
+ * exit 64 whatever is wrong with the request, because 64 is the one code the reader turns into
+ * "this machine's coai-mcp is older than the un-anonymised view".</p>
+ */
+test('a request fault from the real binary is 65, and is not read as an old server',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-realmethod-65-'));
+    try {
+      const ran = spawnSync(server(), ['--real-method'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(ran.status, 65, `a missing --id must be 65, never 64: ${ran.stderr}`);
+
+      const read = await readRealMethod(server(), Number.NaN, async () => ({ code: ran.status ?? 1, output: ran.stderr ?? '' }));
+      assert.equal(read.ok, false);
+      assert.equal(read.ok ? true : read.tooOld, false, 'a request fault must not send somebody to update a server that is fine');
+      assert.match(read.ok ? '' : read.why, /--real-method needs --id/u);
     } finally {
       fs.rmSync(data, { recursive: true, force: true });
     }

@@ -7798,6 +7798,97 @@ filesystem, can only fail where case matters — so it names its own directories
 instead of trusting `mkdtempSync` to draw one, which is what made the original failure intermittent
 in principle and invisible in practice.
 
+### The real method, un-anonymised, and its class (2026-09-18, story 2.3)
+
+A **Real code** toggle in the bar, beside zoom and tone. Pressed, every OPEN row asks the server for
+its method as it really was — `coai-mcp --real-method --id <findingId>`
+(`research/module_server.md`, *The real method, un-anonymised, and its class*) — and shows the real
+text where the skeleton was, with the class it sits in, its kind and its line span at each commit:
+`Totals.GetOrAdd — method_declaration, lines 7–15 at aaaa111 → Totals.GetOrAdd — method_declaration,
+lines 7–18 at bbbb222`. Un-pressed, every open row shows its skeleton again, at once, with no
+process spawned. **A view, never a payload**: the page supplies decision IDs and the send projects
+the stored pair, and the server's own test holds the serialised upload byte-identical with the view
+on and off. This page's half of that promise is `bugzReviewPage.test.ts`'s *a decision made while
+the real text is showing carries ids and nothing else*.
+
+**Both texts live on the row, and the toggle only decides which is visible.** Each detail row
+carries two containers — `data-skel` with the skeleton panes, `data-real` with the real ones — and
+one render, `renderReal(id)`, reads the CURRENT toggle and what the row already holds and flips
+`hidden` on the two. A completed fetch never paints: it fills the real container and calls that same
+render. Flipping the toggle re-renders every open row synchronously from state already held — no
+fetch, no await — which is the finding two plan reviewers raised from two angles, and the one thing
+in this story that could otherwise put real source on a screen that says it is anonymised.
+
+**Every request carries a generation, and a stale answer is discarded, not applied.** The page
+composes `draw/seq` — the panel's paint counter and a per-document counter — and remembers it as
+`pending[id]`; the panel echoes it back on the answer, and the page applies an answer only if that
+exact generation is still wanted. The toggle flipping (`pending = {}`), the row collapsing (`delete
+pending[id]`) and the page being redrawn (a new `draw`) each stale everything before them, and the
+suite is red for each of the three mutations that would let a late answer through — plus a fourth,
+collapse-all mid-flight.
+
+**The fetch is per opened row, cached by the panel for its lifetime — 200 pairs never cost 400 git
+reads.** `BugzReviewPanel` holds `real: Map<findingId, {headSha, fixSha, read}>`: a hit is a hit only
+when the pair still names the same two commits, because a recollection under the page changes the
+fix commit and a cache keyed on the id alone would show last week's method under this week's
+heading. Two requests for one row in flight share one process (`fetching`). A read that REACHED the
+server is kept whatever it said — a pruned commit is a fact — and a failed process is not, so the
+next flip or open tries again. The cache is bounded by the pairs on the page (`MAX_LIMIT`) and is
+emptied with the window, which is its retention rule; the toggle is forgotten with it, so a page
+reopened a day later shows what leaves the machine and asks for the rest. **Panel-held, not a
+setting** — an assumption stated in the plan: its two neighbours `expanded` and the tab selections
+are panel-held with a written reason, and if the operator wants the view remembered across windows
+it becomes a setting later.
+
+**Nothing is fetched at paint.** A redraw hands back what the panel holds (`real`, filtered to the
+pairs being drawn) and the view (`realText`), and the page's script asks on load only for the open
+rows that hold nothing — so a decision, a tab press or a poll with four rows open and the view on
+costs nothing, and the same four rows re-drawn show the same real text.
+
+**What a row says when the real text cannot be shown — one sentence per fact.** A side the server
+could not resolve keeps the skeleton on screen and says why above it or in its pane: *the commit
+aaaa111 is not in the repository any more* · *the file was not in commit bbbb222* · *the line is
+inside no named function at aaaa111* · *two functions are called GetOrAdd at bbbb222, so neither can
+be shown as this one* · *no function called GetOrAdd is in commit bbbb222 any more* · *git did not
+answer for commit aaaa111*. A whole pair: *this pair is not in the database any more* ·
+*D:/repo is not a git repository any more* · *CSharp is not a language the normaliser reads*. A server
+that exits **64** gets its own sentence — *this machine's coai-mcp is older than the un-anonymised
+view; update it from the panel* — spelled once (`TOO_OLD_FOR_THE_REAL_METHOD`) and used by the reader
+and the page both, because 64 means that and only that; the mode answers a bad `--id` with 65 for
+exactly this reason. One side real and the other not shows the real pane beside the sentence.
+
+**The real text goes through the same highlighter and the same diff as the skeletons.**
+`highlight(source, language, marks)` takes arbitrary code, its cache key is `grammar::marks::code`
+so real and skeleton text cannot collide, and `pairDiff` runs over the two real texts unchanged —
+on real text there is nothing to mask, and the masking is also what makes the too-big comparison
+honest, so nothing was simplified away. The escaping property is asserted for the real text as it is
+for the skeletons and the reviewers' prose: a method containing `</script>` or `<img onerror>`
+renders as text, a class name is text, and the text is still all there. `cyclomatic.test.ts` now
+also asserts the count over the ORIGINAL method equals the count over its skeleton — the number a
+person reads beside the real text is the skeleton's, and the anonymiser does not move it.
+
+**`realView(pair, read)` (`realMethodView.ts`) is the one renderer of the real half**, called at paint
+for a cached row and by the panel for a fetch that has just completed, so the two cannot disagree;
+the panel posts `{type: 'real', id, generation, shown, html}` and nothing else. It is a module of its
+own because `bugzReviewPage.ts` had reached the 800-line ceiling the coding-style rule sets and
+`max-lines` enforces (949 lines with the view inside it; 759 without), and because it is a unit
+with a boundary of its own — everything in it is about text a person asked to see un-anonymised.
+The three text helpers both modules need (`text`, `none`, `commit`) moved to `reviewText.ts` rather
+than being copied. `ReviewPair` stays in the page, where `bugzLiveContract.test.ts` reads it — and
+the view does NOT import it: the first draft did, as `import type`, and `importCycles.test.mjs`
+went red naming `bugzReviewPage ↔ realMethodView` as a ninth cycle. The view names the four fields
+it reads as `RealMethodRow`, which a `ReviewPair` satisfies structurally, so the edge runs one way. `readRealMethod` in `roundsDbRead.ts`
+validates the document field by field (`realOf`, both sides REQUIRED — every server that has the
+mode sends both, so a document without one is malformed rather than old) and turns 64 into
+`tooOld`. `bugzLiveContract.test.ts` runs the real binary: an empty corpus answers
+`pair_not_found` as data through the real reader, and a missing `--id` is 65 and is NOT read as an
+old server.
+
+**What the collector cannot give this page, found while building it.** A fix commit that renamed the
+file is never stored — `git log --follow head..fix -- <old name>` lists the rename under the old name
+and nothing after it, so the collector's walk records `symbol_gone` — and therefore no row on this
+page can need a rename followed. The reader does not follow one, and says why in its docblock.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
