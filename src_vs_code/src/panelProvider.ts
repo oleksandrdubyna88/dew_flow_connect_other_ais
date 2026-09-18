@@ -50,6 +50,7 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { ClaudeProbeCache } from './claudeProbeCache';
+import { ConsultPromptFile } from './consultPromptFile';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
@@ -149,7 +150,6 @@ import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
-import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
@@ -217,6 +217,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * view gone" — which are the three it is handed below.</p>
    */
   private readonly claudeProbes: ClaudeProbeCache;
+
+  private readonly consultPrompt: ConsultPromptFile;
 
 
   private codexModels: ModelChoice[] = [];
@@ -340,6 +342,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // BUILT HERE rather than beside its declaration: a field initialiser runs before the constructor
     // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
     // (TS2729). `dataDir` is a readonly parameter and never changes, so the snapshot is the value.
+    this.consultPrompt = new ConsultPromptFile(dataDir);
     this.claudeProbes = new ClaudeProbeCache({
       dataDir,
       render: () => this.render(),
@@ -952,7 +955,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
-      consultPrompt: await this.readConsultPrompt(),
+      consultPrompt: await this.consultPrompt.readConsultPrompt(),
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
@@ -1658,7 +1661,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The consultant's prompt is a FILE, not a setting — see `saveConsultPrompt`. Intercepted here
     // rather than inside the plain case, because everything below this line is about configuration.
     if (write.kind === 'plain' && write.key === 'consultPrompt') {
-      await this.saveConsultPrompt(write.value);
+      await this.consultPrompt.saveConsultPrompt(write.value);
       return;
     }
 
@@ -1889,7 +1892,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.latestCheckedAt = 0;
         break;
       case 'restoreConsultPrompt':
-        await this.saveConsultPrompt('');
+        await this.consultPrompt.saveConsultPrompt('');
         break;
       case 'usageWindow':
         // The cached Team-server totals are the OTHER window's — the same staleness the scope toggle
@@ -3607,102 +3610,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * it can be edited by hand or by another window, and a cache would show a person their own edit
    * from two minutes ago with nothing saying so.</p>
    */
-  /** The last reason a prompt write failed, so one unwritable disk is one message. */
-  private promptWriteFailed = '';
-
-  private async readConsultPrompt(): Promise<string> {
-    try {
-      return new TextDecoder().decode(
-        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH)),
-      );
-    } catch {
-      return ''; // no override, which is the ordinary state and means the shipped prompt
-    }
-  }
-
-  /**
-   * Writes what is in the box to the server's prompt override, or takes the override away.
-   *
-   * <p>Not `config.update`: the server reads its prompts from its own data directory, override-first,
-   * so the file IS the setting. Writing a `coai.*` key beside it would have given one prompt two
-   * homes, and the hand-edit the server has always supported would have been reverted by whichever
-   * window mirrored next.</p>
-   *
-   * <p><b>Written beside it and renamed over it</b>, the way the settings file and an answered
-   * escalation already are. `writeFile` truncates before it fills, so a host killed between the two
-   * leaves the SERVER reading a half-written prompt — and the server reads its prompts override-first
-   * without a second opinion, so a truncated one is simply what the consultant is asked. Raised by two
-   * reviewers on this story's plan round.</p>
-   *
-   * <p>A failure is swallowed the way the settings write's is, and for the same reason: this runs
-   * from a keystroke pause, and a disk that will not take a file is not something a panel can fix by
-   * interrupting somebody about it. Nothing claims the prompt was saved — the box is repainted from
-   * the FILE, so a write that did not land shows as the words coming back on the next paint.</p>
-   */
-  private async saveConsultPrompt(value: unknown): Promise<void> {
-    const write = consultPromptWrite(value);
-    const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
-    try {
-      if (write.kind === 'remove') {
-        // Removing an override that was never written is the ORDINARY case, not an error — and it is
-        // the ONLY one this swallows. It used to swallow every rejection, so a permission failure or
-        // a provider error left the old prompt in force while the panel cleared its warning and the
-        // restore looked as though it had worked. (CodeRabbit, on the pull request.)
-        try {
-          await vscode.workspace.fs.delete(target);
-        } catch (error) {
-          if (!(error instanceof vscode.FileSystemError) || error.code !== 'FileNotFound') {
-            throw error;
-          }
-        }
-        this.promptWriteFailed = '';
-        return;
-      }
-      const directory = vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!);
-      await vscode.workspace.fs.createDirectory(directory);
-      const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
-      await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
-      try {
-        await vscode.workspace.fs.rename(temp, target, { overwrite: true });
-      } catch (error) {
-        // The temp name carries the pid, so a rename that keeps failing leaves one more file beside
-        // the one the SERVER reads out of this directory. The settings writer already cleans up on
-        // its own failure path for the same reason. (CodeRabbit, on the pull request.)
-        await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
-        throw error;
-      }
-      // The situation is over. A failure after this is news rather than a repeat.
-      this.promptWriteFailed = '';
-    } catch (e) {
-      this.reportPromptFailure(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  /**
-   * Says, ONCE per distinct reason, that the consultant's prompt is not on disk.
-   *
-   * <p>The durable-status rule pointed at a text box: an action that failed must not look like one
-   * that succeeded, and this one used to be swallowed entirely — a read-only data directory left a
-   * person typing into a box whose words no consultation would ever read. Once per reason, and
-   * cleared by the next successful write, because this runs from a keystroke PAUSE: a message per
-   * pause over one unwritable disk is the other way to make it unusable. Raised twice on this
-   * story's code round, in two roles.</p>
-   */
-  private reportPromptFailure(why: string): void {
-    if (this.promptWriteFailed === why) {
-      return;
-    }
-    this.promptWriteFailed = why;
-    void notify({
-      as: 'warning',
-      class: 'failure',
-      source: 'consultant',
-      code: 'consultant-prompt-not-saved',
-      title: `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
-      detail: why,
-    });
-  }
-
   private async readUsage(): Promise<UsageEntry[]> {
     try {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, 'usage.jsonl'));
