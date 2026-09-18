@@ -171,6 +171,55 @@ async function until(ready: () => boolean, whatDidNotHappen: string, ms = 15_000
   assert.fail(`${whatDidNotHappen} (waited ${Math.round(ms / 1000)}s)`);
 }
 
+/**
+ * The settings file's text, or `undefined` in the instant it is being replaced.
+ *
+ * <p><b>Why a scenario needs this.</b> The thing under test is a writer whose whole job is to
+ * REPLACE this file, and it publishes by renaming over it. `vscode.workspace.fs.rename(…,
+ * { overwrite: true })` is not documented as atomic — the note in `extension.ts` beside the lock
+ * says the disk provider checks for existence and then renames — so a reader can land in the
+ * instant between. A bare `readFileSync` then throws `ENOENT` and the whole scenario fails with a
+ * raw errno instead of an assertion, which is what it did on 2026-09-18 and what has been resetting
+ * the twenty-run promotion streak this job is counting towards.</p>
+ *
+ * <p>An absent file is NEVER "ready", in either direction. That is the property that keeps this from
+ * weakening anything: were it read as empty text, the final wait — that the marker is GONE — would
+ * be satisfied by the file simply not being there for a moment, which is the opposite of what it
+ * asserts.</p>
+ */
+function settingsTextNow(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch (reason) {
+    if ((reason as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+
+    throw reason;
+  }
+}
+
+/** Waits for the settings file to EXIST and to say something, and hands back what it said. */
+async function settingsUntil(
+  file: string,
+  ready: (text: string) => boolean,
+  whatDidNotHappen: string,
+): Promise<string> {
+  let seen = '';
+  await until(() => {
+    const text = settingsTextNow(file);
+    if (text === undefined) {
+      return false;
+    }
+
+    seen = text;
+
+    return ready(text);
+  }, whatDidNotHappen);
+
+  return seen;
+}
+
 /** Every scenario, named explicitly. A glob that matches nothing is a pass, which is the whole trap. */
 const SCENARIOS: readonly Scenario[] = [
   {
@@ -287,22 +336,24 @@ const SCENARIOS: readonly Scenario[] = [
       const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
 
       // Activation mirrors once, so the file is the proof that the mirror ran at all.
-      await until(() => fs.existsSync(file), 'the extension never wrote a settings file at all');
-      const before = fs.readFileSync(file, 'utf8');
+      const before = await settingsUntil(
+        file, () => true, 'the extension never wrote a settings file at all');
 
       assert.ok(!before.includes('COAI_DEAL_PLAN'), 'the setting this scenario changes is already on');
       try {
         await config().update('dealPlanLenses', true, vscode.ConfigurationTarget.Global);
-        await until(
-          () => fs.readFileSync(file, 'utf8').includes('COAI_DEAL_PLAN'),
+        await settingsUntil(
+          file,
+          (text) => text.includes('COAI_DEAL_PLAN'),
           'the setting was changed and the file the server reads never followed, which is '
           + 'the defect of this story, in the one place no unit test can look',
         );
       } finally {
         await config().update('dealPlanLenses', undefined, vscode.ConfigurationTarget.Global);
       }
-      await until(
-        () => !fs.readFileSync(file, 'utf8').includes('COAI_DEAL_PLAN'),
+      await settingsUntil(
+        file,
+        (text) => !text.includes('COAI_DEAL_PLAN'),
         'returning the setting to its default left the old value in the file',
       );
     },
