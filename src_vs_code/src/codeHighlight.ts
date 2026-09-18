@@ -214,7 +214,11 @@ export function highlight(
   // The marks are PART of the key. They are not: the same skeleton diffed against a different
   // counterpart is different markup, and a key that ignored them would serve the first pair's
   // colouring to the second — a row confidently wrong about which of its lines changed.
-  const key = `${grammar}::${marks.join('')}::${code}`;
+  // The marks are joined with a SEPARATOR: two reviewers pointed out that concatenating a closed
+  // set of words can in principle spell another sequence, and a delimiter costs nothing next to
+  // being sure. They are part of the key because the same skeleton diffed against a different
+  // counterpart is different markup — a key without them serves one pair's colouring to another.
+  const key = `${grammar}::${marks.join('|')}::${code}`;
 
 
   const already = rendered.get(key);
@@ -240,7 +244,11 @@ export function highlight(
             // accessibility tree — three reviewers said so independently. Somebody on a screen
             // reader would hear both panes as identical code and never learn which lines differ,
             // which is the whole feature. So the word goes in as real text, hidden visually.
-            node.children.unshift(said(mark));
+            //
+            // A NEW array rather than `unshift`: this node is Shiki's, not ours, and mutating
+            // somebody else's object in place is what `coding-style.md` is actually about. Two
+            // reviewers said so and here it costs one allocation per marked line.
+            node.children = [said(mark), ...node.children];
           }
         },
       }],
@@ -259,7 +267,7 @@ export function highlight(
 
 /** The mark as a word, for a reader who cannot see the colour. */
 const spokenFor = (mark: LineMark): string =>
-  (mark === 'changed' ? 'changed line' : `${mark} line`);
+  (mark === 'changed' ? 'changed line: ' : `${mark} line: `);
 
 /**
  * The mark as text a screen reader can read, carried inside the line it belongs to.
@@ -278,7 +286,7 @@ function said(mark: LineMark): {
     type: 'element',
     tagName: 'span',
     properties: { class: 'srOnly' },
-    children: [{ type: 'text', value: `${spokenFor(mark)} ` }],
+    children: [{ type: 'text', value: spokenFor(mark) }],
   };
 }
 
@@ -321,7 +329,7 @@ function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[]
     const dl = mark !== undefined && mark !== 'same' ? ` dl-${mark}` : '';
 
     const heard = mark !== undefined && mark !== 'same'
-      ? `<span class="srOnly">${spokenFor(mark)} </span>`
+      ? `<span class="srOnly">${spokenFor(mark)}</span>`
       : '';
 
     return `<span class="line${dl}">${heard}${escapeHtml(line)}</span>`;

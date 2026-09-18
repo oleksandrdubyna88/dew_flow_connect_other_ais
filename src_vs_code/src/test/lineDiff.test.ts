@@ -147,6 +147,11 @@ test('every placeholder kind the normaliser emits is one this module masks', () 
     kinds.add(found[1] ?? '');
   }
 
+  // The companion a structural scan needs: a KNOWN instance it must still find. Without it, a
+  // refactor that moved every kind out of a literal would leave the extraction matching nothing and
+  // this test passing over an empty set for ever. (Two reviewers, and `testing.md` names the shape.)
+  assert.ok(kinds.has('var'),
+    'the extraction no longer finds even the kind this file certainly returns — it reads the wrong shape');
   assert.ok(kinds.size >= 2, 'the extraction found almost nothing — it is reading the wrong shape');
   assert.deepEqual([...kinds].sort(), [...PLACEHOLDER_KINDS].sort(),
     'the normaliser emits a placeholder kind this module does not mask, or masks one it never emits');
@@ -170,6 +175,24 @@ test('a pair beyond the ceiling is compared as a whole rather than line by line'
   const apart = pairDiff(huge, differs);
   assert.ok(apart.before.every((mark) => mark === 'removed'));
   assert.ok(apart.after.every((mark) => mark === 'added'));
+});
+
+/**
+ * The wall of false differences must not reappear ABOVE the ceiling.
+ *
+ * <p>Three reviewers found this and it was real: `tooBig` compared RAW lines, so two large skeletons
+ * differing only by placeholder renumbering came back with every line marked — the exact defect this
+ * module exists to prevent, hiding in the path nobody looks at. Measured before the fix at 600 of
+ * 600 lines.</p>
+ */
+test('a pair beyond the ceiling is not repainted by renumbering either', () => {
+  const before = Array.from({ length: 600 }, (_, at) => `  var_${at} = ${at};`).join('\n');
+  const after = Array.from({ length: 600 }, (_, at) => `  var_${at + 1} = ${at};`).join('\n');
+
+  const diff = pairDiff(before, after);
+
+  assert.equal(diff.before.filter((mark) => mark !== 'same').length, 0,
+    'above the ceiling, renumbering was read as every line changing');
 });
 
 test('a genuine change to a line survives the mask', () => {
