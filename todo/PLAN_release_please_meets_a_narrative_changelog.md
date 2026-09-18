@@ -1,6 +1,9 @@
 # PLAN — release-please, and the narrative changelog it would write over
 
-> Status: **partially implemented, 2026-09-18 — and stopped at a decision rather than at work.** Scope: Epic 4 of
+> Status: **partially implemented, 2026-09-18 — the decision is taken and what remains is not
+> scriptable.** The operator chose a GitHub App over a PAT; `release-please.yml` mints an
+> installation token and refuses in words until the secrets exist. Creating and installing a GitHub
+> App have no REST endpoint, so the next move is two browser steps, written out below. Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -130,6 +133,78 @@ probably be answered together. **Until it is answered, `release-please.yml` ship
 `workflow_dispatch` only** — a no-op that looks like a release is worse than no automation. Turning
 it on is two lines, both written out and commented in the workflow.
 
+### ANSWERED 2026-09-18: the GitHub App
+
+The operator chose the app. `dew_flow_sidecar_rust`'s `release-please.yml` is wired for it —
+`actions/create-github-app-token@bcd2ba4 # v3.2.0` mints a token per run, an hour long and scoped to
+the installation, and `release-please-action` is handed that instead of `GITHUB_TOKEN`.
+
+**What cannot be done from here, and it is a boundary rather than a task left undone.** GitHub has
+**no REST endpoint that creates a GitHub App.** The only two routes are the form at
+`/settings/apps/new` and the app-manifest flow, which still posts a form and comes back through a
+browser redirect carrying a one-hour `code`. **Installing** an app is browser-only as well. So the
+two secrets below cannot be produced by any amount of scripting, and a workflow that pretended
+otherwise would be the same class of thing this plan exists to stop: a mechanism that looks like it
+works and quietly does not.
+
+What the workflow does instead is **refuse in words**. Its first step reads whether the two secrets
+exist — never the private key itself, only `!= ''` — and when they do not it exits 1 saying so and
+naming this document, rather than letting the mint fail with a message about a malformed key, which
+reads like a broken secret instead of an absent one.
+
+#### The app, exactly
+
+| field | value | why |
+|---|---|---|
+| name | `dew-flow-release-please` | |
+| owner | this account, **not public** | it serves three repositories of one account |
+| webhook | **disabled** | nothing listens; an app whose webhook url 404s fills its own delivery log |
+| `contents` | **write** | the commits, the branch and the tag release-please creates |
+| `pull_requests` | **write** | the release pull request it opens and updates |
+| `issues` | **write** | the `autorelease: pending` / `autorelease: tagged` LABELS — labels live on the issues API even when they sit on a pull request, and release-please's state machine reads them back |
+| `metadata` | read | mandatory for every app |
+
+As a manifest, if the form is the slower route:
+
+```json
+{
+  "name": "dew-flow-release-please",
+  "url": "https://github.com/oleksandrdubyna88",
+  "public": false,
+  "hook_attributes": { "active": false },
+  "default_events": [],
+  "default_permissions": {
+    "contents": "write",
+    "pull_requests": "write",
+    "issues": "write",
+    "metadata": "read"
+  }
+}
+```
+
+#### The four steps
+
+1. **Create** it — <https://github.com/settings/apps/new> — with the table above. Note the **App ID**
+   shown after creation.
+2. **Generate a private key** on the same page; a `.pem` downloads. It is shown once.
+3. **Install** it — *Install App* → this account → **Only select repositories** →
+   `dew_flow_sidecar_rust` first, then `dew_flow_creds_for_devs` and `dew_flow_connect_other_ais`
+   when steps 3 and 4 of the build order reach them. *All repositories* would hand the app write
+   access to four that never release.
+4. **Add the secrets**, per repository:
+
+   ```bash
+   gh secret set RELEASE_PLEASE_APP_ID          -R oleksandrdubyna88/dew_flow_sidecar_rust --body '<app id>'
+   gh secret set RELEASE_PLEASE_APP_PRIVATE_KEY -R oleksandrdubyna88/dew_flow_sidecar_rust < path/to/key.pem
+   ```
+
+   The `<` form matters: a multi-line PEM passed as `--body` from a Windows shell arrives mangled,
+   and the failure surfaces an hour later as a token that will not mint.
+
+Then dispatch `release-please` once and watch a release pull request appear. Only after that does
+`push: branches: [main]` get uncommented — step 2 of the build order below is the acceptance test,
+and it has not run yet.
+
 ## Build order
 
 1. **`sidecar_rust` first** — one product, no changelog, `include-component-in-tag: false`. The whole
@@ -141,9 +216,10 @@ it on is two lines, both written out and commented in the workflow.
    will bring `Cargo.toml` into line with reality for the first time.
 2. **Cut one real release through it** and compare the artefacts against the previous release, by
    name and by size. This is Epic 4's acceptance test and it is not optional: a tag that does not
-   trigger the existing workflow produces nothing, silently. **BLOCKED on the token above** — and
-   steps 3 and 4 wait behind it deliberately, because this plan's own recommendation is to measure
-   on one release before the others adopt anything.
+   trigger the existing workflow produces nothing, silently. **BLOCKED on the two browser steps
+   above** — creating and installing the app. Everything downstream of them is written and linted;
+   steps 3 and 4 wait behind this one deliberately, because this plan's own recommendation is to
+   measure on one release before the others adopt anything.
 3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, a generated changelog
    where none exists.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
