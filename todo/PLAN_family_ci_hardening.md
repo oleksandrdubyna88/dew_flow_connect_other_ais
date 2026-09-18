@@ -227,11 +227,24 @@ package in the family could not take the type-aware linter this epic specifies, 
 have passed a gate while dropping the one rule that motivated it, so it was never a fallback.
 
 It was recorded as blocked the same day, pending typescript-eslint. The question that resolved it was
-the operator's: **does this package actually need TypeScript 7?** It does not. The bump was an
-ordinary `chore(deps)` (`7c08d6a8`); `tsconfig.json` asks for nothing newer than ES2022 and
-`exactOptionalPropertyTypes`. Measured before it was proposed: on 5.9.3 the source typechecks with
-**zero errors** and the suite passes **3583 to 0**. The compiler moved back, the linter went in, and
-TypeScript 7 returns the day the parser supports it.
+the operator's: **does this package actually need TypeScript 7?** The bump was an ordinary
+`chore(deps)` (`7c08d6a8`), and on the morning of 2026-09-18 the answer measured NO: on 5.9.3 the
+source typechecked with zero errors and the suite passed 3583 to 0.
+
+**That answer had a shelf life of six hours, and the correction is the more useful record.** Later
+the same day `codeHighlight.ts` landed on main with `shiki@^4.4.3` — ESM-only (`"type": "module"`),
+imported by subpath from a CommonJS module. `require()` of an ESM package is legal under TS 7's
+semantics and NOT under 5.9.3, which answers `TS1479` five times; a rebase is what surfaced it. Both
+escapes were measured and rejected: `moduleResolution: node16` fixes the resolution and then
+TypeScript says the honest thing instead, and the page depends on the **synchronous**
+`createHighlighterCoreSync`, so `await import()` would turn a synchronous highlighter asynchronous
+through the page builder and its tests — a redesign of a day-old feature, not a CI change. Forcing
+the peer range with `--legacy-peer-deps` was measured too: typescript-eslint refuses at RUN time, by
+name, pointing at issue #10940.
+
+**`typescript@6.0.3` is the one version that does both** — compiles this source including shiki
+(6.0 already models `require(esm)`), and satisfies the parser's `<6.1.0`. Measured: zero typecheck
+errors, suite **3756 to 0**. TypeScript 7 returns the day the parser supports it.
 
 What the linter found on first contact is worth recording, because two of the three arguments were
 settled by counting rather than taste:
@@ -418,7 +431,7 @@ as the ruleset intends** — a test tag left behind on a release pattern is a re
 - [ ] Every job of every repository is a required check, and no PR can skip one.
 - [ ] `dotnet format --verify-no-changes` / eslint / cargo fmt / actionlint fail a badly formatted PR.
 - [x] **Epic 2's blocked line is resolved**, 2026-09-18: `src_vs_code` has the type-aware linter,
-      reached by moving TypeScript back to 5.9.3 rather than by weakening the gate.
+      reached by moving TypeScript to 6.0.3 rather than by weakening the gate.
 - [ ] `dependabot.yml`, the PR template and the semantic-title check exist in every repository.
 - [ ] release-please cuts the tags the release workflows already build from, with the narrative
       changelog untouched.
