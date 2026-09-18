@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using FluentAssertions;
@@ -142,84 +141,17 @@ public sealed class TheArchiveCheckTests
     }
 
     /// <summary>Run the real script the real way, and report what it said.</summary>
+    /// <remarks>
+    /// FROM the archive's own directory, naming it relatively — which is how `release.yml` calls it
+    /// (`"$NAME.tar.gz"`, in the workspace) and, on Windows, the only way that works: GNU tar reads
+    /// `C:/x/y.tar.gz` as a REMOTE `host:path` and answers "Cannot connect to C:".
+    /// </remarks>
     private static (int Code, string Error) Check(string archive, params string[] wanted)
     {
-        var script = Path.Combine(Repository(), ".github", "scripts", "archive-carries.sh");
-        File.Exists(script).Should().BeTrue("{0} is what the release runs", script);
+        var arguments = new List<string> { Path.GetFileName(archive) };
+        arguments.AddRange(wanted);
 
-        // FROM the archive's own directory, naming it relatively — which is how `release.yml` calls
-        // it (`"$NAME.tar.gz"`, in the workspace) and, on Windows, the only way that works: GNU tar
-        // reads `C:/x/y.tar.gz` as a REMOTE `host:path` and answers "Cannot connect to C:".
-        var start = new ProcessStartInfo("sh")
-        {
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            WorkingDirectory = Path.GetDirectoryName(archive)!,
-        };
-        start.ArgumentList.Add(Posix(script));
-        start.ArgumentList.Add(Path.GetFileName(archive));
-        foreach (var pattern in wanted)
-        {
-            start.ArgumentList.Add(pattern);
-        }
-
-        using var process = StartOrExplain(start);
-        var error = process.StandardError.ReadToEnd();
-        process.StandardOutput.ReadToEnd();
-        process.WaitForExit(milliseconds: 30_000).Should().BeTrue("the check should not hang");
-
-        return (process.ExitCode, error);
+        return ReleaseScript.Run("archive-carries.sh", Path.GetDirectoryName(archive)!, [.. arguments]);
     }
 
-    /// <summary>A path a POSIX shell will accept, which a Windows one is not.</summary>
-    /// <remarks>
-    /// `sh` from git for Windows reads `C:/x/y` and not `C:\x\y` — a backslash is its escape
-    /// character, so the path arrives mangled and the script answers 2, "that is not a file". On
-    /// Linux there is nothing to convert and this is the identity.
-    /// </remarks>
-    private static string Posix(string path) => path.Replace('\\', '/');
-
-    /// <summary>
-    /// A POSIX shell, or a decision about whose machine this is.
-    /// </summary>
-    /// <remarks>
-    /// CI runs this suite on `ubuntu-latest`, where `sh` is always there — so on CI a missing shell
-    /// is a broken job and says so. A Windows checkout without git's `sh` on PATH skips instead,
-    /// because the alternative is a suite nobody can run locally. The shape is
-    /// `StageRulesTests.RequireTheMount`'s, and for its reason: a skip that also applies to CI is a
-    /// test that can quietly stop testing.
-    /// </remarks>
-    private static Process StartOrExplain(ProcessStartInfo start)
-    {
-        try
-        {
-            return Process.Start(start)!;
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            if (Environment.GetEnvironmentVariable("CI") is { Length: > 0 } ci
-                && !ci.Equals("false", StringComparison.OrdinalIgnoreCase))
-            {
-                Assert.Fail("the release's archive check needs a POSIX shell and CI is the authoritative run");
-            }
-
-            Assert.Skip("the release's archive check needs `sh` on PATH; git for Windows provides one");
-            throw;
-        }
-    }
-
-    /// <summary>The checkout this test binary was built inside.</summary>
-    private static string Repository()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".github", "scripts")))
-            {
-                return dir.FullName;
-            }
-        }
-
-        throw new InvalidOperationException("no checkout above this test binary carries .github/scripts");
-    }
 }
