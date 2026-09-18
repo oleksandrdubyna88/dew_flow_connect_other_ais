@@ -207,9 +207,14 @@ that provably does nothing.
    stays a command somebody runs, which is also what item 3 below asks for.
 
    **APPLIED 2026-09-18**, with the operator's say-so, by `--apply` — the reviewed tool rather than
-   a one-off call. Six of the seven now require every check that runs on their pull requests, and
-   each was verified straight after: the tool answers `matches branch-protection.json`, exit 0.
-   `rag_qln` is the seventh and cannot be, for the reason recorded above.
+   a one-off call. Six of the seven now require every check the audit above SELECTED — not every
+   check that runs, which is a different sentence and the one this line used to make: `ask
+   CodeRabbit`, `SonarCloud Code Analysis`, `extension · a real editor` and `submit-nuget` are
+   deliberately left unrequired, each for a reason recorded a few paragraphs up. (CodeRabbit, on
+   this pull request, and it was right to catch it: a plan that overstates its own coverage is how
+   somebody later believes a gate exists that does not.) Each repository was verified straight
+   after: the tool answers `matches branch-protection.json`, exit 0. `rag_qln` is the seventh and
+   cannot be, for the reason recorded above.
 
    | repository | required before | after |
    |---|---|---|
