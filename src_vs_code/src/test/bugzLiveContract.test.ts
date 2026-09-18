@@ -164,3 +164,45 @@ test('the real --pairs-json envelope is the one readPairs accepts',
       fs.rmSync(data, { recursive: true, force: true });
     }
   });
+
+/**
+ * The SIXTEEN field names, derived from both sides rather than agreed by hand.
+ *
+ * <p><b>The risk two providers named, and the reason the live check above cannot close it.</b>
+ * `ReviewPair` is written twice — a C# positional record serialised camelCase, and a TypeScript
+ * interface — so `fixSha` against `fix_sha` would leave every suite green while the page rendered
+ * honest-looking absences, indistinguishable from an older server and therefore unnoticeable by
+ * looking. The live check runs the real binary through the real reader, but against an EMPTY corpus:
+ * nothing in this repository can seed a pair from outside the collector, and adding a CLI mode to
+ * make a test possible would be changing the product to suit its tests.</p>
+ *
+ * <p>So the names are compared at their SOURCES: the record's properties, camelCased the way
+ * `JsonSourceGenerationOptions(PropertyNamingPolicy = CamelCase)` will case them, against the
+ * interface's own fields. It is a structural read across projects — the third in this suite, after
+ * `SourceLanguage` and `Placeholders.cs` — and it fails loudly on a missing file rather than
+ * quietly.</p>
+ *
+ * <p><b>What it does not prove:</b> that a populated row survives the round trip. Only a seeded
+ * corpus could, and `research/module_tests.md` records that gap rather than implying it is closed.</p>
+ */
+test('both halves of the wire name the same sixteen fields', () => {
+  const read = (from: string): string => {
+    const at = path.join(process.cwd(), '..', from);
+    assert.ok(fs.existsSync(at), `${from} has moved — this test is reading nothing`);
+
+    return fs.readFileSync(at, 'utf8');
+  };
+
+  const record = /public sealed record ReviewPair\(([^;]*)\);/u.exec(read('src_mcp/src/Store/ReviewPair.cs'));
+  assert.ok(record !== null, 'the ReviewPair record is no longer declared as one positional list');
+  const served = [...(record[1] ?? '').matchAll(/\b(?:long|int|string)\s+([A-Z][A-Za-z]*)/gu)]
+    .map((found) => `${(found[1] ?? '').charAt(0).toLowerCase()}${(found[1] ?? '').slice(1)}`);
+
+  const shape = /export interface ReviewPair \{([\s\S]*?)\n\}/u.exec(read('src_vs_code/src/bugzReviewPage.ts'));
+  assert.ok(shape !== null, 'the ReviewPair interface is no longer declared where this looks');
+  const wanted = [...(shape[1] ?? '').matchAll(/readonly ([a-zA-Z]+)\??:/gu)].map((found) => found[1]);
+
+  assert.ok(served.length >= 16, `the record read as ${served.length} fields — the regex is wrong`);
+  assert.deepEqual([...served].sort(), [...wanted].sort(),
+    'the two halves of the --pairs-json contract no longer name the same fields');
+});

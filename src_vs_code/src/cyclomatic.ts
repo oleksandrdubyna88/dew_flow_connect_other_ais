@@ -110,11 +110,12 @@ export function withoutLiterals(code: string): string {
       bare += code[at];
       at += 1;
     } else {
-      // The literal's TEXT goes; the expressions interpolated into it stay. Blanking the whole
-      // thing removed the decision inside `${x ? 1 : 0}` — a plan reviewer found it on the
-      // template-literal form, and it turned out the C# `$"{…}"` form lost it too. Understating
-      // is the worse direction: a method this page calls simple is one nobody looks at twice.
-      bare += keptFrom(code.slice(at, end));
+      // A literal that can INTERPOLATE keeps the expressions in its holes; everything else — a
+      // plain string, a raw string, every comment — goes entirely. Both halves of that sentence
+      // were learned the hard way: blanking wholesale lost the decision inside `${x ? 1 : 0}`,
+      // and then keeping braces everywhere counted `// { if }` as a branch.
+      const literal = code.slice(at, end);
+      bare += interpolates(code, at) ? keptFrom(literal) : ' '.repeat(literal.length);
       at = end;
     }
   }
@@ -136,23 +137,36 @@ export function withoutLiterals(code: string): string {
  * are prose, and prose contains no keywords this counts.</p>
  */
 function keptFrom(literal: string): string {
+  const template = literal.startsWith('`');
   let kept = '';
   let depth = 0;
   let at = 0;
   while (at < literal.length) {
     const here = literal[at];
-    const twice = here !== undefined && literal[at + 1] === here && (here === '{' || here === '}');
-    if (twice) {
+    // `{{` and `}}` are an escaped brace in a C# interpolated string and open nothing. They are
+    // NOT that in a template literal, where `${{ a: 1 }}` is an object in a hole — reading the
+    // doubled brace as an escape there skipped the hole entirely, and a hole ending `}}` left the
+    // depth stuck open so every word after it counted. (Code round, antigravity.)
+    if (!template && here !== undefined && literal[at + 1] === here && (here === '{' || here === '}')) {
       kept += '  ';
       at += 2;
       continue;
     }
-    if (here === '{') {
+    // A hole opens at `${` in a template literal and at a bare `{` in C#. Outside one, the two
+    // characters of `${` are text like the rest.
+    const opens = template ? here === '$' && literal[at + 1] === '{' : here === '{';
+    if (opens && depth === 0) {
+      depth = 1;
+      kept += template ? '  ' : ' ';
+      at += template ? 2 : 1;
+      continue;
+    }
+    if (depth > 0 && here === '{') {
       depth += 1;
-      kept += ' ';
-    } else if (here === '}' && depth > 0) {
+      kept += here;
+    } else if (depth > 0 && here === '}') {
       depth -= 1;
-      kept += ' ';
+      kept += depth === 0 ? ' ' : here;
     } else {
       kept += depth > 0 ? here : ' ';
     }
@@ -176,6 +190,31 @@ function literalEnd(code: string, at: number): number | undefined {
   return stringEnd(code, at, here, next);
 }
 
+/**
+ * Whether what starts at `at` can INTERPOLATE — the only literal whose braces mean anything.
+ *
+ * <p>This distinction is the whole of a regress I introduced and the code round caught four times.
+ * Fixing the template-literal case by keeping whatever sat inside braces applied that rule to every
+ * literal AND to comments, so `// { if }` counted a branch and `"{ if for while }"` counted three —
+ * a worse trade than the understatement it replaced, because braces in prose are common and a
+ * complexity that moves when only a comment moves invents a change the control flow does not have.</p>
+ *
+ * <p>Three forms interpolate and nothing else does: a JS/TS template literal (backtick), and C#'s
+ * `$"…"` and its verbatim pairings `$@"…"` / `@$"…"`. A plain `"…"`, a `'…'`, a `@"…"` without the
+ * `$`, a raw `"""…"""` and every comment are text from end to end.</p>
+ */
+function interpolates(code: string, at: number): boolean {
+  const here = code[at];
+  if (here === '`') {
+    return true;
+  }
+  if (here === '$') {
+    return code[at + 1] === '"' || code.startsWith('@"', at + 1);
+  }
+
+  return here === '@' && code.startsWith('$"', at + 1);
+}
+
 /** The string literal that starts at `at`, in any of the three languages' spellings. */
 function stringEnd(code: string, at: number, here: string | undefined, next: string | undefined): number | undefined {
   if (code.startsWith('"""', at)) {
@@ -188,6 +227,14 @@ function stringEnd(code: string, at: number, here: string | undefined, next: str
   }
   if (here === '$' && code.startsWith('@"', at + 1)) {
     return verbatimEnd(code, at + 3);
+  }
+  // `$"…"` — C#'s plain interpolated string, with ordinary escapes. It was missing: `$@"…"` and
+  // `@$"…"` were both handled and this one fell through, so the `$` passed as code and the quote
+  // opened a bare string that ended at the first quote INSIDE the interpolation. It happened to
+  // give the right answer while every literal was blanked wholesale, and stopped the moment holes
+  // started being scanned. Found by the code round's C# case going red after the real fix.
+  if (here === '$' && next === '"') {
+    return quotedEnd(code, at + 2, '"');
   }
   if (here === '"' || here === '\'' || here === '`') {
     return quotedEnd(code, at + 1, here);
