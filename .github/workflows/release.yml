@@ -551,7 +551,10 @@ jobs:
       - run: npm run bundle
 
       - name: Package
-        run: npx --no -- @vscode/vsce package --no-dependencies
+        # The binary `npm ci` just installed, called directly: no package spec means no version
+        # to pin in a second place, no registry lookup and no lifecycle scripts. The lockfile is
+        # the only thing that decides which vsce runs.
+        run: ./node_modules/.bin/vsce package --no-dependencies
 
       # Drafted and published in one step, because this line is ONE job producing ONE asset — there
       # are no siblings to wait for and nothing a separate job could see that this one cannot. The
@@ -603,7 +606,7 @@ jobs:
             echo "::warning::VSCE_PAT is not set — the .vsix is on the GitHub release; upload it to the Marketplace by hand or add the secret."
             exit 0
           fi
-          npx --no -- @vscode/vsce publish --no-dependencies --packagePath ./*.vsix -p "$VSCE_PAT"
+          ./node_modules/.bin/vsce publish --no-dependencies --packagePath ./*.vsix -p "$VSCE_PAT"
 
   # ---------------------------------------------------------------------------
   # The Team server, as six Native AOT binaries.
