@@ -167,6 +167,14 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // picker goes on offering names that have moved and nothing else on screen says so. ONE site, not
 // one per conversation: a folder refactor moves many at once, so the counts are gathered and
 // `followReport` chooses a single sentence.
+// the ± zoom and ± tone controls, and a settings write that fails now says so. Every other page
+// 123 stays 123 on 2026-09-17, story 1.1 of PLAN_the_review_page_can_be_read, and the reason is
+// worth more than the number. The review panel gained the zoom and tone controls, and a settings
+// write that fails now says so - one new place. But helpPanel.ts had the SAME helper privately over
+// showWarningMessage, and three reviewers across two providers called the duplication in one round.
+// Extracting it into settingWrite.ts made the two sites one, and took that last direct call through
+// the funnel: the population is unchanged and the DIRECT count fell from 1 to 0, which is the only
+// direction the ratchet below allows.
 const PLACES_THIS_SPEAKS = 123;
 
 test('the POPULATION changes only on purpose', () => {
@@ -185,7 +193,8 @@ test('the POPULATION changes only on purpose', () => {
  * and never to rise: a new direct call makes the drift test above red, and lowering this constant
  * is the only sanctioned way to change it.
  */
-const MOST_DIRECT_CALLS_ALLOWED = 1;
+// 1 -> 0 on 2026-09-17: helpPanel.ts was the last one, and settingWrite.ts routes it.
+const MOST_DIRECT_CALLS_ALLOWED = 0;
 
 test('no call site is added outside the funnel — the count only ever falls', () => {
   const counted = count();

@@ -1,9 +1,12 @@
 # PLAN — CI hardening across the dew_flow family: formatting gates, supply chain, PR culture, releases
 
-> Status: **partially implemented, 2026-09-17.** Repository settings applied 2026-09-05. Epic 3 (pins,
-> the persisted credential, dependabot, PR template, semantic titles) and Epic 5 steps 0–2 are shipped;
-> Epic 2 is shipped except one blocked line recorded in its own section. Epics 1 and 4 are NOT started,
-> and Epic 5 step 3 — the step that actually closes the write-token hole — waits on Epic 4.
+> Status: **partially implemented, 2026-09-18.** Repository settings applied 2026-09-05. Epic 3 (pins,
+> the persisted credential, dependabot, PR template, semantic titles) is shipped, and so are Epic 5
+> steps 0–2 — step 0's table is in this document as of 2026-09-18, which is what that step asks for
+> and what the previous status line claimed before there was one. Epic 2 is shipped, its one blocked
+> line resolved 2026-09-18. Epic 1 is AUDITED but NOT APPLIED: the gaps are tabled in its own section
+> and writing branch protection needs the operator. Epic 4 is NOT started, and Epic 5 step 3 — the
+> step that actually closes the write-token hole — waits on it.
 > Scope: every `dew_flow_*` repository's `.github/` (workflows, dependabot, PR template),
 > `.editorconfig` where missing, and `dew_flow_conventions` for the rule that binds them.
 >
@@ -158,6 +161,37 @@ that provably does nothing.
    `pull_request` triggers of `ci-server.yml` and `ci-extension.yml`; protection requires all jobs.
 2. Protection + merge settings on `rag_qln`, `mcp`, `benchmark`, `sidecar_rust`, requiring their
    existing jobs (contract jobs included — they run on every PR with their own services).
+
+   **AUDITED 2026-09-18, and the gap is wider than this line assumed.** The required-check list is
+   hand-maintained and its failure mode is a GREEN result: a job not on the list runs, goes red, and
+   the pull request merges anyway. Measured against the check names GitHub **actually reported** on
+   recent merged pull requests — not against the workflows, because the string a check reports under
+   is the whole contract, and a required name that never appears blocks every pull request forever:
+
+   | repository | required today | runs but is NOT required |
+   |---|---|---|
+   | `rag_qln` | **no branch protection at all** | `build-test`, `contract`, `extension`, `plans`, `pr · semantic title`, `workflows · actionlint` |
+   | `creds_for_devs` | 3 | `build · test`, `clients · build · test` (×2 legs), `compose · scripts`, `http · contract suite`, `typecheck · test · package`, `SonarCloud Scan`, `workflows · actionlint` |
+   | `connect_other_ais` | 3 | `SonarCloud Scan`, `pr · semantic title`, `workflows · actionlint` |
+   | `mcp` / `benchmark` / `sidecar_rust` | 3 / 3 / 4 | `CodeQL`, `pr · semantic title`, `workflows · actionlint` |
+   | `conventions` | 4 | `workflows · actionlint` |
+
+   Verified safe to require: no `pull_request` trigger in any of the seven carries a `paths` filter,
+   so none of these can fail to report; and `pr · semantic title` runs on Dependabot pull requests
+   too, which is the case that would otherwise have been blocked permanently.
+
+   **Deliberately NOT to be required**, because an unexplained omission is the next person's puzzle:
+   `ask CodeRabbit` (a third-party free tier that runs out — requiring it puts every merge behind
+   somebody else's quota), `github-advanced-security` and the `Analyze (…)` legs (umbrella and
+   per-language parts of `CodeQL`, which the family already requires), `SonarCloud Code Analysis`
+   (Sonar's own gate, distinct from the `SonarCloud Scan` job the family requires — making the gate
+   blocking is its own decision), `extension · a real editor` (its workflow says in writing to promote
+   it after twenty consecutive green runs on main), and `submit-nuget` (produced by no workflow in the
+   repository, so when it runs is not something this plan knows).
+
+   **NOT APPLIED.** Writing branch protection is a privileged action on the operator's repositories
+   and needs their say-so; the audit above is the whole of the decision, so applying it is one call
+   per repository once that is given.
 3. **BLOCKED — see requirement 8.** `tools/repo-settings-check.mjs`, with its selftest; run by hand
    for now (it needs a token), documented in the README. Its HOME is the open decision: conventions
    (as written) or one repository. Do not build it until requirement 8 records the answer — the
@@ -268,13 +302,34 @@ that token in `.git/config` for them to read. Nothing in those jobs needs it —
 
 **What is left. Step 0 first — the rest is stated for the family and measured in one repository.**
 
-0. **Inventory the other six.** For each: which workflows trigger on a tag, which of their jobs hold
-   `contents: write` or a `GH_TOKEN`, which checkouts persist credentials, which scripts those jobs
-   run from the checkout, and the exact tag patterns each releases on. One table in this document.
-   Without it a builder protects `v*` somewhere that releases on `server-v*`, or misses a release
-   path entirely — and the steps below all key off that table.
+0. **Inventory the other six — DONE, 2026-09-18.** Measured from `origin/main` in every repository,
+   not from a working copy: the first attempt at this read stale checkouts and missed a whole release
+   line. The question is narrow — which jobs a TAG can start while holding `contents: write` or a
+   token, and what they run out of the checkout, because a tag can point at any commit.
+
+   | repository | tag patterns | privileged jobs a tag starts | scripts run from the checkout | checkout keeps the credential |
+   |---|---|---|---|---|
+   | `connect_other_ais` | `mcp-v*` `extension-v*` `server-v*` `bugs-v*` | **13** — 3 draft, 3 binaries, 3 release-complete, extension, 2 images, manifest | `changelog-names-the-release.mjs`, `changelog-section.mjs`, `draft-release.sh`, `publish-output-carries.sh`, `archive-carries.sh`, `verify-and-publish-release.sh` | no |
+   | `creds_for_devs` | `server-v*` `extension-v*` `cli-v*` `mcp-v*` | 8 — image, manifest, 3 binaries, 3 release | none | no |
+   | `sidecar_rust` | **`v*`** | 1 — `cpu` | none | no |
+   | `conventions` | — | none | — | — |
+   | `mcp` | — | none | — | — |
+   | `rag_qln` | — | none | — | — |
+   | `benchmark` | — | none | — | — |
+
+   **Three repositories release, not seven**, and the four that do not have no tag-triggered job
+   holding a write permission at all — so steps 1 to 3 have three subjects, not seven. The sidecar's
+   `v*` is the row Epic 4 has to decide about: it is the only unprefixed pattern in the family.
+
+   **`connect_other_ais` is the one that matters**, and not because it has the most jobs: it is the
+   only repository whose release jobs execute SCRIPTS from the checkout while holding a write token.
+   Six of them. That is the CWE-522 surface in one sentence — a tag against an unreviewed commit runs
+   that commit's six scripts with the credentials that publish releases.
 1. `persist-credentials: false` on **every** checkout that does not push, across the family. A
    checkout that DOES push keeps it, and the inventory says which those are.
+   **DONE — verified 2026-09-18:** every checkout in every tag-triggered job in all three releasing
+   repositories carries `persist-credentials: false`. None of them pushes, so there is no exception
+   to record.
 2. **Every `uses:` pinned to a full 40-character commit SHA, with the version in a trailing comment**
    — `actions/checkout@8f4b7f8… # v5`. Not "one policy per repository": the family picks SHA, because
    a tag is mutable and zizmor reports it as `unpinned-uses` under a blanket policy. The mixed state
@@ -282,6 +337,13 @@ that token in `.git/config` for them to read. Nothing in those jobs needs it —
    were a decision. **This is only maintainable with the `github-actions` Dependabot group** in
    requirement 3; a frozen SHA with no bot behind it rots into an unpatched action, which is a worse
    place than a tag. Do not do step 2 in a repository before that group exists there.
+   **DONE — measured 2026-09-18: 127 `uses:` lines across the seven repositories are pinned to a
+   40-character commit SHA and ZERO are pinned to a tag or a branch.** The `github-actions`
+   Dependabot group exists in all seven, which is what keeps a frozen SHA from rotting into an
+   unpatched action. One line regressed and was caught the same week — a job that reached main with
+   `actions/checkout@v7` — which is the argument for Epic 1's check rather than against the policy:
+   nothing in CI asks whether a `uses:` is pinned, so the answer is only as current as the last
+   person who looked.
 3. **Protected release tags** — the one that actually closes CWE-522; the others narrow the blast
    radius, this removes the entry. The mechanism, because "protected" alone is not actionable:
    a GitHub **tag ruleset** over each release pattern from the step 0 table (`mcp-v*`,

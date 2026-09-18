@@ -7216,6 +7216,172 @@ unrelated repainted the panel.
 `JSON.parse(...) as T` is a promise rather than a check, and a malformed element would otherwise
 reach the page as `undefined` in a cell and as an invalid id in the decision posted back.
 
+### Collapsed by default, and the page can be sized (2026-09-17, story 1.1)
+
+Two hundred pairs each showing two skeletons is a page nobody scrolls. **Every row now opens
+collapsed** — a summary line per pair, its code behind a disclosure button — with *Expand all* and
+*Collapse all* in the bar, and the ± zoom and ± tone controls every other page here carries
+(`zoomControl.ts` / `textTone.ts` on the page, `uiScaleHost.ts` / `textToneHost.ts` on this side,
+both hooks disposed with the panel).
+
+**A pair is two `<tr>`s, not one row with hidden cells.** Cells sized for skeletons leave a collapsed
+table as a column of empty space wider than the text beside it, so the summary and the detail are
+separate rows and the detail carries `hidden`. The pair's bottom border moves to whichever of the two
+is last, so an open pair reads as one block.
+
+**Which rows are open lives on the PANEL, keyed by `findingId`.** `draw()` replaces `webview.html`
+wholesale and the new document remembers nothing — `rolesPanel.ts` holds its open tab for the same
+reason — and every decision redraws, so without this a person who opened four rows and decided about
+one would be thrown back to a fully collapsed list. A position would be worse than forgetting: a
+redraw can reorder rows or drop the one that was open, and an index then re-opens somebody else's
+method. The set is pruned to what still exists on each SUCCESSFUL read only; pruning against a failed
+read would collapse everything the moment the server timed out once.
+
+**The gesture is painted by the page and merely reported to the panel.** A redraw runs the server
+binary, so a round trip per click would make opening a row cost a process. The page owns what is on
+screen; the panel owns what survives the next redraw.
+
+**The disclosure branch matches the BUTTON, never the row.** `closest('[data-toggle]')` rather than
+`closest('[data-row]')` is one character, and the wider version reads the expanded state off an
+element that does not carry it — after which a second press can never close what the first one
+opened. The suite is red for exactly that mutation.
+
+**The whole summary line is the button** — the method name, the severity/category/title line and the
+state word are all inside it, as spans, because a `<button>` takes phrasing content and a `<div>` in
+one is invalid markup browsers merely tolerate. The first version wrapped only the chevron and the
+name while the stylesheet beside it claimed otherwise, so pressing the part of the row that says
+what the defect IS did nothing at all. (Code round, codex.)
+
+**One helper now reports a failed view-settings write, for every page.** `helpPanel.ts` had a private
+one over `showWarningMessage` and this panel grew a second over `notify`; three reviewers across two
+providers named the duplication in one round. `settingWrite.ts` is the extracted half — and because
+it routes through the funnel, it also retired the **last direct notification call in the extension**:
+the census ratchet went from one permitted direct call to zero.
+
+### Syntax highlighting, with VS Code's own grammars (2026-09-17, story 1.2)
+
+`codeHighlight.ts` — Shiki 4.4.3, three grammars (`csharp`, `typescript`, `javascript`, which is
+exactly what `TreeSitterNormalizer` collects), one theme, and the **JavaScript** regex engine rather
+than the Oniguruma WASM one, so there is no `.wasm` to ship or find at run time.
+
+**The choice was made by a measurement and the deciding fact was not the size.** *Neither option can
+use VS Code's own colours* — a webview is handed the workbench theme variables and no token colours,
+and the only token-ish variable in either repository is `--vscode-debugTokenExpression-name`. So
+"as close to VS Code's own as possible" reduces to **tokenisation**, which real TextMate grammars buy
+and a regex cannot, on a corpus that is real code: `Normalise` renames identifiers and leaves
+literals, comments, generics and interpolation verbatim. Cost, measured: `.vsix` **565,590 →
+664,353 B (+17.5 %)**, against a predicted +17.0 %.
+
+**`createCssVariablesTheme`, never a stock theme.** A stock theme bakes `#1E1E1E`/`#D4D4D4` into
+every block — a dark slab inside a light editor, and a tone control that does nothing to the code it
+was bought for. The variables map to `var(--vscode-charts-*)` exactly as `creds_for_devs` maps its
+own `tok-*` classes, and `--coai-hl-foreground` is `--coai-read`, so the tone moves the uncoloured
+majority of the code with the rest of the page. Token colours are left out of the tone deliberately:
+dimming a keyword towards the background is how a highlighted block stops being readable.
+
+**Built lazily, never at import.** `bugzReviewPage.ts` is reachable from the extension's entry
+point, so a module-level `createHighlighterCoreSync` would cost every window three grammars at
+activation whether or not anybody opened the page.
+
+**Each block is tokenised once, keyed by its own text.** Three plan reviewers raised the same cost
+independently and were right to ask for a number: a draw of 200 pairs is 400 `codeToHtml` calls, and
+a draw happens after every decision. Measured before and after, on 200 pairs fully expanded:
+
+| | first draw | every draw after |
+|---|---|---|
+| time | 468 ms | **2–3 ms** |
+| blocks tokenised | 400 | **0** |
+
+The key is the text itself, which is what makes it safe rather than merely fast — a skeleton that
+changed is a different key, so nothing stale can be served, and the corpus is immutable between
+collections anyway.
+
+**It is bounded in BYTES and it is a real LRU**, both because the code round found the first attempt
+was neither. A count is the wrong unit: a thousand blocks is generous at 200 pairs and useless at
+2000, where a top-to-bottom draw evicts what the same draw needs again. And `Map` iterates in
+insertion order while `set` on an existing key does *not* move it, so a cache that only inserted
+would evict the top of a long review however often it was read — exactly backwards. A hit now
+re-inserts, and a re-render of a key already held no longer evicts somebody else for nothing.
+
+**What is NOT lazy, and why.** Collapsed rows are still tokenised, so opening a panel of 200 pairs
+costs 468 ms once. A reviewer proposed highlighting only open rows; measured, that trade is worse.
+The page paints a disclosure locally precisely so a click costs no process — making the panel redraw
+instead would put a full page rebuild (209 ms, measured) on **every** row a person opens, against
+468 ms **once** when they open the panel. Opening rows is the frequent act. The real ceiling here is
+the page's size at corpus scale — 1.3 MB of HTML at 200 pairs — and that is a virtualisation question
+for a later epic, recorded in the plan rather than half-answered here.
+
+**"We do not read this language" and "this language broke" are different answers.** Both render
+uncoloured, so the block carries `data-highlight="plain"` or `data-highlight="failed"`; without it
+nobody can tell a deliberate fallback from broken highlighting, nor which rows a corpus-extraction
+defect touched. A grammar failure also reaches `console.warn` — this module is pure and cannot reach
+the notification funnel, which is the honest limit of what it can say.
+
+**An unknown language renders as escaped plain text in the same wrapper**, and so does a grammar that
+throws — a row rendering nothing is indistinguishable from a pair that was never collected. That
+fallback path is the one a new corpus language reaches first, which is why it is escaped and tested
+rather than assumed unreachable.
+
+### What differs, the way git shows it (2026-09-18, story 1.3)
+
+`lineDiff.ts` marks every line of both skeletons `same`, `added`, `removed` or `changed`, and
+`codeHighlight.ts` puts that on the line's own node through a **Shiki transformer** — so the diff
+rides on top of the tokens without a string replace ever touching the markup, which is the one way
+to add a class per line that cannot cut a token or an HTML entity in half.
+
+**The measurement that decided the algorithm: anonymisation invents differences the original code
+never had.** The normaliser numbers placeholders in order of declaration (`Placeholders.cs`,
+`$"{kind}_{next}"`, kinds exactly `var`/`method`/`type`), so a fix that adds ONE line near the top
+renumbers everything below it. On a representative pair:
+
+| | lines marked |
+|---|---|
+| the fix actually added | **1** |
+| a plain line diff | **7** |
+| a diff over masked names | **1** |
+
+Seven of seven lines, for one added statement. So the COMPARISON runs over masked text and the
+DISPLAY keeps the real text.
+
+**The mask is NARROW, and that was a code-round correction.** The first version matched any
+`([A-Za-z]+)_\d+` so a fourth placeholder kind would keep working — and two reviewers on two
+providers refused it for a reason the plan had missed: the corpus keeps string literals and comments
+verbatim, so `utf8_2`, `base64_128` and `token_1` are things a skeleton really contains, and masking
+them would report a line where one of them genuinely changed as UNCHANGED. It now masks exactly
+`var`, `method` and `type`, and `lineDiff.test.ts` reads `Placeholders.cs` and fails if the
+normaliser ever returns a kind that is not on that list.
+
+**The honest cost, stated rather than hidden:** a line whose only difference is a placeholder index
+reads as unchanged, and that cannot be told apart from an author genuinely switching variable —
+the skeleton no longer carries what would distinguish them. The mask takes the smaller error.
+
+**A removal opposite an addition is one line rewritten.** Git's own line diff has only `+` and `-`,
+but a person reading two panes sees a rewrite; only the OVERLAP is paired, so three gone and one
+arrived is one change and two removals. Colours come from `--vscode-diffEditor-insertedLineBackground`
+and its removed twin — the one family of variables a webview is given for this — with the gutter
+marker as a `::before` so it costs the code no indentation and cannot be selected into a copy.
+
+**A pair too large to diff is compared as a whole.** The table is `before x after` cells and `row()`
+builds one per pair including collapsed ones, so four reviewers asked for a ceiling. Past 250,000
+cells — a 500-line method against a 500-line method, far outside what the collector extracts, which
+is ONE member — the two sides are compared whole: identical stays unmarked, anything else marks
+every line, which says "these differ and this page will not pretend to know where".
+
+**Every marked line carries its mark as text, not only as colour.** The gutter's `+`, `−` and `~`
+are CSS `content`, which most engines keep out of the accessibility tree — three reviewers said so
+independently. A visually hidden span inside each marked line carries the word, and `changed` is
+spelled out rather than left as a glyph because git has no third state for a person to recognise.
+
+**The marks are part of the cache key.** The same skeleton diffed against a different counterpart is
+different markup, and a key that ignored them would serve one pair's colouring to another — a row
+confidently wrong about which of its own lines changed.
+
+**The webview message boundary is a union, parsed once.** `asReviewMessage` turns raw data into one
+of four shapes or into nothing, and `received` switches over it. A plain lookup table answered
+`handlers['__proto__']` with something truthy and uncallable; `null` threw on the first field read;
+and a `NaN` delta reached `clampScale`, which answers 0 for anything non-finite — so a junk press
+would have silently reset somebody's zoom rather than doing nothing.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
@@ -7383,7 +7549,7 @@ is that every moved line is verbatim may not fix anything, so the eleven pre-exi
 while the file was being carved up were left exactly where they were — including a workspace
 containment check in `chatHooks.ts` that is lexical in front of two calls that follow symlinks, which
 `claudeSessions.ts` already canonicalises against. They are
-[../todo/PLAN_the_tail_of_the_command_split.md](../todo/PLAN_the_tail_of_the_command_split.md), with
+[PLAN_the_tail_of_the_command_split.md](PLAN_the_tail_of_the_command_split.md), with
 the six SonarCloud findings on lines that count as new only because they moved.
 
 | Module | What it owns | Imports `vscode` |
