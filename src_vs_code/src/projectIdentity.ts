@@ -111,12 +111,31 @@ function collapsed(path: string): string {
  * only in case are two projects, and this product's store is per machine.</p>
  */
 export function normalisePath(raw: string): string {
-  const slashed = collapsed(raw.trim().split('\\').join('/')).toLowerCase();
+  return shaped(raw).toLowerCase();
+}
+
+/**
+ * The same path, WITHOUT the case folding — which is the form the filesystem must be asked about.
+ *
+ * <p><b>CI found why these have to be two functions, and the docblock above had already named the
+ * hazard before walking into it.</b> The suite was green on Windows and red on the Ubuntu runner:
+ * folding the path before `existsSync` sees it asks about a directory that exists nowhere case
+ * matters, so on Linux every project with a capital letter in its path reported as *not on disk*.
+ * Separators, doubled separators and a trailing slash are normalised here because those are
+ * spelling in every filesystem; case is not.</p>
+ *
+ * <p>{@link askedOnce} therefore memoises by the unfolded path, and two spellings of one Windows
+ * directory cost two `existsSync` calls. That is the right trade: one extra stat per draw against
+ * an identity rule that answers wrongly on half the platforms this extension runs on.</p>
+ */
+export function shaped(raw: string): string {
+  const slashed = collapsed(raw.trim().split('\\').join('/'));
+
   return slashed.length > 1 ? slashed.replace(/\/$/u, '') : slashed;
 }
 
 /** A drive-qualified path, a POSIX root, or a UNC share — anything else is relative. */
-const ABSOLUTE = /^([a-z]:\/|\/)/u;
+const ABSOLUTE = /^([a-z]:\/|\/)/iu;
 
 /** Which root a resolved path keeps: a UNC share's two separators, a POSIX root's one, or neither. */
 function leadOf(base: string): string {
@@ -170,11 +189,14 @@ function resolvedAgainst(base: string, said: string): string {
 function parentOf(path: string, mark: GitMark): string {
   if (mark.kind !== 'linked') return '';
 
-  const said = normalisePath(mark.gitdir);
+  // Shaped, not folded: a relative gitdir is resolved against the real path, and the ABSOLUTE test
+  // wants the drive letter in either case, which `[a-z]:\/` with the `i`-free pattern would miss.
+  // Folding happens once, on the way out, because the KEY is the only folded thing here.
+  const said = shaped(mark.gitdir);
   const where = ABSOLUTE.test(said) ? said : resolvedAgainst(path, said);
   const found = LINKED.exec(where);
 
-  return found === null ? '' : found[1];
+  return found === null ? '' : found[1].toLowerCase();
 }
 
 function lastSegment(key: string): string {
@@ -188,13 +210,15 @@ function unknownProject(): ProjectIdentity {
 
 function identified(path: string, mark: GitMark): ProjectIdentity {
   const parent = parentOf(path, mark);
-  const key = parent === '' ? path : parent;
+  const key = parent === '' ? path.toLowerCase() : parent;
+
   return { key, label: lastSegment(key), full: key, reachable: mark.kind !== 'gone' };
 }
 
 /** Which project one `sessions.repo_path` belonged to. */
 export function identityOf(raw: string, read: MarkReader): ProjectIdentity {
-  const path = normalisePath(raw);
+  const path = shaped(raw);
+
   return NO_IDENTITY.has(path) ? unknownProject() : identified(path, read(path));
 }
 

@@ -31,7 +31,13 @@ import { askedOnce, GitMark, identityOf, normalisePath, readGitMark, UNKNOWN_PRO
  * </ul>
  */
 
-/** A filesystem that answers from a table, so a test states what git wrote rather than mocking fs. */
+/**
+ * A filesystem that answers from a table, so a test states what git wrote rather than mocking fs.
+ *
+ * <p>Keyed by the path the reader is actually ASKED about — separators normalised, case KEPT. It
+ * was keyed by the folded path until CI went red on Linux and the fold was moved off the
+ * filesystem lookup; keeping the table folded would have hidden that move from every test here.</p>
+ */
 function marksFrom(table: Readonly<Record<string, GitMark>>): (path: string) => GitMark {
   return (path) => table[path] ?? { kind: 'gone' };
 }
@@ -55,11 +61,11 @@ test('one repository spelled three ways is one project', () => {
 test('a linked worktree belongs to the repository its .git names', () => {
   // Verbatim from this worktree's own `.git` file.
   const read = marksFrom({
-    'c:/users/strug/appdata/local/temp/claude/d--rsd-clauderag/23347fea/scratchpad/wt-rp': {
+    'C:/Users/strug/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp': {
       kind: 'linked',
       gitdir: 'D:/rsd/dew_flow_connect_other_ais/.git/worktrees/wt-rp',
     },
-    'd:/rsd/dew_flow_connect_other_ais': { kind: 'checkout' },
+    'D:/rsd/dew_flow_connect_other_ais': { kind: 'checkout' },
   });
 
   const one = identityOf('C:/Users/strug/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp', read);
@@ -72,8 +78,8 @@ test('a linked worktree belongs to the repository its .git names', () => {
 test('two worktrees in ONE directory belonging to two products stay apart', () => {
   // Finding 0, and it is not hypothetical: these two are real siblings in the live table.
   const read = marksFrom({
-    'd:/rsd/_wt/coai-audit': { kind: 'linked', gitdir: 'D:/rsd/dew_flow_connect_other_ais/.git/worktrees/coai-audit' },
-    'd:/rsd/_wt/creds-form-chrome': { kind: 'linked', gitdir: 'D:/rsd/dew_flow_creds_for_devs/.git/worktrees/creds-form-chrome' },
+    'D:/rsd/_wt/coai-audit': { kind: 'linked', gitdir: 'D:/rsd/dew_flow_connect_other_ais/.git/worktrees/coai-audit' },
+    'D:/rsd/_wt/creds-form-chrome': { kind: 'linked', gitdir: 'D:/rsd/dew_flow_creds_for_devs/.git/worktrees/creds-form-chrome' },
   });
 
   const a = identityOf('D:\\rsd\\_wt\\coai-audit', read);
@@ -109,8 +115,8 @@ test('a RELATIVE gitdir is resolved against the worktree that holds it', () => {
   // answer `../repo` and land in one tab — the very merge this module exists to prevent, arriving
   // through the door that was supposed to prevent it.
   const read = marksFrom({
-    'd:/products/a/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
-    'd:/products/b/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
+    'D:/products/a/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
+    'D:/products/b/wt': { kind: 'linked', gitdir: '../repo/.git/worktrees/wt' },
   });
 
   const a = identityOf('D:/products/a/wt', read);
@@ -125,8 +131,8 @@ test('a relative gitdir joins its worktree to the same tab as the absolute form 
   // The companion: resolving to SOMETHING unique would pass the test above while still splitting a
   // worktree from its own main checkout.
   const read = marksFrom({
-    'd:/rsd/_wt/wt-a': { kind: 'linked', gitdir: '../../dew_flow_x/.git/worktrees/wt-a' },
-    'd:/rsd/dew_flow_x': { kind: 'checkout' },
+    'D:/rsd/_wt/wt-a': { kind: 'linked', gitdir: '../../dew_flow_x/.git/worktrees/wt-a' },
+    'D:/rsd/dew_flow_x': { kind: 'checkout' },
   });
 
   assert.equal(identityOf('D:/rsd/_wt/wt-a', read).key, identityOf('D:/rsd/dew_flow_x', read).key);
@@ -175,20 +181,25 @@ test('a memoised reader answers each distinct path once, and KEEPS answering it'
   const once = askedOnce((path) => {
     asked += 1;
 
-    return path === 'd:/rsd/repo' ? { kind: 'checkout' } : { kind: 'gone' };
+    return path.toLowerCase() === 'd:/rsd/repo' ? { kind: 'checkout' } : { kind: 'gone' };
   });
 
   const keys = ['D:\\rsd\\repo', 'd:/rsd/repo', 'D:/rsd/repo/', 'D:\\rsd\\other', '.', '.']
     .map((raw) => identityOf(raw, once).key);
 
-  assert.equal(asked, 2, 'six paths, two distinct normalised ones, and `.` is answered without asking');
-  assert.deepEqual([...new Set(keys)], ['d:/rsd/repo', 'd:/rsd/other', UNKNOWN_PROJECT]);
+  // THREE, and the number is the fix's real cost rather than a fudge: `D:/rsd/repo` and
+  // `d:/rsd/repo` are one directory on Windows and two strings, and the fold was deliberately
+  // moved off the filesystem lookup after CI went red on Linux. One extra `existsSync` per
+  // duplicated spelling per draw, against an identity rule that answered wrongly on Linux.
+  assert.equal(asked, 3, 'two spellings of one Windows path are two lookups; `.` is answered without asking');
+  assert.deepEqual([...new Set(keys)], ['d:/rsd/repo', 'd:/rsd/other', UNKNOWN_PROJECT],
+    'and they still land in ONE bucket, because the KEY is folded');
 
-  // Used again, as the panel uses it across repaints: still two.
+  // Used again, as the panel uses it across repaints: nothing new is learned.
   identityOf('D:/rsd/repo', once);
   identityOf('D:\\rsd\\other', once);
 
-  assert.equal(asked, 2, 'a reader held across draws must not probe the filesystem a second time');
+  assert.equal(asked, 3, 'a reader held across draws must not probe the filesystem a second time');
 });
 
 test('normalising is separators, a trailing slash and case — and nothing else', () => {
@@ -209,18 +220,24 @@ test('normalising is separators, a trailing slash and case — and nothing else'
  * absent, because both mean the identity could not be learned.</p>
  */
 test('the real reader tells a checkout from a worktree from nothing at all', () => {
+  // The directories are named with CAPITALS on purpose. The first version of this test let
+  // `mkdtempSync` choose, and CI answered: the runner drew `coai-identity-YrJmu3`, the path was
+  // case-folded before `existsSync` saw it, and on Linux the lookup missed — the key came back as
+  // the folded path instead of the repository. That is the defect the fold now stays out of the way
+  // of, and a test that relies on six random characters to contain a capital is a test that passes
+  // most days.
   const root = mkdtempSync(join(tmpdir(), 'coai-identity-'));
 
   try {
     // A main checkout: `.git` is a directory.
-    const main = join(root, 'main');
+    const main = join(root, 'Main-Checkout');
     mkdirSync(join(main, '.git'), { recursive: true });
     assert.deepEqual(readGitMark(main), { kind: 'checkout' });
 
     // A linked worktree: `.git` is a file, and the gitdir is the text after the marker. Written
     // with a trailing newline, as git writes it, because a gitdir with a `\n` on the end resolves
     // to nothing.
-    const linked = join(root, 'wt');
+    const linked = join(root, 'WT-Mixed');
     mkdirSync(linked, { recursive: true });
     writeFileSync(join(linked, '.git'), 'gitdir: D:/rsd/repo/.git/worktrees/wt\n', 'utf8');
     assert.deepEqual(readGitMark(linked), { kind: 'linked', gitdir: 'D:/rsd/repo/.git/worktrees/wt' });
@@ -228,13 +245,13 @@ test('the real reader tells a checkout from a worktree from nothing at all', () 
       'the whole chain, through the real filesystem');
 
     // A directory that is not a checkout, and one that does not exist — 41 % of the live corpus.
-    mkdirSync(join(root, 'plain'), { recursive: true });
-    assert.deepEqual(readGitMark(join(root, 'plain')), { kind: 'gone' });
-    assert.deepEqual(readGitMark(join(root, 'never-existed')), { kind: 'gone' });
+    mkdirSync(join(root, 'Plain'), { recursive: true });
+    assert.deepEqual(readGitMark(join(root, 'Plain')), { kind: 'gone' });
+    assert.deepEqual(readGitMark(join(root, 'Never-Existed')), { kind: 'gone' });
 
     // A `.git` file with no marker in it: readable, and says nothing. Not an error — the identity
     // simply cannot be learned, so it falls back to the path.
-    const odd = join(root, 'odd');
+    const odd = join(root, 'Odd-One');
     mkdirSync(odd, { recursive: true });
     writeFileSync(join(odd, '.git'), 'something else entirely', 'utf8');
     assert.deepEqual(readGitMark(odd), { kind: 'linked', gitdir: '' });
@@ -242,4 +259,40 @@ test('the real reader tells a checkout from a worktree from nothing at all', () 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('the filesystem is asked about the path AS GIVEN, never case-folded', () => {
+  // Found by CI: this suite was green on Windows and red on the Ubuntu runner, for the reason this
+  // module's own docblock names and then walks into. The KEY is folded on purpose — 15 of the live
+  // table's 106 values were one path spelled differently — but folding it before the filesystem
+  // sees it asks about a directory that exists nowhere case matters. On Linux that makes every
+  // project with a capital letter in its path report as not on disk.
+  const asked: string[] = [];
+  const read = (path: string): GitMark => {
+    asked.push(path);
+
+    return { kind: 'checkout' };
+  };
+
+  const one = identityOf('D:\\RSD\\Dew_Flow_X', read);
+
+  assert.deepEqual(asked, ['D:/RSD/Dew_Flow_X'], 'separators normalised and a trailing slash dropped, case KEPT');
+  assert.equal(one.key, 'd:/rsd/dew_flow_x', 'and the key is still folded, which is what groups the spellings');
+  assert.equal(one.label, 'dew_flow_x', 'the label comes off the key, so it is folded too');
+});
+
+test('a relative gitdir is resolved against the unfolded path as well', () => {
+  // The companion: resolving against the FOLDED base would ask the filesystem about the right
+  // directory and then key the parent off the wrong one, which is the same defect one step later.
+  const asked: string[] = [];
+  const read = (path: string): GitMark => {
+    asked.push(path);
+
+    return { kind: 'linked', gitdir: '../Repo/.git/worktrees/wt' };
+  };
+
+  const one = identityOf('D:/Products/A/wt', read);
+
+  assert.deepEqual(asked, ['D:/Products/A/wt']);
+  assert.equal(one.key, 'd:/products/a/repo');
 });
