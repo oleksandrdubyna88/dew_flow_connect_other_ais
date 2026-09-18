@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { askedOnce, GitMark, identityOf, normalisePath, readGitMark, UNKNOWN_PROJECT } from '../projectIdentity';
+import { askedOnce, GitMark, identityOf, normalisePath, readGitMark, shaped, UNKNOWN_PROJECT } from '../projectIdentity';
 
 /**
  * Which sessions belong to the SAME project, decided without spawning anything.
@@ -200,6 +200,23 @@ test('a memoised reader answers each distinct path once, and KEEPS answering it'
   identityOf('D:\\rsd\\other', once);
 
   assert.equal(asked, 3, 'a reader held across draws must not probe the filesystem a second time');
+});
+
+test('a UNC share keeps the two separators that make it one', () => {
+  // `collapsed()` exists for this and nothing asserted it. The operator's coai data folder has
+  // lived on \\\\192.168.1.113\\Shared_Drive_Work, so a session recorded against a share is a real
+  // shape: collapsing its leading pair to one separator would turn the host into a directory under
+  // the root and every project on that share into a sibling of the machine's own files.
+  assert.equal(normalisePath('\\\\192.168.1.113\\Shared_Drive_Work\\repo'), '//192.168.1.113/shared_drive_work/repo');
+  assert.equal(shaped('\\\\Server\\Share\\Repo'), '//Server/Share/Repo', 'and the case is kept for the filesystem');
+  assert.equal(normalisePath('//host//share///deep'), '//host/share/deep', 'every OTHER run is still one');
+
+  // The identity of a worktree on a share resolves against the share, not against a root.
+  const read = marksFrom({
+    '//Server/Share/wt': { kind: 'linked', gitdir: '../Repo/.git/worktrees/wt' },
+  });
+
+  assert.equal(identityOf('\\\\Server\\Share\\wt', read).key, '//server/share/repo');
 });
 
 test('normalising is separators, a trailing slash and case — and nothing else', () => {
