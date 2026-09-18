@@ -23,6 +23,7 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
 
     public void Dispose()
     {
+        SettingsFile.BetweenTheCheckAndThePublication = null;
         try
         {
             Directory.Delete(_root, recursive: true);
@@ -75,13 +76,13 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         WriteRoot("""{"COAI_VENDORS":"codex,gemini"}""");
         var env = Env("alpha");
 
-        var providersFirst = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env);
+        var providersFirst = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, _ => { });
 
         providersFirst("COAI_VENDORS").Should().Be("codex,gemini",
             "the one-shot mode reported defaults for an installation that has configuration, and a "
             + "normal start afterwards would have answered differently about the same machine");
 
-        var normalStart = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env);
+        var normalStart = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, _ => { });
 
         normalStart("COAI_VENDORS").Should().Be(providersFirst("COAI_VENDORS"),
             "two roads to the same settings must not answer differently");
@@ -147,7 +148,8 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         // arrives. Modelled by the leftover a killed writer leaves: a temporary sibling.
         WriteRoot("""{"COAI_VENDORS":"codex"}""");
         Directory.CreateDirectory(Path.Combine(_root, "alpha"));
-        File.WriteAllText(Path.Combine(_root, "alpha", SettingsFile.Name + ".9999.tmp"), "{ half");
+        File.WriteAllText(
+            Path.Combine(_root, "alpha", $"{SettingsFile.Name}.9999.{Guid.NewGuid():N}.tmp"), "{ half");
 
         SettingsFile.AdoptRootSettings(Env("alpha"));
 
@@ -170,21 +172,98 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
     }
 
     [Fact]
-    public void ASecondAdopterFindsItPublished_AndNeitherFileIsLost()
+    public void TheOtherSideWinsMidPublication_AndTheWinnersFileStands()
     {
-        // The third way. Two sides starting at once on a NAS; here the destination appears between
-        // one adopter's check and its publication, which is what the race looks like from inside.
+        // The third way, and the code round was right about the first version of this test: it
+        // created the destination BEFORE calling the adoption, so the existence check returned early
+        // and `File.Move(overwrite: false)` — the guarantee the case is named after — was never
+        // reached. It would have passed with the guard deleted.
+        //
+        // A race is only a race from INSIDE, so the other window finishes in the one instant that
+        // matters: after this side has looked and found nothing, before it renames.
         WriteRoot("""{"COAI_VENDORS":"codex"}""");
-        Directory.CreateDirectory(Path.Combine(_root, "alpha"));
-        File.WriteAllText(SidePath("alpha"), """{"COAI_VENDORS":"published-by-the-winner"}""");
+        SettingsFile.BetweenTheCheckAndThePublication = destination =>
+        {
+            if (destination != SidePath("alpha"))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllText(destination, """{"COAI_VENDORS":"published-by-the-winner"}""");
+        };
 
         var said = SettingsFile.AdoptRootSettings(Env("alpha"));
 
         SettingsFile.Read(SidePath("alpha"))["COAI_VENDORS"].Should().Be("published-by-the-winner",
             "the loser of the race overwrote the winner's file, which is last-writer-wins with two "
             + "processes that both believed they were first");
-        said.Should().BeEmpty();
+        said.Should().BeEmpty("the other side published this side's own configuration; there is "
+            + "nothing here that a person has to be told");
         Directory.EnumerateFiles(Path.Combine(_root, "alpha"), "*.tmp").Should().BeEmpty(
             "a refused publication left its temporary file behind");
+    }
+
+    [Fact]
+    public void AnEmptyRootObject_IsAdoptedLikeAnyOther()
+    {
+        // `{}` is a settings file a person legitimately has — the panel opened once and nothing
+        // changed from the shipped defaults. Treating it as "nothing to adopt" would leave the side
+        // adopting the root LATER, after the person has configured that side, which is the one
+        // ordering where adoption could overwrite something real.
+        WriteRoot("{}");
+
+        var said = SettingsFile.AdoptRootSettings(Env("alpha"));
+
+        File.Exists(SidePath("alpha")).Should().BeTrue(
+            "an empty object is a file that exists, and the side must stop looking at the root");
+        said.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Layer_TellsItsCaller_WhatTheAdoptionDid()
+    {
+        // The defect six reviewers across three vendors found in the code round: `Layer` adopted and
+        // dropped the sentence on the floor, while the comment beside it claimed the startup path
+        // logged what came back. Nothing anywhere called `AdoptRootSettings`. A migration that moves
+        // a person's configuration, told to nobody, is the silent default this family of work exists
+        // to end.
+        WriteRoot("""{"COAI_VENDORS":"codex,gemini"}""");
+        var env = Env("alpha");
+        var heard = new List<string>();
+
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+
+        heard.Should().ContainSingle().Which.Should().Contain(SidePath("alpha"),
+            "the caller is where the log and the stderr channel are; a sink that is never called is "
+            + "the same as having no sentence at all");
+    }
+
+    [Fact]
+    public void Layer_SaysNothing_WhenNothingWasAdopted()
+    {
+        // The other half, and it is what keeps the first half worth having: a line printed on every
+        // ordinary start is a line nobody reads by the third day.
+        var env = Env("alpha");
+        var heard = new List<string>();
+
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+
+        heard.Should().BeEmpty("there was no root file, so nothing happened and nothing is worth "
+            + "saying about it");
+    }
+
+    [Fact]
+    public void ARootFileThatCannotBeRead_ReachesTheCallerToo()
+    {
+        // The failure path has to travel the same road as the success. This is the case where a
+        // person's settings did NOT arrive, which is the one they most need told about.
+        WriteRoot("{ this is not json");
+        var env = Env("alpha");
+        var heard = new List<string>();
+
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+
+        heard.Should().ContainSingle().Which.Should().Contain("starting on defaults");
     }
 }

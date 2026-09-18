@@ -133,18 +133,19 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             SettingsFile.PathFor(_dataDir),
             $$"""{"COAI_ROLES": {{OneCustomRole}} }""");
 
-        var fromFileAlone = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, _ => null));
+        var fromFileAlone = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, _ => null, _ => { }));
         fromFileAlone.Rounds.Catalog.ById("Requirements").Should().NotBeNull("the file is the base layer");
 
         var environmentWins = PanelSettings.FromEnvironment(SettingsFile.Layer(
             _dataDir,
             name => name == "COAI_ROLES"
                 ? """[{"id":"Instead","name":"Instead","stage":"result","prompts":[{"id":"instead-general"}]}]"""
-                : null));
+                : null,
+            _ => { }));
         environmentWins.Rounds.Catalog.ById("Requirements").Should().BeNull();
         environmentWins.Rounds.Catalog.ById("Instead").Should().NotBeNull();
 
-        var broken = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, name => name == "COAI_ROLES" ? "[" : null));
+        var broken = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, name => name == "COAI_ROLES" ? "[" : null, _ => { }));
         broken.Rounds.Catalog.Roles.Should().OnlyContain(r => r.BuiltIn,
             "the value that won is unreadable, and the one it beat does not get a second turn");
         broken.Unrecognised.Should().ContainSingle().Which.Should().Contain("COAI_ROLES");

@@ -121,6 +121,12 @@ public sealed class DataSideVectorTests : IDisposable
         var vector = Vectors[index];
         if (vector.Refused)
         {
+            // Asserted rather than skipped, which the code round was right to name: a fixture that
+            // carried a settings path for a REFUSED side would be describing where data goes for a
+            // configuration the product will not start on, and the extension suite already asserts
+            // this direction. A skip here left the two halves checking different things.
+            vector.SettingsPath.Should().BeEmpty(vector.Why);
+            vector.LogsPath.Should().BeEmpty(vector.Why);
             return;
         }
 

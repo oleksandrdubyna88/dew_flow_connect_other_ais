@@ -33,13 +33,25 @@ public static class SettingsFile
     /// for a machine whose configuration exists, and a normal start afterwards would adopt and answer
     /// differently about that same machine. Whatever reads the settings adopts first, so there is one
     /// road. (The plan round found the seam; the consultation named the check.)</para>
-    /// <para>What it does NOT do is say so — this returns a lookup and has nowhere to put a sentence.
-    /// The startup path calls <see cref="AdoptRootSettings"/> itself and logs what comes back, so the
-    /// adoption is CORRECT everywhere and ANNOUNCED where there is a surface to announce it on.</para>
+    /// <para><b><paramref name="said"/> has no default, and that is the enforcement.</b> The first
+    /// build called <see cref="AdoptRootSettings"/> here and dropped what it returned on the floor,
+    /// while this comment claimed the startup path logged it — nothing anywhere called it. Six
+    /// reviewers across three vendors found the same thing, and they were describing the defect this
+    /// whole family of work exists for: a sentence that is composed and shown to nobody. A migration
+    /// that moves a person's configuration, or REFUSES to, is exactly what they need told. Making the
+    /// sink required means the compiler asks every future caller where its sentences go, which a
+    /// ratchet test could only ask after the fact.</para>
+    /// <para>A caller whose stdout carries a protocol — <c>--providers</c> prints JSON, the stdio
+    /// host speaks JSON-RPC — passes a sink that writes to stderr or to the log, never to stdout
+    /// (<c>logging-serilog.md</c>).</para>
     /// </remarks>
-    public static Func<string, string?> Layer(string dataDir, Func<string, string?> environment)
+    public static Func<string, string?> Layer(string dataDir, Func<string, string?> environment, Action<string> said)
     {
-        AdoptRootSettings(environment);
+        foreach (var sentence in AdoptRootSettings(environment))
+        {
+            said(sentence);
+        }
+
         var fromFile = Read(Path.Combine(dataDir, Name));
         return name => environment(name) is { Length: > 0 } fromEnv ? fromEnv : fromFile.GetValueOrDefault(name);
     }
@@ -123,6 +135,20 @@ public static class SettingsFile
     /// <para>A genuinely new side adopts it too, and that is deliberate: it is what that side would
     /// have read yesterday, so adopting preserves behaviour where starting on defaults would be the
     /// surprise.</para>
+    /// <para><b>Why it takes no lock, asked by four reviewers across two vendors.</b> The lock is the
+    /// EXTENSION's — <c>settings.lock</c>, taken in <c>extension.ts</c> around a WRITE of this same
+    /// file — and the server has never had a client for it. It does not need one here: the rename
+    /// below is <c>overwrite: false</c>, so this operation is create-if-absent and ATOMIC. An
+    /// advisory lock file would be weaker, not stronger — it can be stale, broken or ignored, while a
+    /// rename that refuses cannot lose a write. A window writing the same path at the same moment
+    /// wins and this side reads what it wrote; a partial root file being written by an old extension
+    /// fails to parse, is named, and nothing is copied.</para>
+    /// <para><b>Why a READ does a write at all</b>, which is the other thing reviewers keep asking.
+    /// Because the alternative was measured and is worse: <c>--providers</c> can be the first thing
+    /// that runs, and adoption in the startup path would have it report defaults for a machine whose
+    /// configuration exists. On a filesystem that will not take the write — read-only, a mount gone,
+    /// no permission — nothing here throws: every failure is caught and returned as a sentence, so a
+    /// read stays a read and the caller still gets its settings.</para>
     /// </remarks>
     /// <returns>What a person should be told, or empty when nothing happened.</returns>
     public static IReadOnlyList<string> AdoptRootSettings(Func<string, string?> environment)
@@ -160,13 +186,32 @@ public static class SettingsFile
         return Publish(text, destination, legacy);
     }
 
+    /// <summary>
+    /// A test's only way into the instant between "the destination is not there" and the rename.
+    /// </summary>
+    /// <remarks>
+    /// <para>It exists because the race test did not test the race. It created the destination
+    /// BEFORE calling the adoption, so the existence check returned early and
+    /// <c>File.Move(overwrite: false)</c> — the whole guarantee — was never reached: the test would
+    /// have passed with the guard deleted, which is the same way a test stops meaning anything as
+    /// the one caught on the role-deletion nonce. A race is only a race from INSIDE, so the other
+    /// side of it has to be able to finish here.</para>
+    /// <para>It carries the destination so a test acts only on its own directory: xUnit runs classes
+    /// in parallel and a hook that fires blind would reach into another one's adoption.</para>
+    /// </remarks>
+    internal static Action<string>? BetweenTheCheckAndThePublication;
+
     private static IReadOnlyList<string> Publish(string text, string destination, string legacy)
     {
-        var beside = $"{destination}.{Environment.ProcessId}.tmp";
+        // Random rather than the pid alone. The pid is predictable and this directory can be a share,
+        // so a name anyone could precompute is a name anyone could pre-create — and the pid is not
+        // even unique across two machines mounting one NAS, which is the case this feature is for.
+        var beside = $"{destination}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllText(beside, text);
+            BetweenTheCheckAndThePublication?.Invoke(destination);
 
             // `overwrite: false` is what makes a concurrent winner safe: the loser throws here, says
             // so, and the file that is already published stands.
@@ -202,7 +247,8 @@ public static class SettingsFile
 
     private static string Unreadable(string legacy, string why) =>
         $"{legacy} exists and could not be read ({why}), so this side did not adopt it and is "
-        + "starting on defaults. Nothing was changed.";
+        + "starting on defaults. Nothing was changed. Repair that file, or open the panel and save "
+        + $"the settings once to write a fresh {Name} for this side — either ends this message.";
 
     /// <summary>The settings file itself — what a change watcher has to stat.</summary>
     public static string PathFor(string dataDir) => Path.Combine(dataDir, Name);

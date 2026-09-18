@@ -72,7 +72,12 @@ public sealed class PanelServiceHost
 
     private PanelService Build()
     {
-        var configuration = SettingsFile.Layer(SettingsFile.DataDirFrom(_env), _env);
+        var configuration = SettingsFile.Layer(
+            SettingsFile.DataDirFrom(_env),
+            _env,
+            // This rebuild runs on a stamp change rather than at startup, so it is the one place an
+            // adoption could happen with nobody watching. It has a log; it uses it.
+            note => _log.Warning("data directory: {Note}", note));
         return new PanelService(PanelSettings.FromEnvironment(configuration), _keys, _vaultReadUtc, _launcher, _log);
     }
 
