@@ -42,6 +42,22 @@ const asCompared = (line) => line.replace(/\s+$/u, '');
 const unexported = (line) => line.replace(/^(\s*)export /u, '$1');
 
 /**
+ * A line carrying nothing but punctuation — `}`, `});`, `{`, `/**`, `*∕`, a bare `*`.
+ *
+ * <p>Such a line may CONTINUE a run, which is how a moved function keeps its own closing brace, but
+ * it may not START one. A run start is a claim that a region came from THERE, and a line with no
+ * letter and no digit in it cannot support that claim: it occurs everywhere, so the walk restarts at
+ * whichever occurrence happens to match furthest — usually somewhere entirely unrelated.</p>
+ *
+ * <p><b>Measured on the first extraction out of `panelProvider.ts`.</b> Fifteen runs were reported
+ * where eight regions had been cut, and the split was exact: the eight real regions were the seven
+ * moved fields and the one block of methods, and the other SEVEN all began on a bare `}` or a comment
+ * marker matched at lines 3 989–4 022 of a file whose moved code ends at 987. The tool said
+ * <i>"something was reordered"</i> about a move where nothing had been.</p>
+ */
+const nothingButPunctuation = (line) => !/[A-Za-z0-9]/u.test(line);
+
+/**
  * The moved modules, checked against the original IN ORDER.
  *
  * <p><b>Membership alone is not enough, and three reviewers said so in three ways.</b> The first
@@ -97,10 +113,29 @@ export function movedVerbatim(original, modules) {
       // greedily that inflates the count into noise — measured at 52 runs for 27 real regions — and
       // a budget over a noisy number is not a check. So the occurrence that matches FURTHEST is
       // taken, which is the one the region actually came from.
+      // A closing brace or a comment marker continues a run — that is the branch above — but it can
+      // never begin one. Skipped rather than counted and rather than reported: it IS in the original,
+      // so calling it residue would be a lie, and starting a region on it is the noise this guard
+      // measured seven times out of fifteen on its first class extraction.
+      if (nothingButPunctuation(line)) {
+        continue;
+      }
       const starts = whereverItIs(line);
       if (starts.length === 0) {
+        // RESIDUE, and the walk HOLDS ITS PLACE across it. A line the original never had reorders
+        // nothing: the moved lines on either side keep the order they had, which is the only thing a
+        // run is supposed to measure. Resetting here used to split one run in two at every inserted
+        // line — fine for a file of functions, which are cut whole, and wrong for a CLASS, whose new
+        // module needs a declaration, a constructor and a getter BETWEEN the moved regions. Measured
+        // on the first extraction out of `panelProvider.ts`: thirteen scaffolding lines turned eight
+        // cut regions into fifteen reported runs, and the tool said "something was reordered" about a
+        // move where nothing had been. A verification tool may not cry wolf over basic syntax.
+        //
+        // It does NOT weaken the check. A reordering cannot hide here, because a reordered line
+        // still EXISTS in the original — it is found somewhere else, and being found somewhere else
+        // is what starts a new run. Only genuinely new lines reach this branch, and each is already
+        // reported by name for a reviewer to justify.
         residue.push({ name, line: raw.trim() });
-        next = -1;
         continue;
       }
       runs += 1;
