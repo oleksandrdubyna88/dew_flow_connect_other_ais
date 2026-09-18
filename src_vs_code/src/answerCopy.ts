@@ -80,9 +80,17 @@ export function answerToCopy(markdown: string): CopyDecision {
   };
 }
 
-/** A message as this guard needs to see it: what turn it was, and what was said. */
+/**
+ * A message as this guard needs to see it: what turn it was, and what was said.
+ *
+ * <p><b>The roles are spelled out rather than left as `string`, and that is the point.</b> A
+ * structural `role: string` would keep compiling the day `ChatMessage` gains a third kind of turn,
+ * and this guard would quietly refuse it as *"not on this page any more"* — a message the person can
+ * see, refusing to be copied, for a reason that is not true. Naming the two makes that day a compile
+ * error at this line instead, which is where the decision belongs. (codex, the code round.)</p>
+ */
 export interface Answered {
-  readonly role: string;
+  readonly role: 'you' | 'model';
   readonly text: string;
 }
 
@@ -139,33 +147,45 @@ export function stillAnswering(
  */
 
 /**
- * Resolve NOW, at the press — for the control that carries no signature.
- *
- * <p>The whole-answer control sends nothing that could be checked against the message it finds, so a
- * press queued behind a slow write must not look again when its turn comes: by then the index may
- * hold a later answer, and the person would be handed something they never pressed on.</p>
+ * <p><b>One entry point per CONTROL, rather than two interchangeable moments.</b> The first version
+ * of this pair was `decidedNow(said, copy)` and `decidedWhenItRuns(look, copy)` — two functions of
+ * the same shape, returning the same type, either of which either hook could be handed. The code
+ * round said what that leaves open: swapping them at the call sites compiles, every test here stays
+ * green, and the whole-answer control begins resolving after the queue starts while the block control
+ * validates against text nobody is looking at. A guarantee a type can hold should not be left to a
+ * comment, so the two take DIFFERENT arguments — a message against a thunk, and the block control
+ * additionally owns the coordinates only it has. Neither call now fits the other's site.</p>
  */
-export function decidedNow(
-  said: Answered | undefined,
-  copy: (markdown: string) => CopyDecision,
-): () => CopyDecision {
-  const decision = stillAnswering(said, copy);
+
+/**
+ * What the whole-answer control copies, resolved NOW, at the press.
+ *
+ * <p>It sends nothing that could be checked against the message it finds, so a press queued behind a
+ * slow write must not look again when its turn comes: by then the index may hold a later answer, and
+ * the person would be handed something they never pressed on. Taking the message by VALUE is what
+ * makes looking late impossible here rather than merely discouraged.</p>
+ */
+export function theAnswerControlCopies(said: Answered | undefined): () => CopyDecision {
+  const decision = stillAnswering(said, answerToCopy);
 
   return () => decision;
 }
 
 /**
- * Resolve WHEN THE QUEUE REACHES IT — for the control whose signature is checked against what it finds.
+ * What the block control copies, resolved WHEN THE QUEUE REACHES IT.
  *
- * <p>The block control echoes the signature of the markdown it was drawn from, so looking late is
- * safe and is what keeps it honest: `blockToCopy` refuses outright when the answer has been rewritten
- * under it, which it can only do against the message as it is at the moment of the write.</p>
+ * <p>It echoes the signature of the markdown it was drawn from, so looking late is both safe and
+ * necessary: `blockToCopy` refuses outright when the answer has been rewritten under the control, and
+ * it can only see that against the message as it stands at the moment of the write. Taking a THUNK is
+ * what makes looking early impossible here — and taking the block and the signature as well is what
+ * stops this control ever being handed the whole answer instead.</p>
  */
-export function decidedWhenItRuns(
+export function theBlockControlCopies(
   look: () => Answered | undefined,
-  copy: (markdown: string) => CopyDecision,
+  block: number,
+  signature: string,
 ): () => CopyDecision {
-  return () => stillAnswering(look(), copy);
+  return () => stillAnswering(look(), (markdown) => blockToCopy(markdown, block, signature));
 }
 
 /** Where a copy control sits: which message, which block of it, and what it was drawn against. */

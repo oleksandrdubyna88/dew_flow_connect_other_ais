@@ -15,7 +15,7 @@ import { chatInstruction, openingTurn, reinstructed, reinstructedHead, stillOurs
 import { chatSettingsFrom } from './chatSettings';
 import { carriedFrom, carryMark } from './chatCarry';
 import { imageFileName, imageRefusal, pastedImage } from './chatImage';
-import { acknowledgement, answerToCopy, blockToCopy, decidedNow, decidedWhenItRuns } from './answerCopy';
+import { acknowledgement, theAnswerControlCopies, theBlockControlCopies } from './answerCopy';
 import { textCopier, type CopyReport } from './copyText';
 import { coaiDataDir } from './dataDir';
 import { writeFileAtomically } from './atomicFile';
@@ -526,21 +526,20 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         // signature and is refused if the answer changed under it; this one carries nothing, so a
         // press queued behind a slow write could otherwise copy whatever had replaced the message at
         // that index by the time it ran. (codex, the code round.)
-        // The MOMENT is `decidedNow`'s whole job, and it is a named unit because a moment carried by
+        // The MOMENT is this entry point's whole job, and it is the CONTROL'S OWN because a moment carried by
         // the shape of this expression is a moment no test can assert. (codex, the plan round.)
         tellThePage(warn, panels, id, index, undefined, sig, answerCopier.copy(
-          decidedNow(threads.get(id)?.messages[index], answerToCopy)));
+          theAnswerControlCopies(threads.get(id)?.messages[index])));
       },
       onCopyBlock: (id, index, block, sig) => {
         // The SAME markdown the page was drawn from, walked by the SAME function that numbered the
         // control. Nothing the page sent becomes text: it named a position and echoed a signature,
         // and both are checked here against what this host holds.
-        // LATE on purpose, and `decidedWhenItRuns` is where that is written down: the signature is
+        // LATE on purpose, and this control's own entry point is where that is written down: the signature is
         // checked against the message as it stands when the write happens, which is the only moment
         // at which "the answer was rewritten under this control" can be seen at all.
         tellThePage(warn, panels, id, index, block, sig, answerCopier.copy(
-          decidedWhenItRuns(() => threads.get(id)?.messages[index],
-            (markdown) => blockToCopy(markdown, block, sig))));
+          theBlockControlCopies(() => threads.get(id)?.messages[index], block, sig)));
       },
   };
 }

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  answerToCopy, blockToCopy, decidedNow, decidedWhenItRuns, stillAnswering, type Answered,
+  answerToCopy, blockToCopy, stillAnswering, theAnswerControlCopies, theBlockControlCopies,
+  type Answered,
 } from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
 import { chatMessagesHtml } from '../chatPage';
@@ -534,9 +535,13 @@ test('nothing is asked of the text of a message that is refused', () => {
  * one at the press, the block one inside the queued job — and until 2026-09-18 that difference was
  * carried by the SHAPE of two expressions in `chatHooks.ts` and by nothing else. A plan reviewer put
  * the consequence exactly: a block handler that captured `messages[index]` before its queued job ran
- * would leave every `stillAnswering` case above green while the real control copied the wrong text.
- * `decidedNow` and `decidedWhenItRuns` exist so that a test can hold the list and CHANGE it in
- * between, which is the only way to observe a moment.</p>
+ * would leave every `stillAnswering` case above green while the real control copied the wrong text.</p>
+ *
+ * <p>So each control has its OWN entry point, and they do not take the same arguments — a message
+ * against a thunk, and the block control owns the coordinates only it has. That is the code round's
+ * correction to the first attempt, which was two interchangeable moments: swapping those at the call
+ * sites would have compiled, and every case here would have stayed green. Neither of these fits the
+ * other's site.</p>
  */
 
 /** A message list a test can move under a decision that has already been built. */
@@ -547,14 +552,16 @@ function moving(first: Answered): { at: () => Answered | undefined; becomes: (ne
 }
 
 const LATER: Answered = { role: 'model', text: 'a later answer that arrived in between' };
+const DRAWN_FROM = [FENCE, 'the block the control was drawn for', FENCE].join('\n');
+const REWRITTEN = [FENCE, 'something else entirely', FENCE].join('\n');
 
 test('the whole-answer control copies what was there when it was PRESSED', () => {
-  // It sends no signature, so it has nothing to check a late lookup against: whatever it finds when
-  // the queue reaches it, it would copy. Resolving at the press is the only thing standing between a
+  // It sends no signature, so it has nothing to check a late lookup against: whatever it found when
+  // the queue reached it, it would copy. Resolving at the press is the only thing standing between a
   // person and an answer they never pressed on.
   const list = moving(ANSWER);
 
-  const decide = decidedNow(list.at(), answerToCopy);
+  const decide = theAnswerControlCopies(list.at());
   list.becomes(LATER);
   const decision = decide();
 
@@ -563,26 +570,37 @@ test('the whole-answer control copies what was there when it was PRESSED', () =>
     'the press copied an answer that arrived after it — the lookup was hoisted out of the press');
 });
 
-test('the block control copies what is there when the QUEUE reaches it', () => {
-  // The mirror image, and it is not laxity: the block control echoes the signature of the markdown it
-  // was drawn from, and `blockToCopy` refuses outright when that no longer matches. It can only make
-  // that check against the message as it stands at the moment of the write, so it must look late.
-  const list = moving(ANSWER);
+test('the block control checks its signature against what is there WHEN THE QUEUE REACHES IT', () => {
+  // The mirror image, and the proof is that the staleness check actually FIRES. Late resolution hands
+  // `blockToCopy` the rewritten answer, whose signature no longer matches the one the control carries,
+  // so it refuses. A control that had captured the message at the press would instead hand over the
+  // text it was drawn from, signature matching, and copy it happily — which is the defect.
+  const list = moving({ role: 'model', text: DRAWN_FROM });
 
-  const decide = decidedWhenItRuns(list.at, answerToCopy);
-  list.becomes(LATER);
-  const decision = decide();
+  const decide = theBlockControlCopies(list.at, 0, signatureOf(DRAWN_FROM));
+  list.becomes({ role: 'model', text: REWRITTEN });
 
-  assert.equal(decision.kind === 'copy' ? decision.text : '', LATER.text,
+  assert.equal(decide().kind, 'refused',
     'the queued press resolved against a message it had already captured, so the signature check '
-    + 'would run against text nobody is looking at');
+    + 'never saw the text that had replaced it');
+});
+
+test('and the same control copies the block when nothing moved under it', () => {
+  // The other half of the case above: refusing everything would satisfy it just as well, and would be
+  // a control that never works.
+  const list = moving({ role: 'model', text: DRAWN_FROM });
+
+  const decision = theBlockControlCopies(list.at, 0, signatureOf(DRAWN_FROM))();
+
+  assert.equal(decision.kind === 'copy' ? decision.text : '', 'the block the control was drawn for',
+    'the block control refused a block that had not changed at all');
 });
 
 test('an answer that went away before the queue reached it is refused, not copied', () => {
   // The late lookup has to find the guard too, or looking late would be strictly worse than not.
-  let here: Answered | undefined = ANSWER;
+  let here: Answered | undefined = { role: 'model', text: DRAWN_FROM };
 
-  const decide = decidedWhenItRuns(() => here, answerToCopy);
+  const decide = theBlockControlCopies(() => here, 0, signatureOf(DRAWN_FROM));
   here = undefined;
 
   assert.equal(decide().kind, 'refused', 'the queued press copied an answer that had gone');
@@ -592,8 +610,8 @@ test('both controls refuse in the same words', () => {
   // The Definition of Done says the refusal sentence exists in one place. Asserting the two paths
   // produce the SAME sentence says it behaviourally, where counting occurrences of a string literal
   // in the source would pass just as happily on two copies that happen to agree today.
-  const now = decidedNow(undefined, answerToCopy)();
-  const late = decidedWhenItRuns(() => undefined, answerToCopy)();
+  const now = theAnswerControlCopies(undefined)();
+  const late = theBlockControlCopies(() => undefined, 0, 'whatever')();
 
   assert.equal(now.kind, 'refused');
   assert.equal(late.kind, 'refused');
