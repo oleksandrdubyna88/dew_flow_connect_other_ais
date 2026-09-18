@@ -5692,6 +5692,72 @@ effect at all (see [module_server.md](module_server.md)). It is a QuickPick of t
 what it will cause: another set of rounds, stop and act on the findings, or stop and talk. `''` is
 not among them: there is no "ship it anyway".
 
+### Deleting a role: the text waits for the mirror (2026-09-18)
+
+`rolesPanel.ts` used to write the rows and then delete the prompt files, with nothing in between
+asking whether the row reached the file the server reads:
+
+```ts
+  await write(outcome.rows);
+  await forget(outcome.forget);
+```
+
+When it did not reach it, the result was a role that still exists on the server with a prompt that
+has no text, complaining once per round for ever. That is the 2026-09-16 incident's own shape.
+
+**The asymmetry that decides the order.** The row and its four keyed records can be typed again in a
+minute; the paragraphs of prose in a prompt cannot. So the row and `rounds`, `thresholds`,
+`roleEnabled` and `promptsPerRound` go together and go FIRST — they are one payload and the mirror
+carries them in one write — and the TEXT waits on the far side.
+
+| # | Step | Idempotent because |
+|---|---|---|
+| 1 | Write the tombstone, `<dataDir>/deletions/<roleId>.json` | the same content rewritten is the same tombstone |
+| 2 | Write the row AND prune the four role-keyed settings | both are already absent on a second pass |
+| 3 | Wait until the mirror has carried it | the condition is read, never remembered |
+| 4 | Delete the prompt override files | `rm(..., { force: true })` |
+| 5 | Clear the tombstone | unlink of an absent file is a no-op |
+
+**The tombstone is durable BEFORE the row is touched**, and the order is the whole of it. Written
+after, it buys nothing: a process dying between the row write and the tombstone leaves the next start
+with no evidence, the prompt files orphaned and the id free again.
+
+**It is a file, not a setting** — a setting is mirrored, so the tombstone would be waiting on the
+mirror it exists to survive — and not the append-only ledger, because a tombstone must CLEAR and
+nothing in that design is ever rewritten. One file per id, so two windows deleting two roles do not
+contend and a file that fails to parse strands ONE deletion.
+
+**The deletion never calls `sync()` itself**, and that was the plan round's sharpest finding. Writing
+`coai.roles` fires VS Code's configuration listener, which starts the mirror's own schedule, so a
+direct call moments later answers `busy`; the listener's sync then succeeds, the row really does reach
+the server, and nothing resumes the cleanup. It subscribes to the mirror's terminal outcome instead.
+
+**And the condition it resumes on is not "a write landed".** It is *a write landed AND the role is
+absent from the configuration as it reads right now*. Step 2 is several `config.update` calls and each
+fires the listener, so a sync that landed between the first and the last carried an incomplete
+removal; `sync()` writes what the settings say when it runs, so a landed sync whose configuration no
+longer mentions the role is proof the server has the whole of it.
+
+**A nonce, because idempotence does not protect a reused identity.** Two windows can work one
+deletion; one finishes and clears the tombstone; the person creates a role that takes the freed id;
+the second resumes and would prune the NEW role's settings and text. Every destructive step re-reads
+the tombstone and stops if it is gone or carries a different nonce.
+
+**The id is not reusable while a tombstone stands.** `rowsAfter` takes the reserved ids, and `added`
+unions them with the rows — without it the next role of a deleted name inherits a stranger's round
+budget, threshold and enabled flag out of the four records keyed by the id.
+
+**A tombstone that cannot clear must not become a life sentence.** The roles page shows the stranded
+ones — failed at least once, and longer than `STRANDED_AFTER_MS` ago, so a write in flight is never
+shown as stuck — with *Reload Window* when and only when the reason was a stand-down, because that is
+what ends one. *Finish the deletion anyway* releases the id, and says the cost in the words it costs:
+**the server may go on running this role without its text until its settings catch up, and rounds
+against it will complain each time.** Keeping the files instead was refused — it releases the id while
+leaving prose on disk, so the next role of that name opens with a stranger's writing.
+
+**The limit, stated.** Nothing here proves the SERVER drops the role when its settings catch up, and
+the concurrency case drives two coordinators in one process rather than two real windows.
+
 ### One section per role, and no language (2026-09-01)
 
 The Prompts and Gate sections described one thing between them: how many times a role asks, how much

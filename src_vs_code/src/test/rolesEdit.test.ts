@@ -306,3 +306,29 @@ test('a role moved to the stage it is already in is not moving', () => {
 
   assert.strictEqual(after.find((r) => r.id === 'Only')!.stage, RESULT_STAGE);
 });
+
+test('a new role does not take an id whose deletion has not finished', () => {
+  // The four records keyed by a role id - rounds, thresholds, roleEnabled, promptsPerRound - are
+  // still there until the mirror carries the removal, so a new role taking a freed id opens with a
+  // stranger's budget. That is what the 2026-09-16 incident's own role would have handed the next
+  // one called the same thing.
+  const mine = [{ id: 'Reviewer', name: 'Reviewer', stage: 'code', programmingTask: true, active: true,
+    prompts: [] }] as unknown as Parameters<typeof rowsAfter>[0];
+
+  const free = rowsAfter(mine, { kind: 'add' });
+  const first = free.kind === 'rows' ? free.rows[free.rows.length - 1]?.id ?? '' : '';
+
+  assert.notEqual(first, '', 'nothing was added at all, so this proves nothing about ids');
+
+  const taken = rowsAfter(mine, { kind: 'add' }, new Set([first.toLowerCase()]));
+  const second = taken.kind === 'rows' ? taken.rows[taken.rows.length - 1]?.id ?? '' : '';
+
+  assert.notEqual(second, first,
+    'the id of a deletion still on its way out was handed to a new role');
+  // And the other direction, or "never reuse" passes a build that never releases an id at all.
+  assert.equal(
+    (rowsAfter(mine, { kind: 'add' }).kind === 'rows' ? first : ''),
+    first,
+    'an id was withheld although no tombstone holds it',
+  );
+});

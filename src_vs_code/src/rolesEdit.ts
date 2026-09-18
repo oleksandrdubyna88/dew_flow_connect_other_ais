@@ -46,18 +46,28 @@ function stored(rows: readonly RoleRow[], forget: readonly string[] = []): RowsO
   return { kind: 'rows', rows, forget };
 }
 
-export function rowsAfter(current: readonly RoleRow[], command: RolesCommand): RowsOutcome {
-  // `text` is a FILE and `restorePrompt` deletes one; zoom is a different setting entirely. All
-  // three are the host's, and none of them touches a row.
+/**
+ * @param reserved ids that are TAKEN although no row holds them — every deletion still on its way
+ * out. Without it the next role of a deleted name gets the same id, and inherits a stranger's round
+ * budget, threshold and enabled flag out of the four records keyed by it.
+ */
+export function rowsAfter(
+  current: readonly RoleRow[],
+  command: RolesCommand,
+  reserved: ReadonlySet<string> = new Set(),
+): RowsOutcome {
+  // `text` is a FILE and `restorePrompt` deletes one; zoom is a different setting entirely; and
+  // `finishDeletion` and `reloadWindow` are about a deletion that has already left the rows. All of
+  // them are the host's, and none touches a row.
   if (command.kind === 'ignore' || command.kind === 'zoom' || command.kind === 'restorePrompt'
-      || command.kind === 'tab') {
+      || command.kind === 'tab' || command.kind === 'finishDeletion' || command.kind === 'reloadWindow') {
     return UNCHANGED;
   }
   if (command.kind === 'editPrompt' && command.field === 'text') {
     return UNCHANGED;
   }
   if (command.kind === 'add') {
-    return added(current);
+    return added(current, reserved);
   }
   if (command.kind === 'remove') {
     return removed(current, command.id);
@@ -74,8 +84,11 @@ export function rowsAfter(current: readonly RoleRow[], command: RolesCommand): R
  * in no round: the server caps, names what it capped in a sentence on the panel, and the page went
  * on showing the tick. A role created switched off is a role a person can see is switched off.</p>
  */
-function added(current: readonly RoleRow[]): RowsOutcome {
-  const id = idFor('', new Set(current.map((r) => r.id.toLowerCase())));
+function added(current: readonly RoleRow[], reserved: ReadonlySet<string>): RowsOutcome {
+  // Rows AND tombstones. An id whose deletion has not finished is not free: the four records keyed
+  // by it — `rounds`, `thresholds`, `roleEnabled`, `promptsPerRound` — are still there until the
+  // mirror carries the removal, so a new role taking that id opens with a stranger's budget.
+  const id = idFor('', new Set([...current.map((r) => r.id.toLowerCase()), ...reserved]));
   const promptId = promptIdFor(id, 'general', promptIdsInUse(current));
   const room = activeCount(current, RESULT_CODE) < MAX_ACTIVE_PER_BUCKET;
 
@@ -114,7 +127,9 @@ function removed(current: readonly RoleRow[], id: string): RowsOutcome {
 /** Everything that edits one existing row — or creates the override row that will hold the edit. */
 function onRow(
   current: readonly RoleRow[],
-  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' }>,
+  command: Exclude<RolesCommand, {
+    kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
+  }>,
 ): RowsOutcome {
   const mine = current.find((r) => r.id === command.id);
   const known = mine ?? (isBuiltIn(command.id) ? { id: command.id } : undefined);
@@ -138,7 +153,9 @@ function onRow(
 /** One row, edited — returned as a one-row outcome so a refusal can carry its sentence out. */
 function changed(
   row: RoleRow,
-  command: Exclude<RolesCommand, { kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' }>,
+  command: Exclude<RolesCommand, {
+    kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
+  }>,
   all: readonly RoleRow[],
 ): RowsOutcome {
   if (command.kind === 'edit') {

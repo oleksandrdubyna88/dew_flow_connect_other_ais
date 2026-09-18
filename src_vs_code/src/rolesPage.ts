@@ -1,5 +1,6 @@
 import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, type RoleRow } from './roles';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
 
@@ -69,6 +70,16 @@ export function tabShown(tab: string): string {
 }
 
 export interface RolesPageState {
+  /**
+   * Deletions that asked to happen and have not, with the reason the last attempt gave.
+   *
+   * <p>Shown because a tombstone that cannot clear would otherwise bar somebody from ever recreating
+   * a role of that name, with nothing anywhere saying why — the 2026-09-16 incident's own shape,
+   * moved one step along. Only the STRANDED ones reach here: a write that failed a second ago is a
+   * write in flight, and showing a person the inside of one is worse than saying nothing.</p>
+   */
+  readonly stranded?: readonly Tombstone[];
+
   /** The rows as stored — a person's own roles and their edits to the shipped ones. */
   readonly rows: readonly RoleRow[];
 
@@ -113,6 +124,10 @@ export type RolesCommand =
   | { readonly kind: 'zoom'; readonly delta: number }
   /** Which of the three sections is open — decided on the page, remembered by the host. */
   | { readonly kind: 'tab'; readonly id: string }
+  /** A deletion the mirror could not carry, finished locally with the cost accepted. */
+  | { readonly kind: 'finishDeletion'; readonly id: string }
+  /** The cure for a stand-down, offered beside the deletion it is stuck behind. */
+  | { readonly kind: 'reloadWindow' }
   | { readonly kind: 'ignore' };
 
 const IGNORE: RolesCommand = { kind: 'ignore' };
@@ -155,6 +170,16 @@ export function roleEdit(message: unknown): RolesCommand {
   }
   if (type === 'add') {
     return { kind: 'add' };
+  }
+  if (type === 'reloadWindow') {
+    return { kind: 'reloadWindow' };
+  }
+  if (type === 'finishDeletion') {
+    // Through `idOf`, like every other id off this page: the value reaches a file path, and a page
+    // that can be older or newer than the extension it talks to is not a source this side trusts.
+    const id = idOf(said['id']);
+
+    return id === '' ? IGNORE : { kind: 'finishDeletion', id };
   }
   if (type === 'tab') {
     // Against the LIST, so a word this page has no section for is never stored. The drawing side
@@ -408,6 +433,41 @@ function tabStrip(openTab: string): string {
     .join('');
 }
 
+/**
+ * The deletions that are stuck, and the two things that can be done about them.
+ *
+ * <p><b>Reload Window comes first when the mirror STOOD DOWN</b>, because that is the thing which
+ * actually ends one: a newer build owns the settings file, and reloading is how this window becomes
+ * that build. Offering the destructive action first for a condition with a cure would be offering
+ * the wrong one.</p>
+ *
+ * <p><b>And the other action costs something, which it says here rather than afterwards.</b> While
+ * the server still carries the row, deleting the prompt text IS the incident: rounds run the role,
+ * find no text, and complain each time. The softer wording this had first — <i>the server may still
+ * carry the row</i> — describes the same fact without naming what it does to the person.
+ * (antigravity, the plan round.)</p>
+ */
+function strandedHtml(stranded: readonly Tombstone[]): string {
+  if (stranded.length === 0) {
+    return '';
+  }
+  const rows = stranded.map((one) => {
+    const reload = one.reason === STOOD_DOWN
+      ? '<button type="button" class="act" data-reload="1">Reload Window</button>'
+      : '';
+
+    return `<li><b>${escapeHtml(one.name)}</b> was removed here, and the server has not been told yet.`
+      + ` <span class="why">${escapeHtml(one.reason)}</span>`
+      + ` Its prompts are kept until the server has it.`
+      + `${reload}`
+      + `<button type="button" class="act" data-finish="${escapeHtml(one.roleId)}">Finish the deletion anyway</button>`
+      + `<span class="cost">The server may go on running this role without its text until its settings`
+      + ` catch up, and rounds against it will complain each time.</span></li>`;
+  }).join('');
+
+  return `<section class="stranded" aria-label="Deletions the server has not been told about"><ul>${rows}</ul></section>`;
+}
+
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
   const openTab = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
@@ -435,6 +495,7 @@ ${styles(state.uiScale)}
 <body>
 <header><h1>Review roles</h1>${zoomControlHtml(state.uiScale)}</header>
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
+${strandedHtml(state.stranded ?? [])}
 ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
 
 <div class="tabs" role="tablist" aria-label="Which roles to edit">${tabStrip(openTab)}</div>
@@ -573,6 +634,9 @@ function script(nonce: string): string {
       vscode.postMessage({ type: 'tab', id: which });
       return;
     }
+    if (pressed.closest('[data-reload]')) { vscode.postMessage({ type: 'reloadWindow' }); return; }
+    const finish = pressed.closest('[data-finish]');
+    if (finish) { vscode.postMessage({ type: 'finishDeletion', id: finish.dataset.finish }); return; }
     if (pressed.closest('[data-add="role"]')) { vscode.postMessage({ type: 'add' }); return; }
     const addPrompt = pressed.closest('[data-add-prompt]');
     if (addPrompt) { vscode.postMessage({ type: 'addPrompt', id: addPrompt.dataset.addPrompt }); return; }

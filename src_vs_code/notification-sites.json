@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 125,
+  "sites": 126,
   "direct": 0,
   "modal": 18,
-  "events": 107,
+  "events": 108,
   "inTheFunnel": 3,
-  "routed": 125,
+  "routed": 126,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -100,6 +100,7 @@
     "reviewer-already-added",
     "revoke-a-contributor-key",
     "role-edit-refused",
+    "role-not-deleted-yet",
     "roles-page-failure",
     "rounds-exported",
     "rounds-not-exported",

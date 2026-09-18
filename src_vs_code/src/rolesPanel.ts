@@ -12,6 +12,8 @@ import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
+import { RoleDeletions, Tombstone, reserved } from './roleDeletion';
+import { tombstonesIn } from './roleDeletionStore';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 /**
@@ -81,6 +83,85 @@ function rows(): readonly RoleRow[] {
 
 async function write(next: readonly RoleRow[]): Promise<void> {
   await saveSetting(side(), config(), KEY, next);
+}
+
+/**
+ * Every setting keyed by a role id, and there are four of them.
+ *
+ * <p>Deleting a role left all four behind, so the next role that took the freed id opened with a
+ * stranger’s round budget, threshold and enabled flag. They are part of the payload the mirror
+ * writes, which is why they are pruned WITH the row rather than after the mirror carries it —
+ * pruned afterwards, the server holds orphaned keys until some unrelated setting changes, possibly
+ * for ever. (antigravity, the plan round, blocking.)</p>
+ */
+const KEYED_BY_ROLE = ['rounds', 'thresholds', 'roleEnabled', 'promptsPerRound'] as const;
+
+/** Step 2: the row and the four records, in one act. Idempotent, so the sweep may redo it. */
+async function pruneRole(roleId: string): Promise<void> {
+  const current = rows();
+  if (current.some((row) => row.id === roleId)) {
+    await write(current.filter((row) => row.id !== roleId));
+  }
+  const read = readerFor(side(), config());
+  for (const key of KEYED_BY_ROLE) {
+    const held = read(key);
+    if (typeof held === 'object' && held !== null && roleId in (held as Record<string, unknown>)) {
+      const { [roleId]: dropped, ...rest } = held as Record<string, unknown>;
+
+      void dropped;
+      await saveSetting(side(), config(), key, rest);
+    }
+  }
+}
+
+/**
+ * Half of the condition a deletion finishes on: is the role absent from the configuration NOW?
+ *
+ * <p>The other half is the mirror having carried a write, and it takes both — `pruneRole` is
+ * several `config.update` calls and each one fires the configuration listener, so a sync that landed
+ * between the first and the last carried an incomplete removal.</p>
+ */
+function goneFromSettings(roleId: string): boolean {
+  if (rows().some((row) => row.id === roleId)) {
+    return false;
+  }
+  const read = readerFor(side(), config());
+
+  return !KEYED_BY_ROLE.some((key) => {
+    const held = read(key);
+
+    return typeof held === 'object' && held !== null && roleId in (held as Record<string, unknown>);
+  });
+}
+
+/** The deletions of this window, built once the page has its context. */
+let deletions: RoleDeletions | undefined;
+
+export function roleDeletions(): RoleDeletions {
+  deletions ??= new RoleDeletions({
+    store: tombstonesIn(() => coaiDataDir()),
+    prune: pruneRole,
+    gone: goneFromSettings,
+    forget,
+    now: () => new Date(),
+    say: sayNotDeleted,
+  });
+
+  return deletions;
+}
+
+/** Said through the funnel: the ledger keeps it whether or not anybody sees the toast. */
+function sayNotDeleted(tombstone: Tombstone, reason: string): void {
+  void notify({
+    as: 'warning',
+    class: 'stand-down',
+    source: 'rolesPage',
+    code: 'role-not-deleted-yet',
+    subject: tombstone.roleId,
+    title: `“${tombstone.name}” was removed here, and the server has not been told yet.`,
+    detail: reason,
+    cure: 'Its prompts are kept until the server has it. The Roles tab can finish the deletion anyway.',
+  });
 }
 
 /** The body of every prompt that has one, by id — absent means "what this product ships". */
@@ -206,6 +287,7 @@ async function render(): Promise<void> {
       perSide: config().get('perSideSettings') === true,
       tab,
       uiScale: currentUiScale(),
+      stranded: await roleDeletions().stranded(),
     },
     nonce(),
   );
@@ -301,24 +383,52 @@ async function apply(command: RolesCommand): Promise<boolean> {
   if (command.kind === 'remove') {
     return await removeRole(command.id);
   }
+  if (command.kind === 'reloadWindow') {
+    // The cure for a stand-down, offered beside the deletion it is stuck behind: a newer build owns
+    // the settings file, and reloading is how this window becomes that build.
+    void vscode.commands.executeCommand('workbench.action.reloadWindow');
+
+    return false;
+  }
+  if (command.kind === 'finishDeletion') {
+    await roleDeletions().finishAnyway(command.id);
+
+    return true;
+  }
 
   return await store(command);
 }
 
+/**
+ * A row edit the rules refuse, said once in one place.
+ *
+ * <p>It was written twice for about ten minutes — once in `store` and once in `removeRole` when the
+ * deletion stopped going through `store` — and the census caught it before anything else did: two
+ * places speaking where one condition exists is two places to change when the wording does.</p>
+ */
+function sayRefused(why: string): void {
+  void notify({
+    as: 'information',
+    class: 'refusal',
+    source: 'rolesPage',
+    code: 'role-edit-refused',
+    title: why,
+  });
+}
+
 /** Everything that changes a ROW rather than a file. */
 async function store(command: RolesCommand): Promise<boolean> {
-  const outcome = rowsAfter(rows(), command);
+  // Only `add` needs them, and only `add` pays for the read: an id whose deletion has not finished
+  // is not free, because the four records keyed by it are still there.
+  const taken = command.kind === 'add'
+    ? reserved(await tombstonesIn(() => coaiDataDir()).all())
+    : new Set<string>();
+  const outcome = rowsAfter(rows(), command, taken);
   if (outcome.kind === 'unchanged') {
     return false;
   }
   if (outcome.kind === 'refused') {
-    void notify({
-      as: 'information',
-      class: 'refusal',
-      source: 'rolesPage',
-      code: 'role-edit-refused',
-      title: outcome.why,
-    });
+    sayRefused(outcome.why);
 
     // A refusal DOES redraw: the control has just moved to a state that was not saved, and putting
     // it back is what makes the message about it true.
@@ -376,7 +486,21 @@ async function removeRole(id: string): Promise<boolean> {
     return false;
   }
 
-  return await store({ kind: 'remove', id });
+  // Not `store`, which would write the row and delete the text in the same breath. The text waits
+  // on the far side of the mirror having carried the row; `begin` writes the tombstone first, so a
+  // host that dies in the middle leaves evidence rather than an orphaned prompt and a freed id.
+  const outcome = rowsAfter(rows(), { kind: 'remove', id });
+  if (outcome.kind === 'refused') {
+    sayRefused(outcome.why);
+
+    return true;
+  }
+  if (outcome.kind === 'unchanged') {
+    return false;
+  }
+  await roleDeletions().begin({ id, name, promptIds: outcome.forget });
+
+  return true;
 }
 
 /** The override files of prompts no row points at any more. */
