@@ -159,6 +159,43 @@ function show(notice: Notice): Thenable<string | undefined> {
 }
 
 /**
+ * The toast, handed over rather than dropped.
+ *
+ * <p>`show*Message` returns a Thenable and the three fire-and-forget doors do not wait for it — a
+ * caller holding a lock must not be held until somebody clicks, which is this module's oldest rule.
+ * But `void` on a Thenable is not "ignore the answer", it is "nobody will ever hear about a
+ * rejection", and a window closing under a toast is the ordinary way one rejects.</p>
+ */
+function detached(shown: Thenable<unknown>): void {
+  void Promise.resolve(shown).catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: a message could not be shown', reason);
+  });
+}
+
+/**
+ * The promise of a door that nobody waits for, KEPT even when this module cannot deliver.
+ *
+ * <p>Every fire-and-forget call site in this extension writes `void notify(…)` — there are over a
+ * hundred of them, and the funnel exists precisely so that none of them has to remember anything.
+ * So the net belongs HERE rather than at each site: `coaiDataDir()` throws on a `COAI_DATA_SIDE`
+ * that is set and invalid, and that throw happens inside these async functions, so the message was
+ * neither written down nor shown and the rejection went wherever the host sends unhandled ones.</p>
+ *
+ * <p>The console is the only surface left when the surface for saying things is the thing that
+ * failed — the same regress this file already names for the write gap, one layer up. The three
+ * doors that RETURN NOTHING are covered; `notifyAndAsk` is not, because its caller reads an answer
+ * and acts on it, and a caller that is waiting must see a failure. (CodeRabbit, twice on one pull
+ * request: once for the record, once for the display.)</p>
+ */
+async function kept(saying: () => Promise<void>): Promise<void> {
+  try {
+    await saying();
+  } catch (reason) {
+    console.error('ConnectOtherAIs: a message could not be raised at all', reason);
+  }
+}
+
+/**
  * Put one occurrence down, unless this run's bounds have already had enough of it.
  *
  * <p>Returns what was written, or nothing when the bounds refused it — a caller that has an answer
@@ -205,8 +242,10 @@ export function notifyResolved(code: string, subject?: string): void {
  * forget call site did before the funnel and what keeps a caller holding a lock safe.</p>
  */
 export async function notify(notice: Notice): Promise<void> {
-  await record(notice, new Date());
-  void show(notice);
+  await kept(async () => {
+    await record(notice, new Date());
+    detached(show(notice));
+  });
 }
 
 /**
@@ -228,10 +267,12 @@ export async function notifyOnce(notice: Notice): Promise<void> {
   // budget refuses a key, and then they are not: the question "have I already told them" is about
   // the run, not about whatever the counter happens to still be holding. (codex and gemini, the
   // code round, from two directions.)
-  const { firstEver } = await record(notice, new Date());
-  if (firstEver) {
-    void show(notice);
-  }
+  await kept(async () => {
+    const { firstEver } = await record(notice, new Date());
+    if (firstEver) {
+      detached(show(notice));
+    }
+  });
 }
 
 /**
@@ -246,12 +287,16 @@ export async function notifyThen(
   notice: Notice,
   chosen: (answer: string | undefined) => void,
 ): Promise<void> {
-  const { kept } = await record(notice, new Date());
-  void show(notice).then(async (answer) => {
-    if (kept !== undefined) {
-      await write(answered(kept, answer));
-    }
-    chosen(answer);
+  await kept(async () => {
+    const asked = (await record(notice, new Date())).kept;
+    // The WHOLE chain, not the display alone: the `write` of the answer inside this callback had
+    // the same nowhere to go.
+    detached(show(notice).then(async (answer) => {
+      if (asked !== undefined) {
+        await write(answered(asked, answer));
+      }
+      chosen(answer);
+    }));
   });
 }
 
