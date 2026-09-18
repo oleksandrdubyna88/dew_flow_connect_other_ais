@@ -490,8 +490,23 @@ runs the real binary through the real reader but against an EMPTY corpus: nothin
 pair from outside the collector, and adding a CLI mode to make a test possible would be changing
 the product to suit its tests. So a third structural read across projects (after `SourceLanguage`
 and `Placeholders.cs`) camelCases the record's properties and compares them to the interface's
-fields. Verified by renaming one field on the server side. **What it does not prove is that a
-populated row survives the round trip** — only a seeded corpus could.
+fields. Verified by renaming one field on the server side.
+
+**And the populated round trip is now proven too — the conclusion was wrong, not the reasoning.**
+"Nothing here can seed a pair from outside the collector" was true of the product and false of the
+runtime: Node 22.5 brought `node:sqlite` in, so a test can write the rows itself. The product is
+untouched, no CLI mode was added to suit a test, and the gap is closed rather than recorded.
+
+The shape matters. The BINARY makes the schema — a `--bugs-json` call first, so every table and
+every migration is its own work; a test writing its own `CREATE TABLE` would assert against a schema
+it invented, which is the failure this file exists to avoid. Then four rows across the three tables
+`Pairs()` joins, the real binary prints, the real `readPairs` parses, and all sixteen fields are
+compared BY VALUE. The two shas are deliberately different, because the page labels each side of the
+complexity with its own and only distinct values can catch one read where the other belonged.
+
+Two mutations nothing could catch before: reading `fix_sha` from `r.head_sha` (the projection crosses
+the two commits) and the reader asking for `fix_sha` where the server prints `fixSha` (the exact
+drift two reviewers named). Both red.
 
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the

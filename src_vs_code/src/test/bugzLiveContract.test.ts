@@ -206,3 +206,92 @@ test('both halves of the wire name the same sixteen fields', () => {
   assert.deepEqual([...served].sort(), [...wanted].sort(),
     'the two halves of the --pairs-json contract no longer name the same fields');
 });
+
+/**
+ * A POPULATED pair, written into the real database, printed by the real binary, parsed by the real
+ * reader — every one of the sixteen fields checked by value.
+ *
+ * <p><b>This is the check the story shipped without, and said so rather than implying otherwise.</b>
+ * Two reviewers asked for it; the answer at the time was that nothing here can seed a pair from
+ * outside the collector, and adding a CLI mode to make a test possible would be changing the product
+ * to suit its tests. Both halves of that were true and the conclusion was still wrong: Node 22.5
+ * brought `node:sqlite` into the runtime, so a test can write the rows itself. The product is
+ * untouched and the gap is closed.</p>
+ *
+ * <p><b>The server makes the schema; this only fills it.</b> A `--bugs-json` call first, so every
+ * table and every migration is the binary's own work — a test that wrote its own `CREATE TABLE`
+ * would be asserting against a schema it invented, which is the failure this whole file exists to
+ * avoid. Then four rows, through the three tables `Pairs()` actually joins: `repo_path` comes from
+ * `sessions`, `head_sha` from `rounds`, and the rest from `findings` and `collect_pairs`.</p>
+ *
+ * <p>The two shas are DIFFERENT on purpose. `head_sha` is the commit the reviewers read and
+ * `fix_sha` the commit the walk found the fix in, and the page labels each side of the complexity
+ * with its own — so a projection that read one where the other belonged would render a row that is
+ * confidently wrong about half of itself, and only distinct values can catch it.</p>
+ */
+test('a seeded pair survives the real binary and the real reader, field by field',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-seeded-'));
+    try {
+      // The BINARY makes the schema, so what is filled below is the real thing.
+      const made = spawnSync(server(), ['--bugs-json'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
+
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(path.join(data, 'coai.db'));
+      try {
+        db.exec(`
+          INSERT INTO sessions (id, repo_path, branch, opened_utc)
+            VALUES ('s1', 'D:/repo', 'main', '2026-09-18T00:00:00Z');
+          INSERT INTO rounds (id, session_id, stage, number, status, verdict,
+                              started_utc, completed_utc, head_sha)
+            VALUES (1, 's1', 'CodeReview', 1, 'done', 'proceed',
+                    '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', 'aaaa111aaaa');
+          INSERT INTO findings (id, round_id, ordinal, severity, category, file, line,
+                                title, why, fix, fix_sha)
+            VALUES (7, 1, 0, 'Major', 'Reliability', 'src/Totals.cs', 42,
+                    'a race', 'two writers, one row', 'take the lock', 'bbbb222bbbb');
+          INSERT INTO collect_pairs (finding_id, symbol_name, language,
+                                     skeleton_before, skeleton_after, written_utc, keep)
+            VALUES (7, 'method_1', 'CSharp',
+                    'void method_1() { }', 'void method_1() { lock (var_1) { } }',
+                    '2026-09-18T00:02:00Z', -1);
+        `);
+      } finally {
+        db.close();
+      }
+
+      const answer = await readPairs(server(), 5, async (args) => {
+        const ran = spawnSync(server(), args, {
+          encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+        });
+
+        return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+      });
+
+      assert.ok(answer.ok, `the reader refused the binary's output: ${answer.ok ? '' : answer.why}`);
+      assert.equal(answer.pairs.length, 1, 'one pair was seeded, so one must come back');
+      assert.deepEqual(answer.pairs[0], {
+        findingId: 7,
+        symbolName: 'method_1',
+        language: 'CSharp',
+        skeletonBefore: 'void method_1() { }',
+        skeletonAfter: 'void method_1() { lock (var_1) { } }',
+        keep: -1,
+        severity: 'Major',
+        category: 'Reliability',
+        title: 'a race',
+        repoPath: 'D:/repo',
+        headSha: 'aaaa111aaaa',
+        fixSha: 'bbbb222bbbb',
+        file: 'src/Totals.cs',
+        line: 42,
+        why: 'two writers, one row',
+        fix: 'take the lock',
+      }, 'a field was lost, defaulted or crossed with another on the way across the wire');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
