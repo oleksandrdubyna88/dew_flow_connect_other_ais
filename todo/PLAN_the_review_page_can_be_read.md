@@ -119,6 +119,15 @@ draw, 2–3 ms and 0 blocks on every draw after**, once each block is memoised b
 multi-second freeze the round predicted, but a person deciding about ninety pairs paid the first
 number ninety times.
 
+**The size ceiling this page has, named rather than solved.** At 200 pairs the page is **1.3 MB of
+HTML** and its first draw costs 468 ms; both scale linearly, so 2000 pairs would be ~13 MB and ~4.7 s.
+Highlighting is not what makes that true — the markup is — so the answer is virtualisation or
+paging, not a lazier highlighter. The code round proposed highlighting only the open rows; measured,
+that trade is worse, because the page paints a disclosure locally so a click costs no process, and
+moving it to the panel would put a **209 ms full rebuild on every row somebody opens** against 468 ms
+once per panel. **This belongs to epic 2**, where tabs per project and per language arrive and a
+corpus is split for other reasons anyway.
+
 **Shipped, and the prediction checked against the real package.** The estimate above was made by
 deflating a probe bundle; the `.vsix` actually built afterwards came to **664,353 B — +98,763,
 +17.5 %** against the predicted +96,010, +17.0 %. Close enough that the estimate was worth making,

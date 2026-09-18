@@ -46,6 +46,11 @@ const THEME = 'coai-vars';
  * <p>Not a `toLowerCase()`: `codeToHtml` THROWS on an id it has not loaded, and `CSharp` is exactly
  * such an id — verified, not assumed. An explicit table is also the thing that decides, once, which
  * languages this page claims to highlight at all.</p>
+ *
+ * <p><b>The VALUES are Shiki's ids; the KEYS are every spelling that might reach us.</b> The
+ * collector writes `SourceLanguage` names (`CSharp`), the extensions it reads suggest others (`cs`,
+ * `ts`), and a person reading the column would write `c#` — so the keys are aliases and the value
+ * side is canonical. Keys are matched trimmed and lowercased; see {@link keyFor}.</p>
  */
 const GRAMMARS: Readonly<Record<string, string>> = {
   csharp: 'csharp',
@@ -57,8 +62,18 @@ const GRAMMARS: Readonly<Record<string, string>> = {
   js: 'javascript',
 };
 
-/** The one place a stored `language` becomes a key — trimmed, because a column is not a promise. */
-const keyFor = (language: string): string => language.trim().toLowerCase();
+/**
+ * The one place a stored `language` becomes a key.
+ *
+ * <p>Trimmed and lowercased, because a column is not a promise — and typed as `unknown` for the
+ * same reason. A code reviewer found that `language.trim()` threw on `null`, and the throw happened
+ * BEFORE the fallback that exists to catch exactly this, so one malformed row would have taken the
+ * whole page down rather than rendering itself as plain text. `ReviewPair.language` says `string`
+ * and `roundsDbRead` does coerce it, but a page module's safety cannot rest on what its caller
+ * currently happens to do.</p>
+ */
+const keyFor = (language: unknown): string =>
+  (typeof language === 'string' ? language : '').trim().toLowerCase();
 
 /**
  * Built once, on first use — never at import.
@@ -79,7 +94,12 @@ function highlighter(): HighlighterCore {
   return core;
 }
 
-/** Whether this page will colour a pair written in this language. */
+/**
+ * Whether this page will colour a pair written in this language.
+ *
+ * <p>Accepts whatever the column holds: untrimmed, any casing, and any of the aliases in
+ * {@link GRAMMARS}. Anything else — including a value that is not a string at all — is `false`.</p>
+ */
 export function canHighlight(language: string): boolean {
   return GRAMMARS[keyFor(language)] !== undefined;
 }
@@ -101,7 +121,19 @@ export function canHighlight(language: string): boolean {
  * looking.</p>
  */
 const rendered = new Map<string, string>();
-const MOST_BLOCKS_REMEMBERED = 1000;
+
+/**
+ * The ceiling, in BYTES of rendered markup rather than in blocks.
+ *
+ * <p>A reviewer pointed out that a count is the wrong unit: 1000 blocks is generous for a corpus of
+ * 200 pairs and useless for one of 2000, where a top-to-bottom draw evicts what the same draw will
+ * need again and every redraw re-tokenises essentially everything. Bytes bound what actually costs
+ * memory, and they do not vary with how long the methods happen to be. Four megabytes of markup is
+ * roughly two thousand blocks of the size the corpus produces, and it is a fraction of what the
+ * skeletons themselves already occupy in the same process.</p>
+ */
+const MOST_MARKUP_REMEMBERED = 4 * 1024 * 1024;
+let remembered = 0;
 
 /**
  * How many blocks this process has actually tokenised.
@@ -119,12 +151,35 @@ let tokenised = 0;
 export const timesTokenised = (): number => tokenised;
 
 function remember(key: string, html: string): string {
-  if (rendered.size >= MOST_BLOCKS_REMEMBERED) {
-    const oldest = rendered.keys().next();
-    if (!(oldest.done ?? false)) {
+  // Re-setting an existing key would have evicted somebody else for nothing, because `set` on a key
+  // the map already holds does not grow it. Two reviewers found that; it is why the guard asks
+  // whether this key is NEW rather than only how full the map is.
+  if (!rendered.has(key)) {
+    while (remembered + html.length > MOST_MARKUP_REMEMBERED && rendered.size > 0) {
+      const oldest = rendered.keys().next();
+      if (oldest.done === true) {
+        break;
+      }
+      remembered -= rendered.get(oldest.value)?.length ?? 0;
       rendered.delete(oldest.value);
     }
+    remembered += html.length;
   }
+  rendered.set(key, html);
+
+  return html;
+}
+
+/**
+ * A hit moves its entry to the END, which is what makes this an LRU rather than a queue.
+ *
+ * <p>`Map` iterates in insertion order — normatively, since ES2015 — and `set` on an existing key
+ * does NOT move it. So without this, the blocks at the top of a long review are the first evicted
+ * however often they are read, which is exactly backwards: three reviewers arrived at it from
+ * different directions. Deleting and re-inserting is the only way to move an entry, and it is O(1).</p>
+ */
+function touch(key: string, html: string): string {
+  rendered.delete(key);
   rendered.set(key, html);
 
   return html;
@@ -158,7 +213,7 @@ export function highlight(code: string, language: string): string {
 
   const already = rendered.get(key);
   if (already !== undefined) {
-    return already;
+    return touch(key, already);
   }
 
   try {
@@ -199,7 +254,15 @@ export function plainBlock(code: string, why: 'plain' | 'failed'): string {
 }
 
 function plain(code: string, why: 'plain' | 'failed'): string {
-  return `<pre class="shiki" data-highlight="${why}"><code><span class="line">${escapeHtml(code)}</span></code></pre>`;
+  // A failure gets a line a PERSON can read. Two reviewers said the attribute alone is a difference
+  // only a parser can see: uncoloured is uncoloured, so somebody scrolling past assumes "we do not
+  // read this language" and never learns that a grammar broke on their corpus. It is inside the
+  // block rather than beside it so it travels with the code wherever the block is placed.
+  const said = why === 'failed'
+    ? '<span class="hlFailed">syntax highlighting failed for this block</span>'
+    : '';
+
+  return `<pre class="shiki" data-highlight="${why}">${said}<code><span class="line">${escapeHtml(code)}</span></code></pre>`;
 }
 
 /**
@@ -237,4 +300,9 @@ export const HIGHLIGHT_CSS = `
     white-space: pre-wrap; word-break: break-word;
   }
   pre.shiki code { font-family: inherit; }
-  pre.shiki .line { display: block; }`;
+  pre.shiki .line { display: block; }
+  /* Said quietly: it explains an absence, and it must not shout over the code it is about. */
+  .hlFailed {
+    display: block; font-size: .8em; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--vscode-charts-red, #f14c4c); opacity: .8; margin-bottom: 3px;
+  }`;

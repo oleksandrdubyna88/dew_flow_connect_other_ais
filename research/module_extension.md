@@ -7282,8 +7282,22 @@ a draw happens after every decision. Measured before and after, on 200 pairs ful
 
 The key is the text itself, which is what makes it safe rather than merely fast — a skeleton that
 changed is a different key, so nothing stale can be served, and the corpus is immutable between
-collections anyway. The cache is bounded at a thousand blocks and evicts oldest-first; a cache with
-no ceiling is a leak with a good reason.
+collections anyway.
+
+**It is bounded in BYTES and it is a real LRU**, both because the code round found the first attempt
+was neither. A count is the wrong unit: a thousand blocks is generous at 200 pairs and useless at
+2000, where a top-to-bottom draw evicts what the same draw needs again. And `Map` iterates in
+insertion order while `set` on an existing key does *not* move it, so a cache that only inserted
+would evict the top of a long review however often it was read — exactly backwards. A hit now
+re-inserts, and a re-render of a key already held no longer evicts somebody else for nothing.
+
+**What is NOT lazy, and why.** Collapsed rows are still tokenised, so opening a panel of 200 pairs
+costs 468 ms once. A reviewer proposed highlighting only open rows; measured, that trade is worse.
+The page paints a disclosure locally precisely so a click costs no process — making the panel redraw
+instead would put a full page rebuild (209 ms, measured) on **every** row a person opens, against
+468 ms **once** when they open the panel. Opening rows is the frequent act. The real ceiling here is
+the page's size at corpus scale — 1.3 MB of HTML at 200 pairs — and that is a virtualisation question
+for a later epic, recorded in the plan rather than half-answered here.
 
 **"We do not read this language" and "this language broke" are different answers.** Both render
 uncoloured, so the block carries `data-highlight="plain"` or `data-highlight="failed"`; without it
