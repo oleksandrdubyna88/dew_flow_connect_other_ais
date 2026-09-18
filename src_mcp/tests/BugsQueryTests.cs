@@ -316,20 +316,17 @@ public sealed class BugsQueryTests : IDisposable
     private System.Text.Json.JsonElement RunMode(string[] args, out int code)
     {
         Environment.SetEnvironmentVariable("COAI_DATA_DIR", _dir);
-        var written = new StringWriter();
-        var was = Console.Out;
-        Console.SetOut(written);
+        string written;
         try
         {
-            code = Program.BugsJson(args);
+            (written, code) = Stdout.Of(() => Program.BugsJson(args));
         }
         finally
         {
-            Console.SetOut(was);
             Environment.SetEnvironmentVariable("COAI_DATA_DIR", null);
         }
 
-        return System.Text.Json.JsonDocument.Parse(written.ToString()).RootElement.Clone();
+        return System.Text.Json.JsonDocument.Parse(written).RootElement.Clone();
     }
 
     /// <summary>Mark one finding as a collector run would, by its title.</summary>

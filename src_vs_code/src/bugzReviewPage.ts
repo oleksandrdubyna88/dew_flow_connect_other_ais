@@ -625,7 +625,7 @@ ${body(pairs, rows, trouble)}
   // What the host learned about reaching a row's code, painted into the row's own container - the
   // page never decides it. One message may carry every row of a repository whose checkout is gone,
   // which is what makes one process per repository true for the case that matters.
-  function tellRows(items) {
+  function showRevisionActions(items) {
     for (var i = 0; i < (items || []).length; i++) {
       var box = document.querySelector('[data-revision="' + String(items[i].id) + '"]');
       if (box) { box.innerHTML = items[i].html; }
@@ -634,7 +634,7 @@ ${body(pairs, rows, trouble)}
 
   window.addEventListener('message', function (event) {
     var m = event.data;
-    if (m && m.type === 'revisions') { tellRows(m.items); return; }
+    if (m && m.type === 'revisions') { showRevisionActions(m.items); return; }
     if (!m || m.type !== 'real') { return; }
     var id = String(m.id);
     // Applied only to the request that is still WANTED. The toggle flipped, the row collapsed or
@@ -770,7 +770,9 @@ ${toneScript()}
 
   // The keyboard gets back the tab it activated. An id this module composed, never a key from the
   // database: the host says WHICH press, the page works out which element that is.
-  var giveFocusBack = ${JSON.stringify(focusId(view))};
+  // Through the shared escaper, so this block has ONE spelling. The value is an id this module
+  // composed and could never carry markup; the reason is consistency, not a hole. (Code round.)
+  var giveFocusBack = ${jsonForScript(focusId(view))};
   if (giveFocusBack) {
     var wanted = document.getElementById(giveFocusBack);
     if (wanted && wanted.focus) { wanted.focus(); }

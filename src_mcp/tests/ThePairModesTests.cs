@@ -66,22 +66,13 @@ public sealed class ThePairModesTests : IDisposable
         return id;
     }
 
-    /// <summary>Whatever the mode wrote to stdout.</summary>
+    /// <summary>Whatever the mode wrote to stdout — through the one capture, never a private copy.</summary>
     private static string Spoken(Func<int> mode, out int code)
     {
-        var stdout = new StringWriter();
-        var was = Console.Out;
-        try
-        {
-            Console.SetOut(stdout);
-            code = mode();
-        }
-        finally
-        {
-            Console.SetOut(was);
-        }
+        var (spoken, exit) = Stdout.Of(mode);
+        code = exit;
 
-        return stdout.ToString();
+        return spoken;
     }
 
     [Fact]
