@@ -666,7 +666,7 @@ function forgetPicture(thread: Thread): void {
       // 2026-09-17, `pictureDir` has exactly one caller and no sweep reaches that tree. One directory
       // per conversation that ever held a picture, kept for ever. That retention is real work with a
       // real decision in it (when is a conversation's pictures collectable?) and is recorded in
-      // `todo/PLAN_the_tail_of_the_command_split.md` rather than invented here.
+      // `research/PLAN_the_tail_of_the_command_split.md` rather than invented here.
     }
   }
   thread.attached = '';

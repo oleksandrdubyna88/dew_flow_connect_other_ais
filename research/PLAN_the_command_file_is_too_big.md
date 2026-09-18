@@ -233,7 +233,7 @@ diff nobody can review. They are below with what each rests on. The security one
 
 ## Tail — noticed while moving, left for their own work
 
-> **All of it is now [../todo/PLAN_the_tail_of_the_command_split.md](../todo/PLAN_the_tail_of_the_command_split.md),
+> **All of it is now [PLAN_the_tail_of_the_command_split.md](PLAN_the_tail_of_the_command_split.md),
 > extracted on 2026-09-17 when this plan was promoted.** The list below is kept verbatim as the record
 > of what was found while the file was being carved up; the extracted plan is where it is ordered,
 > sequenced and given tests. Read that one to do the work, this one to see where it came from.
