@@ -828,7 +828,15 @@ then dropped.
   the cure, not one per tick; a second sync after the build catches up writes the file and clears the
   condition.
 
-### 2. Deleting a role deletes its text before the deletion has landed
+### 2. Deleting a role deletes its text before the deletion has landed — BUILT 2026-09-18
+
+> Owned by [PLAN_a_deleted_role_stays_deleted.md](PLAN_a_deleted_role_stays_deleted.md), which
+> carries the boundary: this defect and its four holes are that plan’s, and nothing else of S7
+> is. What is below is the defect AS FOUND, kept because the four are read as one list. Two of
+> its bullets were changed by that plan’s own gate round: the four role-keyed settings are pruned
+> WITH the row rather than after the mirror, because they are part of the payload it writes; and
+> the deletion does not call `sync()` at all, because writing the row starts the mirror’s own
+> schedule and a direct call moments later is answered `busy`.
 
 [rolesPanel.ts:320-321](../src_vs_code/src/rolesPanel.ts) writes the rows and **then** deletes the
 prompt files. When the row write does not reach the server the result is a role that exists with a

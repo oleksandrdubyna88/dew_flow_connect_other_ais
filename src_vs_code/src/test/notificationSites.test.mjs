@@ -184,7 +184,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // LANDED after it had reported that it had not. Somebody who presses Try again and is told
 // nothing cannot tell a retry that worked from one that never fired. It is silent until a
 // condition has actually been reported, so an ordinary write adds no traffic at all.
-const PLACES_THIS_SPEAKS = 125;
+// 125 → 126 on 2026-09-18, S7 defect 2: a role removed here that the server has not been told
+// about yet. The deletion keeps its prompts until the mirror has carried the row, and a person
+// who is not told that reads a role still being reviewed against as the product ignoring them —
+// which is the 2026-09-16 incident exactly. Said once per condition, from the coordinator.
+const PLACES_THIS_SPEAKS = 126;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
