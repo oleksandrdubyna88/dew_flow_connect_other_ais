@@ -51,15 +51,16 @@ import {
 import { askVersion, capture } from './versionProbe';
 import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
+import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
-import { DbLog, EMPTY_LOG } from './roundsDb';
+import { DbLog } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, MAX_LIMIT, readBugs, readFindings, readLog, readManyFindings, readPairs, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, readBugs, readPairs, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -219,6 +220,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private readonly claudeProbes: ClaudeProbeCache;
 
   private readonly consultPrompt: ConsultPromptFile;
+  private readonly roundsLog_: RoundsLogCache;
 
 
   private codexModels: ModelChoice[] = [];
@@ -298,9 +300,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
   private pricesCheckedAt = 0;
-  /** The rounds database as last read, and when — a read is a process spawn. */
-  private roundsLogCache: DbLog = EMPTY_LOG;
-  private roundsLogAt = 0;
   /**
    * When a control in the page gained focus, and which one. 0 means none has it.
    *
@@ -343,6 +342,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
     // (TS2729). `dataDir` is a readonly parameter and never changes, so the snapshot is the value.
     this.consultPrompt = new ConsultPromptFile(dataDir);
+    this.roundsLog_ = new RoundsLogCache(context);
     this.claudeProbes = new ClaudeProbeCache({
       dataDir,
       render: () => this.render(),
@@ -441,81 +441,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * answers nothing, which is the same to the page as a machine that has run no rounds — it goes on
    * showing everything it builds from the session files.</p>
    */
-  /**
-   * Forget the cached log, because something it describes has just moved.
-   *
-   * <p>The cache exists so a page refreshing every tick does not spawn a process every tick. That is
-   * right for a page ticking on its own and wrong for a real change: a consultation ending is the
-   * last watcher event there will be, so a cache entry written a second earlier would have kept the
-   * old rows on screen until somebody clicked something. The watcher clears it and asks again.
-   * (CodeRabbit, on the pull request.)</p>
-   */
+  // THE ROUNDS LOG reads and remembers itself, in `roundsLogCache.ts`. These four stay as
+  // delegations rather than moving out of the class's surface because `extension.ts` calls them by
+  // name; what left is the caching, the process spawning and the reasons for both.
   forgetRoundsLog(): void {
-    this.roundsLogAt = 0;
+    this.roundsLog_.forgetRoundsLog();
   }
 
   async roundsLog(): Promise<DbLog> {
-    // Cached for a few seconds, because the log page refreshes every tick while a round runs and
-    // each read is a process spawn plus a walk of the whole findings table. The gate called that
-    // out twice: a hot path is not where a child process belongs. A few seconds is shorter than any
-    // round and longer than any burst of ticks.
-    const AGE_MS = 10_000;
-    if (Date.now() - this.roundsLogAt < AGE_MS) {
-      return this.roundsLogCache;
-    }
-    const server = serverPath(this.context.globalStorageUri);
-    this.roundsLogAt = Date.now();
-    this.roundsLogCache = server === undefined
-      ? EMPTY_LOG
-      // The whole window rather than one page: this list is what gives every row its decision
-      // counts, and the page paginates the rows it already holds. See MAX_LIMIT for the arithmetic.
-      : await readLog(server.fsPath, { limit: MAX_LIMIT });
-
-    return this.roundsLogCache;
+    return this.roundsLog_.roundsLog();
   }
 
-  /**
-   * What ONE round found, read when somebody opens its row.
-   *
-   * <p>Not cached, and not on the tick: this is a read a person asked for by clicking, and it is
-   * small — one round's findings against the 3.78 MB the list used to carry for every round whether
-   * or not anybody looked. A machine with no server installed answers `failed`, which the row draws
-   * as a retry rather than as "this round found nothing".</p>
-   */
   async roundFindings(sessionId: string, stage: string, number: number): Promise<Found> {
-    const server = serverPath(this.context.globalStorageUri);
-
-    return server === undefined
-      ? { state: 'failed', findings: [] }
-      : readFindings(server.fsPath, { sessionId, stage, number });
+    return this.roundsLog_.roundFindings(sessionId, stage, number);
   }
 
-  /**
-   * The findings of a whole SELECTION, in one spawn.
-   *
-   * <p>What a bulk export asks. The per-round call above is what a person opening one row asks, and
-   * the two stay separate because they answer different questions: one row wants the answer now, a
-   * selection wants five hundred answers without five hundred processes.</p>
-   */
   async roundFindingsMany(keys: readonly RoundKey[], stop?: () => boolean): Promise<readonly FoundRound[]> {
-    const server = serverPath(this.context.globalStorageUri);
-    if (server === undefined) {
-      return keys.map((key) => ({ key, found: { state: 'failed' as const, findings: [] } }));
-    }
-
-    // `stop` reaches the CHILD, which is the whole point: one process answers for the whole
-    // selection, so a cancel that only stopped listening would leave it reading the database while
-    // the person who cancelled watched nothing happen. It is handed to the per-round fallback too.
-    return readManyFindings(
-      server.fsPath,
-      keys,
-      keysFileIn(this.context.globalStorageUri.fsPath),
-      // Through `serverRun`, not `capture` directly: that is the door that carries the data
-      // directory this window chose, and a batch read that skipped it would export the rounds of a
-      // different directory from the one the list beside it is showing.
-      serverRun(server.fsPath, stop),
-      readFindings,
-      stop);
+    return this.roundsLog_.roundFindingsMany(keys, stop);
   }
 
   /**
