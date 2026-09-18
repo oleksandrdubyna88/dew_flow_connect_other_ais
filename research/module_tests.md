@@ -291,6 +291,7 @@ of every wire field this product has shipped out of step.
 | `bugzReviewPage.test.ts` | the page RUN against a DOM shim | a tick-box that renders and selects nothing |
 | `bugzReviewWiring.test.ts` | the panel's SOURCE, comments stripped | the page opening a row and the panel never recording it — the seam no page test can see |
 | `codeHighlight.test.ts` | the real Shiki, all three grammars | a skeleton becoming MARKUP; a language rendered by guesswork; colours baked in past the theme |
+| `lineDiff.test.ts` | the pure diff, nine cases | anonymisation's renumbering read as real change; a rewrite shown as an unrelated removal and addition |
 
 **Why the page is run rather than read.** `PROJECT.md` refuses a new behavioural assertion over page
 source text, and story 4 earned that ruling: a model picker matched every regex written about it
@@ -359,6 +360,17 @@ demand — so `plainBlock` is exported and the two fallback shapes are asserted 
 unproven is that a real grammar failure routes there. And the table of languages is pinned against
 `SourceLanguage` in `src_mcp` by reading the enum's declaration, because a table checked only against
 its own unit tests drifts silently the day the collector learns a fourth language.
+
+**The diff's own measurement is a test, not a comment** (2026-09-18, story 1.3). The number that
+shaped `lineDiff.ts` — one added line read as seven changed ones, because the normaliser renumbers
+placeholders in order of declaration — is asserted as a case, with the count, so the day a change
+brings the wall of false differences back it goes red with the figure in the message rather than
+looking merely noisier to whoever next opens the page.
+
+**That measurement was taken on a CONSTRUCTED pair.** No real corpus was present on the machine —
+the data directory was empty — so the shape is representative and the exact ratio is not a
+measurement of live data. Worth re-running against a real database before the ratio is quoted
+anywhere as a property of the corpus.
 
 **What these still do not prove.** Nothing spawns the built binary and drives the review flow end to
 end; `bugzLiveContract.test.ts` does that for the corpus read and there is no equivalent for the

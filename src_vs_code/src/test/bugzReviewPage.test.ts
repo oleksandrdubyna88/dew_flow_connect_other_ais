@@ -639,6 +639,36 @@ test('a pair\'s code arrives coloured by its own language', () => {
 });
 
 /**
+ * What differs is marked, and an identical pair is marked nowhere.
+ *
+ * <p>The marks are counted inside `<tbody>` only: `HIGHLIGHT_CSS` names every `dl-` class in its
+ * own rules, so a count over the whole page would find them on a page with no differences at all —
+ * which is precisely the assertion that has to be able to fail.</p>
+ */
+test('the lines that differ are marked, and an identical pair is not', () => {
+  const changed = {
+    ...pair(1),
+    skeletonBefore: 'void method_1()\n{\n    old_1();\n}',
+    skeletonAfter: 'void method_1()\n{\n    neu_1();\n    var var_1 = 2;\n}',
+  };
+  const rowsOf = (html: string): string =>
+    html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+
+  const marked = rowsOf(reviewPageHtml({
+    pairs: [changed], nonce: 'test-nonce', expanded: new Set([1]),
+  }));
+  assert.match(marked, /class="line dl-added"/u, 'the new line is not marked');
+  assert.match(marked, /class="line dl-changed"/u, 'the rewritten line is not marked');
+
+  const identical = rowsOf(reviewPageHtml({
+    pairs: [{ ...changed, skeletonAfter: changed.skeletonBefore }],
+    nonce: 'test-nonce',
+    expanded: new Set([1]),
+  }));
+  assert.doesNotMatch(identical, /dl-/u, 'a pair where nothing differs must be coloured nowhere');
+});
+
+/**
  * The module escapes; this asks whether the PAGE does.
  *
  * <p>`codeHighlight.test.ts` proves `highlight()` cannot emit markup. That is a different claim from

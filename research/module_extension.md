@@ -7310,6 +7310,42 @@ throws — a row rendering nothing is indistinguishable from a pair that was nev
 fallback path is the one a new corpus language reaches first, which is why it is escaped and tested
 rather than assumed unreachable.
 
+### What differs, the way git shows it (2026-09-18, story 1.3)
+
+`lineDiff.ts` marks every line of both skeletons `same`, `added`, `removed` or `changed`, and
+`codeHighlight.ts` puts that on the line's own node through a **Shiki transformer** — so the diff
+rides on top of the tokens without a string replace ever touching the markup, which is the one way
+to add a class per line that cannot cut a token or an HTML entity in half.
+
+**The measurement that decided the algorithm: anonymisation invents differences the original code
+never had.** The normaliser numbers placeholders in order of declaration (`Placeholders.cs`,
+`$"{kind}_{next}"`, kinds exactly `var`/`method`/`type`), so a fix that adds ONE line near the top
+renumbers everything below it. On a representative pair:
+
+| | lines marked |
+|---|---|
+| the fix actually added | **1** |
+| a plain line diff | **7** |
+| a diff over masked names | **1** |
+
+Seven of seven lines, for one added statement. So the COMPARISON runs over masked text
+(`([A-Za-z]+)_\d+` → `$1_#`, deliberately wider than today's three kinds) and the DISPLAY keeps the
+real text.
+
+**The honest cost, stated rather than hidden:** a line whose only difference is a placeholder index
+reads as unchanged, and that cannot be told apart from an author genuinely switching variable —
+the skeleton no longer carries what would distinguish them. The mask takes the smaller error.
+
+**A removal opposite an addition is one line rewritten.** Git's own line diff has only `+` and `-`,
+but a person reading two panes sees a rewrite; only the OVERLAP is paired, so three gone and one
+arrived is one change and two removals. Colours come from `--vscode-diffEditor-insertedLineBackground`
+and its removed twin — the one family of variables a webview is given for this — with the gutter
+marker as a `::before` so it costs the code no indentation and cannot be selected into a copy.
+
+**The marks are part of the cache key.** The same skeleton diffed against a different counterpart is
+different markup, and a key that ignored them would serve one pair's colouring to another — a row
+confidently wrong about which of its own lines changed.
+
 **The webview message boundary is a union, parsed once.** `asReviewMessage` turns raw data into one
 of four shapes or into nothing, and `received` switches over it. A plain lookup table answered
 `handlers['__proto__']` with something truthy and uncallable; `null` threw on the first field read;
