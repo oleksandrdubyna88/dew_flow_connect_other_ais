@@ -19,6 +19,22 @@ import type { CopyDecision, CopyReport } from './copyText';
 const GONE = 'That block is no longer part of this answer.';
 
 /**
+ * Said when the ANSWER moved out from under the press, rather than a block within it.
+ *
+ * <p>Deliberately not merged with `GONE` above, though the two are a sentence apart: one is about a
+ * block inside an answer that is still there, the other about the answer itself no longer being the
+ * one that was pressed. Both can fire on the same press, in that order, and a person told the wrong
+ * one would look for the wrong thing.</p>
+ *
+ * <p><b>It used to read *"That answer is not on this page any more."*</b> A reviewer read that as
+ * telling the person to reload, which is exactly what it must not do: the page is live, nothing
+ * needs reloading, and what actually happened is that the conversation moved on while the press was
+ * queued. The replacement names the press, because the press is the thing the person remembers doing
+ * and the only thing that dates the answer they meant.</p>
+ */
+const MOVED_ON = 'That answer is no longer the one you pressed Copy on.';
+
+/**
  * Which block a control named, or the sentence to show instead.
  *
  * <p>Two refusals, one sentence. The ordinal can be past the end — an answer the store has since
@@ -85,8 +101,8 @@ export function answerToCopy(markdown: string): CopyDecision {
  *
  * <p><b>The roles are spelled out rather than left as `string`, and that is the point.</b> A
  * structural `role: string` would keep compiling the day `ChatMessage` gains a third kind of turn,
- * and this guard would quietly refuse it as *"not on this page any more"* — a message the person can
- * see, refusing to be copied, for a reason that is not true. Naming the two makes that day a compile
+ * and this guard would quietly refuse it as *"no longer the one you pressed Copy on"* — a message the
+ * person can see, refusing to be copied, for a reason that is not true. Naming the two makes that a compile
  * error at this line instead, which is where the decision belongs. (codex, the code round.)</p>
  */
 export interface Answered {
@@ -126,7 +142,7 @@ export function stillAnswering(
   copy: (markdown: string) => CopyDecision,
 ): CopyDecision {
   return said?.role !== 'model'
-    ? { kind: 'refused', said: 'That answer is not on this page any more.' }
+    ? { kind: 'refused', said: MOVED_ON }
     : copy(said.text);
 }
 
