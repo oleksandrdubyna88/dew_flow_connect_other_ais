@@ -2121,11 +2121,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'forgetChat':
         break;
       case 'showNotifications':
-        // The same shape as every other button that opens a tab: the page is a registered
-        // command that owns its own panel, and this button's job is only to reach it. The count
-        // beside it is a live region, so pressing this does not repaint the sidebar.
+        // The same shape as every other button that opens a tab: the page is a registered command
+        // that owns its own panel, and this button's job is only to reach it. The count beside it is
+        // a live region, so pressing this does not repaint the sidebar — and RETURN is what makes
+        // that true. `break` falls into the full render at the end of this method, which stats the
+        // server binary, probes every vendor CLI, asks GitHub what is published and fetches two
+        // price tables. The comment said it did not repaint; the keyword said otherwise.
+        // (CodeRabbit, on the pull request.)
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.showNotifications);
-        break;
+
+        return;
       case 'installServer':
         // The panel has no business downloading anything itself: the command that does it is
         // registered by the extension, is what the ⋯ menu invokes, and reports its own progress

@@ -180,7 +180,17 @@ function shimFor(html: string): {
   const byId: Record<string, Node> = {};
   for (const id of ['find', 'source', 'from', 'to', 'clear', 'prev', 'next', 'where', 'range-note', 'ack-note', 'mark-all', 'notice']) {
     assert.ok(html.includes(`id="${id}"`), `the page did not render #${id}`);
-    byId[id] = new Node();
+    const node = new Node();
+    // SEEDED from what the page really rendered, for the elements that have an opening and a
+    // closing tag. An empty stub answers `hidden: false` and `textContent: ''` for everything, so a
+    // test could assert a notice was visible on a page that rendered it hidden — matching the text
+    // in the markup proves it is THERE, not that anybody can see it. (CodeRabbit, on the PR.)
+    const rendered = new RegExp(`<(\\w+)([^>]*\\sid="${id}"[^>]*)>([\\s\\S]*?)</\\1>`, 'u').exec(html);
+    if (rendered !== null) {
+      node.hidden = /\shidden(\s|>|=)/u.test(`${rendered[2] as string}>`);
+      node.textContent = (rendered[3] ?? '').replace(/<[^>]*>/gu, '').trim();
+    }
+    byId[id] = node;
   }
 
   const posted: unknown[] = [];
@@ -478,11 +488,20 @@ test('the When column says it is sorted before anybody clicks anything', () => {
   );
 });
 
-test('a notice the host wrote into the page is on screen from the first paint', () => {
-  const html = notificationsPageHtml(state([row()], { notice: 'Everything is marked read.' }), 'n');
+test('a notice the host wrote into the page is VISIBLE from the first paint', () => {
+  // Matching the text proves it is in the markup, not that anybody can see it: an added `hidden`
+  // would pass both assertions. The shim parses the element's own attributes, so the state is read
+  // rather than assumed. (CodeRabbit, on the pull request.)
+  const shim = run(state([row()], { notice: 'Everything is marked read.' }));
 
-  assert.match(html, /Everything is marked read\./u);
-  assert.match(html, /id="notice" role="status" aria-live="polite"/u);
+  assert.match(shim.html, /id="notice" role="status" aria-live="polite"/u);
+  assert.equal(shim.byId['notice']?.textContent, 'Everything is marked read.');
+  assert.equal(shim.byId['notice']?.hidden, false, 'a notice nobody can see is not a notice');
+
+  // And the other way: with nothing to say, the line is hidden rather than an empty box.
+  const quiet = run(state([row()]));
+
+  assert.equal(quiet.byId['notice']?.hidden, true, 'an empty notice leaves no gap on the page');
 });
 
 test('the page names the directory it is reading, and what it is NOT showing', () => {

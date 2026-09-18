@@ -116,6 +116,26 @@ test('a multi-byte character split by a window boundary survives the backwards r
   }
 });
 
+test('a ledger that is NOT THERE reads as empty and READABLE, which is not the same answer', async () => {
+  // A first run is not a failure. The other half — a ledger that is there and will not answer — is
+  // decided by `missingRatherThanBroken`, which is pinned directly in `notificationsSeen.test.ts`
+  // against real error shapes, because the filesystem will not produce a permission failure on
+  // demand: a directory in a ledger's place OPENS on Windows and fails at the first read, and a
+  // path inside a file answers ENOENT. Both measured. What changed here is that either failure now
+  // comes back as `readable: false` instead of an empty ledger the page would render as a clean
+  // table. (CodeRabbit, on the pull request.)
+  const dir = home();
+  try {
+    const read = await readNewestPlaced(join(dir, 'absent.jsonl'), 10);
+
+    assert.equal(read.readable, true, 'a first run is not a ledger that could not be read');
+    assert.deepEqual(read.records, []);
+    assert.equal(read.end, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a SHORT positional read is filled rather than believed', async () => {
   // A positional read may return fewer bytes than it was asked for — rare on a local file, not rare
   // on the network share this data directory can be. A real file will not do it on demand, which is
