@@ -90,14 +90,27 @@ const settle = async (): Promise<void> => {
 function scheduleFor(
   sync: () => Promise<SyncOutcome>,
   clock: Clock,
-): { schedule: MirrorSchedule; readonly said: string[]; readonly back: string[] } {
+): {
+  schedule: MirrorSchedule;
+  readonly said: string[];
+  readonly back: string[];
+  readonly settled: string[];
+} {
   const said: string[] = [];
   const back: string[] = [];
+  const settled: string[] = [];
 
   return {
     said,
     back,
-    schedule: new MirrorSchedule(sync, clock, (outcome) => said.push(outcome), () => back.push('recovered')),
+    settled,
+    schedule: new MirrorSchedule(
+      sync,
+      clock,
+      (outcome) => said.push(outcome),
+      () => back.push('recovered'),
+      (outcome) => settled.push(outcome),
+    ),
   };
 }
 
@@ -380,4 +393,44 @@ test('cancel drops the pending attempt, which is what a closing window does', as
   assert.equal(clock.armed(), 0, 'nothing is left ticking');
   assert.equal(sync.calls(), 1);
   assert.deepEqual(said, [], 'and a schedule that was dropped reports nothing');
+});
+
+test('every TERMINAL outcome is reported once, and a retry in progress is not one', async () => {
+  // What a role deletion waits for, and the reason it does not ask the mirror itself: writing a
+  // setting fires the configuration listener, which starts this schedule, so a deletion calling
+  // `sync()` moments later is answered `busy` while the listener's own attempt goes on to succeed.
+  // The two halves both matter - told on every terminal outcome, and NOT told per attempt - because
+  // a deletion told about each `busy` would write a reason it replaces two seconds later.
+  const clock = heldClock();
+  const answers: SyncOutcome[] = ['busy'];
+  const one = scheduleFor(async () => answers[0] as SyncOutcome, clock);
+
+  one.schedule.start();
+  await settle();
+  assert.deepEqual(one.settled, [], 'a retry still in progress was reported as an outcome');
+
+  clock.tick();
+  await settle();
+  assert.deepEqual(one.settled, [], 'nor after the second attempt');
+
+  clock.tick();
+  await settle();
+  assert.deepEqual(one.settled, ['busy'], 'the exhausted ladder told nobody it had stopped');
+
+  answers[0] = 'written';
+  one.schedule.start();
+  await settle();
+  assert.deepEqual(one.settled, ['busy', 'written']);
+
+  answers[0] = 'stood-down';
+  one.schedule.start();
+  await settle();
+  assert.deepEqual(one.settled, ['busy', 'written', 'stood-down'],
+    'a stand-down is terminal too, and a deletion waiting on it would wait for ever');
+
+  answers[0] = 'unchanged';
+  one.schedule.start();
+  await settle();
+  assert.deepEqual(one.settled, ['busy', 'written', 'stood-down', 'unchanged'],
+    'nothing to write still means the server has what the settings say');
 });

@@ -1,14 +1,26 @@
 # PLAN — a deleted role stays deleted, and an interrupted deletion finishes itself
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope:
-> `src_vs_code/src/rolesPanel.ts`, `src_vs_code/src/rolesEdit.ts`, a new `roleDeletion.ts` and its
-> store, one callback on `mirrorSchedule.ts`, the roles page, and their tests.
+> Status: **IMPLEMENTED, 2026-09-18.** Scope: `rolesPanel.ts`, `rolesEdit.ts`, `rolesPage.ts`, the new
+> `roleDeletion.ts` and `roleDeletionStore.ts`, one callback on `mirrorSchedule.ts`, two lines of
+> `extension.ts`, and their tests.
+>
+> **Deviations: none in the design, two in the shape of the code.** The plan named "a new
+> `roleDeletion.ts` and its store" as one thing and it is two — the coordinator takes its store by
+> parameter, so the coordinator is RUN against a map while the filesystem half is tested against a
+> real temp directory, which is what let the crash cases be written at all. And the mirror's new
+> callback reports the OUTCOME rather than a reason: a schedule that knew what a role deletion is
+> would be a schedule with an opinion about roles, so `extension.ts` translates.
+>
+> One thing the plan asked for and did not get, on purpose: it listed a real-editor scenario for
+> deleting a role. The harness exists and the scenario is buildable; what stopped it is that the
+> interesting half is the FAILURE path, which needs a second build's stamp in the settings file, and
+> that is a scenario of its own rather than a line in this one. Recorded here rather than ticked.
 >
 > Defect 2 of the four in
-> [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md) (its S7).
+> [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md) (its S7).
 >
-> Related: [module_extension.md](../research/module_extension.md), and `PLAN_the_mirror_says_when_it_stood_down.md`
-> — named rather than linked, because defect 1 is still in review and the document is not on `main` yet.
+> Related: [module_extension.md](module_extension.md),
+> [PLAN_the_mirror_says_when_it_stood_down.md](PLAN_the_mirror_says_when_it_stood_down.md).
 >
 > **Through its plan round, 2026-09-18: two reviewers, nine findings, all nine accepted.** The round
 > changed the shape of this plan rather than its details, and the two that changed it most are marked
@@ -22,9 +34,9 @@
 | The ledger, the funnel, the panel count, the notifications page, the write gap | parent plan, S1–S5 | shipped 2026-09-17 |
 | The rounds log's derived sections and its search | `PLAN_the_rounds_log_in_line.md`, S6 | shipped 2026-09-17 |
 | The Help tab's refused write — defect 3 | shipped 2026-09-18 through `settingWrite.ts`, from a direction nobody planned | done |
-| The settings mirror's silence — defect 1 | `PLAN_the_mirror_says_when_it_stood_down.md` | in review 2026-09-18 |
-| **A role deleted before the deletion has landed — defect 2** | **this plan** | **now** |
-| The server half and defect 4 | the parent plan, S8 | needs a `coai-mcp` release |
+| The settings mirror's silence — defect 1 | [PLAN_the_mirror_says_when_it_stood_down.md](PLAN_the_mirror_says_when_it_stood_down.md) | shipped 2026-09-18 |
+| A role deleted before the deletion has landed — defect 2 | this plan | shipped 2026-09-18 |
+| **The server half and defect 4** | **the parent plan, S8** | **next, and it needs a `coai-mcp` release** |
 
 **This plan depends on defect 1**, and that is not a scheduling note: the whole correctness argument
 below rests on somebody being able to ask *did the row actually reach the server*. Before 2026-09-18
@@ -247,24 +259,24 @@ something that grows quietly. The steady state is empty.
 
 ## Definition of Done
 
-- [ ] The prompt files are deleted only after the mirror has carried the removal; the row and the
+- [x] The prompt files are deleted only after the mirror has carried the removal; the row and the
       four role-keyed settings go together, before it.
-- [ ] The tombstone is durable before the row is touched, carries a nonce checked before every
+- [x] The tombstone is durable before the row is touched, carries a nonce checked before every
       destructive step, and a startup sweep finishes what a crash interrupted.
-- [ ] The deletion never calls `sync()` itself; it resumes on the mirror's terminal signal, and its
+- [x] The deletion never calls `sync()` itself; it resumes on the mirror's terminal signal, and its
       condition is that the role is absent from the configuration as it reads then.
-- [ ] A tombstoned id cannot be handed to a new role.
-- [ ] Stranded tombstones are shown with their reason, and can be finished with the cost stated in
+- [x] A tombstoned id cannot be handed to a new role.
+- [x] Stranded tombstones are shown with their reason, and can be finished with the cost stated in
       the words this plan uses.
-- [ ] Each assertion watched failing first, and both observations reported.
-- [ ] The whole suite green, and `notificationSites.test.mjs`'s population moves only with a reason
+- [x] Each assertion watched failing first, and both observations reported.
+- [x] The whole suite green, and `notificationSites.test.mjs`'s population moves only with a reason
       written beside the constant.
-- [ ] `research/module_extension.md` and `research/module_tests.md` record the deletion's steps and
+- [x] `research/module_extension.md` and `research/module_tests.md` record the deletion's steps and
       the new flow.
-- [ ] **The parent plan's boundary table and its defect-2 section are updated in the same task**,
+- [x] **The parent plan's boundary table and its defect-2 section are updated in the same task**,
       per `common/planning-docs.md`.
-- [ ] Promotion per `common/planning-docs.md`, `git mv` last, then `plan-lifecycle.mjs`.
-- [ ] Through `review_plan` (done, nine of nine accepted) and `review_code`.
+- [x] Promotion per `common/planning-docs.md`, `git mv` last, then `plan-lifecycle.mjs`.
+- [x] Through `review_plan` — two reviewers, nine findings, nine accepted — and `review_code`.
 
 ## What this will NOT prove
 
