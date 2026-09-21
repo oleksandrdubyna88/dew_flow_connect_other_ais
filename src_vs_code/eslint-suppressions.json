@@ -1,0 +1,987 @@
+{
+  "src/agyAdapter.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/answerCopy.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/atomicFile.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/bugsAdminApi.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/bugsAdminKey.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/bugsAdminWire.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/bugsKeysFlow.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/bugsKeysPage.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/bugsKeysPanel.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/bugsSend.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/bugzReviewPage.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/bugzReviewPanel.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/bugzView.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/callHierarchy.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/callHierarchyAsk.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/callHierarchyVsCode.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/callsBlock.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/callsPanel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatArchive.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatCapture.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/chatCommand.ts": {
+    "complexity": {
+      "count": 6
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/chatConversationRestore.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatDiscovery.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/chatDoors.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatFollow.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/chatGoto.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatGotoCommand.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatHooks.ts": {
+    "complexity": {
+      "count": 9
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/chatImage.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatLaunch.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/chatLedger.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/chatMessageShape.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatMessages.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatModels.ts": {
+    "complexity": {
+      "count": 6
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatOrphans.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/chatPage.ts": {
+    "complexity": {
+      "count": 7
+    },
+    "max-lines-per-function": {
+      "count": 4
+    }
+  },
+  "src/chatPanel.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/chatPersist.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/chatPresets.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/chatPresetsPage.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatPresetsPanel.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatPrompt.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatRegistry.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatRestore.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatRestorePanel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatSessionJoin.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatSettings.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatShow.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatSpend.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatSpendRows.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatStore.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatStoreCache.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatStoreFile.ts": {
+    "complexity": {
+      "count": 10
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatStoreHousekeeping.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatStoreImport.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/chatStoreKeeper.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/chatStoreLock.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/chatStoreSweep.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/chatStoreWrite.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/chatTabs.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/chatTurn.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/chatUsage.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/claudeAdapter.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/claudeModels.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/claudeProbe.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/claudeProbeCache.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/claudeProbeFile.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/claudeQuestion.ts": {
+    "complexity": {
+      "count": 8
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/claudeSessions.ts": {
+    "complexity": {
+      "count": 12
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/claudeSnippet.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/cliChatLaunch.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/cliChatSession.ts": {
+    "complexity": {
+      "count": 6
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/cliVersions.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/coaiInstall.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/codeHighlight.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/codexAdapter.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/consultPromptFile.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/consultSettings.ts": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/consultantView.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/consultantWrite.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/consultationWatcher.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/consultations.ts": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/conversationChoice.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/conversationPicker.ts": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/conversationPickerCommand.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/cyclomatic.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/dataCommands.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/dataDir.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/dataMove.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/escalationDirs.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/escalationWatcher.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/escalations.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/extension.ts": {
+    "complexity": {
+      "count": 7
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/helpPage.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/installer.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/jsonlLedger.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/lineDiff.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/localEngines.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/measureStreamArgs.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/mirrorSchedule.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/modelPrices.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/models.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/notice.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notifications.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/notificationsCount.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notificationsFile.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/notificationsGlance.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/notificationsPage.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/notificationsPanel.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/notificationsRead.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notificationsSeen.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notificationsSeenCache.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/notificationsSnapshot.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/notify.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/openAtRevision.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/pageTables.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/panelProvider.ts": {
+    "complexity": {
+      "count": 25
+    },
+    "max-lines-per-function": {
+      "count": 10
+    }
+  },
+  "src/panelView.ts": {
+    "complexity": {
+      "count": 19
+    },
+    "max-lines-per-function": {
+      "count": 7
+    }
+  },
+  "src/phrasesEdit.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/phrasesPage.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/phrasesPanel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/processLauncher.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/providers.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/pushLedger.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/realMethodView.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/remoteAsk.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/remoteChatSession.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/renderAnswer.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/reviewAbout.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/reviewPageStyle.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/reviewTree.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/reviewTreeRead.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/reviewTreesCommand.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/revisionActions.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/revisionPanel.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/roleDeletion.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/roleDeletionStore.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/roleDeletionsHost.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/roles.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/rolesEdit.ts": {
+    "complexity": {
+      "count": 5
+    }
+  },
+  "src/rolesPage.ts": {
+    "complexity": {
+      "count": 6
+    },
+    "max-lines-per-function": {
+      "count": 4
+    }
+  },
+  "src/rolesPanel.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/rounds.ts": {
+    "complexity": {
+      "count": 7
+    }
+  },
+  "src/roundsCsv.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/roundsDb.ts": {
+    "complexity": {
+      "count": 7
+    }
+  },
+  "src/roundsDbRead.ts": {
+    "complexity": {
+      "count": 10
+    }
+  },
+  "src/roundsExport.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/roundsLog.ts": {
+    "complexity": {
+      "count": 15
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "src/roundsLogMessages.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/roundsLogPanel.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/selectionCapture.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/serverSettingsFile.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/serverSettingsSync.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/sessionKey.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/settingsShape.ts": {
+    "complexity": {
+      "count": 6
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/settledWrites.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/suppression.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/teamServerApi.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/teamServerAuth.ts": {
+    "complexity": {
+      "count": 4
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/teamServerView.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/teamServers.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/usage.ts": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/vendorColour.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/vendorTerminal.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/vendors.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/versionProbe.ts": {
+    "complexity": {
+      "count": 3
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/wslNetwork.ts": {
+    "complexity": {
+      "count": 5
+    }
+  }
+}

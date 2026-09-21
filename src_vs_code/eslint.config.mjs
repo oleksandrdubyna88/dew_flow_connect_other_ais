@@ -33,12 +33,27 @@
 // `reportUnusedDisableDirectives` makes any marker that has stopped applying an error rather than a
 // silent exemption.
 //
-// WHAT IS DELIBERATELY NOT HERE, with the numbers. The sibling extensions carry a boundary set —
-// `complexity: 4`, `max-lines-per-function: 50`, `no-console`. Measured on this source they report
-// 451, 49 and 109 violations. In `dew_flow_rag_qln` the same set found 33 across 7 files, which is a
-// boundary you can name and exempt; 451 is not a boundary, it is a wholesale rejection of how this
-// package is written, and burying that in a CI change would be the wrong way to raise it. `max-lines`
-// stays, because at 8 violations it IS nameable and the source already expects it.
+// TWO OF THE THREE ARE NOW HERE, and the third still is not. The sibling extensions carry a boundary
+// set — `complexity: 4`, `max-lines-per-function: 50`, `no-console`. When this file was written they
+// reported 451, 49 and 109 here, and the note reasoned that 451 is not a boundary but a wholesale
+// rejection of how the package is written. That reasoning was right and its conclusion has expired:
+// the way to hold new code to a rule the old code breaks is not an exemption, it is a SUPPRESSIONS
+// FILE, and ESLint 10 has one.
+//
+// So `complexity` and `max-lines-per-function` are on for `src/**`, off for `src/test/**` (tests
+// narrate, the same reason `max-lines` is off there), and `eslint-suppressions.json` records the
+// violations that already existed — measured 2026-09-21 at 770 across 236 files, of which 615 in
+// production. `npm run lint` needs NO flag: ESLint reads the file from its default location, which
+// was measured rather than assumed. New code is held to both rules with nothing for anyone to
+// remember, and `suppressionsOnlyShrink.test.ts` refuses a suppression that was not there before,
+// so the file cannot become a place to hide a new violation.
+//
+// | purpose | command |
+// |---|---|
+// | regenerate the baseline | `npx eslint src --suppress-rule complexity --suppress-rule max-lines-per-function` |
+// | drop entries whose violation was fixed | `npx eslint src --prune-suppressions` |
+//
+// `no-console` is STILL not here: 109 violations, and no equivalent argument has been made for it.
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
@@ -96,6 +111,8 @@ export default tseslint.config(
       'no-new-func': 'error',
 
       'max-lines': ['error', { max: 800, skipBlankLines: false, skipComments: false }],
+      complexity: ['error', 4],
+      'max-lines-per-function': ['error', 50],
     },
   },
   {
@@ -103,7 +120,15 @@ export default tseslint.config(
     // hides the story the test exists to tell. And a test page script is executed by `new Function`,
     // which is the only way to run one outside a webview.
     files: ['src/test/**/*.ts'],
-    rules: { 'max-lines': 'off', 'no-new-func': 'off' },
+    rules: {
+      'max-lines': 'off',
+      'no-new-func': 'off',
+      // One scenario told end to end is one function, and the assertions are the story. Splitting a
+      // test to satisfy a line count hides what it exists to say — the same argument as `max-lines`
+      // above, one level down.
+      complexity: 'off',
+      'max-lines-per-function': 'off',
+    },
   },
   {
     // The `.test.mjs` files are node scripts, not part of the TypeScript program: they get node's

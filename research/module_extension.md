@@ -8154,6 +8154,29 @@ fallback and an item with neither is skipped. It used to throw, and a `TypeError
 would have been reported by the bounded wait as a direction that could not be asked: nine callers and
 one unusable tenth would have read as *the language support did not answer*.
 
+### Story 3.2c was CLOSED rather than built (2026-09-21)
+
+*The new window lands on the method* — the third of story 3.2's split, and the operator's decision on
+2026-09-21 was to close it. The reason belongs here beside the two that shipped, because "not built"
+is a design record and not an absence.
+
+**VS Code gives an extension no way to run a command in another window.** `openTreeFolder` opens the
+review worktree with `forceNewWindow: true`, and that window lands on the folder root. Handing it a
+file and a line is not an API that exists: `vscode.openFolder` takes a folder URI, and a
+`vscode://file/path:line` URI opens in the LAST FOCUSED window — a race, not a target.
+
+**The only honest route is a handoff through disk**: a record written beside story 3.2a's tree record,
+read by the new window at activation, acted on and deleted. That brings its own lifetime rules — the
+window that never opened, the person who changed their mind, the tree removed in between — and
+lifetime is precisely what made story 3.2 need a three-way split in the first place.
+
+**And the justification the other two rest on does not carry this one.** 3.2a and 3.2b exist because
+`head_sha` is orphaned **55.7 %** of the time, which means that without a tree the code cannot be
+reached at all. Here the code is already reachable; what 3.2c would save is navigation. That is a
+real convenience and it is not worth an activation-time side effect with a lifetime of its own.
+
+Epic 3 of the review-page plan is therefore complete.
+
 **A `findingId` is a key, not an identity.** A collect can reuse one for another finding, and the
 panel holds answers by it — so a held answer is rendered only when it is about the method the row is
 NOW (`file:line:symbolName`, carried on the answer as `about`). Without that, a refreshed row would
@@ -8172,7 +8195,28 @@ visibly not English is a number a person is right to distrust.
 
 **A live patch that would write the same markup writes nothing.** Replacing `innerHTML` with an
 identical string still destroys the element the person is on, and a superseded completion posts
-exactly that. This page's own rule, stated in `.coderabbit.yaml`.
+exactly that. This page's own rule, stated in `.coderabbit.yaml`. **Both channels obey it since
+2026-09-21** — `showRevisionActions` did not, two functions above `showCalls` in the same file, and
+`RevisionPanel` fans one answer out per REPOSITORY, so a repeat is the normal case there rather than
+an edge.
+
+**One module owns each live-patch channel.** `livePatch.ts` holds the message type, the container
+attribute and the selector builder for both `calls` and `revisions`, and the page script's
+`querySelector` is INTERPOLATED from the same constants when the page is generated. Before it, each
+fact was written twice — once in the generator, once in the hand-written script — and a rename was a
+silent runtime failure: the patch found nothing, wrote nowhere, and the row went on showing a stale
+answer with no error anywhere. Proof it holds: planting a hardcoded attribute back into the generator
+is refused by the COMPILER, because the import it replaces goes unused.
+
+What this deliberately is not is a typed payload rendered by the page — the reviewer's literal
+suggestion. The markup is built by `callsBlock.ts` and `revisionActions.ts`, typed modules with
+tests, and moving it into the page would mean rewriting both as ES5 inside a template literal. The
+defect was never the string; it was that nothing owned the ADDRESS the string is delivered to.
+
+**`ReviewPair` lives in `reviewPair.ts`**, not in the module that renders it. Ten modules import the
+row model, so loading the calls STATE used to pull in the page renderer and everything it needs to
+make HTML. The declaration is DELETED from `bugzReviewPage.ts` rather than re-exported — that is what
+turns a missed importer into a compile error instead of a silent second source of truth.
 
 **Four states, because each is a different next move.** `moved` (that line holds something else),
 `gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as

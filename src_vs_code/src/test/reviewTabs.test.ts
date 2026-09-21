@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ReviewPair } from '../bugzReviewPage';
+import { ReviewPair } from '../reviewPair';
 import { askedOnce, GitMark } from '../projectIdentity';
 import { ALL, reviewTabs } from '../reviewTabs';
 

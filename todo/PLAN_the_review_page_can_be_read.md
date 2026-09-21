@@ -1,7 +1,7 @@
 # PLAN — the review page can be read
 
-> Status: **partly implemented, 2026-09-21 — epics 1 and 2 shipped whole, epic 3 shipped but for its
-> optional story 3.2c, epic 4 unblocked and not started.** It stays in `todo/` because epic 4 is
+> Status: **partly implemented, 2026-09-21 — epics 1, 2 and 3 are COMPLETE (3.2c closed by decision
+> rather than built), epic 4 unblocked and not started.** It stays in `todo/` because epic 4 is
 > still work somebody is supposed to do; the state column of the epic table below is the per-story
 > record. (The line this replaces still said *plan only, nothing implemented yet* after three epics
 > had landed, which is the drift the planning rule exists to catch.) Scope: `src_vs_code`
@@ -381,7 +381,8 @@ and two spellings of one repository — with the expected mapping written down f
 > before a tier rule leaves every reviewer's prompt.
 >
 > **Still open after it:** story 3.2c (the new window landing on the method) and story 3.3 (callers and
-> callees, after its measurement).
+> callees, after its measurement). *Both are now closed: 3.3 shipped 2026-09-21, and 3.2c was closed
+> by decision the same day — see the epic table.*
 
 > **Story 3.3's GATE ran on 2026-09-21, and it passes.** This plan says in so many words that no
 > delegation logic is written until the measurement has run, because *"a language whose provider
@@ -655,7 +656,11 @@ above rather than accepting them, and three of its findings changed the plan:
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **all three shipped** — `codeHighlight.ts` and `lineDiff.ts` are on `main`. The row said *1.1 shipped* until 2026-09-18, which is a status line that stopped matching the repository rather than work that stopped. |
 | **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted) · **2.3 built 2026-09-18** (`--real-method`, a toggle over what the rows already hold; the rename recovery removed after real git showed the collector cannot store the row it would serve) |
-| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree, SPLIT into 3.2a/3.2b/3.2c · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** ; **3.2a built 2026-09-21** (Opus, not the Fable the split assigned — Fable was rate-limited and a four-hour wait was worse than the substitution; said here rather than implied). **3.2b built 2026-09-21** (`--trees` / `--tree-remove`, a picker rather than a page block, ignored files refused until asked for per checkout). **3.2c not started**; **3.3 built 2026-09-21** — its gate measurement ran first and passed, its plan round returned 15 findings (13 gating, 14 accepted), and two of those were measured rather than argued: asking at column 0 prepares the enclosing CLASS, and a provider does answer for a file nobody opened. Story 3.1's earlier note: (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above). **The only thing still open in this row is 3.2c**, which the split declared optional. |
+| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree, SPLIT into 3.2a/3.2b/3.2c · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** ; **3.2a built 2026-09-21** (Opus, not the Fable the split assigned — Fable was rate-limited and a four-hour wait was worse than the substitution; said here rather than implied). **3.2b built 2026-09-21** (`--trees` / `--tree-remove`, a picker rather than a page block, ignored files refused until asked for per checkout). **3.2c not started**; **3.3 built 2026-09-21** — its gate measurement ran first and passed, its plan round returned 15 findings (13 gating, 14 accepted), and two of those were measured rather than argued: asking at column 0 prepares the enclosing CLASS, and a provider does answer for a file nobody opened. Story 3.1's earlier note: (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above). **3.2c was CLOSED rather than built on 2026-09-21**, the operator's decision: VS Code gives an
+extension no way to run a command in another window, the only honest route is a handoff through disk
+with a lifetime of its own, and the 55.7 % measurement that justifies 3.2a and 3.2b does not carry
+this one — the code is already reachable and what would be saved is navigation. Recorded in
+`research/module_extension.md`. **Epic 3 is COMPLETE.** |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere

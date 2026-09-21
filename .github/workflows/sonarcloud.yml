@@ -24,6 +24,7 @@ jobs:
   sonar:
     name: SonarCloud Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,7 +53,19 @@ jobs:
         run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global dotnet-coverage
-      # Two additions to the exclusion lists, both about build scripts rather than shipped code,
+      #   sonar.exclusions        + .agents/conventions/**
+      #     A SUBMODULE. It is `dew_flow_conventions`, a separate repository with its own CI and its
+      #     own Sonar project, mounted here so the shared rules travel with the checkout. Scanning it
+      #     as this project's code was measured on 2026-09-21 and it is why `main`'s quality gate had
+      #     stopped meaning anything: ERROR, `new_reliability_rating=4` and `new_security_rating=3`,
+      #     from 32 new-code findings of which **17 were in the submodule** — path-traversal and PATH
+      #     warnings on its CLI tools, `localeCompare` sort findings in its checkers. None of them is
+      #     fixable from here. A gate that is permanently red reports nothing, so a real regression on
+      #     `main` arrives invisible; story 3.3's own pull request passed at 1/1 while `main` was red
+      #     the whole time. This is the ANALYSIS list rather than the coverage list on purpose: the
+      #     claim is not "do not measure these", it is "these are not ours to judge".
+      #
+      # Two further additions, both about build scripts rather than shipped code,
       # and both worth knowing about because an exclusion is a decision to stop looking:
       #
       #   sonar.exclusions        + src_vs_code/scripts/**
@@ -176,7 +189,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**" \
             /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts" \
             /d:sonar.issue.ignore.multicriteria="e1,e2" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \

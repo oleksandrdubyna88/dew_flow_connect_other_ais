@@ -529,3 +529,34 @@ as the ruleset intends** — a test tag left behind on a release pattern is a re
 - [ ] **Requirement 8's home is settled by the operator**, and Epic 1 item 3 is unblocked or dropped
       accordingly. Nothing in Epic 1 item 3 is built before that.
 - [ ] This plan promoted with what shipped differently.
+
+## The actionlint retry window, to mirror (2026-09-21)
+
+Measured on `dew_flow_connect_other_ais`' own `main`: the actionlint download failed with **four
+consecutive 504s in 6.08 seconds** (14:53:19.86 → 14:53:25.89). The retry was added for exactly this
+class of failure — the comment names a 500 from the release host that failed an unrelated Dependabot
+pull request — but `--retry-delay 2` REPLACES curl's exponential backoff with a flat two seconds, so
+the whole budget is six seconds against a CDN outage measured in minutes. The guard failed looking
+like it worked.
+
+**The fix, landed here 2026-09-21:** drop `--retry-delay 2`, raise `--retry` to 5, add
+`--retry-max-time 120`. That is ~31 s of backoff (1, 2, 4, 8, 16) under a 120 s ceiling, inside a job
+whose `timeout-minutes` is 5. The checksum still decides what runs, so the window widens without
+widening what is trusted. Pinned by `workflowGuards.test.ts`, which also runs the argument list
+against a local server that answers 504 three times and then 200.
+
+**Still to mirror**, each its own checkout and its own pull request — this repository is `conventions`'
+consumer, not its owner, and CI hardening belongs to the repos:
+
+| repo | has the step | done |
+|---|---|---|
+| `dew_flow_conventions` | yes | [ ] |
+| `dew_flow_creds_for_devs` | yes | [ ] |
+| `dew_flow_rag_qln` | yes | [ ] |
+| `dew_flow_mcp` | yes | [ ] |
+| `dew_flow_benchmark` | yes | [ ] |
+| `dew_flow_sidecar_rust` | yes | [ ] |
+
+**And the same audit found a second thing worth mirroring:** `timeout-minutes` was set on exactly ONE
+job across eight workflows here, so every other job fell back to GitHub's 360-minute default. All 25
+jobs declare one now, kept true by a test. Worth checking in each repo above at the same time.
