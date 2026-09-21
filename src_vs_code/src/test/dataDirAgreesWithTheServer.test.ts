@@ -172,7 +172,7 @@ function expectedUnder(vector: Vector, leaf: string): string {
   return join(expected(vector), leaf);
 }
 
-test('every shared vector puts the settings file and the logs where the server puts them', () => {
+test('every shared vector puts the settings file, the logs and the notices where the server puts them', () => {
   // Added 2026-09-18. Until then `SettingsFile.DataDirFrom` on the server was a SECOND resolver with
   // no side and no trim, so these two were the only things in the data directory that did not move
   // with the side: two installations sharing one NAS - the whole reason a side exists - shared one
@@ -203,18 +203,16 @@ test('every shared vector puts the settings file and the logs where the server p
     //
     // Through `serverNoticesPath`, the function the product actually calls, never a second
     // spelling of the same name in a test.
-    assert.equal(
-      serverNoticesPath(expected(vector)),
-      expectedUnder(vector, 'server-notices.jsonl'),
-      vector.why,
-    );
-    assert.equal(asPath(vector.serverNoticesPath, vector), expectedUnder(vector, 'server-notices.jsonl'), vector.why);
+    // Compared against the PRODUCT's own resolver rather than against a filename retyped here: a
+    // reviewer pointed out that a test carrying the literal makes a rename fail on stale test data
+    // instead of holding the two halves to each other.
+    assert.equal(asPath(vector.serverNoticesPath, vector), serverNoticesPath(expected(vector)), vector.why);
     assert.ok(vector.serverNoticesPath.startsWith(vector.dir + '/'),
       `${vector.serverNoticesPath} does not sit under the directory this case resolved`);
   }
 });
 
-test('a refused side names no settings file and no log root', () => {
+test('a refused side names no settings file, no log root and no notices file', () => {
   // The other direction, and it is not decoration: a fixture that carried a path for a refused side
   // would be describing where data goes for a configuration the product will not start on.
   for (const vector of VECTORS.filter((one) => one.refused)) {

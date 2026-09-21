@@ -490,6 +490,27 @@ zero comes to. The panel's figure is an upper bound and says so — the server d
 reviewers a round actually schedules, which is fewer when a repository wrote no rules down and the
 Conventions reviewers are dropped.
 
+### The vectors gained a third path: where the notices file is (2026-09-21)
+
+`shared/data-side-vectors.json` already held `settingsPath` and `logsPath` per case, added on
+2026-09-18 when the two halves were found to disagree about where a side's settings live. It holds a
+`serverNoticesPath` now, for the same reason one step ahead of the defect rather than behind it.
+
+The extension has DERIVED `serverNoticesPath(dataDir)` since 2026-09-17 and has had nothing to read,
+because nothing writes it. The moment `coai-mcp` does, the two containers have to agree about WHERE
+— and the failure of disagreeing is silent in both directions: the server writes, the extension
+reads an empty directory, and every surface goes on reporting half the product exactly as it does
+today, with nothing anywhere saying so.
+
+`ServerNotices.PathFor` takes an already-resolved directory and cannot resolve one; the resolver is
+`SettingsFile.DataDirFrom`, which has been the one rule since 2026-09-18.
+
+**What the fixture does NOT prove, and it is the honest gap.** Both suites compare their own helper
+to the same JSON field, so both would stay green if the field and both helpers were changed to the
+same wrong location. The live check — the real binary writing and the extension's own parser reading
+— needs a writer, and there is none until story 1.4; it is story 2.4's seam leg, and a reviewer
+called it Blocking at this story's code round rather than letting it pass unnamed.
+
 ### A third file neither container owns: the credential words (2026-09-21)
 
 The same shape again, and this one carries a SECURITY measure rather than a catalog.
