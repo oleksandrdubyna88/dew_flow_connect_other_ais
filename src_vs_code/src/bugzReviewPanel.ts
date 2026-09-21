@@ -397,7 +397,7 @@ export class BugzReviewPanel {
           // none of the three commands takes a token — but the answer can be refused, and the one it
           // already has goes too so that reopening after a branch switch asks again rather than
           // showing the old checkout's count. (Code round, four findings.)
-          this.calls.closed(m.ids);
+          this.calls.closed(m.ids, this.held);
         }
         this.remember(m.ids, m.open);
 

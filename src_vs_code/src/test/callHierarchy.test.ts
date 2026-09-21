@@ -152,7 +152,7 @@ const ABOUT: AskedAbout = { findingId: 7, attempt: 'a1', file: 'src/A.ts', line:
 
 const editorThat = (over: Partial<Editor> = {}): Editor => ({
   lineText: async () => '    public counted(): number { return 1; }',
-  prepare: async (): Promise<Preparation> => ({ items: [{ name: 'counted', detail: '' }], handles: ['H'] }),
+  prepare: async (): Promise<Preparation> => [{ item: { name: 'counted', detail: '' }, handle: 'H' }],
   incoming: async () => [END('uses')],
   outgoing: async () => [END('helper')],
   ...over,
@@ -176,14 +176,27 @@ test('a direction that fails does not take the other down with it', async () => 
   assert.equal(calls.outgoing.ends.length, 1);
 });
 
+test('a symbol and its handle are ONE value, so no filtering can pair the wrong two', () => {
+  // Two arrays indexed in parallel is a contract nothing enforces: an adapter that filters one and
+  // not the other pairs a name with another symbol's handle, and the failure looks like a correct
+  // answer about the wrong method — this story's own worst case, one refactor away. (Round 2, codex.)
+  const prepared: Preparation = [
+    { item: { name: 'Totals', detail: '' }, handle: 'the class' },
+    { item: { name: 'counted', detail: '' }, handle: 'the method' },
+  ];
+  const which = theRightSymbol(prepared.map((one) => one.item), 'counted');
+
+  assert.equal(prepared[which]?.handle, 'the method');
+});
+
 test('the provider is asked about the item that MATCHED, whatever its position', async () => {
   let askedAbout: unknown;
   await askCalls(
     editorThat({
-      prepare: async () => ({
-        items: [{ name: 'Totals', detail: '' }, { name: 'counted', detail: '' }],
-        handles: ['the class', 'the method'],
-      }),
+      prepare: async () => [
+        { item: { name: 'Totals', detail: '' }, handle: 'the class' },
+        { item: { name: 'counted', detail: '' }, handle: 'the method' },
+      ],
       incoming: async (handle) => { askedAbout = handle; return []; },
     }),
     ABOUT);
@@ -196,7 +209,7 @@ test('the symbol is proved BEFORE either direction is asked', async () => {
   let asked = 0;
   const calls = await askCalls(
     editorThat({
-      prepare: async () => ({ items: [{ name: 'Totals', detail: '' }], handles: ['H'] }),
+      prepare: async () => [{ item: { name: 'Totals', detail: '' }, handle: 'H' }],
       incoming: async () => { asked += 1; return []; },
       outgoing: async () => { asked += 1; return []; },
     }),
@@ -213,7 +226,7 @@ test('a file the checkout does not have is GONE, not a missing provider', async 
 });
 
 test('an empty preparation is NO PROVIDER, which is not zero callers', async () => {
-  const calls = await askCalls(editorThat({ prepare: async () => ({ items: [], handles: [] }) }), ABOUT);
+  const calls = await askCalls(editorThat({ prepare: async () => [] }), ABOUT);
 
   assert.equal(calls.prepared, 'no-provider');
   assert.equal(calls.incoming.asked, false, 'nothing was asked, so nothing may be shown as a count');

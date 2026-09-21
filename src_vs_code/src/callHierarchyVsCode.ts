@@ -54,10 +54,10 @@ async function prepared(file: string, line: number, character: number): Promise<
   const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
     'vscode.prepareCallHierarchy', vscode.Uri.file(file), new vscode.Position(line, character));
 
-  return {
-    items: (items ?? []).map((one) => ({ name: one.name, detail: one.detail ?? '' })),
-    handles: items ?? [],
-  };
+  return (items ?? []).map((one) => ({
+    item: { name: one.name, detail: one.detail ?? '' },
+    handle: one,
+  }));
 }
 
 async function asked<T>(command: string, handle: unknown): Promise<readonly T[]> {
@@ -67,23 +67,24 @@ async function asked<T>(command: string, handle: unknown): Promise<readonly T[]>
 /**
  * The far end of each call, as a place a person can be taken to.
  *
- * <p><c>selectionRange</c> is declared non-optional by the API and is nevertheless missing from some
- * providers' items, so the whole range is the fallback: a `TypeError` inside this map would fail the
- * direction it is in rather than say what it found.</p>
+ * <p><b>One malformed item costs one END, never the whole direction.</b> `selectionRange` is
+ * declared non-optional by the API and is nevertheless missing from some providers' items, so the
+ * whole range is the fallback — and an item with neither is SKIPPED rather than allowed to throw a
+ * `TypeError` that the bounded wait would report as a direction that could not be asked. Nine
+ * callers and one unusable tenth is nine callers. (Round 2, local.)</p>
  */
 function endsOf(
   calls: readonly { readonly from?: vscode.CallHierarchyItem; readonly to?: vscode.CallHierarchyItem }[],
 ): readonly CallEnd[] {
   return calls.flatMap((one) => {
     const item = one.from ?? one.to;
+    const at = (item?.selectionRange ?? item?.range)?.start;
 
-    return item === undefined ? [] : [endOf(item)];
+    return item === undefined || at === undefined ? [] : [endOf(item, at)];
   });
 }
 
-function endOf(item: vscode.CallHierarchyItem): CallEnd {
-  const at = (item.selectionRange ?? item.range).start;
-
+function endOf(item: vscode.CallHierarchyItem, at: vscode.Position): CallEnd {
   return {
     name: item.name,
     file: item.uri.fsPath,

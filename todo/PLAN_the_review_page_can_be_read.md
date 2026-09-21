@@ -1,6 +1,10 @@
 # PLAN — the review page can be read
 
-> Status: **plan only, nothing implemented yet, 2026-09-17.** Scope: `src_vs_code`
+> Status: **partly implemented, 2026-09-21 — epics 1 and 2 shipped whole, epic 3 shipped but for its
+> optional story 3.2c, epic 4 unblocked and not started.** It stays in `todo/` because epic 4 is
+> still work somebody is supposed to do; the state column of the epic table below is the per-story
+> record. (The line this replaces still said *plan only, nothing implemented yet* after three epics
+> had landed, which is the drift the planning rule exists to catch.) Scope: `src_vs_code`
 > (`bugzReviewPage.ts`, `bugzReviewPanel.ts`, `bugzView.ts`), `src_mcp` (the projection `--bugs-json`
 > and `--pairs-json` return), and — for one story only — the ingest contract in `src_bugs`.
 >

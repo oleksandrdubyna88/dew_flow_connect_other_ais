@@ -66,7 +66,7 @@ import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
-import { currentFileIn } from './openAtRevision';
+import { currentFileIn, folderHolding } from './openAtRevision';
 import { askCalls } from './callHierarchyAsk';
 import { callHierarchyEditor } from './callHierarchyVsCode';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
@@ -3740,13 +3740,13 @@ async function reachable(path: string): Promise<boolean> {
  * — and it is reused rather than a second one written. (Code round, gemini, twice.)</p>
  */
 async function openInsideWorkspace(file: string, line: number): Promise<void> {
-  const folders = workspaceFolderPaths();
-  for (const folder of folders) {
-    const inside = await currentFileIn([folder], folder, relative(folder, file));
-    if (inside.ok) {
-      await showCurrentFile(inside.path, line);
+  const folder = folderHolding(workspaceFolderPaths(), file);
+  if (folder.length === 0) {
+    return;
+  }
 
-      return;
-    }
+  const inside = await currentFileIn([folder], folder, relative(folder, file));
+  if (inside.ok) {
+    await showCurrentFile(inside.path, line);
   }
 }

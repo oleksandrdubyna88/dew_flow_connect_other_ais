@@ -41,7 +41,7 @@ test('the panel records what the page opened, and both kinds of press reach the 
   // compiles whatever is missing.
   assert.match(
     text,
-    /case 'expand':\s*case 'expandAll':\s*if \(!m\.open\) \{\s*this\.calls\.closed\(m\.ids\);\s*\}\s*this\.remember\(m\.ids, m\.open\);/u,
+    /case 'expand':\s*case 'expandAll':\s*if \(!m\.open\) \{\s*this\.calls\.closed\(m\.ids, this\.held\);\s*\}\s*this\.remember\(m\.ids, m\.open\);/u,
     'one press and every press must both end in remember(), or Expand all records nothing');
   assert.match(text, /case 'decide':\s*this\.queue\(m\.ids, m\.keep\);/u);
 });

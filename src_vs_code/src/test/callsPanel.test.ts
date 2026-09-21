@@ -103,12 +103,36 @@ test('collapsing a row drops BOTH what it is waiting for and the answer it alrea
   await panel.ask(pair(7), ROWS);
   assert.match(said.at(-1)?.[0]?.html ?? '', /1 method calls this/u);
 
-  panel.closed([7]);
+  panel.closed([7], ROWS);
 
   // Reopening after a branch switch would otherwise show the OLD checkout's count under the sentence
   // "in the current checkout" — the one thing this story promises never to say.
   assert.match(panel.blockFor(pair(7)), /Who calls this\?/u);
   assert.doesNotMatch(panel.blockFor(pair(7)), /1 method calls this/u);
+});
+
+test('collapsing REPAINTS the row, because the markup it was holding is still in the page', async () => {
+  // The block lives in the detail row, which a collapse hides rather than removes. Forgetting the
+  // answer on this side while leaving the old count in the DOM means re-expanding after a branch
+  // switch shows that count under the sentence "in the current checkout" — which is the one thing
+  // this story promises never to say, arrived at from the other direction. (Round 2, two reviewers.)
+  const { panel, said } = panelThat(async (about) => answered(about));
+
+  await panel.ask(pair(7), ROWS);
+  const before = said.length;
+  panel.closed([7], ROWS);
+
+  assert.equal(said.length, before + 1, 'the page must be told, or it keeps painting the old answer');
+  assert.match(said.at(-1)?.[0]?.html ?? '', /Who calls this\?/u);
+  assert.doesNotMatch(said.at(-1)?.[0]?.html ?? '', /1 method calls this/u);
+});
+
+test('a collapse the page has already forgotten tells nothing about rows it cannot draw', () => {
+  const { panel, said } = panelThat(async (about) => answered(about));
+
+  panel.closed([99], ROWS);
+
+  assert.deepEqual(said, [[]], 'a row that is not on the page has no block to repaint');
 });
 
 test('an answer that lands after its row was collapsed is refused, not shown', async () => {
@@ -118,7 +142,7 @@ test('an answer that lands after its row was collapsed is refused, not shown', a
   }));
 
   const press = panel.ask(pair(7), ROWS);
-  panel.closed([7]);
+  panel.closed([7], ROWS);
   answer(answered({ findingId: 7, attempt: 'a1', file: '', line: 0, symbolName: '' }));
   await press;
 
