@@ -14,11 +14,14 @@ import {
  * answer the one — a reviewer caught the first draft making outgoing conditional on incoming, which
  * would have lost half of an explicitly promised feature to an unrelated timeout.</p>
  *
- * <p><b>There is no process to kill here.</b> A language server belongs to VS Code, is shared with
- * every other extension and with the editor's own features, and an extension has no handle, no pid
- * and no API for it. What exists is a cancellation token the provider is asked to honour and a
- * bounded wait after which we stop listening and say `failed` — which is what a timeout means here
- * and is never rendered as zero.</p>
+ * <p><b>There is no process to kill and no token to pass.</b> A language server belongs to VS Code,
+ * is shared with every other extension and with the editor's own features, and an extension has no
+ * handle, no pid and no API for it. Nor do the three commands take a `CancellationToken`:
+ * `vscode.prepareCallHierarchy` takes a URI and a position, the two direction commands take an item,
+ * and that is all. What exists is a bounded WAIT after which we stop listening and say `failed` —
+ * never zero — and a row whose control is pressed again supersedes its own request rather than
+ * accumulating a second. An earlier draft of this block said a token was passed; it was not, and a
+ * comment that says so is worse than none.</p>
  */
 
 /** What a row knows about the method it is about. */
@@ -31,11 +34,16 @@ export interface AskedAbout {
   readonly symbolName: string;
 }
 
-/** One prepared symbol, as this module needs it. */
+/** What a preparation found, and the handles that go back to the provider. */
 export interface Preparation {
   readonly items: readonly PreparedItem[];
-  /** The opaque handle the provider wants back for the two direction calls. */
-  readonly handle: unknown;
+  /**
+   * The opaque handles, in the SAME ORDER as `items`.
+   *
+   * <p>Plural, and that is the fix for this round's worst finding: a single handle meant the
+   * provider was asked about `items[0]` however far down the list the row's method was.</p>
+   */
+  readonly handles: readonly unknown[];
 }
 
 /** Everything this reaches the editor through. */
@@ -122,8 +130,10 @@ async function askedFor(
     return { why: 'no-provider', handle: undefined };
   }
 
-  return theRightSymbol(prepared.items, about.symbolName)
-    ? { why: 'ok', handle: prepared.handle }
+  const which = theRightSymbol(prepared.items, about.symbolName);
+
+  return which >= 0
+    ? { why: 'ok', handle: prepared.handles[which] }
     : { why: 'moved', handle: undefined };
 }
 

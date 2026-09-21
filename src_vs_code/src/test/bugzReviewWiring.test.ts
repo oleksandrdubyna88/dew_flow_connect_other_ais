@@ -39,7 +39,9 @@ test('the panel records what the page opened, and both kinds of press reach the 
 
   // The union is what makes the page and the panel agree about the shape; a bag of optionals
   // compiles whatever is missing.
-  assert.match(text, /case 'expand':\s*case 'expandAll':\s*this\.remember\(m\.ids, m\.open\);/u,
+  assert.match(
+    text,
+    /case 'expand':\s*case 'expandAll':\s*if \(!m\.open\) \{\s*this\.calls\.closed\(m\.ids\);\s*\}\s*this\.remember\(m\.ids, m\.open\);/u,
     'one press and every press must both end in remember(), or Expand all records nothing');
   assert.match(text, /case 'decide':\s*this\.queue\(m\.ids, m\.keep\);/u);
 });
@@ -380,22 +382,17 @@ test('the panel hands every row its calls block on every paint, and a closed win
     'the answers were about a checkout that may have moved on');
 });
 
-test('a calls press says it is asking before it awaits anything, and every ending replaces that', () => {
-  const asking = bodyOf(code('callsPanel.ts'), 'async ask(pair: ReviewPair, rows: readonly ReviewPair[]): Promise<void> {');
-
-  // Measured at 0.8-2.0 s cold: a row that looks idle for two seconds is a row a person presses again.
-  assert.ok(asking.indexOf('this.tell([pair.findingId], rows);') < asking.indexOf('await '),
-    'the row must say it is asking before the language support is asked');
-  assert.match(asking, /\} finally \{[\s\S]*?this\.tell\(\[pair\.findingId\], rows\);/u);
-  assert.match(asking, /const attempt = `a\$\{\+\+this\.minted\}`;/u,
-    'every press mints an ATTEMPT, which is what a generation alone cannot do');
-});
-
-test('the provider wires the calls hooks to the real editor, not to a second opener', () => {
+test('the provider wires the calls hooks to the real editor, and opens only inside the workspace', () => {
   const text = code('panelProvider.ts');
 
   assert.match(text, /askCalls: \(about\) => askCalls\(callHierarchyEditor\(\), about\),/u,
     'a value test can prove the decisions; only this proves anybody asks the editor');
-  assert.match(text, /openCall: \(end\) => showCurrentFile\(end\.file, end\.line \+ 1\),/u,
-    'and it goes through story 3.1 opener rather than a second one');
+  // A provider answers with whatever URIs it knows — a dependency in node_modules, another root, a
+  // generated file in a temp directory. Story 3.1 built the guard; it is reused, not rewritten.
+  assert.match(text, /openCall: \(end\) => openInsideWorkspace\(end\.file, end\.line \+ 1\),/u);
+  const opening = bodyOf(text, 'async function openInsideWorkspace(file: string, line: number): Promise<void> {');
+  assert.match(opening, /currentFileIn\(\[folder\], folder, relative\(folder, file\)\)/u,
+    'and the check is story 3.1 own, which tests the path as written AND as it really leads');
+  assert.match(opening, /if \(inside\.ok\) \{/u,
+    'a path the guard refuses opens nothing at all');
 });

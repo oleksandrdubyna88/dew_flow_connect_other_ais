@@ -1329,14 +1329,31 @@ Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
 | Suite | What it covers |
 |---|---|
-| `callHierarchy.test.ts` (18) | the decisions as values: the column found on the line and never assumed; a name that is only part of another word rejected; exactly ONE match accepted so an overload pair is refused rather than guessed at; every state a sentence that prints no token; zero told from silence; distinct methods rather than call sites; an answer applied only for the ATTEMPT its row awaits. And the flow with the editor as a parameter: both directions independent, the symbol proved before either is asked, a missing file `gone`, an empty preparation `no-provider`, a provider that never answers bounded and `failed` |
+| `callHierarchy.test.ts` (20) | the decisions as values: the column found on the line and never assumed; a name that is only part of another word rejected; exactly ONE match accepted so an overload pair is refused rather than guessed at, and WHICH one it was; every state a sentence that prints no token; zero told from silence; distinct methods rather than call sites; an answer applied only for the ATTEMPT its row awaits. And the flow with the editor as a parameter: both directions independent, the symbol proved before either is asked, the provider asked about the
+item that MATCHED whatever its position, a missing file `gone`, an empty preparation `no-provider`, a provider that never answers bounded and `failed` |
+| `callsPanel.test.ts` (8) | what one page REMEMBERS, run rather than read: the asking state on screen before the provider is reached; a press that throws leaving the row pressable; a superseded attempt refused; a collapse dropping both the press and the answer; a closed window forgetting; an end opened by index out of what this side holds, with a row that has no answer, a direction with no ends and an index past the end each opening nothing |
+| `callsBlock.test.ts` (6) | the markup: each phase saying one thing and only an idle row pressable; the list stopping at 50 with the count untruncated and a tail that says how many more; a list that fits shown whole; a name a provider invented escaped; a row that could not be asked showing a reason rather than a zero; `calledOut` reading back one entry and refusing nine malformed ones |
 | `bugzReviewPage.test.ts` | the control pressed, by RUNNING the page: nothing asked at paint, the press naming its row |
-| `bugzReviewWiring.test.ts` | `case 'calls'` reaching the one method; an opened end going by INDEX rather than by a path the page carried; the block handed to every paint; the asking state before the first await; the attempt minted per press; a closed window forgetting; the provider wired to the real editor and to story 3.1's opener rather than a second one |
+| `bugzReviewWiring.test.ts` | the seams a value test cannot reach: `case 'calls'` reaching the one method, and the collapse path telling the panel to forget — pinned as ONE condition rather than two fragments; an opened end going by INDEX rather than by a path the page carried; the block handed to every paint; a closed window forgetting; the provider wired to the real editor, and opening only through story 3.1's workspace guard rather than a second one |
 
-**Teeth, and one place where there are none — said rather than implied.** Disabling the column search
-and the single-match rule turns EIGHT tests red, including the two that name them. But the test that
-presses the control and asserts the row is undisturbed stays GREEN when the branch's `return` is
-removed: the control lives in the detail row rather than inside the summary row's toggle, so there is
+**The source-text assertions about `callsPanel.ts` became tests that RUN it**, on a code-round
+reviewer's finding, and it was right: the module imports no `vscode` and reaches the world through two
+functions it is handed, so a regex over `async ask(...)` was matching prose about behaviour that could
+be exercised instead. A regex goes green on a body rewritten to do the opposite; `callsPanel.test.ts`
+does not. What stays a reading is the one seam inside `bugzReviewPanel.ts`, which does import `vscode`.
+
+**Teeth, measured.** Disabling the column search and the single-match rule turns EIGHT tests red,
+including the two that name them. The code round's three fixes were planted back one at a time and
+restored from a saved copy afterwards:
+
+| planted | red | what the failure said |
+|---|---|---|
+| `theRightSymbol` returns 0 rather than the matching index | 2 | the handle must be the one beside the item that matched |
+| `closed()` drops the press but keeps the answer | 1 | a collapsed row still showed `1 method calls this` |
+| the list rendered unbounded | 1 | 120 buttons where 50 and a tail were expected |
+
+**And one place where there are none — said rather than implied.** The test that presses the control
+and asserts the row is undisturbed stays GREEN when the branch's `return` is removed: the control lives in the detail row rather than inside the summary row's toggle, so there is
 nothing for the event to bubble into. Measured by taking the `return` out. It stays because it is the
 house pattern and because the day the control moves is the day it matters — the test documents the
 contract rather than guarding it.

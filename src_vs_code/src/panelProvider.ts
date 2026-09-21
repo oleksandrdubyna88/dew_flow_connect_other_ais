@@ -66,8 +66,9 @@ import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
-import { CallEnd } from './callHierarchy';
-import { askCalls, Editor as CallEditor } from './callHierarchyAsk';
+import { currentFileIn } from './openAtRevision';
+import { askCalls } from './callHierarchyAsk';
+import { callHierarchyEditor } from './callHierarchyVsCode';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -152,7 +153,7 @@ import {
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
@@ -2697,7 +2698,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       folders: () => workspaceFolderPaths(),
       readTreeAt: (asked) => readTreeAt(server.fsPath, asked),
       askCalls: (about) => askCalls(callHierarchyEditor(), about),
-      openCall: (end) => showCurrentFile(end.file, end.line + 1),
+      // Guarded, and by story 3.1's own check rather than a second one: a language server can
+      // answer with a path in node_modules, another workspace root, or anywhere at all, and
+      // `showCurrentFile` on its own would open it. (Code round, gemini, twice.)
+      openCall: (end) => openInsideWorkspace(end.file, end.line + 1),
       openFolder: (path) => openTreeFolder(path),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
@@ -3727,60 +3731,22 @@ async function reachable(path: string): Promise<boolean> {
 }
 
 /**
- * The editor, as story 3.3 needs it — and the only place its API is touched.
+ * Opens a file a LANGUAGE SERVER named, only if it is inside a folder this window has open.
  *
- * <p>Everything decidable lives in `callHierarchy.ts` and `callHierarchyAsk.ts`, where it runs
- * without an editor. This turns four VS Code calls into the four functions those modules take.</p>
- *
- * <p><b>A file the checkout does not have makes `openTextDocument` THROW</b> — measured, not assumed
- * (`research/module_tests.md`, story 3.3's gate). That throw is what separates *the file is gone*
- * from *there is no provider*, so it is caught here and turned into an absent line rather than
- * allowed to look like a provider failure.</p>
+ * <p>A call hierarchy answers with whatever URIs its provider knows: a dependency in `node_modules`,
+ * another workspace root, a generated file in a temp directory, or anything at all. Story 3.1 built
+ * the guard for exactly this shape of question — `currentFileIn` checks the containing checkout
+ * against the open folders and then the file against the checkout, as written AND as it really leads
+ * — and it is reused rather than a second one written. (Code round, gemini, twice.)</p>
  */
-function callHierarchyEditor(): CallEditor {
-  const at = (file: string, line: number, character: number): [vscode.Uri, vscode.Position] =>
-    [vscode.Uri.file(file), new vscode.Position(line, character)];
+async function openInsideWorkspace(file: string, line: number): Promise<void> {
+  const folders = workspaceFolderPaths();
+  for (const folder of folders) {
+    const inside = await currentFileIn([folder], folder, relative(folder, file));
+    if (inside.ok) {
+      await showCurrentFile(inside.path, line);
 
-  const ends = (items: readonly { readonly from?: vscode.CallHierarchyItem; readonly to?: vscode.CallHierarchyItem }[])
-    : readonly CallEnd[] =>
-    items.flatMap((one) => {
-      const item = one.from ?? one.to;
-
-      return item === undefined
-        ? []
-        : [{
-          name: item.name,
-          file: item.uri.fsPath,
-          line: item.selectionRange.start.line,
-          character: item.selectionRange.start.character,
-          detail: item.detail ?? '',
-        }];
-    });
-
-  return {
-    lineText: async (file, line) => {
-      try {
-        const opened = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-
-        return line < opened.lineCount ? opened.lineAt(line).text : undefined;
-      } catch {
-        return undefined;
-      }
-    },
-    prepare: async (file, line, character) => {
-      const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
-        'vscode.prepareCallHierarchy', ...at(file, line, character));
-
-      return {
-        items: (items ?? []).map((one) => ({ name: one.name, detail: one.detail ?? '' })),
-        handle: items?.[0],
-      };
-    },
-    incoming: async (handle) => ends(
-      await vscode.commands.executeCommand<vscode.CallHierarchyIncomingCall[]>(
-        'vscode.provideIncomingCalls', handle) ?? []),
-    outgoing: async (handle) => ends(
-      await vscode.commands.executeCommand<vscode.CallHierarchyOutgoingCall[]>(
-        'vscode.provideOutgoingCalls', handle) ?? []),
-  };
+      return;
+    }
+  }
 }

@@ -18,6 +18,14 @@ import { escapeHtml } from './webviewHtml';
  * A page that carried paths would be a page that could be asked to open one.</p>
  */
 
+/**
+ * How many ends a row lists before it stops and says how many more there are.
+ *
+ * <p>Enough to be useful, few enough that one `innerHTML` assignment cannot freeze a webview. The
+ * count in the sentence above is never truncated.</p>
+ */
+const MOST_SHOWN = 50;
+
 /** What the row is showing right now. */
 export type CallsState =
   | { readonly phase: 'unasked' }
@@ -67,12 +75,19 @@ function side(id: string, which: 'in' | 'out', one: Side, what: 'calls this' | '
     return said;
   }
 
-  const rows = one.ends
+  // Bounded. The COUNT is the answer and the list is how a person reaches a few of them; a method
+  // with ten thousand callers would otherwise become ten thousand buttons in one `innerHTML`
+  // assignment. (Code round, codex.) The sentence above already says how many there are.
+  const shown = one.ends.slice(0, MOST_SHOWN);
+  const rows = shown
     .map((end, at) => `<li><button type="button" class="quiet" data-open-call="${id}:${which}:${at}">`
       + `${escapeHtml(end.name)}</button> <span class="why">${escapeHtml(end.file)}</span></li>`)
     .join('');
+  const rest = one.ends.length > shown.length
+    ? `<li><span class="why">and ${one.ends.length - shown.length} more</span></li>`
+    : '';
 
-  return `${said}<ul class="calls-list">${rows}</ul>`;
+  return `${said}<ul class="calls-list">${rows}${rest}</ul>`;
 }
 
 /** A sentence beside the control, quiet, so the control stays what a person reads first. */
