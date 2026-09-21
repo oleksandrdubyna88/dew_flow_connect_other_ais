@@ -156,4 +156,16 @@ public static class ReviewTreeRemovalReason
 
     /// <summary>The parent checkout is gone, so no git command can deregister this tree.</summary>
     public const string Unreachable = ReviewTreeState.Unreachable;
+
+    /// <summary>
+    /// No record proves this directory is the tree its name says, so nothing may be deregistered on
+    /// its word.
+    /// </summary>
+    /// <remarks>
+    /// A tree whose maker died before writing a record, or beside a record that describes a different
+    /// (repository, commit). Refusing is not a dead end: <c>--tree-at</c> at that commit inspects such
+    /// a directory itself and rebuilds it when it holds nothing, which is the action the sentence
+    /// names. (Code round 2, codex and gemini.)
+    /// </remarks>
+    public const string Incomplete = ReviewTreeState.Incomplete;
 }
