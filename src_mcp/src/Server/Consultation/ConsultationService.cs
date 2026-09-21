@@ -839,5 +839,6 @@ public sealed class ConsultationService(
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) => JsonSerializer.Serialize(value, type);
 
-    private static string Error(string sentence) => JsonSerializer.Serialize(new ErrorAnswer(sentence), ServerJsonContext.Default.ErrorAnswer);
+    /// <summary>A refusal, through the ONE place the wire shape is built. See <see cref="Refusal"/>.</summary>
+    private static string Error(string sentence) => Refusal.Answer(sentence);
 }

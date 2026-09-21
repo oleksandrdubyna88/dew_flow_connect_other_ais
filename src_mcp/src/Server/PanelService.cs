@@ -2664,8 +2664,17 @@ public sealed partial class PanelService
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);
 
-    private static string Error(string sentence) =>
-        JsonSerializer.Serialize(new ErrorAnswer(sentence), ServerJsonContext.Default.ErrorAnswer);
+    /// <summary>
+    /// A refusal, through the ONE place the wire shape is built.
+    /// </summary>
+    /// <remarks>
+    /// It used to build its own <c>ErrorAnswer</c>, and so did <c>ConsultationService</c> — two
+    /// boundaries for one promise. Story 2.2 instruments the refusal road, and a road with two ends
+    /// is a promise nothing bounds; <see cref="Refusal"/> is the single end, held to one file by
+    /// <c>TheRefusalRoadsAreCountedTests</c>. The name stays <c>Error</c> here because
+    /// twenty-five call sites read better for it.
+    /// </remarks>
+    private static string Error(string sentence) => Refusal.Answer(sentence);
 }
 
 /// <summary>

@@ -1520,6 +1520,7 @@ site is enumerated and compared with a list of two, the file name is held to one
 minting sites of `ResolvedDataDir` are asked of the ASSEMBLY as well as of the source — a
 target-typed `new(` hides from a text scan and not from reflection. Each scan has a companion
 asserting it still finds its known instances, so a reformat cannot turn a guard into a pass.
+
 ## The seams, and two gates that had stopped meaning anything (2026-09-21)
 
 Five findings from story 3.3's code rounds were right about the code and wrong about the SCOPE — each
@@ -1580,3 +1581,24 @@ right about the expression, and looking at why found the real hole behind it —
 the script took the first two and compared a pair nobody asked about. Counting the list says what
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
+
+## One scanner, two censuses (2026-09-21, S8 story 2.1)
+
+`ProductionSources` is the source scanner both censuses share — `TheOneAppendTests` (one append) and
+`TheRefusalRoadsAreCountedTests` (one refusal boundary). It was built for the first and extracted
+when the second wanted it, because every rule in it was earned by a bypass somebody found and a
+second copy would have been the version that still has them: the code is read as ONE string with
+nothing between the lines, so a call wrapped across two lines is still one call; the roots are
+DISCOVERED (`src_*`) rather than listed, so a project added tomorrow is scanned; and comments are
+skipped, so a sentence about a call is not a call.
+
+**`UnqualifiedCalls` is the precision the plan round asked for.** A whole-file search for `Error(`
+counts every `_log.Error(` in the file, and this codebase logs constantly. The rule is an occurrence
+whose preceding character is neither a dot nor part of an identifier — and the declaration, which is
+the one preceded by `string `, is excluded, because a declaration counted as a call is an off-by-one
+in a number the documents quote.
+
+**The inventory writes only when asked.** `COAI_RECORD_REFUSAL_SITES=1` regenerates
+`shared/refusal-sites.json`; without it the suite compares read-only. A test that silently rewrites
+its own expectation cannot fail, and one that writes into a read-only CI checkout cannot run — both
+named on the plan round.
