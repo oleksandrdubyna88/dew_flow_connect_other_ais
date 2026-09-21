@@ -128,12 +128,26 @@ public sealed class AppendOnlyFileTests : IDisposable
     [Fact]
     public void ADirectoryInTheFilesPlace_Throws_SoTheLedgerCanAnswerFalse()
     {
-        // The vector the extension's reader documents, from the writing side. It must be an
-        // IOException and not something the ledger's catch list would let past.
+        // The vector the extension's reader documents, from the writing side.
+        //
+        // THE TYPE IS NOT THE SAME ON BOTH PLATFORMS, and asserting one of them split CI. This said
+        // `IOException`, which is what a refused `CreateFileW` gives on Windows, and the Linux job
+        // went red on the first push. Measured on .NET 10 / Ubuntu: opening a directory as a file
+        // throws `UnauthorizedAccessException`, because .NET's `Interop.ThrowExceptionForIoErrno`
+        // maps a directory errno to that type. So what is asserted is the fact that MATTERS — it
+        // throws something the ledger's catch list turns into a false — which is why
+        // `JsonlLedgerTests.ADirectoryInTheFilesPlace_AnswersFalseAndThrowsNothing` is green on both.
         Directory.CreateDirectory(Ledger);
 
         var writing = () => AppendOnlyFile.Write(Ledger, "x\n"u8.ToArray());
 
-        writing.Should().Throw<IOException>("the ledger turns this into a false, and a gap is not a crash");
+        var thrown = writing.Should().Throw<Exception>("a directory is not a file on any platform").Which;
+
+        // An expression tree cannot carry a type pattern, so the two types are named as types.
+        thrown.Should().BeAssignableTo<Exception>()
+            .And.Subject.GetType().Should().Match<Type>(
+                type => typeof(IOException).IsAssignableFrom(type)
+                    || typeof(UnauthorizedAccessException).IsAssignableFrom(type),
+                "the ledger catches both, turns this into a false, and a gap is not a crash");
     }
 }
