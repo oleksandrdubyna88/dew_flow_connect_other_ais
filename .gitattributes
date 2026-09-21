@@ -8,6 +8,12 @@
 # did, on a rebase, hiding what that test is actually for.
 src_vs_code/notification-sites.json text eol=lf
 
+# The same shape, one story later: TheRefusalRoadsAreCountedTests writes this with
+# COAI_RECORD_REFUSAL_SITES=1 and JsonSerializer emits LF. Its comparison is a deserialisation, so
+# CRLF does not turn it red - it just leaves `git status` claiming a change on a file nobody edited,
+# which is how a whitespace-only diff ends up in somebody's commit.
+shared/refusal-sites.json text eol=lf
+
 # C# source, because `dotnet format --verify-no-changes` reads `.editorconfig`, which says
 # `end_of_line = lf` — measured, since the files on disk carry LF and CI runs on ubuntu. Exactly one
 # `.cs` file had ever been committed with CRLF, and it turned the formatting gate red for everybody

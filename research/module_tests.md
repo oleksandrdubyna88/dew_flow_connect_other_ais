@@ -1520,6 +1520,7 @@ site is enumerated and compared with a list of two, the file name is held to one
 minting sites of `ResolvedDataDir` are asked of the ASSEMBLY as well as of the source — a
 target-typed `new(` hides from a text scan and not from reflection. Each scan has a companion
 asserting it still finds its known instances, so a reformat cannot turn a guard into a pass.
+
 ## The seams, and two gates that had stopped meaning anything (2026-09-21)
 
 Five findings from story 3.3's code rounds were right about the code and wrong about the SCOPE — each
@@ -1580,3 +1581,76 @@ right about the expression, and looking at why found the real hole behind it —
 the script took the first two and compared a pair nobody asked about. Counting the list says what
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
+
+## One scanner, two censuses (2026-09-21, S8 story 2.1)
+
+`ProductionSources` is the source scanner both censuses share — `TheOneAppendTests` (one append) and
+`TheRefusalRoadsAreCountedTests` (one refusal boundary). It was built for the first and extracted
+when the second wanted it, because every rule in it was earned by a bypass somebody found and a
+second copy would have been the version that still has them. The roots are DISCOVERED (`src_*`)
+rather than listed, so a project added tomorrow is scanned; the file is read once per run and both
+views cached; and `RepositoryRoot()` lives on the scanner rather than on whichever test class needed
+it first, because a shared utility that cannot find its own root without a particular test class
+existing has an owner its name does not admit to.
+
+**Comments and string contents are removed by a LEXER, not by a line rule.** The first version
+skipped a line whose trimmed text began with `//`, which let a `/* … */` block holding a
+commented-out call count as a call, a trailing `// new ErrorAnswer(` count as one, and a sentence
+inside a string literal count as one. A census that counts prose is the defect it exists to end, in a
+new place. One pass handles line and block comments, ordinary strings with their escapes, verbatim
+strings with their doubled quotes, raw strings and character literals.
+
+**An interpolation hole is CODE and stays** — the second code round's finding, and the last way past
+every census here. A string's contents are prose; `$"{new ErrorAnswer(why)}"` is a construction that
+runs, and the first lexer deleted it with the text around it, so the boundary rule story 2.2 rests on
+would have gone green over it. The holes are walked as code and spliced back between the fences,
+`{{` is a literal brace and not a hole, and a hole may itself hold a literal — which is also how
+`$"{map["k"]}"` stopped ending at the quote before `k`. Written RED first: the failure was
+`Expected "var m = "";" to contain "new ErrorAnswer("`, the whole hole gone. Then proved on a real
+file: a `Hidden(string why) => $"{new ErrorAnswer(why)}"` planted in `Escalations.cs` fails the
+boundary census naming that file, and the plant compiles.
+
+**And CodeRabbit found the same hole one syntax along**, on the pull request: a RAW literal was
+skipped whole, so `$$"""{{new ErrorAnswer(why)}}"""` named the type nowhere either. The number of `$`
+prefixes is the brace count now — one `$` opens a hole with `{`, two with `{{`, and a LITERAL brace is
+written twice that many — and `\` is an ordinary character in a raw string, so the escape rule is off
+there. That rewrite introduced a defect of its own and **its own companion assertion caught it**: `""`
+is the empty string, not a fence of two, and reading it as a fence sent the lexer hunting for the next
+two quotes in a row. The append census lost `UsageLedger.cs` — *"Expected … 2 item(s), but found 1"* —
+which is exactly what "every census has a companion" is for. It is a test of its own now.
+
+**The lexer's methods are small because the rule says four.** `.coderabbit.yaml` sets a cyclomatic
+ceiling of 4 for `src_mcp/**/*.cs`, and the one-pass walk had grown past it. It is a `Fence` record
+(delimiter, run, verbatim, braces) and one small method per decision — `Closes`, `Advance`, `Brace`,
+`Hole`, `Take` — which is also what made the raw-interpolation case a few lines rather than a rewrite.
+
+**There are two views, and the difference is the whole contract.** `CodeOf` drops what is inside a
+literal — that is what stops a census of CALLS counting a sentence that mentions one. `SpellingOf`
+keeps literals and drops only comments, because a census of a NAME is a census of a literal:
+`"server-notices.jsonl"` is a string, not an identifier. Turning the lexer on took that name away
+from story 1.4's two guards and they went RED — which is exactly what their companion "the scan still
+finds its known instances" assertions are for, and the reason every census here has one.
+
+**Lines are joined so that a wrapped MEMBER glues and a wrapped WORD does not.** The first version
+joined with nothing at all: `Type⏎.Method(` became `Type.Method(`, which is what it was for, and
+`using⏎static` became `usingstatic`, which is what story 2.1's import guard was then written to search
+for. A line beginning with `.` glues to the one before it; everything else is separated by one space.
+
+**`UnqualifiedCalls` is the precision the plan round asked for.** A whole-file search for `Error(`
+counts every `_log.Error(` in the file, and this codebase logs constantly. The rule is an occurrence
+whose preceding character is neither a dot nor part of an identifier — and the declaration is
+SUBTRACTED as `Error\(\s*string\b`, not matched on its return type: the first version looked for
+`string ` *before* the name, so changing the helper to return `Task<string>` would have turned its
+declaration into a call, and the second version matched the exact characters `(string `, so
+`Error(  string sentence)` would have done the same. Both move a number the documents quote.
+
+**The scanner has its own tests** (`ProductionSourcesTests`), because every guarantee either census
+makes is really a claim about that one file — and its rules were being asserted inside whichever
+census happened to earn them.
+
+**The inventory writes only when asked, and that run FAILS.** `COAI_RECORD_REFUSAL_SITES=1`
+regenerates `shared/refusal-sites.json` and then fails on purpose, naming the file and saying to
+re-run without the variable; without it the suite compares read-only. A test that silently rewrites
+its own expectation cannot fail, one that writes into a read-only CI checkout cannot run, and one
+that goes green after rewriting its own source of truth is worse than both — the first two were named
+on the plan round, the third on the code round.

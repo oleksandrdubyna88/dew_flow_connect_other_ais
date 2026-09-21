@@ -156,18 +156,15 @@ public sealed class NoSourceFileCarriesAControlByteTests
         NotWritten.Any(directory => file.Contains(
             $"{Path.DirectorySeparatorChar}{directory}{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
-    /// <summary>The checkout this test assembly was built from. Shared with the other source scans rather than copied.</summary>
-    internal static string RepositoryRoot()
-    {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".git"))
-               && !File.Exists(Path.Combine(here.FullName, ".git")))
-        {
-            here = here.Parent;
-        }
-
-        return here?.FullName
-            ?? throw new DirectoryNotFoundException(
-                $"no repository root above {AppContext.BaseDirectory}, so this scan would read nothing");
-    }
+    /// <summary>
+    /// The checkout this test assembly was built from — <see cref="ProductionSources"/>'s, not a
+    /// second copy.
+    /// </summary>
+    /// <remarks>
+    /// It used to live here and the shared scanner called it, which made a utility depend on a
+    /// particular test class existing. The code round was right that this is an ownership the name
+    /// does not admit to; the walk moved to the scanner and this is the one caller that kept its
+    /// name. (Story 2.1's code round, codex.)
+    /// </remarks>
+    internal static string RepositoryRoot() => ProductionSources.RepositoryRoot();
 }

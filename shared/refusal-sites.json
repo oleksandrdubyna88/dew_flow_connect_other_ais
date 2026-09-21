@@ -1,0 +1,21 @@
+{
+  "boundary": "src_mcp/src/Server/Refusal.cs",
+  "callers": [
+    {
+      "file": "src_mcp/src/Server/Consultation/ConsultationService.cs",
+      "refusals": 23
+    },
+    {
+      "file": "src_mcp/src/Server/PanelService.cs",
+      "refusals": 25
+    }
+  ],
+  "reviewerEndings": [
+    "NonZeroExit",
+    "NotStarted",
+    "Ok",
+    "RateLimited",
+    "TimedOut",
+    "Unparseable"
+  ]
+}

@@ -1,9 +1,12 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; epics 2 and 3 open.** Stories 1.1 (the credential list),
-> 1.2 (the notice line), 1.3 (the path) and 1.4 (the writer, and the append it had to fix) have
-> shipped. What remains is every CALL SITE — the census (2.1), the three refusal roads (2.2), the
-> reviewer and startup notices (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
+> and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
+> writer, and the append it had to fix) have shipped, and 2.1 has bounded the population 2.2 is about
+> to make a promise about. What remains is the instrumentation itself — **the ONE refusal road**
+> (2.2: `Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two
+> CALLERS of, not three roads as this plan first said), the reviewer and startup notices (2.3),
+> the live seam leg (2.4) — and the deaths (3.1, 3.2).
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
@@ -327,7 +330,7 @@ because this project's gate holds one session per repo+branch and closes it when
 
 | | Story | Depends on | Model |
 |---|---|---|---|
-| 2.1 | Every refusal road and every reviewer ending is counted, and the count only falls | — | Opus |
+| ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
 | 2.2 | Every refusal returned to the calling AI is written down, inside the helpers that return it | 1.4, 2.1 | Opus |
 | 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
@@ -345,10 +348,28 @@ Order: 1.1 → 1.2 → 1.3 → 1.4 → 2.1 → 2.2 → 2.3 → 2.4 → 3.1 → 3
 
 Six corrections, all verified in the repository before they were written down:
 
-1. **There are THREE refusal roads, not two.** `PanelService.Refused` ([PanelService.cs:709](../src_mcp/src/Server/PanelService.cs))
-   serves document rounds through a `DocumentTurn.Refused` and never touches `Error`. This document
-   said "both helpers"; 2.2 routes the third, and 2.1's census is what stops a fourth appearing
-   unnoticed.
+1. ~~**There are THREE refusal roads, not two.**~~ **CORRECTED by story 2.1, 2026-09-21: there were
+   two, and now there is ONE.** The split wrote that `PanelService.Refused` *"serves document rounds
+   through a `DocumentTurn.Refused` and never touches `Error`"*, and said it was verified in the
+   repository. It was not what the code did:
+
+   ```csharp
+   private string Refused(string sentence)
+   {
+       _log.Warning("review_document refused: {Why}", sentence);
+
+       return Error(sentence);            // a logging wrapper in FRONT of Error, not a road past it
+   }
+   ```
+
+   The wire shape of a refusal was built in exactly two places — one `new ErrorAnswer(` in each
+   service — and story 2.1 made it one: both now go through `Refusal.Answer`, held to a single file
+   by `TheRefusalRoadsAreCountedTests`. So 2.2 instruments ONE point, and "every refusal is written
+   down" is a fact about the type rather than a number anybody maintains.
+
+   **This is the correction the census existed to make.** A claim about how many roads there are is
+   exactly the kind a person verifies once, writes down, and is then wrong about for a year — which
+   is what happened here, in this document, in the sentence that said it had been checked.
 2. **`Log.CloseAndFlush()` does not exist to be called.** This repository's logger is an INSTANCE —
    `using var log = CoaiLogging.CreateDewFlowLogger(...)` inside `ServeAsync` — not the static
    `Log.Logger`, so §6.3's wording describes an API this code does not use. 3.2 is two layers

@@ -33,20 +33,6 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheOneAppendTests
 {
-    /// <summary>
-    /// What is NOT production, by the name of a directory on the way to a file.
-    /// </summary>
-    /// <remarks>
-    /// The roots used to be a list of nine paths, and the code round was right about what that
-    /// allows: a project added outside the list is never visited, so a third write road can exist
-    /// with this test green. They are DISCOVERED now — every <c>src_*</c> directory the repository
-    /// has — and what is excluded is named instead, which is the smaller and more stable set.
-    /// </remarks>
-    private static readonly string[] NotProduction =
-    [
-        "bin", "obj", "node_modules", "out", "dist", "TestResults", ".vscode-test",
-    ];
-
     private static readonly string[] SanctionedAppenders =
     [
         "src_mcp/runners/Reviewers/UsageLedger.cs",
@@ -56,7 +42,7 @@ public sealed class TheOneAppendTests
     [Fact]
     public void ExactlyTwoProductionCallSites_ReachJsonlLedgerAppendLine()
     {
-        var sites = FilesMentioning("JsonlLedger.AppendLine(");
+        var sites = ProductionSources.FilesMentioning("JsonlLedger.AppendLine(");
 
         sites.Keys.Should().BeEquivalentTo(SanctionedAppenders,
             "the spending ledger and the notices writer are the two sanctioned callers; anything else "
@@ -71,9 +57,9 @@ public sealed class TheOneAppendTests
         // codex's second bypass: `using static ...JsonlLedger;` makes `AppendLine(path, line)` legal
         // with the type named nowhere. No spelling-based census can see that call, so the import is
         // refused instead — which is a cheaper rule than a semantic scan and is exactly as strict.
-        var imports = FilesMentioning("using static");
+        var imports = ProductionSources.FilesMentioning("using static");
 
-        imports.Keys.Where(file => CodeOf(file).Contains("JsonlLedger", StringComparison.Ordinal))
+        imports.Keys.Where(file => ProductionSources.CodeOf(file).Contains("JsonlLedger", StringComparison.Ordinal))
             .Should().BeEmpty("the census counts a QUALIFIED call; a static import hides one from it");
     }
 
@@ -81,8 +67,11 @@ public sealed class TheOneAppendTests
     public void TheNoticesFileName_IsSpelledInOneProductionFile()
     {
         // The literal, quoted, so a message that MENTIONS the file (CredentialWords' refusal does)
-        // is not a second spelling of its name.
-        var spellings = FilesMentioning("\"server-notices.jsonl\"");
+        // is not a second spelling of its name — and asked of the SPELLING view, because a name in
+        // this codebase is a string literal and the code view now drops what is inside one. Story
+        // 2.1's lexer turned that on and this test went red, which is how a scanner shared between
+        // two censuses is supposed to fail: loudly, in the census whose question changed meaning.
+        var spellings = ProductionSources.FilesSpelling("\"server-notices.jsonl\"");
 
         spellings.Keys.Should().Equal(["src_mcp/src/Server/ServerNotices.cs"],
             "the extension spells the same name once in notificationsFile.ts, and a second spelling "
@@ -93,7 +82,7 @@ public sealed class TheOneAppendTests
     public void TheResolvedDirectory_IsMintedByTheResolverAndNothingElse()
     {
         // The SOURCE: the one named door appears in one production file.
-        FilesMentioning("ResolvedDataDir.For(").Keys.Should().Equal(["src_mcp/src/Server/PanelSettings.cs"],
+        ProductionSources.FilesMentioning("ResolvedDataDir.For(").Keys.Should().Equal(["src_mcp/src/Server/PanelSettings.cs"],
             "PanelSettings.DataDirectoryFor mints the type; a second minting site can hand the writer "
             + "a directory whose guarantee came from a resolver it does not share");
 
@@ -123,10 +112,10 @@ public sealed class TheOneAppendTests
     {
         // The companions, in one place: each equality above would also fail on an empty scan, but
         // saying so explicitly is what makes the file readable when one of them goes red.
-        FilesMentioning("JsonlLedger.AppendLine(").Should().HaveCount(2);
-        FilesMentioning("\"server-notices.jsonl\"").Should().HaveCount(1);
-        FilesMentioning("ResolvedDataDir.For(").Should().HaveCount(1);
-        CodeOf("src_mcp/src/Server/ServerNotices.cs").Should().Contain("ServerNoticeLine.Of(",
+        ProductionSources.FilesMentioning("JsonlLedger.AppendLine(").Should().HaveCount(2);
+        ProductionSources.FilesSpelling("\"server-notices.jsonl\"").Should().HaveCount(1);
+        ProductionSources.FilesMentioning("ResolvedDataDir.For(").Should().HaveCount(1);
+        ProductionSources.CodeOf("src_mcp/src/Server/ServerNotices.cs").Should().Contain("ServerNoticeLine.Of(",
             "the notices writer hands the serialiser's line to the append, which is what makes the "
             + "bytes test and this census say the same thing");
     }
@@ -139,118 +128,20 @@ public sealed class TheOneAppendTests
         // are discovered, so this asserts the DISCOVERY finds what is on disk rather than asserting
         // a list against itself.
         var root = NoSourceFileCarriesAControlByteTests.RepositoryRoot();
-        var found = SourceRoots().Select(directory => Path.GetFileName(directory)).ToList();
+        var found = ProductionSources.Roots().Select(directory => Path.GetFileName(directory)).ToList();
 
         found.Should().BeEquivalentTo(
             Directory.EnumerateDirectories(root, "src_*").Select(Path.GetFileName),
             "every src_* directory is scanned, including one added tomorrow");
         found.Should().HaveCountGreaterThan(2, "this repository has several source roots; finding "
             + "one or none means the walk started in the wrong place and every census above is empty");
-        ProductionFiles().Should().HaveCountGreaterThan(200,
+        ProductionSources.Files().Should().HaveCountGreaterThan(200,
             "and the roots must contain production files, or the scans are asserting nothing");
-        ProductionFiles().Should().NotContain(file => file.Contains("/tests", StringComparison.Ordinal),
+        ProductionSources.Files().Should().NotContain(file => file.Contains("/tests", StringComparison.Ordinal),
             "a test project is not production: its calls to the append are the tests OF the append");
     }
 
-    [Fact]
-    public void AnAppendSplitAcrossTwoLines_IsStillFound()
-    {
-        // The code round's finding, as a test of the scan itself: the old per-line version missed
-        // this, and a long qualified name is exactly what invites somebody to wrap it.
-        var split = string.Join(Environment.NewLine, ["        JsonlLedger", "            .AppendLine(path, line);"]);
-
-        Joined(split.Split(Environment.NewLine)).Should().Contain("JsonlLedger.AppendLine(",
-            "the scan joins a file's code before searching, so a wrapped call is the same string a "
-            + "call written on one line is — which is the whole point, and the reason the join has no "
-            + "separator");
-    }
-
-    /// <summary>
-    /// Every production file whose CODE contains the text, and how many times — the code as ONE
-    /// string with its newlines collapsed, so a call split across lines is still one call.
-    /// </summary>
-    private static Dictionary<string, int> FilesMentioning(string text)
-    {
-        var found = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var file in ProductionFiles())
-        {
-            var times = Occurrences(CodeOf(file), text);
-            if (times > 0)
-            {
-                found[file] = times;
-            }
-        }
-
-        return found;
-    }
-
-    /// <summary>One production file's code, comments dropped and newlines collapsed to spaces.</summary>
-    private static string CodeOf(string relative) =>
-        Joined(File.ReadAllLines(Path.Combine(NoSourceFileCarriesAControlByteTests.RepositoryRoot(), relative)));
-
-    /// <summary>
-    /// The code lines, trimmed and joined with NOTHING between them.
-    /// </summary>
-    /// <remarks>
-    /// A space would defeat the purpose: the wrap this exists to catch is
-    /// <c>JsonlLedger</c> then <c>.AppendLine(...)</c>, and joining those with a space leaves
-    /// <c>JsonlLedger .AppendLine(</c>, which contains no spelling anybody searches for. The first
-    /// version of this did exactly that, and its own test asserted the spaced form — a check that
-    /// passed while the scan it checks was still blind.
-    /// </remarks>
-    private static string Joined(IEnumerable<string> lines) =>
-        string.Concat(lines.Select(line => line.Trim()).Where(IsCode));
-
-    /// <summary>How many times the text appears, counting overlaps as one each.</summary>
-    private static int Occurrences(string code, string text)
-    {
-        var count = 0;
-        for (var at = code.IndexOf(text, StringComparison.Ordinal); at >= 0;
-             at = code.IndexOf(text, at + text.Length, StringComparison.Ordinal))
-        {
-            count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>Every production source file, by repository-relative path, under every source root.</summary>
-    private static IEnumerable<string> ProductionFiles()
-    {
-        var root = NoSourceFileCarriesAControlByteTests.RepositoryRoot();
-        foreach (var source in SourceRoots())
-        {
-            foreach (var file in Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories))
-            {
-                var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
-                if (IsProduction(relative))
-                {
-                    yield return relative;
-                }
-            }
-        }
-    }
-
-    /// <summary>Every <c>src_*</c> directory this repository has — found, never listed.</summary>
-    private static IEnumerable<string> SourceRoots() =>
-        Directory.EnumerateDirectories(NoSourceFileCarriesAControlByteTests.RepositoryRoot(), "src_*");
-
-    /// <summary>
-    /// Whether a repository-relative path is production: not a test project, not build output.
-    /// </summary>
-    /// <remarks>
-    /// A directory whose name STARTS with <c>tests</c> covers <c>tests</c>, <c>tests_fakecli</c>,
-    /// <c>tests_notices</c> and <c>CoaiBench.Tests</c> — which is every test project here, and the
-    /// shape a new one will have. Said as a rule rather than as a list, for the reason the roots
-    /// above are found rather than listed.
-    /// </remarks>
-    private static bool IsProduction(string relative) =>
-        !relative.Split('/').Any(segment =>
-            segment.StartsWith("tests", StringComparison.OrdinalIgnoreCase)
-            || segment.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
-            || NotProduction.Contains(segment, StringComparer.OrdinalIgnoreCase));
-
-    private static bool IsCode(string line) =>
-        line is { Length: > 0 } && !line.StartsWith("//", StringComparison.Ordinal);
-
+    // The scanner's OWN behaviour — the join rule, the two views, the interpolation holes — is
+    // asserted in ProductionSourcesTests. It answers two censuses now, and its rules were being
+    // tested inside whichever one happened to earn them.
 }
