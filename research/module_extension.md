@@ -8370,3 +8370,93 @@ done:
   above bounds that to four processes rather than one per open row, which is most of the exposure;
   cancelling properly needs an `AbortSignal` threaded through the shared `Run` seam that eight
   readers use, and that is a change to make deliberately rather than inside this story.
+
+
+### What story 3.1's code round changed, and what it got wrong
+
+Twelve reviewers were asked and ten answered (two of gemini's roles came back empty — their vendor
+hit a permission its headless mode cannot prompt for, which is a fact about the gate rather than
+this diff). **29 findings, 12 accepted, 17 rejected.** The rejections are again the larger half, so
+the reasons are here with the lines that settle them.
+
+**All three Blocking findings were false, and all three came from one provider.**
+
+- *"`--file-at` not listed in `.agents/PROJECT.md`."* It is, at line 56, in the same sentence as
+  `--real-method`. The other Conventions reviewer checked the same file and recorded "properly
+  registered".
+- *"`FileAtOfAsync` assumes the pair is non-null"* and will throw. The null check is the method's
+  FIRST statement, and the parameter is declared `ReviewPair?` precisely so it is required.
+- *"Unescaped `JSON.stringify` into a `<script>`."* The quoted line — `var rows =
+  ${JSON.stringify(rows)}` — does not exist anywhere, and the revision answer never travels through
+  the script block at all: it arrives as a posted message. This is the third round in a row where
+  this provider filed this same finding against markup that is not there.
+
+Two more were rejected because they argue themselves out inside their own text: one examines the
+revisions map, writes "This seems correct… This is correct", and files anyway; another states "the
+`if (pair === undefined)` check exists" and asks for it to be handled "more gracefully".
+
+**And one ACCEPTED finding turned out to be false when it was built** — the second time this has
+happened in this epic, and worth the same note. *"Negative finding IDs are accepted"*: `FindingId`
+parses with `NumberStyles.None`, which refuses a sign and a decimal point. Against the shipped
+binary, `--id -1` answers **65**, `--id 1.5` answers **65**, `--id 7` answers 0. Accepting a finding
+commits you to the PROBLEM, not to a fix, and this problem did not exist.
+
+**The eleven that were real:**
+
+1. **A failed `git show` was told as "the file was not there".** Every non-zero exit after a
+   successful commit check became `file_not_in_commit`, so a permission error or a broken object
+   told a person the file had never been at that path — a lie rather than a gap, and the page then
+   suppresses the action for good instead of letting them press again. The discriminator asks git
+   rather than reading its prose: `cat-file -e sha:path` exits 0 when the path IS in the commit, so
+   a failure with the path present is `git_failed` and retryable. One extra process, only on the
+   failure path. It is shared with `--real-method`, so both readers gained the honesty at once.
+2. **A held revision's identity omitted the checkout.** A finding id, a commit and a path are the
+   same three in two checkouts of one repository — which story 2.2 measured as the ordinary case
+   here, 44 of 54 live paths being linked worktrees — so the second row was handed the first one's
+   code.
+3. **The reader trusted the sha and the path it was answered with**, comparing only the finding id.
+   A pair recollected mid-flight answers the same id at another commit. All three coordinates are
+   compared now, but only when the answer CARRIES CONTENT: `pair_not_found` has no coordinates to
+   echo, and refusing it would turn a true answer into silence.
+4. **A server too old was told to the pressed row alone.** `remember` sets `tooOld` globally without
+   marking the repository probed, so with 200 rows and an old binary 199 kept offering the action and
+   each launched another doomed request.
+5. **A press said nothing while it worked.** The first press can wait through a server launch and
+   several git reads, and the row sat on *not checked yet* beside an enabled button the whole time.
+   CLAUDE.md §8 asks a status-changing action to show its real state while it runs: the row now
+   wears an in-flight state, said BEFORE the first `await` because that is the whole point of it.
+6. **A rejection from the editor escaped as an unhandled promise rejection** and left the row on its
+   old note. The `finally` that replaces the in-flight state answers both: a rejection from the
+   EDITOR is not a fact about the revision, so what was read stays read and the row gains the
+   sentence and the offer to press again.
+7. **The webview boundary took `1.5` and `-1` as row ids.**
+8. **The type-kind table fell through to TypeScript** for every language that is not C#, so a fifth
+   language would have shown every method with an empty class and nothing would have failed.
+9. **`tellRows` said nothing about what it does** — it is `showRevisionActions` now.
+10. **Three private copies of the stdout capture** remained in `ThePairModesTests`,
+    `ABatchFindingsReadTests` and `BugsQueryTests`. `Stdout.Of` joins `OfAsync` and the copies are
+    gone; there are two helpers because three of the four one-shots captured are synchronous, and
+    wrapping them in a task to reuse one would add an `await` to tests with nothing to wait for.
+11. **The flow shipped without its scenario.** Two now run in a real VS Code: the revision document
+    opening under this product's own scheme, naming the commit, with the cursor on the finding's line
+    and **an edit refused** — asserted by trying `applyEdit` rather than by trusting the docblock —
+    and the CURRENT file opening from the checkout at its recorded line.
+
+**One mutation stayed green and is reported as such rather than counted.** Moving the two in-flight
+lines inside the `try` preserved the property the test asserts (said before the first wait), so it
+proved nothing; deleting them turns the test red, which is the check that counts.
+
+**And saying it cost a refactor.** The in-flight state pushed `bugzReviewPanel.ts` to 831 lines
+against the 800 the style rule allows — which the implementer predicted in his own questions and
+named this extraction for. `revisionPanel.ts` takes the four methods AND the three fields only they
+touch: what the panel has learned about reaching code, which reads are in flight, and which rows
+have a press out. A cluster that takes its own fields with it has found its seam. It posts through a
+function the panel gives it rather than holding a webview, so there is still ONE place here that
+talks to VS Code, and a test pins that the deciding half contains no `webview` at all. Eight
+structural tests went red on the move, which is what they are for; they were re-pointed at the file
+the code now lives in and not one assertion was weakened.
+
+**Recorded rather than fixed:** a SHA-256 repository is unsupported product-wide — `ObjectId` is
+exactly forty hex characters, so the collector, `--real-method` and `--file-at` all refuse one.
+Widening it would change how every git read treats every repository, untested against a SHA-256
+repository, inside a story that adds one read.
