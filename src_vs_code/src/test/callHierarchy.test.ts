@@ -48,14 +48,25 @@ test('a line that does not hold the symbol at all means the method moved', () =>
 // --------------------------------------------------------------------------------------------
 
 test('exactly one match is the symbol; an overload pair is refused rather than guessed at', () => {
-  assert.equal(theRightSymbol([{ name: 'counted', detail: '(): number' }], 'counted'), true);
+  assert.equal(theRightSymbol([{ name: 'counted', detail: '(): number' }], 'counted'), 0);
   assert.equal(
     theRightSymbol([{ name: 'counted', detail: '(): number' }, { name: 'counted', detail: '(x: number): number' }], 'counted'),
-    false,
+    -1,
     'nothing in a review row can tell two overloads apart, so neither may be counted');
-  assert.equal(theRightSymbol([{ name: 'Totals', detail: '' }], 'counted'), false,
+  assert.equal(theRightSymbol([{ name: 'Totals', detail: '' }], 'counted'), -1,
     'the enclosing class is exactly what column 0 prepares, and this is the guard that catches it');
-  assert.equal(theRightSymbol([], 'counted'), false);
+  assert.equal(theRightSymbol([], 'counted'), -1);
+});
+
+test('WHICH of the prepared items matched is the answer, not merely that one did', () => {
+  // The worst finding of the code round, found independently by three reviewers: the first draft
+  // returned a boolean and then asked about `items[0]`. A provider that answers
+  // [the enclosing class, the method] would have counted the CLASS's callers under the METHOD's
+  // name — a number that is wrong and looks right, which is the one outcome this story forbids.
+  assert.equal(
+    theRightSymbol([{ name: 'Totals', detail: '' }, { name: 'counted', detail: '(): number' }], 'counted'),
+    1,
+    'the handle must be the one beside the item that matched');
 });
 
 // --------------------------------------------------------------------------------------------
@@ -141,7 +152,7 @@ const ABOUT: AskedAbout = { findingId: 7, attempt: 'a1', file: 'src/A.ts', line:
 
 const editorThat = (over: Partial<Editor> = {}): Editor => ({
   lineText: async () => '    public counted(): number { return 1; }',
-  prepare: async (): Promise<Preparation> => ({ items: [{ name: 'counted', detail: '' }], handle: 'H' }),
+  prepare: async (): Promise<Preparation> => ({ items: [{ name: 'counted', detail: '' }], handles: ['H'] }),
   incoming: async () => [END('uses')],
   outgoing: async () => [END('helper')],
   ...over,
@@ -165,11 +176,27 @@ test('a direction that fails does not take the other down with it', async () => 
   assert.equal(calls.outgoing.ends.length, 1);
 });
 
+test('the provider is asked about the item that MATCHED, whatever its position', async () => {
+  let askedAbout: unknown;
+  await askCalls(
+    editorThat({
+      prepare: async () => ({
+        items: [{ name: 'Totals', detail: '' }, { name: 'counted', detail: '' }],
+        handles: ['the class', 'the method'],
+      }),
+      incoming: async (handle) => { askedAbout = handle; return []; },
+    }),
+    ABOUT);
+
+  assert.equal(askedAbout, 'the method',
+    'asking about handles[0] would count the enclosing class under the method’s name');
+});
+
 test('the symbol is proved BEFORE either direction is asked', async () => {
   let asked = 0;
   const calls = await askCalls(
     editorThat({
-      prepare: async () => ({ items: [{ name: 'Totals', detail: '' }], handle: 'H' }),
+      prepare: async () => ({ items: [{ name: 'Totals', detail: '' }], handles: ['H'] }),
       incoming: async () => { asked += 1; return []; },
       outgoing: async () => { asked += 1; return []; },
     }),
@@ -186,7 +213,7 @@ test('a file the checkout does not have is GONE, not a missing provider', async 
 });
 
 test('an empty preparation is NO PROVIDER, which is not zero callers', async () => {
-  const calls = await askCalls(editorThat({ prepare: async () => ({ items: [], handle: undefined }) }), ABOUT);
+  const calls = await askCalls(editorThat({ prepare: async () => ({ items: [], handles: [] }) }), ABOUT);
 
   assert.equal(calls.prepared, 'no-provider');
   assert.equal(calls.incoming.asked, false, 'nothing was asked, so nothing may be shown as a count');

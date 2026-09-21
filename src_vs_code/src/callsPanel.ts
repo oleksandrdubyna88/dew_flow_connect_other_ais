@@ -94,6 +94,11 @@ export class CallsPanel {
   closed(ids: readonly number[]): void {
     const dropping = new Set(ids);
     this.waiting = new Map([...this.waiting].filter(([id]) => !dropping.has(id)));
+    // The ANSWER goes too. A person who collapses a row, checks out another branch and opens it
+    // again would otherwise be shown the old branch's count under the sentence "in the current
+    // checkout" — which is the one thing this story promises never to say. Reopening asks again.
+    // (Code round, three reviewers.)
+    this.held = new Map([...this.held].filter(([id]) => !dropping.has(id)));
   }
 
   /** Opens one end of a call that this side is holding — by index, never by a path from the page. */

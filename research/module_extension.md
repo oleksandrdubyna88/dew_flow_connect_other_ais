@@ -8119,6 +8119,25 @@ would have counted a class's callers under a method's name. So the column is fou
 text, AND the prepared item's name is checked against the one the row records. They were designed
 independently and the measurement showed them agreeing.
 
+**The second guard had to say WHICH item matched, not merely that one did** — the code round's worst
+finding, reached independently by three reviewers. `prepareCallHierarchy` answers with a LIST, and the
+first draft checked the list and then asked the provider about `items[0]`. A provider answering
+`[Totals, counted]` would have passed both guards and still counted the class's callers under the
+method's name: the exact outcome the guards exist for, arrived at through them. `theRightSymbol` now
+returns the INDEX, `Preparation.handles` is plural and in the same order as `items`, and the handle
+asked about is the one beside the item that matched.
+
+**The list is bounded at 50, with a tail that says how many more there are.** The COUNT in the
+sentence is never truncated — it is the answer; the list is only how a person reaches a few of them,
+and a method with ten thousand callers would otherwise become ten thousand buttons in one `innerHTML`
+assignment.
+
+**An end is opened only inside a folder this window has open.** A language provider answers with
+whatever URIs it knows: a dependency in `node_modules`, another workspace root, a generated file in a
+temp directory. Story 3.1 built `currentFileIn` for exactly this shape of question — it checks the
+containing checkout against the open folders and then the file against the checkout, as written AND as
+it really leads — so it is reused rather than a second guard written.
+
 **Four states, because each is a different next move.** `moved` (that line holds something else),
 `gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as
 zero), `failed` (asked and did not answer; worth asking again). Zero callers is a fifth thing and
@@ -8127,7 +8146,13 @@ reads as a plain number, which is the whole point of the gate measurement.
 **An ATTEMPT, not a generation.** A request can time out, a person can press again inside the same
 draw, and the first promise can still resolve. Every press mints an attempt; only the one a row is
 still waiting for may be applied. Collapsing a row forgets its press — the provider cannot be told to
-stop, but the answer can be refused.
+stop (none of the three commands takes a `CancellationToken`: `vscode.prepareCallHierarchy` takes a
+URI and a position, the two direction commands take an item, and that is all), but the answer can be
+refused.
+
+**Collapsing drops the ANSWER too, not only the press.** A person who collapses a row, checks out
+another branch and opens it again would otherwise be shown the old branch's count under the sentence
+*in the current checkout* — the one thing this story promises never to say. Reopening asks again.
 
 **Nothing is reused to avoid a call.** The last answer is kept so a redraw does not lose it; a press
 always asks again. That is what keeps a number from surviving a branch switch without this side
@@ -8138,6 +8163,15 @@ cap and this story needed a dozen lines in it. Ninety-four lines of CSS that no 
 cheapest honest move, and `notificationsPageStyle.ts` is the house precedent. It is a FUNCTION rather
 than a constant because the sheet composes four other modules' CSS and two of them take the zoom and
 tone a person set — the constant version was the first attempt and the compiler caught it at once.
+
+**`callHierarchyVsCode.ts` was extracted for the same reason**, on a code-round finding:
+`panelProvider.ts` is the file every command is registered in and it was over its cap, so the VS Code
+adapter — the three `executeCommand` calls and the shaping of what they return — moved out whole. It
+is the only module in this story that imports `vscode`, which is what lets `callHierarchy.ts`,
+`callHierarchyAsk.ts`, `callsBlock.ts` and `callsPanel.ts` all be RUN by the suite; it is therefore
+also the only one in `sonar.coverage.exclusions`. The adapter guards `selectionRange` — a provider may
+leave it unset, and `item.range.start` is then the position to use, which is a different place on a
+decorated method.
 
 ## Sending — the last thing the Bugz section could not do
 

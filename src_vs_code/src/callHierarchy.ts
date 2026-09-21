@@ -118,15 +118,25 @@ export interface PreparedItem {
 }
 
 /**
- * Whether the symbol the editor prepared is the one the row is about.
+ * WHICH prepared symbol is the one the row is about, as an index — or -1.
  *
  * <p><b>A name is not enough</b>, and a reviewer was right to say so: two overloads share one. So an
  * AMBIGUOUS preparation — more than one item carrying the row's name — is refused rather than
  * guessed at, because nothing in a review row can tell two overloads apart. One match is the only
  * answer that counts.</p>
+ *
+ * <p><b>And it returns WHICH, not whether.</b> The first draft answered a boolean and the caller then
+ * asked the provider about `items[0]` — so a provider returning `[Totals, counted]` passed the check
+ * on `counted` and had `Totals`'s callers counted under the method's name. Three reviewers found it
+ * independently. The index is the fix, and it is the same defect the column measurement found one
+ * level down.</p>
  */
-export function theRightSymbol(items: readonly PreparedItem[], symbolName: string): boolean {
-  return items.filter((one) => one.name === symbolName).length === 1;
+export function theRightSymbol(items: readonly PreparedItem[], symbolName: string): number {
+  const matching = items
+    .map((one, at) => (one.name === symbolName ? at : -1))
+    .filter((at) => at >= 0);
+
+  return matching.length === 1 ? matching[0] ?? -1 : -1;
 }
 
 /** The sentence a row shows instead of a number, and it never prints the state's own word. */
@@ -172,7 +182,10 @@ export function distinct(ends: readonly CallEnd[]): readonly CallEnd[] {
   const seen = new Set<string>();
 
   return ends.filter((end) => {
-    const key = `${end.file}\u0000${end.name}\u0000${end.detail}`;
+    // WHERE as well as what: `A.run()` and `B.run()` in one file share a name and often a
+    // signature, and keying without the position collapsed them into one caller. (Code round, two
+    // reviewers.) The selection start is the provider's own stable identity for a symbol.
+    const key = `${end.file}\u0000${end.line}:${end.character}\u0000${end.name}\u0000${end.detail}`;
     if (seen.has(key)) {
       return false;
     }

@@ -392,6 +392,13 @@ export class BugzReviewPanel {
         return;
       case 'expand':
       case 'expandAll':
+        if (!m.open) {
+          // A collapsed row does not want what it asked for. The provider cannot be told to stop —
+          // none of the three commands takes a token — but the answer can be refused, and the one it
+          // already has goes too so that reopening after a branch switch asks again rather than
+          // showing the old checkout's count. (Code round, four findings.)
+          this.calls.closed(m.ids);
+        }
         this.remember(m.ids, m.open);
 
         return;
