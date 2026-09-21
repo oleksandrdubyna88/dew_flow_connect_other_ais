@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Tests;
 
@@ -126,7 +127,11 @@ internal static class ProductionSources
     /// was right to call brittle: change the helper to return <c>Task&lt;string&gt;</c> and the
     /// declaration starts counting as a call, moving a number the documents quote. A declaration is
     /// the occurrence whose argument list begins with a TYPE and a name — and with string literals
-    /// already removed, <c>Error(string </c> can only be one.</para>
+    /// already removed, <c>Error(string …</c> can only be one.</para>
+    /// <para>The spacing is not part of the rule. The second code round was right that matching the
+    /// exact characters <c>(string </c> makes <c>Error(  string sentence)</c> — a change that alters
+    /// no behaviour and that no formatter forbids — count the declaration as a refusal, which moves a
+    /// number the documents quote.</para>
     /// </remarks>
     internal static int UnqualifiedCalls(string code, string method)
     {
@@ -141,8 +146,13 @@ internal static class ProductionSources
             }
         }
 
-        return calls - Occurrences(code, wanted + "string ");
+        return calls - Declarations(code, method);
     }
+
+    /// <summary>The occurrences that are the helper being DECLARED, not called.</summary>
+    private static int Declarations(string code, string method) =>
+        Regex.Count(code, Regex.Escape(method) + @"\(\s*string\b", RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2));
 
     /// <summary>How many times the text appears, counting overlaps as one each.</summary>
     internal static int Occurrences(string code, string text)
@@ -267,18 +277,25 @@ internal static class ProductionSources
 
         var delimiter = source[quote];
         var run = RunOf(source, quote, delimiter);
+
+        // An interpolation hole is not CONTENTS — it is code that runs. Dropping it with the text
+        // around it is how `$"{new ErrorAnswer(why)}"` hides from a boundary rule that reads source,
+        // which is the guarantee story 2.2 rests on. (The second code round, codex.) The holes are
+        // collected as they are walked and spliced back between the fences.
+        var holes = run < 3 && IsInterpolated(source, at) ? new StringBuilder() : null;
         var end = run >= 3
             ? EndOfRaw(source, quote + run, delimiter, run)
-            : EndOfOrdinary(source, quote + 1, delimiter, IsVerbatim(source, at));
+            : EndOfLiteral(source, quote + 1, delimiter, IsVerbatim(source, at), holes);
 
-        Surviving(kept, source, at, end, delimiter, run, keepText);
+        Surviving(kept, source, at, end, delimiter, run, keepText, holes);
 
         return end;
     }
 
-    /// <summary>The whole literal, or the fences it was written between.</summary>
+    /// <summary>The whole literal, or the fences it was written between with its holes inside.</summary>
     private static void Surviving(
-        StringBuilder kept, string source, int at, int end, char delimiter, int run, bool keepText)
+        StringBuilder kept, string source, int at, int end, char delimiter, int run, bool keepText,
+        StringBuilder? holes)
     {
         if (keepText)
         {
@@ -288,8 +305,18 @@ internal static class ProductionSources
         }
 
         var fence = run >= 3 ? run : 1;
-        kept.Append(delimiter, fence).Append(delimiter, fence);
+        kept.Append(delimiter, fence);
+        if (holes is not null)
+        {
+            kept.Append(holes);
+        }
+
+        kept.Append(delimiter, fence);
     }
+
+    /// <summary>Whether <c>{…}</c> is a hole here — <c>$"…"</c>, <c>$@"…"</c>, <c>@$"…"</c>.</summary>
+    private static bool IsInterpolated(string source, int at) =>
+        source[at] == '$' || (source[at] == '@' && Next(source, at) == '$');
 
     /// <summary>How many of the delimiter in a row — three or more opens a raw string.</summary>
     private static int RunOf(string source, int quote, char delimiter)
@@ -322,28 +349,70 @@ internal static class ProductionSources
         return at < 0 ? source.Length : at + run;
     }
 
-    private static int EndOfOrdinary(string source, int from, char delimiter, bool verbatim)
+    /// <summary>
+    /// Where a one-fence literal ends, collecting its interpolation holes on the way if asked.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="holes"/> is null for a literal that has none, and the walk is then the plain
+    /// one it always was. When it is not null every <c>{…}</c> is handed to <see cref="Hole"/>, which
+    /// copies the code out — and, because a hole may itself hold a literal, that walk is where
+    /// <c>$"{map["k"]}"</c> stops ending at the quote before <c>k</c>.
+    /// </remarks>
+    private static int EndOfLiteral(
+        string source, int from, char delimiter, bool verbatim, StringBuilder? holes)
     {
-        for (var at = from; at < source.Length; at++)
+        for (var at = from; at < source.Length;)
         {
+            if (holes is not null && source[at] == '{')
+            {
+                // `{{` is how C# writes a literal brace, so what follows it is text.
+                at = Next(source, at) == '{' ? at + 2 : Hole(source, at + 1, holes);
+                continue;
+            }
+
             if (!verbatim && source[at] == '\\')
             {
-                at++;
+                at += 2;
                 continue;
             }
 
             if (source[at] != delimiter)
             {
+                at++;
                 continue;
             }
 
             if (verbatim && Next(source, at) == delimiter)
             {
-                at++;
+                at += 2;
                 continue;
             }
 
             return at + 1;
+        }
+
+        return source.Length;
+    }
+
+    /// <summary>One <c>{…}</c> hole, copied out as the code it is — nested braces and literals too.</summary>
+    private static int Hole(string source, int from, StringBuilder holes)
+    {
+        var depth = 1;
+        var at = from;
+        while (at < source.Length)
+        {
+            depth += source[at] switch { '{' => 1, '}' => -1, _ => 0 };
+            if (depth == 0)
+            {
+                // The code ran; a space keeps it from gluing onto whatever follows the literal.
+                holes.Append(' ');
+
+                return at + 1;
+            }
+
+            at = source[at] is '"' or '\'' or '@' or '$'
+                ? Text(source, at, holes, keepText: false)
+                : Keep(source, at, holes);
         }
 
         return source.Length;

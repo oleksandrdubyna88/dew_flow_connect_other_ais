@@ -1600,6 +1600,17 @@ inside a string literal count as one. A census that counts prose is the defect i
 new place. One pass handles line and block comments, ordinary strings with their escapes, verbatim
 strings with their doubled quotes, raw strings and character literals.
 
+**An interpolation hole is CODE and stays** — the second code round's finding, and the last way past
+every census here. A string's contents are prose; `$"{new ErrorAnswer(why)}"` is a construction that
+runs, and the first lexer deleted it with the text around it, so the boundary rule story 2.2 rests on
+would have gone green over it. The holes are walked as code and spliced back between the fences,
+`{{` is a literal brace and not a hole, and a hole may itself hold a literal — which is also how
+`$"{map["k"]}"` stopped ending at the quote before `k`. Written RED first: the failure was
+`Expected "var m = "";" to contain "new ErrorAnswer("`, the whole hole gone. Then proved on a real
+file: a `Hidden(string why) => $"{new ErrorAnswer(why)}"` planted in `Escalations.cs` fails the
+boundary census naming that file, and the plant compiles. What remains outside the lexer is a raw
+interpolated string (`$$"""…"""`), which nothing in this repository writes.
+
 **There are two views, and the difference is the whole contract.** `CodeOf` drops what is inside a
 literal — that is what stops a census of CALLS counting a sentence that mentions one. `SpellingOf`
 keeps literals and drops only comments, because a census of a NAME is a census of a literal:
@@ -1615,9 +1626,14 @@ for. A line beginning with `.` glues to the one before it; everything else is se
 **`UnqualifiedCalls` is the precision the plan round asked for.** A whole-file search for `Error(`
 counts every `_log.Error(` in the file, and this codebase logs constantly. The rule is an occurrence
 whose preceding character is neither a dot nor part of an identifier — and the declaration is
-SUBTRACTED as `Error(string `, not matched on its return type: the first version looked for `string `
-*before* the name, so changing the helper to return `Task<string>` would have turned its declaration
-into a call and moved a number the documents quote.
+SUBTRACTED as `Error\(\s*string\b`, not matched on its return type: the first version looked for
+`string ` *before* the name, so changing the helper to return `Task<string>` would have turned its
+declaration into a call, and the second version matched the exact characters `(string `, so
+`Error(  string sentence)` would have done the same. Both move a number the documents quote.
+
+**The scanner has its own tests** (`ProductionSourcesTests`), because every guarantee either census
+makes is really a claim about that one file — and its rules were being asserted inside whichever
+census happened to earn them.
 
 **The inventory writes only when asked, and that run FAILS.** `COAI_RECORD_REFUSAL_SITES=1`
 regenerates `shared/refusal-sites.json` and then fails on purpose, naming the file and saying to

@@ -66,20 +66,30 @@ public sealed class TheRefusalRoadsAreCountedTests
         RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
 
     [Fact]
-    public void TheRefusalAnswerIsNamedInOnlyTwoPlaces()
+    public void TheRefusalAnswerIsNamedInTwoPlacesAndBuiltInOne()
     {
-        // The guarantee story 2.2 rests on, and the code round widened it from one spelling to the
-        // TYPE: `new ErrorAnswer(` was the only shape searched for, and `ErrorAnswer answer = new(…)`
-        // builds one without ever writing that. A file that cannot NAME the type cannot build one,
-        // however it spells the construction.
+        // The guarantee story 2.2 rests on, and the first code round widened it from one spelling to
+        // the TYPE: `new ErrorAnswer(` was the only shape searched for, and `ErrorAnswer answer =
+        // new(…)` builds one without ever writing that. A file that cannot NAME the type cannot build
+        // one, however it spells the construction.
         var named = ProductionSources.FilesMentioning("ErrorAnswer");
 
         named.Keys.Should().BeEquivalentTo([TheBoundary, TheDeclaration],
             "an ErrorAnswer is the only shape a refusal takes on the wire, so the places that can "
             + "build one are the places instrumentation has to reach — found: {0}",
             string.Join(", ", named.Keys));
-        ProductionSources.FilesMentioning("new ErrorAnswer(").Keys.Should().Equal([TheBoundary],
+
+        var built = ProductionSources.FilesMentioning("new ErrorAnswer(");
+
+        built.Keys.Should().Equal([TheBoundary],
             "and the one construction is in the boundary, which is what the scan must still find");
+        built[TheBoundary].Should().Be(1,
+            "ONE construction, not merely one file. The second code round asked this question with a "
+            + "wrong premise — it believed the boundary was excluded from the census, and it is not — "
+            + "but the gap behind it is real: a SECOND `new ErrorAnswer(` inside Refusal.cs is a "
+            + "second refusal road that story 2.2's hook would not run on, and a list of files cannot "
+            + "see it. When 2.2 needs another, it moves the hook first and changes this number "
+            + "deliberately");
     }
 
     [Fact]

@@ -1240,6 +1240,25 @@ The round moved three other things:
   nothing, and a CI job with that variable set by accident would otherwise go green over a rewritten
   source of truth.
 
+**The second round found the last road, and it was inside a string.** codex: the scanner removes the
+CONTENTS of a literal, and an interpolation hole is not contents — it is code that runs. So
+`$"{new ErrorAnswer(why)}"` constructed a refusal that the boundary rule could not see, in the one
+mechanism story 2.2's whole promise rests on. The lexer walks holes as code now; planting
+`Hidden(string why) => $"{new ErrorAnswer(why)}"` in `Escalations.cs` compiles and fails the census
+naming that file. The same round tightened the boundary from one FILE to one CONSTRUCTION — a second
+`new ErrorAnswer(` inside `Refusal.cs` is a second road that 2.2's hook would not run on, and a list
+of files cannot see it — and made the declaration subtraction whitespace-tolerant, because
+`Error(  string sentence)` changes no behaviour and would have counted the declaration as a refusal.
+
+Two findings of that round were rejected. One asked `Refusal.Answer` to return the `ErrorAnswer`
+record rather than the wire string, on the reasoning that serialising inside the boundary leaves
+nothing to intercept — which describes interception from OUTSIDE, and would put serialisation back
+in the two services this story exists to unify; the seam 2.2 needs is inside the method, between the
+record and the serialiser, which is why the body is two lines. The other asked the scanner to join
+lines with `Environment.NewLine` in case a CRLF file left a hidden character in `using static`; the
+join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
+removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
