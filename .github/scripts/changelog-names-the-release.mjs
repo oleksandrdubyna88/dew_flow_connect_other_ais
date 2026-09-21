@@ -201,8 +201,15 @@ export function verdict(tag, read) {
   return {
     code: 1,
     said: `${problems.join('\n')}\n\n`
-      + 'Then delete this tag and push it again. A release whose notes never arrive is the defect '
-      + 'this check exists to prevent: eight releases of this line once shipped with none.',
+      // WHERE to do it changed when release-please arrived, and the old advice — "delete this tag
+      // and push it again" — became the wrong thing to say. Tags are not pushed by hand any more:
+      // merging the release pull request cuts them, and this repository's rule elsewhere is that a
+      // tag is never moved. So the fix belongs one step earlier, on the pull request, where it
+      // costs an edit rather than a deleted tag.
+      + 'Write it ON THE RELEASE PULL REQUEST — "chore(main): release …" — before merging that pull '
+      + 'request. The merge is what cuts the tag, so by the time this check runs the tag already '
+      + 'exists and must not be moved. A release whose notes never arrive is the defect this check '
+      + 'exists to prevent: eight releases of this line once shipped with none.',
   };
 }
 
