@@ -25,25 +25,14 @@ namespace CoaiMcp.Tests;
 public sealed class CredentialWordsTests
 {
     /// <summary>
-    /// The file both halves are generated from, found from this test assembly's own location.
+    /// The file both halves are generated from — through <see cref="SharedFixtures"/>, which every
+    /// suite that reads <c>shared/</c> now uses instead of its own copy of the same directory walk.
     /// </summary>
     /// <remarks>
-    /// Read from the repository rather than from the embedded copy ON PURPOSE: comparing the
-    /// embedded resource against itself would pass whatever it contained. This is the assertion
-    /// that the SHIPPED artefact still carries what the source of truth says.
+    /// Read from the REPOSITORY rather than from the embedded copy on purpose: comparing the
+    /// embedded resource against itself would pass whatever it contained.
     /// </remarks>
-    private static string SharedJson()
-    {
-        var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !File.Exists(Path.Combine(here.FullName, "shared", "credential-words.json")))
-        {
-            here = here.Parent;
-        }
-
-        here.Should().NotBeNull("the repository's shared/credential-words.json is what both halves are held to");
-
-        return File.ReadAllText(Path.Combine(here!.FullName, "shared", "credential-words.json"));
-    }
+    private static string SharedJson() => SharedFixtures.Text("credential-words.json");
 
     private static (string[] Anywhere, string[] WholePart) FromShared()
     {
@@ -148,16 +137,38 @@ public sealed class CredentialWordsTests
         }
     }
 
-    public static TheoryData<string, bool> TheSharedCorpus()
+    /// <summary>Every row of the corpus, as values — read once and shared by the two tests below.</summary>
+    private static IReadOnlyList<(string Name, bool Credential)> CorpusRows()
     {
         using var parsed = JsonDocument.Parse(SharedJson());
+
+        return [.. parsed.RootElement.GetProperty("cases").EnumerateArray()
+            .Select(one => (one.GetProperty("name").GetString()!, one.GetProperty("credential").GetBoolean()))];
+    }
+
+    public static TheoryData<string, bool> TheSharedCorpus()
+    {
         var data = new TheoryData<string, bool>();
-        foreach (var one in parsed.RootElement.GetProperty("cases").EnumerateArray())
+        foreach (var (name, credential) in CorpusRows())
         {
-            data.Add(one.GetProperty("name").GetString()!, one.GetProperty("credential").GetBoolean());
+            data.Add(name, credential);
         }
 
         return data;
+    }
+
+    [Fact]
+    public void TheSharedCorpus_StillCarriesTheCaseBothHalvesGotWrongFirst()
+    {
+        // A COMPANION to the theory, because a scan that matches nothing passes for ever. A corpus
+        // reduced to its easy rows would leave the theory green while covering none of the boundary
+        // the two splitters actually disagreed on.
+        var cases = CorpusRows();
+
+        cases.Should().HaveCountGreaterThanOrEqualTo(40, "the shared corpus has shrunk");
+        cases.Should().Contain(("xAuth", true),
+            "xAuth is the case only the whole-part rule on the ORIGINAL casing can answer, and it is "
+            + "the one this story's first draft got wrong while every other case stayed green");
     }
 
     [Theory]

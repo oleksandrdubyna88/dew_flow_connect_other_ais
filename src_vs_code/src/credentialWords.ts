@@ -47,8 +47,15 @@
  */
 import { ANYWHERE, WHOLE_PART } from './credentialWords.generated';
 
-/** Every word, for a caller that wants to say what it looks for. */
-export const CREDENTIAL_WORDS: readonly string[] = [...ANYWHERE, ...WHOLE_PART];
+/**
+ * NOT exported: the two lists must never be handed to a caller as one.
+ *
+ * <p>`CREDENTIAL_WORDS` used to be `[...ANYWHERE, ...WHOLE_PART]`, for "a caller that wants to say
+ * what it looks for". It had none, and a reviewer named what it invited: any caller doing a
+ * substring check over the union matches `auth` inside `author` and `key` inside `monkey` — the
+ * exact defect the split was made to prevent, re-entered through a convenience export. The question
+ * is `namesACredential`'s to answer; nothing else needs the words themselves.</p>
+ */
 
 /**
  * A name split the way a person reads it: separators and camelCase, lowercased.
@@ -65,8 +72,25 @@ function partsOf(name: string): readonly string[] {
     .filter((part) => part.length > 0);
 }
 
-/** Whether a parameter name reads as a credential. Case-insensitive, and deliberately broad. */
+/**
+ * Whether a parameter name reads as a credential. Case-insensitive, and deliberately broad.
+ *
+ * <p><b>It refuses an empty list rather than answering `false` for everything.</b> The server throws
+ * at construction when its embedded copy is missing; this side had no such guard, and a reviewer
+ * called the asymmetry Blocking with the right consequence: a generated module that failed to
+ * write, or that esbuild shook out, leaves both arrays empty and every name reads as ordinary —
+ * so a value named `apiKey` reaches the ledger raw, silently, on the one machine that matters.
+ * `--check` and the bundle assertion each catch a way of getting there; this catches having got
+ * there.</p>
+ */
 export function namesACredential(name: string): boolean {
+  if (ANYWHERE.length === 0 || WHOLE_PART.length === 0) {
+    throw new Error(
+      'the credential word list is empty, so nothing would be redacted — credentialWords.generated.ts '
+      + 'is missing, stale or was removed from the bundle. Run: node '
+      + 'src_vs_code/scripts/generate-credential-words.mjs',
+    );
+  }
   if (ANYWHERE.some((word) => name.toLowerCase().includes(word))) {
     return true;
   }

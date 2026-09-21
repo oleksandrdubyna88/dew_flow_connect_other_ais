@@ -21,7 +21,7 @@
 // does not need: the server embeds the JSON itself, so it has no second copy to drift from, while
 // this side's module is a COPY and can go stale in silence.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // `here` comes from this file's own URL, so the working directory the script was started from
@@ -44,7 +44,26 @@ if (!existsSync(seedPath)) {
   process.exit(1);
 }
 
-const seed = JSON.parse(readFileSync(seedPath, 'utf8'));
+// `--out` resolving onto the seed would rename generated TypeScript over the source of truth, and
+// the next run could not parse it. `existsSync` cannot see that the two paths are the same file
+// when one is spelled differently, so both are resolved before they are compared.
+if (resolve(out) === resolve(seedPath)) {
+  console.error(`--out resolves to the seed itself (${resolve(out)}) — that would overwrite the one `
+    + 'file both halves of the product are generated from');
+  process.exit(1);
+}
+
+// Every other failure in this script names the file and says what to do; a raw `readFileSync` or
+// `JSON.parse` throw would be the one that does not. A directory where the seed should be, and a
+// trailing comma somebody left behind, arrive here identically.
+let seed;
+try {
+  seed = JSON.parse(readFileSync(seedPath, 'utf8'));
+} catch (reason) {
+  console.error(`${seedPath} could not be read as JSON: ${reason.message}`);
+  console.error('Repair that file — it is the source of truth both halves of the product redact on.');
+  process.exit(1);
+}
 
 /**
  * One list, validated. An empty one is refused HERE as well as at the server's loader, because a
@@ -80,6 +99,26 @@ const inBoth = anywhere.filter((word) => wholePart.includes(word));
 if (inBoth.length > 0) {
   console.error(`${seedPath}: ${inBoth.join(', ')} appears in BOTH lists — the broader ANYWHERE rule `
     + 'would then decide it, so the whole-part rule that was written for it never runs');
+  process.exit(1);
+}
+
+// And the same thing one step subtler, which a reviewer asked for — in ONE direction only, and
+// finding out which took running it. An ANYWHERE word that sits INSIDE a whole-part word makes the
+// restriction on that word pointless: the broad rule fires on a superset of the names the narrow
+// rule was written for, so `api` in ANYWHERE beside `api-version` in WHOLE_PART decides
+// `api-version` before the whole-part rule is ever consulted.
+//
+// The OTHER direction is the design and must not be refused. `auth` ⊂ `authorization` and
+// `key` ⊂ `apikey` are exactly why those compounds are in the long list: a run-together spelling
+// has no boundary for the short word to sit on. The first version of this check tested both
+// directions and refused the correct seed — five pairs, every one of them deliberate.
+const swallowed = anywhere.flatMap((broad) =>
+  wholePart.filter((narrow) => narrow.includes(broad))
+    .map((narrow) => `${broad} inside ${narrow}`));
+if (swallowed.length > 0) {
+  console.error(`${seedPath}: ${swallowed.join(', ')} overlap as substrings — the ANYWHERE word `
+    + 'decides every name the whole-part word was restricted to, which is the over-redaction the '
+    + 'two lists exist to prevent');
   process.exit(1);
 }
 

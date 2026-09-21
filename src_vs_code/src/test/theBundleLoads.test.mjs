@@ -156,7 +156,7 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
   }
 });
 
-test('every credential word reaches the SHIPPED bundle, so redaction is not generated away', () => {
+test('the shipped bundle carries every credential word as a quoted literal', () => {
   // WHY IT LIVES IN THIS FILE. A test of its own would run `npm run bundle` a second time, and the
   // comment below this one is about exactly that hazard: `prepare-gate.mjs` deletes a generated
   // file for about two seconds mid-build, `node --test` runs files in parallel, and a second
