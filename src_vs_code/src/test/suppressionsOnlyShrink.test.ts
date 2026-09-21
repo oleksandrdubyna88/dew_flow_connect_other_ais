@@ -126,3 +126,36 @@ test('the repository OWN suppressions file is a valid one, and it is committed',
   assert.ok(Object.keys(parsed).every((file) => !file.includes('src/test/')),
     'tests are exempt from both rules, so a suppression for one means the config drifted');
 });
+
+test('a third path is REFUSED rather than silently taken for the pair', () => {
+  // Sonar flagged the argument check as always-false: destructuring a short array gives `undefined`
+  // at runtime but not in its type view. Looking at WHY found a real hole behind it — with three
+  // paths the script read the FIRST TWO, so it compared the wrong pair and reported on files
+  // nobody asked about. All three exist here, so the refusal cannot come from a missing file.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'suppressions-'));
+  try {
+    const grew = { 'src/new.ts': { complexity: { count: 9 } } };
+    const clean = {};
+    const written = ['extra.json', 'now.json', 'before.json'].map((name) => {
+      const at = path.join(dir, name);
+      fs.writeFileSync(at, JSON.stringify(name === 'now.json' ? grew : clean), 'utf8');
+
+      return at;
+    });
+
+    const ran = spawnSync(process.execPath, [script, ...written], { encoding: 'utf8', timeout: 30_000 });
+
+    assert.equal(ran.status, REFUSED,
+      'three paths name no pair; comparing the first two reports on files nobody asked about');
+    assert.match(`${ran.stdout}${ran.stderr}`, /usage: suppressions-only-shrink/u);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('no paths at all is refused, and says how to call it', () => {
+  const ran = spawnSync(process.execPath, [script], { encoding: 'utf8', timeout: 30_000 });
+
+  assert.equal(ran.status, REFUSED);
+  assert.match(`${ran.stdout}${ran.stderr}`, /usage: suppressions-only-shrink/u);
+});

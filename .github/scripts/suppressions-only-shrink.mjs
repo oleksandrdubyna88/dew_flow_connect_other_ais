@@ -92,12 +92,18 @@ function read(path) {
 
 const argv = process.argv.slice(2);
 const baseAbsent = argv.includes('--base-absent');
-const [currentPath, basePath] = argv.filter((one) => one !== '--base-absent');
+const paths = argv.filter((one) => one !== '--base-absent');
 
-if (currentPath === undefined || basePath === undefined) {
+// COUNTED, not checked for undefined. Sonar reads a destructured short array as never undefined
+// and called the old check always-false; it was wrong about the runtime and right about the
+// expression, and looking at why found the real hole: with THREE paths the script took the first
+// two and compared a pair nobody asked about. Counting says what is meant in every reading.
+if (paths.length !== 2) {
   console.error('usage: suppressions-only-shrink.mjs [--base-absent] <current.json> <base.json>');
   process.exit(2);
 }
+
+const [currentPath, basePath] = paths;
 
 const current = read(currentPath);
 if (!isSuppressions(current)) {
