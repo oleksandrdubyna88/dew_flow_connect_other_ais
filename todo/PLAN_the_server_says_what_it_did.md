@@ -195,6 +195,20 @@ generated TypeScript module; `ServerNotice` and its serialiser. The parity prope
 **B. The append.** `ServerNotices.Append`, best-effort, through `DataDirFrom`; the torn-tail
 quarantine; the `serverNoticesPath` vector; `measure:append` re-run with the .NET writer.
 
+> **Carried into 1.4 by story 1.3's code round**, written down here rather than remembered:
+> - the writer's ONLY file-opening path goes through `ServerNotices`, with a test that invokes the
+>   writer and finds the file at the shared resolved path — otherwise the helper can be bypassed and
+>   both suites stay green while the server writes where the extension does not read;
+> - a reviewer asked for an opaque resolved-data-directory TYPE, so that a root path cannot satisfy
+>   the writer's seam. `DataDirFrom` returns `string` and has seven callers, so the cost is only
+>   visible once a writer exists: **decide it in 1.4**, and say which way and why;
+> - the PUBLISHED Native-AOT artefact is exercised — `CredentialWords.EnsureLoaded` is the hook that
+>   turns a missing embedded list into a startup refusal a smoke run can see (carried from 1.1);
+> - **the LIVE cross-implementation check is story 2.4's seam leg.** Two reviewers have now called
+>   it Blocking, at 1.1 and at 1.3, and both times the honest answer was the same: there is nothing
+>   live to check before a writer exists. When 2.4 lands it must drive the real binary and read the
+>   file with the extension's own parser, and until then the fixture agreement is what there is.
+
 **C. The instrumentation and its ratchet.** Both `Error` helpers; `ReviewerSummaryFactory.Describe`
 ([BoundedScheduler.cs:489](../src_mcp/runners/Reviewers/BoundedScheduler.cs)); `LiveRound.Report`
 ([LiveRound.cs:65](../src_mcp/src/Server/LiveRound.cs)); the startup notes — `Unrecognised`,
