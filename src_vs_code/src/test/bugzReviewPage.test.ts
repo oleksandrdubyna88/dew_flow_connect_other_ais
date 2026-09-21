@@ -248,10 +248,17 @@ class Line {
  * nothing about a pair row: a click handler that reached for `[data-row]` from here would find
  * nothing, exactly as it would in a browser.</p>
  */
+/** What a missing opener means, so the failure names the ACTION rather than the attribute. */
+const OFFERS: Readonly<Record<string, string>> = {
+  'data-open-at': 'way to open the file at its revision',
+  'data-open-current': 'way to open the current file',
+  'data-open-tree': 'way to check the commit out in a new window',
+};
+
 class Opener {
   readonly id = '';
 
-  constructor(readonly kind: 'data-open-at' | 'data-open-current', readonly key: string) {}
+  constructor(readonly kind: 'data-open-at' | 'data-open-current' | 'data-open-tree', readonly key: string) {}
 
   getAttribute(name: string): string | null {
     return name === this.kind ? this.key : null;
@@ -364,7 +371,7 @@ interface Page {
   readonly openers: readonly Opener[];
   click(what: Box | Control | Toggle | Line | TabButton | Opener): void;
   /** One row's opener of one kind — asserting it is there, because a row with none has lost the action. */
-  opener(findingId: number, kind: 'data-open-at' | 'data-open-current'): Opener;
+  opener(findingId: number, kind: 'data-open-at' | 'data-open-current' | 'data-open-tree'): Opener;
   /** The container one row's revision actions were rendered into. */
   revision(findingId: number): Note;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
@@ -445,6 +452,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
   const openers = notes.flatMap((note) => [
     ...[...note.innerHTML.matchAll(/data-open-at="(\d+)"/g)].map((m) => new Opener('data-open-at', m[1]!)),
     ...[...note.innerHTML.matchAll(/data-open-current="(\d+)"/g)].map((m) => new Opener('data-open-current', m[1]!)),
+    ...[...note.innerHTML.matchAll(/data-open-tree="(\d+)"/g)].map((m) => new Opener('data-open-tree', m[1]!)),
   ]);
   // The severity/title line and the state word, with the element they are actually INSIDE. Whether
   // that is the disclosure button or merely the row is the whole of the defect a code reviewer
@@ -552,7 +560,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     click: (what) => onClick!({ target: what }),
     opener: (findingId, kind) => {
       const found = openers.find((one) => one.kind === kind && one.key === String(findingId));
-      assert.ok(found !== undefined, `row ${findingId} offers no ${kind === 'data-open-at' ? 'way to open the file at its revision' : 'way to open the current file'}`);
+      assert.ok(found !== undefined, `row ${findingId} offers no ${OFFERS[kind]}`);
 
       return found;
     },
@@ -1617,7 +1625,7 @@ test('a read that never reached the server can be asked for again', () => {
 // --------------------------------------------------------------------------------------------
 
 /** What the page asked the host to open, in order. */
-const opens = (page: Page, type: 'openAt' | 'openCurrent'): readonly Posted[] =>
+const opens = (page: Page, type: 'openAt' | 'openCurrent' | 'openTree'): readonly Posted[] =>
   page.posted.filter((m) => m.type === type);
 
 test('an open row offers the file at its revision and the CURRENT file, and pressing each names the row', () => {
@@ -1637,6 +1645,32 @@ test('an open row offers the file at its revision and the CURRENT file, and pres
  * The current file is the one that can mislead — it is where a fix would be made, and it may no
  * longer be the code the reviewers read — so it is labelled CURRENT and never presented as "the" file.
  */
+/**
+ * Story 3.2a's button, pressed rather than read.
+ *
+ * <p>The page paints no answer here either: it posts, and the host checks out, opens a window and
+ * tells the row what to say. What this proves is the click PATH — the delegated listener, the real
+ * attribute, the message — which is the half a rendered-markup assertion cannot see.</p>
+ */
+test('an open row offers checking the commit out, and pressing it names the row', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1]) });
+  assert.deepEqual(opens(page, 'openTree'), [], 'a checkout costs minutes; nothing may start one at paint');
+
+  page.click(page.opener(1, 'data-open-tree'));
+
+  assert.deepEqual(opens(page, 'openTree'), [{ type: 'openTree', id: 1 }]);
+  assert.equal(page.showing(1), true, 'pressing it must not close the row it sits in');
+  assert.equal(opens(page, 'openAt').length, 0, 'and it is not the other action wearing a new name');
+});
+
+test('the checkout action says it costs a window and a minute, so the cheap actions stay the obvious ones', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+  const said = readable(page.revision(1).innerHTML);
+
+  assert.match(said, /Check out/u, 'the third action must be on the row at all');
+  assert.match(said, /new window/u, 'a person must know the review page is not being replaced');
+});
+
 test('the current file is labelled CURRENT and says it may differ; the revision action names its commit', () => {
   const page = run([pair(1)], { expanded: new Set([1]) });
   const said = readable(page.revision(1).innerHTML);

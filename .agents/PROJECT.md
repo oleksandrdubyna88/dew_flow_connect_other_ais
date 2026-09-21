@@ -53,7 +53,7 @@ node .agents/conventions/tools/pin-check.mjs
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
   `--ask-remote`, `--providers`, `--bugs-json`, `--normalize`, `--collect-bugs`, `--pairs-json`,
-  `--pairs-keep`, `--real-method` and `--file-at`, `--upload-pairs`, `--requeue-refused` and `--close-consult`,
+  `--pairs-keep`, `--real-method`, `--file-at` and `--tree-at`, `--upload-pairs`, `--requeue-refused` and `--close-consult`,
   and their stdout is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
@@ -112,6 +112,8 @@ node .agents/conventions/tools/pin-check.mjs
   SEE if the behaviour were deleted, because this rule's own first tests stayed green when it was.
 - **Reviewers are read-only, in a worktree pinned to a SHA** — one worktree per round, outside the
   repository, pruned on `open`, removed in `finally`.
+- **A REVIEW tree (`--tree-at`) is a person's, under its own root and `coai-review-` prefix:
+  `PruneOursAsync` deletes by prefix on every `open`, and its cap refuses rather than evicts.**
 - **No secret ever reaches argv or a log line.** Vendor keys come from one CredsForDevs `config`
   entry, read once at startup via `creds config <key>`.
 - **Logging** per `.agents/conventions/common/logging-serilog.md`: coloured ANSI console (stderr in

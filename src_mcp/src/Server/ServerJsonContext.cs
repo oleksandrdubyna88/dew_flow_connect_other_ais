@@ -195,6 +195,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Collecting.PairsAnswer))]
 [JsonSerializable(typeof(Core.Collecting.RealMethod))]
 [JsonSerializable(typeof(Core.Collecting.FileAtRevision))]
+[JsonSerializable(typeof(Core.Collecting.ReviewTree))]
 [JsonSerializable(typeof(Collecting.KeepRequest))]
 [JsonSerializable(typeof(Collecting.KeepAnswer))]
 // The wire pair lives in the shared core, so BOTH halves serialize the same declaration.

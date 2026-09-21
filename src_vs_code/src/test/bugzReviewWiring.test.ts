@@ -296,3 +296,61 @@ test('every ending replaces the in-flight state, including one nobody wanted', (
   assert.match(opening, /finally \{[\s\S]*?this\.tell\(/u,
     'the row state is posted on every path out, or a failure leaves the page saying it is still working');
 });
+
+// --------------------------------------------------------------------------------------------
+// The review tree (story 3.2a): a press reaches the checkout, and the checkout opens a window of
+// its own. Both halves are seams no page test and no unit test can see.
+// --------------------------------------------------------------------------------------------
+
+test('a checkout press reaches the one method that answers it', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /case 'openTree':\s*void this\.opened\(m\.id, \(pair\) => this\.revisions\.openTree\(pair, this\.held\)\);/u,
+    'the third action must reach the panel, or the button is wired to nothing');
+});
+
+/**
+ * The finding two plan reviewers raised independently, pinned as the WHOLE option object.
+ *
+ * <p>Without `forceNewWindow`, `vscode.openFolder` REPLACES the current window — so a person
+ * pressing a button on a row would watch the review page they were reading disappear. A match on
+ * the call alone would survive the option being dropped, which is the only way this can break.</p>
+ */
+test('a checkout is opened in a NEW window, never in the one holding the review page', () => {
+  const text = code('revisionOpen.ts');
+
+  assert.match(text, /executeCommand\(\s*'vscode\.openFolder',\s*vscode\.Uri\.file\(path\),\s*\{ forceNewWindow: true \}\)/u,
+    'the option is the whole defect: pin it, not the call');
+  assert.equal([...text.matchAll(/openFolder/gu)].length, 1,
+    'one place opens a folder, so there is one place for this to be wrong');
+});
+
+test('a checkout says it is working before it awaits anything, and every ending replaces that', () => {
+  const opening = bodyOf(code('revisionPanel.ts'), 'async openTree(pair: ReviewPair, rows: readonly ReviewPair[]): Promise<void> {');
+
+  // CLAUDE.md §8. A checkout runs for a minute, which is exactly long enough for a person to
+  // conclude nothing happened — so the state is said before the first await, not after the answer.
+  assert.ok(opening.indexOf('this.tell([pair.findingId], rows);') < opening.indexOf('await '),
+    'the row must say it is working before the server is asked, or the minute looks like nothing');
+  assert.match(opening, /this\.checking = new Set\(\[\.\.\.this\.checking, pair\.findingId\]\);/u);
+  assert.match(opening, /\} finally \{[\s\S]*?this\.checking = new Set\(\[\.\.\.this\.checking\]\.filter/u,
+    'every ending must clear it, including the one where the editor refuses');
+  assert.match(opening, /if \(this\.checking\.has\(pair\.findingId\)\) \{/u,
+    'a second press while one is out must not start a second checkout');
+});
+
+test('a closed window forgets the checkout presses and what they said', () => {
+  const forget = bodyOf(code('revisionPanel.ts'), 'forget(): void {');
+
+  assert.match(forget, /this\.checking = new Set<number>\(\);/u);
+  assert.match(forget, /this\.treeNotes = new Map<number, string>\(\);/u,
+    'a refusal from last week is not a fact about this corpus');
+});
+
+test('the provider wires the checkout hooks to the reader and to the editor', () => {
+  const text = code('panelProvider.ts');
+
+  assert.match(text, /readTreeAt: \(asked\) => readTreeAt\(server\.fsPath, asked\),/u,
+    'a page test can prove the page asks; only this proves anybody answers');
+  assert.match(text, /openFolder: \(path\) => openTreeFolder\(path\),/u);
+});

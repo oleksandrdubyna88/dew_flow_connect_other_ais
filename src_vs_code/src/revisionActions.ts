@@ -70,11 +70,40 @@ export const WORKING: RevisionState = {
   currentNote: '',
 };
 
+/**
+ * What a row can offer about checking its commit OUT — a separate state from {@link RevisionState}
+ * on purpose.
+ *
+ * <p>The two are not the same fact and do not move together: reading a file out of git is instant
+ * and cannot fail for want of disk, while a checkout takes a minute, can be refused by a cap, and
+ * can be in flight in another press. Folding them into one record would mean every field asking
+ * which of the two it is about.</p>
+ */
+export interface TreeState {
+  /** Whether *Check out &lt;sha&gt;* is offered. */
+  readonly offered: boolean;
+  /** What the row says beside it — a refusal, a note about submodules, or nothing. */
+  readonly note: string;
+}
+
+/** Nothing has been pressed: the action is offered and says nothing. */
+export const TREE_READY: TreeState = { offered: true, note: '' };
+
+/**
+ * The press is out. A checkout of a large repository plus its submodules is a minute or more, which
+ * is exactly the window in which a person presses a second time — CLAUDE.md §8, and the reason the
+ * state is said before the first await rather than after the answer.
+ */
+export const TREE_WORKING: TreeState = {
+  offered: false,
+  note: 'checking the commit out… the first time also fetches the submodules',
+};
+
 /** A sentence beside an action, quiet, so the buttons stay the thing a person reads first. */
 const why = (said: string): string => (said.length > 0 ? `<span class="why">${escapeHtml(said)}</span>` : '');
 
 /** The row's actions, as markup for its `data-revision` container. */
-export function revisionActions(row: RevisionRow, state: RevisionState): string {
+export function revisionActions(row: RevisionRow, state: RevisionState, tree: TreeState = TREE_READY): string {
   const id = escapeHtml(String(row.findingId));
   if (text(row.file).length === 0) {
     return none('no file recorded, so there is nothing to open');
@@ -88,5 +117,25 @@ export function revisionActions(row: RevisionRow, state: RevisionState): string 
     ? `<button type="button" class="quiet" data-open-current="${id}" title="The file as it is in the working tree now — CURRENT, which may no longer be the code the reviewers read. This is where a fix would be made.">Open CURRENT (may differ)</button>`
     : none('no checkout recorded, so the current file cannot be found');
 
-  return `${at}${why(atNote)}<span class="sep" aria-hidden="true">·</span>${current}${why(state.currentNote)}`;
+  return `${at}${why(atNote)}<span class="sep" aria-hidden="true">·</span>${current}${why(state.currentNote)}`
+    + checkout(id, sha, row, tree);
+}
+
+/**
+ * The third way out of a row: the WHOLE repository at that commit, in a window of its own.
+ *
+ * <p>It is last and it says what it costs, because the other two are instant and this one is not —
+ * a person reaching for "show me that line" should meet the cheap action first. What it buys is the
+ * code AROUND the finding: imports resolved, go-to-definition, find-references, none of which a
+ * single read-only document can have.</p>
+ */
+function checkout(id: string, sha: string, row: RevisionRow, tree: TreeState): string {
+  if (sha.length === 0 || text(row.repoPath).length === 0) {
+    return '';
+  }
+  const button = tree.offered
+    ? `<button type="button" class="quiet" data-open-tree="${id}" title="Check the whole repository out at this commit, into a folder of its own, and open it in a NEW window — the review page stays where it is. Slower than the other two: it is a real checkout, and the first one also fetches the submodules.">Check out ${commit(sha)} in a new window</button>`
+    : '';
+
+  return `<span class="sep" aria-hidden="true">·</span>${button}${why(tree.note)}`;
 }

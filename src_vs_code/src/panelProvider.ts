@@ -63,8 +63,8 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
-import { RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
+import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, readTreeAt, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -2692,6 +2692,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       showRevision: (document) => this.revisionDocuments().show(document),
       showCurrent: (file, line) => showCurrentFile(file, line),
       folders: () => workspaceFolderPaths(),
+      readTreeAt: (asked) => readTreeAt(server.fsPath, asked),
+      openFolder: (path) => openTreeFolder(path),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
       // unrelated repainted the panel. (Code round, gemini.)

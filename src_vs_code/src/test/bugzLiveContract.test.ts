@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
 import { readFileAt, readPairs, readRealMethod } from '../roundsDbRead';
+import { TREE_REASONS } from '../reviewTree';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -597,3 +598,57 @@ test('a seeded pair reads its file at its revision out of a real repository, and
       fs.rmSync(repo, { recursive: true, force: true });
     }
   });
+
+/**
+ * Story 3.2a's contract, the half a running test cannot reach: every reason word the SERVER can
+ * answer is a word the EXTENSION knows.
+ *
+ * <p>This is the finding the plan round raised — the server could answer a reason nothing on this
+ * side consumes, and both suites would stay green while a row said "the checkout could not be made"
+ * for a fact it could have named. A word added to `ReviewTreeReason` and not to `TREE_REASONS` is
+ * now a red test rather than a silent shrug.</p>
+ *
+ * <p>The C# side is read for its VALUES, not its names: the words that cross the wire are the string
+ * literals, and four of them are deliberately aliases of `RealMethodReason` so that a person meets
+ * one spelling of one fact across three modes.</p>
+ */
+test('every reason the checkout mode can answer is a reason this panel knows', () => {
+  const at = path.join(process.cwd(), '..', 'src_mcp/core/Collecting/ReviewTree.cs');
+  assert.ok(fs.existsSync(at), 'ReviewTree.cs has moved — this test is reading nothing');
+  const source = fs.readFileSync(at, 'utf8');
+
+  const klass = /public static class ReviewTreeReason\s*\{([^}]*)\}/u.exec(source);
+  assert.ok(klass !== null, 'ReviewTreeReason is no longer declared where this looks');
+  const body = klass[1] ?? '';
+
+  // Two spellings of a constant: a literal word, and an alias of a sibling mode's constant.
+  const literals = [...body.matchAll(/public const string \w+ = "([a-z_]+)";/gu)].map((m) => m[1]);
+  const aliased = [...body.matchAll(/public const string \w+ = RealMethodReason\.(\w+);/gu)]
+    .map((m) => reasonValueOf(source, m[1] ?? ''));
+
+  const served = [...literals, ...aliased];
+  assert.ok(served.length >= 7, `ReviewTreeReason read as ${served.length} words — the regex is wrong`);
+  assert.deepEqual([...served].sort(), [...TREE_REASONS].sort(),
+    'the server can answer a reason word this panel does not know, or knows one it cannot answer');
+});
+
+/**
+ * A reason constant's VALUE, followed through however many aliases it takes.
+ *
+ * <p>The vocabulary is deliberately shared: `ReviewTreeReason.RepoPathMissing` is
+ * `RealMethodReason.RepoPathMissing`, which is `SkipReason.RepoPathMissing`, which is finally
+ * `"repo_path_missing"` in `CollectOutcome.cs` — three hops so that one fact has one spelling
+ * across four modes. The literal is what crosses the wire, so the literal is what this resolves, by
+ * looking for the name's one literal definition anywhere in the vocabulary's folder.</p>
+ */
+function reasonValueOf(_nearby: string, name: string): string {
+  const folder = path.join(process.cwd(), '..', 'src_mcp/core/Collecting');
+  const found = fs.readdirSync(folder)
+    .filter((file) => file.endsWith('.cs'))
+    .map((file) => new RegExp(`public const string ${name} = "([a-z_]+)";`, 'u')
+      .exec(fs.readFileSync(path.join(folder, file), 'utf8')))
+    .find((hit) => hit !== null);
+  assert.ok(found !== undefined && found !== null, `no literal defines ${name} anywhere in Collecting/`);
+
+  return found[1] ?? '';
+}

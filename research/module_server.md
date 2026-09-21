@@ -1651,6 +1651,73 @@ helpers, extracted for `TheFileAtRevisionTests`; that suite now delegates. Three
 `ThePairModesTests`, `ABatchFindingsReadTests`, `BugsQueryTests` — still carry their own copy of the
 eight-line stdout capture, named here rather than rewritten as a side effect of this story.
 
+#### The whole repository at that commit (`--tree-at`, 2026-09-21, story 3.2a)
+
+`coai-mcp --tree-at --id <findingId>` checks a pair's `head_sha` out into a durable worktree a person
+can open, and answers `ReviewTree` (`src_mcp/core/Collecting/ReviewTree.cs`) on stdout: `findingId`,
+`sha`, `path`, `repository`, `reused`, `reason`, `emptyMounts`, `trees`. It is the THIRD mode through
+`AnswerOnePairAsync` and obeys that door's two rules unchanged — the coordinates come from the row
+(no `--repo`, no `--sha`), and every domain outcome is data at exit 0, **65** for a bad `--id` and
+never 64, **74** for a database that will not open.
+
+**Why a checkout when `--file-at` already reads the file.** A `coai-revision:` document is one file
+with no project behind it: no imports resolved, no go-to-definition, no find-references. For the
+55.7 % of pairs whose commit is orphaned there is no other way to see the code AROUND the finding as
+it was. It is also story 3.3's precondition: a call hierarchy is answered by the language server of
+the window that asks, over the folder that window has open, so asked from the current checkout it
+counts today's callers — convincing and wrong.
+
+**The defect the story exists around, and the two guards against it.**
+`WorktreeManager.PruneOursAsync` runs on every gate `open` and has two halves: `worktree remove
+--force` over everything `ListOursAsync` matches, and then `Directory.Delete(recursive: true)` over
+every directory under the round storage root whose name starts with the round prefix. The second half
+asks git no permission at all, so **no lock can stop it**. A review tree therefore lives under a
+DIFFERENT ROOT (`{LocalApplicationData}/coai-mcp/review-worktrees`, machine-local) with a DIFFERENT
+PREFIX (`coai-review-`). Either alone suffices and both are asserted separately:
+`AReviewTree_SurvivesTheGatesPrune` proves the root, and
+`AReviewTreeInTheGatesOwnStorageRoot_IsSparedByItsPrefix` puts a review tree in the worst place — the
+gate's own root — and proves the prefix. Each also asserts the gate's own `coai-wt-` tree beside it
+was removed, so the test cannot pass by the prune having done nothing. Shown red by changing the
+prefix back: *Expected Directory.Exists(made.Path) to be True ... but found False*.
+
+**The root is machine-local on purpose.** A linked worktree's `.git` file holds an absolute path into
+the parent's admin directory, so a tree belongs to one machine and one OS; the configured data dir is
+routinely a network share, where such a tree would be broken for every other machine that mounted it.
+
+**The lock, and what it is worth.** The tree is created `--lock`ed with a reason, which makes
+`git worktree remove --force` fail — measured against real git 2.55: exit 128, *cannot remove a
+locked working tree* — and that is exactly the call `RemoveAsync` makes. It is a guard against ONE
+`--force`, not a vault: git's own message names the override (`remove -f -f`). A second measured
+bonus: a worktree HEAD is a gc root, so a tree at an orphaned commit PRESERVES it
+(`AnOrphanedCommit_GetsATree_AndTheTreePinsItAgainstGc` runs `reflog expire --expire=now --all` and
+`gc --prune=now` and finds the commit still there).
+
+**Identity is `(git common dir, full sha)`** — `rev-parse --path-format=absolute --git-common-dir`,
+case-folded for the KEY only, never before a filesystem call (story 2.2's lesson). A worktree is
+registered in exactly ONE object store, so a remote URL is structurally the wrong key: two clones of
+one remote cannot share a tree however alike they look. Two spellings of one checkout, and any linked
+worktree of it, resolve to one tree; two clones get two.
+
+**Lifetime: a tree lives until a person removes it.** No LRU, no removal on panel disposal, no stale
+sweep — every automatic remover that could make room can remove a tree somebody is reading. The cap
+(`ReviewWorktrees.Cap`, 10 per machine) therefore REFUSES at creation and names every tree held, with
+its repository, commit, path and creation time, because a refusal that says "you have ten" without
+saying which ten leaves a person no move. The one thing removed automatically is a tree that never
+finished being made — nobody was ever handed its path — and only after it is proved clean.
+
+**Readiness is the RECORD, not the directory.** `git worktree add` creates the directory before it
+checks anything out, and submodule population runs after that again, so a directory means "somebody
+started". The record (`{root}/{name}.json`, written temp-then-move) is written LAST. A directory with
+no record and younger than ten minutes is `in_progress`; older, it is inspected with `status
+--porcelain --untracked-files=all --ignore-submodules=none` and rebuilt if clean or answered
+`incomplete_and_dirty` — named, and left exactly where it is — if not. Git's own refusal to create an
+existing directory is the mutex, so of two presses at once exactly one creates and the other re-reads
+the record.
+
+**Submodules are populated**, through the existing `SubmodulePopulator`, because in this family a
+project's rules and dependencies ARE submodules and a tree without them is one whose language server
+sees holes. A mount that stayed empty is NAMED on the answer rather than discovered later.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the

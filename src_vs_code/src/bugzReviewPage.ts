@@ -717,6 +717,11 @@ ${body(pairs, rows, trouble)}
       vscode.postMessage({ type: 'openCurrent', id: Number(openingNow.getAttribute('data-open-current')) });
       return;
     }
+    var openingTree = target.closest ? target.closest('[data-open-tree]') : null;
+    if (openingTree) {
+      vscode.postMessage({ type: 'openTree', id: Number(openingTree.getAttribute('data-open-tree')) });
+      return;
+    }
     // A filter press, and this page does NOT paint it: the host holds the choice, because the
     // document is replaced wholesale on every decision and a selection living here would die on the
     // first one. The data-strip attribute on the wrapper says which of the two strips it came

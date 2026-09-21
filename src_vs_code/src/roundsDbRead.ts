@@ -2,6 +2,7 @@ import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseB
 import { ReviewPair } from './bugzReviewPage';
 import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
+import { HeldTree, ReviewTreeAnswer, TOO_OLD_FOR_A_TREE, TreeRead } from './reviewTree';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
@@ -657,6 +658,99 @@ export async function readFileAt(
     return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
   }
 }
+
+function treeOf(raw: unknown, asked: AskedTree): ReviewTreeAnswer | undefined {
+  if (raw === null || typeof raw !== 'object') {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+  if (one['findingId'] !== asked.findingId) {
+    return undefined;
+  }
+
+  // Same rule as a revision's answer, and for the same reason: an answer that CARRIES a tree is
+  // checked against the commit that was asked about, because a pair recollected while the request
+  // was in flight answers the same id at another commit — and this one would then open a window on
+  // the wrong checkout. A reason-only answer has no tree to be wrong about.
+  const carries = textOf(one, 'reason').length === 0;
+  if (carries && one['sha'] !== asked.headSha) {
+    return undefined;
+  }
+
+  return {
+    findingId: asked.findingId,
+    sha: textOf(one, 'sha'),
+    path: textOf(one, 'path'),
+    repository: textOf(one, 'repository'),
+    reused: one['reused'] === true,
+    reason: textOf(one, 'reason'),
+    emptyMounts: textsOf(one['emptyMounts']),
+    trees: heldOf(one['trees']),
+  };
+}
+
+function textsOf(raw: unknown): readonly string[] {
+  return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+}
+
+function heldOf(raw: unknown): readonly HeldTree[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .filter((v): v is Record<string, unknown> => v !== null && typeof v === 'object')
+    .map((v) => ({
+      repository: textOf(v, 'repository'),
+      sha: textOf(v, 'sha'),
+      path: textOf(v, 'path'),
+      created: textOf(v, 'created'),
+    }));
+}
+
+/** The row a tree was asked about: the id, and the commit the answer must be about. */
+export interface AskedTree {
+  readonly findingId: number;
+  readonly headSha: string;
+}
+
+/**
+ * One pair's repository checked out at the commit the reviewers read — `--tree-at`, on stdout.
+ *
+ * <p>The third mode through this door and it obeys the same rule as the other two: 64 is "the server
+ * is too old" and ONLY that, every other non-zero code is the server's own sentence, and a domain
+ * outcome — a cap reached, another press already building it, a commit that is gone — is `ok: true`
+ * with the reason on the answer.</p>
+ *
+ * <p>The cap is longer than a read's because this one checks a repository out and fills its
+ * submodules; a large repository is minutes, not seconds.</p>
+ */
+export async function readTreeAt(
+  executable: string,
+  asked: AskedTree,
+  run: Run = serverRun(executable),
+): Promise<TreeRead> {
+  const { code, output } = await run(['--tree-at', '--id', String(asked.findingId)], TREE_CAP_MS);
+  if (code === EX_USAGE) {
+    return { ok: false, tooOld: true, why: TOO_OLD_FOR_A_TREE };
+  }
+  if (code !== 0) {
+    return { ok: false, tooOld: false, why: output.trim() || `the server exited ${code}` };
+  }
+
+  try {
+    const tree = treeOf(JSON.parse(output), asked);
+
+    return tree === undefined
+      ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
+      : { ok: true, tree };
+  } catch {
+    return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+/** A checkout plus its submodules is minutes; the read cap would abandon a tree still being made. */
+const TREE_CAP_MS = 10 * 60 * 1000;
 
 /**
  * Writes a batch of decisions, and answers how many rows were actually decided.
